@@ -1,0 +1,78 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-09-01T21:37:46.363Z",
+  "phase": "198.3",
+  "phase_name": "overnight-stamina",
+  "phase_dir": ".planning/phases/198.3-overnight-stamina",
+  "plan": 22,
+  "task": 23,
+  "total_tasks": 30,
+  "status": "paused",
+  "completed_tasks": [
+    {"id": 1, "name": "Overnight Trigger and Blocker Truth", "status": "done"},
+    {"id": 2, "name": "Structured Evidence and Durable Owner Checkpoints", "status": "done"},
+    {"id": 3, "name": "Phase-Scoped Provider Readiness", "status": "done"},
+    {"id": 4, "name": "Evidence-Aware Overnight Control Loop", "status": "done"},
+    {"id": 5, "name": "Durable Overnight Report and Bounded Recovery", "status": "done"},
+    {"id": 6, "name": "Guided Insert Phase", "status": "done"},
+    {"id": 7, "name": "Swarm Three-Strike Escalation", "status": "done"},
+    {"id": 8, "name": "Legacy Autopilot Command Surface Removal", "status": "done"},
+    {"id": 9, "name": "Recovery and Medic Command Surface Removal", "status": "done"},
+    {"id": 10, "name": "Overnight Stamina Integration", "status": "done"},
+    {"id": 11, "name": "Capability-Bound Owner Checkpoints", "status": "done"},
+    {"id": 12, "name": "Fail-Closed Seal Owner Checkpoints", "status": "done"},
+    {"id": 13, "name": "Fail-Closed Reviewer Evidence", "status": "done"},
+    {"id": 14, "name": "Report Durability and Replan Preview Parity", "status": "done"},
+    {"id": 15, "name": "Mutation-Free Direct-Build Readiness", "status": "done"},
+    {"id": 16, "name": "Verified Swarm Recovery Epoch", "status": "done"},
+    {"id": 17, "name": "Work-Generation Checkpoint Freshness", "status": "done"},
+    {"id": 18, "name": "Active-Scope Legacy Answers", "status": "done"},
+    {"id": 19, "name": "Reviewer Finding Body Validation", "status": "done"},
+    {"id": 20, "name": "Durable Replan Cadence", "status": "done"},
+    {"id": 21, "name": "Exact Swarm Evidence and Escalation Repair", "status": "done"},
+    {"id": 22, "name": "Overnight Stamina Gap Closure", "status": "done", "commit": "10d52277"}
+  ],
+  "remaining_tasks": [
+    {"id": 23, "name": "Validate an external swarm ID before every durable mutation and prove traversal rejection is zero-mutation", "status": "not_started"},
+    {"id": 24, "name": "Bind external finalization to a runtime-issued, replay-protected manifest and make exact replay idempotent", "status": "not_started"},
+    {"id": 25, "name": "Make seal fail closed when either current or legacy blocker storage is malformed or unreadable", "status": "not_started"},
+    {"id": 26, "name": "Validate legacy reviewer severities before either continuation lane can advance", "status": "not_started"},
+    {"id": 27, "name": "Bind visual checkpoint evidence to immutable terminal claims from the exact build attempt", "status": "not_started"},
+    {"id": 28, "name": "Scope replan cadence decisions to the active session, goal, and plan revision", "status": "not_started"},
+    {"id": 29, "name": "Rerun focused adversarial tests, code review, phase verification, and the full test/race gates", "status": "not_started"},
+    {"id": 30, "name": "After Phase 198.3 verifies, reconcile the 72 classic capabilities in Phase 198.4 and prepare Classic Colony Restoration", "status": "not_started"}
+  ],
+  "blockers": [
+    {"description": "External swarm_id reaches filesystem and durable-state writes before containment validation.", "type": "technical", "workaround": "Do not trust external swarm finalization until validation is moved ahead of every mutation."},
+    {"description": "External swarm manifests are self-asserted and replayable, so altered evidence can overwrite durable result truth.", "type": "technical", "workaround": "Require runtime issuance, an immutable digest or one-time capability, idempotent exact replay, and rejection of altered replay."},
+    {"description": "Seal ignores malformed legacy flags.json when pending-decisions.json is absent.", "type": "technical", "workaround": "Route seal through the canonical fail-closed blocker reader."},
+    {"description": "Legacy reviewer findings can carry invalid severities and evade the Critical evidence gate.", "type": "technical", "workaround": "Apply the structured-artifact severity allowlist to legacy findings too."},
+    {"description": "Visual owner checkpoint evidence is read from a mutable claims file rather than proven against the exact built attempt.", "type": "technical", "workaround": "Compare persisted claims to attempt.Claims or an attempt-bound digest before any decision mutation."},
+    {"description": "Replan cadence can consume stale decisions from another session or goal and suppress a due replan.", "type": "technical", "workaround": "Filter by active pending-decision scope before cadence projection."}
+  ],
+  "human_actions_pending": [
+    {"action": "Perform the outstanding Phase 198.2 WIRE-06 real-world owner UAT when convenient.", "context": "This remains real-world verification debt but does not block Phase 198.3 gap closure.", "blocking": false},
+    {"action": "Judge the restored experience with the acceptance statement: 'This feels like Aether again.'", "context": "Automated parity counts cannot prove the February-April colony experience has returned; this is required during Classic Colony Restoration, not during the immediate 198.3 safety fixes.", "blocking": false}
+  ],
+  "decisions": [
+    {"decision": "Finish and re-verify Phase 198.3 before starting the restoration programme.", "rationale": "The new Go safety kernel is valuable, but the current six evidence and provenance failures make unattended operation unsafe.", "phase": "198.3"},
+    {"decision": "Treat February-April as a composite golden baseline rather than one release.", "rationale": "The desired experience spans Open Chambers at 3a5b81c2 (2026-02-15), the pure-shell v5.0.0 worker-emergence era (2026-02-20), and v5.4's hybrid shell-to-Go era (2026-04-04).", "phase": "future"},
+    {"decision": "Keep Go as the durable safety kernel and restore the classic colony experience above it in editable orchestration and presentation assets.", "rationale": "This preserves atomic state, locking, recovery, evidence, cost tracking, memory, and security while bringing back iterative planning, visible Queen orchestration, useful swarm and Oracle behavior, pheromone steering, and clear next-step presentation.", "phase": "future"},
+    {"decision": "Reframe Phase 198.4 from blind pruning to Classic Capability Reconciliation.", "rationale": "Each of the 72 dropped-since-v5.4 capabilities must be classified as restore exactly, restore in modern form, replace with something demonstrably better, or drop with the owner's explicit reason before deletion.", "phase": "198.4"},
+    {"decision": "Create a Classic Colony Restoration milestone after reconciliation and postpone Phase 199 proof until restoration is complete.", "rationale": "Benchmarking the current safer-but-hollow experience would prove the wrong product; proof should test the reunited colony experience and runtime.", "phase": "future"},
+    {"decision": "Treat Codex integration as a later skill-based platform project, not part of the general restoration baseline.", "rationale": "The immediate target is how Aether itself felt and worked on its primary Claude/OpenCode surfaces; Codex will need lifecycle skills such as ant-init separately.", "phase": "future"},
+    {"decision": "Do not accept broad component-parity percentages as proof of experiential parity.", "rationale": "The existing 80-percent parity claim and passing structural tests coexist with 19 absent and 13 weakened display elements, 72 dropped capabilities, and an owner experience that no longer communicates a living colony.", "phase": "future"}
+  ],
+  "uncommitted_files": [
+    ".planning/STATE.md",
+    ".planning/phases/198.3-overnight-stamina/198.3-VERIFICATION.md",
+    ".gsd/dispatch-isolation-sentinel.json",
+    ".gsd/scratch/blocker1.txt",
+    ".gsd/scratch/decision1.txt",
+    ".gsd/scratch/decision2.txt",
+    ".gsd/worktrees/phase-198-3/wave-1-manifest.json through wave-7-manifest.json",
+    ".aether/dreams/2026-09-01-comprehensive-aether-colony-review.md (local, gitignored long-form report)"
+  ],
+  "next_action": "Read 198.3-VERIFICATION.md first, design the smallest six gap-closure changes without adopting CR-03 from the review because locked decision D-06 explicitly permits same-count ordinary blocker churn, implement adversarial regressions, then rerun code review and verification before marking Phase 198.3 complete.",
+  "context_notes": "All 22 formal plans executed. Verification remains gaps_found: 80/94 plan truths, 3/6 roadmap criteria, and 3/6 STAM requirements. The six-lap happy path works, but six evidence/provenance locks are unsafe. The aggregate Go suite exceeded 300 seconds with no failure output, so it is inconclusive rather than passing. No actionable placeholder summaries were found; placeholder scan hits only explanatory text. The completed 2,638-line historical/product analysis lives in .aether/dreams/2026-09-01-comprehensive-aether-colony-review.md. Historical anchors: Swarm introduction 8092c1f1 (Feb 9), real-time display 470c8af2 (Feb 14), Open Chambers 3a5b81c2 and specialized spawns 47606e63 (Feb 15), pure-shell v5.0.0 at 70c2e519 (Feb 20), mature hybrid v5.4 at 3682956f (Apr 4), Go wiring 28dfcef9 (Apr 4), shell deletion 0063be8b (Apr 5), wrapper collapse aa0da1c9 (Apr 17), lifecycle-semantics restoration 0d1783e0 (Apr 18), and host-orchestrated Swarm restoration 2c9e2a98 (May 5)."
+}
