@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // handoffDecision is one open decision a worker recorded in its handoff,
@@ -292,7 +293,17 @@ func init() {
 	decisionAnswerCmd.Flags().Int("phase", 0, "Phase the decision belongs to")
 	decisionAnswerCmd.Flags().String("source", "worker-handoff", "Where the question came from")
 	decisionAnswerCmd.Flags().String("waiver-capability", "", "Single-use capability from the owner-facing reviewer decline card")
-	decisionAnswerCmd.Flags().String("checkpoint-capability", "", "Single-use capability from the owner-facing checkpoint command")
+	// Both owner-only decision types consume the same shaped transient secret,
+	// and a question can belong to only one protected path. Accept the generated
+	// checkpoint spelling as an alias of the existing capability slot so the
+	// secret-bearing implementation flag does not expand generic help/catalog
+	// discovery. Resolver routing still decides which stored hashes may match.
+	decisionAnswerCmd.Flags().SetNormalizeFunc(func(_ *pflag.FlagSet, name string) pflag.NormalizedName {
+		if name == "checkpoint-capability" {
+			return pflag.NormalizedName("waiver-capability")
+		}
+		return pflag.NormalizedName(name)
+	})
 
 	rootCmd.AddCommand(handoffDecisionsCmd)
 	rootCmd.AddCommand(decisionAnswerCmd)
