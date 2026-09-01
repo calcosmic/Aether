@@ -436,27 +436,49 @@ func TestSwarmWorkerFailureReachesTheFailureLogOnBothLanes(t *testing.T) {
 
 	t.Run("wrapper lane", func(t *testing.T) {
 		saveGlobals(t)
-		s, _ := newTestStore(t)
+		s, root := newTestStore(t)
 		store = s
 
 		const swarmSummary = "could not reproduce the reported crash in cmd/swarm_cmd.go: go test ./cmd/ -run TestSwarmCleanup passes on this machine"
+		dispatches := []swarmWorkerPlan{
+			{Name: "Watcher-1", Caste: "watcher", Role: "watcher", Task: "verify the fix", AgentName: "aether-watcher", Wave: 3},
+		}
 		manifest := swarmManifest{
 			Workflow: "swarm", DispatchMode: "plan-only", RequiresFinalizer: true,
+			GeneratedAt: time.Now().UTC().Format(time.RFC3339), Root: root,
 			SwarmID: "swarm-wrapper-test", Target: "reported bug",
-			Dispatches: []swarmWorkerPlan{
-				{Name: "Watcher-1", Caste: "watcher", Role: "watcher", Task: "verify the fix", AgentName: "aether-watcher", Wave: 3},
-			},
+			WorkerCount: len(dispatches), Dispatches: dispatches,
 		}
 		results := []swarmWorkerExecution{
-			{Name: "Watcher-1", Caste: "watcher", Role: "watcher", Status: "failed", Summary: swarmSummary},
+			{
+				Name: dispatches[0].Name, Caste: dispatches[0].Caste,
+				Role: dispatches[0].Role, Task: dispatches[0].Task,
+				Status: "failed", Summary: swarmSummary,
+				Response: swarmWorkerResponse{Role: dispatches[0].Role},
+			},
 		}
 
-		runs, err := mergeExternalSwarmResults(manifest, results)
+		result, err := runSwarmFinalize(root, externalSwarmCompletion{
+			SwarmManifest: &manifest,
+			Dispatches:    results,
+		})
 		if err != nil {
-			t.Fatalf("mergeExternalSwarmResults: %v", err)
+			t.Fatalf("runSwarmFinalize: %v", err)
 		}
-		if len(runs) != 1 || runs[0].Status != "failed" {
-			t.Fatalf("expected exactly 1 failed merged execution, got %+v", runs)
+		if got := result["status"]; got != "failed" {
+			t.Fatalf("wrapper status = %v, want failed", got)
+		}
+		workers := result["workers"].([]map[string]interface{})
+		if len(workers) != 1 {
+			t.Fatalf("expected exactly 1 failed merged execution, got %+v", workers)
+		}
+		for field, want := range map[string]string{
+			"name": dispatches[0].Name, "caste": dispatches[0].Caste,
+			"role": dispatches[0].Role, "task": dispatches[0].Task,
+		} {
+			if got := strings.TrimSpace(stringValue(workers[0][field])); got != want {
+				t.Errorf("merged worker %s = %q, want manifest value %q", field, got, want)
+			}
 		}
 
 		mf, err := loadMiddenFile(store)
