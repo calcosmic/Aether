@@ -604,8 +604,8 @@ func TestFinalPhaseAdvancesWithOwnerCheckpointAndSealBlocks(t *testing.T) {
 	_ = checkpointCapabilityFromReference(t, autopilotCheckpointReference{RecoveryCommand: wantCommand})
 	if _, _, err := validateSealReady(false); err == nil {
 		t.Fatal("seal accepted unresolved owner checkpoint")
-	} else if !strings.Contains(err.Error(), refs[0].ID) || !strings.Contains(err.Error(), wantCommand) {
-		t.Fatalf("seal refusal omitted stable ID or exact answer command: %v", err)
+	} else if !strings.Contains(err.Error(), refs[0].ID) || !strings.Contains(err.Error(), "--checkpoint-capability") {
+		t.Fatalf("seal refusal omitted stable ID or a freshly issued capability command: %v", err)
 	}
 
 	var outBuf, errBuf bytes.Buffer

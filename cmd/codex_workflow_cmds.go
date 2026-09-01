@@ -1299,7 +1299,7 @@ func checkSealBlockers(s *storage.Store, state colony.ColonyState) (blockers []c
 			}
 		}
 	}
-	checkpointBlockers := autopilotCheckpointSealBlockers(state)
+	checkpointBlockers, _ := autopilotCheckpointSealBlockers(state)
 	blockers = append(blockers, checkpointBlockers...)
 	checkpointCommands := map[string]bool{}
 	for _, blocker := range checkpointBlockers {

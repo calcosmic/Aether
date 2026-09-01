@@ -502,15 +502,52 @@ func checkpointReference(decision PendingDecision) autopilotCheckpointReference 
 	}
 }
 
-func autopilotCheckpointSealBlockers(state colony.ColonyState) []colony.FlagEntry {
+func autopilotCheckpointSealBlockers(state colony.ColonyState) ([]colony.FlagEntry, error) {
 	if store == nil {
-		return nil
+		return nil, fmt.Errorf("load checkpoint seal blockers: no store initialized")
 	}
-	var file PendingDecisionFile
-	if err := store.LoadJSON(pendingDecisionsFile, &file); err != nil {
-		return nil
+	var preview PendingDecisionFile
+	if err := store.LoadJSON(pendingDecisionsFile, &preview); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("load checkpoint seal blockers from %s: %w", pendingDecisionsFile, err)
 	}
 	scope := pendingDecisionScopeFromState(state)
+	hasCurrentCheckpoint := false
+	for _, decision := range preview.Decisions {
+		if !decision.Resolved && isAutopilotCheckpointType(decision.Type) && pendingDecisionMatchesScope(decision, scope) {
+			hasCurrentCheckpoint = true
+			break
+		}
+	}
+	if !hasCurrentCheckpoint {
+		return nil, nil
+	}
+
+	// Capability hashes for every current checkpoint are persisted in one
+	// read-modify-write transaction. Raw capabilities remain attached only to
+	// this in-memory copy so a failed write cannot return an authorization
+	// command whose hash never became durable.
+	var file PendingDecisionFile
+	if err := store.UpdateJSONAtomically(pendingDecisionsFile, &file, func() error {
+		for i := range file.Decisions {
+			decision := &file.Decisions[i]
+			if decision.Resolved || !isAutopilotCheckpointType(decision.Type) || !pendingDecisionMatchesScope(*decision, scope) {
+				continue
+			}
+			capability, capabilityHash, err := newForcedReviewerWaiverCapability()
+			if err != nil {
+				return fmt.Errorf("issue checkpoint capability for %s: %w", decision.ID, err)
+			}
+			appendCheckpointCapabilityHash(decision, capabilityHash)
+			decision.CheckpointCapability = capability
+		}
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("persist checkpoint seal capabilities in %s: %w", pendingDecisionsFile, err)
+	}
+
 	blockers := []colony.FlagEntry{}
 	for _, decision := range file.Decisions {
 		if decision.Resolved || !isAutopilotCheckpointType(decision.Type) || !pendingDecisionMatchesScope(decision, scope) {
@@ -540,5 +577,5 @@ func autopilotCheckpointSealBlockers(state colony.ColonyState) []colony.FlagEntr
 			RecoveryCommand: command,
 		})
 	}
-	return blockers
+	return blockers, nil
 }
