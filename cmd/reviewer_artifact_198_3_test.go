@@ -1,7 +1,10 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -23,6 +26,20 @@ func completedReviewerHandoff() codex.WorkerHandoff {
 		NextWorkerInstructions: []string{"Use the structured review artifact."},
 		Freshness:              "not-run",
 	}
+}
+
+func completedReviewerStep(caste, name string) codexContinueWorkerFlowStep {
+	return codexContinueWorkerFlowStep{
+		Stage: "review", Caste: caste, Name: name, Status: "completed",
+	}
+}
+
+func validCompletedReviewerArtifacts(t *testing.T, caste string) map[string]json.RawMessage {
+	t.Helper()
+	if !strings.EqualFold(strings.TrimSpace(caste), "auditor") {
+		return nil
+	}
+	return reviewerArtifactRaw(t, `{"overall_score":60,"findings":[]}`)
 }
 
 func reviewerEvaluation(t *testing.T, signals codexContinueAutopilotSignals, code autopilotTriggerCode) autopilotTriggerEvaluation {
@@ -155,6 +172,263 @@ func TestReviewerArtifactIsAuthoritativeAndMalformedEvidenceIsExplicit(t *testin
 	malformedSignals := continueReviewAutopilotSignals([]codexContinueWorkerFlowStep{malformed})
 	if len(malformedSignals.EvidenceErrors) == 0 {
 		t.Fatal("current-result autopilot signals omitted malformed evidence errors")
+	}
+}
+
+func TestReviewerArtifactMissingAndEmptyCompletedAuditorEvidenceFailsClosed(t *testing.T) {
+	tests := []struct {
+		name      string
+		artifacts map[string]json.RawMessage
+		want      string
+	}{
+		{name: "missing artifact", artifacts: nil, want: "artifacts.review is required"},
+		{name: "empty object", artifacts: reviewerArtifactRaw(t, `{}`), want: "overall_score is required"},
+		{name: "null", artifacts: reviewerArtifactRaw(t, `null`), want: "must be a JSON object"},
+		{name: "non object", artifacts: reviewerArtifactRaw(t, `[]`), want: "must be a JSON object"},
+		{name: "malformed JSON", artifacts: reviewerArtifactRaw(t, `{"overall_score":`), want: "is malformed"},
+		{name: "missing score", artifacts: reviewerArtifactRaw(t, `{"findings":[]}`), want: "overall_score is required"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			step := normalizeContinueReviewEvidence(completedReviewerStep("auditor", "Audit-Missing"), tt.artifacts)
+			if len(step.EvidenceErrors) == 0 {
+				t.Fatalf("invalid completed-Auditor evidence was accepted: %#v", step)
+			}
+			if got := strings.Join(step.EvidenceErrors, " "); !strings.Contains(got, tt.want) {
+				t.Fatalf("evidence errors %q do not contain %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestReviewerArtifactScoreAndSeverityValidationMatrix(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{name: "negative score", raw: `{"overall_score":-1}`, want: "between 0 and 100"},
+		{name: "score above range", raw: `{"overall_score":101}`, want: "between 0 and 100"},
+		{name: "fractional score", raw: `{"overall_score":59.5}`, want: "must be an integer"},
+		{name: "string score", raw: `{"overall_score":"60"}`, want: "must be an integer"},
+		{name: "invalid severity", raw: `{"overall_score":60,"findings":[{"severity":"catastrophic","description":"bad enum"}]}`, want: "severity must be"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			step := normalizeContinueReviewEvidence(
+				completedReviewerStep("auditor", "Audit-Schema"),
+				reviewerArtifactRaw(t, tt.raw),
+			)
+			if got := strings.Join(step.EvidenceErrors, " "); !strings.Contains(got, tt.want) {
+				t.Fatalf("evidence errors %q do not contain %q; step=%#v", got, tt.want, step)
+			}
+		})
+	}
+}
+
+func TestReviewerArtifactMalformedScorePreservesValidFindings(t *testing.T) {
+	step := normalizeContinueReviewEvidence(
+		completedReviewerStep("auditor", "Audit-Diagnostic"),
+		reviewerArtifactRaw(t, `{
+			"overall_score":"sixty",
+			"findings":[{"severity":"HIGH","description":"retain this diagnostic"}]
+		}`),
+	)
+	if len(step.EvidenceErrors) == 0 {
+		t.Fatal("malformed score did not produce an evidence error")
+	}
+	if len(step.Findings) != 1 || step.Findings[0].Description != "retain this diagnostic" {
+		t.Fatalf("valid findings were discarded with the malformed score: %#v", step.Findings)
+	}
+}
+
+func TestReviewerArtifactScoreBoundaryAndAuditorAbsence(t *testing.T) {
+	for _, score := range []int{59, 60} {
+		t.Run(fmt.Sprintf("score %d", score), func(t *testing.T) {
+			step := normalizeContinueReviewEvidence(
+				completedReviewerStep("auditor", "Audit-Boundary"),
+				reviewerArtifactRaw(t, fmt.Sprintf(`{"overall_score":%d}`, score)),
+			)
+			if len(step.EvidenceErrors) != 0 || step.OverallScore == nil || *step.OverallScore != score {
+				t.Fatalf("valid boundary score %d was rejected: %#v", score, step)
+			}
+		})
+	}
+
+	for _, step := range []codexContinueWorkerFlowStep{
+		completedReviewerStep("watcher", "No-Auditor"),
+		{Stage: "review", Caste: "auditor", Name: "Failed-Auditor", Status: "failed"},
+		{Stage: "review", Caste: "auditor", Name: "Timed-Out-Auditor", Status: "timeout"},
+	} {
+		normalized := normalizeContinueReviewEvidence(step, nil)
+		if normalized.OverallScore != nil || len(normalized.EvidenceErrors) != 0 {
+			t.Fatalf("non-completed or non-Auditor step gained score requirements: %#v", normalized)
+		}
+	}
+}
+
+type reviewerArtifactInvalidFixture struct {
+	name        string
+	artifacts   map[string]json.RawMessage
+	wantError   string
+	wantFinding bool
+}
+
+func reviewerArtifactInvalidFixtures(t *testing.T) []reviewerArtifactInvalidFixture {
+	t.Helper()
+	return []reviewerArtifactInvalidFixture{
+		{name: "missing artifact", artifacts: nil, wantError: "artifacts.review is required"},
+		{name: "empty object", artifacts: reviewerArtifactRaw(t, `{}`), wantError: "overall_score is required"},
+		{name: "null", artifacts: reviewerArtifactRaw(t, `null`), wantError: "must be a JSON object"},
+		{name: "non object", artifacts: reviewerArtifactRaw(t, `[]`), wantError: "must be a JSON object"},
+		{name: "malformed JSON", artifacts: reviewerArtifactRaw(t, `{"overall_score":`), wantError: "is malformed"},
+		{name: "missing score", artifacts: reviewerArtifactRaw(t, `{"findings":[{"severity":"HIGH","description":"retained high diagnostic"}]}`), wantError: "overall_score is required", wantFinding: true},
+		{name: "negative score", artifacts: reviewerArtifactRaw(t, `{"overall_score":-1,"findings":[{"severity":"HIGH","description":"retained high diagnostic"}]}`), wantError: "between 0 and 100", wantFinding: true},
+		{name: "score above range", artifacts: reviewerArtifactRaw(t, `{"overall_score":101,"findings":[{"severity":"HIGH","description":"retained high diagnostic"}]}`), wantError: "between 0 and 100", wantFinding: true},
+		{name: "fractional score", artifacts: reviewerArtifactRaw(t, `{"overall_score":59.5,"findings":[{"severity":"HIGH","description":"retained high diagnostic"}]}`), wantError: "must be an integer", wantFinding: true},
+		{name: "string score", artifacts: reviewerArtifactRaw(t, `{"overall_score":"60","findings":[{"severity":"HIGH","description":"retained high diagnostic"}]}`), wantError: "must be an integer", wantFinding: true},
+		{name: "invalid severity", artifacts: reviewerArtifactRaw(t, `{"overall_score":60,"findings":[{"severity":"HIGH","description":"retained high diagnostic"},{"severity":"catastrophic","description":"invalid diagnostic"}]}`), wantError: "severity must be", wantFinding: true},
+	}
+}
+
+type reviewerArtifactFlowInvoker struct {
+	artifacts map[string]json.RawMessage
+}
+
+func (i *reviewerArtifactFlowInvoker) Invoke(_ context.Context, config codex.WorkerConfig) (codex.WorkerResult, error) {
+	result := codex.WorkerResult{
+		WorkerName: config.WorkerName,
+		Caste:      config.Caste,
+		TaskID:     config.TaskID,
+		Status:     "completed",
+		Summary:    config.Caste + " completed",
+		RawOutput:  "direct reviewer diagnostic for " + config.WorkerName,
+		Handoff:    completedReviewerHandoff(),
+	}
+	if strings.EqualFold(config.Caste, "auditor") {
+		result.Artifacts = i.artifacts
+	}
+	return result, nil
+}
+
+func (*reviewerArtifactFlowInvoker) IsAvailable(context.Context) bool { return true }
+func (*reviewerArtifactFlowInvoker) ValidateAgent(string) error       { return nil }
+
+func reviewerArtifactAuditorStep(t *testing.T, report codexContinueReviewReport) codexContinueWorkerFlowStep {
+	t.Helper()
+	for _, step := range report.Workers {
+		if strings.EqualFold(step.Caste, "auditor") {
+			return step
+		}
+	}
+	t.Fatalf("review report has no Auditor step: %#v", report.Workers)
+	return codexContinueWorkerFlowStep{}
+}
+
+func assertReviewerArtifactBlockedEvidence(t *testing.T, result map[string]interface{}, state colony.ColonyState, diagnostic, wantError string, wantFinding bool) {
+	t.Helper()
+	if blocked, _ := result["blocked"].(bool); !blocked {
+		t.Errorf("invalid completed-Auditor evidence did not block: %#v", result)
+	}
+	if advanced, _ := result["advanced"].(bool); advanced {
+		t.Errorf("invalid completed-Auditor evidence advanced the phase: %#v", result)
+	}
+	if state.CurrentPhase != 1 || len(state.Plan.Phases) == 0 || state.Plan.Phases[0].Status == colony.PhaseCompleted {
+		t.Errorf("phase state advanced despite invalid reviewer evidence: current=%d phases=%#v", state.CurrentPhase, state.Plan.Phases)
+	}
+
+	review, ok := result["review"].(codexContinueReviewReport)
+	if !ok {
+		t.Fatalf("blocked result omitted the typed review report: %#v", result["review"])
+	}
+	if review.Passed {
+		t.Errorf("review.Passed = true, want false: %#v", review)
+	}
+	step := reviewerArtifactAuditorStep(t, review)
+	if continueWorkerFlowStatus(step.Status) != buildWorkerCompleted {
+		t.Errorf("Auditor status = %q, want completed", step.Status)
+	}
+	if !strings.Contains(step.Report, diagnostic) {
+		t.Errorf("Auditor diagnostic %q was not retained in %q", diagnostic, step.Report)
+	}
+	evidenceText := strings.Join(step.EvidenceErrors, " ")
+	if !strings.Contains(evidenceText, wantError) {
+		t.Errorf("Auditor evidence errors %q do not contain %q", evidenceText, wantError)
+	}
+	if wantFinding && (len(step.Findings) != 1 || step.Findings[0].Description != "retained high diagnostic") {
+		t.Errorf("valid High finding was not retained: %#v", step.Findings)
+	}
+	blockingText := strings.ToLower(strings.Join(review.BlockingIssues, " "))
+	if !strings.Contains(blockingText, strings.ToLower(step.Name)) || !strings.Contains(blockingText, "auditor") || !strings.Contains(blockingText, strings.ToLower(wantError)) {
+		t.Errorf("blocking issues must name the reviewer, caste, and validation reason: %v", review.BlockingIssues)
+	}
+}
+
+func TestReviewerArtifactDirectFlowFailsClosed(t *testing.T) {
+	for _, fixture := range reviewerArtifactInvalidFixtures(t) {
+		t.Run(fixture.name, func(t *testing.T) {
+			saveGlobals(t)
+			resetRootCmd(t)
+			root, _, _, _ := setupIntermediateContinueState(t, "Direct reviewer evidence wall")
+
+			invoker := &reviewerArtifactFlowInvoker{artifacts: fixture.artifacts}
+			newCodexWorkerInvoker = func() codex.WorkerInvoker { return invoker }
+
+			result, state, _, _, _, _, err := runCodexContinue(root, codexContinueOptions{HeavyFlag: true})
+			if err != nil {
+				t.Fatalf("runCodexContinue: %v", err)
+			}
+			assertReviewerArtifactBlockedEvidence(t, result, state, "direct reviewer diagnostic", fixture.wantError, fixture.wantFinding)
+		})
+	}
+}
+
+func TestReviewerArtifactExternalFinalizeFailsClosed(t *testing.T) {
+	for _, fixture := range reviewerArtifactInvalidFixtures(t) {
+		t.Run(fixture.name, func(t *testing.T) {
+			saveGlobals(t)
+			resetRootCmd(t)
+			root, dataDir, _, _ := setupIntermediateContinueState(t, "External reviewer evidence wall")
+
+			planResult, _, _, _, err := runCodexContinuePlanOnly(root, codexContinueOptions{HeavyFlag: true})
+			if err != nil {
+				t.Fatalf("runCodexContinuePlanOnly: %v", err)
+			}
+			plan := planResult["continue_manifest"].(codexContinuePlanManifest)
+			results := make([]codexContinueExternalDispatch, 0, len(plan.Dispatches))
+			for _, dispatch := range plan.Dispatches {
+				result := codexContinueExternalDispatch{
+					Stage: dispatch.Stage, Wave: dispatch.Wave, Caste: dispatch.Caste, Name: dispatch.Name,
+					Task: dispatch.Task, TaskID: dispatch.TaskID, Status: "completed",
+					Summary: "external " + dispatch.Caste + " completed",
+					Report:  "external reviewer diagnostic for " + dispatch.Name,
+					Handoff: completedReviewerHandoff(),
+				}
+				if strings.EqualFold(dispatch.Caste, "auditor") {
+					result.Artifacts = fixture.artifacts
+				}
+				results = append(results, result)
+			}
+
+			result, state, _, _, _, _, err := runCodexContinueFinalize(root, codexExternalContinueCompletion{
+				ContinueManifest: &plan,
+				Dispatches:       results,
+			}, false, 0, false)
+			if err != nil {
+				t.Fatalf("runCodexContinueFinalize: %v", err)
+			}
+			assertReviewerArtifactBlockedEvidence(t, result, state, "external reviewer diagnostic", fixture.wantError, fixture.wantFinding)
+
+			var durable colony.ColonyState
+			if err := store.LoadJSON(filepath.ToSlash("COLONY_STATE.json"), &durable); err != nil {
+				t.Fatalf("load durable colony state from %s: %v", dataDir, err)
+			}
+			if durable.CurrentPhase != 1 || durable.Plan.Phases[0].Status == colony.PhaseCompleted {
+				t.Fatalf("durable phase state advanced despite invalid reviewer evidence: %#v", durable)
+			}
+		})
 	}
 }
 

@@ -799,12 +799,6 @@ func mergeExternalContinueResults(plan codexContinuePlanManifest, results []code
 	return flow, nil
 }
 
-type codexContinueReviewArtifact struct {
-	OverallScore *int                 `json:"overall_score,omitempty"`
-	Findings     []codexReviewFinding `json:"findings,omitempty"`
-	Issues       []codexReviewFinding `json:"issues,omitempty"`
-}
-
 // normalizeContinueReviewEvidence applies the same artifact contract to an
 // in-process WorkerResult and a wrapper completion. An explicit review
 // artifact is authoritative: prose and legacy top-level fields cannot
@@ -813,6 +807,9 @@ type codexContinueReviewArtifact struct {
 func normalizeContinueReviewEvidence(step codexContinueWorkerFlowStep, artifacts map[string]json.RawMessage) codexContinueWorkerFlowStep {
 	raw, explicit := artifacts["review"]
 	if !explicit {
+		if strings.EqualFold(strings.TrimSpace(step.Caste), "auditor") && continueWorkerFlowStatus(step.Status) == buildWorkerCompleted {
+			step.EvidenceErrors = uniqueSortedStrings(append(step.EvidenceErrors, fmt.Sprintf("%s artifacts.review is required for a completed Auditor", step.Name)))
+		}
 		return step
 	}
 
@@ -825,23 +822,48 @@ func normalizeContinueReviewEvidence(step codexContinueWorkerFlowStep, artifacts
 		return step
 	}
 
-	var artifact codexContinueReviewArtifact
+	var artifact map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &artifact); err != nil {
 		step.EvidenceErrors = []string{fmt.Sprintf("%s artifacts.review is malformed: %v", step.Name, err)}
 		return step
 	}
+	if artifact == nil {
+		step.EvidenceErrors = []string{fmt.Sprintf("%s artifacts.review must be a JSON object", step.Name)}
+		return step
+	}
 
-	if artifact.OverallScore != nil {
-		if *artifact.OverallScore < 0 || *artifact.OverallScore > 100 {
+	scoreRaw, scorePresent := artifact["overall_score"]
+	if !scorePresent {
+		if strings.EqualFold(strings.TrimSpace(step.Caste), "auditor") && continueWorkerFlowStatus(step.Status) == buildWorkerCompleted {
+			step.EvidenceErrors = append(step.EvidenceErrors, fmt.Sprintf("%s artifacts.review overall_score is required for a completed Auditor", step.Name))
+		}
+	} else {
+		var score int
+		if strings.TrimSpace(string(scoreRaw)) == "null" || json.Unmarshal(scoreRaw, &score) != nil {
+			step.EvidenceErrors = append(step.EvidenceErrors, fmt.Sprintf("%s artifacts.review overall_score must be an integer", step.Name))
+		} else if score < 0 || score > 100 {
 			step.EvidenceErrors = append(step.EvidenceErrors, fmt.Sprintf("%s artifacts.review overall_score must be between 0 and 100", step.Name))
 		} else if strings.EqualFold(strings.TrimSpace(step.Caste), "auditor") && continueWorkerFlowStatus(step.Status) == buildWorkerCompleted {
-			score := *artifact.OverallScore
 			step.OverallScore = &score
 		}
 	}
 
-	validFindings := make([]codexReviewFinding, 0, len(artifact.Findings)+len(artifact.Issues))
-	for index, finding := range append(append([]codexReviewFinding{}, artifact.Findings...), artifact.Issues...) {
+	structuredFindings := []codexReviewFinding{}
+	for _, field := range []string{"findings", "issues"} {
+		fieldRaw, present := artifact[field]
+		if !present {
+			continue
+		}
+		var findings []codexReviewFinding
+		if err := json.Unmarshal(fieldRaw, &findings); err != nil {
+			step.EvidenceErrors = append(step.EvidenceErrors, fmt.Sprintf("%s artifacts.review %s must be an array: %v", step.Name, field, err))
+			continue
+		}
+		structuredFindings = append(structuredFindings, findings...)
+	}
+
+	validFindings := make([]codexReviewFinding, 0, len(structuredFindings))
+	for index, finding := range structuredFindings {
 		severity := strings.ToUpper(strings.TrimSpace(finding.Severity))
 		if !validReviewArtifactSeverity(severity) {
 			step.EvidenceErrors = append(step.EvidenceErrors, fmt.Sprintf("%s artifacts.review findings[%d].severity must be CRITICAL, HIGH, MEDIUM, LOW, or INFO", step.Name, index))
@@ -853,6 +875,24 @@ func normalizeContinueReviewEvidence(step codexContinueWorkerFlowStep, artifacts
 	step.Findings = mergeCodexReviewFindings(validFindings)
 	step.EvidenceErrors = uniqueSortedStrings(step.EvidenceErrors)
 	return step
+}
+
+func continueReviewEvidenceBlockingIssues(step codexContinueWorkerFlowStep) []string {
+	caste := strings.TrimSpace(step.Caste)
+	if caste == "" {
+		caste = "reviewer"
+	}
+	name := strings.TrimSpace(step.Name)
+	if name == "" {
+		name = "unnamed"
+	}
+	blockers := make([]string, 0, len(step.EvidenceErrors))
+	for _, evidenceError := range step.EvidenceErrors {
+		if reason := strings.TrimSpace(evidenceError); reason != "" {
+			blockers = append(blockers, fmt.Sprintf("%s %s review evidence is invalid: %s", caste, name, reason))
+		}
+	}
+	return uniqueSortedStrings(blockers)
 }
 
 func validReviewArtifactSeverity(severity string) bool {
@@ -1150,6 +1190,10 @@ func externalContinueReviewReport(phaseID int, workerFlow []codexContinueWorkerF
 			continue
 		}
 		report.Workers = append(report.Workers, step)
+		if evidenceBlockers := continueReviewEvidenceBlockingIssues(step); len(evidenceBlockers) > 0 {
+			report.Passed = false
+			blockers = append(blockers, evidenceBlockers...)
+		}
 		if isSuccessfulExternalBuildStatus(status) {
 			// Severity is authoritative. Only CRITICAL structured findings
 			// stop the line; the legacy worker-supplied blocking bit remains

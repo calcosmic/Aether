@@ -385,14 +385,15 @@ func TestExternalContinueAdvanceInvokesPhaseEndConsolidation(t *testing.T) {
 	results := make([]codexContinueExternalDispatch, 0, len(plan.Dispatches))
 	for _, dispatch := range plan.Dispatches {
 		results = append(results, codexContinueExternalDispatch{
-			Stage:   dispatch.Stage,
-			Wave:    dispatch.Wave,
-			Caste:   dispatch.Caste,
-			Name:    dispatch.Name,
-			Task:    dispatch.Task,
-			TaskID:  dispatch.TaskID,
-			Status:  "completed",
-			Summary: dispatch.Name + " cleared consolidation wiring review",
+			Stage:     dispatch.Stage,
+			Wave:      dispatch.Wave,
+			Caste:     dispatch.Caste,
+			Name:      dispatch.Name,
+			Task:      dispatch.Task,
+			TaskID:    dispatch.TaskID,
+			Status:    "completed",
+			Summary:   dispatch.Name + " cleared consolidation wiring review",
+			Artifacts: validCompletedReviewerArtifacts(t, dispatch.Caste),
 			// A completed result must relay a non-empty handoff (189-REVIEW.md
 			// CR-01): the finalizer now enforces the same promise every
 			// wrapper brief states.

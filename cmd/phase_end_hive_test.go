@@ -161,8 +161,9 @@ func driveWrapperLaneContinue(t *testing.T, root string) map[string]interface{} 
 		results = append(results, codexContinueExternalDispatch{
 			Stage: dispatch.Stage, Wave: dispatch.Wave, Caste: dispatch.Caste,
 			Name: dispatch.Name, Task: dispatch.Task, TaskID: dispatch.TaskID,
-			Status:  "completed",
-			Summary: dispatch.Name + " cleared the check",
+			Status:    "completed",
+			Summary:   dispatch.Name + " cleared the check",
+			Artifacts: validCompletedReviewerArtifacts(t, dispatch.Caste),
 			Handoff: codex.WorkerHandoff{
 				VerificationStatus:     "pass",
 				NextWorkerInstructions: []string{dispatch.Name + " found no blocking issues"},
