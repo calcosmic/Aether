@@ -347,7 +347,13 @@ func TestRunDryRunUsesCanonicalTriggerCatalogue(t *testing.T) {
 		}},
 	}
 
-	result := buildRunDryRunResult(state, runCompatibilityOptions{})
+	originalLessons := runAutopilotLoadLessons
+	runAutopilotLoadLessons = func(colony.Plan) ([]confirmedAutopilotLesson, error) { return nil, nil }
+	t.Cleanup(func() { runAutopilotLoadLessons = originalLessons })
+	result, err := buildRunDryRunResult(state, runCompatibilityOptions{})
+	if err != nil {
+		t.Fatalf("build dry-run result: %v", err)
+	}
 	dryRunSpecs, ok := result["trigger_catalogue"].([]autopilotTriggerSpec)
 	if !ok {
 		t.Fatalf("dry-run trigger_catalogue type = %T, want []autopilotTriggerSpec", result["trigger_catalogue"])
@@ -378,7 +384,13 @@ func TestAutopilotTriggerCatalogueRendersBothModeDispositions(t *testing.T) {
 			{ID: 1, Name: "Rendered catalogue fixture", Status: colony.PhasePending},
 		}},
 	}
-	result := buildRunDryRunResult(state, runCompatibilityOptions{})
+	originalLessons := runAutopilotLoadLessons
+	runAutopilotLoadLessons = func(colony.Plan) ([]confirmedAutopilotLesson, error) { return nil, nil }
+	t.Cleanup(func() { runAutopilotLoadLessons = originalLessons })
+	result, err := buildRunDryRunResult(state, runCompatibilityOptions{})
+	if err != nil {
+		t.Fatalf("build dry-run result: %v", err)
+	}
 
 	// Exercise the JSON-round-tripped shape used by hosted callers as well as
 	// the direct typed result used by the CLI.

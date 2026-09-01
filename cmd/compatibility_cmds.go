@@ -47,6 +47,12 @@ type autopilotRunDecision struct {
 	Checkpoints []autopilotCheckpointReference `json:"checkpoints,omitempty"`
 }
 
+type autopilotReplanEvaluation struct {
+	Decision       autopilotRunDecision
+	Lessons        []confirmedAutopilotLesson
+	PlanRevisionID string
+}
+
 var watchCmd = &cobra.Command{
 	Use:   "watch",
 	Short: "Compatibility alias for live worker activity",
@@ -431,6 +437,31 @@ func autopilotRunDecisionForCode(code autopilotTriggerCode, headless bool, evide
 	}
 }
 
+// evaluateAutopilotReplan is the one live/preview policy decision for a replan
+// boundary. It is pure: eligibility and mode disposition are computed here,
+// while the live caller alone may persist a pending decision afterwards.
+func evaluateAutopilotReplan(plan colony.Plan, checkpointPhase, phasesCompleted int, opts runCompatibilityOptions, lessons []confirmedAutopilotLesson) (autopilotReplanEvaluation, bool, error) {
+	due := lessonAwareReplanDue(phasesCompleted, opts.ReplanInterval, lessons, opts.ContinueWithoutReplan) ||
+		legacyInteractiveReplanDue(plan, phasesCompleted, opts.ReplanInterval, opts.ContinueWithoutReplan, opts.Headless)
+	if !due {
+		return autopilotReplanEvaluation{}, false, nil
+	}
+	revisionID, _, err := activePlanLessonBoundary(plan)
+	if err != nil {
+		return autopilotReplanEvaluation{}, false, err
+	}
+	evidence := map[string]interface{}{
+		"phase":            checkpointPhase,
+		"lesson_count":     len(lessons),
+		"plan_revision_id": revisionID,
+	}
+	return autopilotReplanEvaluation{
+		Decision:       autopilotRunDecisionForCode(autopilotTriggerReplanDue, opts.Headless, evidence),
+		Lessons:        lessons,
+		PlanRevisionID: revisionID,
+	}, true, nil
+}
+
 func autopilotSignalsFromRunResult(result map[string]interface{}) codexContinueAutopilotSignals {
 	if result == nil {
 		return codexContinueAutopilotSignals{}
@@ -673,7 +704,7 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 	}
 
 	if opts.DryRun {
-		return buildRunDryRunResult(state, opts), nil
+		return buildRunDryRunResult(state, opts)
 	}
 
 	invocation := beginAutopilotInvocation(state)
@@ -837,13 +868,16 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 				decision := autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{"phase": phase.ID, "stage": "replan_evidence"})
 				return finish(state, decision, lessonErr), nil
 			}
-			evidenceReplanDue := lessonAwareReplanDue(phasesCompleted, opts.ReplanInterval, lessons, opts.ContinueWithoutReplan)
-			legacyReplanDue := legacyInteractiveReplanDue(state.Plan, phasesCompleted, opts.ReplanInterval, opts.ContinueWithoutReplan, opts.Headless)
-			if evidenceReplanDue || legacyReplanDue {
-				runDecision := autopilotRunDecisionForCode(autopilotTriggerReplanDue, opts.Headless, map[string]interface{}{"phase": phase.ID, "lesson_count": len(lessons)})
+			replan, due, replanErr := evaluateAutopilotReplan(state.Plan, phase.ID, phasesCompleted, opts, lessons)
+			if replanErr != nil {
+				decision := autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{"phase": phase.ID, "stage": "replan_evidence"})
+				return finish(state, decision, replanErr), nil
+			}
+			if due {
+				runDecision := replan.Decision
 				switch runDecision.Disposition {
 				case autopilotDispositionQueueAndContinue:
-					decision, err := upsertAutopilotReplanDecision(state, phase.ID, lessons, autopilotNow())
+					decision, err := upsertAutopilotReplanDecision(state, phase.ID, replan.Lessons, autopilotNow())
 					if err != nil {
 						failed := autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{"phase": phase.ID, "stage": "replan_persistence"})
 						return finish(state, failed, err), nil
@@ -859,10 +893,11 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 					})
 					emitVisualProgress(renderRunReplanQueued(decision))
 				case autopilotDispositionPause, autopilotDispositionStop, autopilotDispositionNormalStop:
-					emitVisualProgress(renderRunReplanBanner(phasesCompleted, opts.ReplanInterval, len(lessons)))
+					emitVisualProgress(renderRunReplanBanner(phasesCompleted, opts.ReplanInterval, len(replan.Lessons)))
 					result := finish(state, runDecision, nil)
-					result["confirmed_lessons"] = lessons
-					result["lesson_count"] = len(lessons)
+					result["confirmed_lessons"] = replan.Lessons
+					result["lesson_count"] = len(replan.Lessons)
+					result["plan_revision_id"] = replan.PlanRevisionID
 					return result, nil
 				}
 			}
@@ -887,10 +922,14 @@ func loadCompatibilityColonyState() (colony.ColonyState, error) {
 	return state, nil
 }
 
-func buildRunDryRunResult(state colony.ColonyState, opts runCompatibilityOptions) map[string]interface{} {
+func buildRunDryRunResult(state colony.ColonyState, opts runCompatibilityOptions) (map[string]interface{}, error) {
 	steps := []map[string]interface{}{}
 	phasesPlanned := 0
 	working := state
+	lessons, err := runAutopilotLoadLessons(working.Plan)
+	if err != nil {
+		return nil, fmt.Errorf("preview replan evidence: %w", err)
+	}
 	finish := func(reason, next string) map[string]interface{} {
 		return map[string]interface{}{
 			"mode":              "dry-run",
@@ -910,7 +949,7 @@ func buildRunDryRunResult(state colony.ColonyState, opts runCompatibilityOptions
 	for {
 		switch working.State {
 		case colony.StateCOMPLETED:
-			return finish("completed", "aether seal")
+			return finish("completed", "aether seal"), nil
 
 		case colony.StateEXECUTING, colony.StateBUILT:
 			steps = append(steps, map[string]interface{}{
@@ -919,16 +958,16 @@ func buildRunDryRunResult(state colony.ColonyState, opts runCompatibilityOptions
 				"state":   working.State,
 			})
 			phasesPlanned++
-			return finish("continue_required", "aether continue")
+			return finish("continue_required", "aether continue"), nil
 
 		case colony.StateREADY:
 			if opts.MaxPhases > 0 && phasesPlanned >= opts.MaxPhases {
-				return finish("max_phases_reached", nextCommandFromState(working))
+				return finish("max_phases_reached", nextCommandFromState(working)), nil
 			}
 
 			phase := recoveryPhase(&working)
 			if phase == nil {
-				return finish("completed", "aether seal")
+				return finish("completed", "aether seal"), nil
 			}
 
 			steps = append(steps,
@@ -936,12 +975,36 @@ func buildRunDryRunResult(state colony.ColonyState, opts runCompatibilityOptions
 				map[string]interface{}{"command": "aether continue", "phase": phase.ID, "phase_name": phase.Name},
 			)
 			phasesPlanned++
-			if opts.ReplanInterval > 0 && phasesPlanned > 0 && phasesPlanned%opts.ReplanInterval == 0 && !opts.ContinueWithoutReplan {
-				return finish("replan_due", "aether plan")
+			replan, due, replanErr := evaluateAutopilotReplan(working.Plan, phase.ID, phasesPlanned, opts, lessons)
+			if replanErr != nil {
+				return nil, fmt.Errorf("preview replan decision: %w", replanErr)
+			}
+			if due {
+				switch replan.Decision.Disposition {
+				case autopilotDispositionQueueAndContinue:
+					steps = append(steps, map[string]interface{}{
+						"event":            "preview_decision_queue",
+						"preview_only":     true,
+						"trigger_code":     replan.Decision.Code,
+						"disposition":      replan.Decision.Disposition,
+						"phase":            phase.ID,
+						"lesson_count":     len(replan.Lessons),
+						"plan_revision_id": replan.PlanRevisionID,
+						"next":             replan.Decision.Next,
+					})
+				case autopilotDispositionPause, autopilotDispositionStop, autopilotDispositionNormalStop:
+					result := finish(string(replan.Decision.Code), replan.Decision.Next)
+					result["trigger_code"] = replan.Decision.Code
+					result["disposition"] = replan.Decision.Disposition
+					result["confirmed_lessons"] = replan.Lessons
+					result["lesson_count"] = len(replan.Lessons)
+					result["plan_revision_id"] = replan.PlanRevisionID
+					return result, nil
+				}
 			}
 
 			if phase.ID >= len(working.Plan.Phases) {
-				return finish("completed", "aether seal")
+				return finish("completed", "aether seal"), nil
 			}
 
 			working.Plan.Phases[phase.ID-1].Status = colony.PhaseCompleted
@@ -949,7 +1012,7 @@ func buildRunDryRunResult(state colony.ColonyState, opts runCompatibilityOptions
 			working.State = colony.StateREADY
 
 		default:
-			return finish("not_runnable", nextCommandFromState(working))
+			return finish("not_runnable", nextCommandFromState(working)), nil
 		}
 	}
 }
