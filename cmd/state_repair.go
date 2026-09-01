@@ -19,6 +19,20 @@ var (
 )
 
 func repairMissingPlanFromArtifacts(state colony.ColonyState) (colony.ColonyState, bool, error) {
+	repaired, staged, err := stageMissingPlanFromArtifacts(state)
+	if err != nil || !staged {
+		return repaired, staged, err
+	}
+
+	if err := store.SaveJSON("COLONY_STATE.json", repaired); err != nil {
+		return state, false, fmt.Errorf("failed to persist repaired colony state: %w", err)
+	}
+	return repaired, true, nil
+}
+
+// stageMissingPlanFromArtifacts reconstructs a recoverable missing plan in
+// memory. Persistence remains the responsibility of repairMissingPlanFromArtifacts.
+func stageMissingPlanFromArtifacts(state colony.ColonyState) (colony.ColonyState, bool, error) {
 	if store == nil || state.Goal == nil || strings.TrimSpace(*state.Goal) == "" || len(state.Plan.Phases) > 0 {
 		return state, false, nil
 	}
@@ -49,10 +63,6 @@ func repairMissingPlanFromArtifacts(state colony.ColonyState) (colony.ColonyStat
 	repaired.Events = append(trimmedEvents(repaired.Events),
 		fmt.Sprintf("%s|plan_recovered|state|Recovered %d phases from planning artifact after COLONY_STATE.json lost its saved plan", time.Now().UTC().Format(time.RFC3339), len(repaired.Plan.Phases)),
 	)
-
-	if err := store.SaveJSON("COLONY_STATE.json", repaired); err != nil {
-		return state, false, fmt.Errorf("failed to persist repaired colony state: %w", err)
-	}
 	return repaired, true, nil
 }
 
