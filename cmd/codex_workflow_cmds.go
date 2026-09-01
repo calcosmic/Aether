@@ -1345,13 +1345,19 @@ func checkSealBlockers(s *storage.Store, state colony.ColonyState) (blockers []c
 	if checkpointErr != nil {
 		appendPendingDecisionFailure(checkpointErr)
 	}
-	checkpointIDs := map[string]bool{}
 	for _, blocker := range checkpointBlockers {
 		appendBlocker(blocker)
-		checkpointIDs[blocker.ID] = true
+	}
+	checkpointCompatibilityIDs := map[string]bool{}
+	if checkpointErr == nil {
+		var compatibilityErr error
+		checkpointCompatibilityIDs, compatibilityErr = autopilotCheckpointCompatibilityIDsFromStore(s, state)
+		if compatibilityErr != nil {
+			appendPendingDecisionFailure(compatibilityErr)
+		}
 	}
 	for _, blocker := range ownerConfirmationSealBlockers(state) {
-		if checkpointIDs[blocker.ID] {
+		if checkpointCompatibilityIDs[blocker.ID] {
 			continue
 		}
 		appendBlocker(blocker)

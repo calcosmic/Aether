@@ -126,14 +126,17 @@ func ownerConfirmationSealBlockers(state colony.ColonyState) []colony.FlagEntry 
 		phaseID := phase.ID
 		for _, c := range outstandingOwnerConfirmations(phase.ID, report.Criteria) {
 			command := ownerConfirmationCommand(phase.ID, c.TaskID, c.Criterion)
-			checkpointKey := stableAutopilotCheckpointKey(
+			// This is the pre-generation compatibility identity only. Durable
+			// protected rows derive a distinct authorization ID by hashing this
+			// key with their immutable work generation.
+			compatibilityKey := stableAutopilotCheckpointKey(
 				autopilotCheckpointTypeRuntimeVerification,
 				phase.ID,
 				strings.Join([]string{c.TaskID, c.Criterion}, "\x00"),
 				pendingDecisionScopeFromState(state),
 			)
 			blockers = append(blockers, colony.FlagEntry{
-				ID:          stableAutopilotCheckpointID(checkpointKey),
+				ID:          stableAutopilotCheckpointID(compatibilityKey),
 				Type:        "blocker",
 				Description: fmt.Sprintf("Phase %d: %q needs your confirmation -- no program check or reviewer could verify it.", phase.ID, c.Criterion),
 				Phase:       &phaseID,
