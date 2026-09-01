@@ -750,6 +750,116 @@ func TestSwarmRecoveryPersistenceFailurePublicIsNonMutating(t *testing.T) {
 	}
 }
 
+func TestSwarmPartialEscalationRepairPublicFlow(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+	goal := "Repair a partially persisted escalation through the public flow"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:     1,
+			Name:   "Existing stabilization work",
+			Status: colony.PhaseReady,
+			Tasks:  []colony.Task{},
+		}}},
+	})
+
+	target := "Auth panic when session is missing"
+	invoker := &swarmTestInvoker{blockedCaste: "watcher"}
+	originalInvoker := newSwarmWorkerInvoker
+	newSwarmWorkerInvoker = func() codex.WorkerInvoker { return invoker }
+	t.Cleanup(func() { newSwarmWorkerInvoker = originalInvoker })
+
+	history, pendingPath := seedPartialSwarmEscalationFailure(
+		t,
+		store,
+		target,
+		time.Now().UTC().Add(-3*time.Minute),
+	)
+	if _, err := runSwarmCompatibility(root, target, false, false); err == nil {
+		t.Error("public same-target command succeeded while the flag store was still failing")
+	}
+	if got := len(invoker.configs); got != 0 {
+		t.Fatalf("failed public repair invoked %d workers, want zero", got)
+	}
+	if err := os.Remove(pendingPath); err != nil {
+		t.Fatalf("restore pending-decision storage: %v", err)
+	}
+
+	refusal, err := runSwarmCompatibility(root, target, false, false)
+	if err != nil {
+		t.Fatalf("public repair retry: %v", err)
+	}
+	if got := refusal["status"]; got != "architectural_concern" {
+		t.Fatalf("public repair status = %v, want architectural_concern", got)
+	}
+	wantNext := swarmInsertPhaseCommand(target)
+	if got := refusal["next"]; got != wantNext {
+		t.Fatalf("public repair next = %q, want %q", got, wantNext)
+	}
+	if got := len(invoker.configs); got != 0 {
+		t.Fatalf("successful public repair invoked %d workers before recovery, want zero", got)
+	}
+	stableID := swarmEscalationFlagID(history.TargetFingerprint)
+	if flags := activeSwarmEscalationFlags(store); len(flags) != 1 || flags[0].ID != stableID {
+		t.Fatalf("public repair flags = %+v, want one active stable flag %q", flags, stableID)
+	}
+
+	// Execute the exact corrective command emitted by the repaired concern.
+	// It must authenticate against that stable same-target blocker and append a
+	// typed recovery epoch before the target can dispatch again.
+	stdout = &bytes.Buffer{}
+	stderr = &bytes.Buffer{}
+	rootCmd.SetArgs([]string{"insert-phase", target})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("execute emitted recovery command %q: %v", wantNext, err)
+	}
+	insertEnvelope := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	insertResult := insertEnvelope["result"].(map[string]interface{})
+	if inserted, _ := insertResult["inserted"].(bool); !inserted {
+		t.Fatalf("emitted recovery command did not insert a phase: %v", insertResult)
+	}
+	recovered, err := evaluateSwarmStrikeHistory(store, target)
+	if err != nil {
+		t.Fatalf("evaluate repaired recovery epoch: %v", err)
+	}
+	if recovered.StrikeCount != 0 || recovered.LatestRecovery == nil {
+		t.Fatalf("repaired recovery history = %+v, want zero strikes with recovery evidence", recovered)
+	}
+
+	retry, err := runSwarmCompatibility(root, "  AUTH PANIC WHEN SESSION IS MISSING!!!  ", false, false)
+	if err != nil {
+		t.Fatalf("exact-target retry after repaired recovery: %v", err)
+	}
+	if got := retry["status"]; got != "blocked" {
+		t.Fatalf("recovered exact-target retry status = %v, want blocked test outcome", got)
+	}
+	if got := len(invoker.configs); got == 0 {
+		t.Fatal("recovered exact-target retry did not become dispatchable")
+	}
+	flagsFile, ok := loadFlagsFile(store)
+	if !ok {
+		t.Fatal("load repaired escalation after recovery retry")
+	}
+	for _, flag := range flagsFile.Decisions {
+		if flag.ID == stableID {
+			if !flag.Resolved {
+				t.Fatalf("repaired stable escalation was not resolved before dispatch: %+v", flag)
+			}
+			return
+		}
+	}
+	t.Fatalf("repaired stable escalation %q disappeared after recovery retry", stableID)
+}
+
 func TestSwarmRecoveryReconciliationFailurePublicDispatchesNobody(t *testing.T) {
 	dataDir, root, target, invoker := seedSwarmRecoveryPublicEscalation(t)
 

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
 )
@@ -351,6 +352,89 @@ func TestSwarmThreeStrikeReplayKeepsOneEscalation(t *testing.T) {
 		if flags := activeSwarmEscalationFlags(s); len(flags) != 1 {
 			t.Fatalf("replay %d active escalation flags = %d, want 1: %+v", replay, len(flags), flags)
 		}
+	}
+}
+
+func TestSwarmThirdStrikeRepairsEscalationAfterPartialPersistenceFailure(t *testing.T) {
+	saveGlobals(t)
+
+	s, root := newTestStore(t)
+	store = s
+	target := "Auth panic when session is missing"
+	base := time.Now().UTC().Add(-3 * time.Minute)
+	history, pendingPath := seedPartialSwarmEscalationFailure(t, s, target, base)
+	wantEvidence := []string{"swarm-partial-1", "swarm-partial-2", "swarm-partial-3"}
+	if got := swarmStrikeEvidenceIDs(history.Evidence); !reflect.DeepEqual(got, wantEvidence) {
+		t.Fatalf("partial history evidence = %v, want %v", got, wantEvidence)
+	}
+
+	invoker := &swarmTestInvoker{}
+	originalInvoker := newSwarmWorkerInvoker
+	newSwarmWorkerInvoker = func() codex.WorkerInvoker { return invoker }
+	t.Cleanup(func() { newSwarmWorkerInvoker = originalInvoker })
+
+	// The result is durable but the escalation store is still unavailable.
+	// A retry must fail closed before either the native or plan-only lane can
+	// create work.
+	if _, err := runSwarmCompatibility(root, target, false, true); err == nil {
+		t.Error("same-target retry succeeded while escalation persistence was still unavailable")
+	}
+	if got := len(invoker.configs); got != 0 {
+		t.Fatalf("failed repair dispatched %d workers, want zero", got)
+	}
+
+	if err := os.Remove(pendingPath); err != nil {
+		t.Fatalf("restore pending-decision storage: %v", err)
+	}
+	result, err := runSwarmCompatibility(root, target, false, false)
+	if err != nil {
+		t.Fatalf("repair same-target escalation: %v", err)
+	}
+	if got := result["status"]; got != "architectural_concern" {
+		t.Fatalf("repair result status = %v, want architectural_concern", got)
+	}
+	if got := len(invoker.configs); got != 0 {
+		t.Fatalf("successful repair dispatched %d workers, want zero", got)
+	}
+
+	flags := activeSwarmEscalationFlags(s)
+	stableID := swarmEscalationFlagID(history.TargetFingerprint)
+	if len(flags) != 1 || flags[0].ID != stableID {
+		t.Fatalf("repaired flags = %+v, want one active stable flag %q", flags, stableID)
+	}
+	for _, id := range wantEvidence {
+		if !strings.Contains(flags[0].Description, id) {
+			t.Errorf("repaired escalation description missing evidence id %q: %s", id, flags[0].Description)
+		}
+	}
+
+	beforeRepeatFiles := swarmResultFiles(t, s)
+	beforeRepeatHistory, err := evaluateSwarmStrikeHistory(s, target)
+	if err != nil {
+		t.Fatalf("evaluate history before repeated repair: %v", err)
+	}
+	replayed, err := runSwarmCompatibility(root, "  AUTH PANIC WHEN SESSION IS MISSING!!!  ", false, true)
+	if err != nil {
+		t.Fatalf("repeat same-target repair: %v", err)
+	}
+	if got := replayed["status"]; got != "architectural_concern" {
+		t.Fatalf("repeated repair status = %v, want architectural_concern", got)
+	}
+	afterRepeatHistory, err := evaluateSwarmStrikeHistory(s, target)
+	if err != nil {
+		t.Fatalf("evaluate history after repeated repair: %v", err)
+	}
+	if !reflect.DeepEqual(afterRepeatHistory, beforeRepeatHistory) {
+		t.Fatalf("repeated repair changed strike history:\nbefore: %+v\nafter:  %+v", beforeRepeatHistory, afterRepeatHistory)
+	}
+	if got := swarmResultFiles(t, s); !reflect.DeepEqual(got, beforeRepeatFiles) {
+		t.Fatalf("repeated repair changed result files:\nbefore: %v\nafter:  %v", beforeRepeatFiles, got)
+	}
+	if flags := activeSwarmEscalationFlags(s); len(flags) != 1 || flags[0].ID != stableID {
+		t.Fatalf("repeated repair flags = %+v, want one active stable flag %q", flags, stableID)
+	}
+	if got := len(invoker.configs); got != 0 {
+		t.Fatalf("repeated repair dispatched %d workers, want zero", got)
 	}
 }
 
@@ -785,6 +869,67 @@ func regularFilesUnder(t *testing.T, root string) []string {
 	}
 	sort.Strings(files)
 	return files
+}
+
+func swarmResultFiles(t *testing.T, s *storage.Store) []string {
+	t.Helper()
+	paths, err := filepath.Glob(filepath.Join(s.BasePath(), "swarms", "*", "result.json"))
+	if err != nil {
+		t.Fatalf("glob swarm result files: %v", err)
+	}
+	sort.Strings(paths)
+	return paths
+}
+
+func seedPartialSwarmEscalationFailure(
+	t *testing.T,
+	s *storage.Store,
+	target string,
+	base time.Time,
+) (swarmStrikeHistory, string) {
+	t.Helper()
+	statuses := []string{"failed", "blocked", "failed"}
+	for i := 0; i < 2; i++ {
+		if _, err := persistSwarmResultOutcome(s, swarmResultRecord{
+			SwarmID:     fmt.Sprintf("swarm-partial-%d", i+1),
+			Target:      target,
+			Status:      statuses[i],
+			CompletedAt: base.Add(time.Duration(i) * time.Minute).Format(time.RFC3339Nano),
+		}); err != nil {
+			t.Fatalf("persist partial strike %d: %v", i+1, err)
+		}
+	}
+
+	pendingPath := filepath.Join(s.BasePath(), "pending-decisions.json")
+	if err := os.Mkdir(pendingPath, 0755); err != nil {
+		t.Fatalf("make pending-decision failure fixture: %v", err)
+	}
+	history, err := persistSwarmResultOutcome(s, swarmResultRecord{
+		SwarmID:     "swarm-partial-3",
+		Target:      target,
+		Status:      statuses[2],
+		CompletedAt: base.Add(2 * time.Minute).Format(time.RFC3339Nano),
+	})
+	if err == nil {
+		t.Fatal("third strike unexpectedly persisted its escalation flag")
+	}
+	if history.StrikeCount != 3 {
+		t.Fatalf("partial third-strike history = %+v, want three strikes", history)
+	}
+	if _, statErr := os.Stat(filepath.Join(s.BasePath(), "swarms", "swarm-partial-3", "result.json")); statErr != nil {
+		t.Fatalf("third result was not durable after flag failure: %v", statErr)
+	}
+	durable, evalErr := evaluateSwarmStrikeHistory(s, target)
+	if evalErr != nil {
+		t.Fatalf("evaluate partial third-strike history: %v", evalErr)
+	}
+	if durable.StrikeCount != 3 {
+		t.Fatalf("durable partial history = %+v, want three strikes", durable)
+	}
+	if flags := activeSwarmEscalationFlags(s); len(flags) != 0 {
+		t.Fatalf("partial escalation unexpectedly created active flags: %+v", flags)
+	}
+	return durable, pendingPath
 }
 
 func activeSwarmEscalationFlags(s *storage.Store) []colony.FlagEntry {
