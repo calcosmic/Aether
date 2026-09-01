@@ -420,7 +420,7 @@ Plans:
 
 **Audit findings closed**: autopilot-* subcommands orphaned; flag-check-blockers orphaned; insert-phase guided flow dropped; swarm 3-strike escalation dropped; failure-classify / recovery-log orphaned; medic-auto-spawn-check orphaned; status escalated-flags count dropped.
 
-**Plans**: 16 plans (7 original waves + 2 gap-closure waves)
+**Plans**: 22 plans (7 original waves + 5 gap-closure waves)
 
 Plans:
 **Wave 1**
@@ -465,6 +465,21 @@ Plans:
 **Gap Closure Wave 2** *(blocked on Gap Closure Wave 1 completion)*
 
 - [x] 198.3-12-PLAN.md — make seal fail closed, migrate capability consumers safely, and run final integration gates
+
+**Gap Closure Wave 3**
+
+- [ ] 198.3-17-PLAN.md — bind owner approvals to immutable build and verification generations
+- [ ] 198.3-20-PLAN.md — reconstruct replan cadence durably across bounded and interrupted runs
+- [ ] 198.3-21-PLAN.md — require exact terminal swarm evidence and repair partial third-strike escalation writes
+
+**Gap Closure Wave 4** *(blocked on 198.3-17)*
+
+- [ ] 198.3-18-PLAN.md — scope legacy answered-question compatibility to the active session and goal
+- [ ] 198.3-19-PLAN.md — reject suggestion-only Critical evidence before direct or external phase advancement
+
+**Gap Closure Wave 5** *(blocked on Gap Closure Waves 3-4)*
+
+- [ ] 198.3-22-PLAN.md — fail run/status closed on unavailable blocker truth and re-prove the overnight contract
 
 ### Phase 198.4: Prune the Dead Wood
 
