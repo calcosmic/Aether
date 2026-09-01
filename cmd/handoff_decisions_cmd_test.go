@@ -91,6 +91,104 @@ func TestHandoffDecisionsExcludesAnsweredQuestions(t *testing.T) {
 	}
 }
 
+func TestLegacyAnsweredDecisionTextIsScopedToActiveSessionAndGoal(t *testing.T) {
+	const question = "Should exported CSV include archived rows?"
+	initializedAt := time.Date(2026, 9, 1, 8, 0, 0, 0, time.UTC)
+	currentGoal := "Export the active customer ledger"
+	currentSession := "session-current-export"
+
+	tests := []struct {
+		name             string
+		decisionType     string
+		sessionID        string
+		goalHash         string
+		createdAt        time.Time
+		wantStillPending bool
+	}{
+		{
+			name:         "matching scope suppresses the answered question",
+			decisionType: clarificationDecisionType,
+			sessionID:    currentSession,
+			goalHash:     pendingDecisionGoalHash(currentGoal),
+			createdAt:    initializedAt.Add(time.Minute),
+		},
+		{
+			name:             "foreign session cannot suppress current work",
+			decisionType:     clarificationDecisionType,
+			sessionID:        "session-foreign-export",
+			goalHash:         pendingDecisionGoalHash(currentGoal),
+			createdAt:        initializedAt.Add(time.Minute),
+			wantStillPending: true,
+		},
+		{
+			name:             "foreign goal cannot suppress current work",
+			decisionType:     clarificationDecisionType,
+			goalHash:         pendingDecisionGoalHash("Export every archived customer ledger"),
+			createdAt:        initializedAt.Add(time.Minute),
+			wantStillPending: true,
+		},
+		{
+			name:             "stale unscoped row cannot suppress current work",
+			decisionType:     clarificationDecisionType,
+			createdAt:        initializedAt.Add(-time.Minute),
+			wantStillPending: true,
+		},
+		{
+			name:             "protected checkpoint text is not a legacy answer",
+			decisionType:     autopilotCheckpointTypeVisual,
+			sessionID:        currentSession,
+			goalHash:         pendingDecisionGoalHash(currentGoal),
+			createdAt:        initializedAt.Add(time.Minute),
+			wantStillPending: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			saveGlobalsCmd(t)
+			s, tmpDir := newTestStoreCmd(t)
+			t.Cleanup(func() { os.RemoveAll(tmpDir) })
+			store = s
+			if err := store.SaveJSON("COLONY_STATE.json", colony.ColonyState{
+				Version:       "3.0",
+				Goal:          &currentGoal,
+				SessionID:     &currentSession,
+				InitializedAt: &initializedAt,
+			}); err != nil {
+				t.Fatalf("seed current colony scope: %v", err)
+			}
+			seedHandoffOpenDecision(t, question)
+
+			resolvedAt := tt.createdAt.Add(time.Minute).UTC().Format(time.RFC3339)
+			if err := store.SaveJSON(pendingDecisionsFile, PendingDecisionFile{Decisions: []PendingDecision{{
+				ID:          "pd_legacy_answer",
+				Type:        tt.decisionType,
+				Description: formatClarificationDescription(question, nil),
+				Source:      "worker-handoff",
+				SessionID:   tt.sessionID,
+				GoalHash:    tt.goalHash,
+				Resolution:  "No — active rows only",
+				Resolved:    true,
+				CreatedAt:   tt.createdAt.UTC().Format(time.RFC3339),
+				ResolvedAt:  resolvedAt,
+			}}}); err != nil {
+				t.Fatalf("seed resolved legacy answer: %v", err)
+			}
+
+			got := pendingHandoffDecisions(0)
+			if tt.wantStillPending {
+				if len(got) != 1 || got[0].Question != question {
+					t.Fatalf("stale or protected answer hid current owner work: %+v", got)
+				}
+				return
+			}
+			if len(got) != 0 {
+				t.Fatalf("current-scope answer should suppress its matching question: %+v", got)
+			}
+		})
+	}
+}
+
 func TestHandoffDecisionsDoesNotMutate(t *testing.T) {
 	saveGlobalsCmd(t)
 	s, tmpDir := newTestStoreCmd(t)

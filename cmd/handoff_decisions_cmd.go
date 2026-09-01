@@ -34,14 +34,22 @@ func handoffDecisionID(text string) string {
 	return fmt.Sprintf("%x", sha256.Sum256([]byte(normalizeDecisionText(text))))[:12]
 }
 
-// answeredDecisionTexts is the normalized set of questions already resolved
-// in pending-decisions.json, matched against either the parsed clarification
-// question or the raw description.
-func answeredDecisionTexts() map[string]bool {
+// answeredDecisionTexts is the normalized set of ordinary questions already
+// resolved inside the active pending-decision scope, matched against either
+// the parsed clarification question or the raw description. Owner-protected
+// rows never become text-based compatibility answers: their capability-aware
+// resolvers remain the only authorization path.
+func answeredDecisionTexts(scope pendingDecisionScope) map[string]bool {
 	answered := map[string]bool{}
 	file := loadPendingDecisionFile()
 	for _, decision := range file.Decisions {
 		if !decision.Resolved || strings.TrimSpace(decision.Resolution) == "" {
+			continue
+		}
+		if isAutopilotCheckpointType(decision.Type) || decision.Source == "forced-reviewer-waiver" {
+			continue
+		}
+		if !pendingDecisionMatchesScope(decision, scope) {
 			continue
 		}
 		question, _ := parseClarificationDescription(decision.Description)
@@ -63,7 +71,8 @@ func pendingHandoffDecisions(phaseFilter int) []handoffDecision {
 	if err != nil || len(records) == 0 {
 		return nil
 	}
-	answered := answeredDecisionTexts()
+	scope := loadCurrentPendingDecisionScope()
+	answered := answeredDecisionTexts(scope)
 	byText := map[string]handoffDecision{}
 	for _, record := range records {
 		if phaseFilter > 0 && record.Phase > 0 && record.Phase != phaseFilter {
