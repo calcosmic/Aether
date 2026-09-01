@@ -464,7 +464,7 @@ Plans:
 
 **Gap Closure Wave 2** *(blocked on Gap Closure Wave 1 completion)*
 
-- [ ] 198.3-12-PLAN.md — make seal fail closed, migrate capability consumers safely, and run final integration gates
+- [x] 198.3-12-PLAN.md — make seal fail closed, migrate capability consumers safely, and run final integration gates
 
 ### Phase 198.4: Prune the Dead Wood
 
