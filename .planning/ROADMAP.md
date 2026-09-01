@@ -420,7 +420,7 @@ Plans:
 
 **Audit findings closed**: autopilot-* subcommands orphaned; flag-check-blockers orphaned; insert-phase guided flow dropped; swarm 3-strike escalation dropped; failure-classify / recovery-log orphaned; medic-auto-spawn-check orphaned; status escalated-flags count dropped.
 
-**Plans**: 10 plans (7 waves)
+**Plans**: 16 plans (7 original waves + 2 gap-closure waves)
 
 Plans:
 **Wave 1**
@@ -453,6 +453,18 @@ Plans:
 **Wave 7** *(blocked on Wave 6 completion)*
 
 - [x] 198.3-10-PLAN.md — prove a six-phase unattended run and close documentation and repository gates
+
+**Gap Closure Wave 1**
+
+- [ ] 198.3-11-PLAN.md — bind owner checkpoints to single-use capabilities and close generic resolver bypasses
+- [ ] 198.3-13-PLAN.md — fail completed Auditor work closed when structured evidence is absent or malformed
+- [ ] 198.3-14-PLAN.md — make terminal report durability honest and align dry-run replan behavior with the live loop
+- [ ] 198.3-15-PLAN.md — move direct-build provider preflight ahead of every repair, mutation, and cleanup
+- [ ] 198.3-16-PLAN.md — add a verified swarm recovery epoch that unlocks exact-target retry
+
+**Gap Closure Wave 2** *(blocked on Gap Closure Wave 1 completion)*
+
+- [ ] 198.3-12-PLAN.md — make seal fail closed, migrate capability consumers safely, and run final integration gates
 
 ### Phase 198.4: Prune the Dead Wood
 
