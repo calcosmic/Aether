@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -61,6 +62,25 @@ type autopilotCheckpointWorkGenerationMaterial struct {
 	AttemptID        string                                      `json:"attempt_id"`
 	ExecutionBinding autopilotCheckpointExecutionBindingMaterial `json:"execution_binding"`
 	EvidenceSHA256   string                                      `json:"evidence_sha256"`
+}
+
+type runtimeCheckpointCriterionGenerationMaterial struct {
+	TaskID         string   `json:"task_id,omitempty"`
+	Criterion      string   `json:"criterion"`
+	Policy         string   `json:"policy,omitempty"`
+	State          string   `json:"state,omitempty"`
+	Enforced       bool     `json:"enforced"`
+	Passed         bool     `json:"passed"`
+	Summary        string   `json:"summary,omitempty"`
+	Evidence       []string `json:"evidence,omitempty"`
+	SourcePaths    []string `json:"source_paths,omitempty"`
+	RequiredChecks []string `json:"required_checks,omitempty"`
+	BlockingIssues []string `json:"blocking_issues,omitempty"`
+}
+
+type runtimeCheckpointEvidenceGenerationMaterial struct {
+	Version  int                                            `json:"version"`
+	Criteria []runtimeCheckpointCriterionGenerationMaterial `json:"criteria"`
 }
 
 func newAutopilotCheckpointGeneration(attemptID string, binding *codex.ExecutionBinding, evidenceSHA256 string) (autopilotCheckpointGeneration, error) {
@@ -129,6 +149,144 @@ func (generation autopilotCheckpointGeneration) validated() (autopilotCheckpoint
 		return autopilotCheckpointGeneration{}, fmt.Errorf("checkpoint generation derived digests are inconsistent")
 	}
 	return normalized, nil
+}
+
+// runtimeCheckpointGenerationFromManifest derives the one immutable
+// authorization generation shared by direct continue and external
+// continue-finalize. Criterion order and set-like evidence inputs are
+// canonicalized before hashing; timestamps, renderer prose, and transient
+// capabilities never enter the projection.
+func runtimeCheckpointGenerationFromManifest(manifest codexBuildManifest, criteria []codexCriterionVerification) (autopilotCheckpointGeneration, error) {
+	attemptID := strings.TrimSpace(manifest.AttemptID)
+	if !validBuildAttemptID(attemptID) {
+		return autopilotCheckpointGeneration{}, fmt.Errorf("runtime checkpoint build manifest attempt_id %q is invalid", attemptID)
+	}
+	if manifest.ExecutionBinding == nil {
+		return autopilotCheckpointGeneration{}, fmt.Errorf("runtime checkpoint build manifest requires execution_binding")
+	}
+	if err := manifest.ExecutionBinding.Validate(); err != nil {
+		return autopilotCheckpointGeneration{}, fmt.Errorf("runtime checkpoint build manifest execution binding: %w", err)
+	}
+	if strings.TrimSpace(manifest.ExecutionBinding.AttemptID) != attemptID {
+		return autopilotCheckpointGeneration{}, fmt.Errorf("runtime checkpoint build manifest attempt_id does not match execution binding")
+	}
+	if strings.TrimSpace(manifest.ExecutionOwner) != strings.TrimSpace(manifest.ExecutionBinding.ExecutionOwner) {
+		return autopilotCheckpointGeneration{}, fmt.Errorf("runtime checkpoint build manifest execution owner does not match execution binding")
+	}
+	manifestDigest, err := buildManifestSHA256(manifest)
+	if err != nil {
+		return autopilotCheckpointGeneration{}, fmt.Errorf("hash runtime checkpoint build manifest: %w", err)
+	}
+	if !strings.EqualFold(strings.TrimSpace(manifest.ExecutionBinding.ManifestSHA256), manifestDigest) {
+		return autopilotCheckpointGeneration{}, fmt.Errorf("runtime checkpoint build manifest digest does not match execution binding")
+	}
+
+	projection := make([]runtimeCheckpointCriterionGenerationMaterial, 0, len(criteria))
+	for _, criterion := range criteria {
+		projection = append(projection, runtimeCheckpointCriterionGenerationMaterial{
+			TaskID:         strings.TrimSpace(criterion.TaskID),
+			Criterion:      strings.TrimSpace(criterion.Criterion),
+			Policy:         strings.TrimSpace(criterion.Policy),
+			State:          strings.TrimSpace(criterion.State),
+			Enforced:       criterion.Enforced,
+			Passed:         criterion.Passed,
+			Summary:        strings.TrimSpace(criterion.Summary),
+			Evidence:       uniqueSortedStrings(criterion.Evidence),
+			SourcePaths:    uniqueSortedStrings(criterion.RequiredArtifacts),
+			RequiredChecks: uniqueSortedStrings(criterion.RequiredChecks),
+			BlockingIssues: uniqueSortedStrings(criterion.BlockingIssues),
+		})
+	}
+	sort.Slice(projection, func(i, j int) bool {
+		left, _ := json.Marshal(projection[i])
+		right, _ := json.Marshal(projection[j])
+		return string(left) < string(right)
+	})
+	evidenceDigest, err := jsonSHA256(runtimeCheckpointEvidenceGenerationMaterial{Version: 1, Criteria: projection})
+	if err != nil {
+		return autopilotCheckpointGeneration{}, fmt.Errorf("hash runtime checkpoint verification evidence: %w", err)
+	}
+	return newAutopilotCheckpointGeneration(attemptID, manifest.ExecutionBinding, evidenceDigest)
+}
+
+func validatedRuntimeCheckpointGeneration(manifest codexContinueManifest, state colony.ColonyState, criteria []codexCriterionVerification) (autopilotCheckpointGeneration, error) {
+	if !manifest.Present {
+		return autopilotCheckpointGeneration{}, fmt.Errorf("runtime checkpoint build manifest is missing")
+	}
+	boundManifest, err := runtimeCheckpointBoundManifest(manifest)
+	if err != nil {
+		return autopilotCheckpointGeneration{}, err
+	}
+	binding, err := validateBuildAttemptManifestBinding(boundManifest, state, false)
+	if err != nil {
+		return autopilotCheckpointGeneration{}, fmt.Errorf("validate runtime checkpoint build attempt: %w", err)
+	}
+	if !binding.Bound || binding.Legacy {
+		return autopilotCheckpointGeneration{}, fmt.Errorf("runtime checkpoint build manifest is not bound to a durable attempt")
+	}
+	return runtimeCheckpointGenerationFromManifest(boundManifest, criteria)
+}
+
+// runtimeCheckpointBoundManifest resolves the immutable manifest stored in
+// the build-attempt journal. Direct builds rewrite their owner-facing final
+// manifest after dispatch so it carries final worker statuses; that projection
+// intentionally has no attempt fields. It is accepted only when it matches the
+// latest journal record's phase, manifest path, root, timestamp, owner, and
+// claims path. Partial provenance is never repaired or guessed.
+func runtimeCheckpointBoundManifest(manifest codexContinueManifest) (codexBuildManifest, error) {
+	data := manifest.Data
+	attemptID := strings.TrimSpace(data.AttemptID)
+	attemptPath := strings.TrimSpace(data.AttemptPath)
+	hasBinding := data.ExecutionBinding != nil
+	if attemptID != "" || attemptPath != "" || hasBinding {
+		if attemptID == "" || attemptPath == "" || !hasBinding {
+			return codexBuildManifest{}, fmt.Errorf("runtime checkpoint build manifest has incomplete attempt provenance")
+		}
+		return data, nil
+	}
+
+	attemptRel, attempt, ok := loadLatestBuildAttempt(data.Phase)
+	if !ok || attempt.PlanManifest == nil {
+		return codexBuildManifest{}, fmt.Errorf("runtime checkpoint build manifest is not bound to a durable attempt")
+	}
+	loadedManifestRel, err := checkpointStorePath(manifest.Path, "runtime checkpoint manifest")
+	if err != nil {
+		return codexBuildManifest{}, err
+	}
+	recordedManifestRel, err := checkpointStorePath(attempt.Manifest, "build attempt manifest")
+	if err != nil {
+		return codexBuildManifest{}, err
+	}
+	if loadedManifestRel != recordedManifestRel {
+		return codexBuildManifest{}, fmt.Errorf("runtime checkpoint manifest path %q does not match build attempt %s manifest %q", loadedManifestRel, attempt.ID, recordedManifestRel)
+	}
+	durable := *attempt.PlanManifest
+	loadedClaimsRel, err := checkpointStorePath(data.ClaimsPath, "runtime checkpoint claims")
+	if err != nil {
+		return codexBuildManifest{}, err
+	}
+	durableClaimsRel, err := checkpointStorePath(durable.ClaimsPath, "durable build manifest claims")
+	if err != nil {
+		return codexBuildManifest{}, err
+	}
+	if attemptRel != buildAttemptPathForID(data.Phase, attempt.ID) ||
+		data.Phase != durable.Phase ||
+		strings.TrimSpace(data.Root) != strings.TrimSpace(durable.Root) ||
+		strings.TrimSpace(data.GeneratedAt) != strings.TrimSpace(durable.GeneratedAt) ||
+		strings.TrimSpace(data.ExecutionOwner) != strings.TrimSpace(durable.ExecutionOwner) ||
+		loadedClaimsRel != durableClaimsRel {
+		return codexBuildManifest{}, fmt.Errorf("runtime checkpoint final manifest does not match durable build attempt %s", attempt.ID)
+	}
+	return durable, nil
+}
+
+func hasRuntimeVerificationCheckpoint(criteria []codexCriterionVerification) bool {
+	for _, criterion := range criteria {
+		if criterion.State == criterionStateNeedsOwnerConfirmation {
+			return true
+		}
+	}
+	return false
 }
 
 func isAutopilotCheckpointType(decisionType string) bool {
@@ -374,23 +532,11 @@ func checkpointClaimsStorePath(claimsPath string) (string, error) {
 	return checkpointStorePath(claimsPath, "claims")
 }
 
-func materializeRuntimeVerificationCheckpoints(phaseID int, criteria []codexCriterionVerification, generations ...autopilotCheckpointGeneration) ([]autopilotCheckpointReference, error) {
+func materializeRuntimeVerificationCheckpoints(phaseID int, criteria []codexCriterionVerification, generation autopilotCheckpointGeneration) ([]autopilotCheckpointReference, error) {
 	if store == nil {
 		return nil, fmt.Errorf("no store initialized")
 	}
-	if len(generations) > 1 {
-		return nil, fmt.Errorf("runtime verification checkpoints accept exactly one work generation")
-	}
-	var generation autopilotCheckpointGeneration
-	var err error
-	if len(generations) == 1 {
-		generation, err = generations[0].validated()
-	} else {
-		// Transitional compatibility for pre-Plan-17 callers. Task 2 removes
-		// this branch after both continue lanes and every test fixture pass the
-		// durable manifest generation explicitly.
-		generation, err = legacyRuntimeCheckpointGeneration(phaseID, criteria)
-	}
+	generation, err := generation.validated()
 	if err != nil {
 		return nil, err
 	}
@@ -413,6 +559,7 @@ func materializeRuntimeVerificationCheckpoints(phaseID int, criteria []codexCrit
 			Criterion:   strings.TrimSpace(criterion.Criterion),
 			TaskID:      strings.TrimSpace(criterion.TaskID),
 			Evidence:    evidence,
+			SourcePaths: uniqueSortedStrings(criterion.RequiredArtifacts),
 		}, phaseID, strings.Join([]string{criterion.TaskID, criterion.Criterion}, "\x00"), generation)
 		if err != nil {
 			return nil, err
@@ -425,29 +572,7 @@ func materializeRuntimeVerificationCheckpoints(phaseID int, criteria []codexCrit
 	return refs, nil
 }
 
-func legacyRuntimeCheckpointGeneration(phaseID int, criteria []codexCriterionVerification) (autopilotCheckpointGeneration, error) {
-	evidenceDigest, err := jsonSHA256(criteria)
-	if err != nil {
-		return autopilotCheckpointGeneration{}, fmt.Errorf("hash legacy runtime checkpoint evidence: %w", err)
-	}
-	suffix := fmt.Sprintf("legacy-phase-%d", phaseID)
-	binding := codex.ExecutionBinding{
-		SchemaVersion:        codex.ExecutionBindingSchemaVersion,
-		RunID:                "run-checkpoint-" + suffix,
-		AttemptID:            "attempt-checkpoint-" + suffix,
-		ManifestSHA256:       sha256HexString("manifest-" + suffix),
-		WorkspaceFingerprint: sha256HexString("workspace-" + suffix),
-		ExecutionOwner:       "legacy-runtime-checkpoint",
-	}
-	return newAutopilotCheckpointGeneration(binding.AttemptID, &binding, evidenceDigest)
-}
-
-func sha256HexString(value string) string {
-	digest := sha256.Sum256([]byte(value))
-	return hex.EncodeToString(digest[:])
-}
-
-func upsertAutopilotCheckpoint(candidate PendingDecision, phaseID int, subject string, generations ...autopilotCheckpointGeneration) (PendingDecision, bool, error) {
+func upsertAutopilotCheckpoint(candidate PendingDecision, phaseID int, subject string, generation autopilotCheckpointGeneration) (PendingDecision, bool, error) {
 	if store == nil {
 		return PendingDecision{}, false, fmt.Errorf("no store initialized")
 	}
@@ -457,20 +582,7 @@ func upsertAutopilotCheckpoint(candidate PendingDecision, phaseID int, subject s
 	if phaseID <= 0 {
 		return PendingDecision{}, false, fmt.Errorf("phase must be positive")
 	}
-	if len(generations) > 1 {
-		return PendingDecision{}, false, fmt.Errorf("checkpoint accepts exactly one work generation")
-	}
-	var generation autopilotCheckpointGeneration
-	var err error
-	if len(generations) == 1 {
-		generation, err = generations[0].validated()
-	} else {
-		// Transitional compatibility for direct protected-row fixtures. Task 2
-		// migrates those callers and makes this parameter mandatory.
-		generation, err = legacyRuntimeCheckpointGeneration(phaseID, []codexCriterionVerification{{
-			TaskID: candidate.TaskID, Criterion: candidate.Criterion, Evidence: candidate.Evidence,
-		}})
-	}
+	generation, err := generation.validated()
 	if err != nil {
 		return PendingDecision{}, false, err
 	}

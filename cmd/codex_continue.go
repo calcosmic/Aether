@@ -807,9 +807,16 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	verification, watcherFlow := runCodexContinueVerification(ctx, root, state, phase, manifest, options.WorkerTimeout, options.VerificationTimeout, options.SkipWatchers)
 	assessment := assessCodexContinue(phase, manifest, verification, options, now)
 	verification = attachContinueClaimVerification(verification, assessment)
-	runtimeCheckpoints, err := materializeRuntimeVerificationCheckpoints(phase.ID, verification.Criteria)
-	if err != nil {
-		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to preserve owner verification work: %w", err)
+	var runtimeCheckpoints []autopilotCheckpointReference
+	if hasRuntimeVerificationCheckpoint(verification.Criteria) {
+		runtimeGeneration, generationErr := validatedRuntimeCheckpointGeneration(manifest, state, verification.Criteria)
+		if generationErr != nil {
+			return nil, state, phase, nil, nil, false, fmt.Errorf("failed to bind owner verification work: %w", generationErr)
+		}
+		runtimeCheckpoints, err = materializeRuntimeVerificationCheckpoints(phase.ID, verification.Criteria, runtimeGeneration)
+		if err != nil {
+			return nil, state, phase, nil, nil, false, fmt.Errorf("failed to preserve owner verification work: %w", err)
+		}
 	}
 	priorGateResults, _ := gateResultsReadPhase(phase.ID)
 	if priorGateResults == nil {

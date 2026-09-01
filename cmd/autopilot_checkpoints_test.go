@@ -600,6 +600,70 @@ func TestRuntimeCheckpointGenerationDirectExternalParity(t *testing.T) {
 	}
 }
 
+func TestRuntimeCheckpointGenerationAcceptsJournalBoundDirectFinalProjection(t *testing.T) {
+	saveGlobals(t)
+	s, root := newTestStore(t)
+	store = s
+	phase := colony.Phase{ID: 4, Name: "Direct final projection", Status: colony.PhaseInProgress}
+	state := checkpointTestState(t, phase, colony.StateBUILT)
+	startedAt := time.Now().UTC().Truncate(time.Second)
+	manifestRel := filepath.ToSlash(filepath.Join("build", "phase-4", "manifest.json"))
+	claimsRel := filepath.ToSlash(filepath.Join("build", "phase-4", "claims.json"))
+	attemptRel, err := beginBuildAttempt(state, phase.ID, phase, startedAt, []string{"4.1"}, "checkpoints/phase-4.json", manifestRel, claimsRel, "go-runtime", nil)
+	if err != nil {
+		t.Fatalf("begin direct build attempt fixture: %v", err)
+	}
+	_, attempt, ok := loadLatestBuildAttempt(phase.ID)
+	if !ok {
+		t.Fatal("reload direct build attempt fixture")
+	}
+	bound := codexBuildManifest{
+		Phase: phase.ID, Root: root, GeneratedAt: startedAt.Format(time.RFC3339),
+		ExecutionOwner: "go-runtime", ClaimsPath: displayDataPath(claimsRel),
+		AttemptID: attempt.ID, AttemptPath: displayDataPath(attemptRel),
+	}
+	if err := prepareBuildAttemptManifestBinding(attemptRel, &bound); err != nil {
+		t.Fatalf("prepare direct build binding fixture: %v", err)
+	}
+	if err := store.SaveJSON(manifestRel, bound); err != nil {
+		t.Fatalf("save bound direct manifest fixture: %v", err)
+	}
+	if err := bindBuildAttemptManifest(attemptRel, bound); err != nil {
+		t.Fatalf("bind direct build attempt fixture: %v", err)
+	}
+	if err := transitionBuildAttempt(attemptRel, buildAttemptBuilt, "fixture built", nil, &codexBuildClaims{BuildPhase: phase.ID}, "real", nil); err != nil {
+		t.Fatalf("complete direct build attempt fixture: %v", err)
+	}
+
+	finalProjection := bound
+	finalProjection.AttemptID = ""
+	finalProjection.AttemptPath = ""
+	finalProjection.ExecutionBinding = nil
+	criteria := []codexCriterionVerification{{
+		TaskID: "4.1", Criterion: "The owner confirms the result", State: criterionStateNeedsOwnerConfirmation, Passed: true,
+	}}
+	generation, err := validatedRuntimeCheckpointGeneration(codexContinueManifest{Present: true, Path: manifestRel, Data: finalProjection}, state, criteria)
+	if err != nil {
+		t.Fatalf("derive journal-backed direct generation: %v", err)
+	}
+	want, err := runtimeCheckpointGenerationFromManifest(bound, criteria)
+	if err != nil {
+		t.Fatalf("derive bound generation fixture: %v", err)
+	}
+	if generation.WorkGeneration != want.WorkGeneration {
+		t.Fatalf("final projection generation = %s, durable bound generation = %s", generation.WorkGeneration, want.WorkGeneration)
+	}
+
+	tampered := finalProjection
+	tampered.ClaimsPath = displayDataPath("build/phase-4/tampered-claims.json")
+	if _, err := validatedRuntimeCheckpointGeneration(codexContinueManifest{Present: true, Path: manifestRel, Data: tampered}, state, criteria); err == nil {
+		t.Fatal("tampered direct final projection inherited durable attempt provenance")
+	}
+	if _, statErr := os.Stat(filepath.Join(store.BasePath(), pendingDecisionsFile)); !os.IsNotExist(statErr) {
+		t.Fatalf("rejected final projection mutated pending decisions: stat err=%v", statErr)
+	}
+}
+
 func TestCheckpointCapabilityRotatesWithoutChangingIdentityOrPersistingRawTokens(t *testing.T) {
 	saveGlobals(t)
 	s, _ := newTestStore(t)
