@@ -2,6 +2,9 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -9,8 +12,91 @@ import (
 	"testing"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
+
+func checkpointTestDigest(value string) string {
+	digest := sha256.Sum256([]byte(value))
+	return hex.EncodeToString(digest[:])
+}
+
+func checkpointTestExecutionBinding(suffix string) codex.ExecutionBinding {
+	attemptID := "attempt-checkpoint-" + suffix
+	return codex.ExecutionBinding{
+		SchemaVersion:        codex.ExecutionBindingSchemaVersion,
+		RunID:                "run-checkpoint-" + suffix,
+		AttemptID:            attemptID,
+		ManifestSHA256:       checkpointTestDigest("manifest-" + suffix),
+		WorkspaceFingerprint: checkpointTestDigest("workspace-" + suffix),
+		ExecutionOwner:       "checkpoint-test-owner",
+	}
+}
+
+func checkpointTestGeneration(t *testing.T, suffix, evidence string) autopilotCheckpointGeneration {
+	t.Helper()
+	binding := checkpointTestExecutionBinding(suffix)
+	generation, err := newAutopilotCheckpointGeneration(binding.AttemptID, &binding, checkpointTestDigest(evidence))
+	if err != nil {
+		t.Fatalf("create checkpoint generation fixture: %v", err)
+	}
+	return generation
+}
+
+type visualCheckpointTestFixture struct {
+	BuildResult map[string]interface{}
+	AttemptRel  string
+	ClaimsRel   string
+}
+
+func checkpointVisualFixture(t *testing.T, phaseID int, suffix string, claims codexBuildClaims) visualCheckpointTestFixture {
+	t.Helper()
+	claims.BuildPhase = phaseID
+	claimsRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseID), suffix+"-claims.json"))
+	if err := store.SaveJSON(claimsRel, claims); err != nil {
+		t.Fatalf("save visual checkpoint claims: %v", err)
+	}
+
+	binding := checkpointTestExecutionBinding(suffix)
+	attemptRel := buildAttemptPathForID(phaseID, binding.AttemptID)
+	manifest := codexBuildManifest{
+		Phase:            phaseID,
+		AttemptID:        binding.AttemptID,
+		AttemptPath:      displayDataPath(attemptRel),
+		ClaimsPath:       displayDataPath(claimsRel),
+		ExecutionOwner:   binding.ExecutionOwner,
+		ExecutionBinding: &binding,
+	}
+	manifestDigest, err := buildManifestSHA256(manifest)
+	if err != nil {
+		t.Fatalf("hash visual checkpoint manifest: %v", err)
+	}
+	binding.ManifestSHA256 = manifestDigest
+	manifest.ExecutionBinding = &binding
+	record := buildAttemptRecord{
+		SchemaVersion:   buildAttemptSchemaVersion,
+		ID:              binding.AttemptID,
+		Phase:           phaseID,
+		Status:          buildAttemptBuilt,
+		ExecutionOwner:  binding.ExecutionOwner,
+		RunID:           binding.RunID,
+		WorkspaceSHA256: binding.WorkspaceFingerprint,
+		ManifestSHA256:  binding.ManifestSHA256,
+		ClaimsPath:      displayDataPath(claimsRel),
+		PlanManifest:    &manifest,
+	}
+	if err := store.SaveJSON(attemptRel, record); err != nil {
+		t.Fatalf("save visual checkpoint attempt: %v", err)
+	}
+	return visualCheckpointTestFixture{
+		AttemptRel: attemptRel,
+		ClaimsRel:  claimsRel,
+		BuildResult: map[string]interface{}{
+			"attempt":     displayDataPath(attemptRel),
+			"claims_path": displayDataPath(claimsRel),
+		},
+	}
+}
 
 func checkpointTestState(t *testing.T, phase colony.Phase, stateValue colony.State) colony.ColonyState {
 	t.Helper()
@@ -117,23 +203,16 @@ func TestVisualCheckpointMaterializesFromPersistedClaims(t *testing.T) {
 	phase := colony.Phase{ID: 2, Name: "UI result", Status: colony.PhaseInProgress}
 	checkpointTestState(t, phase, colony.StateBUILT)
 
-	claimsPath := "build/phase-2/claims.json"
 	claims := codexBuildClaims{
 		BuildPhase:    phase.ID,
 		FilesCreated:  []string{"web/components/StatusCard.tsx", "../outside/forged.tsx"},
 		FilesModified: []string{"web/styles/status.css", "cmd/status.go", "docs/status.md", "web/components/status-card.test.tsx"},
 		TestsWritten:  []string{"web/components/status-card.test.tsx"},
 	}
-	if err := store.SaveJSON(claimsPath, claims); err != nil {
-		t.Fatalf("save build claims: %v", err)
-	}
-
-	refs, err := materializeVisualCheckpointFromBuildResult(root, phase.ID, map[string]interface{}{
-		"claims_path": displayDataPath(claimsPath),
-		// This untrusted legacy-style assertion must have no effect; paths
-		// in the persisted runtime claims are the sole evidence source.
-		"ui_touched": false,
-	})
+	fixture := checkpointVisualFixture(t, phase.ID, "persisted-claims", claims)
+	fixture.BuildResult["ui_touched"] = false
+	refs, err := materializeVisualCheckpointFromBuildResult(root, phase.ID, fixture.BuildResult)
+	delete(fixture.BuildResult, "ui_touched")
 	if err != nil {
 		t.Fatalf("materialize visual checkpoint: %v", err)
 	}
@@ -148,8 +227,14 @@ func TestVisualCheckpointMaterializesFromPersistedClaims(t *testing.T) {
 	if !reflect.DeepEqual(decisions[0].SourcePaths, wantPaths) {
 		t.Fatalf("visual evidence paths = %#v, want %#v", decisions[0].SourcePaths, wantPaths)
 	}
+	if decisions[0].CheckpointAttemptID == "" || decisions[0].CheckpointExecutionBindingSHA256 == "" || decisions[0].CheckpointEvidenceSHA256 == "" || decisions[0].WorkGeneration == "" {
+		t.Fatalf("visual checkpoint omitted generation provenance: %#v", decisions[0])
+	}
+	if decisions[0].CheckpointCompatibilityKey == "" || decisions[0].CheckpointCompatibilityKey == decisions[0].CheckpointKey {
+		t.Fatalf("visual checkpoint did not separate compatibility and generation keys: %#v", decisions[0])
+	}
 
-	second, err := materializeVisualCheckpointFromBuildResult(root, phase.ID, map[string]interface{}{"claims_path": displayDataPath(claimsPath)})
+	second, err := materializeVisualCheckpointFromBuildResult(root, phase.ID, fixture.BuildResult)
 	if err != nil {
 		t.Fatalf("replay visual checkpoint: %v", err)
 	}
@@ -162,12 +247,142 @@ func TestVisualCheckpointMaterializesFromPersistedClaims(t *testing.T) {
 
 	// Unknown JSON fields such as ui_touched are ignored by the claims type;
 	// with no created/modified UI path they cannot manufacture a decision.
-	boolOnlyPath := "build/phase-3/claims.json"
-	if err := store.SaveJSON(boolOnlyPath, map[string]interface{}{"build_phase": 3, "files_created": []string{}, "files_modified": []string{}, "ui_touched": true}); err != nil {
-		t.Fatalf("save boolean-only claims: %v", err)
-	}
-	if got, err := materializeVisualCheckpointFromBuildResult(root, 3, map[string]interface{}{"claims_path": displayDataPath(boolOnlyPath), "ui_touched": true}); err != nil || len(got) != 0 {
+	boolOnly := checkpointVisualFixture(t, 3, "boolean-only", codexBuildClaims{})
+	boolOnly.BuildResult["ui_touched"] = true
+	if got, err := materializeVisualCheckpointFromBuildResult(root, 3, boolOnly.BuildResult); err != nil || len(got) != 0 {
 		t.Fatalf("worker boolean manufactured visual work: refs=%#v err=%v", got, err)
+	}
+}
+
+func TestVisualCheckpointWorkGenerationRequiresFreshApproval(t *testing.T) {
+	saveGlobals(t)
+	s, root := newTestStore(t)
+	store = s
+	phase := colony.Phase{ID: 2, Name: "Fresh visual approval", Status: colony.PhaseInProgress}
+	checkpointTestState(t, phase, colony.StateBUILT)
+	claims := codexBuildClaims{FilesModified: []string{"web/components/StatusCard.tsx"}}
+
+	generationA := checkpointVisualFixture(t, phase.ID, "generation-a", claims)
+	first, err := materializeVisualCheckpointFromBuildResult(root, phase.ID, generationA.BuildResult)
+	if err != nil || len(first) != 1 {
+		t.Fatalf("materialize generation A: refs=%#v err=%v", first, err)
+	}
+	replayed, err := materializeVisualCheckpointFromBuildResult(root, phase.ID, generationA.BuildResult)
+	if err != nil || len(replayed) != 1 || replayed[0].ID != first[0].ID {
+		t.Fatalf("exact generation A replay drifted: first=%#v replay=%#v err=%v", first, replayed, err)
+	}
+	if got := len(loadCheckpointDecisions(t)); got != 1 {
+		t.Fatalf("exact generation A replay created %d rows, want 1", got)
+	}
+	if _, found, err := resolveAutopilotCheckpointPendingDecision(
+		first[0].Question,
+		"generation A looks correct",
+		phase.ID,
+		checkpointCapabilityFromReference(t, first[0]),
+	); err != nil || !found {
+		t.Fatalf("resolve generation A: found=%v err=%v", found, err)
+	}
+	if exactResolvedReplay, err := materializeVisualCheckpointFromBuildResult(root, phase.ID, generationA.BuildResult); err != nil || len(exactResolvedReplay) != 0 {
+		t.Fatalf("resolved exact replay reopened owner work: refs=%#v err=%v", exactResolvedReplay, err)
+	}
+
+	generationB := checkpointVisualFixture(t, phase.ID, "generation-b", claims)
+	changedAttempt, err := materializeVisualCheckpointFromBuildResult(root, phase.ID, generationB.BuildResult)
+	if err != nil || len(changedAttempt) != 1 {
+		t.Fatalf("materialize changed attempt: refs=%#v err=%v", changedAttempt, err)
+	}
+	if changedAttempt[0].ID == first[0].ID {
+		t.Fatalf("changed attempt inherited generation A row: A=%s B=%s", first[0].ID, changedAttempt[0].ID)
+	}
+
+	changedClaims := codexBuildClaims{
+		BuildPhase:    phase.ID,
+		FilesModified: []string{"web/components/StatusCard.tsx", "web/styles/status.css"},
+	}
+	if err := store.SaveJSON(generationB.ClaimsRel, changedClaims); err != nil {
+		t.Fatalf("replace generation B claims bytes: %v", err)
+	}
+	changedEvidence, err := materializeVisualCheckpointFromBuildResult(root, phase.ID, generationB.BuildResult)
+	if err != nil || len(changedEvidence) != 1 {
+		t.Fatalf("materialize changed claims: refs=%#v err=%v", changedEvidence, err)
+	}
+	if changedEvidence[0].ID == changedAttempt[0].ID || changedEvidence[0].ID == first[0].ID {
+		t.Fatalf("changed claims inherited an older row: A=%s B=%s changed=%s", first[0].ID, changedAttempt[0].ID, changedEvidence[0].ID)
+	}
+
+	decisions := loadCheckpointDecisions(t)
+	if len(decisions) != 3 || !decisions[0].Resolved || decisions[1].Resolved || decisions[2].Resolved {
+		t.Fatalf("generation rows = %#v, want one resolved and two fresh unresolved rows", decisions)
+	}
+	wantCompatibility := decisions[0].CheckpointCompatibilityKey
+	seenRows := map[string]bool{}
+	seenGenerations := map[string]bool{}
+	for _, decision := range decisions {
+		if wantCompatibility == "" || decision.CheckpointCompatibilityKey != wantCompatibility {
+			t.Fatalf("generation changed compatibility identity: %#v", decisions)
+		}
+		if decision.CheckpointKey == "" || seenRows[decision.CheckpointKey] {
+			t.Fatalf("generation row identity was empty or reused: %#v", decisions)
+		}
+		if decision.WorkGeneration == "" || seenGenerations[decision.WorkGeneration] {
+			t.Fatalf("work generation was empty or reused: %#v", decisions)
+		}
+		seenRows[decision.CheckpointKey] = true
+		seenGenerations[decision.WorkGeneration] = true
+	}
+}
+
+func TestVisualCheckpointRejectsMissingOrMismatchedGenerationEvidence(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(fixture visualCheckpointTestFixture) (int, map[string]interface{})
+	}{
+		{
+			name: "missing attempt path",
+			mutate: func(fixture visualCheckpointTestFixture) (int, map[string]interface{}) {
+				delete(fixture.BuildResult, "attempt")
+				return 5, fixture.BuildResult
+			},
+		},
+		{
+			name: "missing claims path",
+			mutate: func(fixture visualCheckpointTestFixture) (int, map[string]interface{}) {
+				delete(fixture.BuildResult, "claims_path")
+				return 5, fixture.BuildResult
+			},
+		},
+		{
+			name: "phase mismatch",
+			mutate: func(fixture visualCheckpointTestFixture) (int, map[string]interface{}) {
+				return 6, fixture.BuildResult
+			},
+		},
+		{
+			name: "attempt claims path mismatch",
+			mutate: func(fixture visualCheckpointTestFixture) (int, map[string]interface{}) {
+				fixture.BuildResult["claims_path"] = displayDataPath("build/phase-5/other-claims.json")
+				return 5, fixture.BuildResult
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			saveGlobals(t)
+			s, root := newTestStore(t)
+			store = s
+			phase := colony.Phase{ID: 5, Name: "Reject stale visual provenance", Status: colony.PhaseInProgress}
+			checkpointTestState(t, phase, colony.StateBUILT)
+			fixture := checkpointVisualFixture(t, phase.ID, strings.ReplaceAll(tt.name, " ", "-"), codexBuildClaims{
+				FilesModified: []string{"web/components/StatusCard.tsx"},
+			})
+			phaseID, result := tt.mutate(fixture)
+			if refs, err := materializeVisualCheckpointFromBuildResult(root, phaseID, result); err == nil {
+				t.Fatalf("mismatched generation materialized refs=%#v", refs)
+			}
+			if _, err := os.Stat(filepath.Join(store.BasePath(), pendingDecisionsFile)); !os.IsNotExist(err) {
+				t.Fatalf("mismatched generation mutated %s: stat err=%v", pendingDecisionsFile, err)
+			}
+		})
 	}
 }
 
@@ -182,12 +397,13 @@ func TestRuntimeVerificationDecisionIsIdempotent(t *testing.T) {
 		{TaskID: "1.2", Criterion: "Animation timing feels calm", State: criterionStateNeedsOwnerConfirmation, Evidence: []string{"requires hands-on playback"}},
 		{TaskID: "1.3", Criterion: "Unit tests pass", State: "", Evidence: []string{"go test passed"}},
 	}
+	generation := checkpointTestGeneration(t, "runtime-idempotent", "runtime-idempotent-evidence")
 
-	first, err := materializeRuntimeVerificationCheckpoints(phase.ID, criteria)
+	first, err := materializeRuntimeVerificationCheckpoints(phase.ID, criteria, generation)
 	if err != nil {
 		t.Fatalf("materialize runtime checkpoints: %v", err)
 	}
-	second, err := materializeRuntimeVerificationCheckpoints(phase.ID, criteria)
+	second, err := materializeRuntimeVerificationCheckpoints(phase.ID, criteria, generation)
 	if err != nil {
 		t.Fatalf("replay runtime checkpoints: %v", err)
 	}
@@ -229,8 +445,9 @@ func TestCheckpointCapabilityRotatesWithoutChangingIdentityOrPersistingRawTokens
 	criterion := codexCriterionVerification{
 		TaskID: "4.1", Criterion: "The interaction feels deliberate", State: criterionStateNeedsOwnerConfirmation,
 	}
+	generation := checkpointTestGeneration(t, "capability-rotation", "capability-rotation-evidence")
 
-	first, err := materializeRuntimeVerificationCheckpoints(phase.ID, []codexCriterionVerification{criterion})
+	first, err := materializeRuntimeVerificationCheckpoints(phase.ID, []codexCriterionVerification{criterion}, generation)
 	if err != nil || len(first) != 1 {
 		t.Fatalf("materialize first checkpoint: refs=%#v err=%v", first, err)
 	}
@@ -258,7 +475,7 @@ func TestCheckpointCapabilityRotatesWithoutChangingIdentityOrPersistingRawTokens
 		t.Fatalf("CheckpointCapability must be transient with json:\"-\"; field=%#v", field)
 	}
 
-	second, err := materializeRuntimeVerificationCheckpoints(phase.ID, []codexCriterionVerification{criterion})
+	second, err := materializeRuntimeVerificationCheckpoints(phase.ID, []codexCriterionVerification{criterion}, generation)
 	if err != nil || len(second) != 1 {
 		t.Fatalf("rotate checkpoint capability: refs=%#v err=%v", second, err)
 	}
@@ -336,7 +553,7 @@ func TestAutopilotCheckpointSealStorageErrorsFailClosed(t *testing.T) {
 		state := checkpointTestState(t, phase, colony.StateCOMPLETED)
 		refs, err := materializeRuntimeVerificationCheckpoints(phase.ID, []codexCriterionVerification{{
 			TaskID: "1.1", Criterion: "The owner experience feels right", State: criterionStateNeedsOwnerConfirmation,
-		}})
+		}}, checkpointTestGeneration(t, "unwritable-owner-work", "unwritable-owner-work-evidence"))
 		if err != nil || len(refs) != 1 {
 			t.Fatalf("seed checkpoint: refs=%#v err=%v", refs, err)
 		}
@@ -367,7 +584,7 @@ func TestAutopilotCheckpointSealCapabilityIsFreshStableAndTransient(t *testing.T
 	state := checkpointTestState(t, phase, colony.StateCOMPLETED)
 	refs, err := materializeRuntimeVerificationCheckpoints(phase.ID, []codexCriterionVerification{{
 		TaskID: "6.1", Criterion: "The final interaction feels right", State: criterionStateNeedsOwnerConfirmation,
-	}})
+	}}, checkpointTestGeneration(t, "seal-capability", "seal-capability-evidence"))
 	if err != nil || len(refs) != 1 {
 		t.Fatalf("seed checkpoint: refs=%#v err=%v", refs, err)
 	}
@@ -418,7 +635,7 @@ func TestCheckpointCapabilityIsScopedSingleUseAndCannotCrossRows(t *testing.T) {
 		{TaskID: "5.1", Criterion: "The desktop flow feels right", State: criterionStateNeedsOwnerConfirmation},
 		{TaskID: "5.2", Criterion: "The mobile flow feels right", State: criterionStateNeedsOwnerConfirmation},
 	}
-	refs, err := materializeRuntimeVerificationCheckpoints(phase.ID, criteria)
+	refs, err := materializeRuntimeVerificationCheckpoints(phase.ID, criteria, checkpointTestGeneration(t, "capability-scope", "capability-scope-evidence"))
 	if err != nil || len(refs) != 2 {
 		t.Fatalf("materialize checkpoints: refs=%#v err=%v", refs, err)
 	}
@@ -488,7 +705,8 @@ func TestCheckpointAnswerResolvesOriginalRow(t *testing.T) {
 		{TaskID: "1.1", Criterion: "The first interaction feels right", State: criterionStateNeedsOwnerConfirmation},
 		{TaskID: "1.2", Criterion: "The first interaction feels right on mobile", State: criterionStateNeedsOwnerConfirmation},
 	}
-	refs, err := materializeRuntimeVerificationCheckpoints(phase.ID, criteria)
+	generation := checkpointTestGeneration(t, "answer-original", "answer-original-evidence")
+	refs, err := materializeRuntimeVerificationCheckpoints(phase.ID, criteria, generation)
 	if err != nil || len(refs) != 2 {
 		t.Fatalf("materialize checkpoints: refs=%#v err=%v", refs, err)
 	}
@@ -525,7 +743,7 @@ func TestCheckpointAnswerResolvesOriginalRow(t *testing.T) {
 
 	// Re-materializing the same criteria must preserve the resolved original
 	// and return only the still-open checkpoint to unattended orchestration.
-	replayed, err := materializeRuntimeVerificationCheckpoints(phase.ID, criteria)
+	replayed, err := materializeRuntimeVerificationCheckpoints(phase.ID, criteria, generation)
 	if err != nil {
 		t.Fatalf("re-materialize after answer: %v", err)
 	}
@@ -564,7 +782,7 @@ func TestFinalPhaseAdvancesWithOwnerCheckpointAndSealBlocks(t *testing.T) {
 	criterion := codexCriterionVerification{
 		TaskID: "1.1", Criterion: "The final screen looks polished", State: criterionStateNeedsOwnerConfirmation, Passed: true,
 	}
-	refs, err := materializeRuntimeVerificationCheckpoints(phase.ID, []codexCriterionVerification{criterion})
+	refs, err := materializeRuntimeVerificationCheckpoints(phase.ID, []codexCriterionVerification{criterion}, checkpointTestGeneration(t, "final-owner-boundary", "final-owner-boundary-evidence"))
 	if err != nil || len(refs) != 1 {
 		t.Fatalf("materialize final checkpoint: refs=%#v err=%v", refs, err)
 	}
