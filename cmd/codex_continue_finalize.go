@@ -262,10 +262,6 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	} else {
 		verification, watcherFlow = attachExternalContinueWatcher(verification, workerFlow)
 	}
-	runtimeCheckpoints, err := materializeRuntimeVerificationCheckpoints(phase.ID, verification.Criteria)
-	if err != nil {
-		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to preserve owner verification work: %w", err)
-	}
 	// ReadOnlyArtifacts is threaded into these reconstructed options for
 	// structural parity with the direct path and fail-fast validation
 	// consistency only. It is NOT how read-only evidence reaches assessment
@@ -276,6 +272,17 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	// evaluation on the finalize path.
 	assessment := assessCodexContinue(phase, manifest, verification, codexContinueOptions{ReconcileTaskIDs: plan.ReconcileTaskIDs, ReadOnlyArtifacts: plan.ReadOnlyArtifacts, VerificationTimeout: verificationTimeout}, now)
 	verification = attachContinueClaimVerification(verification, assessment)
+	var runtimeCheckpoints []autopilotCheckpointReference
+	if hasRuntimeVerificationCheckpoint(verification.Criteria) {
+		runtimeGeneration, generationErr := validatedRuntimeCheckpointGeneration(manifest, state, verification.Criteria)
+		if generationErr != nil {
+			return nil, state, phase, nil, nil, false, fmt.Errorf("failed to bind owner verification work: %w", generationErr)
+		}
+		runtimeCheckpoints, err = materializeRuntimeVerificationCheckpoints(phase.ID, verification.Criteria, runtimeGeneration)
+		if err != nil {
+			return nil, state, phase, nil, nil, false, fmt.Errorf("failed to preserve owner verification work: %w", err)
+		}
+	}
 	priorGateResults, _ := gateResultsReadPhase(phase.ID)
 	if priorGateResults == nil {
 		priorGateResults = []GateCheckResult{}

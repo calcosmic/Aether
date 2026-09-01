@@ -192,7 +192,7 @@ func TestSealPendingDecisionStorageFailureFailsClosed(t *testing.T) {
 		criterion := codexCriterionVerification{
 			TaskID: "1.1", Criterion: "The owner experience feels correct", State: criterionStateNeedsOwnerConfirmation,
 		}
-		if refs, err := materializeRuntimeVerificationCheckpoints(1, []codexCriterionVerification{criterion}); err != nil || len(refs) != 1 {
+		if refs, err := materializeRuntimeVerificationCheckpoints(1, []codexCriterionVerification{criterion}, checkpointTestGeneration(t, "seal-unwritable", "seal-unwritable-evidence")); err != nil || len(refs) != 1 {
 			t.Fatalf("seed checkpoint: refs=%#v err=%v", refs, err)
 		}
 		if err := os.Chmod(s.BasePath(), 0o555); err != nil {
@@ -243,9 +243,14 @@ func TestSealCheckpointCapabilityDeduplicatesAndStaysTransient(t *testing.T) {
 	criterion := codexCriterionVerification{
 		TaskID: "1.1", Criterion: "The final owner interaction feels correct", State: criterionStateNeedsOwnerConfirmation,
 	}
-	refs, err := materializeRuntimeVerificationCheckpoints(1, []codexCriterionVerification{criterion})
+	generationA := checkpointTestGeneration(t, "seal-generation-a", "seal-generation-evidence-a")
+	refs, err := materializeRuntimeVerificationCheckpoints(1, []codexCriterionVerification{criterion}, generationA)
 	if err != nil || len(refs) != 1 {
 		t.Fatalf("materialize checkpoint: refs=%#v err=%v", refs, err)
+	}
+	replayed, err := materializeRuntimeVerificationCheckpoints(1, []codexCriterionVerification{criterion}, generationA)
+	if err != nil || len(replayed) != 1 || replayed[0].ID != refs[0].ID || len(loadCheckpointDecisions(t)) != 1 {
+		t.Fatalf("exact generation replay was not deduplicated: first=%#v replay=%#v err=%v", refs, replayed, err)
 	}
 	initialCapability := checkpointCapabilityFromReference(t, refs[0])
 	report := codexContinueVerificationReport{
@@ -255,9 +260,11 @@ func TestSealCheckpointCapabilityDeduplicatesAndStaysTransient(t *testing.T) {
 		t.Fatalf("seed legacy verification projection: %v", err)
 	}
 
+	decision := loadCheckpointDecisions(t)[0]
+	compatibilityID := stableAutopilotCheckpointID(decision.CheckpointCompatibilityKey)
 	legacy := ownerConfirmationSealBlockers(state)
-	if len(legacy) != 1 || legacy[0].ID != refs[0].ID {
-		t.Fatalf("legacy projection identity = %#v, want durable checkpoint ID %s", legacy, refs[0].ID)
+	if len(legacy) != 1 || legacy[0].ID != compatibilityID || legacy[0].ID == refs[0].ID {
+		t.Fatalf("legacy projection identity = %#v, want compatibility ID %s distinct from durable row %s", legacy, compatibilityID, refs[0].ID)
 	}
 	blockers, _ := checkSealBlockers(s, state)
 	if len(blockers) != 1 || blockers[0].ID != refs[0].ID {
@@ -309,6 +316,26 @@ func TestSealCheckpointCapabilityDeduplicatesAndStaysTransient(t *testing.T) {
 	}
 	if !bytes.Contains(eventRaw, []byte(refs[0].ID)) {
 		t.Fatalf("lifecycle telemetry omitted safe checkpoint identity %s:\n%s", refs[0].ID, eventRaw)
+	}
+
+	generationB := checkpointTestGeneration(t, "seal-generation-b", "seal-generation-evidence-b")
+	secondGeneration, err := materializeRuntimeVerificationCheckpoints(1, []codexCriterionVerification{criterion}, generationB)
+	if err != nil || len(secondGeneration) != 1 || secondGeneration[0].ID == refs[0].ID {
+		t.Fatalf("distinct durable generation was conflated: first=%#v second=%#v err=%v", refs, secondGeneration, err)
+	}
+	blockers, _ = checkSealBlockers(s, state)
+	if len(blockers) != 2 {
+		t.Fatalf("legacy suppression hid a durable generation or leaked a legacy blocker: %#v", blockers)
+	}
+	seen := map[string]bool{}
+	for _, blocker := range blockers {
+		seen[blocker.ID] = true
+		if got := checkpointCapabilitiesInSealOutput(blocker.RecoveryCommand); len(got) != 1 {
+			t.Fatalf("durable generation %s did not retain one capability command: %#v", blocker.ID, blocker)
+		}
+	}
+	if !seen[refs[0].ID] || !seen[secondGeneration[0].ID] || seen[compatibilityID] {
+		t.Fatalf("seal blockers did not preserve both durable row IDs while suppressing compatibility ID %s: %#v", compatibilityID, blockers)
 	}
 }
 

@@ -43,6 +43,18 @@ type PendingDecision struct {
 	// are optional so older pending-decision records remain wire-compatible.
 	// Type distinguishes queueable visual/runtime checks from blocker flags.
 	CheckpointKey string `json:"checkpoint_key,omitempty"`
+	// CheckpointCompatibilityKey is stable for the same logical owner question
+	// across work generations. It exists only to suppress the legacy seal
+	// projection; authorization always binds CheckpointKey, which includes the
+	// immutable WorkGeneration digest.
+	CheckpointCompatibilityKey string `json:"checkpoint_compatibility_key,omitempty"`
+	// The remaining provenance fields make the exact build/verification
+	// generation auditable without persisting raw capabilities or evidence
+	// bytes. WorkGeneration commits to the other three fields together.
+	CheckpointAttemptID              string `json:"checkpoint_attempt_id,omitempty"`
+	CheckpointExecutionBindingSHA256 string `json:"checkpoint_execution_binding_sha256,omitempty"`
+	CheckpointEvidenceSHA256         string `json:"checkpoint_evidence_sha256,omitempty"`
+	WorkGeneration                   string `json:"work_generation,omitempty"`
 	// CheckpointCapability is returned only to the immediate owner-facing
 	// renderer. Only SHA-256 hashes survive a JSON round trip.
 	CheckpointCapability        string   `json:"-"`

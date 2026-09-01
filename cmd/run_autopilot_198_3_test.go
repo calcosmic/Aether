@@ -233,7 +233,7 @@ func TestRunHeadlessQueuesVisualRuntimeAndReplanThenCompletes(t *testing.T) {
 	runAutopilotMaterializeVisual = func(_ string, phaseNum int, _ map[string]interface{}) ([]autopilotCheckpointReference, error) {
 		decision, _, err := upsertAutopilotCheckpoint(PendingDecision{
 			Type: autopilotCheckpointTypeVisual, Description: "Review visual checkpoint", Source: "test",
-		}, phaseNum, "visual")
+		}, phaseNum, "visual", checkpointTestGeneration(t, "run-visual", "run-visual-evidence"))
 		if err != nil {
 			return nil, err
 		}
@@ -250,7 +250,7 @@ func TestRunHeadlessQueuesVisualRuntimeAndReplanThenCompletes(t *testing.T) {
 		if phase.ID == 1 {
 			decision, _, checkpointErr := upsertAutopilotCheckpoint(PendingDecision{
 				Type: autopilotCheckpointTypeRuntimeVerification, Description: "Confirm runtime checkpoint", Source: "test",
-			}, phase.ID, "runtime")
+			}, phase.ID, "runtime", checkpointTestGeneration(t, "run-runtime", "run-runtime-evidence"))
 			if checkpointErr != nil {
 				t.Fatalf("persist runtime checkpoint: %v", checkpointErr)
 			}

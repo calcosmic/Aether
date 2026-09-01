@@ -560,7 +560,7 @@ func TestAutopilotReportCheckpointCapabilityIsImmediateOnly(t *testing.T) {
 	refs, err := materializeRuntimeVerificationCheckpoints(phase.ID, []codexCriterionVerification{{
 		TaskID: "1.1", Criterion: "The finished interaction feels correct", State: criterionStateNeedsOwnerConfirmation,
 		Evidence: []string{"automated checks cannot judge feel"},
-	}})
+	}}, checkpointTestGeneration(t, "report-immediate", "report-immediate-evidence"))
 	if err != nil || len(refs) != 1 {
 		t.Fatalf("materialize immediate checkpoint: refs=%#v err=%v", refs, err)
 	}
