@@ -20,7 +20,7 @@ func finishRecoveryReportForTest(t *testing.T, state colony.ColonyState, decisio
 	invocation := autopilotInvocation{
 		ID:             "run-recovery-idempotent",
 		StartedAt:      started,
-		BlockersBefore: readBlockerSnapshot(store),
+		BlockersBefore: captureAutopilotBlockerSnapshot(store),
 		Phases:         []autopilotPhaseReport{{Phase: state.CurrentPhase, PhaseName: "Recovery phase", Outcome: "checking"}},
 	}
 	result := finishAutopilotInvocation(&invocation, state, runCompatibilityOptions{}, nil, 0, decision, nil)

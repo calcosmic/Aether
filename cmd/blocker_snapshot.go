@@ -1,9 +1,15 @@
 package cmd
 
 import (
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
+	"github.com/calcosmic/Aether/pkg/codex"
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
 )
 
@@ -28,16 +34,29 @@ type blockerSnapshotComparison struct {
 }
 
 // readBlockerSnapshot reads only the live flag store and projects unresolved
-// Type=blocker records. Neighboring issues, notes, owner decisions, signals,
-// gate history, and midden history are outside this reader's authority.
-func readBlockerSnapshot(s *storage.Store) blockerSnapshot {
+// Type=blocker records. A missing current file may use the legacy flags file;
+// every other storage failure is unavailable truth, never an empty snapshot.
+func readBlockerSnapshot(s *storage.Store) (blockerSnapshot, error) {
 	snapshot := blockerSnapshot{
 		IDs:          []string{},
 		EscalatedIDs: []string{},
 	}
-	flags, ok := loadFlagsFile(s)
-	if !ok {
-		return snapshot
+	if s == nil {
+		return snapshot, fmt.Errorf("blocker truth store is unavailable")
+	}
+
+	flags, err := loadCanonicalBlockerFlags(s, "pending-decisions.json")
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return snapshot, err
+		}
+		flags, err = loadCanonicalBlockerFlags(s, "flags.json")
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return snapshot, nil
+			}
+			return snapshot, err
+		}
 	}
 
 	ids := make(map[string]struct{})
@@ -62,7 +81,38 @@ func readBlockerSnapshot(s *storage.Store) blockerSnapshot {
 
 	snapshot.IDs = sortedStringSet(ids)
 	snapshot.EscalatedIDs = sortedStringSet(escalatedIDs)
-	return snapshot
+	return snapshot, nil
+}
+
+func loadCanonicalBlockerFlags(s *storage.Store, relativePath string) (colony.FlagsFile, error) {
+	fullPath := filepath.Join(s.BasePath(), relativePath)
+	info, err := os.Stat(fullPath)
+	if err != nil {
+		return colony.FlagsFile{}, fmt.Errorf("blocker truth %s: %w", relativePath, err)
+	}
+	if !info.Mode().IsRegular() {
+		return colony.FlagsFile{}, fmt.Errorf("blocker truth %s: expected a regular file", relativePath)
+	}
+	var flags colony.FlagsFile
+	if err := s.LoadJSON(relativePath, &flags); err != nil {
+		return colony.FlagsFile{}, fmt.Errorf("blocker truth %s: %w", relativePath, err)
+	}
+	return flags, nil
+}
+
+// blockerSnapshotErrorDetail produces the bounded, path-safe diagnostic used
+// by command and report surfaces. The original error remains available to
+// callers for control flow, while users never receive an absolute data path.
+func blockerSnapshotErrorDetail(s *storage.Store, err error) string {
+	if err == nil {
+		return ""
+	}
+	detail := err.Error()
+	if s != nil && strings.TrimSpace(s.BasePath()) != "" {
+		detail = strings.ReplaceAll(detail, s.BasePath(), ".aether/data")
+	}
+	detail = codex.SanitizeWorkerDiagnosticOutput(detail)
+	return compactActionText(detail, 240)
 }
 
 func compareBlockerSnapshots(before, after blockerSnapshot) blockerSnapshotComparison {

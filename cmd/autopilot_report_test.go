@@ -219,7 +219,7 @@ func TestAutopilotReportElapsedUsesInvocationWallClock(t *testing.T) {
 		reportTestState(colony.StateREADY, 2),
 		autopilotRunDecisionForCode(autopilotTriggerMaxPhasesReached, false, nil),
 		finished,
-		blockerSnapshot{},
+		availableAutopilotBlockerSnapshot(blockerSnapshot{}),
 	)
 	if report.ElapsedSeconds != 12*60 {
 		t.Fatalf("elapsed = %d seconds, want 720 wall-clock seconds", report.ElapsedSeconds)
@@ -240,7 +240,7 @@ func TestAutopilotReportElapsedUsesInvocationWallClock(t *testing.T) {
 		reportTestState(colony.StateREADY, 2),
 		autopilotRunDecisionForCode(autopilotTriggerCancelled, false, nil),
 		restarted,
-		blockerSnapshot{},
+		availableAutopilotBlockerSnapshot(blockerSnapshot{}),
 	)
 	if second.ElapsedSeconds != 0 {
 		t.Fatalf("new invocation elapsed = %d, want 0", second.ElapsedSeconds)
@@ -260,7 +260,7 @@ func TestAutopilotReportRetainsHighFindingsQueuedDecisionsAndBlockers(t *testing
 		autopilotInvocation{
 			ID:             "run-evidence",
 			StartedAt:      started,
-			BlockersBefore: before,
+			BlockersBefore: availableAutopilotBlockerSnapshot(before),
 			Phases: []autopilotPhaseReport{{
 				Phase: 2, PhaseName: "Second", Outcome: "stopped",
 				HighFindings:    []codexReviewFinding{high},
@@ -270,10 +270,10 @@ func TestAutopilotReportRetainsHighFindingsQueuedDecisionsAndBlockers(t *testing
 		reportTestState(colony.StateBUILT, 2),
 		autopilotRunDecisionForCode(autopilotTriggerBlockerEscalated, false, nil),
 		started.Add(time.Minute),
-		after,
+		availableAutopilotBlockerSnapshot(after),
 	)
 
-	if !reflect.DeepEqual(report.BlockersBefore, before) || !reflect.DeepEqual(report.BlockersAfter, after) {
+	if report.BlockersBefore.Snapshot == nil || report.BlockersAfter.Snapshot == nil || !reflect.DeepEqual(*report.BlockersBefore.Snapshot, before) || !reflect.DeepEqual(*report.BlockersAfter.Snapshot, after) {
 		t.Fatalf("blocker movement was not retained: before=%+v after=%+v", report.BlockersBefore, report.BlockersAfter)
 	}
 	if len(report.QueuedDecisions) != 1 || report.QueuedDecisions[0] != queued {
@@ -441,8 +441,8 @@ func TestAutopilotReportRendererUsesRequiredOrderAndExactNext(t *testing.T) {
 		QueuedDecisions: []autopilotQueuedDecisionReport{{
 			ID: "decision-1", Type: autopilotCheckpointTypeRuntimeVerification, Phase: 1,
 		}},
-		BlockersBefore: blockerSnapshot{Count: 1},
-		BlockersAfter:  blockerSnapshot{Count: 2, EscalatedCount: 1},
+		BlockersBefore: availableAutopilotBlockerSnapshot(blockerSnapshot{Count: 1}),
+		BlockersAfter:  availableAutopilotBlockerSnapshot(blockerSnapshot{Count: 2, EscalatedCount: 1}),
 		ElapsedSeconds: 720,
 		Spend:          autopilotSpendReport{UnreportedRows: 1},
 		Next:           "aether build 2",
@@ -578,7 +578,7 @@ func TestAutopilotReportCheckpointCapabilityIsImmediateOnly(t *testing.T) {
 	}
 	invocation := beginAutopilotInvocation(state)
 	invocation.recordRunDecision(state, decision)
-	report := buildAutopilotInvocationReport(invocation, state, decision, autopilotNow(), blockerSnapshot{})
+	report := buildAutopilotInvocationReport(invocation, state, decision, autopilotNow(), availableAutopilotBlockerSnapshot(blockerSnapshot{}))
 	if report.Next != "aether seal" {
 		t.Fatalf("seal-ready durable next = %q, want capability-free re-entry through aether seal", report.Next)
 	}

@@ -3815,14 +3815,16 @@ func runCodexContinueGatesWithAutopilotBaseline(phase colony.Phase, manifest cod
 	blockerFlagCheck := checkUnresolvedBlockerFlags()
 	if !blockerFlagCheck.Passed && autopilotBlockerBaseline != nil {
 		baseline := *autopilotBlockerBaseline
-		current := readBlockerSnapshot(store)
-		movement := compareBlockerSnapshots(baseline, current)
-		if !movement.CountIncreased && !movement.EscalationAdded {
-			blockerFlagCheck.Passed = true
-			blockerFlagCheck.Detail = fmt.Sprintf(
-				"existing blocker baseline did not increase or escalate; %d blocker(s) remain unresolved and visible for follow-up",
-				current.Count,
-			)
+		current, currentErr := readBlockerSnapshot(store)
+		if currentErr == nil {
+			movement := compareBlockerSnapshots(baseline, current)
+			if !movement.CountIncreased && !movement.EscalationAdded {
+				blockerFlagCheck.Passed = true
+				blockerFlagCheck.Detail = fmt.Sprintf(
+					"existing blocker baseline did not increase or escalate; %d blocker(s) remain unresolved and visible for follow-up",
+					current.Count,
+				)
+			}
 		}
 	}
 	if !blockerFlagCheck.Passed {

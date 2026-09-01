@@ -180,10 +180,11 @@ func TestFlagCheckBlockersFailsWhenTruthUnavailable(t *testing.T) {
 func TestBlockerSnapshot(t *testing.T) {
 	saveGlobals(t)
 	tests := []struct {
-		name  string
-		write bool
-		flags []colony.FlagEntry
-		want  blockerSnapshot
+		name    string
+		write   bool
+		flags   []colony.FlagEntry
+		want    blockerSnapshot
+		wantErr bool
 	}{
 		{
 			name: "missing flags file",
@@ -195,9 +196,10 @@ func TestBlockerSnapshot(t *testing.T) {
 			want:  blockerSnapshot{IDs: []string{}, EscalatedIDs: []string{}},
 		},
 		{
-			name:  "nil store",
-			write: false,
-			want:  blockerSnapshot{IDs: []string{}, EscalatedIDs: []string{}},
+			name:    "nil store",
+			write:   false,
+			want:    blockerSnapshot{IDs: []string{}, EscalatedIDs: []string{}},
+			wantErr: true,
 		},
 		{
 			name:  "ordinary and escalated blockers are sorted",
@@ -266,7 +268,11 @@ func TestBlockerSnapshot(t *testing.T) {
 				}
 			}
 
-			if got := readBlockerSnapshot(s); !reflect.DeepEqual(got, tt.want) {
+			got, err := readBlockerSnapshot(s)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("readBlockerSnapshot() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("readBlockerSnapshot() = %#v, want %#v", got, tt.want)
 			}
 		})
@@ -348,7 +354,10 @@ func TestBlockerSnapshotObservesSwarmEscalation(t *testing.T) {
 	if len(flags) != 1 {
 		t.Fatalf("active escalation flags = %d, want 1: %+v", len(flags), flags)
 	}
-	snapshot := readBlockerSnapshot(s)
+	snapshot, err := readBlockerSnapshot(s)
+	if err != nil {
+		t.Fatalf("read blocker snapshot: %v", err)
+	}
 	if snapshot.Count != 1 || snapshot.EscalatedCount != 1 {
 		t.Fatalf("snapshot = %+v, want one escalated blocker", snapshot)
 	}

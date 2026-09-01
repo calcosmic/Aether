@@ -59,6 +59,30 @@ type autopilotSpendReport struct {
 	Phases         []autopilotPhaseSpendReport `json:"phases"`
 }
 
+// autopilotBlockerSnapshotReport preserves the difference between a verified
+// empty blocker set and blocker truth that could not be read.
+type autopilotBlockerSnapshotReport struct {
+	Available bool             `json:"available"`
+	Snapshot  *blockerSnapshot `json:"snapshot"`
+	Error     string           `json:"error,omitempty"`
+}
+
+func availableAutopilotBlockerSnapshot(snapshot blockerSnapshot) autopilotBlockerSnapshotReport {
+	return autopilotBlockerSnapshotReport{Available: true, Snapshot: &snapshot}
+}
+
+func captureAutopilotBlockerSnapshot(s *storage.Store) autopilotBlockerSnapshotReport {
+	snapshot, err := readBlockerSnapshot(s)
+	if err != nil {
+		return autopilotBlockerSnapshotReport{
+			Available: false,
+			Snapshot:  nil,
+			Error:     blockerSnapshotErrorDetail(s, err),
+		}
+	}
+	return availableAutopilotBlockerSnapshot(snapshot)
+}
+
 // autopilotRecoveryReport is the bounded recovery handoff for a genuine stop.
 // MedicAdvice is an owner command only: this integration never constructs or
 // dispatches a worker.
@@ -86,8 +110,8 @@ type autopilotInvocationReport struct {
 	CurrentPhase    int                             `json:"current_phase"`
 	PhasesCompleted int                             `json:"phases_completed"`
 	QueuedDecisions []autopilotQueuedDecisionReport `json:"queued_decisions"`
-	BlockersBefore  blockerSnapshot                 `json:"blockers_before"`
-	BlockersAfter   blockerSnapshot                 `json:"blockers_after"`
+	BlockersBefore  autopilotBlockerSnapshotReport  `json:"blockers_before"`
+	BlockersAfter   autopilotBlockerSnapshotReport  `json:"blockers_after"`
 	Spend           autopilotSpendReport            `json:"spend"`
 	Recovery        *autopilotRecoveryReport        `json:"recovery,omitempty"`
 	Next            string                          `json:"next"`
@@ -100,7 +124,7 @@ type autopilotInvocationReport struct {
 type autopilotInvocation struct {
 	ID             string
 	StartedAt      time.Time
-	BlockersBefore blockerSnapshot
+	BlockersBefore autopilotBlockerSnapshotReport
 	Phases         []autopilotPhaseReport
 }
 
@@ -117,7 +141,7 @@ func beginAutopilotInvocation(state colony.ColonyState) autopilotInvocation {
 	return autopilotInvocation{
 		ID:             autopilotNewInvocationID(now),
 		StartedAt:      now,
-		BlockersBefore: readBlockerSnapshot(store),
+		BlockersBefore: captureAutopilotBlockerSnapshot(store),
 		Phases:         []autopilotPhaseReport{},
 	}
 }
@@ -265,7 +289,7 @@ func autopilotReportOutcome(decision autopilotRunDecision) string {
 	}
 }
 
-func buildAutopilotInvocationReport(invocation autopilotInvocation, state colony.ColonyState, decision autopilotRunDecision, finished time.Time, blockersAfter blockerSnapshot) autopilotInvocationReport {
+func buildAutopilotInvocationReport(invocation autopilotInvocation, state colony.ColonyState, decision autopilotRunDecision, finished time.Time, blockersAfter autopilotBlockerSnapshotReport) autopilotInvocationReport {
 	finished = finished.UTC()
 	started := invocation.StartedAt.UTC()
 	elapsed := finished.Sub(started)
@@ -553,9 +577,7 @@ func renderAutopilotInvocationReport(report autopilotInvocationReport) string {
 			b.WriteString("\n")
 		}
 	}
-	fmt.Fprintf(&b, "Blocker movement: %d -> %d active; %d -> %d escalated\n",
-		report.BlockersBefore.Count, report.BlockersAfter.Count,
-		report.BlockersBefore.EscalatedCount, report.BlockersAfter.EscalatedCount)
+	b.WriteString(renderAutopilotBlockerMovement(report.BlockersBefore, report.BlockersAfter))
 	if report.Recovery != nil {
 		fmt.Fprintf(&b, "Recovery: %s (%s)\n", report.Recovery.Classification, report.Recovery.FailureType)
 		if strings.TrimSpace(report.Recovery.LogError) != "" {
@@ -590,6 +612,15 @@ func renderAutopilotInvocationReport(report autopilotInvocationReport) string {
 		}
 	}
 	return b.String()
+}
+
+func renderAutopilotBlockerMovement(before, after autopilotBlockerSnapshotReport) string {
+	if !before.Available || before.Snapshot == nil || !after.Available || after.Snapshot == nil {
+		return "Blocker movement: unavailable\n"
+	}
+	return fmt.Sprintf("Blocker movement: %d -> %d active; %d -> %d escalated\n",
+		before.Snapshot.Count, after.Snapshot.Count,
+		before.Snapshot.EscalatedCount, after.Snapshot.EscalatedCount)
 }
 
 func renderAutopilotOutcome(report autopilotInvocationReport) string {

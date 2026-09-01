@@ -173,7 +173,7 @@ func seedOrdinaryOvernightBlocker(t *testing.T) {
 	if code := int(renderedCommandExitCode.Load()); code != 0 {
 		t.Fatalf("flag-add exited %d: %s", code, stdout.(*bytes.Buffer).String())
 	}
-	if snapshot := readBlockerSnapshot(store); snapshot.Count != 1 || snapshot.EscalatedCount != 0 {
+	if snapshot, err := readBlockerSnapshot(store); err != nil || snapshot.Count != 1 || snapshot.EscalatedCount != 0 {
 		t.Fatalf("ordinary blocker fixture = %+v, want one non-escalated baseline", snapshot)
 	}
 	stdout.(*bytes.Buffer).Reset()
@@ -283,7 +283,7 @@ func TestOvernightRunCompletesSixPhases(t *testing.T) {
 	if report.ElapsedSeconds <= 0 || len(report.Phases) != 6 || report.PhasesCompleted != 6 {
 		t.Errorf("final report elapsed/phases = %d/%d/%d", report.ElapsedSeconds, len(report.Phases), report.PhasesCompleted)
 	}
-	if report.BlockersBefore.Count != 1 || !reflect.DeepEqual(report.BlockersBefore, report.BlockersAfter) {
+	if report.BlockersBefore.Snapshot == nil || report.BlockersBefore.Snapshot.Count != 1 || !reflect.DeepEqual(report.BlockersBefore, report.BlockersAfter) {
 		t.Errorf("blocker movement = before %+v after %+v, want one unchanged ordinary blocker", report.BlockersBefore, report.BlockersAfter)
 	}
 	if report.Spend.MeasuredTokens == nil || report.Spend.MeasuredRows == 0 || report.Spend.UnreportedRows == 0 {
@@ -415,7 +415,10 @@ func TestOvernightRunBlockerBaselineExceptionIsNarrow(t *testing.T) {
 			s, _ := newTestStore(t)
 			store = s
 			writeTestFlags(t, tt.before...)
-			baseline := readBlockerSnapshot(store)
+			baseline, err := readBlockerSnapshot(store)
+			if err != nil {
+				t.Fatalf("read blocker baseline: %v", err)
+			}
 			writeTestFlags(t, tt.after...)
 			flagsBeforeGate := append([]colony.FlagEntry{}, readTestFlags(t)...)
 

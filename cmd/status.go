@@ -717,9 +717,18 @@ func buildStatusResult(state colony.ColonyState, s *storage.Store) map[string]in
 		"agent_delegate_session": codex.IsAgentDelegateSession(),
 		"plan_revision":          planRevisionSummary(state.Plan),
 	}
-	blockers := readBlockerSnapshot(s)
+	blockers, blockerErr := readBlockerSnapshot(s)
 	issues, notes := countStatusNonBlockerFlags(s)
-	addBlockerSnapshotFields(result, blockers)
+	result["blocker_snapshot_available"] = blockerErr == nil
+	if blockerErr != nil {
+		result["blocker_snapshot_error"] = blockerSnapshotErrorDetail(s, blockerErr)
+		result["blockers"] = nil
+		result["blocker_ids"] = nil
+		result["escalated_blockers"] = nil
+		result["escalated_blocker_ids"] = nil
+	} else {
+		addBlockerSnapshotFields(result, blockers)
+	}
 	result["issues"] = issues
 	result["notes"] = notes
 
@@ -916,12 +925,16 @@ func renderDashboard(state colony.ColonyState, s *storage.Store, result map[stri
 
 	// Flags. These values were captured once when buildStatusResult assembled
 	// the JSON result, so visual and machine-readable status cannot disagree.
-	blockers := intValue(result["blockers"])
-	escalatedBlockers := intValue(result["escalated_blockers"])
 	issues := intValue(result["issues"])
 	notes := intValue(result["notes"])
-	fmt.Fprintf(&b, "Flags: %d blockers | %d issues | %d notes\n", blockers, issues, notes)
-	fmt.Fprintf(&b, "Existing blocker work: %d active (%d escalated)\n", blockers, escalatedBlockers)
+	if available, _ := result["blocker_snapshot_available"].(bool); !available {
+		b.WriteString("Blocker truth: unavailable\n")
+	} else {
+		blockers := intValue(result["blockers"])
+		escalatedBlockers := intValue(result["escalated_blockers"])
+		fmt.Fprintf(&b, "Flags: %d blockers | %d issues | %d notes\n", blockers, issues, notes)
+		fmt.Fprintf(&b, "Existing blocker work: %d active (%d escalated)\n", blockers, escalatedBlockers)
+	}
 	if report := renderAutopilotReportFromResult(result); report != "" {
 		b.WriteString("\n")
 		b.WriteString(report)
@@ -1384,8 +1397,11 @@ func countConstraints(s *storage.Store) (focus, avoid int) {
 // countFlags preserves the existing status counting surface while delegating
 // blocker truth to the shared snapshot reader.
 func countFlags(s *storage.Store) (blockers, issues, notes int) {
-	snapshot := readBlockerSnapshot(s)
+	snapshot, err := readBlockerSnapshot(s)
 	issues, notes = countStatusNonBlockerFlags(s)
+	if err != nil {
+		return 0, issues, notes
+	}
 	return snapshot.Count, issues, notes
 }
 

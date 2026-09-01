@@ -659,7 +659,7 @@ func finishAutopilotInvocation(invocation *autopilotInvocation, state colony.Col
 		status = "running"
 	}
 	invocation.recordRunDecision(state, decision)
-	report := buildAutopilotInvocationReport(*invocation, state, decision, autopilotNow(), readBlockerSnapshot(store))
+	report := buildAutopilotInvocationReport(*invocation, state, decision, autopilotNow(), captureAutopilotBlockerSnapshot(store))
 	recordAutopilotRecovery(&report, decision, cause)
 	persistErr := syncRunAutopilotStateWithReport(state, opts, status, string(decision.Code), &report)
 	result := buildRunExecutionResult(state, opts, steps, phasesCompleted, legacyRunStoppedReason(decision.Code), report.Next)
@@ -801,7 +801,11 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 			}
 			invocation.phase(*phase, "building")
 
-			baseline := readBlockerSnapshot(store)
+			baselineReport := captureAutopilotBlockerSnapshot(store)
+			baseline := blockerSnapshot{IDs: []string{}, EscalatedIDs: []string{}}
+			if baselineReport.Snapshot != nil {
+				baseline = *baselineReport.Snapshot
+			}
 			if baseline.Count > 0 {
 				emitVisualProgress(renderRunBlockerBaseline(baseline))
 			}
@@ -843,7 +847,11 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 				"autopilot_signals": continueReviewAutopilotSignals(nil, visualCheckpoints),
 			}
 			invocation.recordSignals(*phase, autopilotSignalsFromRunResult(buildStageResult))
-			afterBuild := readBlockerSnapshot(store)
+			afterBuildReport := captureAutopilotBlockerSnapshot(store)
+			afterBuild := blockerSnapshot{IDs: []string{}, EscalatedIDs: []string{}}
+			if afterBuildReport.Snapshot != nil {
+				afterBuild = *afterBuildReport.Snapshot
+			}
 			if decision, active := evaluateAutopilotRunStage(buildStageResult, baseline, afterBuild, opts.Headless); active {
 				switch decision.Disposition {
 				case autopilotDispositionQueueAndContinue:
@@ -860,7 +868,11 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 
 		case colony.StateEXECUTING, colony.StateBUILT:
 			invocation.phase(phaseForAutopilotReport(state, state.CurrentPhase), "checking")
-			baseline := readBlockerSnapshot(store)
+			baselineReport := captureAutopilotBlockerSnapshot(store)
+			baseline := blockerSnapshot{IDs: []string{}, EscalatedIDs: []string{}}
+			if baselineReport.Snapshot != nil {
+				baseline = *baselineReport.Snapshot
+			}
 			if baseline.Count > 0 {
 				emitVisualProgress(renderRunBlockerBaseline(baseline))
 			}
@@ -890,7 +902,11 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 			state = updatedState
 			invocation.recordSignals(phase, autopilotSignalsFromRunResult(continueResult))
 
-			afterContinue := readBlockerSnapshot(store)
+			afterContinueReport := captureAutopilotBlockerSnapshot(store)
+			afterContinue := blockerSnapshot{IDs: []string{}, EscalatedIDs: []string{}}
+			if afterContinueReport.Snapshot != nil {
+				afterContinue = *afterContinueReport.Snapshot
+			}
 			if decision, active := evaluateAutopilotRunStage(continueResult, baseline, afterContinue, opts.Headless); active {
 				switch decision.Disposition {
 				case autopilotDispositionQueueAndContinue:
@@ -1261,9 +1277,7 @@ func renderRunReportPersistenceFailure(result map[string]interface{}) string {
 			b.WriteString("\n")
 		}
 	}
-	fmt.Fprintf(&b, "Blocker movement: %d -> %d active; %d -> %d escalated\n",
-		report.BlockersBefore.Count, report.BlockersAfter.Count,
-		report.BlockersBefore.EscalatedCount, report.BlockersAfter.EscalatedCount)
+	b.WriteString(renderAutopilotBlockerMovement(report.BlockersBefore, report.BlockersAfter))
 	if report.Recovery != nil {
 		fmt.Fprintf(&b, "Recovery: %s (%s)\n", report.Recovery.Classification, report.Recovery.FailureType)
 		if strings.TrimSpace(report.Recovery.LogError) != "" {
