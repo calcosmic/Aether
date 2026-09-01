@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -1327,18 +1326,11 @@ func checkSealBlockers(s *storage.Store, state colony.ColonyState) (blockers []c
 		appendPendingDecisionFailure(fmt.Errorf("no store initialized"))
 		return blockers, issues
 	}
-	var ff colony.FlagsFile
-	pendingErr := s.LoadJSON(pendingDecisionsFile, &ff)
-	switch {
-	case pendingErr == nil:
+	ff, _, flagsErr := readCanonicalBlockerFlags(s)
+	if flagsErr != nil {
+		appendPendingDecisionFailure(flagsErr)
+	} else {
 		appendFlags(ff)
-	case errors.Is(pendingErr, os.ErrNotExist):
-		ff = colony.FlagsFile{}
-		if legacyErr := s.LoadJSON("flags.json", &ff); legacyErr == nil {
-			appendFlags(ff)
-		}
-	default:
-		appendPendingDecisionFailure(pendingErr)
 	}
 
 	checkpointBlockers, checkpointErr := autopilotCheckpointSealBlockersFromStore(s, state)

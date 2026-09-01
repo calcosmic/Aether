@@ -110,7 +110,7 @@ func readCanonicalBlockerFlags(s *storage.Store) (colony.FlagsFile, bool, error)
 
 func loadBlockerFlagsPath(s *storage.Store, relativePath string) (colony.FlagsFile, error) {
 	fullPath := filepath.Join(s.BasePath(), relativePath)
-	info, err := os.Stat(fullPath)
+	info, err := os.Lstat(fullPath)
 	if err != nil {
 		return colony.FlagsFile{}, fmt.Errorf("blocker truth %s: %w", relativePath, err)
 	}

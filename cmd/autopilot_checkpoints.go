@@ -37,9 +37,10 @@ type autopilotCheckpointReference struct {
 
 // autopilotCheckpointGeneration is the immutable authorization provenance for
 // one owner checkpoint. The execution binding names the exact attempt and
-// workspace/manifest contract; EvidenceSHA256 commits to the exact persisted
-// bytes (visual) or canonical verification projection (runtime). The two
-// derived digests are persisted on PendingDecision for audit and row identity.
+// workspace/manifest contract; EvidenceSHA256 commits to the canonical terminal
+// claims embedded in the attempt (visual) or canonical verification projection
+// (runtime). The two derived digests are persisted on PendingDecision for audit
+// and row identity.
 type autopilotCheckpointGeneration struct {
 	AttemptID              string
 	ExecutionBinding       codex.ExecutionBinding
@@ -411,11 +412,28 @@ func materializeVisualCheckpointFromBuildResult(root string, phaseID int, buildR
 	if claims.BuildPhase != phaseID {
 		return nil, fmt.Errorf("build claims phase %d does not match requested phase %d", claims.BuildPhase, phaseID)
 	}
-	evidenceDigest := sha256.Sum256(claimsBytes)
+	if attempt.Claims == nil {
+		return nil, fmt.Errorf("build attempt %s is missing terminal claims", attempt.ID)
+	}
+	if attempt.Claims.BuildPhase != phaseID {
+		return nil, fmt.Errorf("build attempt %s terminal claims phase %d does not match requested phase %d", attempt.ID, attempt.Claims.BuildPhase, phaseID)
+	}
+	persistedClaimsDigest, err := jsonSHA256(json.RawMessage(claimsBytes))
+	if err != nil {
+		return nil, fmt.Errorf("hash persisted build claims %q: %w", claimsRel, err)
+	}
+	terminalClaimsDigest, err := jsonSHA256(*attempt.Claims)
+	if err != nil {
+		return nil, fmt.Errorf("hash build attempt %s terminal claims: %w", attempt.ID, err)
+	}
+	if persistedClaimsDigest != terminalClaimsDigest {
+		return nil, fmt.Errorf("persisted build claims %q do not match terminal claims embedded in build attempt %s", claimsRel, attempt.ID)
+	}
+	claims = *attempt.Claims
 	generation, err := newAutopilotCheckpointGeneration(
 		attempt.ID,
 		attempt.PlanManifest.ExecutionBinding,
-		hex.EncodeToString(evidenceDigest[:]),
+		terminalClaimsDigest,
 	)
 	if err != nil {
 		return nil, err

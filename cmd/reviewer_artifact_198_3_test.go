@@ -643,6 +643,158 @@ func TestSuggestionOnlyCriticalExternalFinalizeFailsBeforeAdvancement(t *testing
 	}
 }
 
+type legacyReviewerSeverityFixture struct {
+	name     string
+	severity string
+	want     string
+}
+
+func legacyReviewerSeverityFixtures() []legacyReviewerSeverityFixture {
+	return []legacyReviewerSeverityFixture{
+		{name: "blank severity is invalid", severity: "   ", want: "invalid"},
+		{name: "misspelled severity is invalid", severity: "CRITCAL", want: "invalid"},
+		{name: "mixed-case Critical is normalized and blocks", severity: "cRiTiCaL", want: "critical"},
+		{name: "mixed-case High is normalized and reports", severity: "hIgH", want: "high"},
+	}
+}
+
+func assertLegacyReviewerSeverityBoundary(t *testing.T, result map[string]interface{}, state colony.ColonyState, before []byte, want string) {
+	t.Helper()
+	review, ok := result["review"].(codexContinueReviewReport)
+	if !ok {
+		t.Fatalf("continuation result omitted typed review diagnostics: %#v", result["review"])
+	}
+	var legacyReviewer *codexContinueWorkerFlowStep
+	for index := range review.Workers {
+		if strings.EqualFold(strings.TrimSpace(review.Workers[index].Caste), "gatekeeper") {
+			legacyReviewer = &review.Workers[index]
+			break
+		}
+	}
+	if legacyReviewer == nil {
+		t.Fatalf("review report has no Gatekeeper legacy compatibility row: %#v", review.Workers)
+	}
+	blockingText := strings.ToLower(strings.Join(review.BlockingIssues, " "))
+
+	switch want {
+	case "invalid":
+		if advanced, _ := result["advanced"].(bool); advanced {
+			t.Fatalf("invalid legacy severity advanced the phase: %#v", result)
+		}
+		if blocked, _ := result["blocked"].(bool); !blocked || review.Passed {
+			t.Fatalf("invalid legacy severity did not fail closed: %#v", review)
+		}
+		evidence := strings.ToLower(strings.Join(legacyReviewer.EvidenceErrors, " "))
+		if !strings.Contains(evidence, "legacy findings[0].severity") || !strings.Contains(evidence, "critical, high, medium, low, or info") || !strings.Contains(blockingText, "review evidence is invalid") {
+			t.Fatalf("invalid legacy severity diagnostic was not preserved: reviewer=%#v review=%#v", legacyReviewer, review)
+		}
+	case "critical", "high":
+		wantSeverity := strings.ToUpper(want)
+		if len(legacyReviewer.Findings) != 1 || legacyReviewer.Findings[0].Severity != wantSeverity {
+			t.Fatalf("legacy severity was not normalized to %s: %#v", wantSeverity, legacyReviewer.Findings)
+		}
+		if len(legacyReviewer.EvidenceErrors) != 0 || strings.Contains(blockingText, "review evidence is invalid") {
+			t.Fatalf("valid mixed-case legacy severity became invalid evidence: %#v", review)
+		}
+		if want == "critical" {
+			if advanced, _ := result["advanced"].(bool); advanced {
+				t.Fatalf("normalized legacy Critical advanced the phase: %#v", result)
+			}
+			if blocked, _ := result["blocked"].(bool); !blocked || review.Passed || strings.Contains(blockingText, "review evidence is invalid") {
+				t.Fatalf("normalized legacy Critical did not use the Critical gate: %#v", review)
+			}
+		} else {
+			if advanced, _ := result["advanced"].(bool); !advanced {
+				t.Fatalf("normalized legacy High did not advance: %#v", result)
+			}
+			if blocked, _ := result["blocked"].(bool); blocked || !review.Passed {
+				t.Fatalf("normalized legacy High changed report-only policy: %#v", review)
+			}
+			return
+		}
+	default:
+		t.Fatalf("unknown legacy severity expectation %q", want)
+	}
+
+	if after := reviewerPhasePositionBytes(t, state); string(after) != string(before) {
+		t.Fatalf("returned phase position changed before legacy evidence rejection:\nbefore: %s\nafter:  %s", before, after)
+	}
+	durable := loadReviewerArtifactState(t)
+	if after := reviewerPhasePositionBytes(t, durable); string(after) != string(before) {
+		t.Fatalf("durable phase position changed before legacy evidence rejection:\nbefore: %s\nafter:  %s", before, after)
+	}
+}
+
+func TestLegacyReviewerSeverityDirectNormalizationFailsClosed(t *testing.T) {
+	for _, fixture := range legacyReviewerSeverityFixtures() {
+		t.Run(fixture.name, func(t *testing.T) {
+			step := normalizeContinueReviewEvidence(codexContinueWorkerFlowStep{
+				Stage: "review", Caste: "gatekeeper", Name: "Guard-Legacy", Status: "completed",
+				Findings: []codexReviewFinding{{Severity: fixture.severity, Description: "legacy reviewer finding"}},
+			}, nil)
+			signals := continueReviewAutopilotSignals([]codexContinueWorkerFlowStep{step})
+			critical := reviewerEvaluation(t, signals, autopilotTriggerCriticalReviewFinding).Active
+			switch fixture.want {
+			case "invalid":
+				if critical || len(step.Findings) != 0 || len(step.EvidenceErrors) == 0 || !strings.Contains(strings.Join(step.EvidenceErrors, " "), "legacy findings[0].severity") {
+					t.Fatalf("invalid direct legacy severity did not fail closed: step=%#v signals=%#v", step, signals)
+				}
+			case "critical", "high":
+				wantSeverity := strings.ToUpper(fixture.want)
+				if len(step.EvidenceErrors) != 0 || len(step.Findings) != 1 || step.Findings[0].Severity != wantSeverity {
+					t.Fatalf("valid direct legacy severity was not normalized to %s: step=%#v signals=%#v", wantSeverity, step, signals)
+				}
+				if critical != (fixture.want == "critical") {
+					t.Fatalf("direct legacy severity %s critical activation = %t", wantSeverity, critical)
+				}
+			}
+		})
+	}
+}
+
+func TestLegacyReviewerSeverityExternalFinalizeFailsClosed(t *testing.T) {
+	for _, fixture := range legacyReviewerSeverityFixtures() {
+		t.Run(fixture.name, func(t *testing.T) {
+			saveGlobals(t)
+			resetRootCmd(t)
+			root, _, _, _ := setupIntermediateContinueState(t, "External legacy severity boundary")
+			planResult, _, _, _, err := runCodexContinuePlanOnly(root, codexContinueOptions{HeavyFlag: true})
+			if err != nil {
+				t.Fatalf("runCodexContinuePlanOnly: %v", err)
+			}
+			plan := planResult["continue_manifest"].(codexContinuePlanManifest)
+			before := reviewerPhasePositionBytes(t, loadReviewerArtifactState(t))
+
+			results := make([]codexContinueExternalDispatch, 0, len(plan.Dispatches))
+			for _, dispatch := range plan.Dispatches {
+				worker := codexContinueExternalDispatch{
+					Stage: dispatch.Stage, Wave: dispatch.Wave, Caste: dispatch.Caste, Name: dispatch.Name,
+					Task: dispatch.Task, TaskID: dispatch.TaskID, Status: "completed",
+					Summary: "external " + dispatch.Caste + " completed",
+					Report:  "external legacy severity diagnostic for " + dispatch.Name,
+					Handoff: completedReviewerHandoff(),
+				}
+				if strings.EqualFold(dispatch.Caste, "auditor") {
+					worker.Artifacts = reviewerArtifactRaw(t, `{"overall_score":60,"findings":[]}`)
+				}
+				if strings.EqualFold(dispatch.Caste, "gatekeeper") {
+					worker.Findings = []codexReviewFinding{{Severity: fixture.severity, Description: "legacy reviewer finding"}}
+				}
+				results = append(results, worker)
+			}
+
+			result, state, _, _, _, _, err := runCodexContinueFinalize(root, codexExternalContinueCompletion{
+				ContinueManifest: &plan,
+				Dispatches:       results,
+			}, false, 0, false)
+			if err != nil {
+				t.Fatalf("runCodexContinueFinalize: %v", err)
+			}
+			assertLegacyReviewerSeverityBoundary(t, result, state, before, fixture.want)
+		})
+	}
+}
+
 func TestReviewerArtifactDirectFlowFailsClosed(t *testing.T) {
 	for _, fixture := range reviewerArtifactInvalidFixtures(t) {
 		t.Run(fixture.name, func(t *testing.T) {

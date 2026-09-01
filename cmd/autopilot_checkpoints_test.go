@@ -103,6 +103,7 @@ func checkpointVisualFixture(t *testing.T, phaseID int, suffix string, claims co
 		ManifestSHA256:  binding.ManifestSHA256,
 		ClaimsPath:      displayDataPath(claimsRel),
 		PlanManifest:    &manifest,
+		Claims:          &claims,
 	}
 	if err := store.SaveJSON(attemptRel, record); err != nil {
 		t.Fatalf("save visual checkpoint attempt: %v", err)
@@ -321,17 +322,18 @@ func TestVisualCheckpointWorkGenerationRequiresFreshApproval(t *testing.T) {
 	if err := store.SaveJSON(generationB.ClaimsRel, changedClaims); err != nil {
 		t.Fatalf("replace generation B claims bytes: %v", err)
 	}
+	beforeTamperCheck := snapshotProjectDataTree(t, store.BasePath())
 	changedEvidence, err := materializeVisualCheckpointFromBuildResult(root, phase.ID, generationB.BuildResult)
-	if err != nil || len(changedEvidence) != 1 {
-		t.Fatalf("materialize changed claims: refs=%#v err=%v", changedEvidence, err)
+	if err == nil || len(changedEvidence) != 0 {
+		t.Fatalf("post-build claims tampering was accepted: refs=%#v err=%v", changedEvidence, err)
 	}
-	if changedEvidence[0].ID == changedAttempt[0].ID || changedEvidence[0].ID == first[0].ID {
-		t.Fatalf("changed claims inherited an older row: A=%s B=%s changed=%s", first[0].ID, changedAttempt[0].ID, changedEvidence[0].ID)
+	if afterTamperCheck := snapshotProjectDataTree(t, store.BasePath()); !reflect.DeepEqual(beforeTamperCheck, afterTamperCheck) {
+		t.Fatalf("post-build claims rejection mutated durable state\nbefore: %#v\nafter:  %#v", beforeTamperCheck, afterTamperCheck)
 	}
 
 	decisions := loadCheckpointDecisions(t)
-	if len(decisions) != 3 || !decisions[0].Resolved || decisions[1].Resolved || decisions[2].Resolved {
-		t.Fatalf("generation rows = %#v, want one resolved and two fresh unresolved rows", decisions)
+	if len(decisions) != 2 || !decisions[0].Resolved || decisions[1].Resolved {
+		t.Fatalf("generation rows = %#v, want one resolved and one fresh unresolved row", decisions)
 	}
 	wantCompatibility := decisions[0].CheckpointCompatibilityKey
 	seenRows := map[string]bool{}
@@ -348,6 +350,59 @@ func TestVisualCheckpointWorkGenerationRequiresFreshApproval(t *testing.T) {
 		}
 		seenRows[decision.CheckpointKey] = true
 		seenGenerations[decision.WorkGeneration] = true
+	}
+}
+
+func TestVisualCheckpointRejectsPostBuildClaimsTamperingWithoutMutation(t *testing.T) {
+	tests := []struct {
+		name     string
+		terminal codexBuildClaims
+		tampered codexBuildClaims
+	}{
+		{
+			name:     "removing terminal UI work cannot suppress owner review",
+			terminal: codexBuildClaims{FilesModified: []string{"web/components/StatusCard.tsx"}},
+			tampered: codexBuildClaims{FilesModified: []string{"cmd/status.go"}},
+		},
+		{
+			name:     "inventing UI work cannot manufacture owner review",
+			terminal: codexBuildClaims{FilesModified: []string{"cmd/status.go"}},
+			tampered: codexBuildClaims{FilesModified: []string{"web/components/ForgedCard.tsx"}},
+		},
+		{
+			name:     "replacing terminal UI paths cannot mint a generation",
+			terminal: codexBuildClaims{FilesModified: []string{"web/components/StatusCard.tsx"}},
+			tampered: codexBuildClaims{FilesModified: []string{"web/styles/forged.css"}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			saveGlobals(t)
+			s, root := newTestStore(t)
+			store = s
+			phase := colony.Phase{ID: 4, Name: "Immutable visual claims", Status: colony.PhaseInProgress}
+			checkpointTestState(t, phase, colony.StateBUILT)
+			fixture := checkpointVisualFixture(t, phase.ID, strings.ReplaceAll(tt.name, " ", "-"), tt.terminal)
+			tampered := tt.tampered
+			tampered.BuildPhase = phase.ID
+			if err := store.SaveJSON(fixture.ClaimsRel, tampered); err != nil {
+				t.Fatalf("tamper persisted claims: %v", err)
+			}
+
+			before := snapshotProjectDataTree(t, store.BasePath())
+			refs, err := materializeVisualCheckpointFromBuildResult(root, phase.ID, fixture.BuildResult)
+			if err == nil || len(refs) != 0 {
+				t.Fatalf("tampered visual claims were accepted: refs=%#v err=%v", refs, err)
+			}
+			if !strings.Contains(strings.ToLower(err.Error()), "terminal claims") {
+				t.Fatalf("tamper rejection did not name terminal claims: %v", err)
+			}
+			after := snapshotProjectDataTree(t, store.BasePath())
+			if !reflect.DeepEqual(before, after) {
+				t.Fatalf("tamper rejection mutated durable state\nbefore: %#v\nafter:  %#v", before, after)
+			}
+		})
 	}
 }
 

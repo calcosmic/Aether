@@ -819,6 +819,12 @@ func normalizeContinueReviewEvidence(step codexContinueWorkerFlowStep, artifacts
 	if !explicit {
 		validFindings := make([]codexReviewFinding, 0, len(step.Findings))
 		for index, finding := range step.Findings {
+			severity := strings.ToUpper(strings.TrimSpace(finding.Severity))
+			if !validReviewArtifactSeverity(severity) {
+				step.EvidenceErrors = append(step.EvidenceErrors, fmt.Sprintf("%s legacy findings[%d].severity must be CRITICAL, HIGH, MEDIUM, LOW, or INFO", step.Name, index))
+				continue
+			}
+			finding.Severity = severity
 			if strings.TrimSpace(finding.Title) == "" && strings.TrimSpace(finding.Description) == "" {
 				step.EvidenceErrors = append(step.EvidenceErrors, fmt.Sprintf("%s legacy findings[%d] must include a non-empty title or description", step.Name, index))
 				continue

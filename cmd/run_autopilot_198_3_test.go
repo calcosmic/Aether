@@ -461,6 +461,80 @@ func TestRunReplanCadenceCatchesInterruptedBoundaryBeforeDispatch(t *testing.T) 
 	})
 }
 
+func TestRunReplanCadenceIgnoresSameRevisionDecisionsFromOtherScopes(t *testing.T) {
+	tests := []struct {
+		name          string
+		configure     func(*colony.ColonyState, *PendingDecision)
+		wantScopeName string
+	}{
+		{
+			name: "other session",
+			configure: func(state *colony.ColonyState, decision *PendingDecision) {
+				active := "active-replan-session"
+				state.SessionID = &active
+				decision.SessionID = "stale-replan-session"
+				decision.GoalHash = pendingDecisionGoalHash(derefGoal(state.Goal))
+			},
+			wantScopeName: "session",
+		},
+		{
+			name: "other goal",
+			configure: func(state *colony.ColonyState, decision *PendingDecision) {
+				state.SessionID = nil
+				decision.GoalHash = pendingDecisionGoalHash("a different colony goal")
+			},
+			wantScopeName: "goal",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("AETHER_OUTPUT_MODE", "json")
+			saveGlobals(t)
+			resetRootCmd(t)
+			root := seedDurableReplanRunFixture(t, 2)
+			installAutopilotRunTestDeps(t)
+			buildCalls := 0
+			installDurableReplanRunSteps(t, func(int) { buildCalls++ })
+
+			state := mutateRunFixtureState(t, func(state *colony.ColonyState) {})
+			phase := 2
+			stale := PendingDecision{
+				ID:                    "stale-replan-" + strings.ReplaceAll(tt.name, " ", "-"),
+				Type:                  autopilotReplanDecisionType,
+				Phase:                 &phase,
+				CreatedAt:             time.Now().UTC().Format(time.RFC3339),
+				PlanRevisionID:        "revision-durable-run",
+				FirstCheckpointPhase:  2,
+				LatestCheckpointPhase: 2,
+			}
+			tt.configure(&state, &stale)
+			if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+				t.Fatalf("save scoped run state: %v", err)
+			}
+			if err := store.SaveJSON(pendingDecisionsFile, PendingDecisionFile{Decisions: []PendingDecision{stale}}); err != nil {
+				t.Fatalf("seed stale %s replan decision: %v", tt.wantScopeName, err)
+			}
+
+			preview, err := buildRunDryRunResult(state, runCompatibilityOptions{ReplanInterval: 2, Context: context.Background()})
+			if err != nil {
+				t.Fatalf("dry-run with stale %s decision: %v", tt.wantScopeName, err)
+			}
+			if preview["trigger_code"] != autopilotTriggerReplanDue || preview["disposition"] != autopilotDispositionPause {
+				t.Fatalf("dry-run let stale %s decision suppress due replan: %+v", tt.wantScopeName, preview)
+			}
+
+			result, err := runCompatibilityAutopilot(root, runCompatibilityOptions{ReplanInterval: 2, Context: context.Background()})
+			if err != nil {
+				t.Fatalf("live run with stale %s decision: %v", tt.wantScopeName, err)
+			}
+			if buildCalls != 0 || result["trigger_code"] != autopilotTriggerReplanDue || result["disposition"] != autopilotDispositionPause {
+				t.Fatalf("live run let stale %s decision suppress due replan: build_calls=%d result=%+v", tt.wantScopeName, buildCalls, result)
+			}
+		})
+	}
+}
+
 func TestRunReplanCadenceDoesNotUseInvocationCounter(t *testing.T) {
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {

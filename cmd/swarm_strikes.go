@@ -123,11 +123,8 @@ func saveSwarmResultRecord(s *storage.Store, record swarmResultRecord) error {
 	record.Target = strings.TrimSpace(record.Target)
 	record.Status = strings.ToLower(strings.TrimSpace(record.Status))
 	record.CompletedAt = strings.TrimSpace(record.CompletedAt)
-	if _, err := safeIdentifierSegment(filepath.Join(s.BasePath(), "swarms"), "swarm id", record.SwarmID); err != nil {
+	if _, err := validateDurableSwarmID(s, record.SwarmID); err != nil {
 		return fmt.Errorf("save swarm result: %w", err)
-	}
-	if !isValidSwarmResultID(record.SwarmID) {
-		return fmt.Errorf("save swarm result: swarm id %q does not match the durable result convention", record.SwarmID)
 	}
 	record.TargetFingerprint = swarmTargetFingerprint(record.Target)
 	if record.TargetFingerprint == "" {

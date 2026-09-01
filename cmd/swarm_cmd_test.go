@@ -259,7 +259,7 @@ func TestSwarmDestroySurfacesBlockedWorkers(t *testing.T) {
 	}
 }
 
-func TestSwarmPlanOnlyPrintsManifestWithoutMutatingState(t *testing.T) {
+func TestSwarmPlanOnlyPrintsManifestAndPersistsIssuanceOnly(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
@@ -292,6 +292,10 @@ func TestSwarmPlanOnlyPrintsManifestWithoutMutatingState(t *testing.T) {
 	if got := manifest["finalizer_command"]; !strings.Contains(stringValue(got), "swarm-finalize") {
 		t.Fatalf("finalizer_command = %v", got)
 	}
+	swarmID := strings.TrimSpace(stringValue(manifest["swarm_id"]))
+	if swarmID == "" {
+		t.Fatal("swarm manifest did not include a swarm_id")
+	}
 	workers := result["workers"].([]interface{})
 	if len(workers) != 4 {
 		t.Fatalf("workers = %d, want 4", len(workers))
@@ -299,8 +303,23 @@ func TestSwarmPlanOnlyPrintsManifestWithoutMutatingState(t *testing.T) {
 	if !workerMapsHaveCaste(workers, "gatekeeper") {
 		t.Fatalf("workers missing Queen-selected gatekeeper: %+v", workers)
 	}
-	if _, err := os.Stat(filepath.Join(dataDir, "swarms")); !os.IsNotExist(err) {
-		t.Fatalf("plan-only should not create swarm artifacts, stat err=%v", err)
+	issuancePath := filepath.Join(dataDir, "swarms", swarmID, "issuance.json")
+	var issuance map[string]interface{}
+	if err := store.LoadJSON(filepath.ToSlash(filepath.Join("swarms", swarmID, "issuance.json")), &issuance); err != nil {
+		t.Fatalf("plan-only did not persist a runtime issuance at %s: %v", issuancePath, err)
+	}
+	if got := strings.TrimSpace(stringValue(issuance["manifest_sha256"])); got == "" {
+		t.Fatalf("issuance has no manifest digest: %#v", issuance)
+	}
+	if got := strings.TrimSpace(stringValue(issuance["status"])); got != "issued" {
+		t.Fatalf("issuance status = %q, want issued: %#v", got, issuance)
+	}
+	entries, err := os.ReadDir(filepath.Join(dataDir, "swarms", swarmID))
+	if err != nil {
+		t.Fatalf("read issued swarm directory: %v", err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "issuance.json" {
+		t.Fatalf("plan-only wrote artifacts beyond the issuance record: %+v", entries)
 	}
 	if _, err := os.Stat(filepath.Join(dataDir, "spawn-tree.txt")); !os.IsNotExist(err) {
 		t.Fatalf("plan-only should not write spawn-tree, stat err=%v", err)
@@ -333,7 +352,7 @@ func TestSwarmFinalizeRecordsExternalTaskResults(t *testing.T) {
 				State:   colony.StateREADY,
 			})
 
-			manifest := buildSwarmManifest(root, "Auth panic when session is missing", "plan-only", time.Now().UTC())
+			manifest := issuedSwarmManifestForTest(t, root, "Auth panic when session is missing")
 			dispatches := validExternalSwarmResults(manifest, tc.status)
 			result, err := runSwarmFinalize(root, externalSwarmCompletion{
 				SwarmManifest: &manifest,
@@ -424,7 +443,7 @@ func TestSwarmFinalizeRejectsUnboundOrNonTerminalEvidenceWithoutMutation(t *test
 				State:   colony.StateREADY,
 			})
 
-			manifest := buildSwarmManifest(root, "Auth panic when session is missing", "plan-only", time.Now().UTC())
+			manifest := issuedSwarmManifestForTest(t, root, "Auth panic when session is missing")
 			results := validExternalSwarmResults(manifest, "completed")
 			tc.mutate(&manifest, &results)
 			before := snapshotProjectDataTree(t, dataDir)
@@ -441,6 +460,19 @@ func TestSwarmFinalizeRejectsUnboundOrNonTerminalEvidenceWithoutMutation(t *test
 			}
 		})
 	}
+}
+
+func issuedSwarmManifestForTest(t *testing.T, root, target string) swarmManifest {
+	t.Helper()
+	result, err := runSwarmPlanOnly(root, target)
+	if err != nil {
+		t.Fatalf("issue swarm manifest: %v", err)
+	}
+	manifest, ok := result["swarm_manifest"].(swarmManifest)
+	if !ok {
+		t.Fatalf("swarm_manifest type = %T, want swarmManifest", result["swarm_manifest"])
+	}
+	return manifest
 }
 
 func validExternalSwarmResults(manifest swarmManifest, status string) []swarmWorkerExecution {
@@ -477,6 +509,128 @@ func setExternalSwarmResultStatus(status string) func(*swarmManifest, *[]swarmWo
 		(*results)[0].Status = status
 		(*results)[0].Response.Status = status
 	}
+}
+
+func TestSwarmFinalizeRejectsTraversalIDBeforeAnyMutationPublicBoundary(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+	goal := "Reject an unsafe external swarm identifier"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+	})
+
+	manifest := buildSwarmManifest(root, "Auth panic when session is missing", "plan-only", time.Now().UTC())
+	results := validExternalSwarmResults(manifest, "completed")
+	manifest.SwarmID = "../../../escaped-swarm"
+	completion := externalSwarmCompletion{SwarmManifest: &manifest, Dispatches: results}
+	data, err := json.MarshalIndent(completion, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal traversal completion: %v", err)
+	}
+	completionPath := filepath.Join(t.TempDir(), "swarm-completion.json")
+	if err := os.WriteFile(completionPath, append(data, '\n'), 0644); err != nil {
+		t.Fatalf("write traversal completion: %v", err)
+	}
+
+	before := snapshotProjectDataTree(t, root)
+	rootCmd.SetArgs([]string{"swarm-finalize", "--completion-file", completionPath})
+	if err := rootCmd.Execute(); err == nil {
+		t.Fatal("public swarm-finalize accepted a traversal swarm_id")
+	}
+	after := snapshotProjectDataTree(t, root)
+	if !reflect.DeepEqual(before, after) {
+		t.Fatalf("rejected traversal mutated the workspace\nbefore: %#v\nafter:  %#v", before, after)
+	}
+}
+
+func TestSwarmFinalizeRequiresIssuedManifestAndProtectsReplay(t *testing.T) {
+	newFixture := func(t *testing.T) (string, string) {
+		t.Helper()
+		saveGlobals(t)
+		dataDir := setupBuildFlowTest(t)
+		root := filepath.Dir(filepath.Dir(dataDir))
+		withWorkingDir(t, root)
+		goal := "Trust one issued external swarm manifest"
+		createTestColonyState(t, dataDir, colony.ColonyState{
+			Version: "3.0",
+			Goal:    &goal,
+			State:   colony.StateREADY,
+		})
+		return dataDir, root
+	}
+
+	t.Run("unissued manifest is rejected without mutation", func(t *testing.T) {
+		dataDir, root := newFixture(t)
+		manifest := buildSwarmManifest(root, "Auth panic when session is missing", "plan-only", time.Now().UTC())
+		completion := externalSwarmCompletion{SwarmManifest: &manifest, Dispatches: validExternalSwarmResults(manifest, "completed")}
+		before := snapshotProjectDataTree(t, dataDir)
+		if _, err := runSwarmFinalize(root, completion); err == nil {
+			t.Fatal("swarm-finalize accepted a manifest with no runtime issuance")
+		}
+		after := snapshotProjectDataTree(t, dataDir)
+		if !reflect.DeepEqual(before, after) {
+			t.Fatalf("unissued manifest rejection mutated durable state\nbefore: %#v\nafter:  %#v", before, after)
+		}
+	})
+
+	t.Run("altered issued manifest is rejected without mutation", func(t *testing.T) {
+		dataDir, root := newFixture(t)
+		manifest := issuedSwarmManifestForTest(t, root, "Auth panic when session is missing")
+		manifest.Target = "a caller-rewritten target"
+		completion := externalSwarmCompletion{SwarmManifest: &manifest, Dispatches: validExternalSwarmResults(manifest, "completed")}
+		before := snapshotProjectDataTree(t, dataDir)
+		if _, err := runSwarmFinalize(root, completion); err == nil {
+			t.Fatal("swarm-finalize accepted an altered issued manifest")
+		}
+		after := snapshotProjectDataTree(t, dataDir)
+		if !reflect.DeepEqual(before, after) {
+			t.Fatalf("altered manifest rejection mutated durable state\nbefore: %#v\nafter:  %#v", before, after)
+		}
+	})
+
+	t.Run("exact replay is read-only and changed completion is rejected", func(t *testing.T) {
+		dataDir, root := newFixture(t)
+		manifest := issuedSwarmManifestForTest(t, root, "Auth panic when session is missing")
+		completion := externalSwarmCompletion{SwarmManifest: &manifest, Dispatches: validExternalSwarmResults(manifest, "completed")}
+		first, err := runSwarmFinalize(root, completion)
+		if err != nil {
+			t.Fatalf("first issued finalization: %v", err)
+		}
+
+		beforeReplay := snapshotProjectDataTree(t, dataDir)
+		replayed, err := runSwarmFinalize(root, completion)
+		if err != nil {
+			t.Fatalf("exact replay: %v", err)
+		}
+		afterReplay := snapshotProjectDataTree(t, dataDir)
+		if !reflect.DeepEqual(beforeReplay, afterReplay) {
+			t.Fatalf("exact replay mutated durable state\nbefore: %#v\nafter:  %#v", beforeReplay, afterReplay)
+		}
+		firstJSON, _ := json.Marshal(first)
+		replayJSON, _ := json.Marshal(replayed)
+		if !bytes.Equal(firstJSON, replayJSON) {
+			t.Fatalf("exact replay returned a different result\nfirst:  %s\nreplay: %s", firstJSON, replayJSON)
+		}
+
+		changed := completion
+		changed.Dispatches = append([]swarmWorkerExecution{}, completion.Dispatches...)
+		changed.Dispatches[0].Summary = "caller changed the terminal packet"
+		beforeChanged := snapshotProjectDataTree(t, dataDir)
+		if _, err := runSwarmFinalize(root, changed); err == nil {
+			t.Fatal("swarm-finalize accepted a changed replay")
+		}
+		afterChanged := snapshotProjectDataTree(t, dataDir)
+		if !reflect.DeepEqual(beforeChanged, afterChanged) {
+			t.Fatalf("changed replay rejection mutated durable state\nbefore: %#v\nafter:  %#v", beforeChanged, afterChanged)
+		}
+	})
 }
 
 func TestSwarmThreeStrikeRecoveryExactTargetRetryReEscalates(t *testing.T) {
@@ -1033,7 +1187,7 @@ func TestSwarmThreeStrikeExternalFinalizeReplayKeepsOneEscalation(t *testing.T) 
 		}
 	}
 
-	manifest := buildSwarmManifest(root, target, "plan-only", time.Now().UTC())
+	manifest := issuedSwarmManifestForTest(t, root, target)
 	dispatches := make([]swarmWorkerExecution, 0, len(manifest.Dispatches))
 	for _, plan := range manifest.Dispatches {
 		status := "completed"

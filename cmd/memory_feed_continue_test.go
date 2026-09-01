@@ -70,14 +70,14 @@ func TestCheckWorkerLessonsBecomeObservationsOnBothLanes(t *testing.T) {
 		}
 
 		result := codexContinueExternalDispatch{
-			Stage:   watcher.Stage,
-			Wave:    watcher.Wave,
-			Caste:   watcher.Caste,
-			Name:    watcher.Name,
-			Task:    watcher.Task,
-			TaskID:  watcher.TaskID,
-			Status:  "completed",
-			Summary: "verified the phase end to end",
+			Stage:           watcher.Stage,
+			Wave:            watcher.Wave,
+			Caste:           watcher.Caste,
+			Name:            watcher.Name,
+			Task:            watcher.Task,
+			TaskID:          watcher.TaskID,
+			Status:          "completed",
+			Summary:         "verified the phase end to end",
 			ReusableLessons: []string{testCheckReusableLesson},
 			WeakSpots:       []string{testCheckWeakSpot},
 			Handoff: codex.WorkerHandoff{
@@ -448,6 +448,9 @@ func TestSwarmWorkerFailureReachesTheFailureLogOnBothLanes(t *testing.T) {
 			GeneratedAt: time.Now().UTC().Format(time.RFC3339), Root: root,
 			SwarmID: "swarm-wrapper-test", Target: "reported bug",
 			WorkerCount: len(dispatches), Dispatches: dispatches,
+		}
+		if err := issueExternalSwarmManifest(manifest); err != nil {
+			t.Fatalf("issue wrapper-lane swarm manifest: %v", err)
 		}
 		results := []swarmWorkerExecution{
 			{

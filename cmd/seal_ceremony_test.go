@@ -147,6 +147,22 @@ func checkpointCapabilitiesInSealOutput(output string) []string {
 }
 
 func TestSealPendingDecisionStorageFailureFailsClosed(t *testing.T) {
+	assertLegacyStorageRefused := func(t *testing.T, s *storage.Store, tmpDir string) {
+		t.Helper()
+		_, errOut, err := executeSealAtPublicRoot(t, s, tmpDir, "json")
+		requireRenderedSealExitOne(t, err)
+		if !strings.Contains(errOut, "flags.json") {
+			t.Fatalf("legacy blocker-storage failure did not identify flags.json:\n%s", errOut)
+		}
+		var state colony.ColonyState
+		if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
+			t.Fatalf("load state after refused seal: %v", err)
+		}
+		if state.State == colony.StateCOMPLETED {
+			t.Fatal("seal completed while legacy blocker truth was unavailable")
+		}
+	}
+
 	t.Run("malformed file overrides valid legacy fallback", func(t *testing.T) {
 		s, tmpDir := setupSealTestStore(t)
 		if err := s.SaveJSON("flags.json", colony.FlagsFile{Version: "1", Decisions: []colony.FlagEntry{}}); err != nil {
@@ -182,6 +198,50 @@ func TestSealPendingDecisionStorageFailureFailsClosed(t *testing.T) {
 		requireRenderedSealExitOne(t, err)
 		if !strings.Contains(errOut, pendingDecisionsFile) {
 			t.Fatalf("directory-backed failure did not identify %s: %s", pendingDecisionsFile, errOut)
+		}
+	})
+
+	t.Run("missing current with malformed legacy file", func(t *testing.T) {
+		s, tmpDir := setupSealTestStore(t)
+		if err := os.WriteFile(filepath.Join(s.BasePath(), "flags.json"), []byte("{not-json"), 0o644); err != nil {
+			t.Fatalf("seed malformed legacy flags: %v", err)
+		}
+		assertLegacyStorageRefused(t, s, tmpDir)
+	})
+
+	t.Run("missing current with directory-backed legacy file", func(t *testing.T) {
+		s, tmpDir := setupSealTestStore(t)
+		if err := os.Mkdir(filepath.Join(s.BasePath(), "flags.json"), 0o755); err != nil {
+			t.Fatalf("seed directory-backed legacy flags: %v", err)
+		}
+		assertLegacyStorageRefused(t, s, tmpDir)
+	})
+
+	t.Run("missing current with symlink-backed legacy file", func(t *testing.T) {
+		s, tmpDir := setupSealTestStore(t)
+		target := filepath.Join(tmpDir, "outside-legacy-flags.json")
+		if err := os.WriteFile(target, []byte(`{"version":"1","decisions":[]}`), 0o644); err != nil {
+			t.Fatalf("seed symlink target: %v", err)
+		}
+		if err := os.Symlink(target, filepath.Join(s.BasePath(), "flags.json")); err != nil {
+			t.Fatalf("seed symlink-backed legacy flags: %v", err)
+		}
+		assertLegacyStorageRefused(t, s, tmpDir)
+	})
+
+	t.Run("missing current with unreadable legacy file", func(t *testing.T) {
+		s, tmpDir := setupSealTestStore(t)
+		legacyPath := filepath.Join(s.BasePath(), "flags.json")
+		if err := os.WriteFile(legacyPath, []byte(`{"version":"1","decisions":[]}`), 0o600); err != nil {
+			t.Fatalf("seed unreadable legacy flags: %v", err)
+		}
+		if err := os.Chmod(legacyPath, 0); err != nil {
+			t.Fatalf("make legacy flags unreadable: %v", err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(legacyPath, 0o600) })
+		assertLegacyStorageRefused(t, s, tmpDir)
+		if err := os.Chmod(legacyPath, 0o600); err != nil {
+			t.Fatalf("restore legacy flags permissions: %v", err)
 		}
 	})
 

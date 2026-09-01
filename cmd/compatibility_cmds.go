@@ -741,7 +741,8 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 			decision := autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{"phase": state.CurrentPhase, "stage": stage + "_evidence"})
 			return finish(state, decision, lessonErr), true
 		}
-		replan, due, replanErr := evaluateAutopilotReplan(state.Plan, loadPendingDecisionFile().Decisions, opts, lessons)
+		activeDecisions, _ := filterPendingDecisionFileForScope(loadPendingDecisionFile(), pendingDecisionScopeFromState(state))
+		replan, due, replanErr := evaluateAutopilotReplan(state.Plan, activeDecisions.Decisions, opts, lessons)
 		if replanErr != nil {
 			decision := autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{"phase": state.CurrentPhase, "stage": stage + "_evidence"})
 			return finish(state, decision, replanErr), true
@@ -987,7 +988,8 @@ func buildRunDryRunResult(state colony.ColonyState, opts runCompatibilityOptions
 	phasesPlanned := 0
 	working := state
 	working.Plan.Phases = clonePhases(state.Plan.Phases)
-	previewDecisions := append([]PendingDecision(nil), loadPendingDecisionFile().Decisions...)
+	activeDecisions, _ := filterPendingDecisionFileForScope(loadPendingDecisionFile(), pendingDecisionScopeFromState(working))
+	previewDecisions := append([]PendingDecision(nil), activeDecisions.Decisions...)
 	lessons, err := runAutopilotLoadLessons(working.Plan)
 	if err != nil {
 		return nil, fmt.Errorf("preview replan evidence: %w", err)

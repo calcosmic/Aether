@@ -391,6 +391,9 @@ func runSwarmPlanOnly(root, target string) (map[string]interface{}, error) {
 	}
 
 	manifest := buildSwarmManifest(root, target, dispatchMode, time.Now().UTC())
+	if err := issueExternalSwarmManifest(manifest); err != nil {
+		return nil, err
+	}
 	dispatchMaps := swarmPlanMaps(manifest.Dispatches)
 	return map[string]interface{}{
 		"mode":                  "destroy",
@@ -547,6 +550,9 @@ func swarmPlanMaps(plans []swarmWorkerPlan) []map[string]interface{} {
 }
 
 func initializeSwarmRun(swarmID string) error {
+	if _, err := validateDurableSwarmID(store, swarmID); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(filepath.Join(store.BasePath(), "swarms", swarmID, "responses"), 0755); err != nil {
 		return err
 	}
@@ -653,6 +659,9 @@ func runSwarmFinalize(root string, completion externalSwarmCompletion) (map[stri
 	if manifest == nil {
 		return nil, fmt.Errorf("completion file must include swarm_manifest")
 	}
+	if _, err := validateDurableSwarmID(store, manifest.SwarmID); err != nil {
+		return nil, fmt.Errorf("invalid swarm_manifest swarm_id: %w", err)
+	}
 	if (manifest.DispatchMode != "plan-only" && manifest.DispatchMode != "agent-delegate") || !manifest.RequiresFinalizer {
 		return nil, fmt.Errorf("swarm_manifest must come from `aether swarm --plan-only` or an agent-delegate swarm response")
 	}
@@ -661,6 +670,23 @@ func runSwarmFinalize(root string, completion externalSwarmCompletion) (map[stri
 	}
 	if strings.TrimSpace(manifest.Root) != "" && !sameCleanPath(manifest.Root, root) {
 		return nil, fmt.Errorf("swarm_manifest root does not match current workspace (manifest=%s current=%s)", manifest.Root, root)
+	}
+	manifestDigest, err := jsonSHA256(*manifest)
+	if err != nil {
+		return nil, fmt.Errorf("hash swarm_manifest: %w", err)
+	}
+	completionDigest, err := jsonSHA256(completion)
+	if err != nil {
+		return nil, fmt.Errorf("hash external swarm completion: %w", err)
+	}
+	issuance, err := loadExternalSwarmManifestIssuance(*manifest, manifestDigest)
+	if err != nil {
+		return nil, err
+	}
+	if replayed, exact, err := replayExternalSwarmFinalization(issuance, completionDigest); err != nil {
+		return nil, err
+	} else if exact {
+		return replayed, nil
 	}
 	if err := validateFinalizerManifestFreshness("swarm_manifest", manifest.GeneratedAt, time.Now().UTC()); err != nil {
 		return nil, err
@@ -673,6 +699,19 @@ func runSwarmFinalize(root string, completion externalSwarmCompletion) (map[stri
 	if err != nil {
 		return nil, err
 	}
+	reserved, replay, err := reserveExternalSwarmFinalization(*manifest, manifestDigest, completionDigest)
+	if err != nil {
+		return nil, err
+	}
+	if replay {
+		return externalSwarmFinalizationResult(reserved), nil
+	}
+	reservationCommitted := false
+	defer func() {
+		if !reservationCommitted {
+			releaseExternalSwarmFinalization(*manifest, manifestDigest, completionDigest)
+		}
+	}()
 
 	state, _ := loadColonyState()
 	startedAt := time.Now().UTC()
@@ -703,44 +742,30 @@ func runSwarmFinalize(root string, completion externalSwarmCompletion) (map[stri
 	filesTouched, testsWritten := collectSwarmTouchedFiles(runs)
 	next := swarmNextCommand(state, status)
 
-	if _, err := persistSwarmResultOutcome(store, swarmResultRecord{
-		SwarmID:        swarmID,
-		Target:         manifest.Target,
-		Status:         status,
-		RootCause:      rootCause,
-		Solution:       solution,
-		Recommendation: recommendation,
-		Workers:        runs,
-		Files:          filesTouched,
-		Tests:          testsWritten,
-		Blockers:       blockers,
-		CompletedAt:    time.Now().UTC().Format(time.RFC3339Nano),
-		DispatchMode:   "external-task",
-	}); err != nil {
+	outcome := swarmResultRecord{
+		SwarmID:           swarmID,
+		Target:            manifest.Target,
+		TargetFingerprint: swarmTargetFingerprint(manifest.Target),
+		Status:            status,
+		RootCause:         rootCause,
+		Solution:          solution,
+		Recommendation:    recommendation,
+		Workers:           runs,
+		Files:             filesTouched,
+		Tests:             testsWritten,
+		Blockers:          blockers,
+		CompletedAt:       time.Now().UTC().Format(time.RFC3339Nano),
+		DispatchMode:      "external-task",
+	}
+	if _, err := persistSwarmResultOutcome(store, outcome); err != nil {
 		return nil, fmt.Errorf("write and evaluate swarm result: %w", err)
 	}
-
-	return map[string]interface{}{
-		"mode":                "destroy",
-		"autopilot_available": true,
-		"swarm_id":            swarmID,
-		"target":              manifest.Target,
-		"status":              status,
-		"root_cause":          rootCause,
-		"solution":            solution,
-		"recommendation":      recommendation,
-		"workers":             swarmExecutionsForJSON(runs),
-		"dispatches":          swarmExecutionsForJSON(runs),
-		"worker_count":        len(runs),
-		"wave_count":          manifest.WaveCount,
-		"files_touched":       filesTouched,
-		"tests_written":       testsWritten,
-		"blockers":            blockers,
-		"dispatch_mode":       "external-task",
-		"dispatch_contract":   manifest.DispatchContract,
-		"next":                next,
-		"watch":               false,
-	}, nil
+	receipt, err := completeExternalSwarmFinalization(*manifest, manifestDigest, completionDigest, outcome, next)
+	if err != nil {
+		return nil, err
+	}
+	reservationCommitted = true
+	return externalSwarmFinalizationResult(receipt), nil
 }
 
 func mergeExternalSwarmResults(manifest swarmManifest, results []swarmWorkerExecution) ([]swarmWorkerExecution, error) {
