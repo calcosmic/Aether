@@ -34,6 +34,14 @@ func completedReviewerStep(caste, name string) codexContinueWorkerFlowStep {
 	}
 }
 
+func validCompletedReviewerArtifacts(t *testing.T, caste string) map[string]json.RawMessage {
+	t.Helper()
+	if !strings.EqualFold(strings.TrimSpace(caste), "auditor") {
+		return nil
+	}
+	return reviewerArtifactRaw(t, `{"overall_score":60,"findings":[]}`)
+}
+
 func reviewerEvaluation(t *testing.T, signals codexContinueAutopilotSignals, code autopilotTriggerCode) autopilotTriggerEvaluation {
 	t.Helper()
 	for _, evaluation := range signals.Evaluations {

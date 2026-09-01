@@ -595,14 +595,15 @@ func TestContinueFinalizeRecordsExternalReviewAndAdvances(t *testing.T) {
 	results := make([]codexContinueExternalDispatch, 0, len(plan.Dispatches))
 	for _, dispatch := range plan.Dispatches {
 		results = append(results, codexContinueExternalDispatch{
-			Stage:   dispatch.Stage,
-			Wave:    dispatch.Wave,
-			Caste:   dispatch.Caste,
-			Name:    dispatch.Name,
-			Task:    dispatch.Task,
-			TaskID:  dispatch.TaskID,
-			Status:  "completed",
-			Summary: dispatch.Name + " cleared wrapper continue review",
+			Stage:     dispatch.Stage,
+			Wave:      dispatch.Wave,
+			Caste:     dispatch.Caste,
+			Name:      dispatch.Name,
+			Task:      dispatch.Task,
+			TaskID:    dispatch.TaskID,
+			Status:    "completed",
+			Summary:   dispatch.Name + " cleared wrapper continue review",
+			Artifacts: validCompletedReviewerArtifacts(t, dispatch.Caste),
 			// A completed result must relay a non-empty handoff (189-REVIEW.md
 			// CR-01): the finalizer now enforces the same promise every
 			// wrapper brief states.
@@ -735,6 +736,8 @@ func TestContinueRecordsWorkerFlowInStateReportAndSpawnSummary(t *testing.T) {
 		{Stage: "verification", Caste: "watcher", Name: "Keen-15", Task: "Independent verification before advancement", Status: "spawned"},
 	}
 	seedContinueBuildPacket(t, dataDir, 1, "Continue bookkeeping", goal, dispatches)
+	validReviewInvoker := &reviewerArtifactFlowInvoker{artifacts: validCompletedReviewerArtifacts(t, "auditor")}
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return validReviewInvoker }
 
 	rootCmd.SetArgs([]string{"continue", "--heavy"})
 	if err := rootCmd.Execute(); err != nil {
