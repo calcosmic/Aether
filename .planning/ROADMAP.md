@@ -69,7 +69,7 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 
 ## Phase Details
 
-### Phase 199 — Front Door and Classic Contract
+### Phase 199: Front Door and Classic Contract
 
 **Goal:** Restore one understandable normal lifecycle and make the composite Golden Era experience an executable contract while immediately delivering visible front-door behavior.
 
@@ -85,7 +85,7 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 4. Useful entomb/session/maintenance behavior has a documented modern home; migration, update, cleanup, and integrity failures mutate nothing or roll back safely.
 5. Advanced and internal operations remain inspectable but are visually and semantically separated from the ordinary journey.
 
-### Phase 200 — Iterative Planning
+### Phase 200: Iterative Planning
 
 **Goal:** Restore the visible Scout → Route-Setter research and confidence loop over the modern plan revision/finalizer.
 
@@ -101,7 +101,7 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 4. Prior survey, Hive, charter, research, and outcome evidence prime the loop without stale answers suppressing current questions or silently widening scope.
 5. Intent capture produces an owner-readable specification; the accepted plan includes dependencies, success/failure cases, public paths, recovery, verification, and exclusions, while insert/revision preserves history and explains why reality required change.
 
-### Phase 201 — Queen-Led Work Cycle
+### Phase 201: Queen-Led Work Cycle
 
 **Goal:** Restore visible Queen judgment, proportionate teams, coherent waves, one verification boundary, recovery, and autopilot as a single work story.
 
@@ -117,7 +117,7 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 4. Build, continue, and run verify once at the authoritative boundary and render the same accepted outcome, including honest no-change, partial, blocker, timeout, interrupted-work, evidence, cost/time, and Next Up truth.
 5. One accepted goal can checkpoint and move through survey, plan, work, verify, bounded repair, replan, rollback, resume, and ready-to-seal without phase-number choreography; per-job telemetry drives faster briefs, handoffs, routing, and test lanes without weakening TDD or safety.
 
-### Phase 202 — Swarm, Oracle, and Live Colony
+### Phase 202: Swarm, Oracle, and Live Colony
 
 **Goal:** Restore substantive Swarm diagnosis, iterative Oracle research, and a real live colony cockpit driven by typed runtime events.
 
@@ -133,7 +133,7 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 4. A multi-round Oracle question visibly targets uncertainty, reports confidence and contradictions, detects diminishing returns, and produces a source-grounded final synthesis.
 5. Useful partial Swarm/Oracle work, activity, learning, plan research, and local Dreams remain durable, discoverable, and accurately labelled rather than discarded or called verified.
 
-### Phase 203 — Biological Runtime
+### Phase 203: Biological Runtime
 
 **Goal:** Complete the real worker-discovery → governed recruitment → child result → knowledge transfer → downstream decision loop, then make pheromones operational decision inputs.
 
@@ -149,7 +149,7 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 4. The terminal result returns exactly once, survives interruption/replay, reaches an acknowledged parent or named follow-on as a scoped packet, and changes a recorded downstream decision.
 5. Status, watch, recovery, cost, and depth cover the whole governed subtree, while evidence-backed pheromone proposals expose full action history and later outcomes govern their strengthening, weakening, or quarantine.
 
-### Phase 204 — Learning Governor
+### Phase 204: Learning Governor
 
 **Goal:** Make memory truthful and prove behavior changes through immutable outcomes, permanent evaluations, independent shadow comparison, bounded promotion, and rollback.
 
@@ -165,7 +165,7 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 4. A beneficial candidate beats its frozen baseline without hard-gate or holdout regression, while overfit or evaluator-tampering candidates are quarantined.
 5. Only allowed low-risk canaries promote and roll back atomically; preferences, skills, workflows, source, and security-sensitive policy retain required authority, and source changes remain independently verified branches/PRs that cannot self-approve, merge, publish, or deploy.
 
-### Phase 205 — Owner Acceptance and Restoration Seal
+### Phase 205: Owner Acceptance and Restoration Seal
 
 **Goal:** Reconcile every promise to public evidence, prove the complete restored journey in real repositories, and obtain owner acceptance before sealing v1.28.
 
