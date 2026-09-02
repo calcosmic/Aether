@@ -35,12 +35,22 @@ That means:
 ## Current State
 
 - **v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02**: 9 phases, 84 plans, 195 recorded tasks, and 48/48 requirements. The audit found no blocking requirement, integration, or end-to-end gaps; one Phase 198.2 real-project memory observation and documented warnings carry as explicit debt.
-- **Product version: v1.0.63** (binary and hub agree; published 2026-08-21)
-- **v1.28 Classic Colony Restoration is next**: restore the functional and experiential February–April colony around the modern Go safety kernel. The authoritative brief is `.aether/dreams/2026-09-01-comprehensive-aether-colony-review.md`; the 72-row ledger is traceability, not another owner interview.
+- **Product version: v1.0.66** (installed and source binaries agree in the 2026-09-02 local check)
+- **v1.28 Classic Colony Restoration is active**: approved Phases 199-205 map 64 testable requirements and all 72 Classic capability rows. The authoritative brief is `.aether/dreams/2026-09-01-comprehensive-aether-colony-review.md`; the ledger is traceability, not another owner interview.
 - The priority implementation spec v3 (Downloads, 2026-08-21) is the ratified governing backlog (ruling D1); its order was amended by D12 on 2026-08-22 so v1.27 leads with team judgement, single verification, the cost line, the next-action card and Classic display restoration
 - Phase 194's end-to-end proof reduced the measured one-task bug fix from 8 workers to exactly 1 Builder plus the program's free checks on both the proposed and automatic paths; an explicit heavy request still produces 4 workers, proving the review pipeline remains live. Broader owner-watched proof follows restoration rather than preceding it.
 - Four parallel execution paths have been reduced to two since v1.24: the Go runtime (authoritative) and the thin markdown wrappers; `control-ts/` retired in v1.25, the playbooks no longer loaded, 39 zero-reader config files and 8 dead commands deleted in v1.26
 - `v5.4.0` tag remains the Classic behaviour baseline; the 2026-08-22 display audit lists 19 Classic elements absent today and 13 thinner (recorded in `research/v1.27-milestone-brief.md`)
+
+## Current Milestone: v1.28 Classic Colony Restoration — Active
+
+**Goal:** Reunite the modern Go safety kernel with the understandable, visible, Queen-led February-April colony experience.
+
+**Approved delivery:** seven implementation and acceptance phases, 199-205: front door and executable Classic contract; iterative planning; Queen-led work; Swarm/Oracle/live colony; biological recruitment and information flow; Learning Governor; owner acceptance and restoration seal.
+
+**Approved planning contract:** 64 requirements in `.planning/REQUIREMENTS.md`; 72/72 Classic capability rows routed in `.planning/research/v1.28-classic-capability-ledger.md`; no unsupported retirement and no repeat owner discovery round. Each Phase 199-204 must reconstruct the relevant Classic mechanism from historical source, audit the current Go path, explain what created the owner value, compare alternatives, and record an evidence-backed modern synthesis before implementation plans are approved. The three pending todos route to Phase 200 spec output, Phase 201 turnaround, and Phase 203 platform preflight.
+
+**Sequence:** Phases 199-204 restore the product. Phase 205 runs the owner-watched acceptance after those slices are usable. Codex lifecycle skills remain a later milestone.
 
 ## Previous Milestone: v1.27 The Queen Decides, the Program Checks — Shipped 2026-09-02
 
@@ -211,7 +221,7 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 - [~] v1.25 Switch It On -- Phases 160-171 (superseded by v1.26)
 - [x] v1.26 Intelligent Orchestration -- Phases 172-191.1 (shipped 2026-08-22)
 - [x] v1.27 The Queen Decides, the Program Checks -- Phases 193-198.3 (shipped 2026-09-02)
-- [ ] v1.28 Classic Colony Restoration -- next milestone; phase numbers continue from 198.3
+- [ ] v1.28 Classic Colony Restoration -- active; approved Phases 199-205
 
 ## Requirements
 
@@ -277,13 +287,13 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 
 ### Active
 
-The next active scope is v1.28 Classic Colony Restoration: restore the February–April front door, iterative planning, Queen-led work, substantive Swarm/Oracle/live visibility, biological recruitment and information exchange, and governed learning around the modern safety kernel. Exact requirements belong to the v1.28 requirements file generated from the comprehensive report.
+The active scope is v1.28 Classic Colony Restoration: restore the February–April front door, iterative planning, Queen-led work, substantive Swarm/Oracle/live visibility, biological recruitment and information exchange, and governed learning around the modern safety kernel. The approved contract contains 64 requirements across Phases 199-205 and maps all 72 Classic capability rows. Every restoration phase treats its feature names as research headings, reconstructs the exact old causal mechanisms, audits the present Go architecture, and implements only the evidence-backed synthesis.
 
 Long-lived items not tied to a milestone:
 
 - [ ] QUEEN-02: Deterministic commands and small lifecycle steps do not spawn unnecessary agents — *re-expressed as v1.27 feature 2*
-- [ ] CATALOG-01/02, TEST-01/02: command reliability matrix and smoke coverage — deferred since v1.25; revisit after v1.27
-- [ ] SKILL-03/04: skill validation on the Claude path — deferred off the golden path 2026-08-17
+- [ ] CATALOG-01/02, TEST-01/02: command/test truth is absorbed into LIFE-06, LEARN-05, and restoration proof rather than a separate pre-milestone gate
+- [ ] SKILL-03/04: skill validation on the Claude path remains outside the v1.28 Golden Path; Codex lifecycle skills are a later milestone
 
 ### Out of Scope
 
@@ -325,7 +335,8 @@ Long-lived items not tied to a milestone:
 | Survey-map content and previous-phase outcomes use two separate named brief budgets; neither adds a worker or owner check-in (198.2-06/07, 2026-08-30) | More grounding reaches helpers without crowding out the task or making small jobs heavier | Good |
 | Owner chose to advance from Phase 198.2 while its real-world WIRE-06 confirmation remains untested (2026-08-31) | Carry as verification debt; do not treat it as passed or as a known defect; revisit with `$gsd-verify-work 198.2` | Pending evidence |
 | v1.27 ends at Phase 198.3; Classic restoration is v1.28, not a Phase 198.4 questionnaire (2026-09-02) | The comprehensive report already records owner intent; the 72-row ledger is traceability and owner-watched proof follows restoration | Good |
-| Historical behavior is evidence, while the modern Go runtime remains state and safety authority | Restore outcomes and experience without reviving shell/wrapper state mutation | — Pending (v1.28) |
+| Historical behavior is evidence, while the modern Go runtime remains state and safety authority | Restore outcomes and experience without reviving shell/wrapper state mutation | — Locked for v1.28 |
+| Classic feature names are investigation headings, not predetermined solutions (2026-09-02) | Every Phase 199-204 must reconstruct the exact historical mechanism and owner value, trace the current Go implementation, compare keep/restore/replace options, and plan from a written synthesis | — Locked for v1.28 |
 
 ## Context
 
@@ -345,7 +356,7 @@ These remain promising but are not the next best move:
 
 ## Next Move
 
-Initialize and roadmap v1.28 Classic Colony Restoration from the comprehensive Dreams report and the 72-row capability ledger. Do not repeat the owner interview; ask only choices the report genuinely leaves unresolved.
+Discuss Phase 199, complete its targeted front-door/lifecycle Classic-to-Go synthesis, and only then create implementation plans from the recorded conclusions.
 
 ## Evolution
 
@@ -353,7 +364,7 @@ This document evolves at phase transitions and milestone boundaries.
 
 ## Historical Milestone Briefs (superseded)
 
-*The three sections below are archived milestone briefs from v1.11, v1.12, and v1.16. They are retained for context only and are NOT the current milestone. The current milestone is v1.25 Switch It On, defined near the top of this file.*
+*The three sections below are archived milestone briefs from v1.11, v1.12, and v1.16. They are retained for context only and are NOT the current milestone. The current milestone is v1.28 Classic Colony Restoration, defined near the top of this file.*
 
 ### v1.11 Aether Unification (shipped)
 
@@ -419,4 +430,4 @@ This document evolves at phase transitions and milestone boundaries.
 - Do not move install/update/publish safety out of Go
 - Do not make visual output parsing authoritative
 
-*Last updated: 2026-09-02 after v1.27 milestone close and v1.28 restoration handoff*
+*Last updated: 2026-09-02 after v1.28 requirements, roadmap, and synthesis method approval*

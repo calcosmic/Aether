@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.27
-milestone_name: The Queen Decides, the Program Checks
-status: Awaiting next milestone
-stopped_at: v1.27 archived with audited debt; initializing v1.28 Classic Colony Restoration
-last_updated: "2026-09-01T23:18:06.886Z"
-last_activity: 2026-09-02 — Milestone v1.27 completed and archived with five acknowledged artifacts
+milestone: v1.28
+milestone_name: Classic Colony Restoration
+status: planning
+last_updated: "2026-09-01T23:27:38.816Z"
+last_activity: 2026-09-02 — v1.28 roadmap approved; Phase 199 targeted synthesis is next
 progress:
-  total_phases: 9
-  completed_phases: 9
-  total_plans: 84
-  completed_plans: 84
-  percent: 100
+  total_phases: 7
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -21,17 +20,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-02)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Initialize v1.28 Classic Colony Restoration from the comprehensive Golden Era report
+**Current focus:** Discuss Phase 199 and complete its front-door/lifecycle Classic-to-Go synthesis before implementation planning
 **Previous milestone:** v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02 (48/48 requirements; audit `tech_debt`, no blockers)
-**Product version:** v1.0.63 (binary is authoritative; published 2026-08-21)
+**Product version:** v1.0.66 (installed and source binaries agree in the 2026-09-02 local check)
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
 
 ## Current Position
 
-Phase: Milestone v1.27 complete
+Phase: 199 — Front Door and Classic Contract (not started)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-09-02 — Milestone v1.27 completed and archived
+Status: Roadmap approved; ready for phase discussion and targeted synthesis
+Last activity: 2026-09-02 — 64 requirements, Phases 199-205, and the mandatory Classic-to-Go method approved
 
 ## Performance Metrics
 
@@ -179,6 +178,7 @@ Last activity: 2026-09-02 — Milestone v1.27 completed and archived
 - [Phase 198.3]: Complete verification is no longer inconclusive: 8,566 normal and 8,566 race-instrumented Go tests passed across 20 packages; Phase 198.3 scored 94/94 truths and 6/6 STAM requirements.
 - [Milestone sequencing]: The owner rejected a standalone Phase 198.4 planning gate. v1.27 ends at verified Phase 198.3; the 35,921-word Dreams report is v1.28's authoritative brief, and the 72-row ledger is traceability rather than a 69-question owner gate.
 - [Milestone sequencing]: Classic functional/experience restoration belongs inside v1.28. Owner-watched proof follows the restored product; Codex lifecycle skills remain a separate later milestone.
+- [Milestone method]: Classic feature names are research headings, not selected implementations. Every Phase 199-204 must reconstruct the exact old mechanism and owner value, audit the current Go path, compare keep/restore/replace choices, and link a written synthesis into its plans, tests, CAP dispositions, and verification.
 - [Milestone audit]: v1.27 scored 48/48 requirements, 9/9 delivered phases, 8/8 integration seams, and 4/4 end-to-end flows. Verdict `tech_debt`: no blocking gaps; Phase 198.2 field UAT and documented warnings carry forward.
 
 ### Pending Todos
@@ -204,8 +204,9 @@ Last activity: 2026-09-02 — Milestone v1.27 completed and archived
 - [x] Phase 198.3: Overnight Stamina — 22/22 formal plans plus six final trust-boundary repairs; verified complete 2026-09-02
 - [x] Audit v1.27 at Phase 198.3 — complete 2026-09-02 (`tech_debt`, no blockers)
 - [x] Close and archive v1.27 with the audited debt acknowledged — complete 2026-09-02
-- [ ] Initialize v1.28 Classic Colony Restoration from the comprehensive Dreams report ← **current**
-- [ ] Map the 72-row capability ledger during v1.28 roadmapping without re-interviewing the owner on already-recorded intent
+- [x] Initialize v1.28 Classic Colony Restoration from the comprehensive Dreams report — approved 2026-09-02
+- [x] Route the 72-row capability ledger without re-interviewing the owner — 72/72 routed; final dispositions require phase synthesis
+- [ ] Discuss Phase 199 and complete its front-door/lifecycle Classic-to-Go synthesis before implementation planning ← **current**
 - [ ] Run owner-watched proof only after v1.28 restoration is usable
 - [ ] Plan Phase 187: Crash-Safe Worktrees & Ecosystem Neutrality
 - [ ] Plan Phase 188: One Truth for Failures and Advances (independent — may run in parallel with 187)
