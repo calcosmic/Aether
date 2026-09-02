@@ -2,6 +2,7 @@
 created: 2026-08-20T00:00:00Z
 title: Spec builder — a user-facing command that develops a readable specification before building
 area: commands/intent-capture
+resolves_phase: 200
 source: Owner request, 2026-08-20 session (during phases 188/189 overnight run)
 audit_acknowledged:
   milestone: v1.26

@@ -2,6 +2,7 @@
 created: 2026-08-01T10:05:00Z
 title: ts-host preflight timeout hardcoded, not configurable, runs in repo cwd
 area: ts-host
+resolves_phase: 203
 source: M4L repo residual-issues check against v1.0.46 (original diagnosis session, item P1)
 audit_acknowledged:
   milestone: v1.26

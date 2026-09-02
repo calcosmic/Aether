@@ -3,7 +3,7 @@ created: 2026-08-27T00:00:00Z
 title: Worker turnaround is too slow — a one-plan job costs ~30 minutes
 area: orchestration/performance
 source: Owner feedback, 2026-08-27, during Phase 195 wave 5
-resolves_phase: ""  # not yet scheduled — owner named this a priority; route via /gsd-discuss-phase at the next planning pass
+resolves_phase: 201
 priority: high
 ---
 
