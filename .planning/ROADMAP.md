@@ -77,6 +77,29 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 
 **Requirements:** SYNTH-01, CEC-01, CEC-02, CEC-04, CEC-08, LIFE-01..06, PROOF-01
 
+**Plans:** 19 plans
+
+Plans:
+- [ ] 199-01-PLAN.md — Replace broad test cleanup with exact ownership before running lifecycle proof.
+- [ ] 199-02-PLAN.md — Publish the cited Classic synthesis and versioned corpus contract.
+- [ ] 199-03-PLAN.md — Define backward-compatible durable lifecycle value contracts.
+- [ ] 199-04-PLAN.md — Build one read-only fact load, pure projection, and Next Up policy.
+- [ ] 199-05-PLAN.md — Add crash-safe multi-artifact lifecycle transactions and replay proof.
+- [ ] 199-06-PLAN.md — Create the expert maintenance landing and read-only inspection lane.
+- [ ] 199-07-PLAN.md — Deliver grouped help and guided first-run init as the normal front door.
+- [ ] 199-08-PLAN.md — Automate typed territory freshness, publication, and planning evidence.
+- [ ] 199-09-PLAN.md — Make full and compact status authoritative projection views.
+- [ ] 199-10-PLAN.md — Make phase and history focused views that agree with status.
+- [ ] 199-11-PLAN.md — Enforce the Autopilot authority contract and honest idle watch fallback.
+- [ ] 199-12-PLAN.md — Add evidence-backed signal receipts and the scoped Swarm boundary.
+- [ ] 199-13-PLAN.md — Make pause/resume transactional, exactly once, and provenance aware.
+- [ ] 199-14-PLAN.md — Prune retired pause/resume aliases from managed public surfaces.
+- [ ] 199-15-PLAN.md — Separate verified and forced-incomplete seal outcomes transactionally.
+- [ ] 199-16-PLAN.md — Verify archive content before optional entomb clears active state.
+- [ ] 199-17-PLAN.md — Retire recover/abandon as public lifecycle commands.
+- [ ] 199-18-PLAN.md — Route maintenance mutations through preview, transaction, and rollback.
+- [ ] 199-19-PLAN.md — Execute the complete cross-platform Classic corpus and source audit.
+
 **Success criteria:**
 
 1. A cited mechanism study reconstructs the Classic front door and lifecycle, traces the current Go paths, explains why the old journey worked, and records keep/restore/replace conclusions before implementation planning.
