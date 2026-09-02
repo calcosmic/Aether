@@ -3,8 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: planning
-last_updated: "2026-09-01T23:27:38.816Z"
-last_activity: 2026-09-02 — v1.28 roadmap approved; Phase 199 targeted synthesis is next
+stopped_at: Phase 199 context gathered
+last_updated: "2026-09-02T21:33:28.952Z"
+last_activity: 2026-09-02 — Phase 199 front-door and lifecycle decisions locked
 progress:
   total_phases: 7
   completed_phases: 0
@@ -20,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-02)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Discuss Phase 199 and complete its front-door/lifecycle Classic-to-Go synthesis before implementation planning
+**Current focus:** Research and plan Phase 199 from the locked front-door/lifecycle context and mandatory Classic-to-Go synthesis
 **Previous milestone:** v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02 (48/48 requirements; audit `tech_debt`, no blockers)
 **Product version:** v1.0.66 (installed and source binaries agree in the 2026-09-02 local check)
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
@@ -29,8 +30,8 @@ See: .planning/PROJECT.md (updated 2026-09-02)
 
 Phase: 199 — Front Door and Classic Contract (not started)
 Plan: —
-Status: Roadmap approved; ready for phase discussion and targeted synthesis
-Last activity: 2026-09-02 — 64 requirements, Phases 199-205, and the mandatory Classic-to-Go method approved
+Status: Context gathered; ready for targeted synthesis and planning
+Last activity: 2026-09-02 — Phase 199 front-door and lifecycle decisions locked
 
 ## Performance Metrics
 
@@ -293,9 +294,9 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-01T23:18:06Z
-Stopped at: v1.27 archived with audited debt; initializing v1.28 Classic Colony Restoration
-Resume file: none — the Phase 198.3 continuation handoff was consumed and closed
+Last session: 2026-09-02T21:32:47.437Z
+Stopped at: Phase 199 context gathered
+Resume file: .planning/phases/199-front-door-and-classic-contract/199-CONTEXT.md
 
 ## Operator Next Steps
 
