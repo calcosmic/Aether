@@ -1,7 +1,7 @@
 ---
 phase: 199
 slug: front-door-and-classic-contract
-status: draft
+status: approved
 surface: terminal_cli
 primary_platforms:
   - claude-code
@@ -10,6 +10,7 @@ authority: go-runtime
 shadcn_initialized: false
 preset: aether-compiled-terminal-house-style
 created: 2026-09-03
+reviewed: 2026-09-02T22:33:01Z
 ---
 
 # Phase 199 — UI Design Contract
@@ -671,4 +672,3 @@ Assertions are semantic first: JSON fields, state/artifact digests, receipts, an
 - [ ] Dimension 6 Registry Safety: PASS
 
 **Approval:** pending
-
