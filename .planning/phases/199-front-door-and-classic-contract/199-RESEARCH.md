@@ -795,22 +795,22 @@ Use a non-mutating visual command or a fresh equivalent fixture for the second p
 |---|---|---|---|
 | — | No assumed claims are used. All factual findings are tied to owner-approved context, repository/history inspection, observed environment output, or official documentation. [VERIFIED: provenance audit of this document] | All | No user-confirmation checkpoint is required for the research conclusions. [VERIFIED: synthesis section 8] |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **How long should the hidden suffixed parser redirects remain?**
+1. **RESOLVED — How long should the hidden suffixed parser redirects remain?**
    - What we know: They must be invisible and short-lived; exact duration is delegated. [VERIFIED: D-13 + the agent’s discretion]
    - What is unclear: Release count or usage/removal threshold. [VERIFIED: no value in context]
-   - Recommendation: Choose and document a bounded window in the plan, include an expiry test, and never install wrapper files for the old names. [VERIFIED: D-13]
+   - Resolution: Hidden parser redirects expire in 1.29; the implementation includes an expiry test and never installs wrapper files for the old names. [RESOLVED: planning decision]
 
-2. **Where should lifecycle journals live?**
+2. **RESOLVED — Where should lifecycle journals live?**
    - What we know: They must be durable, versioned, scoped, recoverable, and excluded from ordinary protocol views. [VERIFIED: LIFE-04..06]
    - What is unclear: Whether to extend an existing recovery schema or add `.aether/data/transactions/`. [VERIFIED: internal-schema discretion]
-   - Recommendation: Audit existing recovery/attempt IDs during planning, then use one canonical directory keyed by transaction ID and operation. [VERIFIED: selected architecture]
+   - Resolution: The coordinator journal lives at `.aether/data/transactions/`, keyed by transaction ID and operation; per-root staging/pre-images live beside each allowed destination root so cross-filesystem recovery remains possible. [RESOLVED: planning decision]
 
-3. **How much expert help belongs at raw root versus `maintenance`?**
+3. **RESOLVED — How much expert help belongs at raw root versus `maintenance`?**
    - What we know: Ordinary `/ant-*` vocabulary must stay simple and raw plumbing must remain inspectable. [VERIFIED: D-01; LIFE-06]
    - What is unclear: The exact nesting/group titles. [VERIFIED: rendering discretion]
-   - Recommendation: Let Cobra own groups/hidden status, give `/ant-help` the normal journey, and provide an explicit expert discovery route with corpus coverage. [CITED: https://cobra.dev/docs/how-to-guides/working-with-commands/]
+   - Resolution: Cobra groups root help behind the `maintenance` landing; `/ant-help` presents the normal journey and the landing remains the explicit expert discovery route with corpus coverage. [RESOLVED: planning decision]
 
 None of these questions blocks planning because the owner-visible contract is already locked and all three are implementation discretion. [VERIFIED: `199-CONTEXT.md`]
 

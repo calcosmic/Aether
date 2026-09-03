@@ -77,7 +77,7 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 
 **Requirements:** SYNTH-01, CEC-01, CEC-02, CEC-04, CEC-08, LIFE-01..06, PROOF-01
 
-**Plans:** 19 plans
+**Plans:** 29 plans
 
 Plans:
 - [ ] 199-01-PLAN.md — Replace broad test cleanup with exact ownership before running lifecycle proof.
@@ -98,7 +98,17 @@ Plans:
 - [ ] 199-16-PLAN.md — Verify archive content before optional entomb clears active state.
 - [ ] 199-17-PLAN.md — Retire recover/abandon as public lifecycle commands.
 - [ ] 199-18-PLAN.md — Route maintenance mutations through preview, transaction, and rollback.
-- [ ] 199-19-PLAN.md — Execute the complete cross-platform Classic corpus and source audit.
+- [ ] 199-19-PLAN.md — Publish the canonical maintenance wrapper with its own semantic proof.
+- [ ] 199-20-PLAN.md — Align guided init wrappers and the existing Codex creation skill.
+- [ ] 199-21-PLAN.md — Align the sole resume surface and existing Codex lifecycle guidance.
+- [ ] 199-22-PLAN.md — Remove old pause-colony surfaces and current-product guidance.
+- [ ] 199-23-PLAN.md — Align owner-only seal wrappers and the existing Codex build-cycle skill.
+- [ ] 199-24-PLAN.md — Remove abandon from canonical and generated public surfaces.
+- [ ] 199-25-PLAN.md — Verify chamber/context truth before transactional archive repair.
+- [ ] 199-26-PLAN.md — Ratchet focused lifecycle closeouts after all affected implementations.
+- [ ] 199-27-PLAN.md — Execute every cross-platform Classic journey and public-command parity case.
+- [ ] 199-28-PLAN.md — Validate exact CAP/SYN/decision/requirement coverage and current vocabulary.
+- [ ] 199-29-PLAN.md — Run and receipt the exact full and race repository gates without touching user-owned changes.
 
 **Success criteria:**
 
