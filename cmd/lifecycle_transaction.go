@@ -1332,7 +1332,40 @@ func (tx *lifecycleTransaction) loadCommittedReceipt() (colony.LifecycleReceipt,
 	if receipt.Transaction.ID != tx.config.TransactionID {
 		return colony.LifecycleReceipt{}, false, fmt.Errorf("lifecycle transaction: receipt belongs to %q", receipt.Transaction.ID)
 	}
+	intent, progress, err := tx.loadJournal()
+	if err != nil {
+		return colony.LifecycleReceipt{}, false, fmt.Errorf("lifecycle transaction: receipt journal evidence is invalid: %w", err)
+	}
+	tx.intent, tx.progress = intent, progress
+	manifests, err := tx.validateRecoveryEvidence()
+	if err != nil {
+		return colony.LifecycleReceipt{}, false, fmt.Errorf("lifecycle transaction: receipt root evidence is invalid: %w", err)
+	}
+	if progress.Stage != colony.TransactionStageVerified || progress.StateEffect != colony.LifecycleStateEffectCommitted {
+		return colony.LifecycleReceipt{}, false, fmt.Errorf("lifecycle transaction: receipt conflicts with coordinator stage %q", progress.Stage)
+	}
+	if progress.Receipt != nil && (progress.Receipt.ID != receipt.ReceiptID || progress.Receipt.Digest != lifecycleDigest(receiptBytes)) {
+		return colony.LifecycleReceipt{}, false, fmt.Errorf("lifecycle transaction: receipt reference conflicts with receipt bytes")
+	}
+	if receipt.Command != intent.Record.Command || !equalLifecycleChanges(receipt.Changes, intent.Record.Changes) {
+		return colony.LifecycleReceipt{}, false, fmt.Errorf("lifecycle transaction: receipt claims conflict with coordinator intent")
+	}
+	if !allLifecycleTargetsMatch(intent, manifests, true) {
+		return colony.LifecycleReceipt{}, false, fmt.Errorf("lifecycle transaction: receipt target bytes no longer match verified digests")
+	}
 	return receipt, true, nil
+}
+
+func equalLifecycleChanges(left, right []colony.LifecycleChange) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
 }
 
 func (tx *lifecycleTransaction) loadJournal() (*lifecycleTransactionIntent, *lifecycleTransactionProgress, error) {

@@ -369,6 +369,30 @@ func TestLifecycleTransactionTamperConflict(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("target after verified receipt", func(t *testing.T) {
+		fixture, config, tx, targets := prepareLifecycleFaultTransaction(t, "tamper-after-receipt", "")
+		if _, err := tx.Commit(); err != nil {
+			t.Fatalf("commit transaction: %v", err)
+		}
+		receiptPath := filepath.Join(lifecycleJournalPath(fixture, "tamper-after-receipt"), "receipt.json")
+		originalReceipt := bytes.Clone(mustReadLifecycleFixtureFile(t, receiptPath))
+		mustWriteLifecycleFixtureFile(t, targets[0].path, []byte("hostile-after-receipt"))
+
+		recovery, err := resumeLifecycleTransaction(config)
+		if err == nil {
+			t.Fatal("replay trusted a receipt whose target bytes had changed")
+		}
+		if recovery.OutcomeKind != colony.OutcomeKindRecoveryRequired || recovery.Recovery == nil || recovery.Recovery.Provenance != colony.RecoveryProvenanceConflicting {
+			t.Fatalf("post-receipt tamper recovery = %#v", recovery)
+		}
+		if got := string(mustReadLifecycleFixtureFile(t, targets[0].path)); got != "hostile-after-receipt" {
+			t.Fatalf("post-receipt target conflict was overwritten: %q", got)
+		}
+		if got := mustReadLifecycleFixtureFile(t, receiptPath); !bytes.Equal(got, originalReceipt) {
+			t.Fatal("verified receipt evidence was replaced after target conflict")
+		}
+	})
 }
 
 func readLifecycleTransactionManifestTargets(t *testing.T, fixture lifecycleTransactionFixture, id string) map[string]lifecycleTransactionTargetManifest {
