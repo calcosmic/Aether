@@ -1,0 +1,255 @@
+{
+  "schema_version": "classic-contract/v1",
+  "synthesis_source": ".planning/phases/199-front-door-and-classic-contract/199-CLASSIC-SYNTHESIS.md",
+  "mechanisms": [
+    {
+      "id": "SYN-199-01",
+      "title": "One understandable front door",
+      "disposition": "restore-modern",
+      "cap_ids": [
+        "CAP-016",
+        "CAP-017",
+        "CAP-068"
+      ],
+      "public_commands": [
+        "/ant-help",
+        "/ant-init"
+      ],
+      "source_citations": [
+        "git:3a5b81c2:.claude/commands/ant/help.md",
+        "git:v5.4:.aether/commands/init.yaml",
+        ".aether/commands/help.yaml",
+        "cmd/init_cmd.go"
+      ],
+      "groups": [
+        "front-door"
+      ]
+    },
+    {
+      "id": "SYN-199-02",
+      "title": "Automatic territory understanding",
+      "disposition": "replace-better",
+      "cap_ids": [
+        "CAP-049",
+        "CAP-059"
+      ],
+      "public_commands": [
+        "/ant-init",
+        "/ant-colonize",
+        "/ant-plan"
+      ],
+      "source_citations": [
+        "git:v5.4:.aether/commands/init.yaml",
+        "cmd/survey_staleness.go",
+        "cmd/codex_colonize.go",
+        "cmd/codex_plan_finalize.go"
+      ],
+      "groups": [
+        "territory"
+      ]
+    },
+    {
+      "id": "SYN-199-03",
+      "title": "One truthful orientation model",
+      "disposition": "replace-better",
+      "cap_ids": [
+        "CAP-015",
+        "CAP-018",
+        "CAP-020",
+        "CAP-027",
+        "CAP-028",
+        "CAP-050"
+      ],
+      "public_commands": [
+        "/ant-status",
+        "/ant-phase",
+        "/ant-history"
+      ],
+      "source_citations": [
+        "git:3a5b81c2:.claude/commands/ant/status.md",
+        "cmd/status.go",
+        "cmd/phase.go",
+        "cmd/history.go",
+        "cmd/next_action.go"
+      ],
+      "groups": [
+        "orientation"
+      ]
+    },
+    {
+      "id": "SYN-199-04",
+      "title": "Immediate owner agency",
+      "disposition": "restore-modern",
+      "cap_ids": [
+        "CAP-013"
+      ],
+      "public_commands": [
+        "/ant-focus",
+        "/ant-feedback",
+        "/ant-redirect"
+      ],
+      "source_citations": [
+        "git:3a5b81c2:.claude/commands/ant/help.md",
+        "cmd/pheromone_write.go",
+        "cmd/pheromone_loader.go",
+        "cmd/colony_prime_context.go"
+      ],
+      "groups": [
+        "agency"
+      ]
+    },
+    {
+      "id": "SYN-199-05",
+      "title": "Optional safe Autopilot",
+      "disposition": "restore-modern",
+      "cap_ids": [],
+      "public_commands": [
+        "/ant-run"
+      ],
+      "source_citations": [
+        "git:v5.4.0:.aether/commands/run.yaml",
+        "cmd/compatibility_cmds.go",
+        "cmd/autopilot_policy.go",
+        "cmd/autopilot_report.go"
+      ],
+      "groups": [
+        "autopilot"
+      ]
+    },
+    {
+      "id": "SYN-199-06",
+      "title": "One safe pause and return",
+      "disposition": "replace-better",
+      "cap_ids": [
+        "CAP-032",
+        "CAP-033",
+        "CAP-034",
+        "CAP-035",
+        "CAP-060"
+      ],
+      "public_commands": [
+        "/ant-pause",
+        "/ant-resume"
+      ],
+      "source_citations": [
+        "git:v5.4:.aether/commands/pause-colony.yaml",
+        "git:v5.4:.aether/commands/resume.yaml",
+        "cmd/session_flow_cmds.go",
+        "cmd/recovery_engine.go"
+      ],
+      "groups": [
+        "pause-resume"
+      ]
+    },
+    {
+      "id": "SYN-199-07",
+      "title": "Honest ceremonial closure",
+      "disposition": "restore-modern",
+      "cap_ids": [
+        "CAP-026",
+        "CAP-036",
+        "CAP-037",
+        "CAP-038",
+        "CAP-039",
+        "CAP-040",
+        "CAP-041",
+        "CAP-042"
+      ],
+      "public_commands": [
+        "/ant-seal"
+      ],
+      "source_citations": [
+        "git:v5.4:.aether/commands/seal.yaml",
+        "cmd/codex_workflow_cmds.go",
+        "cmd/seal_confirmation.go",
+        "cmd/seal_final_review.go"
+      ],
+      "groups": [
+        "closure"
+      ]
+    },
+    {
+      "id": "SYN-199-08",
+      "title": "Optional archive-and-clear after seal",
+      "disposition": "restore-modern",
+      "cap_ids": [
+        "CAP-006",
+        "CAP-007"
+      ],
+      "public_commands": [
+        "/ant-entomb"
+      ],
+      "source_citations": [
+        "git:v5.4:.aether/commands/entomb.yaml",
+        "cmd/entomb_cmd.go",
+        "cmd/entomb_cmd_test.go"
+      ],
+      "groups": [
+        "closure"
+      ]
+    },
+    {
+      "id": "SYN-199-09",
+      "title": "Safe inspectable maintenance",
+      "disposition": "replace-better",
+      "cap_ids": [
+        "CAP-008",
+        "CAP-019",
+        "CAP-052",
+        "CAP-053",
+        "CAP-062",
+        "CAP-064",
+        "CAP-065"
+      ],
+      "public_commands": [
+        "aether update",
+        "aether migrate-state",
+        "aether data-clean"
+      ],
+      "source_citations": [
+        "git:v5.4:.aether/commands/help.yaml",
+        "cmd/command_truth.go",
+        "cmd/update_cmd.go",
+        "cmd/maintenance.go",
+        "cmd/skills.go"
+      ],
+      "groups": [
+        "maintenance"
+      ]
+    },
+    {
+      "id": "SYN-199-10",
+      "title": "Executable restoration proof",
+      "disposition": "replace-better",
+      "cap_ids": [],
+      "public_commands": [
+        "/ant-help",
+        "/ant-init",
+        "/ant-status",
+        "/ant-run",
+        "/ant-focus",
+        "/ant-pause",
+        "/ant-resume",
+        "/ant-seal",
+        "/ant-entomb",
+        "aether update"
+      ],
+      "source_citations": [
+        ".planning/phases/199-front-door-and-classic-contract/199-CLASSIC-SYNTHESIS.md",
+        "cmd/blackbox_harness_test.go",
+        "cmd/golden_workflow_test.go",
+        "cmd/classic_command_parity_test.go"
+      ],
+      "groups": [
+        "front-door",
+        "territory",
+        "orientation",
+        "autopilot",
+        "agency",
+        "pause-resume",
+        "closure",
+        "maintenance"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,261 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aether.dev/schemas/classic-contract/v1",
+  "title": "Aether Classic behavior contract v1",
+  "description": "A versioned semantic contract for public Classic restoration cases. Text assertions supplement, but never replace, causal state or filesystem assertions.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "cases"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "classic-contract/v1"
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/case"
+      }
+    }
+  },
+  "$defs": {
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "group",
+        "kind",
+        "historical_anchors",
+        "synthesis_decision",
+        "cap_ids",
+        "source_citations",
+        "platform",
+        "command",
+        "expected"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"
+        },
+        "group": {
+          "enum": [
+            "front-door",
+            "territory",
+            "orientation",
+            "autopilot",
+            "agency",
+            "pause-resume",
+            "closure",
+            "maintenance"
+          ]
+        },
+        "kind": {
+          "const": "behavior"
+        },
+        "historical_anchors": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "synthesis_decision": {
+          "type": "string",
+          "pattern": "^SYN-199-(?:0[1-9]|10)$"
+        },
+        "cap_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^CAP-[0-9]{3}$"
+          }
+        },
+        "source_citations": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "platform": {
+          "enum": [
+            "runtime",
+            "claude",
+            "opencode"
+          ]
+        },
+        "command": {
+          "$ref": "#/$defs/invocation"
+        },
+        "expected": {
+          "$ref": "#/$defs/expected"
+        }
+      }
+    },
+    "invocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args",
+        "environment"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exit_code",
+        "outcome",
+        "semantic_fields"
+      ],
+      "properties": {
+        "exit_code": {
+          "type": "integer"
+        },
+        "outcome": {
+          "type": "string",
+          "minLength": 1
+        },
+        "semantic_fields": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": true
+        },
+        "required_text_tokens": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "forbidden_text_tokens": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "state_assertions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/state_assertion"
+          }
+        },
+        "forbidden_artifacts": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "replay": {
+          "$ref": "#/$defs/replay"
+        },
+        "fault_point": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "state_assertions"
+          ],
+          "properties": {
+            "state_assertions": {
+              "minItems": 1
+            }
+          }
+        },
+        {
+          "required": [
+            "forbidden_artifacts"
+          ],
+          "properties": {
+            "forbidden_artifacts": {
+              "minItems": 1
+            }
+          }
+        }
+      ]
+    },
+    "state_assertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "operator"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "operator": {
+          "enum": [
+            "equals",
+            "exists",
+            "absent",
+            "unchanged",
+            "changed",
+            "contains"
+          ]
+        },
+        "value": true
+      }
+    },
+    "replay": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "expected_outcome"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "idempotent",
+            "reject-altered",
+            "not-applicable"
+          ]
+        },
+        "expected_outcome": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}
