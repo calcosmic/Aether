@@ -270,9 +270,11 @@ var (
 				{"/ant-phase", "Inspect the current phase and its accepted work."},
 				{"/ant-history", "Review recorded colony events."},
 				{"/ant-swarm", "Route a problem or inspect the live swarm."},
-				{"/ant-research", "Browse saved research and Dreams."},
+				{"/ant-oracle status", "Inspect the current deep-research run."},
+				{"/ant-dream", "Let the colony reflect on the codebase."},
+				{"/ant-interpret", "Interpret saved Dreams without changing colony state."},
 				{"/ant-memory-details", "Inspect retained learning and memory."},
-				{"/ant-review-ledger-summary", "Summarize retained findings."},
+				{"/ant-flags", "Inspect retained blockers, issues, and findings."},
 			},
 		},
 		{
@@ -298,8 +300,8 @@ func configureFrontDoorHelp() {
 			"resume-colony": frontDoorNormalGroupID, "seal": frontDoorNormalGroupID, "entomb": frontDoorNormalGroupID,
 			"focus": frontDoorInspectGroupID, "feedback": frontDoorInspectGroupID, "redirect": frontDoorInspectGroupID,
 			"watch": frontDoorInspectGroupID, "phase": frontDoorInspectGroupID, "history": frontDoorInspectGroupID,
-			"swarm": frontDoorInspectGroupID, "research": frontDoorInspectGroupID, "memory-details": frontDoorInspectGroupID,
-			"review-ledger-summary": frontDoorInspectGroupID, "maintenance": frontDoorExpertGroupID,
+			"swarm": frontDoorInspectGroupID, "oracle": frontDoorInspectGroupID, "memory-details": frontDoorInspectGroupID,
+			"flag-list": frontDoorInspectGroupID, "maintenance": frontDoorExpertGroupID,
 		}
 		for _, command := range rootCmd.Commands() {
 			if groupID, ok := membership[command.Name()]; ok {

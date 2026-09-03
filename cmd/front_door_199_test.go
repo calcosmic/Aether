@@ -11,6 +11,7 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
+	"gopkg.in/yaml.v3"
 )
 
 func TestFrontDoorHelpGroups(t *testing.T) {
@@ -257,6 +258,125 @@ func TestFrontDoorInitRefusalZeroWrite(t *testing.T) {
 	for _, want := range []string{"active colony", "Keep the active work", "/ant-status"} {
 		if !strings.Contains(output.String(), want) {
 			t.Errorf("refusal is missing %q:\n%s", want, output.String())
+		}
+	}
+}
+
+func TestFrontDoorHelpWrapperParity(t *testing.T) {
+	type helpGroup struct {
+		Name     string   `yaml:"name"`
+		Commands []string `yaml:"commands"`
+	}
+	type helpSpec struct {
+		Runtime struct {
+			Command string `yaml:"command"`
+		} `yaml:"runtime"`
+		Standing struct {
+			Empty  []string `yaml:"empty"`
+			Active string   `yaml:"active"`
+		} `yaml:"standing"`
+		Groups  []helpGroup `yaml:"groups"`
+		Wrapper string      `yaml:"wrapper"`
+	}
+
+	canonicalPath := filepath.Join("..", ".aether", "commands", "help.yaml")
+	rawCanonical, err := os.ReadFile(canonicalPath)
+	if err != nil {
+		t.Fatalf("read canonical help: %v", err)
+	}
+	var spec helpSpec
+	if err := yaml.Unmarshal(rawCanonical, &spec); err != nil {
+		t.Fatalf("parse canonical help: %v", err)
+	}
+	wantGroups := []helpGroup{
+		{Name: "Normal journey", Commands: []string{`/ant-init "goal"`, "/ant-plan", "/ant-build", "/ant-run", "/ant-status", "/ant-pause", "/ant-resume", "/ant-seal", "/ant-entomb"}},
+		{Name: "Steer and inspect", Commands: []string{"/ant-focus", "/ant-feedback", "/ant-redirect", "/ant-watch", "/ant-phase", "/ant-history", "/ant-swarm", "/ant-oracle status", "/ant-dream", "/ant-interpret", "/ant-memory-details", "/ant-flags"}},
+		{Name: "Expert maintenance", Commands: []string{"/ant-maintenance"}},
+	}
+	if fmt.Sprintf("%#v", spec.Groups) != fmt.Sprintf("%#v", wantGroups) {
+		t.Fatalf("canonical help groups = %#v, want %#v", spec.Groups, wantGroups)
+	}
+	if len(frontDoorHelpGroups) != len(wantGroups) {
+		t.Fatalf("runtime help has %d groups, canonical help has %d", len(frontDoorHelpGroups), len(wantGroups))
+	}
+	for index, wantGroup := range wantGroups {
+		gotGroup := frontDoorHelpGroups[index]
+		gotCommands := make([]string, 0, len(gotGroup.entries))
+		for _, entry := range gotGroup.entries {
+			gotCommands = append(gotCommands, entry.command)
+		}
+		if gotGroup.title != wantGroup.Name || fmt.Sprintf("%#v", gotCommands) != fmt.Sprintf("%#v", wantGroup.Commands) {
+			t.Errorf("runtime group %d = %q %#v, canonical = %q %#v", index, gotGroup.title, gotCommands, wantGroup.Name, wantGroup.Commands)
+		}
+	}
+	wantEmpty := []string{"No colony is active", `Start a guided colony for one goal with /ant-init "goal".`}
+	if fmt.Sprintf("%#v", spec.Standing.Empty) != fmt.Sprintf("%#v", wantEmpty) {
+		t.Fatalf("canonical empty standing = %#v, want %#v", spec.Standing.Empty, wantEmpty)
+	}
+	wantActive := "Colony: {identity} | Goal: {accepted goal} | Episode: {episode} | Phase: {current}/{total} | Standing: {standing} | Ants: {acting castes or No ants are active} | Blockers: {count} | Next Up: {exact action}"
+	if spec.Standing.Active != wantActive {
+		t.Fatalf("canonical active standing = %q, want %q", spec.Standing.Active, wantActive)
+	}
+	if spec.Runtime.Command != "AETHER_OUTPUT_MODE=visual aether help $ARGUMENTS" {
+		t.Fatalf("canonical runtime delegation = %q", spec.Runtime.Command)
+	}
+
+	generated := []string{
+		filepath.Join("..", ".claude", "commands", "ant-help.md"),
+		filepath.Join("..", ".claude", "commands", "ant", "help.md"),
+		filepath.Join("..", ".opencode", "commands", "ant", "help.md"),
+	}
+	header := "<!-- Aether-managed: runtime spec at .aether/commands/help.yaml. Synced by aether update. -->"
+	var shared string
+	for _, path := range generated {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		text := strings.ReplaceAll(string(raw), "\r\n", "\n")
+		if !strings.HasPrefix(text, header+"\n") {
+			t.Errorf("%s is missing source-linked managed header", path)
+		}
+		body := strings.TrimPrefix(text, header+"\n")
+		if shared == "" {
+			shared = body
+		} else if body != shared {
+			t.Errorf("%s is not semantically identical to the other generated help wrappers", path)
+		}
+		for _, exact := range append(append([]string{}, wantEmpty...), wantActive, spec.Runtime.Command, "return its stdout unchanged") {
+			if !strings.Contains(body, exact) {
+				t.Errorf("%s is missing help contract %q", path, exact)
+			}
+		}
+		last := -1
+		for _, group := range wantGroups {
+			groupIndex := strings.Index(body, "## "+group.Name)
+			if groupIndex <= last {
+				t.Errorf("%s group %q is absent or out of order", path, group.Name)
+			}
+			last = groupIndex
+			for _, command := range group.Commands {
+				index := strings.Index(body[last:], "`"+command+"`")
+				if index < 0 {
+					t.Errorf("%s group %q is missing %s", path, group.Name, command)
+					continue
+				}
+				last += index
+			}
+		}
+		for _, forbidden := range []string{"pause-colony", "resume-colony", "/ant-recover", "/ant-abandon", "lay-eggs", "finalize", "protocol"} {
+			if strings.Contains(strings.ToLower(text), forbidden) {
+				t.Errorf("%s exposes retired or internal vocabulary %q", path, forbidden)
+			}
+		}
+	}
+	if strings.TrimSpace(spec.Wrapper) == "" || !strings.Contains(shared, strings.TrimSpace(spec.Wrapper)) {
+		t.Error("generated wrapper body is not sourced from canonical help.yaml")
+	}
+
+	for _, forbidden := range []string{"pause-colony", "resume-colony", "/ant-recover", "/ant-abandon", "lay-eggs", "finalize", "protocol"} {
+		if strings.Contains(strings.ToLower(string(rawCanonical)), forbidden) {
+			t.Errorf("canonical help exposes retired or internal vocabulary %q", forbidden)
 		}
 	}
 }
