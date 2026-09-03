@@ -30,8 +30,8 @@ For dummies: keep the reliable modern engine and brakes, then restore the dashbo
 
 ### Classic Experience Contract
 
-- [ ] **CEC-01 — Identity:** Every ordinary lifecycle screen identifies the colony, current goal or episode, active phase, and acting castes from authoritative runtime state; wrappers may style that truth but may not invent it.
-- [ ] **CEC-02 — Orientation:** At any ordinary entry point, the owner can see where the colony is, what is active or blocked, and one canonical next safe action without interpreting manifests, ledgers, or internal protocol commands.
+- [x] **CEC-01 — Identity:** Every ordinary lifecycle screen identifies the colony, current goal or episode, active phase, and acting castes from authoritative runtime state; wrappers may style that truth but may not invent it.
+- [x] **CEC-02 — Orientation:** At any ordinary entry point, the owner can see where the colony is, what is active or blocked, and one canonical next safe action without interpreting manifests, ledgers, or internal protocol commands.
 - [ ] **CEC-03 — Intention:** Every planning iteration, worker choice, specialist escalation, recovery wave, and stop explains why it happened and what evidence would make the next decision different.
 - [ ] **CEC-04 — Agency:** The owner can steer, pause, resume, stop, answer a material decision, and inspect advanced detail without corrupting active work or being asked again for a decision already valid in the current scope.
 - [ ] **CEC-05 — Liveness:** Planning, building, Swarm, Oracle, recovery, and verification expose typed live events for active workers, waves, questions, confidence, contradictions, signals, findings, and lineage rather than simulated activity.
@@ -43,7 +43,7 @@ For dummies: keep the reliable modern engine and brakes, then restore the dashbo
 
 - [ ] **LIFE-01 — One understandable front door:** Help, first-run setup, `lay-eggs`, and `init` present one normal goal journey; `aether do "goal"` or its approved equivalent drives that journey while advanced and internal protocol surfaces remain inspectable but clearly separated.
 - [ ] **LIFE-02 — Automatic territory understanding:** The lifecycle decides when repository colonization or survey refresh is needed, shows survey freshness, and feeds the resulting territory evidence into planning without requiring the owner to choose an internal survey command.
-- [ ] **LIFE-03 — One orientation model:** `status`, `phase`, `history`, health or maturity information, activity interpretation, research or Dreams visibility, escalated flags, and Next Up agree on the same authoritative lifecycle projection.
+- [x] **LIFE-03 — One orientation model:** `status`, `phase`, `history`, health or maturity information, activity interpretation, research or Dreams visibility, escalated flags, and Next Up agree on the same authoritative lifecycle projection.
 - [ ] **LIFE-04 — Safe pause and return:** Pause, stop, session staleness, `resume`, recovery, and the `resume-colony` compatibility path preserve partial work, attempts, scoped decisions, context, and worker lineage exactly once.
 - [ ] **LIFE-05 — Honest closure:** Seal, archive, and the useful safety or memory behavior formerly attached to `entomb` preserve findings, learnings, signals, owner checkpoints, and rollback information while refusing malformed or incomplete completion truth.
 - [ ] **LIFE-06 — Safe internal maintenance:** State migration, update, cleanup, registry, chamber or context integrity, generated-artifact maintenance, and compatibility operations validate before mutation, checkpoint where needed, roll back on failure, and surface an actionable result through an expert or internal namespace.

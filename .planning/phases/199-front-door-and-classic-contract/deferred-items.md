@@ -17,3 +17,11 @@
 - **Race check:** The full race suite passed 8,636 tests across 20 packages when this suite-order-sensitive test and the existing archived-path fixture were excluded.
 - **Why deferred:** The failure is an unrelated command-test interaction and is not reproducible in isolation, so changing command behavior here would exceed Plan 199-03's lifecycle-contract scope.
 - **Follow-up:** Audit shared process/environment or generated-file state in the command test corpus under a dedicated test-isolation change.
+
+## Legacy Next Up snapshots still encode the pre-199 lifecycle policy
+
+- **Found during:** Plan 199-04 broader command-package verification (`go test ./cmd -count=1`)
+- **Observed:** The package run reported 7,088 passing tests, 60 failures, and 10 skips. Most failures assert the policy this plan deliberately supersedes: discuss before plan, build preferred over run, targeted recover/build-force routes instead of resume, mandatory entomb after seal, or golden cards containing those older recommendations.
+- **Isolation check:** The Plan 199-04 contract suite passes all 36 focused tests, and the existing read-only-loader and token-accounting guard tests pass. The package still compiles and reaches the later tests; the mismatches are expectation-level changes rather than a failure of the new projection path.
+- **Why deferred:** Plans 199-09, 199-10, 199-26, 199-32, and 199-33 own the command-specific renderers, focused closeouts, retired recovery wording, and post-seal status migration. Updating those snapshots here would pre-empt their scoped migrations and hide the deliberate transition.
+- **Follow-up:** Update each legacy expectation alongside its owning renderer migration, then run the exact full and race repository gates in Plan 199-29.

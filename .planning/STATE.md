@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 199-03-PLAN.md
-last_updated: "2026-09-03T18:34:11.300Z"
+stopped_at: Completed 199-04-PLAN.md
+last_updated: "2026-09-03T19:13:21.954Z"
 last_activity: 2026-09-03
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 34
-  completed_plans: 3
-  percent: 0
+  completed_plans: 4
+  percent: 12
 ---
 
 # Project State
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-02)
 ## Current Position
 
 Phase: 199 (front-door-and-classic-contract) — EXECUTING
-Plan: 4 of 34
+Plan: 5 of 34
 Status: Ready to execute
 Last activity: 2026-09-03
 
@@ -81,6 +81,7 @@ Last activity: 2026-09-03
 | Phase 199 P01 | 27min | 2 tasks | 4 files |
 | Phase 199 P02 | 18min | 3 tasks | 5 files |
 | Phase 199 P03 | 22 min | 2 tasks | 5 files |
+| Phase 199 P04 | 31min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -192,6 +193,9 @@ Last activity: 2026-09-03
 - [Phase 199]: All Phase 199 lifecycle evidence uses one lifecycle/v1 schema and exported validated Go contracts. — One durable vocabulary prevents command-specific maps and incompatible wire meanings.
 - [Phase 199]: New lifecycle evidence is pointer-backed and omitted when absent. — Legacy colonies remain readable and missing evidence stays unknown rather than becoming fabricated success.
 - [Phase 199]: Forced-incomplete seal outcomes never satisfy verified completion. — Owner-forced closure must remain visibly distinct from evidence-backed verification.
+- [Phase 199]: Lifecycle orientation reads direct bytes and records missing, malformed, or unavailable provenance instead of repairing state.
+- [Phase 199]: Accepted plans expose guided build and Autopilot as a coequal choice set with no preferred marker.
+- [Phase 199]: Ambiguous recovery uses resume; sealed colonies use status with entomb retained only as an optional alternative.
 
 ### Pending Todos
 
@@ -305,8 +309,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-03T18:34:11.291Z
-Stopped at: Completed 199-03-PLAN.md
+Last session: 2026-09-03T19:13:21.946Z
+Stopped at: Completed 199-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
