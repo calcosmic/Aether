@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 199-04-PLAN.md
-last_updated: "2026-09-03T19:43:12.732Z"
+stopped_at: Completed 199-05-PLAN.md
+last_updated: "2026-09-03T19:44:07.056Z"
 last_activity: 2026-09-03
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 34
   completed_plans: 5
-  percent: 0
+  percent: 15
 ---
 
 # Project State
@@ -82,6 +82,7 @@ Last activity: 2026-09-03
 | Phase 199 P02 | 18min | 3 tasks | 5 files |
 | Phase 199 P03 | 22 min | 2 tasks | 5 files |
 | Phase 199 P04 | 31min | 3 tasks | 9 files |
+| Phase 199 P05 | 27min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -196,6 +197,9 @@ Last activity: 2026-09-03
 - [Phase 199]: Lifecycle orientation reads direct bytes and records missing, malformed, or unavailable provenance instead of repairing state.
 - [Phase 199]: Accepted plans expose guided build and Autopilot as a coequal choice set with no preferred marker.
 - [Phase 199]: Ambiguous recovery uses resume; sealed colonies use status with entomb retained only as an optional alternative.
+- [Phase 199]: Keep immutable coordinator intent separate from mutable progress so recovery never rewrites the evidence that authorized a mutation.
+- [Phase 199]: Stage outputs and pre-images on each destination root, then replace targets only through temporary files in the target directory.
+- [Phase 199]: Classify missing transaction evidence as unknown and altered evidence as conflicting; only matching digests may finish or roll back.
 
 ### Pending Todos
 
@@ -309,8 +313,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-03T19:43:12.723Z
-Stopped at: Completed 199-04-PLAN.md
+Last session: 2026-09-03T19:44:07.048Z
+Stopped at: Completed 199-05-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
