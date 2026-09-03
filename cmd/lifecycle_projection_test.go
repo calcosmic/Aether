@@ -36,7 +36,7 @@ func TestLifecycleProjectionStateTable(t *testing.T) {
 			if got.NextAction.ID != tc.wantAction || got.NextAction.RuntimeCommand != tc.wantRuntime {
 				t.Fatalf("next action = %#v, want id=%q runtime=%q", got.NextAction, tc.wantAction, tc.wantRuntime)
 			}
-			choiceIDs := make([]string, 0, len(got.NextAction.Choices))
+			var choiceIDs []string
 			for _, choice := range got.NextAction.Choices {
 				choiceIDs = append(choiceIDs, choice.ID)
 			}
