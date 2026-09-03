@@ -64,6 +64,9 @@ type LifecyclePhaseResult struct {
 	Identity LifecycleFact[LifecycleIdentityFacts] `json:"identity"`
 	Goal     LifecycleFact[string]                 `json:"goal"`
 	Standing LifecycleFact[string]                 `json:"standing"`
+	// CurrentPhase preserves the shared phase standing even when the focused
+	// selector is --list or --all. Phase below remains the requested detail.
+	CurrentPhase LifecycleFact[LifecyclePhaseProjection] `json:"current_phase"`
 
 	Phase  *LifecyclePhaseDetail  `json:"phase,omitempty"`
 	Phases []LifecyclePhaseDetail `json:"phases,omitempty"`
@@ -178,6 +181,7 @@ func buildLifecyclePhaseProjection(facts LifecycleFacts, projection LifecyclePro
 		Identity:           projection.Identity,
 		Goal:               projection.Goal,
 		Standing:           projection.Standing,
+		CurrentPhase:       projection.Phase,
 		Evidence:           append([]colony.LifecycleEvidence(nil), projection.Evidence...),
 		Verification:       append([]colony.LifecycleVerification(nil), projection.Verification...),
 		Blockers:           append([]colony.LifecycleIssue(nil), projection.Blockers...),
