@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 199-02-PLAN.md
-last_updated: "2026-09-03T14:22:37.986Z"
+stopped_at: Completed 199-03-PLAN.md
+last_updated: "2026-09-03T18:34:11.300Z"
 last_activity: 2026-09-03
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 34
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-02)
 ## Current Position
 
 Phase: 199 (front-door-and-classic-contract) — EXECUTING
-Plan: 3 of 34
+Plan: 4 of 34
 Status: Ready to execute
 Last activity: 2026-09-03
 
@@ -80,6 +80,7 @@ Last activity: 2026-09-03
 | Phase 196 P08 | 24min | 2 tasks | 12 files |
 | Phase 199 P01 | 27min | 2 tasks | 4 files |
 | Phase 199 P02 | 18min | 3 tasks | 5 files |
+| Phase 199 P03 | 22 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -188,6 +189,9 @@ Last activity: 2026-09-03
 - [Phase 199]: Restore Classic information grammar and ceremony through modern Go truth, not prompt-owned writes or shell-era handling. — Preserves Classic intent without reviving superseded implementation mechanisms.
 - [Phase 199]: Require every behavior corpus case to combine semantic assertions with causal state assertions or forbidden artifacts. — Prevents output-only proof from masking wrong state transitions.
 - [Phase 199]: Compose source hygiene from production discovery, managed headers, sync rules, and peer parity while ignoring unmanaged paths. — Keeps the gate aligned with the real source-of-truth pipeline and preserves custom files.
+- [Phase 199]: All Phase 199 lifecycle evidence uses one lifecycle/v1 schema and exported validated Go contracts. — One durable vocabulary prevents command-specific maps and incompatible wire meanings.
+- [Phase 199]: New lifecycle evidence is pointer-backed and omitted when absent. — Legacy colonies remain readable and missing evidence stays unknown rather than becoming fabricated success.
+- [Phase 199]: Forced-incomplete seal outcomes never satisfy verified completion. — Owner-forced closure must remain visibly distinct from evidence-backed verification.
 
 ### Pending Todos
 
@@ -301,8 +305,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-03T14:22:37.974Z
-Stopped at: Completed 199-02-PLAN.md
+Last session: 2026-09-03T18:34:11.291Z
+Stopped at: Completed 199-03-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
