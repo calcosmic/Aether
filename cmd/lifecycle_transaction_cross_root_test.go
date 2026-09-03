@@ -62,3 +62,36 @@ func TestLifecycleTransactionCrossFilesystemRollback(t *testing.T) {
 		t.Fatalf("rolled-back transaction emitted success receipt: %v", err)
 	}
 }
+
+func TestLifecycleTransactionMultiRootFaultMatrix(t *testing.T) {
+	fixture, config, tx, targets := prepareLifecycleFaultTransaction(t, "multi-root-exdev", "")
+	hubTarget := targets[2].path
+	renameCount := 0
+	config.Rename = func(oldPath, newPath string) error {
+		renameCount++
+		if filepath.Dir(oldPath) != filepath.Dir(newPath) {
+			t.Fatalf("rename crossed root/filesystem boundary: %s -> %s", oldPath, newPath)
+		}
+		if newPath == hubTarget {
+			return syscall.EXDEV
+		}
+		return os.Rename(oldPath, newPath)
+	}
+	tx.config.Rename = config.Rename
+
+	if _, err := tx.Commit(); !errors.Is(err, syscall.EXDEV) {
+		t.Fatalf("commit error = %v, want fake EXDEV", err)
+	}
+	assertLifecycleTransactionSnapshot(t, targets, false)
+	if renameCount < 3 {
+		t.Fatalf("rename seam observed %d operations, want commit plus reverse-order rollback", renameCount)
+	}
+	progressBytes := mustReadLifecycleFixtureFile(t, filepath.Join(lifecycleJournalPath(fixture, "multi-root-exdev"), "progress.json"))
+	var progress lifecycleTransactionProgress
+	if err := decodeLifecycleJSON(progressBytes, &progress); err != nil {
+		t.Fatalf("decode progress: %v", err)
+	}
+	if progress.Stage != colony.TransactionStageRolledBack || progress.StateEffect != colony.LifecycleStateEffectRolledBack {
+		t.Fatalf("rollback progress = %#v", progress)
+	}
+}
