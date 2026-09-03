@@ -303,6 +303,21 @@ type Charter struct {
 	Constraints string `json:"constraints"`
 }
 
+const AcceptedCharterSchemaVersion = "accepted-charter/v1"
+
+// AcceptedCharter is the durable episode contract created by init. Charter
+// preserves the optional detailed constraints while these top-level fields
+// make the accepted goal, its provenance, and episode identity replayable
+// without interpreting presentation text.
+type AcceptedCharter struct {
+	SchemaVersion string    `json:"schema_version"`
+	EpisodeID     string    `json:"episode_id"`
+	Goal          string    `json:"goal"`
+	Provenance    string    `json:"provenance"`
+	AcceptedAt    time.Time `json:"accepted_at"`
+	Charter       *Charter  `json:"charter,omitempty"`
+}
+
 // ---------------------------------------------------------------------------
 // Pending suggestion (suggest-analyze)
 // ---------------------------------------------------------------------------
@@ -369,6 +384,7 @@ type ColonyState struct {
 	RunID                     *string              `json:"run_id,omitempty"`
 	GateResults               []GateResultEntry    `json:"gate_results,omitempty"`
 	Charter                   *Charter             `json:"charter,omitempty"`
+	AcceptedCharter           *AcceptedCharter     `json:"accepted_charter,omitempty"`
 	PendingSuggestions        *[]PendingSuggestion `json:"pending_suggestions,omitempty"`
 	LastAnalyzeCommit         *string              `json:"last_analyze_commit,omitempty"`
 	// Lifecycle evidence is additive and pointer-backed so state written

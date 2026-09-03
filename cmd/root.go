@@ -10,9 +10,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
+	"time"
 
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/calcosmic/Aether/pkg/trace"
 	"github.com/spf13/cobra"
@@ -148,6 +152,8 @@ func init() {
 	// instead of "aether version v<version>"
 	rootCmd.SetVersionTemplate("aether {{ .Version }}\n")
 	rootCmd.Version = "v" + resolveVersion()
+	frontDoorDefaultHelpFunc = rootCmd.HelpFunc()
+	rootCmd.SetHelpFunc(renderFrontDoorHelp)
 }
 
 // store is the shared storage instance initialized by PersistentPreRunE.
@@ -212,11 +218,195 @@ func skipStoreInit(cmd *cobra.Command) bool {
 			return true
 		}
 		switch c.Name() {
-		case "command-guide", "completion", "version", "help", "audit-catalog", "reconcile", "internal-worker-adapter":
+		case "command-guide", "completion", "version", "help", "init", "audit-catalog", "reconcile", "internal-worker-adapter":
 			return true
 		}
 	}
 	return false
+}
+
+const (
+	frontDoorNormalGroupID  = "normal-journey"
+	frontDoorInspectGroupID = "steer-and-inspect"
+	frontDoorExpertGroupID  = "expert-maintenance"
+)
+
+type frontDoorHelpEntry struct {
+	command     string
+	description string
+}
+
+type frontDoorHelpGroup struct {
+	id      string
+	title   string
+	entries []frontDoorHelpEntry
+}
+
+var (
+	frontDoorHelpOnce        sync.Once
+	frontDoorDefaultHelpFunc func(*cobra.Command, []string)
+	frontDoorHelpGroups      = []frontDoorHelpGroup{
+		{
+			id: frontDoorNormalGroupID, title: "Normal journey",
+			entries: []frontDoorHelpEntry{
+				{`/ant-init "goal"`, "Start a guided colony for one goal."},
+				{"/ant-plan", "Turn the accepted goal and territory evidence into an executable phase plan."},
+				{"/ant-build", "Execute one accepted phase with guided checkpoints."},
+				{"/ant-run", "Autopilot the remaining accepted phases within the displayed safety contract."},
+				{"/ant-status", "Show the complete authoritative colony snapshot."},
+				{"/ant-pause", "Stop at a safe boundary and save one resumable handoff."},
+				{"/ant-resume", "Validate and restore the safest honest recovery point."},
+				{"/ant-seal", "Close a verified colony, or explicitly record an owner-forced incomplete closure."},
+				{"/ant-entomb", "Archive and clear the sealed colony."},
+			},
+		},
+		{
+			id: frontDoorInspectGroupID, title: "Steer and inspect",
+			entries: []frontDoorHelpEntry{
+				{"/ant-focus", "Guide colony attention toward one area."},
+				{"/ant-feedback", "Add a gentle correction for future work."},
+				{"/ant-redirect", "Record a hard constraint the colony must avoid."},
+				{"/ant-watch", "Show live worker activity."},
+				{"/ant-phase", "Inspect the current phase and its accepted work."},
+				{"/ant-history", "Review recorded colony events."},
+				{"/ant-swarm", "Route a problem or inspect the live swarm."},
+				{"/ant-research", "Browse saved research and Dreams."},
+				{"/ant-memory-details", "Inspect retained learning and memory."},
+				{"/ant-review-ledger-summary", "Summarize retained findings."},
+			},
+		},
+		{
+			id: frontDoorExpertGroupID, title: "Expert maintenance",
+			entries: []frontDoorHelpEntry{
+				{"/ant-maintenance", "Inspect or repair Aether internals with preview and rollback."},
+			},
+		},
+	}
+)
+
+// configureFrontDoorHelp runs lazily from Cobra's help hook. By then every
+// file-level init function has registered its command, so assigning groups
+// cannot depend on Go's cross-file initialization order.
+func configureFrontDoorHelp() {
+	frontDoorHelpOnce.Do(func() {
+		for _, group := range frontDoorHelpGroups {
+			rootCmd.AddGroup(&cobra.Group{ID: group.id, Title: group.title})
+		}
+		membership := map[string]string{
+			"init": frontDoorNormalGroupID, "plan": frontDoorNormalGroupID, "build": frontDoorNormalGroupID,
+			"run": frontDoorNormalGroupID, "status": frontDoorNormalGroupID, "pause": frontDoorNormalGroupID,
+			"resume-colony": frontDoorNormalGroupID, "seal": frontDoorNormalGroupID, "entomb": frontDoorNormalGroupID,
+			"focus": frontDoorInspectGroupID, "feedback": frontDoorInspectGroupID, "redirect": frontDoorInspectGroupID,
+			"watch": frontDoorInspectGroupID, "phase": frontDoorInspectGroupID, "history": frontDoorInspectGroupID,
+			"swarm": frontDoorInspectGroupID, "research": frontDoorInspectGroupID, "memory-details": frontDoorInspectGroupID,
+			"review-ledger-summary": frontDoorInspectGroupID, "maintenance": frontDoorExpertGroupID,
+		}
+		for _, command := range rootCmd.Commands() {
+			if groupID, ok := membership[command.Name()]; ok {
+				command.GroupID = groupID
+			}
+		}
+	})
+}
+
+func renderFrontDoorHelp(cmd *cobra.Command, args []string) {
+	if cmd != rootCmd {
+		frontDoorDefaultHelpFunc(cmd, args)
+		return
+	}
+	configureFrontDoorHelp()
+	width := lifecycleStatusOutputWidth()
+	projection := frontDoorLifecycleProjection(resolveAetherRootPath())
+	var lines []string
+	if projection.Identity.Source.Provenance == LifecycleFactMissing || strings.TrimSpace(projection.Goal.Value) == "" {
+		lines = append(lines,
+			"No colony is active",
+			`Start a guided colony for one goal with /ant-init "goal".`,
+		)
+	} else {
+		lines = append(lines, renderFrontDoorStanding(projection))
+	}
+	lines = append(lines, "", "Usage: /ant-help [command]")
+	for _, group := range frontDoorHelpGroups {
+		lines = append(lines, "", group.title)
+		for _, entry := range group.entries {
+			if width < 64 {
+				lines = append(lines, "  "+entry.command)
+				for _, wrapped := range lifecycleStatusWrapLine(entry.description, width-4) {
+					lines = append(lines, "    "+strings.TrimSpace(wrapped))
+				}
+				continue
+			}
+			row := fmt.Sprintf("  %-16s  %s", entry.command, entry.description)
+			lines = append(lines, lifecycleStatusWrapLine(row, width)...)
+		}
+	}
+	lines = append(lines, "", "Use /ant-help <command> for expert detail outside this journey map.")
+	var rendered []string
+	for _, line := range lines {
+		rendered = append(rendered, lifecycleStatusWrapLine(line, width)...)
+	}
+	fmt.Fprintln(cmd.OutOrStdout(), strings.Join(rendered, "\n"))
+}
+
+// frontDoorLifecycleProjection reads only the facts needed by the compact
+// standing line. It intentionally avoids storage.NewStore: merely asking for
+// help must not create a data or lock directory.
+func frontDoorLifecycleProjection(root string) LifecycleProjection {
+	root = filepath.Clean(root)
+	dataDir := filepath.Join(root, ".aether", "data")
+	state, stateSource := readLifecycleState(filepath.Join(dataDir, "COLONY_STATE.json"))
+	facts := lifecycleFactsFromStateSnapshot(state, stateSource.Provenance == LifecycleFactMissing, time.Now().UTC())
+	facts.Root = root
+	facts.State.Source = stateSource
+	facts.Identity.Source = lifecycleDerivedSource("identity", stateSource)
+	facts.Progress.Source = lifecycleDerivedSource("progress", stateSource)
+	facts.Timing = lifecycleTiming(state, stateSource, facts.CapturedAt)
+	facts.Actors.Value, facts.Actors.Source = readLifecycleActors(filepath.Join(dataDir, "spawn-tree.txt"))
+	flags, blockerSource := readLifecycleJSON[struct {
+		Decisions []colony.FlagEntry `json:"decisions"`
+	}]("blockers", filepath.Join(dataDir, "pending-decisions.json"))
+	facts.Blockers = LifecycleFact[[]colony.FlagEntry]{Value: flags.Decisions, Source: blockerSource}
+	return projectLifecycle(facts, LifecycleViewCompact, "claude")
+}
+
+func renderFrontDoorStanding(projection LifecycleProjection) string {
+	identity := projection.Identity.Value
+	name := emptyFallback(strings.TrimSpace(identity.Name), "Unnamed colony")
+	goal := emptyFallback(strings.TrimSpace(projection.Goal.Value), "Not recorded")
+	episode := emptyFallback(strings.TrimSpace(identity.Episode), "Not recorded")
+	standing := emptyFallback(strings.TrimSpace(projection.Standing.Value), "UNKNOWN")
+	phase := projection.Phase.Value
+	active, _ := lifecycleStatusActors(projection.Actors.Value)
+	castes := make([]string, 0, len(active))
+	seen := map[string]bool{}
+	for _, actorFact := range active {
+		caste := strings.TrimSpace(actorFact.Caste)
+		if caste == "" || seen[strings.ToLower(caste)] {
+			continue
+		}
+		seen[strings.ToLower(caste)] = true
+		castes = append(castes, strings.ToUpper(caste[:1])+caste[1:])
+	}
+	sort.Strings(castes)
+	actors := "No ants are active"
+	if len(castes) > 0 {
+		actors = strings.Join(castes, ", ")
+	}
+	next := lifecycleStatusActionCommand(projection.NextAction)
+	if len(projection.NextAction.Choices) > 0 {
+		choices := make([]string, 0, len(projection.NextAction.Choices))
+		for _, choice := range projection.NextAction.Choices {
+			command := choice.DisplayCommand
+			if command == "" {
+				command = choice.RuntimeCommand
+			}
+			choices = append(choices, command)
+		}
+		next = strings.Join(choices, " or ")
+	}
+	return fmt.Sprintf("Colony: %s | Goal: %s | Episode: %s | Phase: %d/%d | Standing: %s | Ants: %s | Blockers: %d | Next Up: %s",
+		name, goal, episode, phase.CurrentNumber, phase.TotalPhases, standing, actors, len(projection.Blockers), emptyFallback(next, "Not available"))
 }
 
 // Execute runs the root command and returns any error.

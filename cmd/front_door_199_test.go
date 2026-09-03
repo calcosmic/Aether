@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
@@ -31,18 +30,19 @@ func TestFrontDoorHelpGroups(t *testing.T) {
 		last = index
 	}
 
+	compact := strings.Join(strings.Fields(got), " ")
 	wants := []string{
-		`/ant-init "goal"  Start a guided colony for one goal.`,
-		`/ant-run          Autopilot the remaining accepted phases within the displayed safety contract.`,
-		`/ant-status       Show the complete authoritative colony snapshot.`,
-		`/ant-pause        Stop at a safe boundary and save one resumable handoff.`,
-		`/ant-resume       Validate and restore the safest honest recovery point.`,
-		`/ant-seal         Close a verified colony, or explicitly record an owner-forced incomplete closure.`,
-		`/ant-entomb       Archive and clear the sealed colony.`,
-		`/ant-maintenance  Inspect or repair Aether internals with preview and rollback.`,
+		`/ant-init "goal" Start a guided colony for one goal.`,
+		`/ant-run Autopilot the remaining accepted phases within the displayed safety contract.`,
+		`/ant-status Show the complete authoritative colony snapshot.`,
+		`/ant-pause Stop at a safe boundary and save one resumable handoff.`,
+		`/ant-resume Validate and restore the safest honest recovery point.`,
+		`/ant-seal Close a verified colony, or explicitly record an owner-forced incomplete closure.`,
+		`/ant-entomb Archive and clear the sealed colony.`,
+		`/ant-maintenance Inspect or repair Aether internals with preview and rollback.`,
 	}
 	for _, want := range wants {
-		if !strings.Contains(got, want) {
+		if !strings.Contains(compact, want) {
 			t.Errorf("help is missing exact command copy %q", want)
 		}
 	}
@@ -331,5 +331,3 @@ func writeFrontDoorFile199(t *testing.T, path, content string) {
 		t.Fatalf("write %s: %v", path, err)
 	}
 }
-
-var _ = time.RFC3339

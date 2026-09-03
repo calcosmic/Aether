@@ -55,6 +55,7 @@ type LifecycleFact[T any] struct {
 type LifecycleIdentityFacts struct {
 	Name      string `json:"name,omitempty"`
 	Goal      string `json:"goal,omitempty"`
+	Episode   string `json:"episode,omitempty"`
 	Standing  string `json:"standing,omitempty"`
 	Milestone string `json:"milestone,omitempty"`
 	Scope     string `json:"scope,omitempty"`
@@ -543,6 +544,7 @@ func lifecycleFactsFromStateSnapshot(state colony.ColonyState, noColony bool, no
 	}
 	identity := LifecycleIdentityFacts{
 		Name: strings.TrimSpace(lifecycleString(state.ColonyName)), Goal: strings.TrimSpace(lifecycleString(state.Goal)),
+		Episode:  lifecycleAcceptedEpisode(state),
 		Standing: string(state.State), Milestone: state.Milestone,
 		Scope: string(state.EffectiveScope()), Mode: string(state.EffectiveColonyMode()),
 	}
@@ -599,7 +601,8 @@ func loadLifecycleFacts(root string, factStore *storage.Store, now time.Time) (L
 	identity := LifecycleIdentityFacts{
 		Goal: strings.TrimSpace(lifecycleString(state.Goal)), Standing: string(state.State),
 		Name: strings.TrimSpace(lifecycleString(state.ColonyName)), Milestone: state.Milestone,
-		Scope: string(state.EffectiveScope()), Mode: string(state.EffectiveColonyMode()),
+		Episode: lifecycleAcceptedEpisode(state),
+		Scope:   string(state.EffectiveScope()), Mode: string(state.EffectiveColonyMode()),
 	}
 	facts := LifecycleFacts{
 		Root: root, CapturedAt: now,
@@ -619,4 +622,11 @@ func loadLifecycleFacts(root string, factStore *storage.Store, now time.Time) (L
 	}
 	facts.Evidence = lifecycleEvidence(state, stateSource, session, sessionSource)
 	return facts, nil
+}
+
+func lifecycleAcceptedEpisode(state colony.ColonyState) string {
+	if state.AcceptedCharter == nil {
+		return ""
+	}
+	return strings.TrimSpace(state.AcceptedCharter.EpisodeID)
 }

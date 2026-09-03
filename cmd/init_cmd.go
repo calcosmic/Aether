@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/calcosmic/Aether/pkg/trace"
 	"github.com/spf13/cobra"
 )
@@ -26,11 +28,6 @@ var initCmd = &cobra.Command{
 	Short: "Initialize a new colony in the current directory",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if store == nil {
-			outputErrorMessage("no store initialized")
-			return nil
-		}
-
 		scopeRaw, _ := cmd.Flags().GetString("scope")
 		scope, err := colony.ParseColonyScope(scopeRaw)
 		if err != nil {
@@ -53,15 +50,23 @@ var initCmd = &cobra.Command{
 		promoteShelfRaw, _ := cmd.Flags().GetString("promote-shelf")
 		dismissShelfRaw, _ := cmd.Flags().GetString("dismiss-shelf")
 
-		dataDir := store.BasePath()
+		// Init owns its preflight so an active-colony refusal happens before
+		// storage.NewStore can create data/locks or the first-run path can write
+		// a welcome marker. This is the zero-write side of the public contract.
+		dataDir := storage.ResolveDataDir(context.Background())
 		aetherDir := filepath.Dir(dataDir)
+		repoRoot := filepath.Dir(aetherDir)
 
 		// Check idempotency: if COLONY_STATE.json exists, inspect it
 		statePath := filepath.Join(dataDir, "COLONY_STATE.json")
 		if _, err := os.Stat(statePath); err == nil {
 			// Colony already initialized -- load and inspect
-			var existing colony.ColonyState
-			if loadErr := store.LoadJSON("COLONY_STATE.json", &existing); loadErr == nil {
+			existing, _, loadErr := loadColonyStateWithCompatibilityRepairReadOnlyFromPath(statePath)
+			if loadErr != nil {
+				outputError(1, fmt.Sprintf("cannot safely inspect the existing colony state: %v. No files were changed; run /ant-status for evidence and recovery guidance.", loadErr), nil)
+				return nil
+			}
+			{
 				// An entombed/reset colony leaves the state scaffold in place but
 				// clears the goal. Treat that as no active colony.
 				if existing.Goal == nil || strings.TrimSpace(ptrStr(existing.Goal)) == "" || existing.State == colony.StateIDLE {
@@ -73,6 +78,14 @@ var initCmd = &cobra.Command{
 				// refusal that never mentions --confirm-reinit — and silently
 				// ignored the flag when given. A COMPLETED colony carries its whole
 				// history just like a sealed one.
+				publicGuidedInit := detectPlatform() == "claude" || detectPlatform() == "opencode"
+				if publicGuidedInit {
+					name := emptyFallback(strings.TrimSpace(ptrStr(existing.ColonyName)), "Unnamed colony")
+					outputError(1, fmt.Sprintf(
+						"this repository already has an active colony %q with goal %q. No files were changed. Inspect it with /ant-status; use /ant-seal only after its accepted work is complete.",
+						name, ptrStr(existing.Goal)), nil)
+					return nil
+				}
 				if existing.Milestone == "Crowned Anthill" || existing.State == colony.StateCOMPLETED {
 					if sealInProgress(dataDir) {
 						outputError(1, "a seal operation appears to be in progress (COLONY_STATE.json has uncommitted changes with Crowned Anthill milestone). Wait for the seal to complete, commit the seal state, or run `aether entomb` first.", nil)
@@ -117,6 +130,25 @@ var initCmd = &cobra.Command{
 		}
 
 	createFreshColony:
+		setupWasReady := frontDoorScaffoldReady(aetherDir)
+		setupResult := ensureRepoLocalScaffold(aetherDir)
+		if len(setupResult.errors) > 0 {
+			outputError(1, fmt.Sprintf("automatic setup could not finish safely: %s. Fix the reported path and run /ant-init again.", strings.Join(setupResult.errors, "; ")), nil)
+			return nil
+		}
+		setupOutcome := "Bootstrapped"
+		if setupWasReady {
+			setupOutcome = "Ready"
+		}
+		s, err := storage.NewStore(dataDir)
+		if err != nil {
+			outputError(1, fmt.Sprintf("automatic setup could not open colony storage: %v", err), nil)
+			return nil
+		}
+		store = s
+		tracer = trace.NewTracer(s)
+		territory := ensureTerritoryFreshness(repoRoot)
+
 		var charter *colony.Charter
 		if charterJSON, _ := cmd.Flags().GetString("charter-json"); charterJSON != "" {
 			var ch colony.Charter
@@ -157,6 +189,15 @@ var initCmd = &cobra.Command{
 
 		// Generate run ID for trace logging
 		runID := fmt.Sprintf("%s_%d_%s", sanitizedGoal, now.Unix(), randomHex(4))
+		colonyName := frontDoorColonyName(repoRoot)
+		acceptedCharter := &colony.AcceptedCharter{
+			SchemaVersion: colony.AcceptedCharterSchemaVersion,
+			EpisodeID:     sessionID,
+			Goal:          goal,
+			Provenance:    "owner-provided",
+			AcceptedAt:    now.UTC(),
+			Charter:       charter,
+		}
 
 		// Create directory structure
 		if err := os.MkdirAll(filepath.Join(aetherDir, "dreams"), 0755); err != nil {
@@ -271,6 +312,7 @@ var initCmd = &cobra.Command{
 		state := colony.ColonyState{
 			Version:       "3.0",
 			Goal:          &goal,
+			ColonyName:    &colonyName,
 			Scope:         scope,
 			ColonyMode:    colonyMode,
 			ColonyVersion: 0,
@@ -295,6 +337,7 @@ var initCmd = &cobra.Command{
 			ParallelMode: colony.ModeInRepo,
 		}
 		state.Charter = charter
+		state.AcceptedCharter = acceptedCharter
 		state.ResearchDocs = researchDocs
 
 		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
@@ -317,7 +360,6 @@ var initCmd = &cobra.Command{
 		// contains — the runtime proposes, the wrapper asks, the user picks.
 		// The top proposal replaces the old hardcoded "aether plan" as the
 		// recorded suggestion.
-		repoRoot := filepath.Dir(aetherDir)
 		proposals := computeInitProposals(repoRoot, goal, priorStateBackup != "")
 		suggestedNext := "aether plan"
 		if len(proposals) > 0 {
@@ -390,7 +432,11 @@ var initCmd = &cobra.Command{
 			"version":             "3.0",
 			"phase":               0,
 			"session":             sessionID,
+			"colony":              colonyName,
 			"data_dir":            dataDir,
+			"setup":               setupOutcome,
+			"accepted_charter":    acceptedCharter,
+			"territory_freshness": territory,
 			"shelf_backlog":       shelfEntries,
 			"shelf_backlog_count": len(shelfEntries),
 			"shelf_promoted":      shelfPromoted,
@@ -414,9 +460,108 @@ var initCmd = &cobra.Command{
 		// reads come from the same resolve, so they cannot name different
 		// commands (Phase 197 plan 04).
 		closeLifecycleCommand(result, "init", "", "")
-		outputWorkflow(result, renderInitVisual(goal, string(scope), sessionID, dataDir, charter, hiveSeeded, proposals, researchDocs...))
+		outputWorkflow(result, renderFrontDoorInitVisual(state, setupOutcome, territory, dataDir, hiveSeeded, proposals, researchDocs...))
 		return nil
 	},
+}
+
+func frontDoorScaffoldReady(aetherDir string) bool {
+	for _, rel := range []string{"WHAT-IS-THIS.md", ".gitignore", "QUEEN.md", "data", "dreams", "oracle", "checkpoints", "locks"} {
+		if _, err := os.Stat(filepath.Join(aetherDir, rel)); err != nil {
+			return false
+		}
+	}
+	return true
+}
+
+func frontDoorColonyName(repoRoot string) string {
+	name := strings.TrimSpace(filepath.Base(filepath.Clean(repoRoot)))
+	if name == "" || name == "." || name == string(filepath.Separator) {
+		return "Aether colony"
+	}
+	return name
+}
+
+func renderFrontDoorInitVisual(state colony.ColonyState, setupOutcome string, territory SurveyFreshnessResult, dataDir string, hiveSeeded int, proposals []initProposal, researchDocs ...string) string {
+	goal := strings.TrimSpace(ptrStr(state.Goal))
+	name := emptyFallback(strings.TrimSpace(ptrStr(state.ColonyName)), "Unnamed colony")
+	accepted := state.AcceptedCharter
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("init"), "Colony Init"))
+	b.WriteString(visualDividerStr())
+
+	b.WriteString(renderStageMarker("1. Queen opening"))
+	b.WriteString("Queen is opening one guided colony for this repository.\n")
+	b.WriteString("Repository: ")
+	b.WriteString(filepath.Dir(filepath.Dir(dataDir)))
+	b.WriteString("\nRequested goal: ")
+	b.WriteString(goal)
+	b.WriteString("\n")
+
+	b.WriteString(renderStageMarker("2. Setup"))
+	b.WriteString("Setup: ")
+	b.WriteString(setupOutcome)
+	b.WriteString("\n")
+	b.WriteString("Colony state, recovery, and local memory paths are ready.\n")
+
+	b.WriteString(renderStageMarker("3. Accepted intent"))
+	b.WriteString("Queen charter accepted.\n")
+	b.WriteString("Goal: ")
+	b.WriteString(goal)
+	b.WriteString("\n")
+	if accepted != nil {
+		b.WriteString("Episode: ")
+		b.WriteString(accepted.EpisodeID)
+		b.WriteString("\nProvenance: ")
+		b.WriteString(accepted.Provenance)
+		b.WriteString("\n")
+	}
+	if state.Charter != nil {
+		// Preserve the established detailed charter ceremony inside the new
+		// accepted-intent stage so material constraints remain fully visible.
+		b.WriteString(renderStageMarker("Charter"))
+		b.WriteString(renderCharterFields(*state.Charter))
+	} else {
+		b.WriteString("Constraints: No additional material constraints were accepted.\n")
+	}
+	if len(researchDocs) > 0 {
+		b.WriteString("Research: ")
+		b.WriteString(strings.Join(researchDocs, ", "))
+		b.WriteString("\n")
+	}
+	b.WriteString("\n👑 Queen has set the colony's intention\n\n")
+	b.WriteString(fmt.Sprintf("   %q\n\n", goal))
+	b.WriteString("   🟢 Colony Status: READY\n")
+	if hiveSeeded > 0 {
+		b.WriteString(fmt.Sprintf("   🧠 Hive wisdom: %d cross-colony pattern(s) seeded into QUEEN.md\n", hiveSeeded))
+	}
+
+	b.WriteString(renderStageMarker("4. Territory"))
+	b.WriteString("Territory: ")
+	b.WriteString(territory.OutcomeLabel())
+	b.WriteString("\n")
+	if !territory.GeneratedAt.IsZero() {
+		b.WriteString("Observed: ")
+		b.WriteString(territory.GeneratedAt.UTC().Format(time.RFC3339))
+		b.WriteString("\n")
+	}
+	if len(territory.EvidencePaths) > 0 {
+		b.WriteString("Evidence: ")
+		b.WriteString(strings.Join(territory.EvidencePaths, ", "))
+		b.WriteString("\n")
+	}
+	if len(proposals) > 0 {
+		b.WriteString(renderInitProposals(proposals))
+	}
+
+	b.WriteString(renderStageMarker("5. Closeout"))
+	b.WriteString("Colony: ")
+	b.WriteString(name)
+	b.WriteString("\nAccepted goal: ")
+	b.WriteString(goal)
+	b.WriteString("\nCreated: local Aether scaffold, COLONY_STATE.json, session.json, recovery handoff, activity log, and registry entry.\n")
+	b.WriteString("Next Up: /ant-plan\n")
+	return b.String()
 }
 
 // ptrStr safely dereferences a *string, returning "" if nil.
