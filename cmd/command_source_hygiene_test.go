@@ -96,13 +96,186 @@ func TestCommandSourceHygiene(t *testing.T) {
 	})
 }
 
-// auditCommandSourceHygiene starts with the production source-check contract.
-// The RED test above also requires dry-run sync and cross-platform body parity;
-// the GREEN implementation completes those parts without changing production.
+// auditCommandSourceHygiene composes the production source checker, the
+// production platform-sync rules, and the existing cross-platform semantic
+// normalization. It stays read-only with respect to root: regeneration is
+// directed into scratchRoot, which every caller owns as a disposable fixture.
 func auditCommandSourceHygiene(root, scratchRoot string) []sourceCheckIssue {
-	_ = scratchRoot
 	_, issues := checkGeneratedCommandSurfaces(root)
+	issues = append(issues, checkCommandSourceHygieneDryRunSync(root, scratchRoot)...)
+	issues = append(issues, checkCommandSourceHygienePeerParity(root)...)
+	sortSourceCheckIssues(issues)
 	return issues
+}
+
+func checkCommandSourceHygieneDryRunSync(root, scratchRoot string) []sourceCheckIssue {
+	var issues []sourceCheckIssue
+	for index, pair := range commandSourceHygieneSyncPairs() {
+		sourceDir := filepath.Join(root, filepath.FromSlash(pair.srcRel))
+		destination := filepath.Join(scratchRoot, fmt.Sprintf("platform-%d", index))
+		result := syncDir(sourceDir, destination, syncOptions{
+			cleanup:              pair.cleanup,
+			preserveLocalChanges: pair.preserveLocalChanges,
+			validate:             pair.validate,
+			include:              pair.include,
+			mapRelPath:           pair.mapRelPath,
+			cleanupInclude:       pair.cleanupInclude,
+		})
+		for _, syncError := range result.errors {
+			issues = append(issues, sourceCheckIssue{
+				Area:    "commands",
+				Path:    pair.srcRel,
+				Message: "dry-run platform regeneration failed: " + syncError,
+			})
+		}
+
+		for _, rel := range sourceCheckFiles(root, pair.srcRel, func(rel string) bool {
+			return !strings.Contains(filepath.ToSlash(rel), "/") && filepath.Ext(rel) == ".md"
+		}) {
+			sourcePath := filepath.Join(sourceDir, filepath.FromSlash(rel))
+			sourceData, err := os.ReadFile(sourcePath)
+			if err != nil {
+				issues = append(issues, sourceCheckIssue{Area: "commands", Path: filepath.ToSlash(filepath.Join(pair.srcRel, rel)), Message: "managed source is unreadable", Actual: err.Error()})
+				continue
+			}
+			if !isGeneratedAetherCommandWrapper(sourceData) {
+				continue
+			}
+			destinationRel := rel
+			if pair.mapRelPath != nil {
+				destinationRel = pair.mapRelPath(rel)
+			}
+			generatedData, err := os.ReadFile(filepath.Join(destination, filepath.FromSlash(destinationRel)))
+			if err != nil {
+				issues = append(issues, sourceCheckIssue{
+					Area:     "commands",
+					Path:     filepath.ToSlash(filepath.Join(pair.srcRel, rel)),
+					Message:  "dry-run platform regeneration omitted managed output",
+					Expected: destinationRel,
+					Actual:   "missing",
+				})
+				continue
+			}
+			if string(generatedData) != string(sourceData) {
+				issues = append(issues, sourceCheckIssue{
+					Area:     "commands",
+					Path:     filepath.ToSlash(filepath.Join(pair.srcRel, rel)),
+					Message:  "managed output differs from dry-run platform regeneration",
+					Expected: "byte-identical production sync output",
+					Actual:   "content drift",
+				})
+			}
+		}
+	}
+	return issues
+}
+
+func commandSourceHygieneSyncPairs() []installSyncPair {
+	seenSources := map[string]bool{}
+	var pairs []installSyncPair
+	for _, pair := range installSyncPairs() {
+		if !strings.HasPrefix(pair.label, "Commands (") || seenSources[pair.srcRel] {
+			continue
+		}
+		seenSources[pair.srcRel] = true
+		pairs = append(pairs, pair)
+	}
+	slices.SortFunc(pairs, func(left, right installSyncPair) int {
+		return strings.Compare(left.srcRel, right.srcRel)
+	})
+	return pairs
+}
+
+func checkCommandSourceHygienePeerParity(root string) []sourceCheckIssue {
+	dirs := commandSourceHygieneManagedSourceDirs()
+	snapshots := make(map[string]map[string]commandWrapperSnapshot)
+	for _, dir := range dirs {
+		for _, rel := range sourceCheckFiles(root, dir, func(rel string) bool {
+			return !strings.Contains(filepath.ToSlash(rel), "/") && filepath.Ext(rel) == ".md"
+		}) {
+			path := filepath.Join(root, filepath.FromSlash(dir), filepath.FromSlash(rel))
+			data, err := os.ReadFile(path)
+			if err != nil || !isGeneratedAetherCommandWrapper(data) {
+				continue
+			}
+			firstLine := strings.SplitN(string(data), "\n", 2)[0]
+			matches := sourceCheckGeneratedHeader.FindStringSubmatch(firstLine)
+			if matches == nil {
+				continue
+			}
+			name := strings.TrimSuffix(filepath.Base(rel), filepath.Ext(rel))
+			if snapshots[name] == nil {
+				snapshots[name] = make(map[string]commandWrapperSnapshot, len(dirs))
+			}
+			snapshots[name][dir] = commandWrapperSnapshot{
+				source: matches[1],
+				body:   normalizeCommandWrapper(string(data)),
+			}
+		}
+	}
+
+	var issues []sourceCheckIssue
+	var names []string
+	for name := range snapshots {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	for _, name := range names {
+		family := snapshots[name]
+		var baseline commandWrapperSnapshot
+		baselineDir := ""
+		for _, dir := range dirs {
+			snapshot, ok := family[dir]
+			if !ok {
+				issues = append(issues, sourceCheckIssue{
+					Area:     "commands",
+					Path:     filepath.ToSlash(filepath.Join(dir, name+".md")),
+					Message:  "managed command family is missing a required platform peer",
+					Expected: "managed wrapper",
+					Actual:   "missing",
+				})
+				continue
+			}
+			if baselineDir == "" {
+				baseline = snapshot
+				baselineDir = dir
+				continue
+			}
+			if snapshot.source != baseline.source {
+				issues = append(issues, sourceCheckIssue{
+					Area:     "commands",
+					Path:     filepath.ToSlash(filepath.Join(dir, name+".md")),
+					Message:  "managed command family has source-header drift",
+					Expected: baseline.source,
+					Actual:   snapshot.source,
+				})
+			}
+			if snapshot.body != baseline.body {
+				issues = append(issues, sourceCheckIssue{
+					Area:     "commands",
+					Path:     filepath.ToSlash(filepath.Join(dir, name+".md")),
+					Message:  "wrapper body drift between managed platform peers",
+					Expected: "semantic parity with " + baselineDir,
+					Actual:   "content drift",
+				})
+			}
+		}
+	}
+	return issues
+}
+
+func commandSourceHygieneManagedSourceDirs() []string {
+	var dirs []string
+	seen := map[string]bool{}
+	for _, pair := range commandSourceHygieneSyncPairs() {
+		if seen[pair.srcRel] {
+			continue
+		}
+		seen[pair.srcRel] = true
+		dirs = append(dirs, pair.srcRel)
+	}
+	slices.Sort(dirs)
+	return dirs
 }
 
 func newCommandSourceHygieneFixture(t *testing.T) string {
