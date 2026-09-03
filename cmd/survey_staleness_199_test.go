@@ -91,10 +91,8 @@ func TestSurveyFreshness199(t *testing.T) {
 
 	t.Run("malformed evidence is unavailable and never fresh", func(t *testing.T) {
 		root := initTerritoryFreshnessRepo199(t)
+		writeFreshTerritorySnapshot199(t, root, now.Add(-time.Hour))
 		path := filepath.Join(root, territorySnapshotRelativePath)
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			t.Fatalf("mkdir snapshot directory: %v", err)
-		}
 		if err := os.WriteFile(path, []byte("{not-json"), 0o644); err != nil {
 			t.Fatalf("write malformed snapshot: %v", err)
 		}
@@ -191,7 +189,7 @@ func writeFreshTerritorySnapshot199(t *testing.T, root string, generatedAt time.
 	}
 	snapshot := territorySnapshotMetadata{
 		SchemaVersion:      territorySnapshotSchemaVersion,
-		RepositoryIdentity: stableRepoIdentity(root),
+		RepositoryIdentity: stableRepoIdentity(canonicalRoot),
 		RepositoryRoot:     canonicalRoot,
 		SourceRevision:     gitSurveyFreshness199(t, root, "rev-parse", "HEAD"),
 		GeneratedAt:        generatedAt.UTC(),
