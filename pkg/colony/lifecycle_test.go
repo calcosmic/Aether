@@ -2,6 +2,7 @@ package colony
 
 import (
 	"encoding/json"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -260,6 +261,163 @@ func TestLifecycleArchiveManifest(t *testing.T) {
 	withoutCrossReference := manifest
 	withoutCrossReference.CrossReferences = nil
 	assertLifecycleValidationError(t, withoutCrossReference.Validate(), "cross_references")
+}
+
+func TestLifecycleLegacyJSONCompatibility(t *testing.T) {
+	t.Parallel()
+
+	const legacyColony = `{"version":"3.0","goal":null,"colony_name":null,"colony_version":1,"state":"COMPLETED","current_phase":0,"session_id":null,"initialized_at":null,"build_started_at":null,"plan":{"generated_at":null,"confidence":null,"phases":[]},"memory":{"phase_learnings":[],"decisions":[],"instincts":[]},"errors":{"records":[],"flagged_patterns":[]},"signals":[],"graveyards":[],"events":[],"future_lifecycle_field":{"value":"preserve compatibility"}}`
+	const legacySession = `{"session_id":"session-legacy","started_at":"2026-01-01T00:00:00Z","last_command":"status","last_command_at":"2026-01-01T00:00:01Z","colony_goal":"legacy goal","current_phase":2,"current_milestone":"First Mound","suggested_next":"build 3","context_cleared":false,"baseline_commit":"abc123","resumed_at":null,"active_todos":[],"summary":"legacy session","future_lifecycle_field":{"value":"preserve compatibility"}}`
+
+	var state ColonyState
+	if err := json.Unmarshal([]byte(legacyColony), &state); err != nil {
+		t.Fatalf("unmarshal legacy colony state: %v", err)
+	}
+	assertLifecycleEvidenceUnknown(t, state.LifecycleReceipt, state.PauseHandoff, state.RecoveryProvenance, state.SealOutcome, state.ArchiveReference)
+	if state.IsVerifiedCompletion() {
+		t.Fatal("legacy completed state without lifecycle evidence reported verified completion")
+	}
+
+	stateJSON, err := json.Marshal(state)
+	if err != nil {
+		t.Fatalf("re-encode legacy colony state: %v", err)
+	}
+	assertOptionalLifecycleFieldsAbsent(t, stateJSON)
+
+	var session SessionFile
+	if err := json.Unmarshal([]byte(legacySession), &session); err != nil {
+		t.Fatalf("unmarshal legacy session: %v", err)
+	}
+	assertLifecycleEvidenceUnknown(t, session.LifecycleReceipt, session.PauseHandoff, session.RecoveryProvenance, session.SealOutcome, session.ArchiveReference)
+
+	sessionJSON, err := json.Marshal(session)
+	if err != nil {
+		t.Fatalf("re-encode legacy session: %v", err)
+	}
+	assertOptionalLifecycleFieldsAbsent(t, sessionJSON)
+
+	invalidValues := []struct {
+		name   string
+		data   string
+		target any
+	}{
+		{name: "colony recovery provenance", data: `{"recovery_provenance":"assumed"}`, target: new(ColonyState)},
+		{name: "session recovery provenance", data: `{"recovery_provenance":"assumed"}`, target: new(SessionFile)},
+		{name: "nested seal disposition", data: `{"seal_outcome":{"disposition":"successful"}}`, target: new(ColonyState)},
+	}
+	for _, tt := range invalidValues {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if err := json.Unmarshal([]byte(tt.data), tt.target); err == nil {
+				t.Fatal("unknown lifecycle enum value was accepted")
+			}
+		})
+	}
+}
+
+func TestLifecycleStateRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	receipt := validLifecycleReceipt()
+	receipt.Command = "seal"
+	receipt.OutcomeKind = OutcomeKindVerifiedCompletion
+	handoff := PauseHandoffReference{
+		ID:            "handoff-1",
+		TransactionID: "transaction-1",
+		Digest:        "sha256:handoff",
+		Path:          ".aether/data/handoffs/handoff-1.json",
+	}
+	provenance := RecoveryProvenanceReconstructed
+	seal := validVerifiedSealOutcome()
+	archive := ArchiveReference{
+		ID:             "archive-1",
+		TransactionID:  "transaction-archive-1",
+		ManifestDigest: "sha256:manifest",
+		Path:           ".aether/chambers/archive-1/manifest.json",
+	}
+
+	state := ColonyState{
+		Version:            "3.0",
+		State:              StateCOMPLETED,
+		LifecycleReceipt:   &receipt,
+		PauseHandoff:       &handoff,
+		RecoveryProvenance: &provenance,
+		SealOutcome:        &seal,
+		ArchiveReference:   &archive,
+	}
+	assertLifecycleJSONRoundTrip(t, state)
+
+	session := SessionFile{
+		SessionID:          "session-1",
+		LifecycleReceipt:   &receipt,
+		PauseHandoff:       &handoff,
+		RecoveryProvenance: &provenance,
+		SealOutcome:        &seal,
+		ArchiveReference:   &archive,
+	}
+	assertLifecycleJSONRoundTrip(t, session)
+}
+
+func TestForcedClosureIsNotVerifiedCompletion(t *testing.T) {
+	t.Parallel()
+
+	forced := validForcedSealOutcome()
+	state := ColonyState{State: StateCOMPLETED, SealOutcome: &forced}
+	if state.IsVerifiedCompletion() {
+		t.Fatal("forced-incomplete state reported verified completion")
+	}
+	if err := TransitionToVerifiedCompletion(StateBUILT, &forced); !errors.Is(err, ErrCompletionNotVerified) {
+		t.Fatalf("forced transition error = %v, want ErrCompletionNotVerified", err)
+	}
+
+	verified := validVerifiedSealOutcome()
+	state.SealOutcome = &verified
+	if !state.IsVerifiedCompletion() {
+		t.Fatal("valid verified state did not report verified completion")
+	}
+	if err := TransitionToVerifiedCompletion(StateBUILT, &verified); err != nil {
+		t.Fatalf("verified completion transition rejected: %v", err)
+	}
+
+	if err := Transition(StateBUILT, StateREADY); err != nil {
+		t.Fatalf("existing legal transition changed: %v", err)
+	}
+}
+
+func assertLifecycleEvidenceUnknown(t *testing.T, receipt *LifecycleReceipt, handoff *PauseHandoffReference, provenance *RecoveryProvenance, seal *SealOutcome, archive *ArchiveReference) {
+	t.Helper()
+	if receipt != nil || handoff != nil || provenance != nil || seal != nil || archive != nil {
+		t.Fatalf("legacy JSON invented lifecycle evidence: receipt=%v handoff=%v provenance=%v seal=%v archive=%v", receipt, handoff, provenance, seal, archive)
+	}
+}
+
+func assertOptionalLifecycleFieldsAbsent(t *testing.T, data []byte) {
+	t.Helper()
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		t.Fatalf("decode re-encoded JSON: %v", err)
+	}
+	for _, field := range []string{"lifecycle_receipt", "pause_handoff", "recovery_provenance", "seal_outcome", "archive_reference"} {
+		if _, ok := fields[field]; ok {
+			t.Errorf("legacy re-encoding unexpectedly contains %q: %s", field, data)
+		}
+	}
+}
+
+func assertLifecycleJSONRoundTrip[T any](t *testing.T, value T) {
+	t.Helper()
+	data, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("marshal lifecycle state: %v", err)
+	}
+	var decoded T
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal lifecycle state: %v", err)
+	}
+	if !reflect.DeepEqual(decoded, value) {
+		t.Fatalf("lifecycle state round trip mismatch:\ngot:  %#v\nwant: %#v", decoded, value)
+	}
 }
 
 func validLifecycleEvidence(id string) LifecycleEvidence {
