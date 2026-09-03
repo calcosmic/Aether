@@ -77,7 +77,7 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 
 **Requirements:** SYNTH-01, CEC-01, CEC-02, CEC-04, CEC-08, LIFE-01..06, PROOF-01
 
-**Plans:** 4/34 plans executed
+**Plans:** 5/34 plans executed
 
 Plans:
 **Wave 1**
@@ -95,7 +95,7 @@ Plans:
 **Wave 4** *(blocked on Wave 3 completion)*
 
 - [x] 199-04-PLAN.md — Build one read-only fact load, pure projection, and Next Up policy.
-- [ ] 199-05-PLAN.md — Add crash-safe multi-artifact lifecycle transactions and replay proof.
+- [x] 199-05-PLAN.md — Add crash-safe multi-artifact lifecycle transactions and replay proof.
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
