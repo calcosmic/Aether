@@ -492,6 +492,18 @@ func lifecycleHistoryRowsFromWatchValue(value interface{}) []LifecycleHistoryRow
 }
 
 func autopilotRunDecisionForCode(code autopilotTriggerCode, headless bool, evidence map[string]interface{}) autopilotRunDecision {
+	// Missing authority comes from the separate accepted-intent fence rather
+	// than the ordered stage-trigger catalogue. Keeping it out of that legacy
+	// catalogue preserves its stable public ordering while still producing a
+	// typed, actionable pause before an owner-controlled change is applied.
+	if code == autopilotTriggerMissingAuthority {
+		return autopilotRunDecision{
+			Code:        code,
+			Disposition: autopilotDispositionPause,
+			Next:        "aether status",
+			Evidence:    evidence,
+		}
+	}
 	spec, ok := autopilotTriggerSpecByCode(code)
 	if !ok {
 		return autopilotRunDecision{Code: code, Evidence: evidence}

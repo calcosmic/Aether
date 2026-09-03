@@ -162,7 +162,7 @@ func TestAutopilotContract199AuthorityFence(t *testing.T) {
 		autopilotAuthorityAcceptance,
 	} {
 		decision := evaluateAutopilotAuthorityProposal(autopilotAuthorityProposal{Target: target, Before: "accepted", After: "proposed"})
-		if decision.Allowed || decision.Disposition != autopilotDispositionPause || decision.Code != autopilotTriggerMissingAuthority {
+		if decision.Allowed || decision.Disposition != autopilotDispositionPause || decision.Code != autopilotTriggerMissingAuthority || decision.Next != "aether status" {
 			t.Errorf("owner target %q decision = %+v, want a pre-mutation authority pause", target, decision)
 		}
 	}

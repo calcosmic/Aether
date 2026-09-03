@@ -117,14 +117,6 @@ func autopilotTriggerSpecs() []autopilotTriggerSpec {
 			InteractiveDisposition: autopilotDispositionStop,
 		},
 		{
-			Code:                   autopilotTriggerMissingAuthority,
-			Label:                  "Owner authority required",
-			Detection:              "A proposed change crosses the accepted goal, promised behavior, scope, risk authority, or acceptance boundary.",
-			NextActionTemplate:     "aether decision-list",
-			HeadlessDisposition:    autopilotDispositionPause,
-			InteractiveDisposition: autopilotDispositionPause,
-		},
-		{
 			Code:                   autopilotTriggerProviderUnavailable,
 			Label:                  "Required worker provider unavailable",
 			Detection:              "The required provider is still unavailable after its bounded readiness policy, or immediately reports an auth or binary failure.",
