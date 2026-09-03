@@ -702,7 +702,7 @@ func (tx *lifecycleTransaction) applyTarget(target lifecycleTransactionTargetMan
 	}
 	switch target.Action {
 	case lifecycleTransactionWrite:
-		staged, err := os.ReadFile(target.StagePath)
+		staged, err := readLifecycleEvidenceFile(target.StagePath)
 		if err != nil {
 			return fmt.Errorf("read staged bytes: %w", err)
 		}
@@ -849,7 +849,7 @@ func (tx *lifecycleTransaction) rollbackPreparedTargets() error {
 			return tx.requireRecovery(fmt.Errorf("target %q has conflicting rollback bytes", target.TargetPath), colony.RecoveryProvenanceConflicting)
 		}
 		if target.BeforeExists {
-			preimage, err := os.ReadFile(target.PreimagePath)
+			preimage, err := readLifecycleEvidenceFile(target.PreimagePath)
 			if err != nil {
 				return tx.requireRecovery(fmt.Errorf("read preimage for %q: %w", target.TargetPath, err), colony.RecoveryProvenanceUnknown)
 			}
@@ -1010,7 +1010,7 @@ func (tx *lifecycleTransaction) validateRecoveryEvidence() (map[string]lifecycle
 			if target.StagePath != expectedStagePath {
 				return nil, fmt.Errorf("lifecycle transaction: target %s stage path conflicts with manifest ownership", target.ID)
 			}
-			staged, err := os.ReadFile(target.StagePath)
+			staged, err := readLifecycleEvidenceFile(target.StagePath)
 			if err != nil {
 				return nil, fmt.Errorf("lifecycle transaction: read staged evidence for %s: %w", target.ID, err)
 			}
@@ -1031,7 +1031,7 @@ func (tx *lifecycleTransaction) validateRecoveryEvidence() (map[string]lifecycle
 				if target.PreimagePath != expectedPreimagePath {
 					return nil, fmt.Errorf("lifecycle transaction: target %s preimage path conflicts with manifest ownership", target.ID)
 				}
-				preimage, err := os.ReadFile(target.PreimagePath)
+				preimage, err := readLifecycleEvidenceFile(target.PreimagePath)
 				if err != nil {
 					return nil, fmt.Errorf("lifecycle transaction: read preimage evidence for %s: %w", target.ID, err)
 				}
@@ -1245,14 +1245,14 @@ func (tx *lifecycleTransaction) persistProgress() error {
 
 func (tx *lifecycleTransaction) loadCommittedReceipt() (colony.LifecycleReceipt, bool, error) {
 	receiptPath := filepath.Join(tx.journalPath(), "receipt.json")
-	receiptBytes, err := os.ReadFile(receiptPath)
+	receiptBytes, err := readLifecycleEvidenceFile(receiptPath)
 	if os.IsNotExist(err) {
 		return colony.LifecycleReceipt{}, false, nil
 	}
 	if err != nil {
 		return colony.LifecycleReceipt{}, false, fmt.Errorf("lifecycle transaction: read receipt: %w", err)
 	}
-	digestBytes, err := os.ReadFile(filepath.Join(tx.journalPath(), "receipt.sha256"))
+	digestBytes, err := readLifecycleEvidenceFile(filepath.Join(tx.journalPath(), "receipt.sha256"))
 	if err != nil {
 		return colony.LifecycleReceipt{}, false, fmt.Errorf("lifecycle transaction: receipt evidence is incomplete: %w", err)
 	}
@@ -1273,7 +1273,7 @@ func (tx *lifecycleTransaction) loadCommittedReceipt() (colony.LifecycleReceipt,
 }
 
 func (tx *lifecycleTransaction) loadJournal() (*lifecycleTransactionIntent, *lifecycleTransactionProgress, error) {
-	intentBytes, err := os.ReadFile(filepath.Join(tx.journalPath(), "intent.json"))
+	intentBytes, err := readLifecycleEvidenceFile(filepath.Join(tx.journalPath(), "intent.json"))
 	if err != nil {
 		return nil, nil, fmt.Errorf("lifecycle transaction: read intent: %w", err)
 	}
@@ -1287,7 +1287,7 @@ func (tx *lifecycleTransaction) loadJournal() (*lifecycleTransactionIntent, *lif
 	if intent.TransactionID != tx.config.TransactionID || intent.Record.Command != tx.config.Command {
 		return nil, nil, fmt.Errorf("lifecycle transaction: intent identity conflict")
 	}
-	progressBytes, err := os.ReadFile(filepath.Join(tx.journalPath(), "progress.json"))
+	progressBytes, err := readLifecycleEvidenceFile(filepath.Join(tx.journalPath(), "progress.json"))
 	if err != nil {
 		return nil, nil, fmt.Errorf("lifecycle transaction: read progress: %w", err)
 	}
@@ -1327,7 +1327,7 @@ func loadLifecycleRootManifests(intent *lifecycleTransactionIntent) (map[string]
 	manifests := make(map[string]lifecycleTransactionRootManifest, len(intent.Roots))
 	seenTargets := make(map[string]struct{})
 	for _, root := range intent.Roots {
-		content, err := os.ReadFile(root.ManifestPath)
+		content, err := readLifecycleEvidenceFile(root.ManifestPath)
 		if err != nil {
 			return nil, fmt.Errorf("read root manifest %s: %w", root.RootID, err)
 		}
@@ -1443,11 +1443,52 @@ func readLifecycleFileState(path string) (lifecycleFileState, error) {
 	if !info.Mode().IsRegular() {
 		return lifecycleFileState{}, fmt.Errorf("%q is not a regular file", path)
 	}
-	content, err := os.ReadFile(path)
+	content, err := readStableLifecycleRegularFile(path, info)
 	if err != nil {
 		return lifecycleFileState{}, err
 	}
 	return lifecycleFileState{Exists: true, Digest: lifecycleDigest(content), Mode: info.Mode().Perm(), Bytes: content}, nil
+}
+
+func readLifecycleEvidenceFile(path string) ([]byte, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return nil, fmt.Errorf("lifecycle transaction: evidence %q is a symlink", path)
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("lifecycle transaction: evidence %q is not a regular file", path)
+	}
+	return readStableLifecycleRegularFile(path, info)
+}
+
+func readStableLifecycleRegularFile(path string, before os.FileInfo) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	opened, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !opened.Mode().IsRegular() || !os.SameFile(before, opened) {
+		return nil, fmt.Errorf("lifecycle transaction: file %q changed while opening", path)
+	}
+	content, err := io.ReadAll(file)
+	if err != nil {
+		return nil, err
+	}
+	after, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if after.Mode()&os.ModeSymlink != 0 || !os.SameFile(opened, after) {
+		return nil, fmt.Errorf("lifecycle transaction: file %q changed while reading", path)
+	}
+	return content, nil
 }
 
 func atomicReplaceLifecycleTarget(target string, content []byte, mode os.FileMode, rename func(string, string) error) error {

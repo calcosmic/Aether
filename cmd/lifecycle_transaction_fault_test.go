@@ -250,6 +250,28 @@ func TestLifecycleTransactionTamperConflict(t *testing.T) {
 			},
 		},
 		{
+			name:       "symlinked staged bytes",
+			faultPoint: "after_intent",
+			provenance: colony.RecoveryProvenanceConflicting,
+			tamper: func(t *testing.T, fixture lifecycleTransactionFixture, id string, _ []lifecycleTransactionTestTarget) func() {
+				targets := readLifecycleTransactionManifestTargets(t, fixture, id)
+				stagePath := targets["target-0001"].StagePath
+				movedPath := stagePath + ".moved"
+				if err := os.Rename(stagePath, movedPath); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(movedPath, stagePath); err != nil {
+					t.Fatal(err)
+				}
+				return func() {
+					info, err := os.Lstat(stagePath)
+					if err != nil || info.Mode()&os.ModeSymlink == 0 {
+						t.Fatalf("symlink conflict evidence was replaced: info=%v err=%v", info, err)
+					}
+				}
+			},
+		},
+		{
 			name:       "intent",
 			faultPoint: "after_intent",
 			provenance: colony.RecoveryProvenanceConflicting,
