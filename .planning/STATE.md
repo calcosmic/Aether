@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 199-19-PLAN.md
-last_updated: "2026-09-03T23:05:12.647Z"
+stopped_at: Completed 199-11-PLAN.md
+last_updated: "2026-09-03T23:55:09.066Z"
 last_activity: 2026-09-03
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 34
-  completed_plans: 11
+  completed_plans: 12
   percent: 0
 ---
 
@@ -89,6 +89,7 @@ Last activity: 2026-09-03
 | Phase 199 P07 | 26min | 2 tasks | 10 files |
 | Phase 199 P10 | 27min | 3 tasks | 5 files |
 | Phase 199 P19 | 7min | 2 tasks | 5 files |
+| Phase 199 P11 | 29min | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -225,6 +226,10 @@ Last activity: 2026-09-03
 - [Phase 199]: Use the live Go maintenance catalog as the operation-inventory authority and require canonical/generated surfaces to match its ordered IDs. — This keeps wrapper discoverability mechanically tied to executable runtime truth.
 - [Phase 199]: Keep every public maintenance wrapper to one visual runtime invocation; Go alone reads evidence, mutates state, verifies results, emits receipts, and rolls back. — A thin adapter cannot become a competing lifecycle authority.
 - [Phase 199]: Expose live skill inspection only below /ant-maintenance and add no Codex-native $ant-* maintenance surface in this milestone. — This preserves the Phase 191 root-command deletion and the approved later-Codex boundary.
+- [Phase 199]: Autopilot validates one accepted goal and an ordered remaining-phase set from immutable LifecycleFacts before opening its mutating loop. — Invalid entry must remain zero-write.
+- [Phase 199]: Owner-authority changes use a separate typed fence outside the legacy ordered stage-trigger catalogue. — This preserves catalogue compatibility while pausing before owner-controlled changes.
+- [Phase 199]: Without a Phase 202 typed event source, Watch reports idle and treats spawn/history rows as timestamped recorded evidence, never current liveness. — Stale files cannot prove an active ant.
+- [Phase 199]: Run wrappers invoke the Go runtime exactly once; invocation is consent to displayed bounds and typed owner-authority results stop the wrapper. — The runtime remains the sole lifecycle authority.
 
 ### Pending Todos
 
@@ -338,8 +343,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-03T23:05:12.638Z
-Stopped at: Completed 199-19-PLAN.md
+Last session: 2026-09-03T23:55:09.057Z
+Stopped at: Completed 199-11-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

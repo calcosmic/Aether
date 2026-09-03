@@ -77,7 +77,7 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 
 **Requirements:** SYNTH-01, CEC-01, CEC-02, CEC-04, CEC-08, LIFE-01..06, PROOF-01
 
-**Plans:** 11/34 plans executed
+**Plans:** 12/34 plans executed
 
 Plans:
 **Wave 1**
@@ -111,7 +111,7 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 199-11-PLAN.md — Enforce the Autopilot authority contract and honest idle watch fallback.
+- [x] 199-11-PLAN.md — Enforce the Autopilot authority contract and honest idle watch fallback.
 - [ ] 199-20-PLAN.md — Align guided init wrappers and the existing Codex creation skill.
 
 **Wave 8** *(blocked on Wave 7 completion)*
