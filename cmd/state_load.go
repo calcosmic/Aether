@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -80,15 +81,27 @@ func loadColonyStateWithCompatibilityRepair() (colony.ColonyState, error) {
 // loadColonyStateWithCompatibilityRepairReadOnly decodes the one supported
 // legacy numeric-string shape without appending an event or saving the result.
 func loadColonyStateWithCompatibilityRepairReadOnly() (colony.ColonyState, bool, error) {
-	var state colony.ColonyState
-	loadErr := store.LoadJSON("COLONY_STATE.json", &state)
-	if loadErr == nil {
-		return state, false, nil
+	if store == nil {
+		return colony.ColonyState{}, false, fmt.Errorf("no store initialized")
+	}
+	return loadColonyStateWithCompatibilityRepairReadOnlyFromPath(filepath.Join(store.BasePath(), "COLONY_STATE.json"))
+}
+
+// loadColonyStateWithCompatibilityRepairReadOnlyFromPath is the byte-level
+// compatibility boundary used by orientation reads. It deliberately bypasses
+// storage.Store's locking API: acquiring one of those locks can create lock
+// files, which makes an otherwise logical read mutate repository metadata.
+// Legacy numeric strings are normalized only in the returned value.
+func loadColonyStateWithCompatibilityRepairReadOnlyFromPath(path string) (colony.ColonyState, bool, error) {
+	raw, readErr := os.ReadFile(path)
+	if readErr != nil {
+		return colony.ColonyState{}, false, readErr
 	}
 
-	raw, rawErr := store.LoadRawJSON("COLONY_STATE.json")
-	if rawErr != nil {
-		return colony.ColonyState{}, false, loadErr
+	var state colony.ColonyState
+	loadErr := json.Unmarshal(raw, &state)
+	if loadErr == nil {
+		return state, false, nil
 	}
 
 	repairedRaw, repaired, repairErr := repairLegacyNumericStringFields(raw)

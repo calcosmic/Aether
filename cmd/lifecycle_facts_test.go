@@ -249,16 +249,16 @@ func seedLifecycleFactsFixture(t *testing.T, fixture string) (string, *storage.S
   "memory":{"phase_learnings":[{"id":"learning-1","phase":1,"phase_name":"Front door","learnings":[],"timestamp":"2026-09-03T10:00:00Z"}],"decisions":[],"instincts":[]},
   "events":["2026-09-03T10:00:00Z|plan|accepted"],
   "gate_results":[{"name":"tests","passed":true,"timestamp":"2026-09-03T11:00:00Z"}],
-  "lifecycle_receipt":{"schema_version":"lifecycle/v1","receipt_id":"receipt-1","command":"plan","outcome_kind":"success","state_effect":{"before":"IDLE","after":"READY"},"transaction":{},"provenance":"confirmed"},
+  "lifecycle_receipt":{"schema_version":"lifecycle/v1","receipt_id":"receipt-1","command":"plan","outcome_kind":"completed","state_effect":"committed","transaction":{"id":"tx-1","stage":"committed"},"provenance":"confirmed"},
   "recovery_provenance":"confirmed"
 }`, phase))
 		writeLifecycleFixtureFile(t, filepath.Join(dataDir, "pheromones.json"), `{"signals":[{"id":"sig-1","type":"FOCUS","active":true,"content":{"text":"read only"}}]}`)
 		writeLifecycleFixtureFile(t, filepath.Join(dataDir, "spawn-tree.txt"), "2026-09-03T10:00:00Z|queen|builder|Mason-1|load facts|1|completed\n")
 		writeLifecycleFixtureFile(t, filepath.Join(dataDir, "pending-decisions.json"), `{"version":"1","decisions":[{"id":"flag-1","type":"blocker","description":"owner input","source":"test","created_at":"2026-09-03T10:00:00Z","resolved":false}]}`)
-		writeLifecycleFixtureFile(t, sessionPath, `{"session_id":"session-1","started_at":"2026-09-03T08:00:00Z","last_command":"aether plan","current_phase":1,"lifecycle_receipt":{"schema_version":"lifecycle/v1","receipt_id":"receipt-1","command":"plan","outcome_kind":"success","state_effect":{"before":"IDLE","after":"READY"},"transaction":{},"provenance":"confirmed"},"recovery_provenance":"confirmed"}`)
+		writeLifecycleFixtureFile(t, sessionPath, `{"session_id":"session-1","started_at":"2026-09-03T08:00:00Z","last_command":"aether plan","current_phase":1,"lifecycle_receipt":{"schema_version":"lifecycle/v1","receipt_id":"receipt-1","command":"plan","outcome_kind":"completed","state_effect":"committed","transaction":{"id":"tx-1","stage":"committed"},"provenance":"confirmed"},"recovery_provenance":"confirmed"}`)
 		writeLifecycleFixtureFile(t, filepath.Join(dataDir, "instincts.json"), `{"version":"1","instincts":[{"id":"instinct-1","trigger":"orientation","action":"read facts","domain":"workflow","trust_score":0.9,"trust_tier":"trusted","confidence":0.9,"provenance":{},"application_history":[],"related_instincts":[]}]}`)
 		writeLifecycleFixtureFile(t, filepath.Join(dataDir, "learning-observations.json"), `{"observations":[{"id":"observation-1","content":"reads stay read-only"}]}`)
-		writeLifecycleFixtureFile(t, filepath.Join(dataDir, "reviews", "security", "ledger.json"), `{"version":"1","findings":[{"id":"finding-1","title":"No writes"}]}`)
+		writeLifecycleFixtureFile(t, filepath.Join(dataDir, "reviews", "security", "ledger.json"), `{"entries":[{"id":"finding-1","phase":1,"agent":"gatekeeper","generated_at":"2026-09-03T11:00:00Z","status":"open","severity":"HIGH","description":"No writes"}]}`)
 		writeLifecycleFixtureFile(t, filepath.Join(dataDir, "build", "phase-1", "verification.json"), `{"passed":true}`)
 		writeLifecycleFixtureFile(t, filepath.Join(dataDir, "spend", "phase-1-build.json"), `{"schema_version":1,"phase":1,"workflow":"build","recorded_at":"2026-09-03T11:00:00Z","rows":[{"name":"Mason-1","caste":"builder","task":"load facts","status":"completed","usage":{"input_tokens":1000,"output_tokens":500}}]}`)
 		writeLifecycleFixtureFile(t, filepath.Join(root, ".aether", "dreams", "orientation.md"), "# Orientation\n")
