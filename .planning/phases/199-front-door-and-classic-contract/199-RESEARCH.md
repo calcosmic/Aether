@@ -341,6 +341,31 @@ This mapping follows the existing repository boundary: command orchestration in 
 7. **Wave 6 — closure:** make seal and entomb independently transactional and truthful; preserve forced status. [VERIFIED: `SYN-199-07/08`]
 8. **Wave 7 — maintenance/distribution/corpus closure:** route maintenance, stage update, regenerate/prune installed wrappers, finish all corpus cases and traceability. [VERIFIED: `SYN-199-09/10`]
 
+### Targeted revision: current-vocabulary closure inventory
+
+The owner-authorized checker retry found current instructions and emitted Go suggestions outside the original D-13/D-15 inventory. These are in scope because they actively teach or emit lifecycle actions; they are not historical evidence. Canonical sources remain authoritative and generated files remain derived. [VERIFIED: checker findings + D-01/D-13/D-15]
+
+| Current surface | Authority and observed risk | Bounded implementation/proof |
+|---|---|---|
+| `README.md` | Public guide; lifecycle diagram/table still teaches suffixed pause/resume names. | Plan 199-31 replaces current rows with `/ant-pause` and `/ant-resume`; `TestCurrentVocabularyDocs199` and the final inventory ratchet prove the exact path. |
+| `AGENTS.md` | Current Codex guide; advertises the `resume-colony` compatibility alias. | Plan 199-31 teaches raw `aether pause`/`aether resume` only and preserves the D-01 platform boundary. |
+| `cmd/.opencode/OPENCODE.md` | Generated project guidance derived from `.aether/templates/opencode-md-template.md`; stale generated output can reinstall old names. | Plan 199-31 regenerates through the production project-doc path and proves dry-run equality rather than editing it as an authority. |
+| `docs/phase3-section-commands.md` | Active standalone command reference; still lists suffixed command names. | Plan 199-31 migrates both rows and tests semantic agreement with the public guide. |
+| `bench/RUNBOOK.md` | Current benchmark instruction; scripts `/ant-recover` after resume. | Plan 199-31 reduces the ordinary Aether sequence to exactly one `/ant-resume`; explicit conflict inspection, if needed, is logged and returns to resume. |
+| `bench/harness/permitted-inputs.md` | Executable benchmark input policy can authorize the retired second door. | Plan 199-31 makes its Aether lane byte/semantic-parity checked against the runbook and task. |
+| `bench/tasks/03-interrupted-execution.md` | Canonical interruption benchmark task scripts the retired route. | Plan 199-31 makes `/ant-resume` the sole normal action and leaves the GSD lane unchanged. |
+| `cmd/codex_visuals.go` | Active human/JSON renderer emits recovery guidance. | Plan 199-32 executes visual, `NO_COLOR`, and JSON fixtures and rejects retired command-shaped suggestions. |
+| `cmd/init_cmd.go` | Init refusal/failure output points to `aether recover`. | Plan 199-32 routes lifecycle restoration to exact raw `aether resume`. |
+| `cmd/entomb_cmd.go` | Entomb failure/preserved-work output exposes the retired mutator. | Plan 199-32 separates lifecycle resume from read-only `aether maintenance recovery-inspect`. |
+| `cmd/clash.go` | Clash preservation output suggests `aether recover`. | Plan 199-32 keeps all preserved-work evidence while naming only the read-only maintenance inspection route. |
+| `cmd/worktree_safety.go` | Dirty/unproven worktree output suggests the retired route. | Plan 199-32 executes the message builder and proves inspection never claims lifecycle restoration. |
+| `cmd/codex_build_worktree.go` | Cancellation/preservation guidance can redirect owners to the old door. | Plan 199-32 replaces only the emitted command while preserving branch/path and non-copy/non-delete truth. |
+| `cmd/worktree_reap.go` | Reap retention output suggests `aether recover`. | Plan 199-32 uses explicit maintenance inspection and retains resume as the sole later restoration door. |
+
+Plan 199-28 owns an independent exact current-path inventory plus bounded discovery over named production roots. It must fail for an omitted inventory row, an unclassified current lifecycle surface, forbidden command-shaped spelling, generated output that differs from a production dry run, or an executed suggestion that reaches a retired recovery door. The only compatibility exception is the exact-token normalizer in `cmd/normalize_args.go`, with a machine-checked 1.29 expiry. Historical evidence and fixtures require individually enumerated exact paths and reasons; broad directory or glob exclusions are not valid. [VERIFIED: D-13/D-15 + targeted checker recommendation]
+
+The same retry found that exact `go test -run` selectors can succeed when no test matches. Plan 199-02 therefore defines the meaningful aggregate `TestCommandSourceHygiene` before every consuming plan. Plan 199-29 independently proves source definitions exist for corpus, parity, coverage, current vocabulary, document vocabulary, runtime recovery routes, gate schema, aggregate source hygiene, retired-alias pruning, cleanup ownership, and `pkg/colony` lifecycle families before it starts the focused lane. [VERIFIED: Go `-run` zero-match behavior + targeted checker recommendation]
+
 ### Planning gate
 
 - [x] Every in-scope requirement has a synthesis decision. [VERIFIED: phase requirement and linkage tables]

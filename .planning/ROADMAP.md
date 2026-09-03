@@ -77,7 +77,7 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 
 **Requirements:** SYNTH-01, CEC-01, CEC-02, CEC-04, CEC-08, LIFE-01..06, PROOF-01
 
-**Plans:** 30 plans
+**Plans:** 32 plans
 
 Plans:
 - [ ] 199-01-PLAN.md — Replace broad test cleanup with exact ownership before running lifecycle proof.
@@ -110,6 +110,8 @@ Plans:
 - [ ] 199-28-PLAN.md — Validate exact CAP/SYN/decision/requirement coverage and current vocabulary.
 - [ ] 199-29-PLAN.md — Run and receipt the exact full and race repository gates without touching user-owned changes.
 - [ ] 199-30-PLAN.md — Finish the canonical/managed D-13 vocabulary migration before the final vocabulary ratchet.
+- [ ] 199-31-PLAN.md — Migrate active product guides and interrupted-execution benchmarks to the sole pause/resume contract.
+- [ ] 199-32-PLAN.md — Replace retired recovery suggestions in active Go lifecycle and preserved-work output.
 
 **Success criteria:**
 
