@@ -219,16 +219,10 @@ func beginLifecycleTransaction(config lifecycleTransactionConfig) (*lifecycleTra
 	if config.Rename == nil {
 		config.Rename = os.Rename
 	}
-	journalPath := filepath.Join(config.Allowlist.LifecycleDataRoot, "transactions", config.TransactionID)
-	journalStore, err := storage.NewStore(journalPath)
-	if err != nil {
-		return nil, fmt.Errorf("lifecycle transaction: initialize coordinator journal: %w", err)
-	}
 	return &lifecycleTransaction{
-		config:       config,
-		roots:        roots,
-		targets:      make(map[string]struct{}),
-		journalStore: journalStore,
+		config:  config,
+		roots:   roots,
+		targets: make(map[string]struct{}),
 	}, nil
 }
 
@@ -609,6 +603,9 @@ func (tx *lifecycleTransaction) stageAndPersistIntent() error {
 	}
 	intent.Record.Evidence = lifecycleRootEvidence(intent.Roots)
 	intent.Digest = lifecycleIntentDigest(*intent)
+	if err := tx.ensureJournalStore(); err != nil {
+		return err
+	}
 	if _, err := durableSaveJSON(tx.journalStore, "intent.json", intent); err != nil {
 		return fmt.Errorf("lifecycle transaction: persist coordinator intent: %w", err)
 	}
@@ -1287,6 +1284,9 @@ func (tx *lifecycleTransaction) persistProgress() error {
 	if tx.progress == nil {
 		return fmt.Errorf("lifecycle transaction: progress is not initialized")
 	}
+	if err := tx.ensureJournalStore(); err != nil {
+		return err
+	}
 	tx.progress.Digest = lifecycleProgressDigest(*tx.progress)
 	if _, err := durableSaveJSON(tx.journalStore, "progress.json", tx.progress); err != nil {
 		return fmt.Errorf("lifecycle transaction: persist progress: %w", err)
@@ -1303,6 +1303,18 @@ func (tx *lifecycleTransaction) persistProgress() error {
 			return fmt.Errorf("lifecycle transaction: persist lifecycle record: %w", err)
 		}
 	}
+	return nil
+}
+
+func (tx *lifecycleTransaction) ensureJournalStore() error {
+	if tx.journalStore != nil {
+		return nil
+	}
+	journalStore, err := storage.NewStore(tx.journalPath())
+	if err != nil {
+		return fmt.Errorf("lifecycle transaction: initialize coordinator journal: %w", err)
+	}
+	tx.journalStore = journalStore
 	return nil
 }
 

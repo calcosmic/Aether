@@ -207,6 +207,9 @@ func TestLifecycleTransactionRejectsInvalidTarget(t *testing.T) {
 			if _, statErr := os.Stat(filepath.Join(lifecycleJournalPath(fixture, "invalid-target"), "intent.json")); !os.IsNotExist(statErr) {
 				t.Fatalf("invalid transaction wrote authoritative intent: %v", statErr)
 			}
+			if _, statErr := os.Stat(lifecycleJournalPath(fixture, "invalid-target")); !os.IsNotExist(statErr) {
+				t.Fatalf("invalid transaction created coordinator state: %v", statErr)
+			}
 		})
 	}
 
@@ -247,6 +250,9 @@ func TestLifecycleTransactionRejectsChangedBaseline(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(lifecycleJournalPath(fixture, "changed-baseline"), "intent.json")); !os.IsNotExist(err) {
 		t.Fatalf("changed baseline wrote authoritative intent: %v", err)
+	}
+	if _, err := os.Stat(lifecycleJournalPath(fixture, "changed-baseline")); !os.IsNotExist(err) {
+		t.Fatalf("changed baseline created coordinator state: %v", err)
 	}
 }
 
