@@ -371,6 +371,14 @@ type ColonyState struct {
 	Charter                   *Charter             `json:"charter,omitempty"`
 	PendingSuggestions        *[]PendingSuggestion `json:"pending_suggestions,omitempty"`
 	LastAnalyzeCommit         *string              `json:"last_analyze_commit,omitempty"`
+	// Lifecycle evidence is additive and pointer-backed so state written
+	// before lifecycle/v1 remains distinguishable from explicitly recorded
+	// unknown provenance or closure outcomes.
+	LifecycleReceipt   *LifecycleReceipt      `json:"lifecycle_receipt,omitempty"`
+	PauseHandoff       *PauseHandoffReference `json:"pause_handoff,omitempty"`
+	RecoveryProvenance *RecoveryProvenance    `json:"recovery_provenance,omitempty"`
+	SealOutcome        *SealOutcome           `json:"seal_outcome,omitempty"`
+	ArchiveReference   *ArchiveReference      `json:"archive_reference,omitempty"`
 	// ResearchDocs are repository-relative paths the operator pointed this
 	// colony at, typically saved Oracle runs under .aether/research. They are
 	// pointers, not content: the runtime reads them when composing worker
