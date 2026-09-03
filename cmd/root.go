@@ -208,6 +208,9 @@ var rootCmd = &cobra.Command{
 // (completion, version, help).
 func skipStoreInit(cmd *cobra.Command) bool {
 	for c := cmd; c != nil; c = c.Parent() {
+		if c.Annotations["aether.io/store-free"] == "true" {
+			return true
+		}
 		switch c.Name() {
 		case "command-guide", "completion", "version", "help", "audit-catalog", "reconcile", "internal-worker-adapter":
 			return true

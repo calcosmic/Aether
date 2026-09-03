@@ -11,6 +11,28 @@ import (
 
 const maintenanceCatalogSchemaVersion = "maintenance-catalog/v1"
 
+type maintenanceInspectionFinding struct {
+	Code            string   `json:"code"`
+	Summary         string   `json:"summary"`
+	SourcePath      string   `json:"source_path,omitempty"`
+	GeneratedPath   string   `json:"generated_path,omitempty"`
+	EvidencePaths   []string `json:"evidence_paths"`
+	RecoveryCommand string   `json:"recovery_command"`
+}
+
+type maintenanceInspectionEvidence struct {
+	Scope   string   `json:"scope"`
+	Paths   []string `json:"paths"`
+	Checked int      `json:"checked"`
+	Status  string   `json:"status"`
+}
+
+type maintenanceInspectionVerification struct {
+	Status        string `json:"status"`
+	EvidenceCount int    `json:"evidence_count"`
+	FindingCount  int    `json:"finding_count"`
+}
+
 type maintenanceOperation struct {
 	OperationID         string `json:"operation_id"`
 	Label               string `json:"label"`
@@ -80,8 +102,8 @@ func buildMaintenanceCatalog(platform string) maintenanceCatalog {
 	}
 	return maintenanceCatalog{
 		Inspection: []maintenanceOperation{
-			readOnly("integrity.inspect", "Release and hub integrity", "aether integrity", "integrity-result/v1"),
-			readOnly("source.parity.inspect", "Generated and source parity", "aether source-check", "source-check-result/v1"),
+			readOnly("integrity.inspect", "Release and hub integrity", "aether integrity", integrityInspectionSchemaVersion),
+			readOnly("source.parity.inspect", "Generated and source parity", "aether source-check", sourceCheckResultSchemaVersion),
 			readOnly("registry.inspect", "Registered colony inventory", "aether registry-list", "registry-inspection/v1"),
 			readOnly("chamber.inspect", "Chamber inventory", "aether chamber-list", "chamber-inspection/v1"),
 			readOnly("context.inspect", "Current lifecycle context", "aether status --compact", LifecycleResultSchemaVersion),

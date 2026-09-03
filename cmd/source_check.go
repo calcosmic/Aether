@@ -9,9 +9,12 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
+
+const sourceCheckResultSchemaVersion = "source-check-result/v1"
 
 type sourceCheckIssue struct {
 	Area     string `json:"area"`
@@ -29,11 +32,19 @@ type sourceCheckComponent struct {
 }
 
 type sourceCheckResult struct {
-	OK         bool                   `json:"ok"`
-	Root       string                 `json:"root"`
-	Components []sourceCheckComponent `json:"components"`
-	Issues     []sourceCheckIssue     `json:"issues,omitempty"`
-	Next       string                 `json:"next"`
+	SchemaVersion string                            `json:"schema_version"`
+	OperationID   string                            `json:"operation_id"`
+	OK            bool                              `json:"ok"`
+	Root          string                            `json:"root"`
+	Components    []sourceCheckComponent            `json:"components"`
+	Issues        []sourceCheckIssue                `json:"issues,omitempty"`
+	Findings      []maintenanceInspectionFinding    `json:"findings"`
+	Evidence      []maintenanceInspectionEvidence   `json:"evidence"`
+	Verification  maintenanceInspectionVerification `json:"verification"`
+	StateEffect   colony.LifecycleStateEffect       `json:"state_effect"`
+	Blockers      []maintenanceInspectionFinding    `json:"blockers"`
+	NextAction    string                            `json:"next_action"`
+	Next          string                            `json:"next"`
 }
 
 type sourceCheckCommandSpec struct {
@@ -67,38 +78,75 @@ var sourceCheckRequiredExchangeXMLAssets = []string{
 }
 
 var sourceCheckCmd = &cobra.Command{
-	Use:   "source-check",
-	Short: "Verify source-of-truth and generated wrapper parity",
+	Use:         "source-check",
+	Short:       "Verify source-of-truth and generated wrapper parity",
+	Annotations: map[string]string{"aether.io/read-only": "true", "aether.io/store-free": "true"},
 	Long: "Checks Aether's source-of-truth layout without modifying files. " +
 		"It verifies generated command wrappers before publish.",
 	Args: cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		rootFlag, _ := cmd.Flags().GetString("root")
-		root, err := resolveSourceCheckRoot(rootFlag)
-		if err != nil {
-			return err
-		}
-		result := runSourceCheck(root)
-		if jsonOut, _ := cmd.Flags().GetBool("json"); jsonOut {
-			data, err := json.MarshalIndent(result, "", "  ")
-			if err != nil {
-				return fmt.Errorf("marshal source-check result: %w", err)
-			}
-			fmt.Fprintln(stdout, string(data))
-		} else {
-			outputWorkflow(result, renderSourceCheckVisual(result))
-		}
-		if !result.OK {
-			return fmt.Errorf("source check failed")
-		}
-		return nil
-	},
+	RunE: runSourceCheckCommand,
 }
 
 func init() {
 	sourceCheckCmd.Flags().String("root", "", "Aether source checkout root (default: auto-detect from current directory)")
 	sourceCheckCmd.Flags().Bool("json", false, "Output JSON instead of visual report")
 	rootCmd.AddCommand(sourceCheckCmd)
+}
+
+func runSourceCheckCommand(cmd *cobra.Command, _ []string) error {
+	rootFlag, _ := cmd.Flags().GetString("root")
+	result, resolutionErr := buildSourceCheckResult(rootFlag)
+	if jsonOut, _ := cmd.Flags().GetBool("json"); jsonOut {
+		data, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			return fmt.Errorf("marshal source-check result: %w", err)
+		}
+		fmt.Fprintln(stdout, string(data))
+	} else {
+		outputWorkflow(result, renderSourceCheckVisual(result))
+	}
+	if resolutionErr != nil {
+		return fmt.Errorf("source check failed: %w", resolutionErr)
+	}
+	if !result.OK {
+		return fmt.Errorf("source check failed")
+	}
+	return nil
+}
+
+func buildSourceCheckResult(explicitRoot string) (sourceCheckResult, error) {
+	root, err := resolveSourceCheckRoot(explicitRoot)
+	if err == nil {
+		return runSourceCheck(root), nil
+	}
+
+	root = sourceCheckCandidateRoot(explicitRoot)
+	result := runSourceCheck(root)
+	result.Issues = append(result.Issues, sourceCheckIssue{
+		Area:    "input",
+		Path:    root,
+		Message: err.Error(),
+		Actual:  "missing or invalid source checkout",
+	})
+	sortSourceCheckIssues(result.Issues)
+	finalizeSourceCheckResult(&result)
+	return result, err
+}
+
+func sourceCheckCandidateRoot(explicitRoot string) string {
+	if strings.TrimSpace(explicitRoot) != "" {
+		if abs, err := filepath.Abs(explicitRoot); err == nil {
+			return abs
+		}
+		return explicitRoot
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		if root := findAetherModuleRoot(cwd); root != "" {
+			return root
+		}
+		return cwd
+	}
+	return "."
 }
 
 func resolveSourceCheckRoot(explicit string) (string, error) {
@@ -144,8 +192,17 @@ func looksLikeAetherSourceRoot(root string) bool {
 
 func runSourceCheck(root string) sourceCheckResult {
 	result := sourceCheckResult{
-		Root: root,
-		Next: "Fix reported source surface drift, then rerun `aether source-check` before publishing.",
+		SchemaVersion: sourceCheckResultSchemaVersion,
+		OperationID:   "source.parity.inspect",
+		Root:          root,
+		Components:    []sourceCheckComponent{},
+		Issues:        []sourceCheckIssue{},
+		Findings:      []maintenanceInspectionFinding{},
+		Evidence:      []maintenanceInspectionEvidence{},
+		StateEffect:   colony.LifecycleStateEffectNone,
+		Blockers:      []maintenanceInspectionFinding{},
+		NextAction:    "aether update --force",
+		Next:          "Fix reported source surface drift, then rerun `aether source-check` before publishing.",
 	}
 
 	sourceChecked, sourceIssues := checkCanonicalSourceSurfaces(root)
@@ -178,9 +235,98 @@ func runSourceCheck(root string) sourceCheckResult {
 	sortSourceCheckIssues(result.Issues)
 	result.OK = len(result.Issues) == 0
 	if result.OK {
+		result.NextAction = "aether integrity --source"
 		result.Next = "Source surfaces are aligned. Publish only after active work is intentionally committed."
 	}
+	finalizeSourceCheckResult(&result)
 	return result
+}
+
+func finalizeSourceCheckResult(result *sourceCheckResult) {
+	if result == nil {
+		return
+	}
+	result.SchemaVersion = sourceCheckResultSchemaVersion
+	result.OperationID = "source.parity.inspect"
+	result.StateEffect = colony.LifecycleStateEffectNone
+	result.OK = len(result.Issues) == 0
+	result.Findings = make([]maintenanceInspectionFinding, 0, len(result.Issues))
+	for _, issue := range result.Issues {
+		result.Findings = append(result.Findings, sourceCheckFinding(issue))
+	}
+	result.Blockers = append([]maintenanceInspectionFinding(nil), result.Findings...)
+	if result.Blockers == nil {
+		result.Blockers = []maintenanceInspectionFinding{}
+	}
+	result.Evidence = make([]maintenanceInspectionEvidence, 0, len(result.Components))
+	for _, component := range result.Components {
+		result.Evidence = append(result.Evidence, maintenanceInspectionEvidence{
+			Scope:   component.Name,
+			Paths:   sourceCheckComponentPaths(component.Name),
+			Checked: component.Checked,
+			Status:  component.Status,
+		})
+	}
+	if result.Evidence == nil {
+		result.Evidence = []maintenanceInspectionEvidence{}
+	}
+	status := "pass"
+	if !result.OK {
+		status = "fail"
+		result.NextAction = "aether update --force"
+	} else if strings.TrimSpace(result.NextAction) == "" {
+		result.NextAction = "aether integrity --source"
+	}
+	result.Verification = maintenanceInspectionVerification{
+		Status:        status,
+		EvidenceCount: len(result.Evidence),
+		FindingCount:  len(result.Findings),
+	}
+}
+
+func sourceCheckFinding(issue sourceCheckIssue) maintenanceInspectionFinding {
+	finding := maintenanceInspectionFinding{
+		Code:            "source." + strings.ReplaceAll(strings.TrimSpace(issue.Area), " ", "_"),
+		Summary:         issue.Message,
+		EvidencePaths:   []string{},
+		RecoveryCommand: "aether source-check",
+	}
+	path := filepath.ToSlash(issue.Path)
+	expected := filepath.ToSlash(issue.Expected)
+	if strings.HasPrefix(path, ".aether/") {
+		finding.SourcePath = path
+	}
+	if strings.HasPrefix(path, ".claude/") || strings.HasPrefix(path, ".opencode/") || strings.HasPrefix(path, ".codex/") {
+		finding.GeneratedPath = path
+		finding.RecoveryCommand = "aether update --force"
+		if strings.HasPrefix(expected, ".aether/") {
+			finding.SourcePath = expected
+		} else if strings.Contains(path, "/commands/") {
+			name := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+			finding.SourcePath = filepath.ToSlash(filepath.Join(".aether", "commands", name+".yaml"))
+		}
+	}
+	for _, evidencePath := range []string{finding.SourcePath, finding.GeneratedPath, path} {
+		if evidencePath == "" || containsString(finding.EvidencePaths, evidencePath) {
+			continue
+		}
+		finding.EvidencePaths = append(finding.EvidencePaths, evidencePath)
+	}
+	sort.Strings(finding.EvidencePaths)
+	return finding
+}
+
+func sourceCheckComponentPaths(name string) []string {
+	switch name {
+	case "canonical source surfaces":
+		return []string{".aether/commands", ".aether/docs", ".aether/exchange", ".aether/skills", ".aether/templates", ".aether/utils", ".aether/workers.md", ".claude/agents/ant", ".claude/commands/ant", ".codex/agents", ".opencode/agents", ".opencode/commands/ant"}
+	case "retired source mirrors":
+		return []string{".aether/agents-claude", ".aether/agents-codex", ".aether/commands/claude", ".aether/commands/opencode", ".aether/skills-codex"}
+	case "generated command wrappers":
+		return []string{".aether/commands", ".claude/commands/ant", ".opencode/commands/ant"}
+	default:
+		return []string{}
+	}
 }
 
 func checkCanonicalSourceSurfaces(root string) (int, []sourceCheckIssue) {
