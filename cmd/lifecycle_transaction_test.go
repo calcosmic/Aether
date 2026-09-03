@@ -132,7 +132,7 @@ func TestLifecycleTransactionCommit(t *testing.T) {
 	if receipt.OutcomeKind != colony.OutcomeKindCompleted || receipt.StateEffect != colony.LifecycleStateEffectCommitted {
 		t.Fatalf("receipt outcome/state = %q/%q, want completed/committed", receipt.OutcomeKind, receipt.StateEffect)
 	}
-	if receipt.Transaction == nil || receipt.Transaction.Stage != colony.TransactionStageVerified {
+	if receipt.Transaction.Stage != colony.TransactionStageVerified {
 		t.Fatalf("receipt transaction = %#v, want verified transaction", receipt.Transaction)
 	}
 	for _, name := range []string{"intent.json", "progress.json", "receipt.json", "receipt.sha256"} {
@@ -292,7 +292,7 @@ func TestLifecycleTransactionReceipt(t *testing.T) {
 	if receipt.Recovery == nil || !strings.Contains(receipt.Recovery.SafeNextStep, "aether resume") {
 		t.Fatalf("receipt recovery command = %#v, want aether resume guidance", receipt.Recovery)
 	}
-	if receipt.Transaction == nil || receipt.Transaction.JournalPath != lifecycleJournalPath(fixture, "receipt") {
+	if receipt.Transaction.JournalPath != lifecycleJournalPath(fixture, "receipt") {
 		t.Fatalf("receipt journal reference = %#v", receipt.Transaction)
 	}
 }
@@ -412,9 +412,4 @@ func TestLifecycleTransactionPerRootStaging(t *testing.T) {
 			t.Fatalf("root %s staging escaped root: %#v", root.Kind, manifest.Targets[0])
 		}
 	}
-}
-
-func pathIsWithin(root, candidate string) bool {
-	relative, err := filepath.Rel(root, candidate)
-	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) && !filepath.IsAbs(relative)
 }
