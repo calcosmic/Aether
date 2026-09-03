@@ -544,6 +544,17 @@ func newWorktreeTestStore(t *testing.T, stateJSON string) (*storage.Store, strin
 	return s, tmpDir
 }
 
+func registerSourceWorktreeAllocation(t *testing.T, branch string) {
+	t.Helper()
+	workingDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get test working directory: %v", err)
+	}
+	repoRoot := findTestModuleRoot(t)
+	worktreePath := filepath.Join(workingDir, filepath.FromSlash(worktreeBaseDir), sanitizeBranchPath(branch))
+	registerTestOwnedWorktree(t, repoRoot, worktreePath, branch)
+}
+
 // ---------------------------------------------------------------------------
 // worktree-allocate with agent+phase flag combination tests
 // ---------------------------------------------------------------------------
@@ -562,6 +573,7 @@ func TestWorktreeAllocateAgentPhase(t *testing.T) {
 	store = s
 
 	// --agent and --phase should construct "phase-2/builder-1"
+	registerSourceWorktreeAllocation(t, "phase-2/builder-1")
 	rootCmd.SetArgs([]string{"worktree-allocate", "--agent", "builder-1", "--phase", "2"})
 
 	err := rootCmd.Execute()
@@ -590,6 +602,7 @@ func TestWorktreeAllocateHumanBranch(t *testing.T) {
 	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
 	store = s
 
+	registerSourceWorktreeAllocation(t, "feature/auth")
 	rootCmd.SetArgs([]string{"worktree-allocate", "--branch", "feature/auth"})
 
 	err := rootCmd.Execute()
@@ -896,17 +909,11 @@ func TestWorktreeAllocateAuditLog(t *testing.T) {
 	store = s
 
 	branch := fmt.Sprintf("feature/test-audit-%d", time.Now().UnixNano())
-	workingDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("get test working directory: %v", err)
-	}
-	repoRoot := findTestModuleRoot(t)
-	worktreePath := filepath.Join(workingDir, filepath.FromSlash(worktreeBaseDir), sanitizeBranchPath(branch))
-	registerTestOwnedWorktree(t, repoRoot, worktreePath, branch)
+	registerSourceWorktreeAllocation(t, branch)
 
 	rootCmd.SetArgs([]string{"worktree-allocate", "--branch", branch})
 
-	err = rootCmd.Execute()
+	err := rootCmd.Execute()
 	_ = err // may fail if git is not available
 
 	// If the command succeeded (no error on stderr about store), check audit log
@@ -1116,6 +1123,7 @@ func TestWorktreeAllocateMergedBranchAllowed(t *testing.T) {
 	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
 	store = s
 
+	registerSourceWorktreeAllocation(t, "phase-2/builder-1")
 	rootCmd.SetArgs([]string{"worktree-allocate", "--agent", "builder-1", "--phase", "2"})
 
 	err := rootCmd.Execute()
@@ -1816,6 +1824,7 @@ func TestWorktreeLifecycleFull(t *testing.T) {
 	}
 
 	// Step 2: Allocate worktree via command
+	registerSourceWorktreeAllocation(t, "phase-1/builder-1")
 	rootCmd.SetArgs([]string{"worktree-allocate", "--agent", "builder-1", "--phase", "1"})
 	err := rootCmd.Execute()
 	_ = err // may fail in test env, check if state was updated
