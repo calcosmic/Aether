@@ -193,7 +193,13 @@ var rootCmd = &cobra.Command{
 		}
 		store = s
 		tracer = trace.NewTracer(s)
-		checkAndEmitFirstRun(dataDir)
+		// Commands that promise a causally read-only result must not create the
+		// first-run marker merely because they were inspected. The annotation is
+		// owned by the command so future read-only expert surfaces can make the
+		// same guarantee without growing a name switch here.
+		if cmd.Annotations["aether.io/read-only"] != "true" {
+			checkAndEmitFirstRun(dataDir)
+		}
 		return nil
 	},
 }
