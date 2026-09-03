@@ -125,7 +125,7 @@ func TestMaintenanceWrapperContract(t *testing.T) {
 		{
 			name: "non-runtime state authority",
 			body: wantManagedBody + "\n- Read `COLONY_STATE.json` and decide whether the repair is complete.\n",
-			want: "filesystem or state mutation",
+			want: "non-runtime state authority",
 		},
 		{
 			name: "visual output parsing",
@@ -261,7 +261,11 @@ func maintenanceWrapperSemanticIssues199(body string, wantInspection, wantMutati
 	}{
 		{
 			label:   "filesystem or state mutation",
-			pattern: regexp.MustCompile(`(?i)(?:\.aether/data|COLONY_STATE\.json|session\.json|os\.WriteFile|writeFile\s*\(|atomicWrite\s*\(|(?:cat|tee|jq|sed|awk|perl|python3?|rm|mv|cp|echo)\b[^\n]*(?:>|\.aether/|COLONY_STATE))`),
+			pattern: regexp.MustCompile(`(?i)(?:\.aether/|os\.WriteFile|writeFile\s*\(|atomicWrite\s*\(|(?:cat|tee|jq|sed|awk|perl|python3?|rm|mv|cp|echo|touch|mkdir|install|rsync)\b[^\n]*(?:>|\.aether/|COLONY_STATE|session\.json))`),
+		},
+		{
+			label:   "non-runtime state authority",
+			pattern: regexp.MustCompile(`(?im)^\s*(?:[-*]\s*)?(?:read|inspect|load|open)\b[^\n]*(?:\.aether/|COLONY_STATE\.json|session\.json|state\s+files?|evidence\s+files?)`),
 		},
 		{
 			label:   "visual output parsing",
@@ -273,7 +277,7 @@ func maintenanceWrapperSemanticIssues199(body string, wantInspection, wantMutati
 		},
 		{
 			label:   "root-level live-skill command",
-			pattern: regexp.MustCompile(`(?i)(?:/ant-(?:skill-list|skill-diff|skill-cache-rebuild)|\baether\s+(?:skill-list|skill-diff|skill-cache-rebuild)\b)`),
+			pattern: regexp.MustCompile(`(?i)(?:/ant-(?:skills?|skill-list|skill-diff|skill-cache-rebuild)(?:\s|\x60)|\baether\s+(?:skills?|skill-list|skill-diff|skill-cache-rebuild)\b)`),
 		},
 		{
 			label:   "Codex-native $ant-* surface",
