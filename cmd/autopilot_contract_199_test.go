@@ -11,6 +11,7 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
+	"gopkg.in/yaml.v3"
 )
 
 func autopilotContract199Facts(goal string, phases []colony.Phase) LifecycleFacts {
@@ -276,6 +277,86 @@ func TestAutopilotContract199CompletionDoesNotSeal(t *testing.T) {
 	for _, forbidden := range []string{"auto-seal", "--force", "sealed automatically"} {
 		if strings.Contains(strings.ToLower(visual), forbidden) {
 			t.Errorf("completion contains autonomous seal language %q:\n%s", forbidden, visual)
+		}
+	}
+}
+
+func TestAutopilotWrapperContract199(t *testing.T) {
+	const (
+		description = "Autopilot the remaining accepted phases within the displayed safety contract."
+		runtimeCall = "AETHER_OUTPUT_MODE=visual aether run $ARGUMENTS"
+		source      = ".aether/commands/run.yaml"
+	)
+	repoRoot := filepath.Clean(filepath.Join(".."))
+	yamlPath := filepath.Join(repoRoot, ".aether", "commands", "run.yaml")
+	rawYAML, err := os.ReadFile(yamlPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var spec struct {
+		Name        string `yaml:"name"`
+		Description string `yaml:"description"`
+		Runtime     struct {
+			Command string `yaml:"command"`
+		} `yaml:"runtime"`
+		CeremonyContract struct {
+			Authority   string `yaml:"authority"`
+			WrapperRole string `yaml:"wrapper_role"`
+		} `yaml:"ceremony_contract"`
+		Guardrails []string `yaml:"guardrails"`
+	}
+	if err := yaml.Unmarshal(rawYAML, &spec); err != nil {
+		t.Fatal(err)
+	}
+	if spec.Name != "ant-run" || spec.Description != description || spec.Runtime.Command != runtimeCall {
+		t.Fatalf("canonical run wrapper contract drifted: %+v", spec)
+	}
+	canonicalContract := strings.ToLower(strings.Join(append([]string{spec.CeremonyContract.Authority, spec.CeremonyContract.WrapperRole}, spec.Guardrails...), "\n"))
+	for _, required := range []string{"invocation is consent", "typed", "owner authority", "runtime result", "exactly once", "do not write", "do not parse", "do not fabricate", "do not auto-seal"} {
+		if !strings.Contains(canonicalContract, required) {
+			t.Errorf("canonical wrapper contract lacks %q:\n%s", required, string(rawYAML))
+		}
+	}
+
+	wrapperPaths := []string{
+		filepath.Join(repoRoot, ".claude", "commands", "ant-run.md"),
+		filepath.Join(repoRoot, ".claude", "commands", "ant", "run.md"),
+		filepath.Join(repoRoot, ".opencode", "commands", "ant", "run.md"),
+	}
+	var canonicalBody string
+	for _, path := range wrapperPaths {
+		raw, readErr := os.ReadFile(path)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		text := string(raw)
+		lines := strings.Split(text, "\n")
+		wantHeader := "<!-- Aether-managed: runtime spec at " + source + ". Synced by aether update. -->"
+		if len(lines) == 0 || lines[0] != wantHeader {
+			t.Errorf("%s lacks canonical source linkage", path)
+		}
+		if !strings.Contains(text, `description: "`+description+`"`) {
+			t.Errorf("%s description does not match the canonical sentence", path)
+		}
+		if strings.Count(text, runtimeCall) != 1 {
+			t.Errorf("%s has %d runtime calls, want exactly one", path, strings.Count(text, runtimeCall))
+		}
+		lower := strings.ToLower(text)
+		for _, required := range []string{"invoking /ant-run is consent", "typed runtime result", "owner-authority pause", "do not write", "do not parse", "do not fabricate", "do not auto-seal"} {
+			if !strings.Contains(lower, required) {
+				t.Errorf("%s lacks %q", path, required)
+			}
+		}
+		for _, forbidden := range []string{"continue?", "--force", "aether seal", "colony_state.json", "savejson(", "writefile("} {
+			if strings.Contains(lower, forbidden) {
+				t.Errorf("%s contains forbidden host behavior %q", path, forbidden)
+			}
+		}
+		body := strings.Join(lines[6:], "\n")
+		if canonicalBody == "" {
+			canonicalBody = body
+		} else if body != canonicalBody {
+			t.Errorf("generated wrapper %s is not semantically identical to the other run wrappers", path)
 		}
 	}
 }
