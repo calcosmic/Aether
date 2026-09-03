@@ -25,3 +25,11 @@
 - **Isolation check:** The Plan 199-04 contract suite passes all 36 focused tests, and the existing read-only-loader and token-accounting guard tests pass. The package still compiles and reaches the later tests; the mismatches are expectation-level changes rather than a failure of the new projection path.
 - **Why deferred:** Plans 199-09, 199-10, 199-26, 199-32, and 199-33 own the command-specific renderers, focused closeouts, retired recovery wording, and post-seal status migration. Updating those snapshots here would pre-empt their scoped migrations and hide the deliberate transition.
 - **Follow-up:** Update each legacy expectation alongside its owning renderer migration, then run the exact full and race repository gates in Plan 199-29.
+
+## Plan 199-06 full command suite still crosses the staged lifecycle migration
+
+- **Found during:** Plan 199-06 overall command-package verification (`go test ./cmd -count=1`)
+- **Observed:** After the plan-owned catalog, reachability, and visual-writer regressions were corrected, the remaining failures were the archived Plan 196 branch-disposition fixture plus legacy Next Up expectations in `TestWrapperPartialFinalizeDoesNotShowTheFinishedBuildScreen`, `TestPrintNextUpUsesTargetedRecoveryCommand`, `TestPrintNextUpReadyUsesCurrentPhaseBuild`, `TestWorkflowSuggestionsFailedPhase`, and `TestSwarmDestroyRunsWorkerWavesAndReturnsStructuredResult`.
+- **Isolation check:** Every Plan 199-06 contract and each directly affected audit gate passes in focused runs, including the maintenance landing, typed inspections, live skill inventory/diff, command catalog, reachability, visual-output discipline, and source-surface checks.
+- **Why deferred:** These failures are concrete instances of the pre-existing migration items above. Their renderers and recovery wording belong to later Phase 199 plans; changing them in the expert-maintenance plan would cross ownership boundaries.
+- **Follow-up:** Resolve them with the owning lifecycle-renderer plans, then rerun the full command and repository suites in Plan 199-29.

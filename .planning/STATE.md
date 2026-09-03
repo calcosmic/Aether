@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 199-05-PLAN.md
-last_updated: "2026-09-03T19:44:07.056Z"
+stopped_at: Completed 199-06-PLAN.md
+last_updated: "2026-09-03T20:22:14.758Z"
 last_activity: 2026-09-03
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 34
-  completed_plans: 5
-  percent: 15
+  completed_plans: 6
+  percent: 18
 ---
 
 # Project State
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-02)
 ## Current Position
 
 Phase: 199 (front-door-and-classic-contract) — EXECUTING
-Plan: 6 of 34
+Plan: 7 of 34
 Status: Ready to execute
 Last activity: 2026-09-03
 
@@ -83,6 +83,7 @@ Last activity: 2026-09-03
 | Phase 199 P03 | 22 min | 2 tasks | 5 files |
 | Phase 199 P04 | 31min | 3 tasks | 9 files |
 | Phase 199 P05 | 27min | 2 tasks | 4 files |
+| Phase 199 P06 | 29min | 3 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -200,6 +201,9 @@ Last activity: 2026-09-03
 - [Phase 199]: Keep immutable coordinator intent separate from mutable progress so recovery never rewrites the evidence that authorized a mutation.
 - [Phase 199]: Stage outputs and pre-images on each destination root, then replace targets only through temporary files in the target directory.
 - [Phase 199]: Classify missing transaction evidence as unknown and altered evidence as conflicting; only matching digests may finish or roll back.
+- [Phase 199]: Read-only and store-free command annotations suppress first-run and lock initialization writes for expert inspections.
+- [Phase 199]: Live skills use source plus relative path identity and SHA-256 byte digests, with every inventory read directly from repository and hub sources.
+- [Phase 199]: Skill inventory and drift remain nested below maintenance; standalone cache/list/diff root commands stay deleted.
 
 ### Pending Todos
 
@@ -313,8 +317,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-03T19:44:07.048Z
-Stopped at: Completed 199-05-PLAN.md
+Last session: 2026-09-03T20:22:14.749Z
+Stopped at: Completed 199-06-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

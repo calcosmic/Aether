@@ -77,7 +77,7 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 
 **Requirements:** SYNTH-01, CEC-01, CEC-02, CEC-04, CEC-08, LIFE-01..06, PROOF-01
 
-**Plans:** 5/34 plans executed
+**Plans:** 6/34 plans executed
 
 Plans:
 **Wave 1**
@@ -99,7 +99,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 199-06-PLAN.md — Create the expert maintenance landing and read-only inspection lane.
+- [x] 199-06-PLAN.md — Create the expert maintenance landing and read-only inspection lane.
 - [ ] 199-08-PLAN.md — Automate typed territory freshness, publication, and planning evidence.
 - [ ] 199-09-PLAN.md — Make full and compact status authoritative projection views.
 
