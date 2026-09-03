@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -910,6 +911,30 @@ func TestWorktreeAllocateAuditLog(t *testing.T) {
 			}
 		}
 		// It's ok if the command failed for other reasons (e.g. git not available)
+	}
+}
+
+func TestCleanupTestWorktreesIsIdempotent(t *testing.T) {
+	repoRoot := t.TempDir()
+	runGit(t, repoRoot, "init", "-b", "main")
+	runGit(t, repoRoot, "config", "user.email", "test@example.com")
+	runGit(t, repoRoot, "config", "user.name", "Test")
+	runGit(t, repoRoot, "commit", "--allow-empty", "-m", "initial")
+
+	branch := "feature/test-owned-idempotent"
+	worktreePath := filepath.Join(repoRoot, ".aether", "worktrees", "test-owned-idempotent")
+	registerTestOwnedWorktree(t, repoRoot, worktreePath, branch)
+	runGit(t, repoRoot, "worktree", "add", "-b", branch, worktreePath, "HEAD")
+
+	cleanupTestWorktrees()
+	cleanupTestWorktrees()
+
+	if _, err := os.Lstat(worktreePath); !os.IsNotExist(err) {
+		t.Fatalf("registered worktree still exists after repeated cleanup: %v", err)
+	}
+	branchExists := exec.Command("git", "-C", repoRoot, "show-ref", "--verify", "--quiet", "refs/heads/"+branch).Run() == nil
+	if branchExists {
+		t.Fatalf("registered branch %q still exists after repeated cleanup", branch)
 	}
 }
 
