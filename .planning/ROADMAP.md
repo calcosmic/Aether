@@ -80,40 +80,93 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 **Plans:** 34 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 199-01-PLAN.md — Replace broad test cleanup with exact ownership before running lifecycle proof.
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 199-02-PLAN.md — Publish the cited Classic synthesis and versioned corpus contract.
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 199-03-PLAN.md — Define backward-compatible durable lifecycle value contracts.
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 199-04-PLAN.md — Build one read-only fact load, pure projection, and Next Up policy.
 - [ ] 199-05-PLAN.md — Add crash-safe multi-artifact lifecycle transactions and replay proof.
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 199-06-PLAN.md — Create the expert maintenance landing and read-only inspection lane.
-- [ ] 199-07-PLAN.md — Deliver grouped help and guided first-run init as the normal front door.
 - [ ] 199-08-PLAN.md — Automate typed territory freshness, publication, and planning evidence.
 - [ ] 199-09-PLAN.md — Make full and compact status authoritative projection views.
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 199-07-PLAN.md — Deliver grouped help and guided first-run init as the normal front door.
 - [ ] 199-10-PLAN.md — Make phase and history focused views that agree with status.
+- [ ] 199-19-PLAN.md — Publish the canonical maintenance wrapper with its own semantic proof.
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
 - [ ] 199-11-PLAN.md — Enforce the Autopilot authority contract and honest idle watch fallback.
+- [ ] 199-20-PLAN.md — Align guided init wrappers and the existing Codex creation skill.
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
 - [ ] 199-12-PLAN.md — Add evidence-backed signal receipts and the scoped Swarm boundary.
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
 - [ ] 199-13-PLAN.md — Make pause/resume transactional, exactly once, and provenance aware.
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
 - [ ] 199-14-PLAN.md — Prune retired pause/resume aliases from managed public surfaces.
 - [ ] 199-15-PLAN.md — Separate verified and forced-incomplete seal outcomes transactionally.
+
+**Wave 11** *(blocked on Wave 10 completion)*
+
 - [ ] 199-16-PLAN.md — Verify archive content before optional entomb clears active state.
+- [ ] 199-22-PLAN.md — Remove old pause-colony surfaces and repair canonical rule/playbook guidance.
+
+**Wave 12** *(blocked on Wave 11 completion)*
+
 - [ ] 199-17-PLAN.md — Retire recover/abandon as public lifecycle commands.
 - [ ] 199-18-PLAN.md — Route maintenance mutations through preview, transaction, and rollback.
-- [ ] 199-19-PLAN.md — Publish the canonical maintenance wrapper with its own semantic proof.
-- [ ] 199-20-PLAN.md — Align guided init wrappers and the existing Codex creation skill.
+- [ ] 199-26-PLAN.md — Ratchet focused lifecycle closeouts after all affected implementations.
+
+**Wave 13** *(blocked on Wave 12 completion)*
+
 - [ ] 199-21-PLAN.md — Align the sole resume surface and existing Codex lifecycle guidance.
-- [ ] 199-22-PLAN.md — Remove old pause-colony surfaces and repair canonical rule/playbook guidance.
-- [ ] 199-23-PLAN.md — Align owner-only seal wrappers and the existing Codex build-cycle skill.
 - [ ] 199-24-PLAN.md — Remove abandon from canonical and generated public surfaces.
 - [ ] 199-25-PLAN.md — Verify chamber/context truth before transactional archive repair.
-- [ ] 199-26-PLAN.md — Ratchet focused lifecycle closeouts after all affected implementations.
-- [ ] 199-27-PLAN.md — Execute every cross-platform Classic journey and public-command parity case.
-- [ ] 199-28-PLAN.md — Validate exact CAP/SYN/decision/requirement coverage and current vocabulary.
-- [ ] 199-29-PLAN.md — Run and receipt the exact full and race repository gates without touching user-owned changes.
-- [ ] 199-30-PLAN.md — Finish the canonical/managed D-13 vocabulary migration before the final vocabulary ratchet.
-- [ ] 199-31-PLAN.md — Migrate active product guides and interrupted-execution benchmarks to the sole pause/resume contract.
 - [ ] 199-32-PLAN.md — Replace retired recovery suggestions in active Go lifecycle and preserved-work output.
-- [ ] 199-33-PLAN.md — Make status review primary after seal across canonical and generated current guides.
+
+**Wave 14** *(blocked on Wave 13 completion)*
+
+- [ ] 199-23-PLAN.md — Align owner-only seal wrappers and the existing Codex build-cycle skill.
+- [ ] 199-30-PLAN.md — Finish the canonical/managed D-13 vocabulary migration before the final vocabulary ratchet.
 - [ ] 199-34-PLAN.md — Canonicalize stored resume state and retire the remaining recover/apply runtime routes.
+
+**Wave 15** *(blocked on Wave 14 completion)*
+
+- [ ] 199-27-PLAN.md — Execute every cross-platform Classic journey and public-command parity case.
+- [ ] 199-31-PLAN.md — Migrate active product guides and interrupted-execution benchmarks to the sole pause/resume contract.
+
+**Wave 16** *(blocked on Wave 15 completion)*
+
+- [ ] 199-33-PLAN.md — Make status review primary after seal across canonical and generated current guides.
+
+**Wave 17** *(blocked on Wave 16 completion)*
+
+- [ ] 199-28-PLAN.md — Validate exact CAP/SYN/decision/requirement coverage and current vocabulary.
+
+**Wave 18** *(blocked on Wave 17 completion)*
+
+- [ ] 199-29-PLAN.md — Run and receipt the exact full and race repository gates without touching user-owned changes.
 
 **Success criteria:**
 
