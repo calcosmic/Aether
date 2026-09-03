@@ -202,10 +202,13 @@ func TestLifecycleHistory199FocusedProjection(t *testing.T) {
 		t.Fatalf("history visual returned error: %v\nstderr: %s", err, visualErr)
 	}
 	plain := stripANSI(visual)
-	for _, heading := range []string{"Colony", "Activity", "Active work", "Recent completed outcomes", "Next Up"} {
+	for _, heading := range []string{"Colony", "Activity", "Active work", "Recent completed outcomes"} {
 		if !strings.Contains(plain, heading) {
 			t.Errorf("history visual missing %q\n%s", heading, plain)
 		}
+	}
+	if !strings.Contains(plain, "aether continue") {
+		t.Errorf("history visual missing the shared Next Up command\n%s", plain)
 	}
 	for _, forbidden := range []string{
 		`{"ok":true`, `"schema_version"`,
