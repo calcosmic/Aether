@@ -971,6 +971,7 @@ func TestPlanForceRecoversFromStaleInProgress(t *testing.T) {
 	resetRootCmd(t)
 
 	dataDir := setupBuildFlowTest(t)
+	withWorkingDir(t, filepath.Dir(filepath.Dir(dataDir)))
 	goal := "Force replan from stale state"
 	taskID := "1.1"
 	createTestColonyState(t, dataDir, colony.ColonyState{
@@ -1027,6 +1028,7 @@ func TestPlanForcePreservesCompletedPhasesAndRevisesFutureWork(t *testing.T) {
 	resetRootCmd(t)
 
 	dataDir := setupBuildFlowTest(t)
+	withWorkingDir(t, filepath.Dir(filepath.Dir(dataDir)))
 	goal := "Force replan after completion"
 	taskID1 := "1.1"
 	taskID2 := "2.1"
@@ -2371,6 +2373,7 @@ func TestE2EForceReplanRecovery(t *testing.T) {
 	resetRootCmd(t)
 
 	dataDir := setupBuildFlowTest(t)
+	withWorkingDir(t, filepath.Dir(filepath.Dir(dataDir)))
 	planningDir := dataDir + "/planning"
 	if err := os.MkdirAll(planningDir, 0755); err != nil {
 		t.Fatalf("failed to create planning dir: %v", err)

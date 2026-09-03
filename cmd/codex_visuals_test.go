@@ -370,6 +370,7 @@ func TestPlanVisualOutput(t *testing.T) {
 	resetRootCmd(t)
 
 	dataDir := setupBuildFlowTest(t)
+	withWorkingDir(t, filepath.Dir(filepath.Dir(dataDir)))
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
 	goal := "Ship visual output parity"
@@ -663,6 +664,7 @@ func TestPlanVisualOutputShowsSpawnTreeContract(t *testing.T) {
 	resetRootCmd(t)
 
 	dataDir := setupBuildFlowTest(t)
+	withWorkingDir(t, filepath.Dir(filepath.Dir(dataDir)))
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
 	goal := "Surface planning contracts"
