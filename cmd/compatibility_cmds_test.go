@@ -410,7 +410,7 @@ func TestSwarmCompatibilityWatchPrefersCurrentRunWorkers(t *testing.T) {
 	}
 }
 
-func TestWatchCompatibilityWritesArtifacts(t *testing.T) {
+func TestWatchCompatibilityUsesReadOnlyFallback(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -433,6 +433,8 @@ func TestWatchCompatibilityWritesArtifacts(t *testing.T) {
 	if err := spawnTree.UpdateStatus("Hammer-9", "active", "Running"); err != nil {
 		t.Fatalf("mark active: %v", err)
 	}
+	root := filepath.Dir(filepath.Dir(dataDir))
+	before := hashDirContents(t, root)
 
 	rootCmd.SetArgs([]string{"watch"})
 	if err := rootCmd.Execute(); err != nil {
@@ -441,20 +443,23 @@ func TestWatchCompatibilityWritesArtifacts(t *testing.T) {
 
 	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
 	result := env["result"].(map[string]interface{})
-	if result["mode"] != "watch" {
-		t.Fatalf("mode = %v, want watch", result["mode"])
+	if result["mode"] != "idle_watch" {
+		t.Fatalf("mode = %v, want idle_watch", result["mode"])
 	}
-	if result["active_count"] != float64(1) {
-		t.Fatalf("active_count = %v, want 1", result["active_count"])
+	if result["active_count"] != float64(0) || result["live_capability"] != "unsupported" {
+		t.Fatalf("idle watch fabricated liveness: %+v", result)
+	}
+	if result["idle_message"] != "No ants are active right now" || result["authoritative_snapshot"] != "status" {
+		t.Fatalf("idle watch fallback contract = %+v", result)
 	}
 
-	statusPath := filepath.Join(dataDir, "watch-status.txt")
-	progressPath := filepath.Join(dataDir, "watch-progress.txt")
-	if _, err := os.Stat(statusPath); err != nil {
-		t.Fatalf("watch-status.txt missing: %v", err)
+	if after := hashDirContents(t, root); after != before {
+		t.Fatalf("watch mutated its workspace: %s -> %s", before, after)
 	}
-	if _, err := os.Stat(progressPath); err != nil {
-		t.Fatalf("watch-progress.txt missing: %v", err)
+	for _, deprecated := range []string{"watch-status.txt", "watch-progress.txt"} {
+		if _, err := os.Stat(filepath.Join(dataDir, deprecated)); !os.IsNotExist(err) {
+			t.Fatalf("idle watch wrote deprecated artifact %s", deprecated)
+		}
 	}
 }
 

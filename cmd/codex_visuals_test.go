@@ -1005,7 +1005,7 @@ func TestContinueVisualOutputShowsColonyCompleteStageMarker(t *testing.T) {
 	}
 }
 
-func TestWatchVisualOutputShowsSnapshotArtifacts(t *testing.T) {
+func TestWatchVisualOutputShowsHonestIdleFallback(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -1039,15 +1039,26 @@ func TestWatchVisualOutputShowsSnapshotArtifacts(t *testing.T) {
 
 	output := stdout.(*bytes.Buffer).String()
 	for _, want := range []string{
-		"Scope: meta",
+		"No ants are active right now",
+		"Status is the authoritative snapshot",
+		"Projection revision: " + LifecycleProjectionRevision,
+		"Recent recorded activity",
+		"Actor: Hammer-9",
+		"recorded evidence only",
+		"Live event source: unsupported until Phase 202",
+	} {
+		if !strings.Contains(output, want) {
+			t.Errorf("watch visual output missing %q\n%s", want, output)
+		}
+	}
+	for _, forbidden := range []string{
 		"Active Workers",
-		".aether/data/spawn-tree.txt",
 		".aether/data/watch-status.txt",
 		".aether/data/watch-progress.txt",
 		"Run in a TTY for live refresh.",
 	} {
-		if !strings.Contains(output, want) {
-			t.Errorf("watch visual output missing %q\n%s", want, output)
+		if strings.Contains(output, forbidden) {
+			t.Errorf("idle watch visual output contains obsolete live claim %q\n%s", forbidden, output)
 		}
 	}
 }
