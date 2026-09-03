@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -10,6 +12,76 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
+
+func TestLifecycleStatusWrapper199(t *testing.T) {
+	root, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("find repository root: %v", err)
+	}
+	const (
+		source      = ".aether/commands/status.yaml"
+		description = "Show the complete authoritative colony snapshot."
+		runtime     = "AETHER_OUTPUT_MODE=visual aether status $ARGUMENTS"
+	)
+	spec, issues := readSourceCheckCommandSpec(root, source, "status")
+	if len(issues) > 0 {
+		t.Fatalf("status source is invalid: %#v", issues)
+	}
+	if spec.Description != description {
+		t.Fatalf("canonical description = %q, want %q", spec.Description, description)
+	}
+	if spec.Runtime.Command != runtime {
+		t.Fatalf("canonical runtime command = %q, want %q", spec.Runtime.Command, runtime)
+	}
+
+	canonical, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(source)))
+	if err != nil {
+		t.Fatalf("read canonical status source: %v", err)
+	}
+	canonicalText := string(canonical)
+	for _, want := range []string{"default", "full", "--compact", "snapshot", "watch", "event stream"} {
+		if !strings.Contains(strings.ToLower(canonicalText), strings.ToLower(want)) {
+			t.Errorf("canonical status source missing %q semantics\n%s", want, canonicalText)
+		}
+	}
+
+	for _, rel := range []string{
+		".claude/commands/ant-status.md",
+		".claude/commands/ant/status.md",
+		".opencode/commands/ant/status.md",
+	} {
+		t.Run(rel, func(t *testing.T) {
+			data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+			if err != nil {
+				t.Fatalf("read wrapper: %v", err)
+			}
+			firstLine := strings.SplitN(string(data), "\n", 2)[0]
+			if want := "<!-- Aether-managed: runtime spec at " + source + ". Synced by aether update. -->"; firstLine != want {
+				t.Fatalf("source linkage = %q, want %q", firstLine, want)
+			}
+			frontmatter, body, err := parseSourceCheckWrapper(data)
+			if err != nil {
+				t.Fatalf("parse wrapper: %v", err)
+			}
+			if frontmatter.Name != "ant-status" || frontmatter.Description != description {
+				t.Fatalf("frontmatter = %#v, want ant-status and exact description", frontmatter)
+			}
+			for _, want := range []string{spec.SourceOfTruth, runtime, "default full", "--compact", "complete snapshot", "event stream"} {
+				if !strings.Contains(strings.ToLower(body), strings.ToLower(want)) {
+					t.Errorf("wrapper missing %q\n%s", want, body)
+				}
+			}
+			for _, forbidden := range []string{
+				".aether/data", "COLONY_STATE.json", "spawn-tree", "pending-decisions",
+				"`ps ", "`pgrep ", "`git log", "`cat ", "`jq ", "cost ledger",
+			} {
+				if strings.Contains(strings.ToLower(body), strings.ToLower(forbidden)) {
+					t.Errorf("wrapper performs or names host-side inference %q\n%s", forbidden, body)
+				}
+			}
+		})
+	}
+}
 
 func TestLifecycleStatus199FullOrder(t *testing.T) {
 	projection := projectLifecycle(lifecycleStatus199Facts(), LifecycleViewFull, "codex")
