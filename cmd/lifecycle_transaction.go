@@ -478,6 +478,14 @@ func (tx *lifecycleTransaction) Commit() (colony.LifecycleReceipt, error) {
 	if receipt, ok, err := tx.loadCommittedReceipt(); ok || err != nil {
 		return receipt, err
 	}
+	if tx.intent != nil {
+		return colony.LifecycleReceipt{}, fmt.Errorf("lifecycle transaction: durable intent already exists; resume transaction %s instead of recommitting it", tx.config.TransactionID)
+	}
+	if _, err := os.Lstat(filepath.Join(tx.journalPath(), "intent.json")); err == nil {
+		return colony.LifecycleReceipt{}, fmt.Errorf("lifecycle transaction: durable intent already exists; resume transaction %s instead of reusing its id", tx.config.TransactionID)
+	} else if !os.IsNotExist(err) {
+		return colony.LifecycleReceipt{}, fmt.Errorf("lifecycle transaction: inspect existing intent: %w", err)
+	}
 	if err := tx.Validate(); err != nil {
 		return colony.LifecycleReceipt{}, err
 	}
@@ -891,6 +899,11 @@ func (tx *lifecycleTransaction) restoreLifecycleTarget(target lifecycleTransacti
 func (tx *lifecycleTransaction) Rollback() error {
 	lifecycleTransactionProcessMu.Lock()
 	defer lifecycleTransactionProcessMu.Unlock()
+	if _, committed, err := tx.loadCommittedReceipt(); err != nil {
+		return err
+	} else if committed {
+		return fmt.Errorf("lifecycle transaction: verified transaction %s cannot be rolled back after its receipt is durable", tx.config.TransactionID)
+	}
 	if tx.intent == nil {
 		intent, progress, err := tx.loadJournal()
 		if err != nil {

@@ -207,6 +207,9 @@ func TestLifecycleTransactionReplayExactlyOnce(t *testing.T) {
 	if renames != 1 {
 		t.Fatalf("replay applied effect %d times, want exactly once", renames)
 	}
+	if err := tx.Rollback(); err == nil {
+		t.Fatal("verified transaction allowed rollback after its receipt was durable")
+	}
 	if got := string(mustReadLifecycleFixtureFile(t, target)); got != "after" {
 		t.Fatalf("target = %q, want after", got)
 	}
