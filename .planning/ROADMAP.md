@@ -77,7 +77,7 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 
 **Requirements:** SYNTH-01, CEC-01, CEC-02, CEC-04, CEC-08, LIFE-01..06, PROOF-01
 
-**Plans:** 9/34 plans executed
+**Plans:** 10/34 plans executed
 
 Plans:
 **Wave 1**
@@ -106,7 +106,7 @@ Plans:
 **Wave 6** *(blocked on Wave 5 completion)*
 
 - [x] 199-07-PLAN.md — Deliver grouped help and guided first-run init as the normal front door.
-- [ ] 199-10-PLAN.md — Make phase and history focused views that agree with status.
+- [x] 199-10-PLAN.md — Make phase and history focused views that agree with status.
 - [ ] 199-19-PLAN.md — Publish the canonical maintenance wrapper with its own semantic proof.
 
 **Wave 7** *(blocked on Wave 6 completion)*

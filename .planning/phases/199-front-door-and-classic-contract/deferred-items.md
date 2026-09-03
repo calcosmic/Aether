@@ -49,3 +49,11 @@
 - **Isolation check:** All ten `TestFrontDoor*` cases, `TestCommandSourceHygiene`, the source-check regressions, the existing init compatibility suite, and `go test ./pkg/colony` pass in isolation. The catalog mismatch contains only the previously changed `maturity` and `status` metadata; it contains no Plan 199-07 command.
 - **Why deferred:** These failures reproduce outside the front-door paths and are already assigned to later renderer/snapshot cleanup and the final Phase 199 verification gate.
 - **Follow-up:** Resolve the owning lifecycle migrations, refresh the catalog once their command contracts settle, and rerun the normal/race repository gates in Plan 199-29.
+
+## Plan 199-10 full command suite still includes staged lifecycle migrations
+
+- **Found during:** Plan 199-10 overall command-package verification (`go test ./cmd -count=1`)
+- **Observed:** The aggregate package reported 7,201 passing tests, 108 failures, and 10 skips. The Plan 199-10 phase/history/agreement contracts pass all 29 focused cases in both normal and race-enabled runs. The broader failures remain concentrated in the already-recorded legacy status/Next Up expectations, old golden snapshots, missing archived Phase 196 fixture, and command-surface migrations owned by later Phase 199 plans.
+- **Isolation check:** Existing `TestHistory*` plus the new history tests pass together (15 cases), the exact phase suite passes 14 cases, and the cross-view agreement suite passes 8 cases. Refreshing the command catalog would also absorb previously deferred `maturity` and `status` metadata, confirming that its mismatch is a shared staged snapshot rather than an isolated Plan 199-10 fix.
+- **Why deferred:** Updating the unrelated legacy expectations or shared goldens here would cross the explicit ownership of later renderer, compatibility, and final-verification plans. Plan 199-10 changes no legacy Next Up policy and its focused views already use the authoritative projection.
+- **Follow-up:** Complete the remaining Phase 199 command migrations, refresh shared catalogs/goldens once those contracts settle, and rerun the normal and race repository gates in Plan 199-29.

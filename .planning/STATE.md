@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 199-07-PLAN.md
-last_updated: "2026-09-03T22:24:17.134Z"
+stopped_at: Completed 199-10-PLAN.md
+last_updated: "2026-09-03T22:54:54.007Z"
 last_activity: 2026-09-03
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 34
-  completed_plans: 9
+  completed_plans: 10
   percent: 0
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-02)
 ## Current Position
 
 Phase: 199 (front-door-and-classic-contract) — EXECUTING
-Plan: 10 of 34
+Plan: 11 of 34
 Status: Ready to execute
 Last activity: 2026-09-03
 
@@ -87,6 +87,7 @@ Last activity: 2026-09-03
 | Phase 199 P08 | 58min | 3 tasks | 12 files |
 | Phase 199 P09 | 19min | 2 tasks | 9 files |
 | Phase 199 P07 | 26min | 2 tasks | 10 files |
+| Phase 199 P10 | 27min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -217,6 +218,9 @@ Last activity: 2026-09-03
 - [Phase 199]: Guided Claude and OpenCode init refuse an existing colony before storage opens; the raw runtime confirmation escape hatch remains compatible.
 - [Phase 199]: Accepted intent is durable accepted-charter/v1 episode data, not presentation text reconstructed after initialization.
 - [Phase 199]: Help wrappers invoke the visual Go command once and return stdout unchanged instead of maintaining a second help implementation.
+- [Phase 199]: History event sources remain evidence sources; only recorded spawn-tree identities become actors. — This prevents command names from being presented as people or workers without evidence.
+- [Phase 199]: Untimestamped lifecycle receipts remain visible after timestamped history evidence. — History must not invent a chronology from the read time or a nearby event.
+- [Phase 199]: Phase exposes shared current_phase separately from requested detail/list/all selection. — All focused selectors must retain the same phase standing as status and history.
 
 ### Pending Todos
 
@@ -330,8 +334,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-03T22:24:17.125Z
-Stopped at: Completed 199-07-PLAN.md
+Last session: 2026-09-03T22:54:53.999Z
+Stopped at: Completed 199-10-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
