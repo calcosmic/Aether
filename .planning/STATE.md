@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 199-08-PLAN.md
-last_updated: "2026-09-03T21:26:17.384Z"
+stopped_at: Completed 199-09-PLAN.md
+last_updated: "2026-09-03T21:48:28.648Z"
 last_activity: 2026-09-03
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 34
-  completed_plans: 7
-  percent: 21
+  completed_plans: 8
+  percent: 0
 ---
 
 # Project State
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-02)
 ## Current Position
 
 Phase: 199 (front-door-and-classic-contract) — EXECUTING
-Plan: 8 of 34
+Plan: 9 of 34
 Status: Ready to execute
 Last activity: 2026-09-03
 
@@ -85,6 +85,7 @@ Last activity: 2026-09-03
 | Phase 199 P05 | 27min | 2 tasks | 4 files |
 | Phase 199 P06 | 29min | 3 tasks | 14 files |
 | Phase 199 P08 | 58min | 3 tasks | 12 files |
+| Phase 199 P09 | 19min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -208,6 +209,9 @@ Last activity: 2026-09-03
 - [Phase 199]: A fresh territory snapshot authenticates repository identity, canonical root, source revision, and every consumed artifact digest, including anchors.json.
 - [Phase 199]: Automatic refresh writes worker output to a canonical candidate directory and publishes only a complete, validated snapshot through lifecycle_transaction.
 - [Phase 199]: The plan manifest carries immutable territory evidence and finalization revalidates that exact evidence against the current repository before accepting a plan.
+- [Phase 199]: Status loads lifecycle facts once, projects once, and treats full/compact as views of that same result. — One semantic result prevents the compact and full dashboards from disagreeing.
+- [Phase 199]: Health and readiness use discrete evidence-backed states instead of percentage-derived maturity labels. — Verified, blocked, degraded, unavailable, and unknown remain distinguishable and cite their evidence.
+- [Phase 199]: Status wrappers only invoke the Go runtime with argument passthrough; they never inspect host files, costs, or activity. — The Go lifecycle projection stays the sole authority across Claude and OpenCode.
 
 ### Pending Todos
 
@@ -321,8 +325,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-03T21:26:17.374Z
-Stopped at: Completed 199-08-PLAN.md
+Last session: 2026-09-03T21:48:28.638Z
+Stopped at: Completed 199-09-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

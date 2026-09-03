@@ -33,3 +33,11 @@
 - **Isolation check:** Every Plan 199-06 contract and each directly affected audit gate passes in focused runs, including the maintenance landing, typed inspections, live skill inventory/diff, command catalog, reachability, visual-output discipline, and source-surface checks.
 - **Why deferred:** These failures are concrete instances of the pre-existing migration items above. Their renderers and recovery wording belong to later Phase 199 plans; changing them in the expert-maintenance plan would cross ownership boundaries.
 - **Follow-up:** Resolve them with the owning lifecycle-renderer plans, then rerun the full command and repository suites in Plan 199-29.
+
+## Plan 199-09 supersedes legacy status-dashboard expectations
+
+- **Found during:** Plan 199-09 broader command-package verification (`go test ./cmd`)
+- **Observed:** The package run reported 7,157 passing tests, 100 failures, and 10 skips. The status-specific failures still assert the retired dashboard/JSON shape (granularity, version, memory-health, reconciliation, and hand-built Next Up fields), while the catalog/golden failures retain the prior status description. The remaining failures substantially overlap the already-deferred lifecycle-policy and archived-path items above.
+- **Isolation check:** The exact Plan 199-09 runtime contract passes all 18 focused cases, including full/compact semantic agreement, all five health states, responsive rendering, absent-evidence wording, and zero-write fixtures. The exact wrapper/source-hygiene commands pass 4 and 7 cases respectively.
+- **Why deferred:** This plan deliberately makes the versioned lifecycle projection authoritative and replaces the legacy status result. Reintroducing the retired dashboard solely to satisfy old snapshots would create two competing truth systems; the remaining cross-command migrations and golden refresh belong to later Phase 199 plans.
+- **Follow-up:** Migrate or retire the legacy status expectations with their owning Phase 199 renderer/snapshot plans, then run the repository-wide normal and race gates in Plan 199-29.
