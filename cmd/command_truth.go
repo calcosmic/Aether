@@ -20,21 +20,21 @@ import (
 var newQuickWorkerInvoker = codex.NewWorkerInvoker
 
 var maturityCmd = &cobra.Command{
-	Use:   "maturity",
-	Short: "View colony maturity journey",
-	Args:  cobra.NoArgs,
+	Use:         "maturity",
+	Short:       "Show evidence-backed colony health and readiness",
+	Args:        cobra.NoArgs,
+	Annotations: map[string]string{"aether.io/read-only": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if store == nil {
-			outputErrorMessage("no store initialized")
-			return nil
-		}
-		state, err := loadActiveColonyState()
+		root := resolveAetherRoot()
+		now := time.Now().UTC()
+		facts, err := loadLifecycleFacts(root, store, now)
 		if err != nil {
-			outputError(1, colonyStateLoadMessage(err), nil)
-			return nil
+			facts = unavailableLifecycleFacts(root, now, err.Error())
 		}
-		result := buildMaturityResult(state)
-		outputWorkflow(result, renderMaturityVisual(result))
+		projection := projectLifecycle(facts, LifecycleViewFocused, detectPlatform())
+		projection.Command = "maturity"
+		result := projectLifecycleHealth(facts, projection)
+		outputWorkflow(result, renderLifecycleHealth(result, lifecycleStatusOutputWidth()))
 		return nil
 	},
 }
@@ -131,94 +131,244 @@ func init() {
 	rootCmd.AddCommand(verifyCastesCmd)
 }
 
-func buildMaturityResult(state colony.ColonyState) map[string]interface{} {
-	milestone, total, completed := deriveMilestoneProgress(state)
-	progress := 0
-	if total > 0 {
-		progress = int(float64(completed) / float64(total) * 100)
-	}
-	ageDays := 0
-	initializedAt := ""
-	if state.InitializedAt != nil {
-		initializedAt = state.InitializedAt.UTC().Format(time.RFC3339)
-		ageDays = int(time.Since(*state.InitializedAt).Hours() / 24)
-		if ageDays < 0 {
-			ageDays = 0
-		}
-	}
-	return map[string]interface{}{
-		"mode":             "maturity",
-		"goal":             goalText(state),
-		"milestone":        milestone,
-		"version":          resolveVersion(resolveAetherRoot()),
-		"phases_completed": completed,
-		"total_phases":     total,
-		"progress_percent": progress,
-		"colony_age_days":  ageDays,
-		"initialized_at":   initializedAt,
-		"state":            string(state.State),
-		"next":             nextCommandFromState(state),
+type LifecycleHealthState string
+
+const (
+	LifecycleHealthVerified    LifecycleHealthState = "verified"
+	LifecycleHealthBlocked     LifecycleHealthState = "blocked"
+	LifecycleHealthDegraded    LifecycleHealthState = "degraded"
+	LifecycleHealthUnavailable LifecycleHealthState = "unavailable"
+	LifecycleHealthUnknown     LifecycleHealthState = "unknown"
+)
+
+type LifecycleHealthAssessment struct {
+	Status      LifecycleHealthState `json:"status"`
+	EvidenceIDs []string             `json:"evidence_ids,omitempty"`
+	Timestamp   string               `json:"timestamp,omitempty"`
+	Reasons     []string             `json:"reasons,omitempty"`
+}
+
+// LifecycleHealthProjection replaces the old percentage-derived maturity
+// label with typed claims backed by the same immutable lifecycle snapshot as
+// status. It intentionally reuses the projection's identity and Next Up.
+type LifecycleHealthProjection struct {
+	SchemaVersion      string                                  `json:"schema_version"`
+	Command            string                                  `json:"command"`
+	OutcomeKind        colony.OutcomeKind                      `json:"outcome_kind"`
+	ProjectionRevision string                                  `json:"projection_revision"`
+	Identity           LifecycleFact[LifecycleIdentityFacts]   `json:"identity"`
+	Goal               LifecycleFact[string]                   `json:"goal"`
+	Standing           LifecycleFact[string]                   `json:"standing"`
+	Phase              LifecycleFact[LifecyclePhaseProjection] `json:"phase"`
+	Tasks              LifecycleFact[[]colony.Task]            `json:"tasks"`
+	Health             LifecycleHealthAssessment               `json:"health"`
+	Readiness          LifecycleHealthAssessment               `json:"readiness"`
+	NextAction         LifecycleProjectedAction                `json:"next_action"`
+	Alternatives       []LifecycleActionChoice                 `json:"alternatives,omitempty"`
+	StateEffect        colony.LifecycleStateEffect             `json:"state_effect"`
+	Provenance         colony.RecoveryProvenance               `json:"provenance"`
+}
+
+func projectLifecycleHealth(facts LifecycleFacts, projection LifecycleProjection) LifecycleHealthProjection {
+	assessment := classifyLifecycleHealth(facts, projection)
+	readiness := assessment
+	readiness.EvidenceIDs = append([]string(nil), assessment.EvidenceIDs...)
+	readiness.Reasons = append([]string(nil), assessment.Reasons...)
+	return LifecycleHealthProjection{
+		SchemaVersion:      LifecycleResultSchemaVersion,
+		Command:            "maturity",
+		OutcomeKind:        projection.OutcomeKind,
+		ProjectionRevision: LifecycleProjectionRevision,
+		Identity:           projection.Identity,
+		Goal:               projection.Goal,
+		Standing:           projection.Standing,
+		Phase:              projection.Phase,
+		Tasks:              projection.Tasks,
+		Health:             assessment,
+		Readiness:          readiness,
+		NextAction:         projection.NextAction,
+		Alternatives:       append([]LifecycleActionChoice(nil), projection.Alternatives...),
+		StateEffect:        colony.LifecycleStateEffectNone,
+		Provenance:         projection.Provenance,
 	}
 }
 
-func deriveMilestoneProgress(state colony.ColonyState) (string, int, int) {
-	total := len(state.Plan.Phases)
-	completed := 0
-	for _, phase := range state.Plan.Phases {
-		if phase.Status == colony.PhaseCompleted {
-			completed++
+func classifyLifecycleHealth(facts LifecycleFacts, projection LifecycleProjection) LifecycleHealthAssessment {
+	for _, source := range []LifecycleFactSource{facts.State.Source, facts.Progress.Source, facts.Verification.Source} {
+		if source.Provenance != LifecycleFactMalformed && source.Provenance != LifecycleFactUnavailable {
+			continue
+		}
+		return LifecycleHealthAssessment{
+			Status:      LifecycleHealthUnavailable,
+			EvidenceIDs: lifecycleHealthEvidenceIDs(source.Domain, source.Path),
+			Reasons:     []string{emptyFallback(strings.TrimSpace(source.Diagnostic), fmt.Sprintf("%s evidence is unavailable", source.Domain))},
 		}
 	}
-	milestone := strings.TrimSpace(state.Milestone)
-	if milestone == "" && total > 0 {
-		ratio := float64(completed) / float64(total)
-		switch {
-		case ratio >= 1:
-			milestone = "Sealed Chambers"
-		case ratio >= 0.75:
-			milestone = "Ventilated Nest"
-		case ratio >= 0.5:
-			milestone = "Brood Stable"
-		case ratio >= 0.25:
-			milestone = "Open Chambers"
-		default:
-			milestone = "First Mound"
+	for _, source := range []LifecycleFactSource{facts.State.Source, facts.Progress.Source, facts.Verification.Source} {
+		if source.Provenance != LifecycleFactMissing {
+			continue
+		}
+		return LifecycleHealthAssessment{
+			Status:      LifecycleHealthUnknown,
+			EvidenceIDs: lifecycleHealthEvidenceIDs(source.Domain, source.Path),
+			Reasons:     []string{emptyFallback(strings.TrimSpace(source.Diagnostic), fmt.Sprintf("%s evidence is not recorded", source.Domain))},
 		}
 	}
-	if milestone == "" {
-		milestone = "First Mound"
+
+	if len(projection.Blockers) > 0 {
+		assessment := LifecycleHealthAssessment{Status: LifecycleHealthBlocked}
+		for _, blocker := range projection.Blockers {
+			assessment.EvidenceIDs = appendUniqueString(assessment.EvidenceIDs, blocker.ID)
+			assessment.Reasons = appendUniqueString(assessment.Reasons, blocker.Summary)
+		}
+		assessment.Timestamp = lifecycleHealthLatestFlagTime(facts.Blockers.Value)
+		return assessment
 	}
-	return milestone, total, completed
+	if projection.Closure.Forced || projection.Closure.Status == "forced_incomplete" {
+		return LifecycleHealthAssessment{
+			Status:      LifecycleHealthBlocked,
+			EvidenceIDs: []string{"forced-incomplete-closure"},
+			Reasons:     []string{emptyFallback(strings.TrimSpace(projection.Closure.OwnerReason), "Closure was forced with incomplete work")},
+		}
+	}
+	for _, gate := range facts.Verification.Value.Gates {
+		if gate.Passed {
+			continue
+		}
+		return LifecycleHealthAssessment{
+			Status:      LifecycleHealthBlocked,
+			EvidenceIDs: []string{emptyFallback(strings.TrimSpace(gate.Name), "unnamed-gate")},
+			Timestamp:   strings.TrimSpace(gate.Timestamp),
+			Reasons:     []string{emptyFallback(strings.TrimSpace(gate.Detail), "A recorded verification gate failed")},
+		}
+	}
+
+	openFindings := make([]colony.ReviewLedgerEntry, 0)
+	for _, finding := range facts.Memory.Value.Findings {
+		if strings.EqualFold(strings.TrimSpace(finding.Status), "open") {
+			openFindings = append(openFindings, finding)
+		}
+	}
+	if len(openFindings) > 0 {
+		assessment := LifecycleHealthAssessment{Status: LifecycleHealthDegraded}
+		for _, finding := range openFindings {
+			assessment.EvidenceIDs = appendUniqueString(assessment.EvidenceIDs, finding.ID)
+			assessment.Reasons = appendUniqueString(assessment.Reasons, finding.Description)
+			assessment.Timestamp = laterLifecycleTimestamp(assessment.Timestamp, finding.GeneratedAt)
+		}
+		return assessment
+	}
+
+	if len(facts.Verification.Value.Gates) == 0 {
+		return LifecycleHealthAssessment{
+			Status:      LifecycleHealthUnknown,
+			EvidenceIDs: lifecycleHealthEvidenceIDs(facts.Verification.Source.Domain, facts.Verification.Source.Path),
+			Reasons:     []string{emptyFallback(strings.TrimSpace(facts.Verification.Source.Diagnostic), "No verification evidence is recorded")},
+		}
+	}
+
+	assessment := LifecycleHealthAssessment{Status: LifecycleHealthVerified}
+	for _, gate := range facts.Verification.Value.Gates {
+		assessment.EvidenceIDs = appendUniqueString(assessment.EvidenceIDs, gate.Name)
+		assessment.Timestamp = laterLifecycleTimestamp(assessment.Timestamp, gate.Timestamp)
+	}
+	assessment.Reasons = []string{"All recorded verification gates passed"}
+	return assessment
 }
 
-func goalText(state colony.ColonyState) string {
-	if state.Goal == nil {
-		return ""
+func lifecycleHealthEvidenceIDs(values ...string) []string {
+	var result []string
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			result = appendUniqueString(result, strings.TrimSpace(value))
+		}
 	}
-	return strings.TrimSpace(*state.Goal)
+	return result
 }
 
-func renderMaturityVisual(result map[string]interface{}) string {
-	var b strings.Builder
-	b.WriteString(renderBanner(commandEmoji("maturity"), "Maturity"))
-	b.WriteString(visualDividerStr())
-	if goal := strings.TrimSpace(stringValue(result["goal"])); goal != "" {
-		b.WriteString("Goal: ")
-		b.WriteString(goal)
-		b.WriteString("\n")
+func appendUniqueString(values []string, value string) []string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return values
 	}
-	b.WriteString("Milestone: ")
-	b.WriteString(emptyFallback(stringValue(result["milestone"]), "First Mound"))
-	b.WriteString("\n")
-	b.WriteString(fmt.Sprintf("Progress: %d/%d phases (%d%%)\n", intValue(result["phases_completed"]), intValue(result["total_phases"]), intValue(result["progress_percent"])))
-	if age := intValue(result["colony_age_days"]); age > 0 {
-		b.WriteString(fmt.Sprintf("Age: %d days\n", age))
+	for _, existing := range values {
+		if existing == value {
+			return values
+		}
 	}
-	b.WriteString("Version: ")
-	b.WriteString(emptyFallback(stringValue(result["version"]), "unknown"))
-	b.WriteString("\n")
-	b.WriteString(renderNextUp(fmt.Sprintf("Run `%s` for the next lifecycle step.", emptyFallback(stringValue(result["next"]), "aether status"))))
-	return b.String()
+	return append(values, value)
+}
+
+func lifecycleHealthLatestFlagTime(flags []colony.FlagEntry) string {
+	latest := ""
+	for _, flag := range flags {
+		if !flag.Resolved {
+			latest = laterLifecycleTimestamp(latest, flag.CreatedAt)
+		}
+	}
+	return latest
+}
+
+func laterLifecycleTimestamp(current, candidate string) string {
+	current = strings.TrimSpace(current)
+	candidate = strings.TrimSpace(candidate)
+	if candidate > current {
+		return candidate
+	}
+	return current
+}
+
+func renderLifecycleHealth(result LifecycleHealthProjection, width int) string {
+	phase := result.Phase.Value
+	lines := []string{
+		"━━ 🩺 H E A L T H   &   R E A D I N E S S ━━",
+		"",
+		"Colony",
+		"Name: " + emptyFallback(strings.TrimSpace(result.Identity.Value.Name), "Unnamed colony"),
+		"Goal: " + emptyFallback(strings.TrimSpace(result.Goal.Value), "Not recorded"),
+		fmt.Sprintf("Phase %d/%d | Tasks %d/%d", phase.CurrentNumber, phase.TotalPhases, phase.CompletedTasks, phase.TotalTasks),
+		"",
+		"Health & Readiness",
+		"Health: " + lifecycleHealthStateLabel(result.Health.Status),
+		"Readiness: " + lifecycleHealthStateLabel(result.Readiness.Status),
+	}
+	if len(result.Health.EvidenceIDs) > 0 {
+		lines = append(lines, "Evidence: "+strings.Join(result.Health.EvidenceIDs, ", "))
+	}
+	if result.Health.Timestamp != "" {
+		lines = append(lines, "Observed: "+result.Health.Timestamp)
+	}
+	for _, reason := range result.Health.Reasons {
+		lines = append(lines, "Reason: "+reason)
+	}
+	lines = append(lines,
+		"",
+		"Next Up",
+		"Command: "+emptyFallback(lifecycleStatusActionCommand(result.NextAction), "Not available"),
+		"Reason: "+emptyFallback(strings.TrimSpace(result.NextAction.Reason), "Not recorded"),
+	)
+	return colorLifecycleHealth(lifecycleStatusJoin(lines, width, false))
+}
+
+func lifecycleHealthStateLabel(state LifecycleHealthState) string {
+	text := string(state)
+	if text == "" {
+		text = string(LifecycleHealthUnknown)
+	}
+	return strings.ToUpper(text[:1]) + text[1:]
+}
+
+func colorLifecycleHealth(output string) string {
+	if !shouldUseANSIColors() {
+		return output
+	}
+	lines := strings.Split(strings.TrimSuffix(output, "\n"), "\n")
+	for index, line := range lines {
+		if index == 0 || line == "Colony" || line == "Health & Readiness" || line == "Next Up" {
+			lines[index] = "\x1b[96m" + line + "\x1b[0m"
+		}
+	}
+	return strings.Join(lines, "\n") + "\n"
 }
 
 func runQuickScout(question string, timeout time.Duration) (map[string]interface{}, error) {

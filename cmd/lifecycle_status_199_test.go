@@ -85,7 +85,7 @@ func TestLifecycleStatus199CompactSubset(t *testing.T) {
 			t.Fatalf("compact status rendered non-selected section %q\n%s", forbidden, output)
 		}
 	}
-	for _, want := range []string{"Atlas", "Phase 1/1", "No ants are active", "Unreported", "aether continue"} {
+	for _, want := range []string{"Atlas", "Phase 1/1", "No ants are active", "1500 tokens", "aether continue"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("compact status missing %q\n%s", want, output)
 		}

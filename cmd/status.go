@@ -20,33 +20,31 @@ import (
 )
 
 var statusCmd = &cobra.Command{
-	Use:   "status",
-	Short: "Display colony dashboard",
-	Args:  cobra.NoArgs,
+	Use:         "status",
+	Short:       "Show the complete authoritative colony snapshot.",
+	Args:        cobra.NoArgs,
+	Annotations: map[string]string{"aether.io/read-only": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		state, err := loadActiveColonyState()
+		compact, _ := cmd.Flags().GetBool("compact")
+		root := resolveAetherRoot()
+		now := time.Now().UTC()
+		facts, err := loadLifecycleFacts(root, store, now)
 		if err != nil {
-			if shouldRenderVisualOutput(stdout) && strings.Contains(colonyStateLoadMessage(err), "No colony initialized") {
-				writeVisualOutput(stdout, renderNoColonyStatusVisual())
-				return nil
-			}
-			renderRecoveryMenu("status", colonyStateLoadMessage(err), nil)
-			return nil
+			facts = unavailableLifecycleFacts(root, now, err.Error())
 		}
-
-		result := buildStatusResult(state, store)
-		mode := strings.ToLower(strings.TrimSpace(os.Getenv("AETHER_OUTPUT_MODE")))
-		if mode == "json" {
-			outputOK(result)
-			return nil
+		view := LifecycleViewFull
+		if compact {
+			view = LifecycleViewCompact
 		}
-		output := renderDashboard(state, store, result)
-		writeVisualOutput(stdout, output)
+		projection := projectLifecycle(facts, view, detectPlatform())
+		projection.Command = "status"
+		outputWorkflow(projection, renderLifecycleStatus(projection, lifecycleStatusOutputWidth()))
 		return nil
 	},
 }
 
 func init() {
+	statusCmd.Flags().Bool("compact", false, "Show the strict compact subset of the colony snapshot")
 	rootCmd.AddCommand(statusCmd)
 }
 
