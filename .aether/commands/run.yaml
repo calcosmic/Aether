@@ -1,12 +1,17 @@
 name: ant-run
-description: "⚡ Autopilot — builds, verifies, learns, and advances through phases automatically"
+description: "Autopilot the remaining accepted phases within the displayed safety contract."
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether run $ARGUMENTS"
 ceremony_contract:
   class: "progress"
-  authority: "Go owns the autopilot build/continue loop, verification gates, phase advancement, and next-step routing."
-  wrapper_role: "Show the runtime progress and terminal result. Do not replace autopilot output with synthetic worker theatre or hand-edit colony state."
+  authority: "Go owns the typed preflight, displayed operating contract, bounded repair/debt policy, owner-authority pauses, execution loop, and runtime result."
+  wrapper_role: "Invoke the runtime exactly once. Invocation is consent; relay the typed runtime result and stop on its owner-authority pause rather than making lifecycle decisions in the host."
 guardrails:
-  - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
+  - "Do not ask for extra confirmation; invocation is consent to the displayed bounded contract."
+  - "Stop when the typed runtime result reports an owner-authority pause, and relay its exact Next Up action."
+  - "Do not write or edit colony state, session, plan, evidence, registry, or pheromone files from this wrapper."
+  - "Do not parse visual output back into control flow; use only the typed runtime result."
+  - "Do not fabricate workers, live events, verification, repairs, debt, or outcomes."
+  - "Do not add force flags and do not auto-seal; sealing remains an explicit owner action."
   - "If docs and runtime disagree, runtime wins."

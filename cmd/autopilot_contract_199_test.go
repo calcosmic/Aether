@@ -312,7 +312,7 @@ func TestAutopilotWrapperContract199(t *testing.T) {
 		t.Fatalf("canonical run wrapper contract drifted: %+v", spec)
 	}
 	canonicalContract := strings.ToLower(strings.Join(append([]string{spec.CeremonyContract.Authority, spec.CeremonyContract.WrapperRole}, spec.Guardrails...), "\n"))
-	for _, required := range []string{"invocation is consent", "typed", "owner authority", "runtime result", "exactly once", "do not write", "do not parse", "do not fabricate", "do not auto-seal"} {
+	for _, required := range []string{"invocation is consent", "typed", "owner-authority", "runtime result", "exactly once", "do not write", "do not parse", "do not fabricate", "do not auto-seal"} {
 		if !strings.Contains(canonicalContract, required) {
 			t.Errorf("canonical wrapper contract lacks %q:\n%s", required, string(rawYAML))
 		}
