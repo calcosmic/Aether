@@ -286,11 +286,57 @@ func canonicalTerritoryRoot(root string) (string, error) {
 
 func requiredTerritoryArtifactPaths() []string {
 	artifacts := requiredSurveyArtifacts()
-	paths := make([]string, 0, len(artifacts))
+	paths := make([]string, 0, len(artifacts)+1)
 	for _, artifact := range artifacts {
 		paths = append(paths, filepath.ToSlash(filepath.Join(".aether", "data", "survey", artifact.Name)))
 	}
+	// anchors.json is consumed directly by planning for source grounding. It
+	// predates survey-verify's compatibility list, but an immutable territory
+	// snapshot must authenticate it too or planning could read unbound input.
+	paths = append(paths, filepath.ToSlash(filepath.Join(".aether", "data", "survey", "anchors.json")))
 	return paths
+}
+
+// ensureTerritoryFreshness is the shared read-only entrypoint for init and
+// plan. Refresh work is deliberately chosen by the caller so classification
+// itself remains zero-write and safe for status rendering.
+func ensureTerritoryFreshness(root string) SurveyFreshnessResult {
+	return classifySurveyFreshness(root, time.Now().UTC())
+}
+
+// territorySurveyBaselineDigest binds a refresh manifest to the complete
+// live publication set it observed. Missing files are represented explicitly,
+// so first publication and replacement publication cannot share a baseline.
+func territorySurveyBaselineDigest(root string) string {
+	paths := append([]string{}, requiredTerritoryArtifactPaths()...)
+	paths = append(paths,
+		filepath.ToSlash(territorySnapshotRelativePath),
+		filepath.ToSlash(filepath.Join(".aether", "data", "COLONY_STATE.json")),
+	)
+	sort.Strings(paths)
+	parts := make([]string, 0, len(paths))
+	for _, rel := range paths {
+		path := filepath.Join(root, filepath.FromSlash(rel))
+		info, err := os.Lstat(path)
+		switch {
+		case os.IsNotExist(err):
+			parts = append(parts, rel+":"+lifecycleTransactionMissingDigest)
+		case err != nil:
+			parts = append(parts, rel+":unavailable")
+		case info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular():
+			parts = append(parts, rel+":unsafe")
+		default:
+			body, readErr := os.ReadFile(path)
+			if readErr != nil {
+				parts = append(parts, rel+":unavailable")
+				continue
+			}
+			sum := sha256.Sum256(body)
+			parts = append(parts, rel+":"+hex.EncodeToString(sum[:]))
+		}
+	}
+	sum := sha256.Sum256([]byte(strings.Join(parts, "\n")))
+	return hex.EncodeToString(sum[:])
 }
 
 func unavailableSurveyResult(result SurveyFreshnessResult, reason SurveyFreshnessReasonCode, evidence string, err error) SurveyFreshnessResult {

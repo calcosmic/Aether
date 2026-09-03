@@ -960,6 +960,10 @@ func TestCLIProviderBackedPlanRevisionJourney(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(harness.repo, ".aether", "oracle", "synthesis.md")); err != nil {
 		t.Fatalf("oracle provider run did not persist synthesis evidence: %v", err)
 	}
+	// Planning now consumes a verified territory snapshot. This journey is
+	// about revision behavior rather than colonize orchestration, so seed the
+	// same immutable input a completed colonize-finalize run would publish.
+	writeFreshTerritorySnapshot199(t, harness.repo, time.Now().UTC().Add(-time.Minute))
 
 	revise := harness.runWithEnv(t, providerEnv,
 		"plan", "--refresh", "--depth", "fast", "--accept",
@@ -1097,6 +1101,9 @@ func TestCLICompiledInstallToSealJourney(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(harness.repo, ".aether", "oracle", "research-plan.md")); err != nil {
 		t.Fatalf("oracle did not persist a reusable research plan: %v", err)
 	}
+	// Keep this acceptance journey focused on plan/build/continue/seal while
+	// satisfying planning's verified-territory precondition.
+	writeFreshTerritorySnapshot199(t, harness.repo, time.Now().UTC().Add(-time.Minute))
 
 	plan := harness.run(t, "plan", "--synthetic", "--depth", "fast", "--accept")
 	assertBlackBoxSuccess(t, "plan", plan)

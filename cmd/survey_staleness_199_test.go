@@ -201,12 +201,7 @@ func writeFreshTerritorySnapshot199(t *testing.T, root string, generatedAt time.
 }
 
 func requiredTerritoryArtifactPaths199() []string {
-	artifacts := requiredSurveyArtifacts()
-	paths := make([]string, 0, len(artifacts))
-	for _, artifact := range artifacts {
-		paths = append(paths, filepath.Join(".aether", "data", "survey", artifact.Name))
-	}
-	return paths
+	return append([]string{}, requiredTerritoryArtifactPaths()...)
 }
 
 func writeTerritorySnapshotFixture199(t *testing.T, root string, snapshot territorySnapshotMetadata) {

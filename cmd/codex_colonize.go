@@ -60,9 +60,10 @@ type codexWorkspaceFacts struct {
 }
 
 type codexColonizeOptions struct {
-	ForceResurvey bool
-	WorkerTimeout time.Duration
-	PlanOnly      bool
+	ForceResurvey         bool
+	WorkerTimeout         time.Duration
+	PlanOnly              bool
+	RequireCompleteSurvey bool
 }
 
 type codexColonizeManifest struct {
@@ -83,6 +84,11 @@ type codexColonizeManifest struct {
 	DispatchContract     map[string]interface{}           `json:"dispatch_contract"`
 	Dispatches           []codexSurveyorDispatch          `json:"dispatches"`
 	Snapshots            map[string]codexArtifactSnapshot `json:"snapshots,omitempty"`
+	TransactionID        string                           `json:"transaction_id,omitempty"`
+	BaselineDigest       string                           `json:"baseline_digest,omitempty"`
+	CandidateSurveyDir   string                           `json:"candidate_survey_dir,omitempty"`
+	PublicationMode      string                           `json:"publication_mode,omitempty"`
+	RefreshReasons       []SurveyFreshnessReasonCode      `json:"refresh_reasons,omitempty"`
 	FinalizerCommand     string                           `json:"finalizer_command"`
 	Stats                map[string]interface{}           `json:"stats,omitempty"`
 	// ContextCapsule is the colony-prime grounding payload (state, decisions,
@@ -399,6 +405,13 @@ func runCodexColonizePlanOnly(root string, opts codexColonizeOptions) (map[strin
 func buildCodexColonizeManifest(root string, facts codexWorkspaceFacts, opts codexColonizeOptions, dispatchMode string, existingSurvey bool, snapshots map[string]codexArtifactSnapshot, contextCapsule string) codexColonizeManifest {
 	workerTimeout := effectiveSurveyorDispatchTimeout(opts.WorkerTimeout)
 	dispatches := plannedSurveyors(root)
+	if opts.RequireCompleteSurvey {
+		dispatches = make([]codexSurveyorDispatch, 0, len(surveyorSpecs))
+		for i, spec := range surveyorSpecs {
+			dispatches = append(dispatches, surveyDispatchFromSpec(root, spec, i))
+		}
+	}
+	ensureUniqueSurveyorDispatchNames(dispatches)
 	for i := range dispatches {
 		dispatches[i].Stage = "survey"
 		dispatches[i].Wave = 1
@@ -627,6 +640,26 @@ func plannedSurveyors(root string) []codexSurveyorDispatch {
 		dispatches = append(dispatches, surveyDispatchFromSpec(root, spec, i))
 	}
 	return dispatches
+}
+
+// ensureUniqueSurveyorDispatchNames keeps compact deterministic display names
+// without treating their two-digit suffix as a protocol identity. A rare name
+// collision is resolved deterministically before the manifest and spawn-tree
+// evidence are emitted.
+func ensureUniqueSurveyorDispatchNames(dispatches []codexSurveyorDispatch) {
+	seen := make(map[string]bool, len(dispatches))
+	for i := range dispatches {
+		base := strings.TrimSpace(dispatches[i].Name)
+		if base == "" {
+			base = "Surveyor"
+		}
+		candidate := base
+		for suffix := 2; seen[candidate]; suffix++ {
+			candidate = fmt.Sprintf("%s-%d", base, suffix)
+		}
+		dispatches[i].Name = candidate
+		seen[candidate] = true
+	}
 }
 
 // surveyorSpec defines a single surveyor for real dispatch.
@@ -903,9 +936,22 @@ func writeSurveyArtifacts(root, surveyDir string, facts codexWorkspaceFacts, dis
 
 	names := make([]string, 0, len(files))
 	preserved := 0
+	relativeRoot := filepath.Clean(root)
+	if resolved, resolveErr := filepath.EvalSymlinks(relativeRoot); resolveErr == nil {
+		relativeRoot = resolved
+	}
+	relativeSurveyDir := filepath.Clean(surveyDir)
+	if resolved, resolveErr := filepath.EvalSymlinks(relativeSurveyDir); resolveErr == nil {
+		relativeSurveyDir = resolved
+	}
 	for name, content := range files {
-		relPath := filepath.ToSlash(filepath.Join(".aether", "data", "survey", name))
-		if err := ensureSurveyArtifactPathWritable(filepath.Join(surveyDir, name), name); err != nil {
+		artifactPath := filepath.Join(surveyDir, name)
+		relPath, relErr := filepath.Rel(relativeRoot, filepath.Join(relativeSurveyDir, name))
+		if relErr != nil || relPath == ".." || strings.HasPrefix(relPath, ".."+string(filepath.Separator)) {
+			return nil, 0, fmt.Errorf("survey artifact %s is outside the repository", artifactPath)
+		}
+		relPath = filepath.ToSlash(relPath)
+		if err := ensureSurveyArtifactPathWritable(artifactPath, name); err != nil {
 			return nil, 0, err
 		}
 		if shouldPreserveWorkerArtifact(root, relPath, snapshots, claimed) {
@@ -913,7 +959,7 @@ func writeSurveyArtifacts(root, surveyDir string, facts codexWorkspaceFacts, dis
 			preserved++
 			continue
 		}
-		if err := os.WriteFile(filepath.Join(surveyDir, name), []byte(content), 0644); err != nil {
+		if err := os.WriteFile(artifactPath, []byte(content), 0644); err != nil {
 			return nil, 0, fmt.Errorf("failed to write %s: %w", name, err)
 		}
 		names = append(names, name)

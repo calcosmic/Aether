@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
 )
@@ -57,29 +58,63 @@ func TestTerritoryLifecycleAutomaticRefresh(t *testing.T) {
 	if refresh.TransactionID == "" || refresh.BaselineDigest == "" || refresh.PublicationMode != territoryPublicationTransactional {
 		t.Fatalf("refresh manifest lacks transaction binding: %#v", refresh)
 	}
-	if len(refresh.Dispatches) == 0 {
-		t.Fatal("automatic refresh manifest has no real surveyor dispatches")
+	if len(refresh.Dispatches) != len(surveyorSpecs) {
+		t.Fatalf("automatic refresh manifest has %d surveyor dispatches, want complete roster %d", len(refresh.Dispatches), len(surveyorSpecs))
 	}
+	declaredOutputs := make(map[string]bool, len(requiredSurveyMarkdownFiles))
 	for _, dispatch := range refresh.Dispatches {
+		for _, output := range dispatch.Outputs {
+			declaredOutputs[output] = true
+		}
 		for _, output := range dispatch.OutputPaths {
 			if !strings.HasPrefix(output, refresh.CandidateSurveyDir+"/") {
 				t.Fatalf("dispatch output %q is outside candidate survey dir %q", output, refresh.CandidateSurveyDir)
 			}
 		}
 	}
+	for _, output := range requiredSurveyMarkdownFiles {
+		if !declaredOutputs[output] {
+			t.Fatalf("automatic refresh omitted worker-authored survey output %s", output)
+		}
+	}
+	if err := validateTerritoryPublicationMarkdown([]byte("# Survey\n\nplaceholder\n")); err == nil {
+		t.Fatal("placeholder survey content was accepted for publication")
+	}
 
-	publication, err := publishTerritorySnapshot(territoryPublicationRequest{
-		Root:           root,
-		GeneratedAt:    time.Now().UTC(),
-		TransactionID:  refresh.TransactionID,
-		BaselineDigest: refresh.BaselineDigest,
-		Artifacts:      territoryArtifactFixture199("automatic refresh"),
+	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
+	completed := make([]codexSurveyorDispatch, 0, len(refresh.Dispatches))
+	for _, dispatch := range refresh.Dispatches {
+		if err := spawnTree.RecordSpawn("Queen", dispatch.Caste, dispatch.Name, dispatch.Task, 1); err != nil {
+			t.Fatalf("record survey spawn: %v", err)
+		}
+		dispatch.Status = "completed"
+		dispatch.Summary = "candidate survey complete"
+		for _, rel := range dispatch.OutputPaths {
+			path := filepath.Join(root, filepath.FromSlash(rel))
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				t.Fatalf("mkdir candidate output: %v", err)
+			}
+			if err := os.WriteFile(path, []byte("# "+filepath.Base(path)+"\n\nautomatic refresh\n"), 0o644); err != nil {
+				t.Fatalf("write candidate output: %v", err)
+			}
+			dispatch.FilesCreated = append(dispatch.FilesCreated, rel)
+		}
+		if err := spawnTree.UpdateStatus(dispatch.Name, "completed", dispatch.Summary); err != nil {
+			t.Fatalf("complete survey spawn: %v", err)
+		}
+		completed = append(completed, dispatch)
+	}
+
+	finalized, err := runCodexColonizeFinalize(root, codexExternalColonizeCompletion{
+		ColonizeManifest: refresh,
+		Dispatches:       completed,
 	})
 	if err != nil {
-		t.Fatalf("publishTerritorySnapshot: %v", err)
+		t.Fatalf("runCodexColonizeFinalize: %v", err)
 	}
-	if publication.Freshness.Freshness != colony.SurveyFreshnessFresh || !publication.Freshness.Refreshed {
-		t.Fatalf("publication freshness = %#v, want refreshed/fresh", publication.Freshness)
+	publication, ok := finalized["territory_freshness"].(SurveyFreshnessResult)
+	if !ok || publication.Freshness != colony.SurveyFreshnessFresh || !publication.Refreshed {
+		t.Fatalf("publication freshness = %#v, want refreshed/fresh", finalized["territory_freshness"])
 	}
 	for _, rel := range requiredTerritoryArtifactPaths() {
 		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel))); err != nil {

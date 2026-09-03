@@ -104,6 +104,7 @@ var planCmd = &cobra.Command{
 			RevisionReason:    revisionReason,
 			RevisionEvidence:  revisionEvidence,
 			ResearchDocs:      researchDocs,
+			RequireTerritory:  true,
 		})
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -113,6 +114,100 @@ var planCmd = &cobra.Command{
 		outputWorkflow(result, renderPlanVisual(result))
 		return nil
 	},
+}
+
+// territoryPlanPreflight is the common automatic territory gate used by the
+// plan command and the Phase 199 front door. It never dispatches workers or
+// writes state. A missing/stale result carries the existing colonize manifest
+// as internal work; unavailable evidence stops with a single recovery door.
+func territoryPlanPreflight(root string, opts codexPlanOptions) (SurveyFreshnessResult, *codexColonizeManifest, error) {
+	freshness := ensureTerritoryFreshness(root)
+	switch freshness.Freshness {
+	case colony.SurveyFreshnessFresh:
+		return freshness, nil, nil
+	case colony.SurveyFreshnessUnavailable:
+		detail := strings.TrimSpace(freshness.SourceError)
+		if detail == "" {
+			detail = strings.Join(surveyReasonStrings(freshness.ReasonCodes), ", ")
+		}
+		return freshness, nil, fmt.Errorf("territory evidence is unavailable: %s; run `aether resume` to inspect and recover the retained evidence", detail)
+	case colony.SurveyFreshnessMissing, colony.SurveyFreshnessStale:
+		facts, err := surveyWorkspace(root)
+		if err != nil {
+			return freshness, nil, fmt.Errorf("prepare automatic territory refresh: %w", err)
+		}
+		existingSurvey := surveyDocsExist(filepath.Join(store.BasePath(), "survey"))
+		colonizeOpts := codexColonizeOptions{
+			ForceResurvey:         true,
+			WorkerTimeout:         opts.WorkerTimeout,
+			PlanOnly:              true,
+			RequireCompleteSurvey: true,
+		}
+		manifest := buildCodexColonizeManifest(
+			root,
+			facts,
+			colonizeOpts,
+			"plan-only",
+			existingSurvey,
+			snapshotRelativeFiles(root, filepath.ToSlash(filepath.Join(".aether", "data", "survey"))),
+			resolveCodexWorkerContext(),
+		)
+		manifest.TransactionID = fmt.Sprintf("territory-%d-%s", time.Now().UTC().UnixNano(), randomHex(4))
+		manifest.BaselineDigest = territorySurveyBaselineDigest(root)
+		manifest.PublicationMode = territoryPublicationTransactional
+		manifest.RefreshReasons = append([]SurveyFreshnessReasonCode{}, freshness.ReasonCodes...)
+		manifest.CandidateSurveyDir = filepath.ToSlash(filepath.Join(".aether", "data", "territory-candidates", manifest.TransactionID, "survey"))
+		for i := range manifest.Dispatches {
+			paths := make([]string, 0, len(manifest.Dispatches[i].Outputs))
+			for _, output := range manifest.Dispatches[i].Outputs {
+				paths = append(paths, filepath.ToSlash(filepath.Join(manifest.CandidateSurveyDir, output)))
+			}
+			manifest.Dispatches[i].OutputPaths = paths
+			manifest.Dispatches[i].Brief = fmt.Sprintf(
+				"Survey task: %s\n\nWrite these candidate survey outputs in the repo: %s\n\nSurvey the territory at %s. Do not write the live .aether/data/survey directory; the Go finalizer publishes the verified candidate atomically.",
+				manifest.Dispatches[i].Task,
+				strings.Join(paths, ", "),
+				root,
+			)
+		}
+		return freshness, &manifest, nil
+	default:
+		return freshness, nil, fmt.Errorf("territory freshness returned invalid value %q; run `aether resume`", freshness.Freshness)
+	}
+}
+
+func surveyReasonStrings(reasons []SurveyFreshnessReasonCode) []string {
+	values := make([]string, 0, len(reasons))
+	for _, reason := range reasons {
+		values = append(values, string(reason))
+	}
+	return values
+}
+
+func territoryRefreshPlanResult(state colony.ColonyState, freshness SurveyFreshnessResult, manifest codexColonizeManifest) map[string]interface{} {
+	goal := ""
+	if state.Goal != nil {
+		goal = strings.TrimSpace(*state.Goal)
+	}
+	dispatches := surveyorDispatchMaps(manifest.Dispatches)
+	return map[string]interface{}{
+		"planned":                    false,
+		"plan_only":                  true,
+		"goal":                       goal,
+		"territory_refresh_required": true,
+		"territory_freshness":        freshness,
+		"territory_outcome_label":    freshness.OutcomeLabel(),
+		"colonize_manifest":          manifest,
+		"dispatches":                 dispatches,
+		"surveyors":                  dispatches,
+		"dispatch_mode":              manifest.DispatchMode,
+		"dispatch_contract":          manifest.DispatchContract,
+		"requires_finalizer":         true,
+		"finalizer_command":          manifest.FinalizerCommand,
+		"resume_command":             "aether plan",
+		"owner_decision_required":    false,
+		"next":                       "run the manifest surveyors, finalize the territory refresh, then resume `aether plan`",
+	}
 }
 
 func parseCoherentJobProposals(rawValues []string) ([]coherentJobProposal, error) {

@@ -185,6 +185,8 @@ type codexPlanOptions struct {
 	RevisionReason    string
 	RevisionEvidence  []string
 	ResearchDocs      []string
+	Territory         *SurveyFreshnessResult
+	RequireTerritory  bool
 }
 
 type codexPlanningLoop struct {
@@ -243,6 +245,8 @@ type codexPlanManifest struct {
 	VerificationDepth         string                           `json:"verification_depth,omitempty"`
 	PlanningLoop              codexPlanningLoop                `json:"planning_loop,omitempty"`
 	Survey                    codexSurveyContext               `json:"survey"`
+	Territory                 *SurveyFreshnessResult           `json:"territory,omitempty"`
+	TerritoryRequired         bool                             `json:"territory_required,omitempty"`
 	Dispatches                []codexPlanningDispatch          `json:"dispatches"`
 	Snapshots                 map[string]codexArtifactSnapshot `json:"snapshots,omitempty"`
 	DispatchMode              string                           `json:"dispatch_mode"`
@@ -315,8 +319,9 @@ func planningWorkersFailedError(err error) error {
 
 func runCodexPlan(root string, refresh bool, synthetic bool) (map[string]interface{}, error) {
 	return runCodexPlanWithOptions(root, codexPlanOptions{
-		Refresh:   refresh,
-		Synthetic: synthetic,
+		Refresh:          refresh,
+		Synthetic:        synthetic,
+		RequireTerritory: true,
 	})
 }
 
@@ -328,6 +333,20 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	state, err := loadActiveColonyState()
 	if err != nil {
 		return nil, fmt.Errorf("%s", colonyStateLoadMessage(err))
+	}
+	// Legacy non-git workspaces have no immutable source revision to bind. They
+	// retain the pre-199 planning behavior; repositories with a real revision
+	// use the strict automatic territory gate below.
+	_, territoryRevisionErr := currentTerritoryRevision(root)
+	if opts.RequireTerritory && territoryRevisionErr == nil && !opts.RepairArtifact && (len(state.Plan.Phases) == 0 || opts.Refresh) {
+		freshness, refreshManifest, err := territoryPlanPreflight(root, opts)
+		if err != nil {
+			return nil, err
+		}
+		if refreshManifest != nil {
+			return territoryRefreshPlanResult(state, freshness, *refreshManifest), nil
+		}
+		opts.Territory = &freshness
 	}
 
 	// --research is additive and persistent: point once, and every later plan
@@ -606,6 +625,9 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		FinalizeSurface:      "direct-runtime",
 		RequiresFinalizer:    false,
 	}
+	if opts.Territory != nil {
+		attachTerritoryToPlanManifest(&manifest, *opts.Territory)
+	}
 	planningLoop := evaluatePlanningLoop(confidence, unresolvedGaps, opts, planDepth)
 	if !opts.Synthetic && dispatchMode == "real" {
 		if err := validatePlanningConfidenceEvidence(manifest, confidence, evidenceHash); err != nil {
@@ -820,6 +842,10 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		"planning_run_id":            manifest.PlanningRunID,
 		"iteration":                  manifest.Iteration,
 		"evidence_hash":              evidenceHash,
+	}
+	if manifest.TerritoryRequired {
+		result["territory_freshness"] = manifest.Territory
+		result["territory_snapshot_id"] = manifest.Territory.SnapshotID
 	}
 	return result, nil
 }
@@ -1177,6 +1203,9 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		DepthProposalCard:        proposalCard,
 		ContextCapsule:           contextCapsule,
 	}
+	if opts.Territory != nil {
+		attachTerritoryToPlanManifest(&manifest, *opts.Territory)
+	}
 
 	boundary, err := materializeOrchestratorBoundaryQuestions("plan", state, planningPhase, planBoundaryQuestionCandidates(state, granularity, planDepth, planningDepth, verificationDepth))
 	if err != nil {
@@ -1235,6 +1264,10 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 			"planning_depth":          planningDepth,
 			"planning_loop":           manifest.PlanningLoop,
 		},
+	}
+	if manifest.TerritoryRequired {
+		result["territory_freshness"] = manifest.Territory
+		result["territory_snapshot_id"] = manifest.Territory.SnapshotID
 	}
 	addBoundaryQuestionResultFields(result, boundary)
 	if guidance, ok := addOrchestratorBoundaryGuidance(result, "plan", state, planAfterDiscussNext(opts), boundary.Questions); ok {

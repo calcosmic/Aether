@@ -269,6 +269,11 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 	if err := validateFinalizerManifestRoot("plan_manifest", manifest.Root, root); err != nil {
 		return nil, err
 	}
+	if manifest.TerritoryRequired {
+		if err := validatePlanTerritorySnapshot(root, *manifest); err != nil {
+			return nil, err
+		}
+	}
 
 	state, granularity, err := validateExternalPlanState(manifest)
 	if err != nil {
@@ -510,6 +515,53 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 	// on the mid-loop branch above.
 	closeLifecycleRun(result, updatedState, "plan")
 	return result, nil
+}
+
+// attachTerritoryToPlanManifest copies the verified immutable evidence into a
+// planning manifest. Maps and slices are cloned so later renderer or caller
+// changes cannot silently rewrite the finalizer's input.
+func attachTerritoryToPlanManifest(manifest *codexPlanManifest, freshness SurveyFreshnessResult) {
+	if manifest == nil {
+		return
+	}
+	freshness.ArtifactDigests = cloneStringMap(freshness.ArtifactDigests)
+	freshness.ReasonCodes = append([]SurveyFreshnessReasonCode{}, freshness.ReasonCodes...)
+	freshness.EvidencePaths = append([]string{}, freshness.EvidencePaths...)
+	manifest.Territory = &freshness
+	manifest.TerritoryRequired = true
+}
+
+// validatePlanTerritorySnapshot prevents a planning completion from being
+// accepted against absent, changed, replayed, or unverified territory input.
+func validatePlanTerritorySnapshot(root string, manifest codexPlanManifest) error {
+	bound := manifest.Territory
+	if !manifest.TerritoryRequired || bound == nil || bound.Freshness != colony.SurveyFreshnessFresh ||
+		strings.TrimSpace(bound.SnapshotID) == "" || strings.TrimSpace(bound.SourceRevision) == "" ||
+		len(bound.ArtifactDigests) == 0 {
+		return fmt.Errorf("plan_manifest requires a verified territory snapshot; rerun `aether plan` to refresh territory before finalizing")
+	}
+	current := ensureTerritoryFreshness(root)
+	if current.Freshness != colony.SurveyFreshnessFresh {
+		return fmt.Errorf("plan_manifest territory is no longer fresh (%s: %v); rerun `aether plan`", current.Freshness, current.ReasonCodes)
+	}
+	if bound.SchemaVersion != current.SchemaVersion || bound.SnapshotID != current.SnapshotID ||
+		bound.RepositoryIdentity != current.RepositoryIdentity || !sameCleanPath(bound.RepositoryRoot, current.RepositoryRoot) ||
+		bound.SourceRevision != current.SourceRevision || !sameTerritoryDigestSet(bound.ArtifactDigests, current.ArtifactDigests) {
+		return fmt.Errorf("plan_manifest territory snapshot does not match the current verified publication; rerun `aether plan`")
+	}
+	return nil
+}
+
+func sameTerritoryDigestSet(left, right map[string]string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for path, digest := range left {
+		if right[path] != digest {
+			return false
+		}
+	}
+	return true
 }
 
 func validateExternalPlanState(manifest *codexPlanManifest) (colony.ColonyState, colony.PlanGranularity, error) {
