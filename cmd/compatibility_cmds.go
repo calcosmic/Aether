@@ -13,7 +13,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
 )
 
@@ -55,25 +57,14 @@ type autopilotReplanEvaluation struct {
 }
 
 var watchCmd = &cobra.Command{
-	Use:   "watch",
-	Short: "Compatibility alias for live worker activity",
-	Args:  cobra.NoArgs,
+	Use:         "watch",
+	Short:       "Show the honest idle watch fallback",
+	Args:        cobra.NoArgs,
+	Annotations: map[string]string{"aether.io/read-only": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if store == nil {
-			outputErrorMessage("no store initialized")
-			return renderedErrorExit(1)
-		}
-
-		once, _ := cmd.Flags().GetBool("once")
-		interval, _ := cmd.Flags().GetDuration("interval")
-		if shouldUseLiveWatchRefresh(stdout, once) {
-			return runLiveWatch(interval)
-		}
-
-		result := buildSwarmWatchResult("", true, false)
-		visual := renderSwarmCompatibilityVisual(result)
-		_ = writeWatchArtifacts(result, visual)
-		outputWorkflow(result, visual)
+		_ = cmd // --once/--interval remain accepted compatibility flags.
+		result := buildIdleWatchResult(resolveAetherRoot(), store, time.Now().UTC())
+		outputWorkflow(result, renderIdleWatchVisual(result))
 		return nil
 	},
 }
@@ -365,54 +356,138 @@ func init() {
 }
 
 func writeWatchArtifacts(result map[string]interface{}, visual string) error {
-	if store == nil {
-		return nil
-	}
-	statusText := fmt.Sprintf("state=%s scope=%s active_workers=%d completed_workers=%d blocked_workers=%d failed_workers=%d live_refresh=%t next=%s\n",
-		stringValue(result["state"]),
-		stringValue(result["scope"]),
-		intValue(result["active_count"]),
-		intValue(result["completed_count"]),
-		intValue(result["blocked_count"]),
-		intValue(result["failed_count"]),
-		boolValue(result["live_refresh"]),
-		stringValue(result["next"]),
-	)
-	if err := store.AtomicWrite("watch-status.txt", []byte(statusText)); err != nil {
-		return err
-	}
-	return store.AtomicWrite("watch-progress.txt", []byte(visual))
+	// Phase 199 retired these inferred snapshot artifacts. Keep the private
+	// compatibility seam inert so no old in-process caller can make a
+	// read-only watch invocation mutate the colony.
+	_ = result
+	_ = visual
+	return nil
 }
 
 func runLiveWatch(interval time.Duration) error {
-	if interval <= 0 {
-		interval = 2 * time.Second
+	// Real typed live events arrive in Phase 202. Until then this legacy seam
+	// is intentionally one-shot and read-only; an interval cannot turn stale
+	// files or process observations into trustworthy current activity.
+	_ = interval
+	result := buildIdleWatchResult(resolveAetherRoot(), store, time.Now().UTC())
+	outputWorkflow(result, renderIdleWatchVisual(result))
+	return nil
+}
+
+func buildIdleWatchResult(root string, factStore *storage.Store, now time.Time) map[string]interface{} {
+	facts, err := loadLifecycleFacts(root, factStore, now)
+	if err != nil {
+		facts = unavailableLifecycleFacts(root, now, err.Error())
 	}
+	projection := projectLifecycle(facts, LifecycleViewCompact, detectPlatform())
+	projection.Command = "watch"
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+	// A spawn-tree row is durable history, not a typed live event. Preserve
+	// terminal rows for the compact snapshot and suppress every live-looking
+	// status until Phase 202 supplies an event source with liveness semantics.
+	terminalActors := make([]LifecycleActorFact, 0, len(projection.Actors.Value))
+	for _, actorFact := range projection.Actors.Value {
+		if agent.IsTerminalSpawnStatus(actorFact.Status) {
+			terminalActors = append(terminalActors, actorFact)
+		}
+	}
+	projection.Actors.Value = terminalActors
+	projection.Lineage.Value = nil
 
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
+	history := buildLifecycleHistoryProjection(facts, projection, "", 5)
+	recent := append([]LifecycleHistoryRow(nil), history.Events...)
+	for i := range recent {
+		if recent[i].Category == lifecycleHistoryCategoryActiveWork {
+			recent[i].Category = lifecycleHistoryCategoryEvent
+			recent[i].Event = "recorded worker activity (not live)"
+			recent[i].Result = strings.TrimSpace(recent[i].Result) + " Live telemetry is unavailable; this row is recorded evidence only."
+		}
+	}
+	phase := projection.Phase.Value
+	status := map[string]interface{}{
+		"colony": projection.Identity.Value.Name, "goal": projection.Goal.Value,
+		"state": projection.Standing.Value, "current_phase": phase.CurrentNumber,
+		"total_phases": phase.TotalPhases, "completed_phases": phase.CompletedPhases,
+		"tasks_completed": phase.CompletedTasks, "tasks_total": phase.TotalTasks,
+		"active_count": 0, "next": lifecycleStatusActionCommand(projection.NextAction),
+		"projection_revision": projection.ProjectionRevision,
+	}
+	return map[string]interface{}{
+		"schema_version": LifecycleResultSchemaVersion,
+		"mode":           "idle_watch", "command": "watch",
+		"outcome_kind":    colony.OutcomeKindNoChange,
+		"state_effect":    colony.LifecycleStateEffectNone,
+		"idle_message":    "No ants are active right now",
+		"live_capability": "unsupported", "active_count": 0,
+		"authoritative_snapshot": "status", "status": status,
+		"projection_revision": projection.ProjectionRevision,
+		"captured_at":         now.UTC().Format(time.RFC3339Nano),
+		"recent_activity":     recent, "history_source": facts.History.Source,
+		"projection": projection,
+	}
+}
 
-	for {
-		result := buildSwarmWatchResult("", true, true)
-		visual := renderSwarmCompatibilityVisual(result)
-		_ = writeWatchArtifacts(result, visual)
+func renderIdleWatchVisual(result map[string]interface{}) string {
+	projection, ok := lifecycleProjectionFromWatchValue(result["projection"])
+	if !ok {
+		return "No ants are active right now\nStatus is the authoritative snapshot."
+	}
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("watch"), "Watch"))
+	b.WriteString(visualDividerStr())
+	b.WriteString("No ants are active right now\n")
+	b.WriteString("Status is the authoritative snapshot; Watch is showing its compact projection.\n")
+	fmt.Fprintf(&b, "Projection revision: %s | Captured: %s\n\n", projection.ProjectionRevision, emptyFallback(stringValue(result["captured_at"]), "unknown"))
+	b.WriteString(renderLifecycleStatusCompact(projection, lifecycleStatusOutputWidth()))
+	b.WriteString("\nRecent recorded activity\n")
+	recent := lifecycleHistoryRowsFromWatchValue(result["recent_activity"])
+	if len(recent) == 0 {
+		b.WriteString("None recorded.\n")
+	} else {
+		for _, row := range recent {
+			writeLifecycleHistoryRow(&b, row)
+		}
+	}
+	b.WriteString("\nLive event source: unsupported until Phase 202; recorded rows are never treated as current liveness.\n")
+	return b.String()
+}
 
-		frame := "\033[H\033[2J" + strings.TrimRight(visual, "\n") + "\n"
-		writeVisualOutput(stdout, frame)
+func lifecycleProjectionFromWatchValue(value interface{}) (LifecycleProjection, bool) {
+	switch projection := value.(type) {
+	case LifecycleProjection:
+		return projection, true
+	case *LifecycleProjection:
+		if projection != nil {
+			return *projection, true
+		}
+		return LifecycleProjection{}, false
+	default:
+		data, err := json.Marshal(value)
+		if err != nil {
+			return LifecycleProjection{}, false
+		}
+		var decoded LifecycleProjection
+		if json.Unmarshal(data, &decoded) != nil {
+			return LifecycleProjection{}, false
+		}
+		return decoded, true
+	}
+}
 
-		stateName := strings.TrimSpace(stringValue(result["state"]))
-		if intValue(result["active_count"]) == 0 && stateName != string(colony.StateEXECUTING) && stateName != string(colony.StateBUILT) {
+func lifecycleHistoryRowsFromWatchValue(value interface{}) []LifecycleHistoryRow {
+	switch rows := value.(type) {
+	case []LifecycleHistoryRow:
+		return rows
+	default:
+		data, err := json.Marshal(value)
+		if err != nil {
 			return nil
 		}
-
-		select {
-		case <-ctx.Done():
+		var decoded []LifecycleHistoryRow
+		if json.Unmarshal(data, &decoded) != nil {
 			return nil
-		case <-ticker.C:
 		}
+		return decoded
 	}
 }
 
