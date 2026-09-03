@@ -261,11 +261,6 @@ var runCompatibilityCmd = &cobra.Command{
 	Short: "Run remaining phases through the Codex build and continue loop",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if store == nil {
-			outputErrorMessage("no store initialized")
-			return nil
-		}
-
 		maxPhases, _ := cmd.Flags().GetInt("max-phases")
 		replanInterval, _ := cmd.Flags().GetInt("replan-interval")
 		continueWithoutReplan, _ := cmd.Flags().GetBool("continue")
@@ -521,6 +516,18 @@ func autopilotCheckpointsForCode(signals codexContinueAutopilotSignals, code aut
 // signal, or midden stores. Candidate triggers are selected in canonical
 // catalogue order, so the catalogue remains the policy authority.
 func evaluateAutopilotRunStage(result map[string]interface{}, before, after blockerSnapshot, headless bool) (autopilotRunDecision, bool) {
+	if proposal, ok := autopilotAuthorityProposalFromResult(result); ok {
+		authority := evaluateAutopilotAuthorityProposal(proposal)
+		if !authority.Allowed {
+			return autopilotRunDecisionForCode(authority.Code, headless, map[string]interface{}{
+				"target": proposal.Target,
+				"before": proposal.Before,
+				"after":  proposal.After,
+				"reason": proposal.Reason,
+			}), true
+		}
+	}
+
 	type candidate struct {
 		evidence map[string]interface{}
 	}
@@ -580,6 +587,31 @@ func evaluateAutopilotRunStage(result map[string]interface{}, before, after bloc
 		return decision, true
 	}
 	return autopilotRunDecision{}, false
+}
+
+func autopilotAuthorityProposalFromResult(result map[string]interface{}) (autopilotAuthorityProposal, bool) {
+	if result == nil || result["authority_change"] == nil {
+		return autopilotAuthorityProposal{}, false
+	}
+	switch proposal := result["authority_change"].(type) {
+	case autopilotAuthorityProposal:
+		return proposal, strings.TrimSpace(string(proposal.Target)) != ""
+	case *autopilotAuthorityProposal:
+		if proposal != nil {
+			return *proposal, strings.TrimSpace(string(proposal.Target)) != ""
+		}
+		return autopilotAuthorityProposal{}, false
+	default:
+		data, err := json.Marshal(proposal)
+		if err != nil {
+			return autopilotAuthorityProposal{}, false
+		}
+		var decoded autopilotAuthorityProposal
+		if json.Unmarshal(data, &decoded) != nil || strings.TrimSpace(string(decoded.Target)) == "" {
+			return autopilotAuthorityProposal{}, false
+		}
+		return decoded, true
+	}
 }
 
 func classifyAutopilotRunError(ctx context.Context, err error) autopilotTriggerCode {
@@ -709,23 +741,42 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 		ctx = context.Background()
 	}
 
-	state, err := loadCompatibilityColonyState()
+	facts, err := loadLifecycleFacts(root, store, autopilotNow())
 	if err != nil {
 		return nil, err
 	}
-	if len(state.Plan.Phases) == 0 {
-		return nil, fmt.Errorf("No project plan. Run `aether plan` first.")
+	preflight := buildAutopilotPreflight(facts)
+	if !preflight.Valid {
+		if preflight.Completed {
+			return map[string]interface{}{
+				"mode": "autopilot", "started": false, "completed": true,
+				"current_state": facts.State.Value.State, "phases_completed": 0,
+				"stopped_reason": autopilotTriggerColonyComplete, "next": "aether seal",
+				"outcome_kind": colony.OutcomeKindCompleted, "state_effect": colony.LifecycleStateEffectNone,
+				"preflight": preflight,
+			}, nil
+		}
+		return buildAutopilotPreflightRefusalResult(preflight), nil
 	}
+	state := facts.State.Value
 
 	if opts.DryRun {
-		return buildRunDryRunResult(state, opts)
+		result, dryRunErr := buildRunDryRunResult(state, opts)
+		if result != nil {
+			result["preflight"] = preflight
+		}
+		return result, dryRunErr
 	}
 
 	invocation := beginAutopilotInvocation(state)
+	repairLedger := newAutopilotRepairLedger(invocation.ID, maxAutomaticCheckFixAttempts)
 	steps := make([]map[string]interface{}, 0, len(state.Plan.Phases)*2)
 	phasesCompleted := 0
 	finish := func(current colony.ColonyState, decision autopilotRunDecision, cause error) map[string]interface{} {
-		return finishAutopilotInvocation(&invocation, current, opts, steps, phasesCompleted, decision, cause)
+		result := finishAutopilotInvocation(&invocation, current, opts, steps, phasesCompleted, decision, cause)
+		result["preflight"] = preflight
+		attachAutopilotRepairReport(result, repairLedger)
+		return result
 	}
 	if !invocation.BlockersBefore.Available {
 		cause := fmt.Errorf("blocker truth unavailable: %s", emptyFallback(invocation.BlockersBefore.Error, "unknown storage error"))
@@ -783,7 +834,10 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 		}
 	}
 
-	emitVisualProgress(renderRunEngageLine(state, opts))
+	emitVisualProgress(renderAutopilotOperatingContract(preflight))
+	// Preserve the established append-only start event after the new contract
+	// card. The card is consent; this line is only a progress marker.
+	emitVisualProgress("━━━ 🤖 " + spacedTitle("Autopilot Engaged") + " ━━━")
 
 	for {
 		if err := ctx.Err(); err != nil {
@@ -842,6 +896,9 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 			if err != nil {
 				decision := autopilotRunDecisionForCode(classifyAutopilotRunError(ctx, err), opts.Headless, map[string]interface{}{"phase": phase.ID, "stage": "build"})
 				return finish(state, decision, err), nil
+			}
+			if decision, active := evaluateAutopilotRunStage(buildResult, baseline, baseline, opts.Headless); active && decision.Code == autopilotTriggerMissingAuthority {
+				return finish(state, decision, nil), nil
 			}
 			invocation.phase(*phase, "built")
 			steps = append(steps, map[string]interface{}{
@@ -926,6 +983,12 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 			})
 			state = updatedState
 			invocation.recordSignals(phase, autopilotSignalsFromRunResult(continueResult))
+			if repairErr := recordAutopilotCheckFixReceipt(&repairLedger, continueResult); repairErr != nil {
+				decision := autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{
+					"phase": phase.ID, "stage": "repair_receipt_persistence",
+				})
+				return finish(state, decision, repairErr), nil
+			}
 
 			afterContinueReport := captureAutopilotBlockerSnapshot(store)
 			if !afterContinueReport.Available || afterContinueReport.Snapshot == nil {
@@ -973,6 +1036,107 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 			return finish(state, decision, err), nil
 		}
 	}
+}
+
+func buildAutopilotPreflightRefusalResult(preflight AutopilotPreflight) map[string]interface{} {
+	return map[string]interface{}{
+		"mode": "autopilot_preflight", "started": false, "completed": false,
+		"outcome_kind": preflight.OutcomeKind, "state_effect": preflight.StateEffect,
+		"missing": preflight.Missing, "next": preflight.Next,
+		"projection_revision": preflight.ProjectionRevision, "captured_at": preflight.CapturedAt,
+		"preflight": preflight,
+	}
+}
+
+const autopilotRepairLedgerPath = "autopilot/repair-ledger.json"
+
+func recordAutopilotCheckFixReceipt(ledger *autopilotRepairLedger, result map[string]interface{}) error {
+	fix, ok := autopilotCheckFixAttemptFromResult(result)
+	if !ok {
+		return nil
+	}
+	for _, receipt := range ledger.Receipts {
+		if receipt.Phase == fix.Phase && receipt.Attempt == fix.ParentAttemptID && strings.EqualFold(receipt.Check, fix.Check) {
+			return nil
+		}
+	}
+	scope := append([]string(nil), fix.FailureIndex.ImplicatedTaskIDs...)
+	if len(scope) == 0 {
+		scope = []string{fmt.Sprintf("phase-%d verification repair", fix.Phase)}
+	}
+	baseline := strings.TrimSpace(fix.FailureIndex.Command)
+	if baseline == "" {
+		baseline = emptyFallback(fix.ParentAttemptID, "recorded failing verification")
+	}
+	failure := autopilotRepairFailure{
+		Phase: fix.Phase, Attempt: fix.ParentAttemptID, Check: fix.Check,
+		Evidence: append([]string(nil), fix.FailureIndex.Excerpts...), PlannedAction: fix.Reason,
+		Baseline: baseline, PermittedScope: scope, ScopeSafe: true, SafetySafe: true, AuthoritySafe: true,
+		AffectedPaths: []string{fmt.Sprintf("phase-%d", fix.Phase)},
+	}
+	receipt, err := beginAutopilotRepair(ledger, failure, autopilotNow())
+	if err != nil {
+		recordAutopilotRepairDebt(ledger, failure, err.Error(), false)
+		return persistAutopilotRepairLedger(*ledger)
+	}
+	passed := fix.Outcome == "fixed"
+	verificationEvidence := []string{fmt.Sprintf("%s: %s", fix.Check, strings.ReplaceAll(fix.Outcome, "_", " "))}
+	if err := completeAutopilotRepair(ledger, receipt.ID, verificationEvidence, passed, autopilotNow()); err != nil {
+		return err
+	}
+	if err := persistAutopilotRepairLedger(*ledger); err != nil {
+		return err
+	}
+	emitVisualProgress(renderAutopilotRepairReceipt(ledger.Receipts[len(ledger.Receipts)-1]))
+	return nil
+}
+
+func autopilotCheckFixAttemptFromResult(result map[string]interface{}) (checkFixAttemptRecord, bool) {
+	if result == nil || result["verification"] == nil {
+		return checkFixAttemptRecord{}, false
+	}
+	var verification codexContinueVerificationReport
+	switch value := result["verification"].(type) {
+	case codexContinueVerificationReport:
+		verification = value
+	case *codexContinueVerificationReport:
+		if value == nil {
+			return checkFixAttemptRecord{}, false
+		}
+		verification = *value
+	default:
+		data, err := json.Marshal(value)
+		if err != nil || json.Unmarshal(data, &verification) != nil {
+			return checkFixAttemptRecord{}, false
+		}
+	}
+	if verification.CheckFixAttempt == nil {
+		return checkFixAttemptRecord{}, false
+	}
+	return *verification.CheckFixAttempt, true
+}
+
+func persistAutopilotRepairLedger(ledger autopilotRepairLedger) error {
+	if store == nil {
+		return fmt.Errorf("repair receipt persistence is unavailable")
+	}
+	return store.SaveJSON(autopilotRepairLedgerPath, ledger)
+}
+
+func attachAutopilotRepairReport(result map[string]interface{}, ledger autopilotRepairLedger) {
+	if result == nil {
+		return
+	}
+	report := autopilotRepairReportFields(ledger)
+	result["repair_report"] = report
+	result["repair_attempts"] = report.Attempts
+	result["repair_receipts"] = report.Receipts
+	result["repair_budget_remaining"] = report.RemainingBudget
+	result["repair_budget_exhausted"] = report.BudgetExhausted
+	result["debt"] = report.Debt
+	result["repair_blockers"] = report.Blockers
+	result["continued_paths"] = report.ContinuedPaths
+	result["skipped_paths"] = report.SkippedPaths
 }
 
 func loadCompatibilityColonyState() (colony.ColonyState, error) {
@@ -1186,6 +1350,14 @@ func renderRunCompatibilityVisual(result map[string]interface{}) string {
 	if strings.TrimSpace(stringValue(result["report_persist_error"])) != "" {
 		return renderRunReportPersistenceFailure(result)
 	}
+	if mode := strings.TrimSpace(stringValue(result["mode"])); mode == "autopilot_preflight" {
+		if preflight, ok := autopilotPreflightFromValue(result["preflight"]); ok {
+			return renderAutopilotPreflightRefusal(preflight)
+		}
+	}
+	if !boolValue(result["started"]) && boolValue(result["completed"]) {
+		return "━━━ ✅ " + spacedTitle("Autopilot Complete") + " ━━━\nAll accepted phases are built and verified.\nSealing remains an explicit owner action. Next: `aether seal`."
+	}
 
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("run"), "Run"))
@@ -1194,6 +1366,7 @@ func renderRunCompatibilityVisual(result map[string]interface{}) string {
 	if dryRun, _ := result["dry_run"].(bool); !dryRun {
 		if report := renderAutopilotReportFromResult(result); report != "" {
 			b.WriteString(report)
+			b.WriteString(renderAutopilotRepairReport(result["repair_report"]))
 			return b.String()
 		}
 	}
@@ -1266,6 +1439,28 @@ func renderRunCompatibilityVisual(result map[string]interface{}) string {
 		fmt.Sprintf("Stop reason: %s", emptyFallback(stringValue(result["stopped_reason"]), "none")),
 	))
 	return b.String()
+}
+
+func autopilotPreflightFromValue(value interface{}) (AutopilotPreflight, bool) {
+	switch preflight := value.(type) {
+	case AutopilotPreflight:
+		return preflight, true
+	case *AutopilotPreflight:
+		if preflight != nil {
+			return *preflight, true
+		}
+		return AutopilotPreflight{}, false
+	default:
+		data, err := json.Marshal(value)
+		if err != nil {
+			return AutopilotPreflight{}, false
+		}
+		var decoded AutopilotPreflight
+		if json.Unmarshal(data, &decoded) != nil {
+			return AutopilotPreflight{}, false
+		}
+		return decoded, true
+	}
 }
 
 // renderRunReportPersistenceFailure is deliberately separate from the normal

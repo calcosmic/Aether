@@ -17,17 +17,41 @@ import (
 // stays a clean machine surface.
 
 func renderRunEngageLine(state colony.ColonyState, opts runCompatibilityOptions) string {
-	goal := "(no goal recorded)"
-	if state.Goal != nil && strings.TrimSpace(*state.Goal) != "" {
-		goal = strings.TrimSpace(*state.Goal)
+	_ = opts // The accepted range, not a presentation-only cap, defines this card.
+	facts := lifecycleFactsFromStateSnapshot(state, false, autopilotNow())
+	return renderAutopilotOperatingContract(buildAutopilotPreflight(facts))
+}
+
+func renderAutopilotPreflightRefusal(preflight AutopilotPreflight) string {
+	var b strings.Builder
+	if preflight.Paused {
+		b.WriteString("⏸ Autopilot paused\n")
+		fmt.Fprintf(&b, "Because: %s.\n", emptyFallback(strings.TrimSuffix(strings.TrimSpace(preflight.Diagnostic), "."), "authoritative colony state cannot be read safely"))
+		b.WriteString("State: unchanged.\n")
+		fmt.Fprintf(&b, "Next: %s", emptyFallback(strings.TrimSpace(preflight.Next), "/ant-status"))
+		return b.String()
 	}
-	maxLabel := "all"
-	if opts.MaxPhases > 0 {
-		maxLabel = fmt.Sprintf("%d", opts.MaxPhases)
+	b.WriteString("⛔ Autopilot did not start\n")
+	fmt.Fprintf(&b, "Missing: %s.\n", emptyFallback(strings.TrimSpace(preflight.Missing), "an accepted plan"))
+	b.WriteString("State: unchanged.\n")
+	fmt.Fprintf(&b, "Next: %s", emptyFallback(strings.TrimSpace(preflight.Next), "/ant-status"))
+	return b.String()
+}
+
+func renderAutopilotOperatingContract(preflight AutopilotPreflight) string {
+	pheromones := "none"
+	if len(preflight.ActivePheromones) > 0 {
+		pheromones = strings.Join(preflight.ActivePheromones, "; ")
 	}
 	var b strings.Builder
-	b.WriteString("━━━ 🤖 " + spacedTitle("Autopilot Engaged") + " ━━━\n")
-	b.WriteString(fmt.Sprintf("Goal: %s | Phase %d of %d | Max: %s", goal, state.CurrentPhase, len(state.Plan.Phases), maxLabel))
+	b.WriteString("━━ ⚡ A U T O P I L O T ━━\n")
+	fmt.Fprintf(&b, "Goal: %s\n", emptyFallback(strings.TrimSpace(preflight.Goal), "Not recorded"))
+	fmt.Fprintf(&b, "Range: Phase %d through Phase %d\n", preflight.FirstPhase, preflight.LastPhase)
+	fmt.Fprintf(&b, "Active pheromones: %s\n", pheromones)
+	b.WriteString("May revise: tasks, dependencies, sequencing, and implementation details when evidence requires it.\n")
+	b.WriteString("Will pause before changing: goal, promised behavior, scope, risk authority, or acceptance criteria.\n")
+	b.WriteString("Also pauses for: safety failure, corrupt state, missing authority, a material owner decision, or an invalidating failed dependency.\n")
+	b.WriteString("Starting now.")
 	return b.String()
 }
 
@@ -123,9 +147,66 @@ func renderAutopilotComplete(phasesCompleted int) string {
 	var b strings.Builder
 	b.WriteString("━━━ ✅ " + spacedTitle("Autopilot Complete") + " ━━━\n")
 	if phasesCompleted == 1 {
-		b.WriteString("1 phase built, verified, and advanced.")
+		b.WriteString("1 phase built and verified.\n")
 	} else {
-		b.WriteString(fmt.Sprintf("%d phases built, verified, and advanced.", phasesCompleted))
+		b.WriteString(fmt.Sprintf("%d phases built and verified.\n", phasesCompleted))
+	}
+	b.WriteString("Sealing remains an explicit owner action. Next: `aether seal`.")
+	return b.String()
+}
+
+func renderAutopilotRepairReceipt(receipt autopilotRepairReceipt) string {
+	var b strings.Builder
+	b.WriteString("━━━ 🔧 " + spacedTitle("Bounded Repair") + " ━━━\n")
+	fmt.Fprintf(&b, "Receipt: %s | Phase %d | Attempt: %s\n", receipt.ID, receipt.Phase, emptyFallback(receipt.Attempt, "not recorded"))
+	fmt.Fprintf(&b, "Failing check: %s\n", emptyFallback(receipt.Check, "not recorded"))
+	fmt.Fprintf(&b, "Permitted scope: %s\n", emptyFallback(strings.Join(receipt.PermittedScope, ", "), "none"))
+	fmt.Fprintf(&b, "Action: %s\n", emptyFallback(receipt.PlannedAction, "not recorded"))
+	fmt.Fprintf(&b, "Verification: %s — %s\n", emptyFallback(receipt.Verification.Check, receipt.Check), repairVerificationLabel(receipt.Verification.Passed))
+	fmt.Fprintf(&b, "Remaining repair budget: %d", receipt.BudgetRemaining)
+	return b.String()
+}
+
+func repairVerificationLabel(passed bool) string {
+	if passed {
+		return "passed"
+	}
+	return "failed"
+}
+
+func renderAutopilotRepairReport(value interface{}) string {
+	var report autopilotRepairReport
+	switch typed := value.(type) {
+	case autopilotRepairReport:
+		report = typed
+	case *autopilotRepairReport:
+		if typed == nil {
+			return ""
+		}
+		report = *typed
+	default:
+		return ""
+	}
+	if report.Attempts == 0 && len(report.Debt) == 0 && len(report.Blockers) == 0 && len(report.ContinuedPaths) == 0 && len(report.SkippedPaths) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("\nRepair and debt\n")
+	fmt.Fprintf(&b, "Attempts: %d | Remaining budget: %d | Exhausted: %t\n", report.Attempts, report.RemainingBudget, report.BudgetExhausted)
+	for _, receipt := range report.Receipts {
+		fmt.Fprintf(&b, "  - %s: phase %d %s — %s\n", receipt.ID, receipt.Phase, receipt.Check, receipt.Status)
+	}
+	for _, debt := range report.Debt {
+		fmt.Fprintf(&b, "  - Debt: %s\n", debt.Summary)
+	}
+	for _, blocker := range report.Blockers {
+		fmt.Fprintf(&b, "  - Blocker: %s\n", blocker.Summary)
+	}
+	if len(report.ContinuedPaths) > 0 {
+		fmt.Fprintf(&b, "Continued independent paths: %s\n", strings.Join(report.ContinuedPaths, ", "))
+	}
+	if len(report.SkippedPaths) > 0 {
+		fmt.Fprintf(&b, "Stopped affected paths: %s\n", strings.Join(report.SkippedPaths, ", "))
 	}
 	return b.String()
 }
@@ -156,6 +237,8 @@ func humanizeAutopilotPauseReason(reason string) string {
 		return "A blocker escalation is unresolved at this stage boundary."
 	case reason == string(autopilotTriggerColonyNotRunnable):
 		return "The colony cannot safely enter its next build or verification step."
+	case reason == string(autopilotTriggerMissingAuthority):
+		return "The proposed change needs owner authority before it can be applied."
 	case reason == string(autopilotTriggerProviderUnavailable):
 		return "The required worker provider is unavailable; the current phase remains ready to resume."
 	case reason == string(autopilotTriggerRuntimeVerificationNeeded):
