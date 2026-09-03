@@ -529,6 +529,9 @@ func (tx *lifecycleTransaction) stageAndPersistIntent() error {
 		root := declarations[0].Root
 		rootID := fmt.Sprintf("root-%02d-%s", rootIndex+1, kind)
 		localDirectory := filepath.Join(root.Path, lifecycleTransactionDirectory, tx.config.TransactionID, rootID)
+		if err := rejectLifecycleSymlinkTarget(root.Path, localDirectory); err != nil {
+			return fmt.Errorf("lifecycle transaction: unsafe local staging for %s: %w", kind, err)
+		}
 		localStore, err := storage.NewStore(localDirectory)
 		if err != nil {
 			return fmt.Errorf("lifecycle transaction: create local staging for %s: %w", kind, err)
@@ -543,6 +546,9 @@ func (tx *lifecycleTransaction) stageAndPersistIntent() error {
 		for _, declaration := range declarations {
 			stageRelative := filepath.Join("staged", declaration.ID+".bin")
 			stagePath := filepath.Join(localDirectory, stageRelative)
+			if err := rejectLifecycleSymlinkTarget(root.Path, stagePath); err != nil {
+				return fmt.Errorf("lifecycle transaction: unsafe stage path for %s: %w", declaration.ID, err)
+			}
 			stageBytes := declaration.Content
 			if declaration.Action == lifecycleTransactionRemove {
 				stageBytes = []byte("remove\n")
@@ -564,6 +570,9 @@ func (tx *lifecycleTransaction) stageAndPersistIntent() error {
 				}
 				preimageRelative := filepath.Join("preimages", declaration.ID+".bin")
 				preimagePath = filepath.Join(localDirectory, preimageRelative)
+				if err := rejectLifecycleSymlinkTarget(root.Path, preimagePath); err != nil {
+					return fmt.Errorf("lifecycle transaction: unsafe preimage path for %s: %w", declaration.ID, err)
+				}
 				if err := durableAtomicWrite(localStore, preimageRelative, state.Bytes); err != nil {
 					return fmt.Errorf("lifecycle transaction: stage preimage %q: %w", declaration.TargetPath, err)
 				}
@@ -583,6 +592,9 @@ func (tx *lifecycleTransaction) stageAndPersistIntent() error {
 			intent.CommitOrder = append(intent.CommitOrder, declaration.ID)
 		}
 		manifestPath := filepath.Join(localDirectory, "manifest.json")
+		if err := rejectLifecycleSymlinkTarget(root.Path, manifestPath); err != nil {
+			return fmt.Errorf("lifecycle transaction: unsafe manifest path for %s: %w", rootID, err)
+		}
 		manifestBytes, err := durableSaveJSON(localStore, "manifest.json", manifest)
 		if err != nil {
 			return fmt.Errorf("lifecycle transaction: persist root manifest %s: %w", rootID, err)
@@ -1309,6 +1321,10 @@ func (tx *lifecycleTransaction) persistProgress() error {
 func (tx *lifecycleTransaction) ensureJournalStore() error {
 	if tx.journalStore != nil {
 		return nil
+	}
+	dataRoot := tx.roots[lifecycleTransactionRootData].Path
+	if err := rejectLifecycleSymlinkTarget(dataRoot, filepath.Join(tx.journalPath(), "progress.json")); err != nil {
+		return fmt.Errorf("lifecycle transaction: unsafe coordinator journal: %w", err)
 	}
 	journalStore, err := storage.NewStore(tx.journalPath())
 	if err != nil {

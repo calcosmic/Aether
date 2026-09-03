@@ -330,6 +330,54 @@ func TestLifecycleTransactionRootAllowlist(t *testing.T) {
 		}
 	})
 
+	t.Run("symlink local staging directory", func(t *testing.T) {
+		fixture := newLifecycleTransactionFixture(t)
+		outside := t.TempDir()
+		if err := os.Symlink(outside, filepath.Join(fixture.repositoryRoot, lifecycleTransactionDirectory)); err != nil {
+			t.Fatal(err)
+		}
+		tx, err := beginLifecycleTransaction(fixture.config("linked-staging"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := tx.DeclareWrite(lifecycleTransactionRootRepository, "safe.txt", []byte("unsafe")); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tx.Commit(); err == nil {
+			t.Fatal("symlinked root staging directory was accepted")
+		}
+		if _, err := os.Stat(filepath.Join(fixture.repositoryRoot, "safe.txt")); !os.IsNotExist(err) {
+			t.Fatalf("rejected staging escape mutated target: %v", err)
+		}
+		if entries, err := os.ReadDir(outside); err != nil || len(entries) != 0 {
+			t.Fatalf("staging escape wrote outside root: entries=%v err=%v", entries, err)
+		}
+	})
+
+	t.Run("symlink coordinator directory", func(t *testing.T) {
+		fixture := newLifecycleTransactionFixture(t)
+		outside := t.TempDir()
+		if err := os.Symlink(outside, filepath.Join(fixture.dataRoot, "transactions")); err != nil {
+			t.Fatal(err)
+		}
+		tx, err := beginLifecycleTransaction(fixture.config("linked-coordinator"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := tx.DeclareWrite(lifecycleTransactionRootRepository, "safe.txt", []byte("unsafe")); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tx.Commit(); err == nil {
+			t.Fatal("symlinked coordinator directory was accepted")
+		}
+		if _, err := os.Stat(filepath.Join(fixture.repositoryRoot, "safe.txt")); !os.IsNotExist(err) {
+			t.Fatalf("rejected coordinator escape mutated target: %v", err)
+		}
+		if entries, err := os.ReadDir(outside); err != nil || len(entries) != 0 {
+			t.Fatalf("coordinator escape wrote outside data root: entries=%v err=%v", entries, err)
+		}
+	})
+
 	tests := []struct {
 		name      string
 		configure func(*lifecycleTransactionConfig)
