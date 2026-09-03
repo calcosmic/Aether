@@ -33,6 +33,7 @@ package cmd
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -134,6 +135,10 @@ type nextAction struct {
 	Recovery       nextActionRecovery       `json:"recovery"`
 	Notes          []string                 `json:"notes,omitempty"`
 	Memory         nextActionMemory         `json:"memory"`
+	// Projection is the authoritative lifecycle answer. The legacy fields
+	// above remain as compatibility adapters for callers migrated in later
+	// plans; renderers consume this value directly.
+	Projection *LifecycleProjection `json:"projection,omitempty"`
 }
 
 // nextActionMemory is what the colony remembers about the owner, shown only
@@ -161,6 +166,12 @@ type nextActionMemory struct {
 // nextActionInput is everything the decision needs, already gathered. The
 // resolver never reaches past this struct.
 type nextActionInput struct {
+	// Facts is the one read-only lifecycle snapshot. State remains below as a
+	// compatibility field for callers that already hold an in-memory state;
+	// resolveNextAction converts that state to facts exactly once when Facts is
+	// absent, then delegates every lifecycle decision to projectLifecycle.
+	Facts LifecycleFacts
+
 	// NoColony distinguishes "there is no project here at all" from "a project
 	// that has only just started". They lead to completely different advice and
 	// conflating them is how a fresh checkout gets told to continue a build
@@ -476,405 +487,183 @@ func availableCommand(candidate string) (string, bool) {
 // The resolver
 // ---------------------------------------------------------------------------
 
-type nextActionChoice struct {
-	key            nextActionCandidateKey
-	args           []interface{}
-	recommendation string
-	// literal, when set, is a command that came from saved data rather than
-	// from the candidate set (a recovery report names its own exact command).
-	// It is gated exactly like any other candidate, and when it fails to
-	// resolve the fallback below is used and the substitution is recorded.
-	literal string
-	// fallback is the key used when the primary choice does not resolve.
-	fallback     nextActionCandidateKey
-	fallbackArgs []interface{}
-	alternatives []nextActionAlternativeChoice
+// nextActionFacts returns the authoritative aggregate supplied by the loader.
+// Callers that already own a just-written in-memory state are adapted to the
+// same shape with explicit unavailable provenance for domains they did not
+// observe.
+func nextActionFacts(in nextActionInput) LifecycleFacts {
+	facts := in.Facts
+	if facts.State.Source.Domain == "" {
+		facts = lifecycleFactsFromStateSnapshot(in.State, in.NoColony, time.Time{})
+	}
+
+	flags := append([]colony.FlagEntry(nil), facts.Blockers.Value...)
+	for _, flag := range in.Flags {
+		flags = appendLifecycleFlagOnce(flags, flag)
+	}
+	if in.PlanBlocker != nil {
+		flags = appendLifecycleFlagOnce(flags, *in.PlanBlocker)
+	}
+	if in.Recovery != nil {
+		flags = appendLifecycleFlagOnce(flags, colony.FlagEntry{
+			ID:          "active-recovery",
+			Type:        "blocker",
+			Description: strings.TrimSpace(in.Recovery.Summary),
+			Source:      in.Recovery.ReportPath,
+		})
+	}
+	if in.BuildLooksAbandoned {
+		flags = appendLifecycleFlagOnce(flags, colony.FlagEntry{
+			ID:          "abandoned-build-evidence",
+			Type:        "blocker",
+			Description: "the saved execution has no live dispatch evidence",
+			Source:      "build manifest",
+		})
+	}
+	facts.Blockers.Value = flags
+	return facts
 }
 
-type nextActionAlternativeChoice struct {
-	key     nextActionCandidateKey
-	args    []interface{}
-	literal string
-	why     string
+func appendLifecycleFlagOnce(flags []colony.FlagEntry, candidate colony.FlagEntry) []colony.FlagEntry {
+	for _, existing := range flags {
+		if candidate.ID != "" && existing.ID == candidate.ID {
+			return flags
+		}
+	}
+	return append(flags, candidate)
 }
 
-// resolveNextAction is the one decision. Given the project's saved state it
-// answers all eight of the owner's questions. It reads nothing.
+func projectedLifecycleCommand(command string) bool {
+	fields := strings.Fields(strings.TrimSpace(command))
+	if len(fields) < 2 || fields[0] != "aether" {
+		return false
+	}
+	switch fields[1] {
+	case "init", "plan", "build", "run", "resume", "resume-colony", "seal", "entomb":
+		return true
+	default:
+		return false
+	}
+}
+
+func applyNextActionDetailOverride(projection LifecycleProjection, override *nextActionOverride) LifecycleProjection {
+	if override == nil {
+		return projection
+	}
+	command := strings.TrimSpace(override.Command)
+	if command == "" || projectedLifecycleCommand(command) {
+		return projection
+	}
+	if _, ok := availableCommand(command); !ok {
+		return projection
+	}
+	reason := strings.TrimSpace(override.Recommendation)
+	if reason == "" {
+		reason = "This command exposes the additional detail produced by the run that just finished."
+	}
+	projection.NextAction = lifecycleAction("command_detail", command, reason, projection.Evidence)
+	projection.Alternatives = nil
+	projection.NextAction, projection.Alternatives = lifecycleApplyPlatform(
+		projection.NextAction,
+		projection.Alternatives,
+		"codex",
+	)
+	return projection
+}
+
+func gateLifecycleProjection(projection LifecycleProjection) (LifecycleProjection, []string) {
+	var notes []string
+	if len(projection.NextAction.Choices) > 0 {
+		choices := make([]LifecycleActionChoice, 0, len(projection.NextAction.Choices))
+		for _, choice := range projection.NextAction.Choices {
+			if command, ok := availableCommand(choice.RuntimeCommand); ok {
+				choice.RuntimeCommand = command
+				choice.DisplayCommand = command
+				choices = append(choices, choice)
+			}
+		}
+		if len(choices) != len(projection.NextAction.Choices) {
+			notes = append(notes, "One of the projected execution modes is not available in this runtime; inspect status before continuing.")
+			projection.NextAction = lifecycleAction(
+				"inspect",
+				"aether status",
+				"The accepted execution modes are not both available in this runtime.",
+				projection.Evidence,
+			)
+		} else {
+			projection.NextAction.Choices = choices
+		}
+	}
+
+	if command := strings.TrimSpace(projection.NextAction.RuntimeCommand); command != "" {
+		if gated, ok := availableCommand(command); ok {
+			projection.NextAction.RuntimeCommand = gated
+			projection.NextAction.DisplayCommand = gated
+		} else {
+			notes = append(notes, fmt.Sprintf("%q is not available in this runtime; the read-only status view was substituted.", command))
+			projection.NextAction = lifecycleAction(
+				"inspect",
+				"aether status",
+				"The projected command is unavailable in this runtime, so inspect the retained state.",
+				projection.Evidence,
+			)
+			projection.NextAction.DisplayCommand = projection.NextAction.RuntimeCommand
+		}
+	}
+
+	alternatives := make([]LifecycleActionChoice, 0, len(projection.Alternatives))
+	for _, alternative := range projection.Alternatives {
+		if gated, ok := availableCommand(alternative.RuntimeCommand); ok {
+			alternative.RuntimeCommand = gated
+			alternative.DisplayCommand = gated
+			alternatives = append(alternatives, alternative)
+		}
+	}
+	projection.Alternatives = alternatives
+	return projection, notes
+}
+
+func legacyAlternativesFromProjection(projection LifecycleProjection) []nextActionAlternative {
+	result := make([]nextActionAlternative, 0, len(projection.Alternatives))
+	for _, alternative := range projection.Alternatives {
+		result = append(result, nextActionAlternative{
+			Command:     alternative.RuntimeCommand,
+			Explanation: alternative.Reason,
+		})
+	}
+	return result
+}
+
+// resolveNextAction retains the established reporting envelope while delegating
+// the lifecycle decision itself to projectLifecycle. It reads nothing.
 func resolveNextAction(in nextActionInput) nextAction {
-	state := normalizeLegacyColonyState(in.State)
+	facts := nextActionFacts(in)
+	state := facts.State.Value
+	reportInput := in
+	reportInput.State = state
+	reportInput.NoColony = facts.State.Source.Provenance == LifecycleFactMissing
+	if len(reportInput.Flags) == 0 {
+		reportInput.Flags = append([]colony.FlagEntry(nil), facts.Blockers.Value...)
+	}
+
+	projection := projectLifecycle(facts, LifecycleViewFocused, "codex")
+	projection = applyNextActionDetailOverride(projection, in.Override)
+	projection, notes := gateLifecycleProjection(projection)
 
 	answer := nextAction{
-		Standing:      standingFromInput(in, state),
-		Changed:       changedFromInput(in, state),
-		Open:          openItemsFromInput(in),
-		Recovery:      recoveryFromInput(in, state),
-		ContextHealth: contextHealthFromInput(in, state),
-		// Straight passthrough -- see the doc comment on nextAction.Memory.
-		// loadNextActionInput / loadNextActionInputForCommand leave in.Memory
-		// zero, so every closing card but the greeting is unchanged.
-		Memory: in.Memory,
+		Standing:       standingFromInput(reportInput, state),
+		Changed:        changedFromInput(reportInput, state),
+		Open:           openItemsFromInput(reportInput),
+		Recovery:       recoveryFromInput(reportInput, state),
+		ContextHealth:  contextHealthFromInput(reportInput, state),
+		Memory:         in.Memory,
+		Projection:     &projection,
+		Recommendation: projection.NextAction.Reason,
+		Command:        projection.NextAction.RuntimeCommand,
+		Alternatives:   legacyAlternativesFromProjection(projection),
+		Notes:          notes,
 	}
-
-	choice := chooseNextAction(in, state)
-	answer.Recommendation = choice.recommendation
-
-	command, notes := gateChoice(choice)
-	answer.Command = command
-	answer.Notes = notes
-	answer.Alternatives = gateAlternatives(choice.alternatives, command)
-
 	return answer
-}
-
-// chooseNextAction is the ordered decision, merging the branches the five
-// existing deciders each implement partially. Most specific first.
-func chooseNextAction(in nextActionInput, state colony.ColonyState) nextActionChoice {
-	if in.NoColony {
-		return nextActionChoice{
-			key: candidateInit,
-			recommendation: "There is no Aether project set up in this folder yet. " +
-				"Start one by saying, in a sentence, what you want built.",
-			alternatives: []nextActionAlternativeChoice{
-				{key: candidateColonize},
-				{key: candidateStatus},
-			},
-		}
-	}
-
-	// The caller's own knowledge of this exact run outranks everything the
-	// saved state can say, because the saved state cannot know it: which half
-	// of a part-built phase is still unwritten, or the exact command the last
-	// check named. It is still gated like any other command below, so an
-	// override naming something this version does not have falls back to the
-	// ordinary answer rather than telling the owner to type a command that
-	// does not exist.
-	if in.Override != nil && strings.TrimSpace(in.Override.Command) != "" {
-		recommendation := strings.TrimSpace(in.Override.Recommendation)
-		if recommendation == "" {
-			recommendation = "This run left something specific to do next, and this command does exactly that " +
-				"rather than starting the general next step."
-		}
-		return nextActionChoice{
-			literal:        strings.TrimSpace(in.Override.Command),
-			fallback:       candidateContinue,
-			recommendation: recommendation,
-			alternatives: []nextActionAlternativeChoice{
-				{key: candidateStatus},
-				{key: candidateFlags},
-			},
-		}
-	}
-
-	// A sealed project -- one that has reached the final milestone, named
-	// "Crowned Anthill" in this project's vocabulary -- has nothing left to
-	// build. The only step left is filing it away.
-	if colonyNeedsEntomb(state) {
-		return nextActionChoice{
-			key: candidateEntomb,
-			recommendation: "This project is finished and signed off. The last step is to file it away in the " +
-				"archive, which takes it off the active list without deleting anything.",
-			alternatives: []nextActionAlternativeChoice{
-				{key: candidateStatus},
-				{key: candidateInit},
-			},
-		}
-	}
-
-	if state.Paused {
-		return nextActionChoice{
-			key: candidateResume,
-			recommendation: "You paused this project. Picking it back up reloads everything that was " +
-				"in progress and makes it runnable again.",
-			// candidateResumeColony is NOT offered here: "aether resume" and
-			// "aether resume-colony" are two names for the same command (a
-			// declared Cobra alias), so pairing them recommends one thing
-			// twice while calling it a different view. candidateResumeDashboard
-			// is genuinely different -- a read-only look, not the same resume.
-			alternatives: []nextActionAlternativeChoice{
-				{key: candidateStatus},
-				{key: candidateResumeDashboard},
-			},
-		}
-	}
-
-	if in.PlanBlocker != nil {
-		description := compactActionText(in.PlanBlocker.Description, 120)
-		if description == "" {
-			description = "planning did not finish cleanly"
-		}
-		return nextActionChoice{
-			key: candidateFlags,
-			recommendation: "Planning stopped on a problem that needs you: " + description + ". " +
-				"Read the open problem list before starting any build, because building on a broken " +
-				"plan wastes the run.",
-			alternatives: []nextActionAlternativeChoice{
-				{key: candidatePlanRepair},
-				{key: candidateStatus},
-			},
-		}
-	}
-
-	if len(state.Plan.Phases) == 0 {
-		return nextActionChoice{
-			key: candidateDiscuss,
-			recommendation: "The goal is saved but there is no plan yet. The next step is a short " +
-				"conversation to pin down what you actually want, so the phases are built on your " +
-				"answers rather than on a guess.",
-			alternatives: []nextActionAlternativeChoice{
-				{key: candidatePlan},
-				{key: candidateColonize},
-				{key: candidateStatus},
-			},
-		}
-	}
-
-	// A phase that failed outranks everything below it: there is no point
-	// starting new work on top of work that is known to be broken.
-	for _, phase := range state.Plan.Phases {
-		if phase.Status == "failed" {
-			return nextActionChoice{
-				key:  candidateBuildPhase,
-				args: []interface{}{phase.ID},
-				recommendation: fmt.Sprintf(
-					"Phase %d (%s) failed. The next step is to retry it -- the helpers start from "+
-						"what is already there rather than from scratch.", phase.ID, phase.Name),
-				alternatives: []nextActionAlternativeChoice{
-					{key: candidateStatus},
-					{key: candidateFlags},
-					{key: candidateHistory},
-				},
-			}
-		}
-	}
-
-	// Every phase done, but the project has not been signed off yet. Note that
-	// this deliberately says "sign it off", not "file it away": archiving a
-	// project that was never signed off skips the step that records what was
-	// learned. workflowSuggestionsForState used to advise archiving here; that
-	// was the drift.
-	if allPhasesCompleteInPlan(state) && !colonyNeedsEntomb(state) {
-		return nextActionChoice{
-			key: candidateSeal,
-			recommendation: "Every planned phase is finished. Signing the project off marks it complete " +
-				"and writes down what was learned so later projects reuse it. Nothing is deleted.",
-			alternatives: []nextActionAlternativeChoice{
-				{key: candidateStatus},
-				{key: candidateHistory},
-			},
-		}
-	}
-
-	switch state.State {
-	case colony.StateEXECUTING, colony.StateBUILT:
-		if state.State == colony.StateEXECUTING && state.BuildStartedAt == nil && state.CurrentPhase > 0 {
-			return nextActionChoice{
-				key:  candidateBuildForce,
-				args: []interface{}{state.CurrentPhase},
-				recommendation: fmt.Sprintf(
-					"Phase %d was interrupted before it did any work. Restarting it replaces the "+
-						"abandoned attempt rather than running alongside it.", state.CurrentPhase),
-				alternatives: []nextActionAlternativeChoice{
-					{key: candidateStatus},
-					{key: candidateResumeColony},
-				},
-			}
-		}
-		if in.BuildLooksAbandoned && state.CurrentPhase > 0 {
-			return nextActionChoice{
-				key:  candidateBuildForce,
-				args: []interface{}{state.CurrentPhase},
-				recommendation: fmt.Sprintf(
-					"Phase %d has been sitting unfinished for a long time with nothing running behind "+
-						"it. Restarting it replaces the stalled attempt.", state.CurrentPhase),
-				alternatives: []nextActionAlternativeChoice{
-					{key: candidateStatus},
-					{key: candidateResumeColony},
-				},
-			}
-		}
-		if in.Recovery != nil && in.Recovery.HasTargetedRoute {
-			alternatives := []nextActionAlternativeChoice{{key: candidateStatus}}
-			if reconcile := strings.TrimSpace(in.Recovery.Recovery.ReconcileCommand); reconcile != "" && reconcile != in.Recovery.Next {
-				alternatives = append(alternatives, nextActionAlternativeChoice{
-					literal: reconcile,
-					why:     "Use this instead if the code already landed and only the record of it is behind.",
-				})
-			}
-			alternatives = append(alternatives, nextActionAlternativeChoice{key: candidateFlags})
-			summary := compactActionText(in.Recovery.Summary, 160)
-			if summary != "" {
-				summary = " " + summary
-			}
-			return nextActionChoice{
-				literal:      in.Recovery.Next,
-				fallback:     candidateContinue,
-				alternatives: alternatives,
-				recommendation: fmt.Sprintf(
-					"Phase %d is blocked.%s The saved report from the last check names the exact command "+
-						"that clears it, so this is more targeted than a general re-check.",
-					state.CurrentPhase, summary),
-			}
-		}
-		return nextActionChoice{
-			key: candidateContinue,
-			recommendation: fmt.Sprintf(
-				"Phase %d has produced work that has not been checked yet. The next step runs the "+
-					"checks and, if they pass, moves on to the following phase.", state.CurrentPhase),
-			alternatives: []nextActionAlternativeChoice{
-				{key: candidateStatus},
-				{key: candidateResumeColony},
-			},
-		}
-
-	case colony.StateCOMPLETED:
-		// Every one of the other four deciders except workflowSuggestionsForState
-		// says "sign it off" here, and they are right: COMPLETED means the work
-		// is done but the project has NOT been signed off -- signing off is what
-		// sets the final milestone that the archive step looks for.
-		return nextActionChoice{
-			key: candidateSeal,
-			recommendation: "All the work is done but the project has not been signed off yet. Signing " +
-				"it off records what was learned and marks it complete.",
-			alternatives: []nextActionAlternativeChoice{
-				{key: candidateStatus},
-				{key: candidateHistory},
-			},
-		}
-	}
-
-	// READY, IDLE with a plan, and anything else with phases: start the first
-	// phase that is not finished.
-	if phase := recoveryPhase(&state); phase != nil && phase.Status != colony.PhaseCompleted {
-		return nextActionChoice{
-			key:  candidateBuildPhase,
-			args: []interface{}{phase.ID},
-			recommendation: fmt.Sprintf(
-				"Phase %d (%s) is ready to start. Helpers will write the code for it and report back "+
-					"before anything is accepted.", phase.ID, phase.Name),
-			alternatives: []nextActionAlternativeChoice{
-				{key: candidateFocus},
-				{key: candidateStatus},
-				{key: candidatePheromones},
-			},
-		}
-	}
-
-	return nextActionChoice{
-		key: candidateSeal,
-		recommendation: "Every planned phase is finished. Signing the project off marks it complete and " +
-			"records what was learned.",
-		alternatives: []nextActionAlternativeChoice{
-			{key: candidateStatus},
-			{key: candidateHistory},
-		},
-	}
-}
-
-// gateChoice turns a choice into the exact command, resolved against the live
-// command tree. A primary that does not resolve falls back to a command that is
-// itself gated -- so the fallback cannot rot either -- and the substitution is
-// recorded so the owner is never silently redirected.
-func gateChoice(choice nextActionChoice) (string, []string) {
-	var notes []string
-
-	if literal := strings.TrimSpace(choice.literal); literal != "" {
-		if command, ok := availableCommand(literal); ok {
-			return command, nil
-		}
-		notes = append(notes, fmt.Sprintf(
-			"The saved report suggested %q, which is not a command this version has. Falling back to the general next step.",
-			literal))
-		if command, why, ok := candidateCommand(choice.fallback); ok {
-			if gated, ok := availableCommand(command); ok {
-				_ = why
-				return gated, notes
-			}
-		}
-	} else if choice.key != "" {
-		if command, _, ok := candidateCommand(choice.key, choice.args...); ok {
-			if gated, ok := availableCommand(command); ok {
-				return gated, notes
-			}
-			notes = append(notes, fmt.Sprintf(
-				"%q is not a command this version has, so a general next step is offered instead.", command))
-		}
-		if choice.fallback != "" {
-			if command, _, ok := candidateCommand(choice.fallback, choice.fallbackArgs...); ok {
-				if gated, ok := availableCommand(command); ok {
-					return gated, notes
-				}
-			}
-		}
-	}
-
-	// Last resort: the dashboard, which changes nothing. Still gated.
-	if command, _, ok := candidateCommand(candidateStatus); ok {
-		if gated, ok := availableCommand(command); ok {
-			return gated, notes
-		}
-	}
-	return "", notes
-}
-
-// nextActionFillerKeys top up a short alternatives list. Every entry is gated
-// like any other candidate.
-var nextActionFillerKeys = []nextActionCandidateKey{
-	candidateStatus,
-	candidateResumeColony,
-	candidateHistory,
-	candidatePheromones,
-}
-
-func gateAlternatives(choices []nextActionAlternativeChoice, recommended string) []nextActionAlternative {
-	result := make([]nextActionAlternative, 0, 4)
-	seen := map[string]bool{recommended: true}
-
-	add := func(command, why string) {
-		if len(result) >= 4 {
-			return
-		}
-		command = strings.TrimSpace(command)
-		if command == "" || seen[command] {
-			return
-		}
-		gated, ok := availableCommand(command)
-		if !ok {
-			return
-		}
-		seen[gated] = true
-		result = append(result, nextActionAlternative{Command: gated, Explanation: why})
-	}
-
-	for _, choice := range choices {
-		if literal := strings.TrimSpace(choice.literal); literal != "" {
-			why := choice.why
-			if strings.TrimSpace(why) == "" {
-				why = "Another way forward from here."
-			}
-			add(literal, why)
-			continue
-		}
-		command, defaultWhy, ok := candidateCommand(choice.key, choice.args...)
-		if !ok {
-			continue
-		}
-		why := choice.why
-		if strings.TrimSpace(why) == "" {
-			why = defaultWhy
-		}
-		add(command, why)
-	}
-
-	for _, key := range nextActionFillerKeys {
-		if len(result) >= 2 {
-			break
-		}
-		if command, why, ok := candidateCommand(key); ok {
-			add(command, why)
-		}
-	}
-
-	return result
 }
 
 // ---------------------------------------------------------------------------

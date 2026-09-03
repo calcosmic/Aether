@@ -260,7 +260,7 @@ func seedLifecycleFactsFixture(t *testing.T, fixture string) (string, *storage.S
 		writeLifecycleFixtureFile(t, filepath.Join(dataDir, "learning-observations.json"), `{"observations":[{"id":"observation-1","content":"reads stay read-only"}]}`)
 		writeLifecycleFixtureFile(t, filepath.Join(dataDir, "reviews", "security", "ledger.json"), `{"entries":[{"id":"finding-1","phase":1,"agent":"gatekeeper","generated_at":"2026-09-03T11:00:00Z","status":"open","severity":"HIGH","description":"No writes"}]}`)
 		writeLifecycleFixtureFile(t, filepath.Join(dataDir, "build", "phase-1", "verification.json"), `{"passed":true}`)
-		writeLifecycleFixtureFile(t, filepath.Join(dataDir, "spend", "phase-1-build.json"), `{"schema_version":1,"phase":1,"workflow":"build","recorded_at":"2026-09-03T11:00:00Z","rows":[{"name":"Mason-1","caste":"builder","task":"load facts","status":"completed","usage":{"input_tokens":1000,"output_tokens":500}}]}`)
+		writeLifecycleFixtureFile(t, filepath.Join(dataDir, "spend", "phase-1-build.json"), `{"schema_version":1,"phase":1,"workflow":"build","recorded_at":"2026-09-03T11:00:00Z","rows":[{"name":"Mason-1","caste":"builder","task":"load facts","status":"completed","usage":{"input_tokens":1000,"output_tokens":500,"total_tokens":1500}}]}`)
 		writeLifecycleFixtureFile(t, filepath.Join(root, ".aether", "dreams", "orientation.md"), "# Orientation\n")
 		writeLifecycleFixtureFile(t, filepath.Join(root, ".aether", "research", "front-door.md"), "# Front door research\n")
 		writeLifecycleFixtureFile(t, filepath.Join(dataDir, "survey", "territory.json"), `{"language":"go"}`)

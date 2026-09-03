@@ -85,12 +85,18 @@ func renderNextActionCardForPlatform(answer nextAction, platform string) string 
 		b.WriteString(cardText(section, platform))
 	}
 
-	// 4-6. The recommendation, the exact command, and the alternatives. This is
-	// the single Next Up funnel, which is where platform translation happens.
-	b.WriteString(renderNextUp(
-		nextActionPrimarySuggestion(answer),
-		nextActionAlternativeSuggestions(answer)...,
-	))
+	// 4-6. Render the projected action, its coequal choice set, evidence, and
+	// secondary safe choices without re-deciding any of them here. Older
+	// hand-constructed callers retain the compatibility rendering until their
+	// own migration plan supplies a projection.
+	if answer.Projection != nil {
+		b.WriteString(renderLifecycleProjectionNextUp(*answer.Projection, platform))
+	} else {
+		b.WriteString(renderNextUp(
+			nextActionPrimarySuggestion(answer),
+			nextActionAlternativeSuggestions(answer)...,
+		))
+	}
 
 	// Any place the availability check substituted a command. The owner is
 	// never silently redirected to something other than what was decided.
@@ -114,6 +120,65 @@ func renderNextActionCardForPlatform(answer nextAction, platform string) string 
 		b.WriteString(cardText(section, platform))
 	}
 
+	return b.String()
+}
+
+func renderLifecycleProjectionNextUp(projection LifecycleProjection, platform string) string {
+	var b strings.Builder
+	b.WriteString("\n")
+	b.WriteString(renderBanner(commandEmoji("next-up"), "Next Up"))
+	action := projection.NextAction
+
+	if len(action.Choices) > 0 {
+		if reason := strings.TrimSpace(action.Reason); reason != "" {
+			b.WriteString(reason)
+			b.WriteString("\n")
+		}
+		for _, choice := range action.Choices {
+			command := lifecycleProjectionCommand(choice.RuntimeCommand, platform)
+			if command == "" {
+				continue
+			}
+			b.WriteString("Choice: ")
+			b.WriteString(nextActionSuggestionLine(command, choice.Reason))
+			b.WriteString("\n")
+		}
+	} else if line := nextActionSuggestionLine(
+		lifecycleProjectionCommand(action.RuntimeCommand, platform),
+		action.Reason,
+	); line != "" {
+		b.WriteString(line)
+		b.WriteString("\n")
+	}
+
+	for _, evidence := range action.Evidence {
+		label := strings.TrimSpace(evidence.Summary)
+		if label == "" {
+			label = strings.TrimSpace(evidence.Source)
+		}
+		if label == "" {
+			label = strings.TrimSpace(evidence.ID)
+		}
+		if label == "" {
+			continue
+		}
+		b.WriteString("Evidence: ")
+		b.WriteString(label)
+		b.WriteString("\n")
+	}
+
+	for _, alternative := range projection.Alternatives {
+		line := nextActionSuggestionLine(
+			lifecycleProjectionCommand(alternative.RuntimeCommand, platform),
+			alternative.Reason,
+		)
+		if line == "" {
+			continue
+		}
+		b.WriteString("Alternative: ")
+		b.WriteString(line)
+		b.WriteString("\n")
+	}
 	return b.String()
 }
 
@@ -241,6 +306,11 @@ const (
 	// nextActionContextHealthKey is the verdict on closing the chat, as an
 	// enumeration plus a reason code -- the sentence belongs to the card.
 	nextActionContextHealthKey = "next_context_health"
+	// nextActionChoicesKey carries a coequal set when there is deliberately no
+	// single next command (the accepted-plan build/run decision).
+	nextActionChoicesKey = "next_choices"
+	// lifecycleProjectionKey exposes the same semantic result the card renders.
+	lifecycleProjectionKey = "lifecycle_projection"
 )
 
 // applyNextActionToResult folds the resolved answer into a command's result map
@@ -258,6 +328,10 @@ func applyNextActionToResult(result map[string]interface{}, answer nextAction) m
 	result[nextActionRecommendationKey] = answer.Recommendation
 	result[nextActionAlternativesKey] = answer.Alternatives
 	result[nextActionContextHealthKey] = answer.ContextHealth
+	if answer.Projection != nil {
+		result[nextActionChoicesKey] = answer.Projection.NextAction.Choices
+		result[lifecycleProjectionKey] = answer.Projection
+	}
 	return result
 }
 

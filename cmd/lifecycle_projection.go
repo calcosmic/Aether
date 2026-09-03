@@ -294,13 +294,20 @@ func lifecycleProjectionDecision(facts LifecycleFacts, blockers []colony.Lifecyc
 
 	// An absent state is an honest empty repository. Any present-but-unusable
 	// state or lifecycle-evidence source is ambiguous recovery, not emptiness.
-	if facts.State.Source.Provenance == LifecycleFactMissing || strings.TrimSpace(facts.Identity.Value.Goal) == "" && facts.State.Source.Provenance == LifecycleFactConfirmed {
-		return lifecycleAction("initialize", `aether init "goal"`, "No colony goal is active in this repository.", evidence), nil, colony.OutcomeKindNoChange, closure, colony.RecoveryProvenanceUnknown
+	if facts.State.Source.Provenance == LifecycleFactMissing ||
+		(strings.TrimSpace(facts.Identity.Value.Goal) == "" && len(progress.Phases) == 0 && progress.CurrentPhase < 1 && facts.State.Source.Provenance == LifecycleFactConfirmed) {
+		return lifecycleAction("initialize", `aether init "goal"`, "No colony goal is active in this repository.", evidence), []LifecycleActionChoice{
+			lifecycleChoice("status", "aether status", "Inspect this repository without changing it."),
+			lifecycleChoice("history", "aether history", "Review any retained activity before starting."),
+		}, colony.OutcomeKindNoChange, closure, colony.RecoveryProvenanceUnknown
 	}
 	if facts.State.Source.Provenance == LifecycleFactMalformed || facts.State.Source.Provenance == LifecycleFactUnavailable ||
 		facts.Evidence.Source.Provenance == LifecycleFactMalformed || facts.Evidence.Source.Provenance == LifecycleFactUnavailable {
 		closure.Status = "unknown"
-		return lifecycleAction("resume", "aether resume", "Saved lifecycle evidence is incomplete or conflicting; resume is the single recovery door.", evidence), nil, colony.OutcomeKindRecoveryRequired, closure, colony.RecoveryProvenanceUnknown
+		return lifecycleAction("resume", "aether resume", "Saved lifecycle evidence is incomplete or conflicting; resume is the single recovery door.", evidence), []LifecycleActionChoice{
+			lifecycleChoice("status", "aether status", "Inspect the retained evidence without changing it."),
+			lifecycleChoice("history", "aether history", "Review the recorded activity before recovery."),
+		}, colony.OutcomeKindRecoveryRequired, closure, colony.RecoveryProvenanceUnknown
 	}
 
 	if recorded := facts.Evidence.Value.Recovery; recorded != nil && recorded.Valid() {
@@ -324,24 +331,62 @@ func lifecycleProjectionDecision(facts LifecycleFacts, blockers []colony.Lifecyc
 		}
 		return lifecycleAction("inspect_sealed", "aether status", "The sealed colony remains active and inspectable.", evidence), []LifecycleActionChoice{
 			lifecycleChoice("entomb", "aether entomb", "Optionally archive and clear the sealed colony."),
+			lifecycleChoice("history", "aether history", "Review the retained lifecycle history."),
 		}, outcome, closure, provenance
+	}
+	// The pre-lifecycle/v1 sealed marker remains inspectable, but it is not
+	// promoted to verified closure without a typed seal outcome.
+	if state.State == colony.StateCOMPLETED && strings.EqualFold(strings.TrimSpace(state.Milestone), "Crowned Anthill") {
+		closure.Status = "sealed_legacy"
+		closure.Inspectable = true
+		closure.ArchiveReady = true
+		return lifecycleAction("inspect_sealed", "aether status", "This older sealed record remains available to inspect. It does not contain enough evidence to call the closure verified.", evidence), []LifecycleActionChoice{
+			lifecycleChoice("entomb", "aether entomb", "Optionally archive and clear the sealed colony."),
+			lifecycleChoice("history", "aether history", "Review the retained lifecycle history."),
+		}, colony.OutcomeKindNoChange, closure, colony.RecoveryProvenanceReconstructed
 	}
 
 	if state.Paused {
-		return lifecycleAction("resume", "aether resume", "The colony is paused; resume validates the handoff before restoring work.", evidence), nil, colony.OutcomeKindPaused, closure, provenance
+		return lifecycleAction("resume", "aether resume", "The colony is paused; resume validates the handoff before restoring work.", evidence), []LifecycleActionChoice{
+			lifecycleChoice("status", "aether status", "Inspect the paused state without restoring it."),
+			lifecycleChoice("history", "aether history", "Review what happened before the pause."),
+		}, colony.OutcomeKindPaused, closure, provenance
+	}
+	for _, phase := range progress.Phases {
+		if phase.Status == "failed" {
+			blockers = append(blockers, colony.LifecycleIssue{ID: fmt.Sprintf("phase-%d-failed", phase.ID), Summary: fmt.Sprintf("Phase %d failed", phase.ID)})
+		}
 	}
 	if len(blockers) > 0 {
-		return lifecycleAction("resume", "aether resume", "Lifecycle work is blocked; resume reconciles the durable evidence before work continues.", evidence), nil, colony.OutcomeKindRecoveryRequired, closure, provenance
+		return lifecycleAction("resume", "aether resume", "Lifecycle work is blocked; resume reconciles the durable evidence before work continues.", evidence), []LifecycleActionChoice{
+			lifecycleChoice("status", "aether status", "Inspect the blockers without changing state."),
+			lifecycleChoice("history", "aether history", "Review the evidence leading to the block."),
+		}, colony.OutcomeKindRecoveryRequired, closure, provenance
 	}
 	if state.State == colony.StateCOMPLETED || lifecycleAllPhasesComplete(progress) {
 		closure.Status = "ready_to_seal"
-		return lifecycleAction("seal", "aether seal", "All accepted work is complete; sealing records the verified retained closure.", evidence), nil, colony.OutcomeKindCompleted, closure, provenance
+		return lifecycleAction("seal", "aether seal", "All accepted work is complete; sealing records the verified retained closure.", evidence), []LifecycleActionChoice{
+			lifecycleChoice("status", "aether status", "Review the completed work before sealing."),
+			lifecycleChoice("history", "aether history", "Review the recorded activity first."),
+		}, colony.OutcomeKindCompleted, closure, provenance
 	}
 	if len(progress.Phases) == 0 {
-		return lifecycleAction("plan", "aether plan", "The goal is accepted but no plan has been accepted yet.", evidence), nil, colony.OutcomeKindNoChange, closure, provenance
+		return lifecycleAction("plan", "aether plan", "The goal is accepted but no plan has been accepted yet.", evidence), []LifecycleActionChoice{
+			lifecycleChoice("status", "aether status", "Review the accepted goal before planning."),
+			lifecycleChoice("history", "aether history", "Review the recorded setup activity."),
+		}, colony.OutcomeKindNoChange, closure, provenance
+	}
+	if state.State == colony.StateEXECUTING && state.CurrentPhase > 0 && state.BuildStartedAt == nil {
+		return lifecycleAction("resume", "aether resume", "The saved state says work was executing but carries no start evidence; resume must reconcile it before another run.", evidence), []LifecycleActionChoice{
+			lifecycleChoice("status", "aether status", "Inspect the uncertain execution state."),
+			lifecycleChoice("history", "aether history", "Review the last recorded activity."),
+		}, colony.OutcomeKindRecoveryRequired, closure, colony.RecoveryProvenanceUnknown
 	}
 	if state.State == colony.StateEXECUTING || state.State == colony.StateBUILT {
-		return lifecycleAction("continue", "aether continue", "The current phase has work that must be checked and advanced.", evidence), nil, colony.OutcomeKindInProgress, closure, provenance
+		return lifecycleAction("continue", "aether continue", "The current phase has work that must be checked and advanced.", evidence), []LifecycleActionChoice{
+			lifecycleChoice("status", "aether status", "Inspect the current phase before checking it."),
+			lifecycleChoice("history", "aether history", "Review the activity behind the current phase."),
+		}, colony.OutcomeKindInProgress, closure, provenance
 	}
 
 	_, phase := lifecycleCurrentPhase(progress)
@@ -352,11 +397,14 @@ func lifecycleProjectionDecision(facts LifecycleFacts, blockers []colony.Lifecyc
 	run := lifecycleChoice("run", "aether run", "Run every remaining accepted phase in Autopilot.")
 	// Deliberately equal: zero rank, no recommendation marker, stable plan order.
 	return LifecycleProjectedAction{
-		ID:       "choose_execution_mode",
-		Reason:   "Choose guided operation or Autopilot; both execute the same accepted plan.",
-		Evidence: append([]colony.LifecycleEvidence(nil), evidence...),
-		Choices:  []LifecycleActionChoice{build, run},
-	}, nil, colony.OutcomeKindNoChange, closure, provenance
+			ID:       "choose_execution_mode",
+			Reason:   "Choose guided operation or Autopilot; both execute the same accepted plan.",
+			Evidence: append([]colony.LifecycleEvidence(nil), evidence...),
+			Choices:  []LifecycleActionChoice{build, run},
+		}, []LifecycleActionChoice{
+			lifecycleChoice("status", "aether status", "Review the accepted plan before choosing a mode."),
+			lifecycleChoice("pheromones", "aether pheromones", "Review the standing instructions before starting."),
+		}, colony.OutcomeKindNoChange, closure, provenance
 }
 
 func lifecycleApplyPlatform(action LifecycleProjectedAction, alternatives []LifecycleActionChoice, platform string) (LifecycleProjectedAction, []LifecycleActionChoice) {

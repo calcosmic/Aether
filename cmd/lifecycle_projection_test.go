@@ -131,6 +131,10 @@ func projectionState(state colony.State, withPlan, paused bool) colony.ColonySta
 		Goal: &goal, ColonyName: &name, State: state, CurrentPhase: 1,
 		Milestone: "v2", Paused: paused,
 	}
+	if state == colony.StateEXECUTING {
+		started := time.Date(2026, 9, 3, 11, 0, 0, 0, time.UTC)
+		value.BuildStartedAt = &started
+	}
 	if withPlan {
 		phaseStatus := colony.PhaseReady
 		taskStatus := colony.TaskPending

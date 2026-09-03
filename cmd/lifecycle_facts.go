@@ -420,9 +420,6 @@ func readLifecycleCost(dataDir string) (LifecycleReportedCostFacts, LifecycleFac
 		}
 		for _, row := range ledger.Rows {
 			tokens := row.Usage.TotalTokens
-			if tokens == 0 && !row.Usage.Empty() {
-				tokens = row.Usage.InputTokens + row.Usage.OutputTokens
-			}
 			if tokens == 0 {
 				continue
 			}
@@ -491,6 +488,92 @@ func unavailableLifecycleFacts(root string, now time.Time, diagnostic string) Li
 		Evidence:     LifecycleFact[LifecycleEvidenceFacts]{Source: unavailable("evidence", filepath.Join(base, "COLONY_STATE.json"))},
 		Session:      LifecycleFact[colony.SessionFile]{Source: unavailable("session", filepath.Join(base, "session.json"))},
 	}
+}
+
+// loadActiveRecoveryGuidanceReadOnly reads the optional continue report
+// without acquiring storage.Store's write-backed lock. It preserves the
+// report's exact recovery detail for closeout copy; lifecycle routing itself
+// remains owned by projectLifecycle.
+func loadActiveRecoveryGuidanceReadOnly(state colony.ColonyState, dataDir string) *activeRecoveryGuidance {
+	state = normalizeLegacyColonyState(state)
+	if state.CurrentPhase < 1 || (state.State != colony.StateEXECUTING && state.State != colony.StateBUILT) {
+		return nil
+	}
+	rel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", state.CurrentPhase), "continue.json"))
+	data, err := os.ReadFile(filepath.Join(dataDir, filepath.FromSlash(rel)))
+	if err != nil {
+		return nil
+	}
+	var report codexContinueReport
+	if err := json.Unmarshal(data, &report); err != nil || report.Phase != state.CurrentPhase || report.Advanced || report.Completed {
+		return nil
+	}
+	if state.BuildStartedAt != nil {
+		generatedAt, err := time.Parse(time.RFC3339, strings.TrimSpace(report.GeneratedAt))
+		if err == nil && generatedAt.Before(state.BuildStartedAt.UTC()) {
+			return nil
+		}
+	}
+	next := strings.TrimSpace(report.Next)
+	if next == "" {
+		if fallback := continueNextCommandForAssessment(codexContinueAssessment{Recovery: report.Recovery}); fallback != "aether continue" {
+			next = fallback
+		}
+	}
+	return &activeRecoveryGuidance{
+		Summary:          strings.TrimSpace(report.Summary),
+		Next:             next,
+		ReportPath:       displayDataPath(rel),
+		GeneratedAt:      strings.TrimSpace(report.GeneratedAt),
+		PartialSuccess:   report.PartialSuccess,
+		Recovery:         report.Recovery,
+		HasTargetedRoute: next != "" && next != "aether continue",
+	}
+}
+
+// lifecycleFactsFromStateSnapshot adapts a state a mutating command already
+// holds to the same aggregate used by disk-backed orientation. It records the
+// state as confirmed in-memory evidence while leaving actors, spend, research,
+// and other unobserved domains explicitly unavailable; it never invents them.
+func lifecycleFactsFromStateSnapshot(state colony.ColonyState, noColony bool, now time.Time) LifecycleFacts {
+	state = normalizeLegacyColonyState(state)
+	stateSource := lifecycleSource("state", "(in-memory state)", LifecycleFactConfirmed, "")
+	if noColony {
+		stateSource = lifecycleSource("state", "(in-memory state)", LifecycleFactMissing, "no active colony state was supplied")
+	}
+	identity := LifecycleIdentityFacts{
+		Name: strings.TrimSpace(lifecycleString(state.ColonyName)), Goal: strings.TrimSpace(lifecycleString(state.Goal)),
+		Standing: string(state.State), Milestone: state.Milestone,
+		Scope: string(state.EffectiveScope()), Mode: string(state.EffectiveColonyMode()),
+	}
+	unobserved := func(domain string) LifecycleFactSource {
+		return lifecycleUnavailableSource(domain, "(not observed by in-memory state caller)", "the caller supplied state but did not load this fact domain")
+	}
+	facts := LifecycleFacts{
+		CapturedAt: now,
+		State:      LifecycleFact[colony.ColonyState]{Value: state, Source: stateSource},
+		Identity:   LifecycleFact[LifecycleIdentityFacts]{Value: identity, Source: lifecycleDerivedSource("identity", stateSource)},
+		Progress:   LifecycleFact[LifecycleProgressFacts]{Value: LifecycleProgressFacts{CurrentPhase: state.CurrentPhase, Phases: state.Plan.Phases}, Source: lifecycleDerivedSource("progress", stateSource)},
+		Actors:     LifecycleFact[[]LifecycleActorFact]{Source: unobserved("actors")},
+		Signals:    LifecycleFact[[]colony.PheromoneSignal]{Source: unobserved("signals")},
+		Research:   LifecycleFact[LifecycleResearchFacts]{Source: unobserved("research")},
+		Memory: LifecycleFact[LifecycleMemoryFacts]{
+			Value: LifecycleMemoryFacts{State: state.Memory}, Source: lifecycleDerivedSource("memory", stateSource),
+		},
+		Verification: LifecycleFact[LifecycleVerificationFacts]{
+			Value: LifecycleVerificationFacts{Gates: append([]colony.GateResultEntry(nil), state.GateResults...)}, Source: lifecycleDerivedSource("verification", stateSource),
+		},
+		ReportedCost: LifecycleFact[LifecycleReportedCostFacts]{Source: unobserved("reported cost")},
+		History:      LifecycleFact[[]string]{Value: append([]string(nil), state.Events...), Source: lifecycleDerivedSource("history", stateSource)},
+		Blockers:     LifecycleFact[[]colony.FlagEntry]{Source: unobserved("blockers")},
+		Evidence: LifecycleFact[LifecycleEvidenceFacts]{
+			Value:  LifecycleEvidenceFacts{Receipt: state.LifecycleReceipt, Handoff: state.PauseHandoff, Recovery: state.RecoveryProvenance, Seal: state.SealOutcome, Archive: state.ArchiveReference},
+			Source: lifecycleDerivedSource("evidence", stateSource),
+		},
+		Session: LifecycleFact[colony.SessionFile]{Source: unobserved("session")},
+	}
+	facts.Timing = lifecycleTiming(state, stateSource, now)
+	return facts
 }
 
 // loadLifecycleFacts performs one causally read-only orientation load. It uses

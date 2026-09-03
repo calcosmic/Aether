@@ -16,7 +16,6 @@ package cmd
 // file's design and that assertion exist to prevent.
 
 import (
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -37,34 +36,40 @@ func loadNextActionInput() nextActionInput {
 func loadNextActionInputForCommand(lastCommand string) nextActionInput {
 	in := nextActionInput{LastCommand: strings.TrimSpace(lastCommand)}
 
-	state, ok := readColonyStateWithoutWriting()
-	if !ok {
+	if store == nil {
 		// "No project set up here" is NOT "a project that has just started".
 		// Conflating them is how a fresh checkout ends up being told to carry
 		// on with a build that does not exist.
 		in.NoColony = true
+		in.Facts = unavailableLifecycleFacts(resolveAetherRootPath(), time.Now().UTC(), "store is not initialized")
 		return in
 	}
-	in.State = state
+	root := filepath.Dir(filepath.Dir(store.BasePath()))
+	observedAt := time.Now().UTC().Truncate(time.Second)
+	facts, _ := loadLifecycleFacts(root, store, observedAt)
+	in.Facts = facts
+	in.State = facts.State.Value
+	in.NoColony = facts.State.Source.Provenance == LifecycleFactMissing || colonyStateIsUnstarted(in.State)
+	if in.NoColony {
+		return in
+	}
 
-	if flags, ok := loadFlagsFile(store); ok {
-		for _, flag := range flags.Decisions {
-			if flag.Resolved {
-				continue
-			}
-			in.Flags = append(in.Flags, flag)
+	for _, flag := range facts.Blockers.Value {
+		if flag.Resolved {
+			continue
+		}
+		in.Flags = append(in.Flags, flag)
+		if flag.Source == planFinalizeFailureSource && in.PlanBlocker == nil {
+			found := flag
+			in.PlanBlocker = &found
 		}
 	}
-	if blocker, ok := activePlanFinalizeFailureFlag(store); ok {
-		found := blocker
-		in.PlanBlocker = &found
-	}
 
-	in.Recovery = loadActiveRecoveryGuidance(state)
+	in.Recovery = loadActiveRecoveryGuidanceReadOnly(in.State, store.BasePath())
 	in.HandoffExists = fileExists(handoffDocumentPath())
-	in.Signals = extractSignalTexts(8)
-	in.ActiveTodos = sessionActiveTodosFromState(state)
-	in.BuildLooksAbandoned = buildLooksAbandoned(state)
+	pf := colony.PheromoneFile{Signals: facts.Signals.Value}
+	in.Signals = extractSignalTextsFrom(&pf, 8)
+	in.ActiveTodos = sessionActiveTodosFromState(in.State)
 
 	return in
 }
@@ -175,20 +180,9 @@ func readColonyStateWithoutWriting() (colony.ColonyState, bool) {
 	if store == nil {
 		return colony.ColonyState{}, false
 	}
-
-	var state colony.ColonyState
-	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
-		raw, rawErr := store.LoadRawJSON("COLONY_STATE.json")
-		if rawErr != nil {
-			return colony.ColonyState{}, false
-		}
-		repairedRaw, repaired, repairErr := repairLegacyNumericStringFields(raw)
-		if repairErr != nil || !repaired {
-			return colony.ColonyState{}, false
-		}
-		if err := json.Unmarshal(repairedRaw, &state); err != nil {
-			return colony.ColonyState{}, false
-		}
+	state, _, err := loadColonyStateWithCompatibilityRepairReadOnlyFromPath(filepath.Join(store.BasePath(), "COLONY_STATE.json"))
+	if err != nil {
+		return colony.ColonyState{}, false
 	}
 
 	// A state file with no goal is a leftover, not a project.
