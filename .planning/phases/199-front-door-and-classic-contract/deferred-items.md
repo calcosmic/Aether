@@ -41,3 +41,11 @@
 - **Isolation check:** The exact Plan 199-09 runtime contract passes all 18 focused cases, including full/compact semantic agreement, all five health states, responsive rendering, absent-evidence wording, and zero-write fixtures. The exact wrapper/source-hygiene commands pass 4 and 7 cases respectively.
 - **Why deferred:** This plan deliberately makes the versioned lifecycle projection authoritative and replaces the legacy status result. Reintroducing the retired dashboard solely to satisfy old snapshots would create two competing truth systems; the remaining cross-command migrations and golden refresh belong to later Phase 199 plans.
 - **Follow-up:** Migrate or retire the legacy status expectations with their owning Phase 199 renderer/snapshot plans, then run the repository-wide normal and race gates in Plan 199-29.
+
+## Plan 199-07 full command suite crosses the same staged migrations
+
+- **Found during:** Plan 199-07 overall verification (`go test ./cmd -count=1`)
+- **Observed:** The exact front-door and wrapper contracts pass, while the aggregate package still reports the already-recorded legacy status/Next Up expectations, the archived Phase 196 branch-disposition fixture, and the stale command-catalog golden from Plans 199-06/09.
+- **Isolation check:** All ten `TestFrontDoor*` cases, `TestCommandSourceHygiene`, the source-check regressions, the existing init compatibility suite, and `go test ./pkg/colony` pass in isolation. The catalog mismatch contains only the previously changed `maturity` and `status` metadata; it contains no Plan 199-07 command.
+- **Why deferred:** These failures reproduce outside the front-door paths and are already assigned to later renderer/snapshot cleanup and the final Phase 199 verification gate.
+- **Follow-up:** Resolve the owning lifecycle migrations, refresh the catalog once their command contracts settle, and rerun the normal/race repository gates in Plan 199-29.

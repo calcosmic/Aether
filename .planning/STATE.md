@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 199-09-PLAN.md
-last_updated: "2026-09-03T21:48:28.648Z"
+stopped_at: Completed 199-07-PLAN.md
+last_updated: "2026-09-03T22:24:17.134Z"
 last_activity: 2026-09-03
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 34
-  completed_plans: 8
+  completed_plans: 9
   percent: 0
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-02)
 ## Current Position
 
 Phase: 199 (front-door-and-classic-contract) — EXECUTING
-Plan: 9 of 34
+Plan: 10 of 34
 Status: Ready to execute
 Last activity: 2026-09-03
 
@@ -86,6 +86,7 @@ Last activity: 2026-09-03
 | Phase 199 P06 | 29min | 3 tasks | 14 files |
 | Phase 199 P08 | 58min | 3 tasks | 12 files |
 | Phase 199 P09 | 19min | 2 tasks | 9 files |
+| Phase 199 P07 | 26min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -212,6 +213,10 @@ Last activity: 2026-09-03
 - [Phase 199]: Status loads lifecycle facts once, projects once, and treats full/compact as views of that same result. — One semantic result prevents the compact and full dashboards from disagreeing.
 - [Phase 199]: Health and readiness use discrete evidence-backed states instead of percentage-derived maturity labels. — Verified, blocked, degraded, unavailable, and unknown remain distinguishable and cite their evidence.
 - [Phase 199]: Status wrappers only invoke the Go runtime with argument passthrough; they never inspect host files, costs, or activity. — The Go lifecycle projection stays the sole authority across Claude and OpenCode.
+- [Phase 199]: Root help is a curated journey map backed by the shared lifecycle projection; raw Cobra inventory remains command-specific or expert.
+- [Phase 199]: Guided Claude and OpenCode init refuse an existing colony before storage opens; the raw runtime confirmation escape hatch remains compatible.
+- [Phase 199]: Accepted intent is durable accepted-charter/v1 episode data, not presentation text reconstructed after initialization.
+- [Phase 199]: Help wrappers invoke the visual Go command once and return stdout unchanged instead of maintaining a second help implementation.
 
 ### Pending Todos
 
@@ -325,8 +330,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-03T21:48:28.638Z
-Stopped at: Completed 199-09-PLAN.md
+Last session: 2026-09-03T22:24:17.125Z
+Stopped at: Completed 199-07-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
