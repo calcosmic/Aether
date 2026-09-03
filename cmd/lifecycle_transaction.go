@@ -837,39 +837,8 @@ func (tx *lifecycleTransaction) rollbackPreparedTargets() error {
 	}
 	targets := flattenLifecycleManifestTargets(tx.intent, manifests)
 	for index := len(targets) - 1; index >= 0; index-- {
-		target := targets[index]
-		current, err := readLifecycleFileState(target.TargetPath)
-		if err != nil {
-			return tx.requireRecovery(err, colony.RecoveryProvenanceUnknown)
-		}
-		if current.Exists == target.BeforeExists && current.Digest == target.BeforeDigest {
-			continue
-		}
-		if current.Digest != target.AfterDigest {
-			return tx.requireRecovery(fmt.Errorf("target %q has conflicting rollback bytes", target.TargetPath), colony.RecoveryProvenanceConflicting)
-		}
-		if target.BeforeExists {
-			preimage, err := readLifecycleEvidenceFile(target.PreimagePath)
-			if err != nil {
-				return tx.requireRecovery(fmt.Errorf("read preimage for %q: %w", target.TargetPath, err), colony.RecoveryProvenanceUnknown)
-			}
-			if lifecycleDigest(preimage) != target.BeforeDigest {
-				return tx.requireRecovery(fmt.Errorf("preimage for %q has conflicting digest", target.TargetPath), colony.RecoveryProvenanceConflicting)
-			}
-			if err := atomicReplaceLifecycleTarget(target.TargetPath, preimage, os.FileMode(target.Mode), tx.config.Rename); err != nil {
-				return tx.requireRecovery(err, colony.RecoveryProvenanceUnknown)
-			}
-		} else if current.Exists {
-			if err := os.Remove(target.TargetPath); err != nil {
-				return tx.requireRecovery(err, colony.RecoveryProvenanceUnknown)
-			}
-			if err := syncLifecycleDirectory(filepath.Dir(target.TargetPath)); err != nil {
-				return tx.requireRecovery(err, colony.RecoveryProvenanceUnknown)
-			}
-		}
-		restored, err := readLifecycleFileState(target.TargetPath)
-		if err != nil || restored.Exists != target.BeforeExists || restored.Digest != target.BeforeDigest {
-			return tx.requireRecovery(fmt.Errorf("target %q failed rollback verification: %w", target.TargetPath, err), colony.RecoveryProvenanceUnknown)
+		if err := tx.restoreLifecycleTarget(targets[index]); err != nil {
+			return tx.requireRecovery(err, lifecycleRecoveryProvenance(err))
 		}
 	}
 	tx.progress.Stage = colony.TransactionStageRolledBack
@@ -877,6 +846,46 @@ func (tx *lifecycleTransaction) rollbackPreparedTargets() error {
 	tx.progress.CommittedTargets = nil
 	tx.progress.CommittedRoots = nil
 	return tx.persistProgress()
+}
+
+func (tx *lifecycleTransaction) restoreLifecycleTarget(target lifecycleTransactionTargetManifest) error {
+	current, err := readLifecycleFileState(target.TargetPath)
+	if err != nil {
+		return err
+	}
+	if current.Exists == target.BeforeExists && current.Digest == target.BeforeDigest {
+		return nil
+	}
+	if current.Digest != target.AfterDigest {
+		return fmt.Errorf("target %q has conflicting rollback bytes", target.TargetPath)
+	}
+	if target.BeforeExists {
+		preimage, err := readLifecycleEvidenceFile(target.PreimagePath)
+		if err != nil {
+			return fmt.Errorf("read preimage for %q: %w", target.TargetPath, err)
+		}
+		if lifecycleDigest(preimage) != target.BeforeDigest {
+			return fmt.Errorf("preimage for %q has conflicting digest", target.TargetPath)
+		}
+		if err := atomicReplaceLifecycleTarget(target.TargetPath, preimage, os.FileMode(target.Mode), tx.config.Rename); err != nil {
+			return err
+		}
+	} else if current.Exists {
+		if err := os.Remove(target.TargetPath); err != nil {
+			return err
+		}
+		if err := syncLifecycleDirectory(filepath.Dir(target.TargetPath)); err != nil {
+			return err
+		}
+	}
+	restored, err := readLifecycleFileState(target.TargetPath)
+	if err != nil {
+		return fmt.Errorf("target %q failed rollback read: %w", target.TargetPath, err)
+	}
+	if restored.Exists != target.BeforeExists || restored.Digest != target.BeforeDigest {
+		return fmt.Errorf("target %q failed rollback digest verification", target.TargetPath)
+	}
+	return nil
 }
 
 func (tx *lifecycleTransaction) Rollback() error {
@@ -927,7 +936,7 @@ func resumeLifecycleTransaction(config lifecycleTransactionConfig) (colony.Lifec
 		colony.TransactionStageVerifying,
 		colony.TransactionStageVerified:
 		if err := tx.validateResumeTargetStates(manifests); err != nil {
-			rollbackErr := tx.rollbackPreparedTargets()
+			rollbackErr := tx.rollbackCommittedTargets(manifests)
 			if rollbackErr != nil {
 				err = errors.Join(err, rollbackErr)
 			}
@@ -1059,6 +1068,11 @@ func (tx *lifecycleTransaction) validateRecoveryEvidence() (map[string]lifecycle
 	if err := validateLifecycleProgressIDs(tx.progress.CommittedTargets, knownTargets, "target"); err != nil {
 		return nil, err
 	}
+	for index, targetID := range tx.progress.CommittedTargets {
+		if index >= len(tx.intent.CommitOrder) || tx.intent.CommitOrder[index] != targetID {
+			return nil, fmt.Errorf("lifecycle transaction: committed targets are not a prefix of commit order")
+		}
+	}
 	if err := validateLifecycleProgressIDs(tx.progress.CommittedRoots, knownRoots, "root"); err != nil {
 		return nil, err
 	}
@@ -1099,6 +1113,42 @@ func (tx *lifecycleTransaction) validateResumeTargetStates(manifests map[string]
 		}
 	}
 	return nil
+}
+
+// rollbackCommittedTargets is used when resume discovers that a remaining
+// target is no longer safe to commit. It restores the proven committed prefix
+// in reverse order while leaving the unrelated conflicting target untouched.
+func (tx *lifecycleTransaction) rollbackCommittedTargets(manifests map[string]lifecycleTransactionRootManifest) error {
+	tx.progress.Stage = colony.TransactionStageRollingBack
+	tx.progress.StateEffect = colony.LifecycleStateEffectRecoveryRequired
+	if err := tx.persistProgress(); err != nil {
+		return err
+	}
+	targets := flattenLifecycleManifestTargets(tx.intent, manifests)
+	committedPrefix := len(tx.progress.CommittedTargets)
+	if committedPrefix < len(targets) {
+		candidate := targets[committedPrefix]
+		state, err := readLifecycleFileState(candidate.TargetPath)
+		if err == nil && state.Digest == candidate.AfterDigest {
+			// A crash can occur after replacement but before its progress write.
+			// At most the next target in commit order can be in that state.
+			committedPrefix++
+		}
+	}
+	var rollbackErrors []error
+	for index := committedPrefix - 1; index >= 0; index-- {
+		if err := tx.restoreLifecycleTarget(targets[index]); err != nil {
+			rollbackErrors = append(rollbackErrors, err)
+		}
+	}
+	if len(rollbackErrors) > 0 {
+		return tx.requireRecovery(errors.Join(rollbackErrors...), colony.RecoveryProvenanceConflicting)
+	}
+	tx.progress.CommittedTargets = nil
+	tx.progress.CommittedRoots = nil
+	tx.progress.Stage = colony.TransactionStageRecoveryRequired
+	tx.progress.StateEffect = colony.LifecycleStateEffectRecoveryRequired
+	return tx.persistProgress()
 }
 
 func allLifecycleTargetsMatch(intent *lifecycleTransactionIntent, manifests map[string]lifecycleTransactionRootManifest, after bool) bool {

@@ -317,6 +317,25 @@ func TestLifecycleTransactionTamperConflict(t *testing.T) {
 				}
 			},
 		},
+		{
+			name:       "uncommitted target after root commit",
+			faultPoint: "after_root_commit:root-01-repository",
+			provenance: colony.RecoveryProvenanceConflicting,
+			tamper: func(t *testing.T, _ lifecycleTransactionFixture, _ string, targets []lifecycleTransactionTestTarget) func() {
+				mustWriteLifecycleFixtureFile(t, targets[2].path, []byte("hostile-uncommitted-target"))
+				return func() {
+					if got := string(mustReadLifecycleFixtureFile(t, targets[2].path)); got != "hostile-uncommitted-target" {
+						t.Fatalf("uncommitted conflict was overwritten: %q", got)
+					}
+					if got := string(mustReadLifecycleFixtureFile(t, targets[0].path)); got != "repository-before" {
+						t.Fatalf("committed repository write was not rolled back: %q", got)
+					}
+					if got := string(mustReadLifecycleFixtureFile(t, targets[1].path)); got != "remove-before" {
+						t.Fatalf("committed repository removal was not rolled back: %q", got)
+					}
+				}
+			},
+		},
 	}
 
 	for _, test := range tests {
