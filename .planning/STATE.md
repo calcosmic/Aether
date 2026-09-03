@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 199-01-PLAN.md
-last_updated: "2026-09-03T13:55:02.113Z"
+stopped_at: Completed 199-02-PLAN.md
+last_updated: "2026-09-03T14:22:37.986Z"
 last_activity: 2026-09-03
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 34
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-02)
 ## Current Position
 
 Phase: 199 (front-door-and-classic-contract) — EXECUTING
-Plan: 2 of 34
+Plan: 3 of 34
 Status: Ready to execute
 Last activity: 2026-09-03
 
@@ -79,6 +79,7 @@ Last activity: 2026-09-03
 | Phase 196 P07 | 78 min | 2 tasks | 10 files |
 | Phase 196 P08 | 24min | 2 tasks | 12 files |
 | Phase 199 P01 | 27min | 2 tasks | 4 files |
+| Phase 199 P02 | 18min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -184,6 +185,9 @@ Last activity: 2026-09-03
 - [Milestone audit]: v1.27 scored 48/48 requirements, 9/9 delivered phases, 8/8 integration seams, and 4/4 end-to-end flows. Verdict `tech_debt`: no blocking gaps; Phase 198.2 field UAT and documented warnings carry forward.
 - [Phase 199]: Every test that can allocate a worktree in the source checkout registers ownership before command execution. — Pre-registration guarantees bounded cleanup even when allocation exits partway through.
 - [Phase 199]: Test teardown may delete only exact repository/path/branch triples registered by the creating test. — Naming conventions and Aether-shaped paths are not evidence of test ownership.
+- [Phase 199]: Restore Classic information grammar and ceremony through modern Go truth, not prompt-owned writes or shell-era handling. — Preserves Classic intent without reviving superseded implementation mechanisms.
+- [Phase 199]: Require every behavior corpus case to combine semantic assertions with causal state assertions or forbidden artifacts. — Prevents output-only proof from masking wrong state transitions.
+- [Phase 199]: Compose source hygiene from production discovery, managed headers, sync rules, and peer parity while ignoring unmanaged paths. — Keeps the gate aligned with the real source-of-truth pipeline and preserves custom files.
 
 ### Pending Todos
 
@@ -297,8 +301,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-03T13:55:02.104Z
-Stopped at: Completed 199-01-PLAN.md
+Last session: 2026-09-03T14:22:37.974Z
+Stopped at: Completed 199-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
