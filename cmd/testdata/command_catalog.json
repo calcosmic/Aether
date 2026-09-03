@@ -4089,6 +4089,14 @@
     "stability_score": 91
   },
   {
+    "name": "maintenance",
+    "short_description": "Inspect or repair Aether internals with preview and rollback.",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": true,
+    "output_mode": "unknown"
+  },
+  {
     "name": "maturity",
     "short_description": "View colony maturity journey",
     "flags": [],
@@ -9962,6 +9970,14 @@
     "stability_score": 91
   },
   {
+    "name": "skills",
+    "short_description": "Inspect live skill sources without rebuilding a cache",
+    "flags": [],
+    "parent_command": "maintenance",
+    "has_subcommands": true,
+    "output_mode": "unknown"
+  },
+  {
     "name": "get",
     "short_description": "Get current parallel mode",
     "flags": [],
@@ -10138,5 +10154,29 @@
       "v5.4.0": false
     },
     "stability_score": 91
+  },
+  {
+    "name": "diff",
+    "short_description": "Compare live skill inventory receipts or a supplied manifest",
+    "flags": [
+      "after",
+      "before",
+      "hub",
+      "root"
+    ],
+    "parent_command": "skills",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "inspect",
+    "short_description": "Create a read-only receipt from live skill sources",
+    "flags": [
+      "hub",
+      "root"
+    ],
+    "parent_command": "skills",
+    "has_subcommands": false,
+    "output_mode": "unknown"
   }
 ]

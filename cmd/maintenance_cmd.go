@@ -108,8 +108,8 @@ func buildMaintenanceCatalog(platform string) maintenanceCatalog {
 			readOnly("chamber.inspect", "Chamber inventory", "aether chamber-list", "chamber-inspection/v1"),
 			readOnly("context.inspect", "Current lifecycle context", "aether status --compact", LifecycleResultSchemaVersion),
 			readOnly("archive.inspect", "Archived chamber integrity", "aether chamber-verify --name <chamber>", "archive-inspection/v1"),
-			readOnly("skills.inspect", "Live skill inventory", "aether maintenance skills inspect", "maintenance-skills/v1"),
-			readOnly("skills.diff", "Live skill inventory drift", "aether maintenance skills diff --before <receipt> --after <receipt>", "maintenance-skills-diff/v1"),
+			readOnly("skills.inspect", "Live skill inventory", "aether maintenance skills inspect", maintenanceSkillsSchemaVersion),
+			readOnly("skills.diff", "Live skill inventory drift", "aether maintenance skills diff --before <receipt> --after <receipt>", maintenanceSkillsDiffSchemaVersion),
 		},
 		Mutation: []maintenanceOperation{
 			mutating("update.apply", "Update companion surfaces", "aether update", true, "Restore every path named by the transaction receipt, then rerun aether integrity."),

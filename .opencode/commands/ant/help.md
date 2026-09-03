@@ -59,6 +59,17 @@ When stuck or curious: `/ant-oracle "question"` — iterative deep research (�
 
 `/ant-entomb` — archive a sealed colony · `/ant-maturity` — the colony's journey · `/ant-shelf` — idea backlog (`-add`, `-list`, `-promote`, `-dismiss`) · `/ant-flags` / `/ant-flag` — blockers · `/ant-preferences` — how you like to work · `/ant-profile` — learned behavior · `/ant-skill-create` — teach the colony a skill · `/ant-quick` — one-shot task · `/ant-run` — autopilot · `/ant-update` — refresh Aether's files from the hub (note: does **not** update the runtime binary) · `/ant-data-clean`, `/ant-migrate-state`, `/ant-verify-castes`, `/ant-patrol`, `/ant-memory-details`, `/ant-tunnels`, `/ant-insert-phase`, `/ant-export-signals`, `/ant-import-signals`, `/ant-reference-index`, `/ant-reference-list`, `/ant-reference-match`, `/ant-queen-compose`, `/ant-porter`, `/ant-bump-version` (owner), `/ant-lay-eggs` (first-time setup)
 
+## Expert maintenance
+
+Advanced inspection stays behind one explicit runtime landing. Opening it changes nothing:
+
+```bash
+aether maintenance
+aether maintenance skills
+aether maintenance skills inspect
+aether maintenance skills diff --before <receipt> --after <receipt>
+```
+
 ## Digging deeper
 
 - `aether command-guide <command>` — runtime truth for any single command

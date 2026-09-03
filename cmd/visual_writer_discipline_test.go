@@ -43,18 +43,18 @@ var visualWriterExemptions = map[string]string{
 
 	"oracle_progress.go:appendOracleProgressEvent": "diagnostics for a failed progress-log write; the log itself is machine-read by --follow and the line the operator sees goes through emitVisualLine",
 
-	"gate.go:gateResultsReadCmd":            "JSON gate results for scripts and wrappers",
-	"gate.go:gateResultsWriteCmd":           "JSON write acknowledgement",
-	"gate.go:shouldSkipGateCmd":             "bare boolean consumed by scripts",
-	"gate.go:gateRecoveryTemplateCmd":       "recovery template text consumed by wrappers",
-	"source_check.go:sourceCheckCmd":        "JSON branch; the visual branch uses outputWorkflow",
-	"trace_cmds.go:traceExportCmd":          "JSON trace export",
-	"unblock_cmd.go:unblockCmd":             "JSON branch; the visual branch uses writeVisualOutput",
-	"recovery_engine.go:renderRecoveryMenu": "JSON error envelope; the visual branch returns text for the caller to render",
-	"recover.go:runRecover":                 "JSON branch; the visual branch uses visualFprint",
-	"integrity_cmd.go:runIntegrity":         "JSON branch behind --json; prose warnings use visualFprintf",
-	"porter_cmd.go:renderPorterResult":      "JSON branch behind --json",
-	"fixer_dispatch.go:dispatchFixer":       "JSON dispatch payload; prose notices use visualFprintf",
+	"gate.go:gateResultsReadCmd":             "JSON gate results for scripts and wrappers",
+	"gate.go:gateResultsWriteCmd":            "JSON write acknowledgement",
+	"gate.go:shouldSkipGateCmd":              "bare boolean consumed by scripts",
+	"gate.go:gateRecoveryTemplateCmd":        "recovery template text consumed by wrappers",
+	"source_check.go:runSourceCheckCommand":  "JSON branch; the visual branch uses outputWorkflow",
+	"trace_cmds.go:traceExportCmd":           "JSON trace export",
+	"unblock_cmd.go:unblockCmd":              "JSON branch; the visual branch uses writeVisualOutput",
+	"recovery_engine.go:renderRecoveryMenu":  "JSON error envelope; the visual branch returns text for the caller to render",
+	"recover.go:runRecover":                  "JSON branch; the visual branch uses visualFprint",
+	"integrity_cmd.go:renderIntegrityResult": "JSON branch behind --json; the visual branch uses visualFprint",
+	"porter_cmd.go:renderPorterResult":       "JSON branch behind --json",
+	"fixer_dispatch.go:dispatchFixer":        "JSON dispatch payload; prose notices use visualFprintf",
 
 	// Raw worker output echoed under --verbose. This is what a worker printed;
 	// rewriting it would misreport what actually happened.
