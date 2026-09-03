@@ -87,6 +87,19 @@ type lifecycleTransactionAllowlist struct {
 
 type lifecycleTransactionFaultHook func(point string) error
 
+type lifecycleTransactionFaultError struct {
+	point string
+	cause error
+}
+
+func (err *lifecycleTransactionFaultError) Error() string {
+	return fmt.Sprintf("lifecycle transaction interrupted at %s: %v", err.point, err.cause)
+}
+
+func (err *lifecycleTransactionFaultError) Unwrap() error {
+	return err.cause
+}
+
 type lifecycleTransactionConfig struct {
 	TransactionID string
 	Command       string
@@ -479,6 +492,10 @@ func (tx *lifecycleTransaction) Commit() (colony.LifecycleReceipt, error) {
 	}
 	receipt, err := tx.verifyAndWriteReceipt()
 	if err != nil {
+		var faultErr *lifecycleTransactionFaultError
+		if errors.As(err, &faultErr) {
+			return colony.LifecycleReceipt{}, err
+		}
 		rollbackErr := tx.rollbackPreparedTargets()
 		if rollbackErr != nil {
 			return colony.LifecycleReceipt{}, fmt.Errorf("lifecycle transaction: verification failed: %w", errors.Join(err, rollbackErr))
@@ -875,6 +892,325 @@ func (tx *lifecycleTransaction) Rollback() error {
 	return tx.rollbackPreparedTargets()
 }
 
+// resumeLifecycleTransaction reduces only durable evidence. It never guesses
+// success from a file's existence: immutable intent and root manifests must
+// validate first, and every live target must match either its declared baseline
+// or staged result before the reducer commits or rolls back anything.
+func resumeLifecycleTransaction(config lifecycleTransactionConfig) (colony.LifecycleReceipt, error) {
+	tx, err := beginLifecycleTransaction(config)
+	if err != nil {
+		return colony.LifecycleReceipt{}, err
+	}
+	lifecycleTransactionProcessMu.Lock()
+	defer lifecycleTransactionProcessMu.Unlock()
+
+	if receipt, ok, receiptErr := tx.loadCommittedReceipt(); ok || receiptErr != nil {
+		if receiptErr != nil {
+			return tx.recoveryResult(receiptErr, lifecycleRecoveryProvenance(receiptErr))
+		}
+		return receipt, nil
+	}
+	intent, progress, err := tx.loadJournal()
+	if err != nil {
+		return tx.recoveryResult(err, lifecycleRecoveryProvenance(err))
+	}
+	tx.intent, tx.progress = intent, progress
+	manifests, err := tx.validateRecoveryEvidence()
+	if err != nil {
+		return tx.recoveryResult(err, lifecycleRecoveryProvenance(err))
+	}
+
+	switch progress.Stage {
+	case colony.TransactionStageIntentRecorded,
+		colony.TransactionStageCommitting,
+		colony.TransactionStageCommitted,
+		colony.TransactionStageVerifying,
+		colony.TransactionStageVerified:
+		if err := tx.validateResumeTargetStates(manifests); err != nil {
+			rollbackErr := tx.rollbackPreparedTargets()
+			if rollbackErr != nil {
+				err = errors.Join(err, rollbackErr)
+			}
+			return tx.recoveryResult(err, lifecycleRecoveryProvenance(err))
+		}
+		if !allLifecycleTargetsMatch(intent, manifests, true) {
+			if err := tx.commitPreparedTargets(); err != nil {
+				return tx.recoveryResult(err, lifecycleRecoveryProvenance(err))
+			}
+		}
+		return tx.verifyAndWriteReceipt()
+	case colony.TransactionStageRollingBack, colony.TransactionStageRecoveryRequired:
+		if err := tx.rollbackPreparedTargets(); err != nil {
+			return tx.recoveryResult(err, lifecycleRecoveryProvenance(err))
+		}
+		return tx.rolledBackResult(), nil
+	case colony.TransactionStageRolledBack:
+		if !allLifecycleTargetsMatch(intent, manifests, false) {
+			err := fmt.Errorf("lifecycle transaction: rolled-back journal does not match baseline bytes")
+			return tx.recoveryResult(err, colony.RecoveryProvenanceConflicting)
+		}
+		return tx.rolledBackResult(), nil
+	default:
+		err := fmt.Errorf("lifecycle transaction: stage %q cannot be resumed from durable intent", progress.Stage)
+		return tx.recoveryResult(err, colony.RecoveryProvenanceConflicting)
+	}
+}
+
+func (tx *lifecycleTransaction) validateRecoveryEvidence() (map[string]lifecycleTransactionRootManifest, error) {
+	if tx.intent == nil || tx.progress == nil {
+		return nil, fmt.Errorf("lifecycle transaction: coordinator evidence is incomplete: %w", os.ErrNotExist)
+	}
+	if err := tx.intent.Record.Validate(); err != nil {
+		return nil, fmt.Errorf("lifecycle transaction: invalid intent record: %w", err)
+	}
+	if tx.intent.Record.TransactionID != tx.config.TransactionID || tx.intent.Record.Command != tx.config.Command || tx.intent.Record.Stage != colony.TransactionStageIntentRecorded {
+		return nil, fmt.Errorf("lifecycle transaction: intent record identity or stage conflict")
+	}
+	if !tx.progress.Stage.Valid() || !tx.progress.StateEffect.Valid() {
+		return nil, fmt.Errorf("lifecycle transaction: invalid progress vocabulary")
+	}
+	manifests, err := loadLifecycleRootManifests(tx.intent)
+	if err != nil {
+		return nil, err
+	}
+	knownTargets := make(map[string]struct{})
+	knownRoots := make(map[string]struct{})
+	absoluteTargets := make(map[string]struct{})
+	for _, rootReference := range tx.intent.Roots {
+		knownRoots[rootReference.RootID] = struct{}{}
+		configuredRoot, ok := tx.roots[rootReference.Kind]
+		if !ok || configuredRoot.Path != rootReference.RootPath {
+			return nil, fmt.Errorf("lifecycle transaction: root %s conflicts with current allowlist", rootReference.Kind)
+		}
+		localDirectory := filepath.Join(configuredRoot.Path, lifecycleTransactionDirectory, tx.config.TransactionID, rootReference.RootID)
+		if rootReference.ManifestPath != filepath.Join(localDirectory, "manifest.json") {
+			return nil, fmt.Errorf("lifecycle transaction: root %s manifest path conflicts with owned staging directory", rootReference.Kind)
+		}
+		manifest := manifests[rootReference.RootID]
+		for _, target := range manifest.Targets {
+			if target.ID == "" || target.BeforeDigest == "" || target.AfterDigest == "" {
+				return nil, fmt.Errorf("lifecycle transaction: target manifest has missing identity or digest")
+			}
+			if _, duplicate := knownTargets[target.ID]; duplicate {
+				return nil, fmt.Errorf("lifecycle transaction: duplicate target id %s", target.ID)
+			}
+			knownTargets[target.ID] = struct{}{}
+			resolvedRoot, targetPath, relativeTarget, err := tx.resolveTarget(rootReference.Kind, target.RelativeTarget)
+			if err != nil {
+				return nil, err
+			}
+			if resolvedRoot.Path != rootReference.RootPath || targetPath != target.TargetPath || relativeTarget != target.RelativeTarget {
+				return nil, fmt.Errorf("lifecycle transaction: target %s resolution conflicts with manifest", target.ID)
+			}
+			if _, duplicate := absoluteTargets[target.TargetPath]; duplicate {
+				return nil, fmt.Errorf("lifecycle transaction: duplicate absolute target %q", target.TargetPath)
+			}
+			absoluteTargets[target.TargetPath] = struct{}{}
+			expectedStagePath := filepath.Join(localDirectory, "staged", target.ID+".bin")
+			if target.StagePath != expectedStagePath {
+				return nil, fmt.Errorf("lifecycle transaction: target %s stage path conflicts with manifest ownership", target.ID)
+			}
+			staged, err := os.ReadFile(target.StagePath)
+			if err != nil {
+				return nil, fmt.Errorf("lifecycle transaction: read staged evidence for %s: %w", target.ID, err)
+			}
+			switch target.Action {
+			case lifecycleTransactionWrite:
+				if lifecycleDigest(staged) != target.AfterDigest {
+					return nil, fmt.Errorf("lifecycle transaction: staged evidence for %s has conflicting digest", target.ID)
+				}
+			case lifecycleTransactionRemove:
+				if target.AfterDigest != lifecycleTransactionMissingDigest || !bytes.Equal(staged, []byte("remove\n")) {
+					return nil, fmt.Errorf("lifecycle transaction: removal evidence for %s conflicts with manifest", target.ID)
+				}
+			default:
+				return nil, fmt.Errorf("lifecycle transaction: target %s has unknown action %q", target.ID, target.Action)
+			}
+			if target.BeforeExists {
+				expectedPreimagePath := filepath.Join(localDirectory, "preimages", target.ID+".bin")
+				if target.PreimagePath != expectedPreimagePath {
+					return nil, fmt.Errorf("lifecycle transaction: target %s preimage path conflicts with manifest ownership", target.ID)
+				}
+				preimage, err := os.ReadFile(target.PreimagePath)
+				if err != nil {
+					return nil, fmt.Errorf("lifecycle transaction: read preimage evidence for %s: %w", target.ID, err)
+				}
+				if lifecycleDigest(preimage) != target.BeforeDigest {
+					return nil, fmt.Errorf("lifecycle transaction: preimage evidence for %s has conflicting digest", target.ID)
+				}
+			} else if target.PreimagePath != "" || target.BeforeDigest != lifecycleTransactionMissingDigest {
+				return nil, fmt.Errorf("lifecycle transaction: absent baseline evidence for %s conflicts with manifest", target.ID)
+			}
+		}
+	}
+	if len(tx.intent.CommitOrder) != len(knownTargets) {
+		return nil, fmt.Errorf("lifecycle transaction: commit order length conflicts with targets")
+	}
+	seenOrder := make(map[string]struct{})
+	for _, targetID := range tx.intent.CommitOrder {
+		if _, ok := knownTargets[targetID]; !ok {
+			return nil, fmt.Errorf("lifecycle transaction: commit order names unknown target %s", targetID)
+		}
+		if _, duplicate := seenOrder[targetID]; duplicate {
+			return nil, fmt.Errorf("lifecycle transaction: commit order repeats target %s", targetID)
+		}
+		seenOrder[targetID] = struct{}{}
+	}
+	if err := validateLifecycleProgressIDs(tx.progress.CommittedTargets, knownTargets, "target"); err != nil {
+		return nil, err
+	}
+	if err := validateLifecycleProgressIDs(tx.progress.CommittedRoots, knownRoots, "root"); err != nil {
+		return nil, err
+	}
+	return manifests, nil
+}
+
+func validateLifecycleProgressIDs(values []string, known map[string]struct{}, kind string) error {
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		if _, ok := known[value]; !ok {
+			return fmt.Errorf("lifecycle transaction: progress names unknown %s %s", kind, value)
+		}
+		if _, duplicate := seen[value]; duplicate {
+			return fmt.Errorf("lifecycle transaction: progress repeats %s %s", kind, value)
+		}
+		seen[value] = struct{}{}
+	}
+	return nil
+}
+
+func (tx *lifecycleTransaction) validateResumeTargetStates(manifests map[string]lifecycleTransactionRootManifest) error {
+	committed := make(map[string]struct{}, len(tx.progress.CommittedTargets))
+	for _, targetID := range tx.progress.CommittedTargets {
+		committed[targetID] = struct{}{}
+	}
+	for _, target := range flattenLifecycleManifestTargets(tx.intent, manifests) {
+		state, err := readLifecycleFileState(target.TargetPath)
+		if err != nil {
+			return fmt.Errorf("lifecycle transaction: inspect recovery target %s: %w", target.ID, err)
+		}
+		matchesBefore := state.Exists == target.BeforeExists && state.Digest == target.BeforeDigest
+		matchesAfter := state.Digest == target.AfterDigest
+		if !matchesBefore && !matchesAfter {
+			return fmt.Errorf("lifecycle transaction: recovery target %s conflicts with baseline and staged result", target.ID)
+		}
+		if _, markedCommitted := committed[target.ID]; markedCommitted && !matchesAfter {
+			return fmt.Errorf("lifecycle transaction: committed target %s no longer matches staged result", target.ID)
+		}
+	}
+	return nil
+}
+
+func allLifecycleTargetsMatch(intent *lifecycleTransactionIntent, manifests map[string]lifecycleTransactionRootManifest, after bool) bool {
+	for _, target := range flattenLifecycleManifestTargets(intent, manifests) {
+		state, err := readLifecycleFileState(target.TargetPath)
+		if err != nil {
+			return false
+		}
+		if after {
+			if state.Digest != target.AfterDigest {
+				return false
+			}
+		} else if state.Exists != target.BeforeExists || state.Digest != target.BeforeDigest {
+			return false
+		}
+	}
+	return true
+}
+
+func (tx *lifecycleTransaction) recoveryResult(cause error, provenance colony.RecoveryProvenance) (colony.LifecycleReceipt, error) {
+	if provenance != colony.RecoveryProvenanceConflicting && provenance != colony.RecoveryProvenanceUnknown {
+		provenance = colony.RecoveryProvenanceUnknown
+	}
+	evidence := colony.LifecycleEvidence{
+		ID:      tx.config.TransactionID + "-recovery-evidence",
+		Kind:    "coordinator_journal",
+		Source:  tx.journalPath(),
+		Summary: cause.Error(),
+	}
+	transaction := colony.LifecycleTransactionReference{
+		ID:          tx.config.TransactionID,
+		Stage:       colony.TransactionStageRecoveryRequired,
+		JournalPath: tx.journalPath(),
+	}
+	receipt := colony.LifecycleReceipt{
+		SchemaVersion: colony.LifecycleSchemaVersion,
+		ReceiptID:     tx.config.TransactionID + "-recovery",
+		Command:       tx.config.Command,
+		OutcomeKind:   colony.OutcomeKindRecoveryRequired,
+		Evidence:      []colony.LifecycleEvidence{evidence},
+		StateEffect:   colony.LifecycleStateEffectRecoveryRequired,
+		Transaction:   transaction,
+		Recovery: &colony.LifecycleRecovery{
+			Provenance: provenance,
+			Facts: []colony.LifecycleRecoveryFact{{
+				Name:       "recovery-evidence",
+				Summary:    cause.Error(),
+				Provenance: provenance,
+				Evidence:   []colony.LifecycleEvidence{evidence},
+			}},
+			Transaction:  &transaction,
+			SafeNextStep: "Preserve the journal and conflicting files, resolve the named evidence, then run `aether resume` again.",
+		},
+		Provenance: provenance,
+	}
+	if tx.intent != nil {
+		receipt.Changes = append([]colony.LifecycleChange(nil), tx.intent.Record.Changes...)
+	}
+	if tx.progress != nil && tx.intent != nil {
+		tx.progress.Stage = colony.TransactionStageRecoveryRequired
+		tx.progress.StateEffect = colony.LifecycleStateEffectRecoveryRequired
+		_ = tx.persistProgress()
+	}
+	if err := receipt.Validate(); err != nil {
+		return colony.LifecycleReceipt{}, errors.Join(cause, fmt.Errorf("build recovery receipt: %w", err))
+	}
+	return receipt, fmt.Errorf("lifecycle transaction: recovery required (%s): %w", provenance, cause)
+}
+
+func (tx *lifecycleTransaction) rolledBackResult() colony.LifecycleReceipt {
+	evidence := colony.LifecycleEvidence{
+		ID:      tx.config.TransactionID + "-rollback-evidence",
+		Kind:    "coordinator_journal",
+		Source:  tx.journalPath(),
+		Summary: "All declared targets match their pre-transaction baselines.",
+	}
+	transaction := colony.LifecycleTransactionReference{
+		ID:          tx.config.TransactionID,
+		Stage:       colony.TransactionStageRolledBack,
+		JournalPath: tx.journalPath(),
+	}
+	return colony.LifecycleReceipt{
+		SchemaVersion: colony.LifecycleSchemaVersion,
+		ReceiptID:     tx.config.TransactionID + "-rolled-back",
+		Command:       tx.config.Command,
+		OutcomeKind:   colony.OutcomeKindNoChange,
+		Changes:       append([]colony.LifecycleChange(nil), tx.intent.Record.Changes...),
+		Evidence:      []colony.LifecycleEvidence{evidence},
+		StateEffect:   colony.LifecycleStateEffectRolledBack,
+		Transaction:   transaction,
+		Recovery: &colony.LifecycleRecovery{
+			Provenance: colony.RecoveryProvenanceConfirmed,
+			Facts: []colony.LifecycleRecoveryFact{{
+				Name:       "rollback-complete",
+				Summary:    "Every declared target matches its recorded baseline.",
+				Provenance: colony.RecoveryProvenanceConfirmed,
+				Evidence:   []colony.LifecycleEvidence{evidence},
+			}},
+			Transaction:  &transaction,
+			SafeNextStep: "The transaction is rolled back; rerun the original lifecycle command to start a new transaction.",
+		},
+		Provenance: colony.RecoveryProvenanceConfirmed,
+	}
+}
+
+func lifecycleRecoveryProvenance(err error) colony.RecoveryProvenance {
+	if errors.Is(err, os.ErrNotExist) {
+		return colony.RecoveryProvenanceUnknown
+	}
+	return colony.RecoveryProvenanceConflicting
+}
+
 func (tx *lifecycleTransaction) requireRecovery(cause error, provenance colony.RecoveryProvenance) error {
 	if tx.progress != nil {
 		tx.progress.Stage = colony.TransactionStageRecoveryRequired
@@ -1262,7 +1598,7 @@ func (tx *lifecycleTransaction) callFault(point string) error {
 		return nil
 	}
 	if err := tx.config.Fault(point); err != nil {
-		return fmt.Errorf("lifecycle transaction interrupted at %s: %w", point, err)
+		return &lifecycleTransactionFaultError{point: point, cause: err}
 	}
 	return nil
 }
