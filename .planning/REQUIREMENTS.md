@@ -42,7 +42,7 @@ For dummies: keep the reliable modern engine and brakes, then restore the dashbo
 ### Front Door and Lifecycle Grammar
 
 - [ ] **LIFE-01 — One understandable front door:** Help, first-run setup, `lay-eggs`, and `init` present one normal goal journey; `aether do "goal"` or its approved equivalent drives that journey while advanced and internal protocol surfaces remain inspectable but clearly separated.
-- [ ] **LIFE-02 — Automatic territory understanding:** The lifecycle decides when repository colonization or survey refresh is needed, shows survey freshness, and feeds the resulting territory evidence into planning without requiring the owner to choose an internal survey command.
+- [x] **LIFE-02 — Automatic territory understanding:** The lifecycle decides when repository colonization or survey refresh is needed, shows survey freshness, and feeds the resulting territory evidence into planning without requiring the owner to choose an internal survey command.
 - [x] **LIFE-03 — One orientation model:** `status`, `phase`, `history`, health or maturity information, activity interpretation, research or Dreams visibility, escalated flags, and Next Up agree on the same authoritative lifecycle projection.
 - [x] **LIFE-04 — Safe pause and return:** Pause, stop, session staleness, `resume`, recovery, and the `resume-colony` compatibility path preserve partial work, attempts, scoped decisions, context, and worker lineage exactly once.
 - [x] **LIFE-05 — Honest closure:** Seal, archive, and the useful safety or memory behavior formerly attached to `entomb` preserve findings, learnings, signals, owner checkpoints, and rollback information while refusing malformed or incomplete completion truth.
