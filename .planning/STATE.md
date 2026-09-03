@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Phase 199 UI-SPEC approved
-last_updated: "2026-09-03T13:11:03.374Z"
-last_activity: 2026-09-03 -- Phase 199 planning complete
+stopped_at: Completed 199-01-PLAN.md
+last_updated: "2026-09-03T13:55:02.113Z"
+last_activity: 2026-09-03
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 34
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
@@ -21,17 +21,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-02)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Research and plan Phase 199 from the locked front-door/lifecycle context and mandatory Classic-to-Go synthesis
+**Current focus:** Phase 199 — front-door-and-classic-contract
 **Previous milestone:** v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02 (48/48 requirements; audit `tech_debt`, no blockers)
 **Product version:** v1.0.66 (installed and source binaries agree in the 2026-09-02 local check)
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
 
 ## Current Position
 
-Phase: 199 — Front Door and Classic Contract (not started)
-Plan: —
+Phase: 199 (front-door-and-classic-contract) — EXECUTING
+Plan: 2 of 34
 Status: Ready to execute
-Last activity: 2026-09-03 -- Phase 199 planning complete
+Last activity: 2026-09-03
 
 ## Performance Metrics
 
@@ -78,6 +78,7 @@ Last activity: 2026-09-03 -- Phase 199 planning complete
 | Phase 196 P06 | 41 min | 2 tasks | 9 files |
 | Phase 196 P07 | 78 min | 2 tasks | 10 files |
 | Phase 196 P08 | 24min | 2 tasks | 12 files |
+| Phase 199 P01 | 27min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -181,6 +182,8 @@ Last activity: 2026-09-03 -- Phase 199 planning complete
 - [Milestone sequencing]: Classic functional/experience restoration belongs inside v1.28. Owner-watched proof follows the restored product; Codex lifecycle skills remain a separate later milestone.
 - [Milestone method]: Classic feature names are research headings, not selected implementations. Every Phase 199-204 must reconstruct the exact old mechanism and owner value, audit the current Go path, compare keep/restore/replace choices, and link a written synthesis into its plans, tests, CAP dispositions, and verification.
 - [Milestone audit]: v1.27 scored 48/48 requirements, 9/9 delivered phases, 8/8 integration seams, and 4/4 end-to-end flows. Verdict `tech_debt`: no blocking gaps; Phase 198.2 field UAT and documented warnings carry forward.
+- [Phase 199]: Every test that can allocate a worktree in the source checkout registers ownership before command execution. — Pre-registration guarantees bounded cleanup even when allocation exits partway through.
+- [Phase 199]: Test teardown may delete only exact repository/path/branch triples registered by the creating test. — Naming conventions and Aether-shaped paths are not evidence of test ownership.
 
 ### Pending Todos
 
@@ -294,9 +297,9 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-02T22:33:45.378Z
-Stopped at: Phase 199 UI-SPEC approved
-Resume file: .planning/phases/199-front-door-and-classic-contract/199-UI-SPEC.md
+Last session: 2026-09-03T13:55:02.104Z
+Stopped at: Completed 199-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 

@@ -102,7 +102,7 @@ For dummies: keep the reliable modern engine and brakes, then restore the dashbo
 
 ### Restoration Proof
 
-- [ ] **PROOF-01 — Executable Classic corpus:** From each phase's historical/current mechanism study, build versioned outcome, behavior, and experience fixtures for the public commands and journeys that slice changes; snapshots or remembered feature names alone cannot prove causality.
+- [x] **PROOF-01 — Executable Classic corpus:** From each phase's historical/current mechanism study, build versioned outcome, behavior, and experience fixtures for the public commands and journeys that slice changes; snapshots or remembered feature names alone cannot prove causality.
 - [ ] **PROOF-02 — Complete capability traceability:** Every `CAP-001` through `CAP-072` row maps exactly once to a v1.28 requirement and phase, while its final implementation disposition is signed only after the relevant phase study demonstrates the historical mechanism, current successor, and chosen synthesis; missing, duplicate, or unsupported dispositions fail the planning and completion ratchets.
 - [ ] **PROOF-03 — Three-dimensional parity:** Each phase proves useful outcome parity, actual behavior parity, and understandable experience parity while preserving the modern kernel's fail-closed safety; endpoint counts or broad percentage claims are not completion evidence.
 - [ ] **PROOF-04 — Honest supported-platform contract:** Real public entry points prove the declared Claude Code, OpenCode, and runtime-native Codex outcomes or fail early with a truthful limitation; native platform ability is never called Aether-governed without ledger binding, and Codex lifecycle-skill integration remains a later milestone.
