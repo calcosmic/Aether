@@ -895,9 +895,18 @@ func TestWorktreeAllocateAuditLog(t *testing.T) {
 	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
 	store = s
 
-	rootCmd.SetArgs([]string{"worktree-allocate", "--branch", fmt.Sprintf("feature/test-audit-%d", time.Now().UnixNano())})
+	branch := fmt.Sprintf("feature/test-audit-%d", time.Now().UnixNano())
+	workingDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get test working directory: %v", err)
+	}
+	repoRoot := findTestModuleRoot(t)
+	worktreePath := filepath.Join(workingDir, filepath.FromSlash(worktreeBaseDir), sanitizeBranchPath(branch))
+	registerTestOwnedWorktree(t, repoRoot, worktreePath, branch)
 
-	err := rootCmd.Execute()
+	rootCmd.SetArgs([]string{"worktree-allocate", "--branch", branch})
+
+	err = rootCmd.Execute()
 	_ = err // may fail if git is not available
 
 	// If the command succeeded (no error on stderr about store), check audit log

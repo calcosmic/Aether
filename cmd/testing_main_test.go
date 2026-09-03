@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -217,43 +219,140 @@ func resetFlags(cmd *cobra.Command) {
 	}
 }
 
-// cleanupTestWorktrees removes git worktrees and branches created by the test
-// suite. Tests like TestWorktreeAllocateAuditLog create real worktrees in
-// cmd/.aether/worktrees/ that persist after tests finish. This runs once after
-// all tests complete.
-func cleanupTestWorktrees() {
-	// Remove all non-main worktrees
-	out, _ := exec.Command("git", "worktree", "list", "--porcelain").Output()
-	lines := strings.Split(string(out), "\n")
-	for _, line := range lines {
-		if !strings.HasPrefix(line, "worktree ") {
-			continue
-		}
-		path := strings.TrimPrefix(line, "worktree ")
-		// Skip the main working tree (matches the repo root)
-		if !strings.Contains(path, "/.aether/worktrees/") && !strings.Contains(path, "-worktrees/") {
-			continue
-		}
-		exec.Command("git", "worktree", "remove", path, "--force").Run()
+type testOwnedWorktree struct {
+	repoRoot string
+	path     string
+	branch   string
+}
+
+var testOwnedWorktrees struct {
+	sync.Mutex
+	entries []testOwnedWorktree
+}
+
+// registerTestOwnedWorktree records positive ownership before a test creates a
+// real worktree. The registry is process-local, so only this test run can grant
+// cleanup permission for an exact repository, path, and branch.
+func registerTestOwnedWorktree(t *testing.T, repoRoot, path, branch string) {
+	t.Helper()
+	entry, err := validateTestOwnedWorktree(repoRoot, path, branch)
+	if err != nil {
+		t.Fatalf("register test-owned worktree: %v", err)
 	}
+	testOwnedWorktrees.Lock()
+	testOwnedWorktrees.entries = append(testOwnedWorktrees.entries, entry)
+	testOwnedWorktrees.Unlock()
+}
 
-	// Prune any remaining detached entries
-	exec.Command("git", "worktree", "prune").Run()
+// cleanupTestWorktrees removes only worktrees and branches that this test
+// process registered explicitly. Missing artifacts are harmless: cleanup is
+// deliberately safe to replay.
+func cleanupTestWorktrees() {
+	testOwnedWorktrees.Lock()
+	entries := append([]testOwnedWorktree(nil), testOwnedWorktrees.entries...)
+	testOwnedWorktrees.entries = nil
+	testOwnedWorktrees.Unlock()
 
-	// Delete branches that match test-created patterns
-	branchOut, _ := exec.Command("git", "branch", "--list").Output()
-	branches := strings.Split(string(branchOut), "\n")
-	for _, br := range branches {
-		br = strings.TrimSpace(br)
-		br = strings.TrimPrefix(br, "* ")
-		if br == "" || br == "main" || br == "master" {
+	for _, registered := range entries {
+		entry, err := validateTestOwnedWorktree(registered.repoRoot, registered.path, registered.branch)
+		if err != nil {
 			continue
 		}
-		// Only delete branches that match test patterns
-		if strings.HasPrefix(br, "feature/test-audit-") ||
-			strings.HasPrefix(br, "phase-") ||
-			(strings.HasPrefix(br, "feature/") && len(strings.Split(br, "/")) == 2) {
-			exec.Command("git", "branch", "-D", br).Run()
+		_ = exec.Command("git", "-C", entry.repoRoot, "worktree", "remove", "--force", entry.path).Run()
+		_ = exec.Command("git", "-C", entry.repoRoot, "branch", "-D", "--", entry.branch).Run()
+	}
+}
+
+func validateTestOwnedWorktree(repoRoot, path, branch string) (testOwnedWorktree, error) {
+	root, err := canonicalTestRepositoryRoot(repoRoot)
+	if err != nil {
+		return testOwnedWorktree{}, err
+	}
+	if strings.TrimSpace(path) == "" {
+		return testOwnedWorktree{}, fmt.Errorf("worktree path is required")
+	}
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(root, path)
+	}
+	resolvedPath, err := resolveTestOwnedPath(path)
+	if err != nil {
+		return testOwnedWorktree{}, fmt.Errorf("resolve worktree path: %w", err)
+	}
+	relativePath, err := filepath.Rel(root, resolvedPath)
+	if err != nil || relativePath == "." || relativePath == "" || filepath.IsAbs(relativePath) || relativePath == ".." || strings.HasPrefix(relativePath, ".."+string(filepath.Separator)) {
+		return testOwnedWorktree{}, fmt.Errorf("worktree path %q is not beneath repository %q", resolvedPath, root)
+	}
+	if branch == "" || branch != strings.TrimSpace(branch) {
+		return testOwnedWorktree{}, fmt.Errorf("branch name is required")
+	}
+	if output, err := exec.Command("git", "check-ref-format", "--branch", branch).CombinedOutput(); err != nil {
+		return testOwnedWorktree{}, fmt.Errorf("invalid branch %q: %s", branch, strings.TrimSpace(string(output)))
+	}
+	return testOwnedWorktree{repoRoot: root, path: resolvedPath, branch: branch}, nil
+}
+
+func canonicalTestRepositoryRoot(repoRoot string) (string, error) {
+	if strings.TrimSpace(repoRoot) == "" {
+		return "", fmt.Errorf("repository root is required")
+	}
+	absoluteRoot, err := filepath.Abs(repoRoot)
+	if err != nil {
+		return "", fmt.Errorf("make repository root absolute: %w", err)
+	}
+	resolvedRoot, err := filepath.EvalSymlinks(absoluteRoot)
+	if err != nil {
+		return "", fmt.Errorf("resolve repository root: %w", err)
+	}
+	info, err := os.Stat(resolvedRoot)
+	if err != nil {
+		return "", fmt.Errorf("stat repository root: %w", err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("repository root %q is not a directory", resolvedRoot)
+	}
+	topLevelOutput, err := exec.Command("git", "-C", resolvedRoot, "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return "", fmt.Errorf("validate repository root: %w", err)
+	}
+	topLevel, err := filepath.EvalSymlinks(strings.TrimSpace(string(topLevelOutput)))
+	if err != nil {
+		return "", fmt.Errorf("resolve git top-level: %w", err)
+	}
+	if filepath.Clean(topLevel) != filepath.Clean(resolvedRoot) {
+		return "", fmt.Errorf("repository root %q is not git top-level %q", resolvedRoot, topLevel)
+	}
+	return filepath.Clean(resolvedRoot), nil
+}
+
+// resolveTestOwnedPath resolves every existing path component, then appends
+// any not-yet-created suffix. This catches symlink escapes while still allowing
+// registration before git creates the worktree directory.
+func resolveTestOwnedPath(path string) (string, error) {
+	absolutePath, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	candidate := filepath.Clean(absolutePath)
+	var missing []string
+	for {
+		if _, err := os.Lstat(candidate); err == nil {
+			resolved, resolveErr := filepath.EvalSymlinks(candidate)
+			if resolveErr != nil {
+				return "", resolveErr
+			}
+			for i := len(missing) - 1; i >= 0; i-- {
+				resolved = filepath.Join(resolved, missing[i])
+			}
+			return filepath.Clean(resolved), nil
+		} else if !os.IsNotExist(err) {
+			return "", err
 		}
+
+		parent := filepath.Dir(candidate)
+		if parent == candidate {
+			return "", fmt.Errorf("no existing ancestor for %q", absolutePath)
+		}
+		missing = append(missing, filepath.Base(candidate))
+		candidate = parent
 	}
 }
