@@ -36,6 +36,9 @@ func newLifecyclePhase199Harness(t *testing.T, fixture string) lifecyclePhase199
 		if err := os.WriteFile(filepath.Join(root, ".aether", "data", "COLONY_STATE.json"), []byte(lifecyclePhase199State), 0o644); err != nil {
 			t.Fatalf("write phase fixture: %v", err)
 		}
+		if err := os.WriteFile(filepath.Join(root, ".aether", "data", "pending-decisions.json"), []byte(`{"version":"1","decisions":[]}`), 0o644); err != nil {
+			t.Fatalf("clear phase fixture blockers: %v", err)
+		}
 	}
 	saveGlobals(t)
 	resetRootCmd(t)
