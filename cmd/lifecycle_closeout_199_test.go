@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -269,6 +270,142 @@ func TestLifecycleCloseout199FrontDoorRefusal(t *testing.T) {
 		"codex_plan_finalize.go":     `lifecycleCloseoutRefusalFromDisk(`,
 	} {
 		lifecycleCloseout199RequireSourceCall(t, path, fragment)
+	}
+}
+
+func TestLifecycleCloseout199Seal(t *testing.T) {
+	result := lifecycleCloseout199SealResult(colony.SealDispositionVerified)
+	structured, err := sealLifecycleCloseoutResult(result)
+	if err != nil {
+		t.Fatalf("build verified seal closeout: %v", err)
+	}
+	closeout := lifecycleCloseout199MustResult(t, structured)
+	if closeout.OutcomeKind != colony.OutcomeKindVerifiedCompletion || closeout.ProjectionRevision != LifecycleProjectionRevision || closeout.Closure.Status != "verified" {
+		t.Fatalf("verified seal closeout lost closure truth: %#v", closeout)
+	}
+	if closeout.StateChanges.Effect != colony.LifecycleStateEffectCommitted || closeout.NextUp.RuntimeCommand != "aether status" || len(closeout.Alternatives) == 0 || closeout.Alternatives[0].RuntimeCommand != "aether entomb" {
+		t.Fatalf("verified seal closeout lost committed/retained or status-first truth: %#v", closeout)
+	}
+	visual := RenderSealOutcome(result)
+	if !strings.Contains(visual, "Verified completion recorded") || !strings.Contains(visual, "Crowned Anthill") || !strings.Contains(visual, "State effect: committed") || strings.Count(visual, "Next Up") != 2 {
+		// One occurrence is the shared slot marker and one is its compatibility
+		// summary line; a second card would add a third occurrence.
+		t.Fatalf("verified seal did not close through the focused grammar:\n%s", visual)
+	}
+	claude := renderLifecycleCloseout(closeout, "claude")
+	if !strings.Contains(claude, "/ant-status") || !strings.Contains(claude, "/ant-entomb") || !strings.Contains(claude, "Optionally") {
+		t.Fatalf("verified seal lost status-primary/optional-entomb spelling:\n%s", claude)
+	}
+}
+
+func TestLifecycleCloseout199ForcedSeal(t *testing.T) {
+	result := lifecycleCloseout199SealResult(colony.SealDispositionForcedIncomplete)
+	structured, err := sealLifecycleCloseoutResult(result)
+	if err != nil {
+		t.Fatalf("build forced seal closeout: %v", err)
+	}
+	closeout := lifecycleCloseout199MustResult(t, structured)
+	if closeout.OutcomeKind != colony.OutcomeKindForcedIncompleteClosure || closeout.Closure.Status != "forced_incomplete" || !closeout.Closure.Forced || closeout.Closure.OwnerReason != result.Outcome.OwnerReason {
+		t.Fatalf("forced seal closeout lost discriminator/reason: %#v", closeout)
+	}
+	if !lifecycleCloseoutHasOpenItems(closeout.Unresolved) || closeout.NextUp.RuntimeCommand != "aether status" || len(closeout.Alternatives) == 0 || closeout.Alternatives[0].RuntimeCommand != "aether entomb" {
+		t.Fatalf("forced seal closeout lost unresolved or optional archive truth: %#v", closeout)
+	}
+	visual := RenderSealOutcome(result)
+	for _, forbidden := range []string{"Crowned Anthill", "Verified completion recorded", "Every phase, task"} {
+		if strings.Contains(visual, forbidden) {
+			t.Fatalf("forced closeout contains verified-success discriminator %q:\n%s", forbidden, visual)
+		}
+	}
+	if !strings.Contains(visual, result.Outcome.OwnerReason) || !strings.Contains(visual, "State effect: committed") {
+		t.Fatalf("forced closeout omitted authority/effect truth:\n%s", visual)
+	}
+}
+
+func TestLifecycleCloseout199Entomb(t *testing.T) {
+	result := entombTransactionResult{
+		ArchiveID:      "archive-199",
+		Goal:           "Ship the classic front door",
+		Scope:          colony.ScopeProject,
+		ChamberName:    "chamber-project-front-door",
+		ChamberPath:    ".aether/chambers/chamber-project-front-door",
+		ManifestDigest: "sha256:archive",
+		Receipt: colony.LifecycleReceipt{
+			ReceiptID: "entomb-199-receipt", OutcomeKind: colony.OutcomeKindCompleted,
+			ProjectionRevision: LifecycleProjectionRevision, StateEffect: colony.LifecycleStateEffectCommitted,
+			Evidence:     []colony.LifecycleEvidence{{ID: "archive-proof", Kind: "manifest", Source: "manifest.json", Summary: "Verified archive bytes and cross-references"}},
+			Verification: []colony.LifecycleVerification{{Name: "published archive", Passed: true, EvidenceIDs: []string{"archive-proof"}}},
+			Changes:      []colony.LifecycleChange{{Target: "active colony", Action: "cleared after verified archive publication"}},
+		},
+		Disposition: colony.SealDispositionVerified,
+		Stages:      append([]string(nil), entombOrderedStages...),
+		Next:        `/ant-init "next goal"`,
+	}
+	payload := entombResultMap(result)
+	closeout := lifecycleCloseout199MustResult(t, payload)
+	if closeout.OutcomeKind != colony.OutcomeKindArchived || closeout.ProjectionRevision != LifecycleProjectionRevision || closeout.Closure.Status != "archived" || closeout.StateChanges.Effect != colony.LifecycleStateEffectCommitted {
+		t.Fatalf("entomb closeout lost archive/clear truth: %#v", closeout)
+	}
+	if closeout.NextUp.RuntimeCommand != `aether init "next goal"` || len(closeout.Evidence) < 3 {
+		t.Fatalf("entomb closeout offered init before archive proof: %#v", closeout)
+	}
+	visual := renderEntombVisual(payload)
+	if !strings.Contains(visual, "Verified archive bytes") || strings.Count(visual, "Next Up") != 2 {
+		t.Fatalf("entomb visual did not use one focused closeout:\n%s", visual)
+	}
+	if claude := renderLifecycleCloseout(closeout, "claude"); !strings.Contains(claude, `/ant-init "next goal"`) {
+		t.Fatalf("entomb closeout lost exact wrapper action:\n%s", claude)
+	}
+}
+
+func TestLifecycleCloseout199ArchiveFailure(t *testing.T) {
+	goal := "Ship the classic front door"
+	state := colony.ColonyState{
+		Goal: &goal, State: colony.StateCOMPLETED, Milestone: "Crowned Anthill",
+		SealOutcome: &colony.SealOutcome{Disposition: colony.SealDispositionVerified, OutcomeKind: colony.OutcomeKindVerifiedCompletion, ProjectionRevision: LifecycleProjectionRevision},
+	}
+	failure := entombRetainedError("verification", "entomb-199", errors.New("archive digest mismatch"))
+	payload, err := entombFailureResultForState(state, failure)
+	if err != nil {
+		t.Fatalf("build archive failure closeout: %v", err)
+	}
+	closeout := lifecycleCloseout199MustResult(t, payload)
+	if closeout.OutcomeKind != colony.OutcomeKindFailed || closeout.StateChanges.Effect != colony.LifecycleStateEffectRetained || closeout.Closure.Status != "verified" {
+		t.Fatalf("archive failure did not retain sealed-state truth: %#v", closeout)
+	}
+	if closeout.NextUp.RuntimeCommand != "aether status" || strings.Contains(renderLifecycleCloseout(closeout, "claude"), "/ant-init") {
+		t.Fatalf("archive failure offered unsafe init: %#v", closeout.NextUp)
+	}
+	if len(closeout.Evidence) == 0 || !strings.Contains(closeout.Evidence[len(closeout.Evidence)-1].Source, "transactions/entomb-199") || !lifecycleCloseoutHasOpenItems(closeout.Unresolved) {
+		t.Fatalf("archive failure omitted journal/blocker evidence: %#v", closeout)
+	}
+	visual := renderEntombFailureVisual(failure, payload)
+	if !strings.Contains(visual, "archive digest mismatch") || !strings.Contains(visual, "State effect: retained") || strings.Contains(visual, `/ant-init`) {
+		t.Fatalf("archive failure visual drifted from structured closeout:\n%s", visual)
+	}
+}
+
+func lifecycleCloseout199SealResult(disposition colony.SealDisposition) SealTransactionResult {
+	outcome := colony.SealOutcome{
+		OutcomeKind: colony.OutcomeKindVerifiedCompletion, ProjectionRevision: LifecycleProjectionRevision,
+		Disposition: disposition, StateEffect: colony.LifecycleStateEffectCommitted,
+		Evidence: []colony.LifecycleEvidence{{ID: "crowned-record", Kind: "closure_record", Source: ".aether/CROWNED-ANTHILL.md", Summary: "Crowned closure evidence retained with active state"}},
+		Changes:  []colony.LifecycleChange{{Target: "active colony", Action: "retained as inspectable sealed state"}},
+	}
+	evidence := SealClosureEvidence{ProjectionRevision: LifecycleProjectionRevision, PrimaryNext: "aether status", OptionalNext: "aether entomb"}
+	if disposition == colony.SealDispositionForcedIncomplete {
+		outcome.OutcomeKind = colony.OutcomeKindForcedIncompleteClosure
+		outcome.OwnerReason = "Owner accepted the incomplete closure risk"
+		outcome.UnresolvedEvidence = []colony.LifecycleEvidence{{ID: "unfinished", Kind: "unresolved", Summary: "One phase remains incomplete"}}
+		outcome.Blockers = []colony.LifecycleIssue{{ID: "unfinished", Summary: "One phase remains incomplete"}}
+		evidence.OwnerReason = outcome.OwnerReason
+		evidence.UncompletedWork = []SealUnresolvedItem{{Kind: "phase", ID: "phase-2", Summary: "One phase remains incomplete"}}
+	}
+	return SealTransactionResult{
+		TransactionID: "seal-199", Outcome: outcome,
+		Receipt:  colony.LifecycleReceipt{ReceiptID: "seal-199-receipt", ProjectionRevision: LifecycleProjectionRevision, StateEffect: colony.LifecycleStateEffectCommitted},
+		Evidence: evidence, SummaryPath: ".aether/CROWNED-ANTHILL.md",
+		PrimaryNext: "aether status", OptionalNext: "aether entomb",
 	}
 }
 
