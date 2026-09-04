@@ -1,53 +1,53 @@
-# resume -- Lifecycle Contract
+# resume — Lifecycle Contract
 
-**Last verified:** 2026-05-07
-**Source files:** cmd/session_flow_cmds.go, cmd/session_cmds.go
+**Last verified:** 2026-09-04
+**Source files:** `cmd/session_flow_cmds.go`, `cmd/lifecycle_facts.go`, `cmd/lifecycle_transaction.go`, `cmd/normalize_args.go`
 
-## Inputs
+## Public command
 
-### Flags
-None (resume-colony has no flags; reads session.json automatically)
+`aether resume` is the runtime's only recovery entry point. Its generated
+wrapper is `/ant-resume`.
 
-### Arguments
-None
+- Arguments: none.
+- `--no-handoff` disables `HANDOFF.md` reconstruction when durable colony state
+  is not runnable.
+- The lifecycle store must be initialized before recovery can proceed.
 
-### Environment
-None
+## Evidence and provenance
 
-## Outputs
+Before declaring any write, `resume` reads the lifecycle fact bundle and checks
+the handoff identity against durable state, session state, the pause receipt,
+repository bytes, worktree evidence, and worker activity.
 
-### Stdout
-JSON envelope via `outputWorkflow` (visual + structured). Displays colony state, session context, phase progress, and suggested next command.
+| Provenance | Meaning | State effect |
+|------------|---------|--------------|
+| `confirmed` | The referenced pause handoff and all independent evidence agree. | Commit or replay the named resume transaction. |
+| `reconstructed` | The runtime can derive one honest recovery point from durable evidence. | Commit or replay the named resume transaction and persist the reconstructed handoff evidence. |
+| `conflicting` | Independent evidence disagrees or a supposedly finished transaction cannot be validated. | None; render the named conflict and safe inspection step. |
+| `unknown` | There is not enough readable evidence to choose an honest recovery point. | None; render the missing evidence and safe inspection step. |
 
-### Files Created/Modified
-| File | Operation | When |
-|------|-----------|------|
-| .aether/data/COLONY_STATE.json | update | Paused flag cleared, session restored |
-| .aether/data/session.json | update | Session refresh with current state |
-| .aether/data/handoffs/worker-handoffs.json | update | Resume handoff written |
-| .aether/data/activity.log | append | Resume activity entry |
+Confirmed and reconstructed facts remain visibly distinct in both visual and
+structured output. Conflicting and unknown outcomes never mutate lifecycle
+state.
 
-### Exit Codes
-| Code | Meaning |
-|------|---------|
-| 0 | Success |
-| 1 | No colony initialized or session recovery failure |
+## Transaction contract
 
-## State Mutations
+The transaction identifier is derived from the handoff identity. An existing
+intent or receipt is resumed instead of creating a second recovery operation,
+so retries are idempotent.
 
-### Colony State Transitions
-May clear Paused flag: If colony was paused, marks Paused=false and restores active session.
+A successful transaction updates `.aether/data/COLONY_STATE.json`,
+`.aether/data/session.json`, and `.aether/CONTEXT.md`; it removes the consumed
+`.aether/HANDOFF.md`. Reconstructed recovery also writes
+`.aether/data/pause-handoff.json`. When stale worker activity is part of the
+validated recovery point, the transaction removes the stale spawn records.
+The lifecycle transaction journal retains the intent and receipt that prove the
+committed state effect.
 
-### Data Artifacts Modified
-| Artifact | Write Type | Content Changed |
-|----------|------------|-----------------|
-| .aether/data/COLONY_STATE.json | update | Paused=false, session restored |
-| .aether/data/session.json | update | Session refreshed |
-| .aether/data/handoffs/worker-handoffs.json | update | Resume handoff |
-| .aether/data/activity.log | append | Resume activity |
+## Bounded parser compatibility
 
-## Preconditions
-
-- Colony must be initialized (COLONY_STATE.json exists)
-- session.json should exist from prior session
-- Store must be initialized
+During the 1.28 milestone only, process startup rewrites one exact historical
+suffixed token to `resume` before Cobra parses arguments. The rewrite expires at
+1.29 and is deliberately absent from command metadata, help, completion,
+canonical YAML, and generated wrappers. It is hidden migration plumbing, not a
+flag, alias, or user-selectable route.
