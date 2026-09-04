@@ -1,106 +1,64 @@
 package cmd
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
-
-	"github.com/calcosmic/Aether/pkg/colony"
 )
 
-// TestCanonicalAliasDelegates is criterion 5's own test: `pause` and
-// `pause-colony` must resolve, through the live command tree, to the same
-// *cobra.Command object -- not merely to two implementations that happen to
-// agree today. It also drives both names through the real RunE over one
-// prepared project and requires byte-identical output.
-func TestCanonicalAliasDelegates(t *testing.T) {
-	t.Run("same_command_object", func(t *testing.T) {
+// TestCanonicalAlias keeps two contracts separate: real public aliases remain
+// Cobra metadata and participate in wrapper reconciliation, while the bounded
+// lifecycle migration tokens remain pre-Cobra parser plumbing only.
+func TestCanonicalAlias(t *testing.T) {
+	t.Run("metadata", func(t *testing.T) {
 		saveGlobals(t)
 		resetRootCmd(t)
 
-		canonical, _, err := rootCmd.Find([]string{"pause"})
+		canonical, _, err := rootCmd.Find([]string{"flag-list"})
 		if err != nil {
-			t.Fatalf("resolve pause: %v", err)
+			t.Fatalf("resolve flag-list: %v", err)
 		}
-		alias, _, err := rootCmd.Find([]string{"pause-colony"})
+		alias, _, err := rootCmd.Find([]string{"flags"})
 		if err != nil {
-			t.Fatalf("resolve pause-colony: %v", err)
+			t.Fatalf("resolve public alias flags: %v", err)
 		}
 		if canonical != alias {
-			t.Fatalf(
-				"pause and pause-colony resolve to different *cobra.Command objects (%p vs %p) -- "+
-					"two implementations that happen to agree today is exactly what criterion 5 forbids",
-				canonical, alias,
-			)
+			t.Fatalf("flag-list and flags resolve to different commands (%p vs %p)", canonical, alias)
 		}
-		if canonical.Name() != "pause" {
-			t.Fatalf("canonical command name = %q, want %q", canonical.Name(), "pause")
-		}
-		if len(canonical.Aliases) != 1 || canonical.Aliases[0] != "pause-colony" {
-			t.Fatalf("canonical command aliases = %v, want [pause-colony]", canonical.Aliases)
-		}
-	})
 
-	t.Run("identical_output_for_one_state", func(t *testing.T) {
-		// Running the real pause RunE points the package-level store at this
-		// subtest's temp root; without restoring it, every later test that
-		// relies on the default store inherits a path that no longer exists.
-		saveGlobals(t)
-		dataDir := setupBuildFlowTest(t)
-
-		goal := "Pause via canonical name"
-		taskID := "task-1"
-		now := time.Now().UTC()
-		freshState := func() colony.ColonyState {
-			return colony.ColonyState{
-				Version:        "3.0",
-				Goal:           &goal,
-				State:          colony.StateEXECUTING,
-				CurrentPhase:   1,
-				BuildStartedAt: &now,
-				Milestone:      "Open Chambers",
-				Plan: colony.Plan{
-					Phases: []colony.Phase{
-						{
-							ID:     1,
-							Name:   "Execution",
-							Status: colony.PhaseInProgress,
-							Tasks:  []colony.Task{{ID: &taskID, Goal: "Implement pause", Status: colony.TaskInProgress}},
-						},
-					},
-				},
+		for _, retired := range []string{"pause-colony", "resume-colony"} {
+			if wrapperCommandNames[retired] {
+				t.Errorf("parser-only token %q remains in the public wrapper map", retired)
+			}
+			for _, command := range rootCmd.Commands() {
+				if command.Name() == retired {
+					t.Errorf("parser-only token %q is a Cobra command", retired)
+				}
+				for _, publicAlias := range command.Aliases {
+					if publicAlias == retired {
+						t.Errorf("parser-only token %q is a Cobra alias of %q", retired, command.Name())
+					}
+				}
 			}
 		}
 
-		runInvocation := func(arg string) string {
-			resetRootCmd(t)
-			createTestColonyState(t, dataDir, freshState())
-			var buf bytes.Buffer
-			stdout = &buf
-			rootCmd.SetArgs([]string{arg})
-			if err := rootCmd.Execute(); err != nil {
-				t.Fatalf("%s returned error: %v", arg, err)
+		var sawFlags bool
+		for _, surface := range declaredAliasSurfaces(t.TempDir()) {
+			if surface.Alias == "flags" {
+				sawFlags = true
 			}
-			return buf.String()
+			if surface.Alias == "pause-colony" || surface.Alias == "resume-colony" {
+				t.Errorf("parser-only token leaked into alias reconciliation: %+v", surface)
+			}
 		}
-
-		canonicalOut := runInvocation("pause")
-		aliasOut := runInvocation("pause-colony")
-
-		if !strings.Contains(canonicalOut, `"paused":true`) {
-			t.Fatalf("expected paused:true JSON from pause, got: %s", canonicalOut)
-		}
-		if canonicalOut != aliasOut {
-			t.Fatalf(
-				"pause and pause-colony produced different output for the same project state:\npause:        %s\npause-colony: %s",
-				canonicalOut, aliasOut,
-			)
+		if !sawFlags {
+			t.Fatal("public alias flags is missing from alias reconciliation")
 		}
 	})
+
+	t.Run("update_reconciliation", assertCanonicalAliasUpdateReconciliation)
 }
 
 // aliasCheckFixtureDir builds a minimal, realistic .aether/commands +

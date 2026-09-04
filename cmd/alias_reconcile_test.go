@@ -21,8 +21,9 @@ func aliasReconcileWrapperBody(yamlName, wrapperName string) string {
 }
 
 // buildAliasReconcilePackageDir builds a minimal Aether package directory
-// carrying the pause/pause-colony wrapper pair on both platforms -- the
-// real shape `aether install` reads, not a hand-built stand-in.
+// carrying canonical lifecycle wrappers plus one unrelated public alias. It
+// deliberately omits pause-colony/resume-colony: those tokens are accepted
+// only by the pre-Cobra migration parser and must never become package files.
 func buildAliasReconcilePackageDir(t *testing.T) string {
 	t.Helper()
 	packageDir := t.TempDir()
@@ -32,13 +33,15 @@ func buildAliasReconcilePackageDir(t *testing.T) string {
 
 	claudeCmds := filepath.Join(packageDir, ".claude", "commands", "ant")
 	mustMkdirAllForAliasFixture(t, claudeCmds)
-	mustWriteFileForAliasFixture(t, filepath.Join(claudeCmds, "pause.md"), aliasReconcileWrapperBody("pause", "pause"))
-	mustWriteFileForAliasFixture(t, filepath.Join(claudeCmds, "pause-colony.md"), aliasReconcileWrapperBody("pause", "pause-colony"))
+	for _, name := range []string{"pause", "resume", "flags"} {
+		mustWriteFileForAliasFixture(t, filepath.Join(claudeCmds, name+".md"), aliasReconcileWrapperBody(name, name))
+	}
 
 	opencodeCmds := filepath.Join(packageDir, ".opencode", "commands", "ant")
 	mustMkdirAllForAliasFixture(t, opencodeCmds)
-	mustWriteFileForAliasFixture(t, filepath.Join(opencodeCmds, "pause.md"), aliasReconcileWrapperBody("pause", "pause"))
-	mustWriteFileForAliasFixture(t, filepath.Join(opencodeCmds, "pause-colony.md"), aliasReconcileWrapperBody("pause", "pause-colony"))
+	for _, name := range []string{"pause", "resume", "flags"} {
+		mustWriteFileForAliasFixture(t, filepath.Join(opencodeCmds, name+".md"), aliasReconcileWrapperBody(name, name))
+	}
 
 	return packageDir
 }
@@ -71,11 +74,18 @@ func setUpAliasReconcileProject(t *testing.T) (homeDir, repoDir string) {
 		t.Fatalf("setup failed: %v", err)
 	}
 
-	// Sanity: both names landed where a real project reads them from.
-	for _, name := range []string{"pause", "pause-colony"} {
+	// Sanity: the canonical names and unrelated public alias landed where a
+	// real project reads them from; parser-only names did not.
+	for _, name := range []string{"pause", "resume", "flags"} {
 		p := filepath.Join(homeDir, ".claude", "commands", "ant-"+name+".md")
 		if _, err := os.Stat(p); err != nil {
 			t.Fatalf("install did not create %s: %v", p, err)
+		}
+	}
+	for _, name := range []string{"pause-colony", "resume-colony"} {
+		p := filepath.Join(homeDir, ".claude", "commands", "ant-"+name+".md")
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Fatalf("install unexpectedly created parser-only wrapper %s: %v", p, err)
 		}
 	}
 
@@ -113,13 +123,13 @@ func runAliasReconcileUpdate(t *testing.T, homeDir, repoDir string) map[string]i
 	return inner
 }
 
-// TestUpdateRestoresAMissingAliasWrapper proves the missing wrapper for a
-// declared alias comes back after `aether update --force`, over a project
-// built by the real install path and then damaged.
-func TestUpdateRestoresAMissingAliasWrapper(t *testing.T) {
+// assertCanonicalAliasUpdateReconciliation proves an unrelated, genuinely
+// public Cobra alias still participates in update reconciliation after
+// lifecycle parser redirects are removed from public metadata.
+func assertCanonicalAliasUpdateReconciliation(t *testing.T) {
 	homeDir, repoDir := setUpAliasReconcileProject(t)
 
-	missing := filepath.Join(homeDir, ".claude", "commands", "ant-pause-colony.md")
+	missing := filepath.Join(homeDir, ".claude", "commands", "ant-flags.md")
 	if err := os.Remove(missing); err != nil {
 		t.Fatalf("remove %s: %v", missing, err)
 	}
@@ -127,29 +137,14 @@ func TestUpdateRestoresAMissingAliasWrapper(t *testing.T) {
 		t.Fatalf("expected %s to be gone before update, stat err = %v", missing, err)
 	}
 
-	runAliasReconcileUpdate(t, homeDir, repoDir)
+	result := runAliasReconcileUpdate(t, homeDir, repoDir)
 
 	if _, err := os.Stat(missing); err != nil {
 		t.Fatalf("expected update --force to restore %s, stat err = %v", missing, err)
 	}
-}
-
-// TestUpdateReportsTheAliasRepairByName asserts the command name appears in
-// the reported output -- not only a larger copied-file count -- and that
-// the wording is distinguishable from the unrelated stale-publish signal.
-func TestUpdateReportsTheAliasRepairByName(t *testing.T) {
-	homeDir, repoDir := setUpAliasReconcileProject(t)
-
-	missing := filepath.Join(homeDir, ".claude", "commands", "ant-pause-colony.md")
-	if err := os.Remove(missing); err != nil {
-		t.Fatalf("remove %s: %v", missing, err)
-	}
-
-	result := runAliasReconcileUpdate(t, homeDir, repoDir)
-
 	message, _ := result["message"].(string)
-	if !strings.Contains(message, "pause-colony") {
-		t.Fatalf("expected update message to name pause-colony, got: %q", message)
+	if !strings.Contains(message, "flags") {
+		t.Fatalf("expected update message to name public alias flags, got: %q", message)
 	}
 	if strings.Contains(message, "republish") || strings.Contains(message, "stale") {
 		t.Fatalf("alias repair message should read distinctly from the stale-publish signal, got: %q", message)
@@ -160,22 +155,21 @@ func TestUpdateReportsTheAliasRepairByName(t *testing.T) {
 		t.Fatalf("expected a non-empty alias_wrapper_repairs list, got: %v", result["alias_wrapper_repairs"])
 	}
 	entry, ok := repairs[0].(map[string]interface{})
-	if !ok || entry["alias"] != "pause-colony" {
-		t.Fatalf("expected alias_wrapper_repairs[0].alias = pause-colony, got: %v", repairs[0])
+	if !ok || entry["alias"] != "flags" {
+		t.Fatalf("expected alias_wrapper_repairs[0].alias = flags, got: %v", repairs[0])
 	}
 
 	stalePublish, _ := result["stale_publish"].(map[string]interface{})
 	staleMessage, _ := stalePublish["message"].(string)
-	if strings.Contains(staleMessage, "pause-colony") {
+	if strings.Contains(staleMessage, "flags") {
 		t.Fatalf("stale_publish message should not carry the alias repair wording, got: %q", staleMessage)
 	}
 }
 
-// TestUpdateReportsNoRepairWhenNothingIsMissing asserts an update that finds
-// nothing missing reports no repair and changes nothing -- an update that
-// reports a repair every time it runs is noise, and noise is how a real
-// repair gets ignored.
-func TestUpdateReportsNoRepairWhenNothingIsMissing(t *testing.T) {
+// TestUpdateDoesNotRestoreParserOnlyAlias proves the hidden argv normalizer
+// is not consulted as public alias metadata and therefore cannot manufacture
+// a wrapper or repair report.
+func TestUpdateDoesNotRestoreParserOnlyAlias(t *testing.T) {
 	homeDir, repoDir := setUpAliasReconcileProject(t)
 
 	result := runAliasReconcileUpdate(t, homeDir, repoDir)
@@ -188,10 +182,75 @@ func TestUpdateReportsNoRepairWhenNothingIsMissing(t *testing.T) {
 		t.Fatalf("expected an empty alias_wrapper_repairs list, got: %v", repairs)
 	}
 
-	for _, name := range []string{"pause", "pause-colony"} {
-		p := filepath.Join(homeDir, ".claude", "commands", "ant-"+name+".md")
-		if _, err := os.Stat(p); err != nil {
-			t.Fatalf("expected %s to remain present: %v", p, err)
+	for _, name := range []string{"pause-colony", "resume-colony"} {
+		for _, p := range retiredAliasPlatformPaths(homeDir, name) {
+			if _, err := os.Stat(p); !os.IsNotExist(err) {
+				t.Fatalf("update unexpectedly created parser-only wrapper %s: %v", p, err)
+			}
 		}
 	}
+}
+
+func retiredAliasPlatformPaths(homeDir, name string) []string {
+	return []string{
+		filepath.Join(homeDir, ".claude", "commands", "ant-"+name+".md"),
+		filepath.Join(homeDir, ".claude", "commands", "ant", name+".md"),
+		filepath.Join(homeDir, ".opencode", "command", name+".md"),
+		filepath.Join(homeDir, ".config", "opencode", "commands", "ant", name+".md"),
+	}
+}
+
+func seedRetiredAliasPlatformPaths(t *testing.T, homeDir, body string) map[string][]byte {
+	t.Helper()
+	written := make(map[string][]byte)
+	for _, name := range []string{"pause-colony", "resume-colony"} {
+		for _, path := range retiredAliasPlatformPaths(homeDir, name) {
+			mustMkdirAllForAliasFixture(t, filepath.Dir(path))
+			content := []byte(body)
+			if body == "managed" {
+				canonical := strings.TrimSuffix(name, "-colony")
+				content = []byte(aliasReconcileWrapperBody(canonical, name))
+			}
+			mustWriteFileForAliasFixture(t, path, string(content))
+			written[path] = content
+		}
+	}
+	return written
+}
+
+// TestRetiredLifecycleAliasPruning199 exercises the real install -> hub ->
+// update pipeline. Stale wrappers are removed only when their generated header
+// proves Aether ownership; byte-identical custom commands at the same paths are
+// left alone.
+func TestRetiredLifecycleAliasPruning199(t *testing.T) {
+	t.Run("managed_wrappers_are_removed_from_every_platform_path", func(t *testing.T) {
+		homeDir, repoDir := setUpAliasReconcileProject(t)
+		written := seedRetiredAliasPlatformPaths(t, homeDir, "managed")
+
+		runAliasReconcileUpdate(t, homeDir, repoDir)
+
+		for path := range written {
+			if _, err := os.Stat(path); !os.IsNotExist(err) {
+				t.Errorf("managed retired wrapper survived at %s: %v", path, err)
+			}
+		}
+	})
+
+	t.Run("unmanaged_same_name_commands_survive_byte_for_byte", func(t *testing.T) {
+		homeDir, repoDir := setUpAliasReconcileProject(t)
+		written := seedRetiredAliasPlatformPaths(t, homeDir, "# My custom command\n")
+
+		runAliasReconcileUpdate(t, homeDir, repoDir)
+
+		for path, want := range written {
+			got, err := os.ReadFile(path)
+			if err != nil {
+				t.Errorf("custom retired-name command was removed at %s: %v", path, err)
+				continue
+			}
+			if !bytes.Equal(got, want) {
+				t.Errorf("custom retired-name command changed at %s: got %q want %q", path, got, want)
+			}
+		}
+	})
 }
