@@ -105,3 +105,11 @@
 - **Isolation check:** The exact 10-case update/migration/generated/platform/binary suite passes, along with the existing update dry-run, alias reconciliation, managed-pruning, custom-preservation, migration rollback, and `runUpdateSync` compatibility lanes.
 - **Why deferred:** Changing an unrelated contradictory fixture is outside Plan 199-18's declared command/test files and would not alter the transaction implementation.
 - **Follow-up:** Make the setup removal tolerate `os.IsNotExist`, or seed the file before removing it, when the legacy update-card fixtures are migrated.
+
+## Broad update-name selection includes a later-plan Next Up expectation
+
+- **Found during:** Plan 199-18 Wave 12 gate recovery (`go test ./cmd -run '^Test.*Update' -count=1`).
+- **Observed:** `TestHookPreCompactUpdatesSessionSummary` expects `SuggestedNext = "aether build 1"`, while the current authoritative lifecycle projection returns `aether status`. The test is selected only because its name contains “Updates”; it does not execute maintenance update.
+- **Isolation check:** Every Plan 199-18-owned update, stale-publish, binary-mode, deterministic no-spawn, registry, cleanup, source-hygiene, and wiring case passes after gate recovery. The only other broad-name failure is the already-recorded contradictory update closing-card setup.
+- **Why deferred:** Suggested-next policy was changed by later lifecycle projection/closeout plans and is outside the bounded Plan 199-18 maintenance repair. Reintroducing an older build recommendation here would split lifecycle truth.
+- **Follow-up:** Migrate this hook expectation with its owning lifecycle projection snapshot work, then rerun the final Phase 199 full normal/race gates.
