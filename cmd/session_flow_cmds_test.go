@@ -51,15 +51,15 @@ func TestPauseColonyWritesHandoffAndSession(t *testing.T) {
 					ID:     1,
 					Name:   "Execution",
 					Status: colony.PhaseInProgress,
-					Tasks:  []colony.Task{{ID: &taskID, Goal: "Implement pause-colony", Status: colony.TaskInProgress}},
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Implement pause", Status: colony.TaskInProgress}},
 				},
 			},
 		},
 	})
 
-	rootCmd.SetArgs([]string{"pause-colony"})
+	rootCmd.SetArgs([]string{"pause"})
 	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("pause-colony returned error: %v", err)
+		t.Fatalf("pause returned error: %v", err)
 	}
 
 	if !strings.Contains(buf.String(), `"paused":true`) {
@@ -70,8 +70,8 @@ func TestPauseColonyWritesHandoffAndSession(t *testing.T) {
 	if err := store.LoadJSON("session.json", &session); err != nil {
 		t.Fatalf("expected session.json to be written: %v", err)
 	}
-	if session.LastCommand != "pause-colony" {
-		t.Fatalf("session.LastCommand = %q, want pause-colony", session.LastCommand)
+	if session.LastCommand != "pause" {
+		t.Fatalf("session.LastCommand = %q, want pause", session.LastCommand)
 	}
 	if !session.ContextCleared {
 		t.Fatal("expected ContextCleared to be true after pause")
@@ -97,7 +97,7 @@ func TestPauseColonyWritesHandoffAndSession(t *testing.T) {
 		t.Fatalf("expected handoff file: %v", err)
 	}
 	handoff := string(data)
-	for _, want := range []string{"# Colony Session — Paused Colony", "Pause this colony cleanly", "Implement pause-colony", "aether resume"} {
+	for _, want := range []string{"# Colony Handoff", "Pause this colony cleanly", "Implement pause", "aether resume"} {
 		if !strings.Contains(handoff, want) {
 			t.Errorf("handoff missing %q\n%s", want, handoff)
 		}

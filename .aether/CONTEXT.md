@@ -97,15 +97,14 @@ Paused at phase 1
 
 1. Run `aether resume`
 2. Run `aether phase --number 1` to inspect the tracked phase details
-3. Run `aether resume-colony` after a context clear if you want the full recovery view
+3. Run `aether resume` after a context clear to restore the full recovery view
 
 ---
 
 ## If Context Collapses
 
-1. Run `aether resume` for the quick dashboard restore
-2. Run `aether resume-colony` for the full handoff and task view
-3. Read `.aether/HANDOFF.md` if a richer session summary was persisted
+1. Run `aether resume` to restore the full handoff and task view
+2. Read `.aether/HANDOFF.md` if a richer session summary was persisted
 
 ### Active Todos
 - Add a failing manifest contract test in cmd/codex_plan_test.go proving aether plan --plan-only emits planning_run_id, iteration, target and max controls, dispatch_mode plan-only, requires_finalizer true, and exactly two dispatches ordered Scout then Route-Setter.

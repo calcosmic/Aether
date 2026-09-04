@@ -502,12 +502,11 @@ func renderContextSnapshot(state colony.ColonyState, session colony.SessionFile,
 	} else {
 		b.WriteString("2. Run `aether status` for the colony dashboard\n")
 	}
-	b.WriteString("3. Run `aether resume-colony` after a context clear if you want the full recovery view\n")
+	b.WriteString("3. Run `aether resume` after a context clear to restore the full recovery view\n")
 	b.WriteString("\n---\n\n")
 	b.WriteString("## If Context Collapses\n\n")
-	b.WriteString("1. Run `aether resume` for the quick dashboard restore\n")
-	b.WriteString("2. Run `aether resume-colony` for the full handoff and task view\n")
-	b.WriteString("3. Read `.aether/HANDOFF.md` if a richer session summary was persisted\n")
+	b.WriteString("1. Run `aether resume` to restore the full handoff and task view\n")
+	b.WriteString("2. Read `.aether/HANDOFF.md` if a richer session summary was persisted\n")
 	if len(activeTasks) > 0 {
 		b.WriteString("\n### Active Todos\n")
 		for _, task := range activeTasks {
@@ -601,8 +600,7 @@ func renderHandoffSnapshot(state colony.ColonyState, session colony.SessionFile,
 	b.WriteString("- Run `")
 	b.WriteString(nextAction)
 	b.WriteString("`\n")
-	b.WriteString("- Quick restore: `aether resume`\n")
-	b.WriteString("- Full restore: `aether resume-colony`\n")
+	b.WriteString("- Restore the full handoff and task view: `aether resume`\n")
 	b.WriteString("\n## Tasks\n\n")
 	if len(tasks) == 0 {
 		b.WriteString("- None\n")
