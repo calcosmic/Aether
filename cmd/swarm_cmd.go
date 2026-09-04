@@ -158,17 +158,25 @@ func runSwarmCompatibility(root, target string, watch, planOnly bool) (map[strin
 		if planOnly && strings.TrimSpace(target) == "" && !watch {
 			return nil, fmt.Errorf("swarm --plan-only requires a problem description")
 		}
-		return buildSwarmWatchResult(target, watch, false), nil
+		contract, err := swarmInterventionPreflight(root, target)
+		if err != nil {
+			return nil, err
+		}
+		return resultWithSwarmInterventionContract(buildSwarmWatchResult(target, watch, false), contract), nil
 	}
 	history, err := evaluateSwarmStrikeHistory(store, target)
 	if err != nil {
 		return nil, err
 	}
 	if history.StrikeCount >= 3 {
+		contract, err := swarmInterventionPreflight(root, target)
+		if err != nil {
+			return nil, err
+		}
 		if err := ensureSwarmEscalationForHistory(store, target, history); err != nil {
 			return nil, err
 		}
-		return swarmArchitecturalConcernResult(target, history), nil
+		return resultWithSwarmInterventionContract(swarmArchitecturalConcernResult(target, history), contract), nil
 	}
 	if history.LatestRecovery != nil {
 		if err := reconcileSwarmRecoveryEscalation(store, target, history); err != nil {
@@ -264,6 +272,10 @@ func spawnEntriesToWatchMaps(entries []agent.SpawnEntry) []map[string]interface{
 }
 
 func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
+	contract, err := swarmInterventionPreflight(root, target)
+	if err != nil {
+		return nil, err
+	}
 	invoker := newSwarmWorkerInvoker()
 	if invoker == nil {
 		return nil, fmt.Errorf("swarm worker invoker is not configured")
@@ -355,7 +367,7 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 		return nil, fmt.Errorf("write and evaluate swarm result: %w", err)
 	}
 
-	return map[string]interface{}{
+	result := map[string]interface{}{
 		"mode":                "destroy",
 		"autopilot_available": true,
 		"swarm_id":            swarmID,
@@ -371,7 +383,8 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 		"blockers":            blockers,
 		"next":                next,
 		"watch":               false,
-	}, nil
+	}
+	return resultWithSwarmInterventionContract(result, contract), nil
 }
 
 func runSwarmPlanOnly(root, target string) (map[string]interface{}, error) {
@@ -381,6 +394,10 @@ func runSwarmPlanOnly(root, target string) (map[string]interface{}, error) {
 	target = strings.TrimSpace(target)
 	if target == "" {
 		return nil, fmt.Errorf("swarm --plan-only requires a problem description")
+	}
+	contract, err := swarmInterventionPreflight(root, target)
+	if err != nil {
+		return nil, err
 	}
 
 	dispatchMode := "plan-only"
@@ -395,7 +412,7 @@ func runSwarmPlanOnly(root, target string) (map[string]interface{}, error) {
 		return nil, err
 	}
 	dispatchMaps := swarmPlanMaps(manifest.Dispatches)
-	return map[string]interface{}{
+	result := map[string]interface{}{
 		"mode":                  "destroy",
 		"status":                status,
 		"dispatch_mode":         dispatchMode,
@@ -416,7 +433,37 @@ func runSwarmPlanOnly(root, target string) (map[string]interface{}, error) {
 		"finalizer_command":     manifest.FinalizerCommand,
 		"next":                  "dispatch host swarm workers, then run `aether swarm-finalize --completion-file <file>`",
 		"watch":                 false,
-	}, nil
+	}
+	return resultWithSwarmInterventionContract(result, contract), nil
+}
+
+func resultWithSwarmInterventionContract(result map[string]interface{}, contract SwarmInterventionContract) map[string]interface{} {
+	result["intervention_contract"] = contract
+	return result
+}
+
+// swarmInterventionPreflight is causally read-only and runs before any Swarm
+// issuance, worker dispatch, escalation write, or finalizer mutation. Exact
+// active task IDs are the only accepted job link; arbitrary problem prose is
+// deliberately left unlocalized.
+func swarmInterventionPreflight(root, target string) (SwarmInterventionContract, error) {
+	facts, err := loadLifecycleFacts(root, store, time.Now().UTC())
+	if err != nil {
+		return SwarmInterventionContract{}, err
+	}
+	projection := projectLifecycle(facts, LifecycleViewFocused, "runtime")
+	evidence := SwarmInterventionEvidence{}
+	target = strings.TrimSpace(target)
+	for _, task := range projection.Tasks.Value {
+		if task.ID == nil || task.Status != colony.TaskInProgress {
+			continue
+		}
+		if strings.TrimSpace(*task.ID) == target {
+			evidence.AffectedJobID = target
+			break
+		}
+	}
+	return BuildSwarmInterventionContract(projection, evidence)
 }
 
 func buildSwarmManifest(root, target, dispatchMode string, now time.Time) swarmManifest {
@@ -671,6 +718,10 @@ func runSwarmFinalize(root string, completion externalSwarmCompletion) (map[stri
 	if strings.TrimSpace(manifest.Root) != "" && !sameCleanPath(manifest.Root, root) {
 		return nil, fmt.Errorf("swarm_manifest root does not match current workspace (manifest=%s current=%s)", manifest.Root, root)
 	}
+	intervention, err := swarmInterventionPreflight(root, manifest.Target)
+	if err != nil {
+		return nil, err
+	}
 	manifestDigest, err := jsonSHA256(*manifest)
 	if err != nil {
 		return nil, fmt.Errorf("hash swarm_manifest: %w", err)
@@ -686,7 +737,7 @@ func runSwarmFinalize(root string, completion externalSwarmCompletion) (map[stri
 	if replayed, exact, err := replayExternalSwarmFinalization(issuance, completionDigest); err != nil {
 		return nil, err
 	} else if exact {
-		return replayed, nil
+		return resultWithSwarmInterventionContract(replayed, intervention), nil
 	}
 	if err := validateFinalizerManifestFreshness("swarm_manifest", manifest.GeneratedAt, time.Now().UTC()); err != nil {
 		return nil, err
@@ -704,7 +755,7 @@ func runSwarmFinalize(root string, completion externalSwarmCompletion) (map[stri
 		return nil, err
 	}
 	if replay {
-		return externalSwarmFinalizationResult(reserved), nil
+		return resultWithSwarmInterventionContract(externalSwarmFinalizationResult(reserved), intervention), nil
 	}
 	reservationCommitted := false
 	defer func() {
@@ -765,7 +816,7 @@ func runSwarmFinalize(root string, completion externalSwarmCompletion) (map[stri
 		return nil, err
 	}
 	reservationCommitted = true
-	return externalSwarmFinalizationResult(receipt), nil
+	return resultWithSwarmInterventionContract(externalSwarmFinalizationResult(receipt), intervention), nil
 }
 
 func mergeExternalSwarmResults(manifest swarmManifest, results []swarmWorkerExecution) ([]swarmWorkerExecution, error) {
@@ -1512,6 +1563,13 @@ func renderSwarmCompatibilityVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("swarm"), "Swarm"))
 	b.WriteString(visualDividerStr())
+	if contract, ok := result["intervention_contract"].(SwarmInterventionContract); ok {
+		b.WriteString(RenderSwarmInterventionContract(contract))
+		b.WriteString("\n")
+	} else if contract, ok := result["intervention_contract"].(*SwarmInterventionContract); ok && contract != nil {
+		b.WriteString(RenderSwarmInterventionContract(*contract))
+		b.WriteString("\n")
+	}
 
 	mode := strings.TrimSpace(stringValue(result["mode"]))
 	target := strings.TrimSpace(stringValue(result["target"]))

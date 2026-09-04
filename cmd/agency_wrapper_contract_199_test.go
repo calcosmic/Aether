@@ -85,13 +85,13 @@ func TestAgencyReceipt199CommandWiring(t *testing.T) {
 		return signal["id"].(string)
 	}
 
-	first := run("focus", "prefer <small> changes")
+	first := run("focus", "prefer score < 10 changes")
 	firstID := assertReceipt(first, "FOCUS")
 	content := first["signal"].(map[string]interface{})["content"].(map[string]interface{})
-	if content["text"] != "prefer &lt;small&gt; changes" {
+	if content["text"] != "prefer score &lt; 10 changes" {
 		t.Fatalf("signal did not retain sanitization: %#v", content)
 	}
-	second := run("focus", "prefer <small> changes")
+	second := run("focus", "prefer score < 10 changes")
 	if secondID := assertReceipt(second, "FOCUS"); secondID != firstID {
 		t.Fatalf("reinforcement changed durable identity: %s -> %s", firstID, secondID)
 	}

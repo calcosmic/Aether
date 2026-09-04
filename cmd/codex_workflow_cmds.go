@@ -1064,78 +1064,81 @@ func newSignalShortcutCommand(use, signalType, short string) *cobra.Command {
 				outputErrorMessage("no store initialized")
 				return nil
 			}
-			result, err := createPheromoneSignal(signalType, args[0], "user", "", "", 1.0, "")
+			result, err := createAgencySignalResult(signalType, args[0], "user", "", "", 1.0, "")
 			if err != nil {
 				outputError(1, err.Error(), nil)
 				return nil
 			}
-			priorityValue := signalPriorityValue(signalType)
-			if signal, ok := result["signal"].(map[string]interface{}); ok {
-				if persisted, ok := signal["priority"].(string); ok && strings.TrimSpace(persisted) != "" {
-					priorityValue = persisted
-				}
-			}
-			replaced, _ := result["replaced"].(bool)
-			outputWorkflow(result, renderSignalVisual(signalType, args[0], priorityValue, replaced))
+			outputWorkflow(result, RenderAgencySignalResult(result))
 			return nil
 		},
 	}
 }
 
 func createPheromoneSignal(sigType, content, sourceFlag, reasonFlag, ttlFlag string, strength float64, priority string) (map[string]interface{}, error) {
-	if sigType == "" || strings.TrimSpace(content) == "" {
-		return nil, fmt.Errorf("signal type and content are required")
-	}
-
-	sigType = strings.ToUpper(sigType)
-	switch sigType {
-	case "FOCUS", "REDIRECT", "FEEDBACK":
-	default:
-		return nil, fmt.Errorf("invalid signal type %q", sigType)
-	}
-
-	if priority == "" {
-		switch sigType {
-		case "FOCUS":
-			priority = "normal"
-		case "REDIRECT":
-			priority = "high"
-		case "FEEDBACK":
-			priority = "low"
-		}
-	}
-
-	if strength == 0 {
-		strength = 1.0
-	}
-
-	tmpCmd := &cobra.Command{}
-	tmpCmd.Flags().String("type", sigType, "")
-	tmpCmd.Flags().String("content", content, "")
-	tmpCmd.Flags().String("priority", priority, "")
-	tmpCmd.Flags().Float64("strength", strength, "")
-	tmpCmd.Flags().String("source", sourceFlag, "")
-	tmpCmd.Flags().String("reason", reasonFlag, "")
-	tmpCmd.Flags().String("ttl", ttlFlag, "")
-
-	var buf strings.Builder
-	oldStdout := stdout
-	stdout = &buf
-	defer func() { stdout = oldStdout }()
-
-	if err := pheromoneWriteCmd.RunE(tmpCmd, nil); err != nil {
+	signal, reinforced, total, err := persistPheromoneSignal(sigType, content, sourceFlag, reasonFlag, ttlFlag, strength, priority)
+	if err != nil {
 		return nil, err
 	}
+	return map[string]interface{}{
+		"created":  true,
+		"signal":   signal,
+		"total":    total,
+		"replaced": reinforced,
+	}, nil
+}
 
-	var envelope map[string]interface{}
-	if err := json.Unmarshal([]byte(buf.String()), &envelope); err != nil {
-		return nil, fmt.Errorf("failed to parse pheromone-write result: %w", err)
+// createAgencySignalResult performs exactly one existing signal write, then
+// derives a read-only receipt from the signal and lifecycle facts returned by
+// that write. It does not infer an acknowledgement, causal effect, or conflict.
+func createAgencySignalResult(sigType, content, sourceFlag, reasonFlag, ttlFlag string, strength float64, priority string) (AgencySignalResult, error) {
+	signal, reinforced, _, err := persistPheromoneSignal(sigType, content, sourceFlag, reasonFlag, ttlFlag, strength, priority)
+	if err != nil {
+		return AgencySignalResult{}, err
 	}
-	if ok, _ := envelope["ok"].(bool); !ok {
-		return nil, fmt.Errorf("failed to create pheromone signal")
+	evidence := currentAgencyReceiptEvidence(resolveAetherRootPath(), signal)
+	return BuildAgencySignalResult(signal, reinforced, evidence)
+}
+
+func persistPheromoneSignal(sigType, content, sourceFlag, reasonFlag, ttlFlag string, strength float64, priority string) (colony.PheromoneSignal, bool, int, error) {
+	if strings.TrimSpace(sigType) == "" || strings.TrimSpace(content) == "" {
+		return colony.PheromoneSignal{}, false, 0, fmt.Errorf("signal type and content are required")
 	}
-	result, _ := envelope["result"].(map[string]interface{})
-	return result, nil
+	signal, reinforced, err := writePheromoneSignal(sigType, content, priority, sourceFlag, reasonFlag, ttlFlag, strength, nil)
+	if err != nil {
+		return colony.PheromoneSignal{}, false, 0, err
+	}
+	var file colony.PheromoneFile
+	total := 0
+	if loadErr := store.LoadJSON("pheromones.json", &file); loadErr == nil {
+		total = len(file.Signals)
+	}
+	return signal, reinforced, total, nil
+}
+
+func currentAgencyReceiptEvidence(root string, signal colony.PheromoneSignal) AgencyReceiptEvidence {
+	facts, err := loadLifecycleFacts(root, store, time.Now().UTC())
+	if err != nil {
+		return AgencyReceiptEvidence{}
+	}
+	projection := projectLifecycle(facts, LifecycleViewFocused, "runtime")
+	evidence := AgencyReceiptEvidence{}
+	for _, task := range projection.Tasks.Value {
+		if task.ID != nil && task.Status == colony.TaskInProgress && strings.TrimSpace(*task.ID) != "" {
+			evidence.ActiveJobIDs = append(evidence.ActiveJobIDs, strings.TrimSpace(*task.ID))
+		}
+	}
+	state := facts.State.Value
+	if facts.State.Source.Provenance == LifecycleFactConfirmed &&
+		(state.CurrentPhase > 0 || len(state.Plan.Phases) > 0 || strings.TrimSpace(string(state.State)) != "") {
+		evidence.LifecycleBoundary = &colony.LifecycleEvidence{
+			ID:      "next-safe-boundary:" + signal.ID,
+			Kind:    "lifecycle_boundary",
+			Source:  facts.State.Source.Path,
+			Summary: "The durable signal is available to the next worker-context lifecycle boundary.",
+		}
+	}
+	return evidence
 }
 
 func synthesizePlan(goal string, granularity colony.PlanGranularity, domains []string) []colony.Phase {
