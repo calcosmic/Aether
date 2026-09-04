@@ -11,8 +11,10 @@ along it is, the one command to run next, and a couple of alternatives. A folder
 with no project set up in it is not greeted at all.
 
 Nothing is restored automatically — the card tells you what to run and you
-decide. `/ant-resume` reloads the quick view, `/ant-resume-colony` the fuller
-one.
+decide. `/ant-resume` is the one return and recovery command. The Go runtime
+validates a saved handoff or reconstructs the safest honest recovery point from
+durable evidence, keeps confirmed and reconstructed provenance distinct, and
+stops without changing runnable state when evidence conflicts.
 
 ## Available Commands
 
@@ -52,9 +54,13 @@ one.
 ### Session Management
 | Command | Purpose |
 |---------|---------|
-| `/ant-pause-colony` | Save state and create handoff |
-| `/ant-resume-colony` | Restore from pause with the full recovery view |
-| `/ant-resume` | Quick session restore |
+| `/ant-pause` | Stop at a safe boundary and save one validated handoff and receipt |
+| `/ant-resume` | Validate or reconstruct the recovery point and report its provenance |
+
+Both are thin runtime commands. Wrappers never write colony, session, or
+handoff state themselves. Pause and resume use the handoff ID as the
+idempotency key, so a verified replay returns the existing receipt rather than
+creating a second recovery effect.
 
 ### Lifecycle
 | Command | Purpose |
@@ -101,9 +107,11 @@ Starting a colony:
 7. /ant-build 2                            (repeat until complete)
    /ant-run                                (or use autopilot for all phases)
 
+Before a planned session break:
+8. /ant-pause                              (runtime stops at a safe boundary and saves a receipt)
+
 After /clear or session break:
-8. /ant-resume                             (quick restore)
-9. /ant-resume-colony                      (full recovery view if needed)
+9. /ant-resume                             (validate or safely reconstruct with provenance)
 10. /ant-status                            (see where you left off)
 
 After completing a colony:
