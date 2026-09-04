@@ -174,6 +174,104 @@ func TestLifecycleCloseout199ZeroWrite(t *testing.T) {
 	}
 }
 
+func TestLifecycleCloseout199Init(t *testing.T) {
+	projection := projectLifecycle(projectionFacts(projectionState(colony.StateREADY, false, false)), LifecycleViewFocused, "codex")
+	projection.Command = "init"
+	result := lifecycleCloseout199Result(projection, colony.OutcomeKindCompleted, colony.LifecycleStateEffectCommitted)
+	if err := applyLifecycleCloseout(result, "init", LifecycleCloseoutDetails{
+		Summary: "The owner-provided charter was accepted and the colony was created.",
+		Evidence: []colony.LifecycleEvidence{
+			{ID: "accepted-charter", Kind: "charter", Source: "COLONY_STATE.json", Summary: "Persisted accepted charter"},
+			{ID: "territory", Kind: "territory", Source: "territory-snapshot.json", Summary: "Territory freshness result"},
+		},
+	}); err != nil {
+		t.Fatalf("apply init closeout: %v", err)
+	}
+	got := lifecycleCloseout199MustResult(t, result)
+	visual := renderLifecycleCloseout(got, "claude")
+	if got.Colony.Goal != "Ship the classic front door" || got.StateChanges.Effect != colony.LifecycleStateEffectCommitted || !strings.Contains(visual, "/ant-plan") {
+		t.Fatalf("init closeout lost accepted intent, commit truth, or exact next action:\n%#v\n%s", got, visual)
+	}
+	if strings.Contains(visual, "aether plan") || got.ProjectionRevision != stringValue(result["projection_revision"]) {
+		t.Fatalf("init closeout has platform/revision drift:\n%#v\n%s", got, visual)
+	}
+	lifecycleCloseout199RequireSourceCall(t, "init_cmd.go", `applyLifecycleCloseout(result, "init"`)
+}
+
+func TestLifecycleCloseout199Colonize(t *testing.T) {
+	projection := projectLifecycle(projectionFacts(projectionState(colony.StateREADY, false, false)), LifecycleViewFocused, "codex")
+	projection.Command = "colonize"
+	projection.Evidence = []colony.LifecycleEvidence{{ID: "territory-snapshot", Kind: "territory", Source: "territory-snapshot.json", Summary: "Verified immutable territory snapshot"}}
+	result := lifecycleCloseout199Result(projection, colony.OutcomeKindCompleted, colony.LifecycleStateEffectCommitted)
+	if err := applyLifecycleCloseout(result, "colonize", LifecycleCloseoutDetails{
+		Summary:  "The surveyors published the verified territory snapshot.",
+		Evidence: []colony.LifecycleEvidence{{ID: "territory-receipt", Kind: "receipt", Summary: "Committed territory transaction receipt"}},
+	}); err != nil {
+		t.Fatalf("apply colonize closeout: %v", err)
+	}
+	got := lifecycleCloseout199MustResult(t, result)
+	if got.NextUp.RuntimeCommand != "aether plan" || len(got.Evidence) != 2 || got.StateChanges.Effect != colony.LifecycleStateEffectCommitted {
+		t.Fatalf("colonize closeout = %#v", got)
+	}
+	visual := renderLifecycleCloseout(got, "claude")
+	if !strings.Contains(visual, "/ant-plan") || strings.Contains(strings.ToLower(visual), "status dashboard") {
+		t.Fatalf("colonize focused closeout drifted:\n%s", visual)
+	}
+	lifecycleCloseout199RequireSourceCall(t, "codex_colonize_finalize.go", `applyLifecycleCloseout(result, "colonize"`)
+}
+
+func TestLifecycleCloseout199Plan(t *testing.T) {
+	projection := lifecycleCloseout199Projection(colony.StateREADY, "plan")
+	projection.Evidence = []colony.LifecycleEvidence{{ID: "plan-revision", Kind: "plan", Source: "COLONY_STATE.json", Summary: "Accepted plan revision"}}
+	result := lifecycleCloseout199Result(projection, colony.OutcomeKindCompleted, colony.LifecycleStateEffectCommitted)
+	if err := applyLifecycleCloseout(result, "plan", LifecycleCloseoutDetails{
+		Summary:  "Scout and Route-Setter evidence produced an accepted plan.",
+		Evidence: []colony.LifecycleEvidence{{ID: "plan-receipt", Kind: "receipt", Summary: "Committed planning receipt"}},
+		Blockers: []colony.LifecycleIssue{{ID: "gap-1", Summary: "One recorded planning gap remains visible"}},
+	}); err != nil {
+		t.Fatalf("apply plan closeout: %v", err)
+	}
+	got := lifecycleCloseout199MustResult(t, result)
+	if len(got.NextUp.Choices) != 2 || got.NextUp.Choices[0].ID != "build" || got.NextUp.Choices[1].ID != "run" {
+		t.Fatalf("accepted plan lost coequal build/run choice: %#v", got.NextUp)
+	}
+	if !lifecycleCloseoutHasOpenItems(got.Unresolved) || got.ProjectionRevision != projection.ProjectionRevision {
+		t.Fatalf("plan closeout lost gap or revision: %#v", got)
+	}
+	lifecycleCloseout199RequireSourceCall(t, "codex_plan_finalize.go", `applyLifecycleCloseout(result, "plan"`)
+}
+
+func TestLifecycleCloseout199FrontDoorRefusal(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "COLONY_STATE.json")
+	if err := os.WriteFile(statePath, []byte(`{"goal":"existing","state":"READY"}`), 0o600); err != nil {
+		t.Fatalf("write refusal fixture: %v", err)
+	}
+	before := snapshotProjectDataTree(t, dir)
+
+	projection := lifecycleCloseout199Projection(colony.StateREADY, "init")
+	projection.NextAction = LifecycleProjectedAction{ID: "status", RuntimeCommand: "aether status", DisplayCommand: "aether status", Reason: "Inspect the active colony before replacing it."}
+	result := lifecycleCloseout199Result(projection, colony.OutcomeKindRefused, colony.LifecycleStateEffectNone)
+	if err := applyLifecycleCloseout(result, "init", LifecycleCloseoutDetails{Summary: "An active colony already exists; no files were changed."}); err != nil {
+		t.Fatalf("apply init refusal: %v", err)
+	}
+	visual := renderLifecycleCloseout(lifecycleCloseout199MustResult(t, result), "claude")
+	after := snapshotProjectDataTree(t, dir)
+	if !reflect.DeepEqual(before, after) || result["state_effect"] != colony.LifecycleStateEffectNone {
+		t.Fatalf("front-door refusal wrote state:\nbefore=%#v\nafter=%#v result=%#v", before, after, result)
+	}
+	if !strings.Contains(visual, "/ant-status") || strings.Contains(visual, "/ant-plan") {
+		t.Fatalf("front-door refusal offered unsafe action:\n%s", visual)
+	}
+	for path, fragment := range map[string]string{
+		"init_cmd.go":                `lifecycleCloseoutRefusalForState(`,
+		"codex_colonize_finalize.go": `lifecycleCloseoutRefusalFromDisk(`,
+		"codex_plan_finalize.go":     `lifecycleCloseoutRefusalFromDisk(`,
+	} {
+		lifecycleCloseout199RequireSourceCall(t, path, fragment)
+	}
+}
+
 func lifecycleCloseout199Projection(state colony.State, command string) LifecycleProjection {
 	facts := projectionFacts(projectionState(state, true, false))
 	projection := projectLifecycle(facts, LifecycleViewFocused, "codex")
