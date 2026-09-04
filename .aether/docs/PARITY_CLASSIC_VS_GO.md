@@ -62,7 +62,7 @@ To determine whether the parity checklist meets the "at least 50% verifiable" th
 | **Lessons** — Phase learnings, hypothesis tracking, validated/disproven status | Go `learning_cmds.go` with hypothesis/validate/disprove lifecycle | MATCH | Golden test: continue extracts hypotheses and tracks evidence | Go |
 | **Skills** — Skill index, skill match, skill inject, custom skill creation | Go `skills.go` + `skill-index` / `skill-match` / `skill-inject` subcommands | MATCH | Test: skill-match scores skills by worker role and pheromones | Go |
 | **Events** — Event bus, NDJSON stream, event TTL, pub/sub | Go `eventbus.go` emits events; TTL cleanup in maintenance | DEGRADED | Golden test: events have type, timestamp, payload; manual: NDJSON stream is readable by TS host | Hybrid |
-| **Recovery** — Stuck-state detection (7 classes), auto-repair, resume with full context | Go `recovery_snapshot.go` + `autofix.go`; 7 stuck-state classes detected; resume restores context | MATCH | E2E test: `aether recover` detects and fixes safe issues | Go |
+| **Recovery** — Stuck-state detection (7 classes), safe lifecycle restoration with full context | Go maintenance inspection reads the evidence without state changes; `aether resume` is the only restoration owner | MATCH | E2E test: `aether maintenance recovery-inspect` reports `state_effect: none`, then `aether resume` restores lifecycle progress | Go |
 | **Cleanup** — Data-clean, midden review, session sync, stale file removal | Go `data-clean` command + midden review in `midden_cmds.go`; session freshness checks | MATCH | Test: data-clean removes test artifacts; midden-review groups failures by category | Go |
 
 ### Summary

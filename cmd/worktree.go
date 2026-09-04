@@ -848,7 +848,7 @@ var worktreeMergeBackCmd = &cobra.Command{
 
 			// The merge already succeeded and is durable on main -- only the
 			// destructive cleanup step is skipped. Leave the entry marked
-			// orphaned so `aether recover` / `worktree-reap` can find it,
+			// orphaned so maintenance recovery-inspect / worktree-reap can find it,
 			// rather than merged (which would suggest nothing is left to
 			// look at).
 			preservedNow := time.Now().UTC().Format(time.RFC3339)

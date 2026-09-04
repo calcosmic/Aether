@@ -9,8 +9,8 @@ import (
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
-// renderRecoverDiagnosis renders the human-readable diagnosis report for
-// aether recover. It follows the same visual patterns as medic_cmd.go
+// renderRecoverDiagnosis renders the human-readable diagnosis report for the
+// retired recovery scanner. It follows the same visual patterns as medic_cmd.go
 // (renderBanner, renderStageMarker, renderNextUp) for consistency.
 func renderRecoverDiagnosis(issues []HealthIssue, state colony.ColonyState, repairResult *RepairResult) string {
 	var b strings.Builder
@@ -91,17 +91,8 @@ func renderRecoverDiagnosis(issues []HealthIssue, state colony.ColonyState, repa
 	b.WriteString(fmt.Sprintf("%d issues found (%d critical, %d warning, %d info)\n",
 		len(issues), len(critical), len(warnings), len(infos)))
 
-	fixableCount := 0
-	for _, issue := range issues {
-		if issue.Fixable {
-			fixableCount++
-		}
-	}
-	if fixableCount > 0 {
-		b.WriteString(fmt.Sprintf("Run `aether recover --apply` to fix %d issues automatically.\n", fixableCount))
-	} else {
-		b.WriteString("No automatic fixes available. Review issues above.\n")
-	}
+	b.WriteString("Inspect the evidence with `aether maintenance recovery-inspect`; state effect: none.\n")
+	b.WriteString("Run `aether resume` only when you are ready to restore lifecycle progress.\n")
 	b.WriteString("\n")
 
 	// The one resolver's answer, fed this scan's own top finding as an
@@ -118,11 +109,7 @@ func writeRecoverIssueLine(b *strings.Builder, issue HealthIssue) {
 		if shouldUseANSIColors() {
 			b.WriteString("\x1b[2m") // dim
 		}
-		if isDestructiveCategory(issue.Category) {
-			b.WriteString("    Needs confirmation with --apply\n")
-		} else {
-			b.WriteString("    Fixable with --apply\n")
-		}
+		b.WriteString("    Inspect with aether maintenance recovery-inspect; it does not change state.\n")
 		if shouldUseANSIColors() {
 			b.WriteString("\x1b[0m")
 		}
@@ -133,9 +120,9 @@ func writeRecoverIssueLine(b *strings.Builder, issue HealthIssue) {
 func recoverFixHint(category string) string {
 	switch category {
 	case "dirty_worktree":
-		return "Needs --apply with confirmation"
+		return "Inspect preserved work before choosing an owner-authorized maintenance mutation"
 	case "bad_manifest":
-		return "Needs --force for manual repair"
+		return "Inspect the manifest before choosing an owner-authorized maintenance mutation"
 	case "state":
 		return "Check colony initialization"
 	default:
@@ -166,15 +153,9 @@ func recoverOverrideFromIssues(issues []HealthIssue, state colony.ColonyState) (
 		case "partial_phase":
 			return "aether continue",
 				"This phase only partly finished. Checking it moves the colony on if the work holds up."
-		case "stale_spawned":
-			return "aether recover --apply",
-				"Old worker-tracking data is stuck. Applying the fix clears it."
-		case "bad_manifest":
-			return "aether recover --apply --force",
-				"The saved build record is broken. This repairs it, bypassing the usual confirmation."
-		case "dirty_worktree":
-			return "aether recover --apply --force",
-				"A worker's isolated copy of the code was left in an unfinished state. This fixes it and skips the confirmation prompt."
+		case "stale_spawned", "bad_manifest", "dirty_worktree":
+			return "aether maintenance recovery-inspect",
+				"Inspect the durable evidence without changing state, then use aether resume as the only lifecycle restoration command."
 		}
 		return "", ""
 	}
@@ -186,8 +167,8 @@ func recoverOverrideFromIssues(issues []HealthIssue, state colony.ColonyState) (
 		}
 		switch issue.Category {
 		case "missing_agents":
-			return "aether recover --apply",
-				"Some shared helper files are missing. Applying the fix restores them from the shared install."
+			return "aether maintenance recovery-inspect",
+				"Inspect missing runtime evidence without changing state, then use aether resume as the only lifecycle restoration command."
 		case "broken_survey":
 			return "aether colonize",
 				"The saved scan of the existing code is broken. Re-scanning rebuilds it."
@@ -202,7 +183,7 @@ func recoverOverrideFromIssues(issues []HealthIssue, state colony.ColonyState) (
 	}
 
 	if len(issues) > 0 {
-		return "aether recover --apply", "Fixing the issues found automatically."
+		return "aether maintenance recovery-inspect", "Inspect the issues without changing state, then use aether resume as the only lifecycle restoration command."
 	}
 	return "", ""
 }
