@@ -36,11 +36,11 @@ func TestSealWrapperCeremonyContract(t *testing.T) {
 				"AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file",
 				"AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow seal --completion-file",
 				"Do NOT bypass `aether host seal`",
-				// 198-03 (D-04..D-07): the confirmation gate's own prose --
-				// state-of-play card, the review before the question, the
-				// one question, the second question when something is
-				// failing, how the answer is recorded, and that automatic
-				// mode never finishes a project.
+				// The confirmation gate remains runtime-owned: the state-of-play
+				// card, review, explicit owner question, and recorded answer must
+				// remain present. Phase 199 tightened the final boundary: Autopilot
+				// never seals, stops at the explicit seal boundary, and leaves
+				// owner-supplied force and confirmation to the Go runtime.
 				"awaiting_owner_confirmation",
 				"state-of-play card",
 				"\"what did we learn\" review",
@@ -48,7 +48,12 @@ func TestSealWrapperCeremonyContract(t *testing.T) {
 				"Finish anyway with",
 				"result.question",
 				"result.next",
-				"Automatic mode (autopilot) never finishes a project.",
+				"Autopilot never seals a project.",
+				"It stops at the explicit seal boundary",
+				"Force flags pass only when directly supplied by the owner.",
+				"owner-supplied force request",
+				"owner-confirmation question.",
+				"Go runtime.",
 			}
 			for _, needle := range required {
 				if !strings.Contains(text, needle) {
