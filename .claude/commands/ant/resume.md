@@ -1,17 +1,16 @@
 <!-- Aether-managed: runtime spec at .aether/commands/resume.yaml. Synced by aether update. -->
 ---
 name: ant-resume
-description: "💾 Resume previous session through the Aether CLI runtime"
+description: "Validate and restore the safest honest recovery point."
 ---
 
-Use the Go `aether` CLI as the source of truth.
+You are the **Queen**. Delegate the recovery ceremony to the Go runtime, which is the source of truth.
 
-- Execute `AETHER_OUTPUT_MODE=visual aether resume` directly.
-- `resume` is currently an alias of `resume-colony`, not a distinct recovery flow.
-- For a read-only overview before resuming, use `AETHER_OUTPUT_MODE=visual aether resume-dashboard`.
-- Do not reconstruct state manually from `session.json`, `COLONY_STATE.json`, or `.aether/HANDOFF.md`.
+- Execute `AETHER_OUTPUT_MODE=visual aether resume $ARGUMENTS` exactly once.
+- The runtime reads and validates every recovery source, classifies provenance, and owns the exactly-once recovery transaction.
+- Render the runtime's provenance groups without flattening them: **Confirmed** is validated handoff evidence, **Reconstructed** is an honest point derived from named durable evidence, **Conflicting** means durable sources disagree, and **Unknown** means evidence is insufficient.
+- Relay the returned handoff, receipt, state effect, replay status, and next action exactly as reported.
+- A **Conflicting** or **Unknown** result has **state effect: none**. Render the named evidence or owner decision and stop without making the colony runnable.
+- Do not inspect, select, or modify recovery evidence; the runtime alone decides whether restoration is safe.
+- Do not invent another public recovery route or host-side repair path.
 - If docs and runtime disagree, runtime wins.
-
-**Next steps:**
-- `/ant-status` — full colony dashboard
-- `/ant-build <phase>` or `/ant-continue` — pick up where the colony left off
