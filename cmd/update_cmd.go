@@ -49,7 +49,7 @@ func init() {
 	updateCmd.Flags().String("binary-version", "", "Binary version to download (default: resolved installed version)")
 	updateCmd.Flags().Bool("dry-run", false, "Show what would be updated without making changes")
 	updateCmd.Flags().Bool("force", false, "Overwrite modified companion files and remove stale ones")
-	updateCmd.Flags().Bool("sync-platform-homes", false, "For dev channel, also sync global Claude/OpenCode/Codex home assets")
+	updateCmd.Flags().Bool("sync-platform-homes", false, "Explicitly sync stable Claude/OpenCode/Codex home assets (dev channel is refused)")
 
 	rootCmd.AddCommand(updateCmd)
 }
@@ -63,44 +63,51 @@ func runMaintenanceUpdate(cmd *cobra.Command, _ []string) error {
 	channel := runtimeChannelFromFlag(cmd.Flags())
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return fmt.Errorf("cannot determine home directory: %w", err)
-	}
-	repositoryRoot, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("cannot determine working directory: %w", err)
-	}
-	repositoryRoot, err = filepath.Abs(repositoryRoot)
-	if err != nil {
-		return fmt.Errorf("resolve repository root: %w", err)
+		return emitMaintenanceUpdateFailure(fmt.Errorf("cannot determine home directory: %w", err), "Set HOME to the installed Aether home, then rerun `aether update`.", nil)
 	}
 	if store == nil {
-		return fmt.Errorf("update requires an initialized lifecycle store")
+		return emitMaintenanceUpdateFailure(fmt.Errorf("update requires an initialized lifecycle store"), "Run `aether lay-eggs` in the repository, then rerun `aether update`.", nil)
+	}
+	repositoryRoot, err := maintenanceUpdateRepositoryRoot()
+	if err != nil {
+		return emitMaintenanceUpdateFailure(err, "Set AETHER_ROOT or COLONY_DATA_DIR to this repository, then rerun `aether update`.", nil)
 	}
 	repoVersionBefore := ""
 	if marker, ok := readInstalledVersionMarker(repositoryRoot); ok {
 		repoVersionBefore = marker.Version
 	}
-	aliasSurfacesMissingBefore := missingDeclaredAliasSurfaces(homeDir)
 	dataRoot := filepath.Clean(store.BasePath())
 	hubRoot := filepath.Clean(resolveHubPathForHome(homeDir, channel))
 	hubVersion := normalizeVersion(readHubVersionAtPath(hubRoot))
 	if hubVersion == "" {
-		return fmt.Errorf("Aether hub not installed; run aether install first")
-	}
-	if err := validateMaintenanceVersionAgreement(repositoryRoot, hubRoot, hubVersion); err != nil {
-		return err
-	}
-	if isAetherSourceCheckout(repositoryRoot) {
-		check := runSourceCheck(repositoryRoot)
-		if !check.OK {
-			return fmt.Errorf("maintenance update: source/generated parity check failed")
-		}
+		return emitMaintenanceUpdateFailure(fmt.Errorf("Aether hub not installed; run aether install first"), "Run `aether install`, then rerun `aether update`.", nil)
 	}
 
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
 	force, _ := cmd.Flags().GetBool("force")
 	syncPlatformHomes, _ := cmd.Flags().GetBool("sync-platform-homes")
 	downloadBinary, _ := cmd.Flags().GetBool("download-binary")
+	binaryVersion := normalizeVersion(resolveVersion())
+	stale := checkStalePublish(hubRoot, hubVersion, binaryVersion, channel, nil)
+	if stale.Classification == staleCritical {
+		failure := fmt.Errorf("stale publish detected: %s", stale.Message)
+		return emitMaintenanceUpdateFailure(failure, stale.RecoveryCommand, &stale)
+	}
+	if err := validateMaintenanceVersionAgreement(repositoryRoot, hubRoot, hubVersion); err != nil {
+		return emitMaintenanceUpdateFailure(err, recoveryCommandForChannel(channel), nil)
+	}
+	sourceRoot := normalizeMaintenanceSourceRoot(repositoryRoot)
+	if isAetherSourceCheckout(sourceRoot) {
+		check := runSourceCheck(sourceRoot)
+		if !check.OK {
+			return emitMaintenanceUpdateFailure(fmt.Errorf("maintenance update: source/generated parity check failed"), "Run `aether source-check --json`, repair the reported source drift, then publish again.", nil)
+		}
+	}
+	// This inspection names repaired aliases after a successful sync, but it
+	// must not precede the stale-publish gate above: stale input is refused
+	// before any platform target discovery or download work.
+	aliasSurfacesMissingBefore := missingDeclaredAliasSurfaces(homeDir)
+
 	now := time.Now().UTC()
 	plan := maintenanceMutationPlan{
 		SchemaVersion:   maintenanceMutationSchemaVersion,
@@ -109,7 +116,7 @@ func runMaintenanceUpdate(cmd *cobra.Command, _ []string) error {
 		SourceRoot:      hubRoot,
 		DestinationRoot: repositoryRoot,
 		Channel:         channel,
-		CurrentVersion:  resolveVersion(),
+		CurrentVersion:  binaryVersion,
 		DesiredVersion:  hubVersion,
 		Checkpoint:      "maintenance:update:validated",
 		Recovery:        "aether resume",
@@ -123,16 +130,18 @@ func runMaintenanceUpdate(cmd *cobra.Command, _ []string) error {
 		},
 	}
 	if err := appendMaintenanceUpdateRepositoryTargets(&plan, hubRoot, repositoryRoot, force, now); err != nil {
-		return err
+		return emitMaintenanceUpdateFailure(err, "Repair the selected hub or repository target named in the error, then rerun `aether update`.", nil)
 	}
 	if shouldSyncPlatformHomes(channel, syncPlatformHomes) {
 		if channel == channelDev {
-			return fmt.Errorf("maintenance update: dev channel is isolated from stable platform homes")
+			return emitMaintenanceUpdateFailure(fmt.Errorf("maintenance update: dev channel is isolated from stable platform homes"), "Rerun `aether update --channel dev` without `--sync-platform-homes`.", nil)
 		}
 		if err := appendMaintenanceUpdatePlatformTargets(&plan, hubRoot, homeDir); err != nil {
-			return err
+			return emitMaintenanceUpdateFailure(err, "Run `aether install` to establish platform homes, then rerun `aether update`.", nil)
 		}
 	}
+	installedBinary := ""
+	installedBinaryVersion := ""
 	if downloadBinary {
 		versionFlag, _ := cmd.Flags().GetString("binary-version")
 		versionFlag = normalizeVersion(versionFlag)
@@ -140,37 +149,43 @@ func runMaintenanceUpdate(cmd *cobra.Command, _ []string) error {
 			versionFlag = hubVersion
 		}
 		if versionFlag != hubVersion {
-			return fmt.Errorf("maintenance update: binary version %s must match companion version %s", versionFlag, hubVersion)
+			return emitMaintenanceUpdateFailure(fmt.Errorf("maintenance update: binary version %s must match companion version %s", versionFlag, hubVersion), "Use the selected hub version for `--binary-version`, then rerun `aether update --download-binary`.", nil)
 		}
 		staged, err := stageMaintenanceBinaryDownload(versionFlag, channel, downloader.DownloadBinary)
 		if err != nil {
-			return err
+			return emitMaintenanceUpdateFailure(err, "Verify the published release and network, then rerun `aether update --download-binary`.", nil)
 		}
 		destinationDir := filepath.Join(homeDir, defaultBinaryDestSubdirForChannel(channel))
 		destination, err := filepath.Abs(filepath.Join(destinationDir, staged.Name))
 		if err != nil {
-			return fmt.Errorf("resolve binary destination: %w", err)
+			return emitMaintenanceUpdateFailure(fmt.Errorf("resolve binary destination: %w", err), "Repair the channel binary destination, then rerun `aether update --download-binary`.", nil)
 		}
+		installedBinary = destination
+		installedBinaryVersion = staged.Version
 		plan.Allowlist.BinaryDestination = destination
 		plan.Targets = append(plan.Targets, maintenanceMutationTarget{
 			Root: lifecycleTransactionRootBinaryDestination, RelativeTarget: filepath.Base(destination),
-			Source: staged.Source, Action: lifecycleTransactionWrite, Content: staged.Content, Managed: true,
+			Label: "Binary (" + string(channel) + ")", Source: staged.Source, Action: lifecycleTransactionWrite,
+			Content: staged.Content, Mode: staged.Mode, Managed: true,
 		})
 	}
 
 	preview, err := prepareMaintenanceMutation(plan)
 	if err != nil {
-		return err
+		return emitMaintenanceUpdateFailure(err, "Resolve the named validation failure, then rerun `aether update`.", nil)
 	}
 	if dryRun {
 		result := map[string]interface{}{
-			"operation": "update", "preview": preview, "state_effect": "none",
+			"operation": "update", "preview": preview, "receipt": nil, "state_effect": "none",
 			"binary_refresh_mode": updateBinaryRefreshMode(downloadBinary, true), "recovery": plan.Recovery,
 		}
 		details, copied, skipped := maintenancePreviewSyncDetails(preview)
-		stale := checkStalePublish(hubRoot, hubVersion, resolveVersion(), channel, details)
 		result["stale_publish"] = staleResultToMap(stale)
-		outputWorkflow(result, renderUpdateVisual(repositoryRoot, hubVersion, resolveVersion(), renderRepoVersionTransition(repoVersionBefore, hubVersion, true), force, true, details, copied, skipped, nil, updateBinaryRefreshMode(downloadBinary, true), hubVersion == resolveVersion(), result))
+		visual := renderUpdateVisual(repositoryRoot, hubVersion, binaryVersion, renderRepoVersionTransition(repoVersionBefore, hubVersion, true), force, true, details, copied, skipped, nil, updateBinaryRefreshMode(downloadBinary, true), hubVersion == binaryVersion, result)
+		if stale.Classification != staleOK {
+			visual += renderStalePublishBanner(stale)
+		}
+		outputWorkflow(result, visual)
 		return nil
 	}
 
@@ -180,7 +195,7 @@ func runMaintenanceUpdate(cmd *cobra.Command, _ []string) error {
 		"transaction": mutation.Preview.TransactionID, "receipt": mutation.Receipt,
 		"state_effect": mutation.StateEffect, "verification": mutation.Verification,
 		"recovery": mutation.Recovery, "hub_version": hubVersion,
-		"local_version": resolveVersion(), "binary_refresh_mode": updateBinaryRefreshMode(downloadBinary, false),
+		"local_version": binaryVersion, "binary_refresh_mode": updateBinaryRefreshMode(downloadBinary, false),
 	}
 	details, copied, skipped := maintenancePreviewSyncDetails(mutation.Preview)
 	aliasRepairReport := diffAliasRepairs(aliasSurfacesMissingBefore)
@@ -190,27 +205,82 @@ func runMaintenanceUpdate(cmd *cobra.Command, _ []string) error {
 	}
 	result["message"] = message
 	result["alias_wrapper_repairs"] = aliasRepairReport.Repairs
-	result["stale_publish"] = staleResultToMap(checkStalePublish(hubRoot, hubVersion, resolveVersion(), channel, details))
+	result["stale_publish"] = staleResultToMap(stale)
 	if err != nil {
 		outputWorkflow(result, renderMaintenanceMutationPreview(mutation.Preview, false))
 		return err
 	}
+	if installedBinary != "" {
+		if err := verifyMaintenanceInstalledBinary(installedBinary, installedBinaryVersion); err != nil {
+			result["error"] = err.Error()
+			result["recovery"] = "Reinstall the matching published binary, then run `aether integrity`."
+			outputWorkflow(result, renderVisualError("Update committed but installed-binary verification failed", result))
+			return err
+		}
+		result["installed_binary_verified"] = true
+	}
 	closeLifecycleCommand(result, updateLastCommandFact(aliasRepairReport.Message()), "", "")
 	restartTargets := platformRestartTargets(details)
-	outputWorkflow(result, renderUpdateVisual(repositoryRoot, hubVersion, resolveVersion(), renderRepoVersionTransition(repoVersionBefore, hubVersion, false), force, false, details, copied, skipped, restartTargets, updateBinaryRefreshMode(downloadBinary, false), hubVersion == resolveVersion(), result))
+	visual := renderUpdateVisual(repositoryRoot, hubVersion, binaryVersion, renderRepoVersionTransition(repoVersionBefore, hubVersion, false), force, false, details, copied, skipped, restartTargets, updateBinaryRefreshMode(downloadBinary, false), hubVersion == binaryVersion, result)
+	if stale.Classification != staleOK {
+		visual += renderStalePublishBanner(stale)
+	}
+	outputWorkflow(result, visual)
 	return nil
+}
+
+func emitMaintenanceUpdateFailure(err error, recovery string, stale *stalePublishResult) error {
+	result := map[string]interface{}{
+		"operation": "update", "outcome": "no_change", "error": err.Error(),
+		"preview": nil, "targets": []interface{}{}, "transaction": "", "receipt": nil,
+		"state_effect": "none", "verification": []interface{}{}, "recovery": strings.TrimSpace(recovery),
+	}
+	visual := renderVisualError("Update stopped without changes", result)
+	if stale != nil {
+		result["stale_publish"] = staleResultToMap(*stale)
+		visual = renderStalePublishBanner(*stale)
+	}
+	outputWorkflow(result, visual)
+	return err
+}
+
+func maintenanceUpdateRepositoryRoot() (string, error) {
+	candidate := strings.TrimSpace(repoRootFromStore(store))
+	if candidate == "" {
+		return "", fmt.Errorf("maintenance update: repository root is unavailable from the lifecycle store")
+	}
+	absolute, err := filepath.Abs(candidate)
+	if err != nil {
+		return "", fmt.Errorf("maintenance update: resolve repository root: %w", err)
+	}
+	absolute = filepath.Clean(absolute)
+	if moduleRoot := normalizeMaintenanceSourceRoot(absolute); isAetherSourceCheckout(moduleRoot) {
+		absolute = moduleRoot
+	}
+	info, err := os.Lstat(absolute)
+	if err != nil {
+		return "", fmt.Errorf("maintenance update: inspect repository root: %w", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return "", fmt.Errorf("maintenance update: repository root must be a real directory")
+	}
+	return absolute, nil
 }
 
 func maintenancePreviewSyncDetails(preview maintenanceMutationPreview) ([]map[string]interface{}, int, int) {
 	type counts struct{ copied, skipped, removed int }
-	order := []lifecycleTransactionRootKind{}
-	byRoot := map[lifecycleTransactionRootKind]*counts{}
+	order := []string{}
+	byLabel := map[string]*counts{}
 	for _, target := range preview.Targets {
-		count := byRoot[target.Root]
+		label := strings.TrimSpace(target.Label)
+		if label == "" {
+			label = "Transaction root " + string(target.Root)
+		}
+		count := byLabel[label]
 		if count == nil {
 			count = &counts{}
-			byRoot[target.Root] = count
-			order = append(order, target.Root)
+			byLabel[label] = count
+			order = append(order, label)
 		}
 		switch target.Change {
 		case maintenanceMutationChangeWrite:
@@ -223,9 +293,9 @@ func maintenancePreviewSyncDetails(preview maintenanceMutationPreview) ([]map[st
 	}
 	var details []map[string]interface{}
 	totalCopied, totalSkipped := 0, 0
-	for _, root := range order {
-		count := byRoot[root]
-		details = append(details, map[string]interface{}{"label": "Transaction root " + string(root), "copied": count.copied, "skipped": count.skipped, "removed": count.removed})
+	for _, label := range order {
+		count := byLabel[label]
+		details = append(details, map[string]interface{}{"label": label, "copied": count.copied, "skipped": count.skipped, "removed": count.removed})
 		totalCopied += count.copied
 		totalSkipped += count.skipped
 	}
@@ -247,7 +317,7 @@ func appendMaintenanceUpdateRepositoryTargets(plan *maintenanceMutationPlan, hub
 			if pair.consumerOnly || pair.hubRel != "." {
 				base := filepath.Clean(filepath.Join(".aether", filepath.FromSlash(pair.destRel)))
 				spec := maintenanceSyncSpec{
-					Root: lifecycleTransactionRootRepository, SourceDir: filepath.Join(hubSystem, filepath.FromSlash(pair.hubRel)), DestinationBase: base,
+					Root: lifecycleTransactionRootRepository, Label: pair.label, SourceDir: filepath.Join(hubSystem, filepath.FromSlash(pair.hubRel)), DestinationBase: base,
 					Options:             syncOptions{cleanup: pair.cleanup, preserveLocalChanges: !force && pair.preserveLocalChanges, protectedDirs: map[string]bool{"data": true, "dreams": true, "oracle": true, "locks": true, "checkpoints": true, "archive": true, "backups": true, "chambers": true, "temp": true}, protectedFiles: map[string]bool{"QUEEN.md": true, "CROWNED-ANTHILL.md": true}, validate: pair.validate, include: pair.include, mapRelPath: pair.mapRelPath, cleanupInclude: pair.cleanupInclude, merge: pair.merge},
 					PruneRetiredAliases: pair.cleanupLegacyClaude,
 				}
@@ -304,7 +374,7 @@ func appendMaintenanceProjectDocTargets(plan *maintenanceMutationPlan, hubSystem
 		} else if readErr != nil && !os.IsNotExist(readErr) {
 			return readErr
 		}
-		plan.Targets = append(plan.Targets, maintenanceMutationTarget{Root: lifecycleTransactionRootRepository, RelativeTarget: spec.destRel, Source: source, Action: lifecycleTransactionWrite, Content: []byte(renderProjectDocTemplate(string(data))), Managed: true})
+		plan.Targets = append(plan.Targets, maintenanceMutationTarget{Root: lifecycleTransactionRootRepository, RelativeTarget: spec.destRel, Label: filepath.ToSlash(spec.destRel), Source: source, Action: lifecycleTransactionWrite, Content: []byte(renderProjectDocTemplate(string(data))), Managed: true})
 	}
 	return nil
 }
@@ -451,7 +521,7 @@ func appendMaintenanceUpdatePlatformTargets(plan *maintenanceMutationPlan, hubRo
 			base = strings.TrimPrefix(filepath.ToSlash(pair.destRel), ".codex/")
 		}
 		err := appendMaintenanceSyncTargets(plan, maintenanceSyncSpec{
-			Root: rootKind, SourceDir: sourceDir, DestinationBase: filepath.FromSlash(base),
+			Root: rootKind, Label: pair.label, SourceDir: sourceDir, DestinationBase: filepath.FromSlash(base),
 			Options:             syncOptions{cleanup: pair.cleanup, preserveLocalChanges: pair.preserveLocalChanges, validate: pair.validate, include: pair.include, mapRelPath: pair.mapRelPath, cleanupInclude: pair.cleanupInclude},
 			PruneRetiredAliases: pair.cleanupLegacyClaude,
 		})
@@ -625,6 +695,7 @@ func validateMaintenanceVersionAgreement(sourceRoot, hubRoot, desiredVersion str
 		return fmt.Errorf("maintenance update: hub version %s does not match desired version %s", hubVersion, desiredVersion)
 	}
 
+	sourceRoot = normalizeMaintenanceSourceRoot(sourceRoot)
 	sourceVersionPath := filepath.Join(sourceRoot, ".aether", "version.json")
 	npmVersionPath := filepath.Join(sourceRoot, "npm", "package.json")
 	_, sourceStatErr := os.Stat(sourceVersionPath)
@@ -652,6 +723,14 @@ func validateMaintenanceVersionAgreement(sourceRoot, hubRoot, desiredVersion str
 		return fmt.Errorf("maintenance update: version disagreement source=%s npm=%s hub=%s desired=%s", sourceVersion, npmVersion, hubVersion, desiredVersion)
 	}
 	return nil
+}
+
+func normalizeMaintenanceSourceRoot(candidate string) string {
+	candidate = filepath.Clean(candidate)
+	if moduleRoot := findAetherModuleRoot(candidate); moduleRoot != "" && isAetherSourceCheckout(moduleRoot) {
+		return filepath.Clean(moduleRoot)
+	}
+	return candidate
 }
 
 // --- stale-publish detection ---

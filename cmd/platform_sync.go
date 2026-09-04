@@ -31,9 +31,11 @@ const (
 type maintenanceMutationTarget struct {
 	Root           lifecycleTransactionRootKind
 	RelativeTarget string
+	Label          string
 	Source         string
 	Action         lifecycleTransactionAction
 	Content        []byte
+	Mode           os.FileMode
 	ExpectedDigest string
 	Managed        bool
 }
@@ -58,10 +60,13 @@ type maintenanceMutationPlan struct {
 type maintenanceMutationTargetPreview struct {
 	Root           lifecycleTransactionRootKind `json:"root"`
 	RelativeTarget string                       `json:"target"`
+	Label          string                       `json:"label,omitempty"`
 	Source         string                       `json:"source"`
 	Change         maintenanceMutationChange    `json:"change"`
 	CurrentDigest  string                       `json:"current_digest"`
 	DesiredDigest  string                       `json:"desired_digest"`
+	CurrentMode    uint32                       `json:"current_mode,omitempty"`
+	DesiredMode    uint32                       `json:"desired_mode,omitempty"`
 	CommitOrder    int                          `json:"commit_order"`
 }
 
@@ -188,17 +193,26 @@ func prepareMaintenanceMutation(plan maintenanceMutationPlan) (maintenanceMutati
 			return preview, fmt.Errorf("maintenance mutation: baseline changed for %q", targetPath)
 		}
 		desiredDigest := lifecycleTransactionMissingDigest
+		desiredMode := os.FileMode(0)
 		change := maintenanceMutationChangeRemove
 		if action == lifecycleTransactionWrite {
 			desiredDigest = lifecycleDigest(target.Content)
+			desiredMode = target.Mode.Perm()
+			if desiredMode == 0 {
+				desiredMode = current.Mode.Perm()
+			}
+			if desiredMode == 0 {
+				desiredMode = 0o644
+			}
 			change = maintenanceMutationChangeWrite
 		}
-		if current.Digest == desiredDigest {
+		if current.Digest == desiredDigest && (action == lifecycleTransactionRemove || current.Mode.Perm() == desiredMode) {
 			change = maintenanceMutationChangeUnchanged
 		}
 		entry := maintenanceMutationTargetPreview{
-			Root: root.Kind, RelativeTarget: clean, Source: strings.TrimSpace(target.Source),
-			Change: change, CurrentDigest: current.Digest, DesiredDigest: desiredDigest, CommitOrder: index + 1,
+			Root: root.Kind, RelativeTarget: clean, Label: strings.TrimSpace(target.Label), Source: strings.TrimSpace(target.Source),
+			Change: change, CurrentDigest: current.Digest, DesiredDigest: desiredDigest,
+			CurrentMode: uint32(current.Mode.Perm()), DesiredMode: uint32(desiredMode.Perm()), CommitOrder: index + 1,
 		}
 		preview.Targets = append(preview.Targets, entry)
 		preview.CommitOrder = append(preview.CommitOrder, fmt.Sprintf("%d:%s:%s", index+1, root.Kind, filepath.ToSlash(clean)))
@@ -241,7 +255,7 @@ func commitMaintenanceMutation(plan maintenanceMutationPlan) (maintenanceMutatio
 		if action == lifecycleTransactionRemove {
 			err = tx.DeclareRemoval(target.Root, target.RelativeTarget)
 		} else {
-			err = tx.DeclareWrite(target.Root, target.RelativeTarget, target.Content)
+			err = tx.DeclareWriteWithMode(target.Root, target.RelativeTarget, target.Content, target.Mode)
 		}
 		if err != nil {
 			return result, err
@@ -249,6 +263,9 @@ func commitMaintenanceMutation(plan maintenanceMutationPlan) (maintenanceMutatio
 		declaration := tx.declarations[len(tx.declarations)-1]
 		if declaration.BeforeDigest != preview.Targets[index].CurrentDigest {
 			return result, fmt.Errorf("maintenance mutation: baseline changed for %q", declaration.TargetPath)
+		}
+		if uint32(declaration.BeforeMode.Perm()) != preview.Targets[index].CurrentMode {
+			return result, fmt.Errorf("maintenance mutation: baseline mode changed for %q", declaration.TargetPath)
 		}
 		declared++
 	}
@@ -309,6 +326,7 @@ func commitMaintenanceMutation(plan maintenanceMutationPlan) (maintenanceMutatio
 
 type maintenanceSyncSpec struct {
 	Root                lifecycleTransactionRootKind
+	Label               string
 	SourceDir           string
 	DestinationBase     string
 	Options             syncOptions
@@ -389,7 +407,7 @@ func appendMaintenanceSyncTargets(plan *maintenanceMutationPlan, spec maintenanc
 			return fmt.Errorf("maintenance sync: read destination %s: %w", destinationPath, readErr)
 		}
 		plan.Targets = append(plan.Targets, maintenanceMutationTarget{
-			Root: spec.Root, RelativeTarget: targetRel, Source: sourcePath,
+			Root: spec.Root, RelativeTarget: targetRel, Label: spec.Label, Source: sourcePath,
 			Action: lifecycleTransactionWrite, Content: content, Managed: true,
 		})
 		added[filepath.ToSlash(targetRel)] = true
@@ -432,7 +450,7 @@ func appendMaintenanceSyncTargets(plan *maintenanceMutationPlan, spec maintenanc
 			continue
 		}
 		plan.Targets = append(plan.Targets, maintenanceMutationTarget{
-			Root: spec.Root, RelativeTarget: targetRel, Source: "managed generated wrapper ownership header",
+			Root: spec.Root, RelativeTarget: targetRel, Label: spec.Label, Source: "managed generated wrapper ownership header",
 			Action: lifecycleTransactionRemove, Managed: true,
 		})
 		added[filepath.ToSlash(targetRel)] = true

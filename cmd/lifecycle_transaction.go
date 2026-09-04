@@ -142,6 +142,7 @@ type lifecycleTransactionDeclaration struct {
 	BeforeExists   bool
 	BeforeDigest   string
 	AfterDigest    string
+	BeforeMode     os.FileMode
 	Mode           os.FileMode
 }
 
@@ -162,6 +163,7 @@ type lifecycleTransactionTargetManifest struct {
 	BeforeExists   bool                       `json:"before_exists"`
 	BeforeDigest   string                     `json:"before_digest"`
 	AfterDigest    string                     `json:"after_digest"`
+	BeforeMode     uint32                     `json:"before_mode,omitempty"`
 	Mode           uint32                     `json:"mode"`
 	StagePath      string                     `json:"stage_path"`
 	PreimagePath   string                     `json:"preimage_path,omitempty"`
@@ -330,14 +332,21 @@ func validateLifecycleDirectoryRoot(kind lifecycleTransactionRootKind, path stri
 }
 
 func (tx *lifecycleTransaction) DeclareWrite(kind lifecycleTransactionRootKind, relativeTarget string, content []byte) error {
-	return tx.declare(kind, relativeTarget, lifecycleTransactionWrite, bytes.Clone(content))
+	return tx.declare(kind, relativeTarget, lifecycleTransactionWrite, bytes.Clone(content), 0)
+}
+
+// DeclareWriteWithMode carries the desired permission bits into the durable
+// root manifest. Binary installation uses this instead of an unjournaled
+// chmod after commit, so replay and rollback can verify the same file mode.
+func (tx *lifecycleTransaction) DeclareWriteWithMode(kind lifecycleTransactionRootKind, relativeTarget string, content []byte, mode os.FileMode) error {
+	return tx.declare(kind, relativeTarget, lifecycleTransactionWrite, bytes.Clone(content), mode.Perm())
 }
 
 func (tx *lifecycleTransaction) DeclareRemoval(kind lifecycleTransactionRootKind, relativeTarget string) error {
-	return tx.declare(kind, relativeTarget, lifecycleTransactionRemove, nil)
+	return tx.declare(kind, relativeTarget, lifecycleTransactionRemove, nil, 0)
 }
 
-func (tx *lifecycleTransaction) declare(kind lifecycleTransactionRootKind, relativeTarget string, action lifecycleTransactionAction, content []byte) error {
+func (tx *lifecycleTransaction) declare(kind lifecycleTransactionRootKind, relativeTarget string, action lifecycleTransactionAction, content []byte, desiredMode os.FileMode) error {
 	if tx.intent != nil {
 		return fmt.Errorf("lifecycle transaction: declarations are closed after intent persistence")
 	}
@@ -361,14 +370,19 @@ func (tx *lifecycleTransaction) declare(kind lifecycleTransactionRootKind, relat
 		Content:        content,
 		BeforeExists:   state.Exists,
 		BeforeDigest:   state.Digest,
-		Mode:           state.Mode,
-	}
-	if declaration.Mode == 0 {
-		declaration.Mode = 0o644
+		BeforeMode:     state.Mode.Perm(),
 	}
 	if action == lifecycleTransactionWrite {
+		declaration.Mode = desiredMode.Perm()
+		if declaration.Mode == 0 {
+			declaration.Mode = state.Mode.Perm()
+		}
+		if declaration.Mode == 0 {
+			declaration.Mode = 0o644
+		}
 		declaration.AfterDigest = lifecycleDigest(content)
 	} else {
+		declaration.Mode = state.Mode.Perm()
 		declaration.AfterDigest = lifecycleTransactionMissingDigest
 	}
 	tx.declarations = append(tx.declarations, declaration)
@@ -457,7 +471,7 @@ func (tx *lifecycleTransaction) Validate() error {
 		if err != nil {
 			return fmt.Errorf("lifecycle transaction: verify baseline for %q: %w", declaration.TargetPath, err)
 		}
-		if state.Exists != declaration.BeforeExists || state.Digest != declaration.BeforeDigest {
+		if state.Exists != declaration.BeforeExists || state.Digest != declaration.BeforeDigest || state.Mode.Perm() != declaration.BeforeMode.Perm() {
 			return fmt.Errorf("lifecycle transaction: baseline changed for %q", declaration.TargetPath)
 		}
 	}
@@ -565,7 +579,7 @@ func (tx *lifecycleTransaction) stageAndPersistIntent() error {
 				if err != nil {
 					return err
 				}
-				if state.Digest != declaration.BeforeDigest {
+				if state.Digest != declaration.BeforeDigest || state.Mode.Perm() != declaration.BeforeMode.Perm() {
 					return fmt.Errorf("lifecycle transaction: baseline changed for %q during staging", declaration.TargetPath)
 				}
 				preimageRelative := filepath.Join("preimages", declaration.ID+".bin")
@@ -585,6 +599,7 @@ func (tx *lifecycleTransaction) stageAndPersistIntent() error {
 				BeforeExists:   declaration.BeforeExists,
 				BeforeDigest:   declaration.BeforeDigest,
 				AfterDigest:    declaration.AfterDigest,
+				BeforeMode:     uint32(declaration.BeforeMode.Perm()),
 				Mode:           uint32(declaration.Mode.Perm()),
 				StagePath:      stagePath,
 				PreimagePath:   preimagePath,
@@ -711,10 +726,10 @@ func (tx *lifecycleTransaction) applyTarget(target lifecycleTransactionTargetMan
 	if err != nil {
 		return err
 	}
-	if current.Digest == target.AfterDigest {
+	if lifecycleTargetMatchesAfter(current, target) {
 		return nil
 	}
-	if current.Exists != target.BeforeExists || current.Digest != target.BeforeDigest {
+	if !lifecycleTargetMatchesBefore(current, target) {
 		return fmt.Errorf("target %q baseline changed before commit", target.TargetPath)
 	}
 	switch target.Action {
@@ -745,8 +760,8 @@ func (tx *lifecycleTransaction) applyTarget(target lifecycleTransactionTargetMan
 	if err != nil {
 		return err
 	}
-	if after.Digest != target.AfterDigest {
-		return fmt.Errorf("target %q failed post-commit digest verification", target.TargetPath)
+	if !lifecycleTargetMatchesAfter(after, target) {
+		return fmt.Errorf("target %q failed post-commit digest/mode verification", target.TargetPath)
 	}
 	return nil
 }
@@ -782,7 +797,7 @@ func (tx *lifecycleTransaction) verifyAndWriteReceipt() (colony.LifecycleReceipt
 			if err != nil {
 				return colony.LifecycleReceipt{}, err
 			}
-			if state.Digest != target.AfterDigest {
+			if !lifecycleTargetMatchesAfter(state, target) {
 				return colony.LifecycleReceipt{}, fmt.Errorf("target %q differs during global verification", target.TargetPath)
 			}
 			evidenceID := target.ID + "-result"
@@ -797,7 +812,7 @@ func (tx *lifecycleTransaction) verifyAndWriteReceipt() (colony.LifecycleReceipt
 				Name:        "target:" + target.ID,
 				Passed:      true,
 				EvidenceIDs: []string{evidenceID},
-				Detail:      fmt.Sprintf("%s matches declared digest", target.TargetPath),
+				Detail:      fmt.Sprintf("%s matches declared digest and mode %04o", target.TargetPath, lifecycleTargetAfterMode(target)),
 			})
 		}
 	}
@@ -870,10 +885,10 @@ func (tx *lifecycleTransaction) restoreLifecycleTarget(target lifecycleTransacti
 	if err != nil {
 		return err
 	}
-	if current.Exists == target.BeforeExists && current.Digest == target.BeforeDigest {
+	if lifecycleTargetMatchesBefore(current, target) {
 		return nil
 	}
-	if current.Digest != target.AfterDigest {
+	if !lifecycleTargetMatchesAfter(current, target) {
 		return fmt.Errorf("target %q has conflicting rollback bytes", target.TargetPath)
 	}
 	if target.BeforeExists {
@@ -884,7 +899,7 @@ func (tx *lifecycleTransaction) restoreLifecycleTarget(target lifecycleTransacti
 		if lifecycleDigest(preimage) != target.BeforeDigest {
 			return fmt.Errorf("preimage for %q has conflicting digest", target.TargetPath)
 		}
-		if err := atomicReplaceLifecycleTarget(target.TargetPath, preimage, os.FileMode(target.Mode), tx.config.Rename); err != nil {
+		if err := atomicReplaceLifecycleTarget(target.TargetPath, preimage, lifecycleTargetBeforeMode(target), tx.config.Rename); err != nil {
 			return err
 		}
 	} else if current.Exists {
@@ -899,8 +914,8 @@ func (tx *lifecycleTransaction) restoreLifecycleTarget(target lifecycleTransacti
 	if err != nil {
 		return fmt.Errorf("target %q failed rollback read: %w", target.TargetPath, err)
 	}
-	if restored.Exists != target.BeforeExists || restored.Digest != target.BeforeDigest {
-		return fmt.Errorf("target %q failed rollback digest verification", target.TargetPath)
+	if !lifecycleTargetMatchesBefore(restored, target) {
+		return fmt.Errorf("target %q failed rollback digest/mode verification", target.TargetPath)
 	}
 	return nil
 }
@@ -1047,6 +1062,9 @@ func (tx *lifecycleTransaction) validateRecoveryEvidence() (map[string]lifecycle
 			}
 			switch target.Action {
 			case lifecycleTransactionWrite:
+				if lifecycleTargetAfterMode(target) == 0 {
+					return nil, fmt.Errorf("lifecycle transaction: write target %s has no declared mode", target.ID)
+				}
 				if lifecycleDigest(staged) != target.AfterDigest {
 					return nil, fmt.Errorf("lifecycle transaction: staged evidence for %s has conflicting digest", target.ID)
 				}
@@ -1058,6 +1076,9 @@ func (tx *lifecycleTransaction) validateRecoveryEvidence() (map[string]lifecycle
 				return nil, fmt.Errorf("lifecycle transaction: target %s has unknown action %q", target.ID, target.Action)
 			}
 			if target.BeforeExists {
+				if lifecycleTargetBeforeMode(target) == 0 {
+					return nil, fmt.Errorf("lifecycle transaction: target %s has no baseline mode", target.ID)
+				}
 				expectedPreimagePath := filepath.Join(localDirectory, "preimages", target.ID+".bin")
 				if target.PreimagePath != expectedPreimagePath {
 					return nil, fmt.Errorf("lifecycle transaction: target %s preimage path conflicts with manifest ownership", target.ID)
@@ -1125,8 +1146,8 @@ func (tx *lifecycleTransaction) validateResumeTargetStates(manifests map[string]
 		if err != nil {
 			return fmt.Errorf("lifecycle transaction: inspect recovery target %s: %w", target.ID, err)
 		}
-		matchesBefore := state.Exists == target.BeforeExists && state.Digest == target.BeforeDigest
-		matchesAfter := state.Digest == target.AfterDigest
+		matchesBefore := lifecycleTargetMatchesBefore(state, target)
+		matchesAfter := lifecycleTargetMatchesAfter(state, target)
 		if !matchesBefore && !matchesAfter {
 			return fmt.Errorf("lifecycle transaction: recovery target %s conflicts with baseline and staged result", target.ID)
 		}
@@ -1151,7 +1172,7 @@ func (tx *lifecycleTransaction) rollbackCommittedTargets(manifests map[string]li
 	if committedPrefix < len(targets) {
 		candidate := targets[committedPrefix]
 		state, err := readLifecycleFileState(candidate.TargetPath)
-		if err == nil && state.Digest == candidate.AfterDigest {
+		if err == nil && lifecycleTargetMatchesAfter(state, candidate) {
 			// A crash can occur after replacement but before its progress write.
 			// At most the next target in commit order can be in that state.
 			committedPrefix++
@@ -1180,10 +1201,10 @@ func allLifecycleTargetsMatch(intent *lifecycleTransactionIntent, manifests map[
 			return false
 		}
 		if after {
-			if state.Digest != target.AfterDigest {
+			if !lifecycleTargetMatchesAfter(state, target) {
 				return false
 			}
-		} else if state.Exists != target.BeforeExists || state.Digest != target.BeforeDigest {
+		} else if !lifecycleTargetMatchesBefore(state, target) {
 			return false
 		}
 	}
@@ -1517,7 +1538,7 @@ func (tx *lifecycleTransaction) lifecycleChanges() []colony.LifecycleChange {
 func (tx *lifecycleTransaction) baselineDigest() string {
 	parts := make([]string, 0, len(tx.declarations))
 	for _, declaration := range tx.declarations {
-		parts = append(parts, declaration.ID+":"+declaration.BeforeDigest)
+		parts = append(parts, fmt.Sprintf("%s:%s:%04o", declaration.ID, declaration.BeforeDigest, declaration.BeforeMode.Perm()))
 	}
 	return lifecycleDigest([]byte(strings.Join(parts, "\n")))
 }
@@ -1572,6 +1593,34 @@ func readLifecycleFileState(path string) (lifecycleFileState, error) {
 		return lifecycleFileState{}, err
 	}
 	return lifecycleFileState{Exists: true, Digest: lifecycleDigest(content), Mode: info.Mode().Perm(), Bytes: content}, nil
+}
+
+func lifecycleTargetBeforeMode(target lifecycleTransactionTargetManifest) os.FileMode {
+	if target.BeforeMode != 0 {
+		return os.FileMode(target.BeforeMode).Perm()
+	}
+	// Manifests written before before_mode was introduced used mode for both
+	// the live write and its pre-image. Preserve deterministic replay for
+	// those journals while new journals retain the exact baseline mode.
+	return os.FileMode(target.Mode).Perm()
+}
+
+func lifecycleTargetAfterMode(target lifecycleTransactionTargetManifest) os.FileMode {
+	return os.FileMode(target.Mode).Perm()
+}
+
+func lifecycleTargetMatchesBefore(state lifecycleFileState, target lifecycleTransactionTargetManifest) bool {
+	if state.Exists != target.BeforeExists || state.Digest != target.BeforeDigest {
+		return false
+	}
+	return !state.Exists || state.Mode.Perm() == lifecycleTargetBeforeMode(target)
+}
+
+func lifecycleTargetMatchesAfter(state lifecycleFileState, target lifecycleTransactionTargetManifest) bool {
+	if target.Action == lifecycleTransactionRemove {
+		return !state.Exists && state.Digest == lifecycleTransactionMissingDigest
+	}
+	return state.Exists && state.Digest == target.AfterDigest && state.Mode.Perm() == lifecycleTargetAfterMode(target)
 }
 
 func readLifecycleEvidenceFile(path string) ([]byte, error) {
