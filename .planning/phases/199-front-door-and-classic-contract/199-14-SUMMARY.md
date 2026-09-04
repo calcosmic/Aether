@@ -41,7 +41,7 @@ key-decisions:
   - "Describe recovery only through canonical resume while recording the hidden redirect as bounded, expiring parser plumbing rather than a user option."
 
 patterns-established:
-  - "Retired-wrapper pruning: normalize each generated wrapper basename, compare it with the public wrapper allowlist, and require the Aether-managed source header before deletion."
+  - "Retired-wrapper pruning: match only the two bounded lifecycle filenames and require the Aether-managed source header before deletion; registry absence alone never authorizes removal."
   - "Platform-home cleanup: derive one home from each command destination and apply the same ownership-aware retirement rule to Claude flat/nested and both OpenCode locations."
 
 requirements-completed: [CEC-04, LIFE-01, LIFE-04]
@@ -68,6 +68,7 @@ completed: 2026-09-04
 - Added ownership-aware retirement cleanup across Claude flat/nested, OpenCode home, and OpenCode config destinations; managed old-name wrappers are deleted while same-named custom commands survive byte-for-byte.
 - Deleted the obsolete canonical resume source and its three repository-managed wrappers, so update, install, publish, and source checks cannot restore that public surface.
 - Rewrote the current resume lifecycle contract around confirmed/reconstructed/conflicting/unknown provenance, handoff-keyed transaction replay, zero-write conflicts, and one expiring pre-Cobra compatibility rewrite.
+- Recovered the post-wave contract/install gates by restoring the repository's four-section contract format and narrowing cleanup exceptions to the two retired lifecycle filenames.
 
 ## Task Commits
 
@@ -78,12 +79,14 @@ Each task was committed atomically:
    - `785ca441` — feat(199-14): keep retired aliases pruned (GREEN)
 2. **Task 2: Remove the resume-colony source and generated surfaces**
    - `ef4bd978` — docs(199-14): retire resume-colony public surfaces
+3. **Post-wave gate recovery**
+   - `ca5e05e7` — fix(199-14): preserve command sync contracts
 
 **Plan metadata:** committed with this summary.
 
 ## Files Created/Modified
 
-- `cmd/platform_sync.go` — public-metadata alias filter plus managed-header retirement cleanup for every supported platform command home.
+- `cmd/platform_sync.go` — public-metadata alias filter plus exact retired-name, managed-header cleanup that preserves ordinary copy/stale-removal semantics.
 - `cmd/wrapper_command_names.go` — public wrapper inventory with the two parser-only lifecycle tokens removed.
 - `cmd/alias_reconcile_test.go` — real install-to-hub-to-update coverage for public alias repair, managed retired-wrapper deletion, and custom-file preservation.
 - `cmd/canonical_alias_test.go` — canonical/public alias metadata boundary and update reconciliation coverage.
@@ -99,11 +102,34 @@ Each task was committed atomically:
 
 ## Deviations from Plan
 
-None - plan executed exactly as written.
+### Auto-fixed Issues
+
+**1. [Rule 1 - Contract regression] Restored the required contract structure**
+
+- **Found during:** Post-wave `TestContractStructure`
+- **Issue:** The canonical rewrite retained truthful content but replaced the repository-required `Inputs`, `Outputs`, `State Mutations`, and `Preconditions` headings.
+- **Fix:** Reorganized the same canonical resume, provenance, transaction, and compatibility facts beneath all four required headings without restoring any retired public surface.
+- **Files modified:** `cmd/contracts/resume.md`
+- **Verification:** `TestContractStructure` passes.
+- **Committed in:** `ca5e05e7`
+
+**2. [Rule 1 - Sync regression] Narrowed the cleanup exception to the retired lifecycle names**
+
+- **Found during:** Post-wave `TestInstallCopiesClaudeCommands` and `TestInstallRemovesStale`
+- **Issue:** Registry-based pruning deleted a freshly supplied managed command unknown to the running binary, while disabling ordinary cleanup let unrelated stale command files survive.
+- **Fix:** Match only the two bounded retired lifecycle filenames for header-gated pruning, exclude only those names from ordinary cleanup, and retain normal copy/removal behavior for every other command.
+- **Files modified:** `cmd/platform_sync.go`
+- **Verification:** Both install tests pass alongside managed-retired and unmanaged-preservation coverage.
+- **Committed in:** `ca5e05e7`
+
+---
+
+**Total deviations:** 2 auto-fixed regressions (Rule 1)
+**Impact on plan:** The fixes preserve the intended retired-alias boundary while restoring established contract and install/update behavior; no new surface or dependency was added.
 
 ## Verification
 
-- PASS — `go test ./cmd -run '^(TestRetiredLifecycleAliasPruning199|TestCanonicalAlias|TestUpdateDoesNotRestoreParserOnlyAlias|TestCommandSourceHygiene)$' -count=1` (14 cases including subtests).
+- PASS — `go test ./cmd -run '^(TestContractStructure|TestInstallCopiesClaudeCommands|TestInstallRemovesStale|TestRetiredLifecycleAliasPruning199|TestCanonicalAlias|TestUpdateDoesNotRestoreParserOnlyAlias|TestCommandSourceHygiene)$' -count=1` (17 cases including subtests).
 - PASS — all four obsolete public/source files are absent.
 - PASS — `aether source-check --root . --json` reports `ok: true`, 128 generated wrappers aligned, and zero findings.
 - PASS — `cmd/contracts/resume.md` contains neither the retired command spelling nor a separate public recovery command.
@@ -137,7 +163,7 @@ None - no external service configuration required.
 ## Self-Check: PASSED
 
 - All five retained Plan 14 implementation/test/contract files and this summary exist; all four intentionally retired source/wrapper files are absent.
-- RED `d53055c7`, GREEN `785ca441`, and surface-removal `ef4bd978` resolve in Git in the documented order.
+- RED `d53055c7`, GREEN `785ca441`, surface-removal `ef4bd978`, and gate-recovery `ca5e05e7` resolve in Git in the documented order.
 - The summary and all remaining unstaged changes pass whitespace validation.
 - Exact Plan 14 tests and the production source checker pass, and protected pre-existing paths remain unstaged.
 
