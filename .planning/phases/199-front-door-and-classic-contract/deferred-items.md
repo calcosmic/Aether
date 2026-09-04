@@ -57,3 +57,11 @@
 - **Isolation check:** Existing `TestHistory*` plus the new history tests pass together (15 cases), the exact phase suite passes 14 cases, and the cross-view agreement suite passes 8 cases. Refreshing the command catalog would also absorb previously deferred `maturity` and `status` metadata, confirming that its mismatch is a shared staged snapshot rather than an isolated Plan 199-10 fix.
 - **Why deferred:** Updating the unrelated legacy expectations or shared goldens here would cross the explicit ownership of later renderer, compatibility, and final-verification plans. Plan 199-10 changes no legacy Next Up policy and its focused views already use the authoritative projection.
 - **Follow-up:** Complete the remaining Phase 199 command migrations, refresh shared catalogs/goldens once those contracts settle, and rerun the normal and race repository gates in Plan 199-29.
+
+## Plan 199-19 maintenance YAML is not yet represented in the Codex command-guide catalog
+
+- **Found during:** Plan 199-20 broader command-guide compatibility verification (`go test ./cmd -run '^TestCommandGuide' -count=1`).
+- **Observed:** `TestCommandGuideCoversAllYamlCommands` reports `maintenance` as missing because `.aether/commands/maintenance.yaml` exists while `commandGuideCatalog` has no corresponding Codex definition.
+- **Isolation check:** Plan 199-20's exact init parity, source-hygiene, wrapper-compatibility, and command-guide checks pass all 23 cases, and the live `command-guide init --platform codex` smoke check succeeds.
+- **Why deferred:** The missing entry predates and does not exercise Plan 199-20's init-only surfaces. Adding an expert-maintenance Codex orchestration contract here would cross the maintenance surface ownership established by Plan 199-19.
+- **Follow-up:** Add or deliberately exempt the maintenance entry with its owning Codex command-guide migration, then rerun the complete command-guide catalog test.

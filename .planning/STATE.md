@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 199-11-PLAN.md
-last_updated: "2026-09-03T23:55:09.066Z"
-last_activity: 2026-09-03
+stopped_at: Completed 199-20-PLAN.md
+last_updated: "2026-09-04T00:10:43.164Z"
+last_activity: 2026-09-04
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 34
-  completed_plans: 12
+  completed_plans: 13
   percent: 0
 ---
 
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-09-02)
 ## Current Position
 
 Phase: 199 (front-door-and-classic-contract) — EXECUTING
-Plan: 12 of 34
+Plan: 13 of 34
 Status: Ready to execute
-Last activity: 2026-09-03
+Last activity: 2026-09-04
 
 ## Performance Metrics
 
@@ -90,6 +90,7 @@ Last activity: 2026-09-03
 | Phase 199 P10 | 27min | 3 tasks | 5 files |
 | Phase 199 P19 | 7min | 2 tasks | 5 files |
 | Phase 199 P11 | 29min | 3 tasks | 11 files |
+| Phase 199 P20 | 12min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -230,6 +231,9 @@ Last activity: 2026-09-03
 - [Phase 199]: Owner-authority changes use a separate typed fence outside the legacy ordered stage-trigger catalogue. — This preserves catalogue compatibility while pausing before owner-controlled changes.
 - [Phase 199]: Without a Phase 202 typed event source, Watch reports idle and treats spawn/history rows as timestamped recorded evidence, never current liveness. — Stale files cannot prove an active ant.
 - [Phase 199]: Run wrappers invoke the Go runtime exactly once; invocation is consent to displayed bounds and typed owner-authority results stop the wrapper. — The runtime remains the sole lifecycle authority.
+- [Phase 199]: Claude and OpenCode init close with exact /ant-plan, while Codex closes with exact aether plan.
+- [Phase 199]: Guided init surfaces synthesize intent, while Go alone owns setup, persistence, territory evidence, refusal, and result truth.
+- [Phase 199]: Codex parity extends raw aether orchestration without restoring a native $ant-* lifecycle surface.
 
 ### Pending Todos
 
@@ -343,8 +347,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-03T23:55:09.057Z
-Stopped at: Completed 199-11-PLAN.md
+Last session: 2026-09-04T00:10:43.156Z
+Stopped at: Completed 199-20-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
