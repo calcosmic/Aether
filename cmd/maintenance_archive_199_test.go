@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -154,6 +156,155 @@ func TestMaintenanceArchive199ForcedMarker(t *testing.T) {
 			t.Fatalf("forced-marker conflict mutated fixture bytes\nbefore=%s\nafter=%s", before, after)
 		}
 	})
+}
+
+func TestMaintenanceArchive199RepairRollback(t *testing.T) {
+	fixture, entombed, targetPath, original, tampered := newArchiveRepairFixture199(t)
+	manifestBefore, err := os.ReadFile(filepath.Join(entombed.ChamberPath, "manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	chamberBefore := entombFixtureDigest199(t, entombed.ChamberPath)
+	relativeTarget, err := filepath.Rel(fixture.root, targetPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	plan, err := prepareArchiveMaintenanceRepair(archiveMaintenanceRepairRequest{
+		RepositoryRoot: fixture.root,
+		DataRoot:       fixture.dataRoot,
+		ChamberPath:    entombed.ChamberPath,
+		TransactionID:  "maintenance-archive-rollback",
+		Targets: []archiveMaintenanceRepairTarget{{
+			RelativePath: filepath.ToSlash(relativeTarget),
+			Content:      original,
+			Source:       "operator-provided manifest-backed preimage",
+		}},
+		Fault: func(point string) error {
+			if point == "after_target_commit:target-0001" {
+				return errors.New("injected archive repair failure")
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("prepare repair: %v", err)
+	}
+	if plan.PreviewDigest == "" || plan.Checkpoint == "" || plan.Preview.StateEffect != colony.LifecycleStateEffectNone {
+		t.Fatalf("repair preview omitted checkpoint/baseline proof: %+v", plan)
+	}
+	plan.ApprovedPreviewDigest = plan.PreviewDigest
+	result, err := commitArchiveMaintenanceRepair(plan)
+	if err == nil || !strings.Contains(err.Error(), "injected archive repair failure") {
+		t.Fatalf("repair fault = %v, want injected failure", err)
+	}
+	if !result.RolledBack || result.StateEffect != colony.LifecycleStateEffectRolledBack || result.Receipt == nil || result.Receipt.Transaction.Stage != colony.TransactionStageRolledBack {
+		t.Fatalf("repair rollback omitted auditable receipt/effect: %+v", result)
+	}
+	if got, readErr := os.ReadFile(targetPath); readErr != nil || !bytes.Equal(got, tampered) {
+		t.Fatalf("repair fault did not restore exact historical preimage: %q err=%v", got, readErr)
+	}
+	if chamberAfter := entombFixtureDigest199(t, entombed.ChamberPath); chamberAfter != chamberBefore {
+		t.Fatalf("rollback changed chamber bytes\nbefore=%s\nafter=%s", chamberBefore, chamberAfter)
+	}
+	if manifestAfter, readErr := os.ReadFile(filepath.Join(entombed.ChamberPath, "manifest.json")); readErr != nil || !bytes.Equal(manifestAfter, manifestBefore) {
+		t.Fatal("rollback rewrote the historical manifest")
+	}
+
+	t.Run("forced marker refusal", func(t *testing.T) {
+		forced := newEntombTransactionFixture199(t, colony.SealDispositionForcedIncomplete)
+		forcedEntombed, entombErr := runEntombTransaction(entombTransactionInput{
+			Root: forced.root, DataRoot: forced.dataRoot, Confirmed: true, Now: entombTransactionTime199(),
+		})
+		if entombErr != nil {
+			t.Fatal(entombErr)
+		}
+		handoffPath := filepath.Join(forced.root, ".aether", "HANDOFF.md")
+		handoff, readErr := os.ReadFile(handoffPath)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		writeEntombFile199(t, handoffPath, []byte(strings.ReplaceAll(string(handoff), forced.outcome.OwnerReason, "[removed]")))
+		before := entombFixtureDigest199(t, forced.root)
+		_, prepareErr := prepareArchiveMaintenanceRepair(archiveMaintenanceRepairRequest{
+			RepositoryRoot: forced.root, DataRoot: forced.dataRoot, ChamberPath: forcedEntombed.ChamberPath,
+			TransactionID: "maintenance-forced-marker-refusal",
+			Targets: []archiveMaintenanceRepairTarget{{
+				RelativePath: ".aether/HANDOFF.md", Content: handoff, Source: "verified tombstone copy",
+			}},
+		})
+		if prepareErr == nil || !strings.Contains(strings.ToLower(prepareErr.Error()), "forced") {
+			t.Fatalf("missing forced marker reached mutation preview: %v", prepareErr)
+		}
+		if after := entombFixtureDigest199(t, forced.root); after != before {
+			t.Fatalf("forced-marker preflight wrote bytes\nbefore=%s\nafter=%s", before, after)
+		}
+	})
+}
+
+func TestMaintenanceArchive199Receipt(t *testing.T) {
+	fixture, entombed, targetPath, original, _ := newArchiveRepairFixture199(t)
+	manifestPath := filepath.Join(entombed.ChamberPath, "manifest.json")
+	manifestBefore, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	relativeTarget, err := filepath.Rel(fixture.root, targetPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := prepareArchiveMaintenanceRepair(archiveMaintenanceRepairRequest{
+		RepositoryRoot: fixture.root, DataRoot: fixture.dataRoot, ChamberPath: entombed.ChamberPath,
+		TransactionID: "maintenance-archive-receipt",
+		Targets: []archiveMaintenanceRepairTarget{{
+			RelativePath: filepath.ToSlash(relativeTarget), Content: original, Source: "manifest-backed retained memory",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Preview.Targets) != 1 || plan.Preview.Targets[0].CurrentDigest == plan.Preview.Targets[0].DesiredDigest || plan.BaselineDigest == "" {
+		t.Fatalf("repair preview lacks exact current/desired baseline: %+v", plan)
+	}
+	plan.ApprovedPreviewDigest = plan.PreviewDigest
+	result, err := commitArchiveMaintenanceRepair(plan)
+	if err != nil {
+		t.Fatalf("commit repair: %v", err)
+	}
+	if result.StateEffect != colony.LifecycleStateEffectCommitted || result.Receipt == nil || result.Receipt.Transaction.Stage != colony.TransactionStageVerified || result.RolledBack {
+		t.Fatalf("repair receipt is not a verified commit: %+v", result)
+	}
+	if len(result.ChangedFiles) != 1 || result.ChangedFiles[0] != filepath.ToSlash(relativeTarget) || len(result.Verification) == 0 || result.Rollback == "" || result.NextAction == "" {
+		t.Fatalf("repair result omitted changed files/verification/rollback/next: %+v", result)
+	}
+	if got, readErr := os.ReadFile(targetPath); readErr != nil || !bytes.Equal(got, original) {
+		t.Fatalf("committed repair bytes = %q err=%v", got, readErr)
+	}
+	if manifestAfter, readErr := os.ReadFile(manifestPath); readErr != nil || !bytes.Equal(manifestAfter, manifestBefore) {
+		t.Fatal("repair rewrote the historical manifest")
+	}
+	if !result.Inspection.Valid || !result.Inspection.ContentVerified {
+		t.Fatalf("committed repair did not re-establish archive truth: %+v", result.Inspection)
+	}
+}
+
+func newArchiveRepairFixture199(t *testing.T) (entombTransactionFixture199, entombTransactionResult, string, []byte, []byte) {
+	t.Helper()
+	fixture := newEntombTransactionFixture199(t, colony.SealDispositionVerified)
+	entombed, err := runEntombTransaction(entombTransactionInput{
+		Root: fixture.root, DataRoot: fixture.dataRoot, Confirmed: true, Now: entombTransactionTime199(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	targetPath := filepath.Join(entombed.ChamberPath, "QUEEN.md")
+	original, err := os.ReadFile(targetPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tampered := []byte("# Tampered retained colony memory\n")
+	writeEntombFile199(t, targetPath, tampered)
+	return fixture, entombed, targetPath, original, tampered
 }
 
 func archiveInspectionHasFinding199(inspection archiveMaintenanceInspectionResult, code string) bool {
