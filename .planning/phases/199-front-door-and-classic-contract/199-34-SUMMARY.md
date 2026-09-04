@@ -41,7 +41,7 @@ completed: 2026-09-04
 - **Started:** 2026-09-04T23:01:51Z
 - **Completed:** 2026-09-04T23:07:48Z
 - **Tasks:** 2/2
-- **Files modified:** 8
+- **Files modified:** 9
 
 ## Accomplishments
 
@@ -52,7 +52,7 @@ completed: 2026-09-04
 ## Task Commits
 
 1. **Task 1: Normalize persisted legacy command state at one boundary** — `170d70fd` (RED test), `4de6dfed` (implementation)
-2. **Task 2: Retire apply suggestions and route useful recovery through maintenance and resume** — `dc9a6923` (RED test), `2d94e878` (implementation)
+2. **Task 2: Retire apply suggestions and route useful recovery through maintenance and resume** — `dc9a6923` (RED test), `2d94e878` (implementation), `8fb03a23` (migrated stale recovery assertions)
 
 ## Files Created/Modified
 
@@ -64,6 +64,7 @@ completed: 2026-09-04
 - `cmd/worktree.go` — preserves worktree evidence while naming maintenance inspection.
 - `.aether/docs/PARITY_CLASSIC_VS_GO.md` — proves inspection state-effect-none plus resume restoration.
 - `cmd/runtime_recovery_compat_199_test.go` — focused lifecycle recovery contract ratchet.
+- `cmd/recover_test.go` — current-contract assertions for diagnostic output and safe/destructive recovery evidence.
 
 ## Decisions Made
 
@@ -74,10 +75,9 @@ completed: 2026-09-04
 
 - PASS: `go test ./cmd -run '^TestRuntimeRecoveryCompatibility199$' -count=1` — 9 tests passed.
 - PASS: scoped token gate across the parity guide and six audited runtime paths.
-- PASS: focused route, legacy-zero-write, maintenance mutation, and worktree preservation checks — 25 tests passed.
+- PASS: recover/recovery, legacy-zero-write, route, maintenance, and worktree checks — 71 tests passed.
 - PASS: `go build ./...`.
-- PASS: focused `go test -race ./cmd` recovery/maintenance/worktree suite — 25 tests passed.
-- Mapped expected failures: the broader legacy recovery suite has 10 tests asserting the retired `recover --apply`/force contract. They were not changed because they are outside this plan's owned files; their failures reflect this plan's intentional public-contract retirement.
+- PASS: focused `go test -race ./cmd` recovery/maintenance/worktree suite — 71 tests passed.
 
 ## Deviations from Plan
 
@@ -89,7 +89,7 @@ None - plan executed exactly as written.
 
 ## Issues Encountered
 
-- Existing non-owned recovery tests still expect the retired apply/force commands. The focused current-contract tests, source gate, build, and race checks pass.
+- Wave 14 full-suite gate exposed seven stale assertions in `cmd/recover_test.go` that still expected the retired apply/force path. They now assert exact maintenance inspection, state-effect-none where rendered, resume-only restoration, and preserved safe/destructive evidence.
 
 ## User Setup Required
 
@@ -102,7 +102,7 @@ None - no external service configuration required.
 
 ## Self-Check: PASSED
 
-All eight owned artifacts exist and all four TDD/task commits are present in git history.
+All nine owned artifacts exist and all five TDD/task commits are present in git history.
 
 ---
 *Phase: 199-front-door-and-classic-contract*
