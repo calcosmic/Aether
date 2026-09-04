@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 199-22-PLAN.md
-last_updated: "2026-09-04T14:39:41.552Z"
+stopped_at: Completed 199-17-PLAN.md
+last_updated: "2026-09-04T15:28:02.730Z"
 last_activity: 2026-09-04
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 34
-  completed_plans: 19
-  percent: 56
+  completed_plans: 20
+  percent: 59
 ---
 
 # Project State
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-02)
 ## Current Position
 
 Phase: 199 (front-door-and-classic-contract) — EXECUTING
-Plan: 17 of 34
+Plan: 18 of 34
 Status: Ready to execute
 Last activity: 2026-09-04
 
@@ -97,6 +97,7 @@ Last activity: 2026-09-04
 | Phase 199 P15 | 65min | 2 tasks | 7 files |
 | Phase 199 P16 | 71min | 3 tasks | 8 files |
 | Phase 199 P22 | 13min | 2 tasks | 4 files |
+| Phase 199 P17 | 28min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -256,6 +257,8 @@ Last activity: 2026-09-04
 - [Phase 199]: Derive one stable entomb transaction and chamber identity from the verified seal outcome so interruption resumes instead of creating duplicate archives. — Stable identity makes retry and replay converge on one chamber and receipt.
 - [Phase 199]: Treat an archive as valid only when every enumerated source byte, digest, kind, path, and closure cross-reference verifies before any publication or clear. — Directory existence cannot prove content integrity or closure truth.
 - [Phase 199]: Keep invocation and owner confirmation separate from seal; platform wrappers call the Go runtime exactly once and never reproduce archive or clearing logic. — D-17 keeps sealed state reviewable until the owner explicitly chooses archive-and-clear.
+- [Phase 199]: Keep legacy recover and abandon tokens parseable but hidden, store-free, and zero-write so old automation receives safe migration guidance without retaining authority. — Parser compatibility must not preserve product vocabulary or mutation authority.
+- [Phase 199]: Read recovery evidence directly through LifecycleFacts and raw manifest/claims readers, while reserving all restoration for aether resume. — Expert diagnosis stays causally read-only and cannot become a second recovery owner.
 
 ### Pending Todos
 
@@ -369,8 +372,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-04T14:39:41.544Z
-Stopped at: Completed 199-22-PLAN.md
+Last session: 2026-09-04T15:28:02.721Z
+Stopped at: Completed 199-17-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
