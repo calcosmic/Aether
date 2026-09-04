@@ -271,6 +271,61 @@ func TestClassicMechanismCoverage(t *testing.T) {
 	assertHashSnapshotsEqualForTest(t, "Classic mechanism validation", before, after)
 }
 
+// The journey IDs are intentionally semantic rather than a list of commands.
+// A public journey has one Claude and one OpenCode row; platform expansion is
+// verified below instead of allowing either wrapper to stand in for the other.
+var classicContractRequiredJourneyIDs = []string{
+	"front-door.help-no-colony", "front-door.help-active-colony", "front-door.init-first",
+	"territory.fresh", "territory.refreshed", "territory.unavailable", "territory.init-active-refusal",
+	"autopilot.valid", "autopilot.repair", "autopilot.debt", "autopilot.no-colony", "autopilot.authority-fence",
+	"orientation.status-full", "orientation.status-compact", "orientation.phase", "orientation.history", "orientation.watch-idle", "orientation.read-only", "orientation.unavailable",
+	"steering.focus", "steering.feedback", "steering.redirect", "steering.swarm",
+	"pause-resume.clean-handoff", "pause-resume.stale-handoff", "pause-resume.reconstruction", "pause-resume.legacy-hidden", "pause-resume.journal-fault", "pause-resume.conflict", "pause-resume.replay",
+	"seal.verified", "seal.incomplete-refusal", "seal.forced-residual", "seal.owner-checkpoint",
+	"entomb.verified", "entomb.forced", "entomb.corrupt-refusal", "entomb.publish-fault", "entomb.replay",
+	"maintenance.migration", "maintenance.update", "maintenance.cleanup", "maintenance.integrity",
+}
+
+func TestClassicContractCorpusRequiredCategories(t *testing.T) {
+	document := loadClassicContractCorpus(t)
+	assertClassicContractJourneyMatrix(t, document)
+}
+
+func TestClassicContractCorpusRejectsMissingFrontDoorCase(t *testing.T) {
+	document := loadClassicContractCorpus(t)
+	for _, requiredID := range classicContractRequiredJourneyIDs[:7] {
+		t.Run(requiredID, func(t *testing.T) {
+			invalid := cloneClassicContractDocument(t, document)
+			invalid.Cases = classicContractWithoutJourney(invalid.Cases, requiredID)
+			if err := validateClassicContractCorpus(invalid); err == nil || !strings.Contains(err.Error(), requiredID) {
+				t.Fatalf("missing journey error = %v, want %q", err, requiredID)
+			}
+		})
+	}
+}
+
+func TestClassicContractCorpusClaude(t *testing.T) {
+	classicContractExecutePlatform(t, "claude")
+}
+
+func TestClassicContractCorpusOpenCode(t *testing.T) {
+	classicContractExecutePlatform(t, "opencode")
+}
+
+func TestClassicContractCorpusCausalReceipts(t *testing.T) {
+	document := loadClassicContractCorpus(t)
+	for _, testCase := range document.Cases {
+		for _, field := range []string{"fixture", "requirement_ids", "pre_post_digest", "artifact_or_receipt", "structured_assertions"} {
+			if _, ok := testCase.Expected.SemanticFields[field]; !ok {
+				t.Errorf("%s missing causal semantic field %q", testCase.ID, field)
+			}
+		}
+		if len(testCase.Expected.RequiredTextTokens) == 0 || len(testCase.Expected.ForbiddenTextTokens) == 0 || testCase.Expected.Replay == nil || testCase.Expected.FaultPoint == "" {
+			t.Errorf("%s lacks visual/replay/fault evidence", testCase.ID)
+		}
+	}
+}
+
 func classicContractFixtureDir(t *testing.T) string {
 	t.Helper()
 	return filepath.Join(findTestModuleRoot(t), "cmd", "testdata", "classic-contract", "v1")
