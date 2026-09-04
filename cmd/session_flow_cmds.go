@@ -1,26 +1,60 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
-	"github.com/calcosmic/Aether/pkg/trace"
 	"github.com/spf13/cobra"
 )
 
 const sessionStaleThreshold = 24 * time.Hour
 const handoffStateFence = "aether-colony-state"
 
+const (
+	pauseHandoffDataPath = "pause-handoff.json"
+	pauseReplayMessage   = "Already paused; the existing validated handoff was retained."
+)
+
 var handoffPhaseLinePattern = regexp.MustCompile(`(?i)(?:Current:|Phase:)\s*([0-9]+)\s*/\s*([0-9]+)(?:\s*(?:—|-)\s*(.*))?`)
 var resumeNoHandoff bool
+
+// pauseResumeLifecycleFault is intentionally nil in production. Focused crash
+// tests inject failures at the transaction coordinator's named stage hooks so
+// pause and resume prove the same restart behavior as every lifecycle writer.
+var pauseResumeLifecycleFault lifecycleTransactionFaultHook
+
+type pauseResumeLifecycleOutcome struct {
+	Handoff     colony.PauseHandoff
+	Receipt     colony.LifecycleReceipt
+	Provenance  colony.RecoveryProvenance
+	StateEffect colony.LifecycleStateEffect
+	Replay      bool
+	Message     string
+}
+
+type pauseBoundaryPendingError struct {
+	Boundary string
+	Attempt  string
+}
+
+func (err pauseBoundaryPendingError) Error() string {
+	if err.Attempt == "" {
+		return fmt.Sprintf("pause is waiting for safe boundary %q", err.Boundary)
+	}
+	return fmt.Sprintf("pause is waiting for safe boundary %q on attempt %s", err.Boundary, err.Attempt)
+}
 
 // sessionFreshnessResult describes how fresh a session is for resume.
 type sessionFreshnessResult struct {
@@ -73,63 +107,54 @@ func sessionVerifyFresh(s *storage.Store) sessionFreshnessResult {
 }
 
 var pauseColonyCmd = &cobra.Command{
-	Use:     "pause",
-	Short:   "Save colony state and write a handoff for later resumption",
-	Aliases: []string{"pause-colony"},
-	Args:    cobra.NoArgs,
+	Use:   "pause",
+	Short: "Stop at a safe boundary and save one resumable handoff.",
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if store == nil {
 			outputErrorMessage("no store initialized")
 			return nil
 		}
-
-		state, err := loadActiveColonyState()
+		writeLegacySessionRedirectNotice()
+		outcome, err := pauseColonyAt(time.Now().UTC())
 		if err != nil {
-			outputError(1, colonyStateLoadMessage(err), nil)
+			if pending, ok := err.(pauseBoundaryPendingError); ok {
+				result := map[string]interface{}{
+					"paused": false, "safe_boundary": pending.Boundary,
+					"attempt_id": pending.Attempt, "state_effect": colony.LifecycleStateEffectNone,
+					"message": pending.Error(), "next": "aether pause",
+				}
+				outputWorkflow(result, pending.Error()+"\n")
+				return nil
+			}
+			renderRecoveryMenu("pause", err.Error(), []string{"aether status", "aether pause"})
 			return nil
 		}
-		pausedAt := time.Now().UTC().Format(time.RFC3339)
-		state.Paused = true
-		state.PausedAt = &pausedAt
-		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
-			outputError(2, fmt.Sprintf("failed to mark colony paused: %v", err), nil)
-			return nil
-		}
-
-		nextAction := "aether resume"
-		contextCleared := true
-		session, err := syncColonyArtifacts(state, colonyArtifactOptions{
-			CommandName:    "pause-colony",
-			SuggestedNext:  nextAction,
-			Summary:        fmt.Sprintf("Paused at phase %d", state.CurrentPhase),
-			SafeToClear:    "YES — Colony paused, safe to clear context",
-			HandoffTitle:   "Paused Colony",
-			WriteHandoff:   true,
-			ContextCleared: &contextCleared,
-		})
-		if err != nil {
-			outputError(2, fmt.Sprintf("failed to save recovery artifacts: %v", err), nil)
-			return nil
-		}
-		goal := session.ColonyGoal
-		if goal == "" && state.Goal != nil {
-			goal = *state.Goal
-		}
-
+		state := loadStateAfterLifecycleOutcome()
 		result := map[string]interface{}{
 			"paused":        true,
-			"goal":          goal,
+			"goal":          colonyStateGoalText(state),
 			"state":         state.State,
 			"current_phase": state.CurrentPhase,
 			"phase_name":    lookupPhaseName(state, state.CurrentPhase),
 			"handoff_path":  handoffDocumentPath(),
+			"handoff_id":    outcome.Handoff.HandoffID,
+			"safe_boundary": outcome.Handoff.SafeBoundary,
+			"receipt_id":    outcome.Receipt.ReceiptID,
+			"provenance":    outcome.Provenance,
+			"state_effect":  outcome.StateEffect,
+			"replay":        outcome.Replay,
 			"next":          "aether resume",
 		}
-		// The state was already saved above with Paused: true, so resolving
-		// the one closing answer from disk here picks up the paused-project
-		// branch automatically -- no override needed for pause specifically.
+		if outcome.Message != "" {
+			result["message"] = outcome.Message
+		}
 		closeLifecycleCommand(result, "pause", "", "")
-		outputWorkflow(result, renderPauseVisual(result))
+		visual := renderPauseVisual(result)
+		if outcome.Replay {
+			visual = pauseReplayMessage + "\n"
+		}
+		outputWorkflow(result, visual)
 		return nil
 	},
 }
@@ -174,174 +199,1191 @@ func detectStaleFocusSignals(s *storage.Store, currentPhase int) []staleSignalIn
 }
 
 var resumeColonyCmd = &cobra.Command{
-	Use:     "resume-colony",
-	Short:   "Restore colony context from handoff and mark the session resumed",
-	Aliases: []string{"resume"},
-	Args:    cobra.NoArgs,
+	Use:   "resume",
+	Short: "Validate and restore the safest honest recovery point.",
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if store == nil {
 			outputErrorMessage("no store initialized")
 			return nil
 		}
-
-		now := time.Now().UTC()
-		handoffPath := handoffDocumentPath()
-		handoffData, _ := readHandoffDocument()
-		handoffText := strings.TrimSpace(string(handoffData))
-
-		// Rotate trace file if it has grown too large
-		if rotated, rotateErr := trace.RotateTraceFile(store, 50); rotateErr == nil && rotated {
-			fmt.Fprintf(os.Stderr, "warning: rotated trace.jsonl before resume\n")
-		}
-
-		// Verify session freshness
-		freshness := sessionVerifyFresh(store)
-
-		state, recoveredFromHandoff, stateErr := loadResumeState(handoffText, resumeNoHandoff)
-		if stateErr != nil {
-			renderRecoveryMenu("resume", stateErr.Error(), nil)
+		writeLegacySessionRedirectNotice()
+		outcome, err := resumeColonyAt(time.Now().UTC())
+		if err != nil {
+			renderRecoveryMenu("resume", err.Error(), []string{"aether status", "aether resume"})
 			return nil
 		}
-		if state.Goal != nil && strings.TrimSpace(*state.Goal) != "" {
-			activeBuildProcess := false
-			if _, attempt, ok := loadRelevantBuildAttempt(state); ok {
-				activeBuildProcess = state.State == colony.StateEXECUTING && buildAttemptProcessAlive(attempt)
+		if outcome.Provenance == colony.RecoveryProvenanceConflicting || outcome.Provenance == colony.RecoveryProvenanceUnknown {
+			result := map[string]interface{}{
+				"resumed": false, "provenance": outcome.Provenance,
+				"state_effect": outcome.StateEffect, "message": outcome.Message,
+				"next": "aether status",
 			}
-			state.Paused = false
-			state.PausedAt = nil
-			if state.State == colony.StateEXECUTING && state.BuildStartedAt == nil {
-				state.State = colony.StateREADY
-			}
-			if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
-				renderRecoveryMenu("resume", fmt.Sprintf("failed to restore runnable colony state: %v", err), nil)
-				return nil
-			}
-			if state.State != colony.StateEXECUTING || state.BuildStartedAt == nil {
-				rotateSpawnTree(store)
-			}
-			// Clear stale spawn state if session is not fresh
-			if !freshness.Fresh && !activeBuildProcess {
-				state.BuildStartedAt = nil
-				// Generate new run_id for resumed stale session
-				newRunID := fmt.Sprintf("resume_%d_%s", now.Unix(), randomHex(4))
-				state.RunID = &newRunID
-				if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
-					renderRecoveryMenu("resume", fmt.Sprintf("failed to clear stale spawn state: %v", err), nil)
-					return nil
-				}
-				if tracer != nil && state.RunID != nil {
-					_ = tracer.LogIntervention(*state.RunID, "resume.spawn-clear", "resume-colony", map[string]interface{}{
-						"reason": "stale_session",
-					})
-				}
-			}
-			contextCleared := false
-			if _, err := syncColonyArtifacts(state, colonyArtifactOptions{
-				CommandName:    "resume-colony",
-				SuggestedNext:  nextCommandFromState(state),
-				Summary:        "Colony resumed",
-				HandoffTitle:   "Resumed Colony",
-				WriteHandoff:   false,
-				ContextCleared: &contextCleared,
-			}); err != nil {
-				outputError(2, fmt.Sprintf("failed to save session: %v", err), nil)
-				return nil
-			}
-			if recoveredFromHandoff {
-				freshness.Fresh = false
-			}
-
-			var session colony.SessionFile
-			if err := store.LoadJSON("session.json", &session); err == nil {
-				resumedAt := now.Format(time.RFC3339)
-				session.ResumedAt = &resumedAt
-				if err := store.SaveJSON("session.json", session); err != nil {
-					outputError(2, fmt.Sprintf("failed to mark session resumed: %v", err), nil)
-					return nil
-				}
-			}
-		}
-
-		// Preserve-and-report pass over tracked worktrees before resuming.
-		// This is the exact path a crash-recovery user reaches — it must
-		// never destroy what resume was invoked to recover (D-01), and it
-		// must surface what happened rather than silently dropping the
-		// result (D-02). This is the single most important report in the
-		// phase: it is the screen the user sees when resuming after a
-		// crash, and it is where "your work is still here" has to appear.
-		gcCleaned, gcPreserved, gcErr := gcOrphanedWorktrees()
-
-		// Detect stale FOCUS pheromones (D-07, D-08)
-		var staleSignalsList []staleSignalInfo
-		var freshState colony.ColonyState
-		if stateLoadErr := store.LoadJSON("COLONY_STATE.json", &freshState); stateLoadErr == nil {
-			ns := normalizeLegacyColonyState(freshState)
-			staleSignalsList = detectStaleFocusSignals(store, ns.CurrentPhase)
+			outputWorkflow(result, outcome.Message+"\n")
+			return nil
 		}
 
 		result := buildResumeDashboardResult()
 		result["resumed"] = true
-		if recoveredFromHandoff {
+		result["handoff_found"] = outcome.Handoff.HandoffID != ""
+		result["handoff_path"] = handoffDocumentPath()
+		result["handoff_removed"] = true
+		result["handoff_id"] = outcome.Handoff.HandoffID
+		result["receipt_id"] = outcome.Receipt.ReceiptID
+		result["provenance"] = outcome.Provenance
+		result["state_effect"] = outcome.StateEffect
+		result["replay"] = outcome.Replay
+		if outcome.Provenance == colony.RecoveryProvenanceReconstructed {
 			result["state_recovered_from_handoff"] = true
 		}
-		result["freshness"] = map[string]interface{}{
-			"fresh":      freshness.Fresh,
-			"age_hours":  fmt.Sprintf("%.1f", freshness.Age.Hours()),
-			"git_match":  freshness.GitMatch,
-			"git_check":  freshness.GitCheck,
-			"session_id": freshness.SessionID,
-		}
-		result["handoff_found"] = handoffText != ""
-		result["handoff_path"] = handoffPath
-		if gcErr != nil {
-			// Surfaced by name (worktree_gc_error) so the dashboard renderer
-			// can report it — a captured-but-never-rendered error is the
-			// same as a discarded one from the user's point of view.
-			result["worktree_gc_error"] = gcErr.Error()
-		}
-		if gcCleaned > 0 || gcPreserved > 0 {
-			result["worktrees_preserved"] = map[string]interface{}{
-				"cleaned":   gcCleaned,
-				"preserved": gcPreserved,
-			}
-		}
-		if len(staleSignalsList) > 0 {
-			staleData := make([]map[string]interface{}, 0, len(staleSignalsList))
-			for _, ss := range staleSignalsList {
-				staleData = append(staleData, map[string]interface{}{
-					"id":            ss.ID,
-					"type":          ss.Type,
-					"content":       ss.Content,
-					"source_phase":  ss.SourcePhase,
-					"current_phase": ss.CurrentPhase,
-				})
-			}
-			result["stale_signals"] = staleData
-		}
-
-		if handoffText != "" {
-			if err := removeHandoffDocument(); err == nil {
-				result["handoff_removed"] = true
-			} else {
-				result["handoff_removed"] = false
-				result["handoff_remove_error"] = err.Error()
-			}
-		} else {
-			result["handoff_removed"] = false
-		}
-
-		// buildResumeDashboardResult already resolved and folded an answer
-		// under "resume-dashboard"; re-fold under this command's own name so
-		// the "what changed" line names the command the owner actually ran,
-		// carrying forward the same override fact (if any) rather than
-		// dropping it on a second, unrelated resolve. "colony" is a word
-		// this repo invented (S-05); the plain phrase avoids needing it
-		// explained a second time right next to itself in "what changed".
 		closeLifecycleCommand(result, "picking the project back up",
 			stringValue(result["resume_override_command"]), stringValue(result["resume_override_why"]))
-		outputWorkflow(result, renderResumeVisual(result, handoffText, true))
+		visual := renderResumeVisual(result, "", true)
+		if outcome.Replay && outcome.Message != "" {
+			visual = outcome.Message + "\n"
+		}
+		outputWorkflow(result, visual)
 		return nil
 	},
+}
+
+// pauseColonyAt is the single mutating pause boundary. Every durable target is
+// declared before intent is persisted, and the handoff ID names the same
+// transaction on retry. A crash therefore resumes the existing journal rather
+// than rebuilding partial state or emitting another handoff.
+func pauseColonyAt(now time.Time) (pauseResumeLifecycleOutcome, error) {
+	root := resolveAetherRootPath()
+	facts, err := loadLifecycleFacts(root, store, now.UTC())
+	if err != nil {
+		return pauseResumeLifecycleOutcome{}, err
+	}
+	if facts.State.Source.Provenance != LifecycleFactConfirmed {
+		return pauseResumeLifecycleOutcome{}, fmt.Errorf("colony state is %s: %s", facts.State.Source.Provenance, facts.State.Source.Diagnostic)
+	}
+	state := normalizeLegacyColonyState(facts.State.Value)
+	if !resumeStateIsRunnable(state) {
+		return pauseResumeLifecycleOutcome{}, fmt.Errorf("COLONY_STATE.json is not a runnable recovery source")
+	}
+	session := pauseResumeSessionFromFacts(facts, state, now)
+
+	if state.Paused && state.PauseHandoff != nil {
+		return replayPauseTransaction(*state.PauseHandoff)
+	}
+
+	repository, err := pauseRepositoryEvidence(root)
+	if err != nil {
+		return pauseResumeLifecycleOutcome{}, err
+	}
+	handoffID := pauseEpisodeHandoffID(state, session, repository)
+	transactionID := "pause-" + handoffID
+	config := pauseResumeTransactionConfig(transactionID, "pause")
+	if lifecycleTransactionHasIntentOrReceipt(transactionID) {
+		receipt, resumeErr := resumeLifecycleTransaction(config)
+		if resumeErr != nil {
+			return pauseResumeLifecycleOutcome{}, resumeErr
+		}
+		return loadPauseOutcome(receipt, true, pauseReplayMessage)
+	}
+	if err := discardUncommittedLifecycleStaging(transactionID); err != nil {
+		return pauseResumeLifecycleOutcome{}, err
+	}
+
+	safeBoundary, attemptID, pending := pauseSafeBoundary(state)
+	if pending {
+		return pauseResumeLifecycleOutcome{}, pauseBoundaryPendingError{Boundary: safeBoundary, Attempt: attemptID}
+	}
+
+	handoff, err := buildPauseHandoff(facts, state, session, repository, now, handoffID, transactionID, safeBoundary, attemptID, colony.RecoveryProvenanceConfirmed)
+	if err != nil {
+		return pauseResumeLifecycleOutcome{}, err
+	}
+	handoffBytes, err := pauseResumeJSON(handoff)
+	if err != nil {
+		return pauseResumeLifecycleOutcome{}, fmt.Errorf("marshal pause handoff: %w", err)
+	}
+	reference := colony.PauseHandoffReference{
+		ID: handoff.HandoffID, TransactionID: transactionID,
+		Digest: lifecycleDigest(handoffBytes), Path: pauseHandoffDataPath,
+	}
+	if err := reference.Validate(); err != nil {
+		return pauseResumeLifecycleOutcome{}, fmt.Errorf("validate pause handoff reference: %w", err)
+	}
+
+	pausedAt := now.UTC().Format(time.RFC3339)
+	state.Paused = true
+	state.PausedAt = &pausedAt
+	state.PauseHandoff = &reference
+	confirmed := colony.RecoveryProvenanceConfirmed
+	state.RecoveryProvenance = &confirmed
+	if state.SessionID == nil || strings.TrimSpace(*state.SessionID) == "" {
+		id := session.SessionID
+		state.SessionID = &id
+	}
+	state.Events = append(state.Events, pauseResumeLifecycleEvent(now, "pause", handoffID, safeBoundary))
+
+	session.LastCommand = "pause"
+	session.LastCommandAt = pausedAt
+	session.CurrentPhase = state.CurrentPhase
+	session.CurrentMilestone = state.Milestone
+	session.SuggestedNext = "aether resume"
+	session.ContextCleared = true
+	session.ResumedAt = nil
+	session.ActiveTodos = mergeShelfTodos(session.ActiveTodos, currentOpenTasks(state))
+	session.Summary = fmt.Sprintf("Paused once at %s; resume from %s.", safeBoundary, handoff.RestartPoint)
+	session.PauseHandoff = &reference
+	session.RecoveryProvenance = &confirmed
+	session.BaselineCommit = repository.Head
+
+	stateBytes, err := pauseResumeJSON(state)
+	if err != nil {
+		return pauseResumeLifecycleOutcome{}, fmt.Errorf("marshal paused state: %w", err)
+	}
+	sessionBytes, err := pauseResumeJSON(session)
+	if err != nil {
+		return pauseResumeLifecycleOutcome{}, fmt.Errorf("marshal paused session: %w", err)
+	}
+	contextText := renderContextSnapshot(state, session, "aether resume", session.Summary, "YES — one validated handoff is committed")
+	humanHandoff := buildTransactionalHandoffDocument(now, state, session, handoff)
+
+	tx, err := beginLifecycleTransaction(config)
+	if err != nil {
+		return pauseResumeLifecycleOutcome{}, err
+	}
+	for _, declaration := range []struct {
+		root    lifecycleTransactionRootKind
+		path    string
+		content []byte
+	}{
+		{lifecycleTransactionRootData, "COLONY_STATE.json", stateBytes},
+		{lifecycleTransactionRootData, "session.json", sessionBytes},
+		{lifecycleTransactionRootData, pauseHandoffDataPath, handoffBytes},
+		{lifecycleTransactionRootRepository, filepath.Join(".aether", "CONTEXT.md"), []byte(contextText)},
+		{lifecycleTransactionRootRepository, filepath.Join(".aether", "HANDOFF.md"), []byte(humanHandoff)},
+	} {
+		if err := tx.DeclareWrite(declaration.root, declaration.path, declaration.content); err != nil {
+			return pauseResumeLifecycleOutcome{}, err
+		}
+	}
+	receipt, err := tx.Commit()
+	if err != nil {
+		return pauseResumeLifecycleOutcome{}, err
+	}
+	return loadPauseOutcome(receipt, false, "")
+}
+
+// resumeColonyAt validates every independent copy of the handoff identity
+// before it declares a write. Conflicting and unknown paths return a rendered
+// stop with StateEffectNone; only confirmed or explicitly reconstructed facts
+// reach the transaction coordinator.
+func resumeColonyAt(now time.Time) (pauseResumeLifecycleOutcome, error) {
+	root := resolveAetherRootPath()
+	facts, err := loadLifecycleFacts(root, store, now.UTC())
+	if err != nil {
+		return pauseResumeLifecycleOutcome{}, err
+	}
+	state := normalizeLegacyColonyState(facts.State.Value)
+	session := pauseResumeSessionFromFacts(facts, state, now)
+
+	// A pause crash can leave durable intent before its state target lands. A
+	// resume request first completes that already-authorized pause transaction;
+	// it never invents a second handoff to get past the interruption.
+	if state.PauseHandoff == nil {
+		if repository, repoErr := pauseRepositoryEvidence(root); repoErr == nil {
+			candidateID := pauseEpisodeHandoffID(state, session, repository)
+			candidateTx := "pause-" + candidateID
+			if lifecycleTransactionHasIntentOrReceipt(candidateTx) {
+				if _, resumeErr := resumeLifecycleTransaction(pauseResumeTransactionConfig(candidateTx, "pause")); resumeErr != nil {
+					return pauseResumeLifecycleOutcome{}, resumeErr
+				}
+				facts, err = loadLifecycleFacts(root, store, now.UTC())
+				if err != nil {
+					return pauseResumeLifecycleOutcome{}, err
+				}
+				state = normalizeLegacyColonyState(facts.State.Value)
+				session = pauseResumeSessionFromFacts(facts, state, now)
+			}
+		}
+	}
+
+	if state.PauseHandoff != nil && !state.Paused {
+		resumeTxID := resumeTransactionID(state.PauseHandoff.ID)
+		if lifecycleTransactionHasIntentOrReceipt(resumeTxID) {
+			receipt, resumeErr := resumeLifecycleTransaction(pauseResumeTransactionConfig(resumeTxID, "resume"))
+			if resumeErr != nil {
+				return pauseResumeConflictOutcome("Recovery evidence conflicts with the previously committed resume receipt. Preserve the transaction journal, inspect `aether status`, choose which named evidence is authoritative, then run `aether resume`."), nil
+			}
+			handoff, loadErr := loadValidatedPauseHandoff(*state.PauseHandoff)
+			if loadErr != nil {
+				return pauseResumeConflictOutcome("Recovery evidence conflicts after resume: the retained handoff no longer matches its reference. Inspect `aether status` before deciding whether to repair the handoff evidence."), nil
+			}
+			return pauseResumeLifecycleOutcome{
+				Handoff: handoff, Receipt: receipt, Provenance: handoff.Provenance,
+				StateEffect: receipt.StateEffect, Replay: true,
+				Message: "Already resumed; the existing validated recovery receipt was retained.",
+			}, nil
+		}
+	}
+
+	var handoff colony.PauseHandoff
+	provenance := colony.RecoveryProvenanceConfirmed
+	reconstructed := false
+	if state.PauseHandoff != nil {
+		if facts.Session.Source.Provenance != LifecycleFactConfirmed || session.PauseHandoff == nil {
+			return pauseResumeConflictOutcome("Recovery evidence conflicts: state names a handoff but session does not. Run `aether status`, decide whether state or session evidence is authoritative, then run `aether resume`."), nil
+		}
+		if !pauseHandoffReferencesEqual(*state.PauseHandoff, *session.PauseHandoff) {
+			return pauseResumeConflictOutcome("Recovery evidence conflicts: state and session name different handoff evidence. Run `aether status`, decide which handoff is authoritative, then run `aether resume`."), nil
+		}
+		handoff, err = loadValidatedPauseHandoff(*state.PauseHandoff)
+		if err != nil {
+			return pauseResumeConflictOutcome(fmt.Sprintf("Recovery evidence conflicts: the referenced handoff is invalid (%v). Run `aether status`, preserve the named evidence, and choose the authoritative recovery point.", err)), nil
+		}
+		pauseReceipt, receiptErr := resumeLifecycleTransaction(pauseResumeTransactionConfig(handoff.Transaction.ID, "pause"))
+		if receiptErr != nil || handoff.Receipt == nil || pauseReceipt.ReceiptID != handoff.Receipt.ID {
+			return pauseResumeConflictOutcome("Recovery evidence conflicts: the pause transaction receipt does not validate against state, session, and handoff bytes. Run `aether status` and resolve the named transaction evidence before resuming."), nil
+		}
+		currentRepository, repoErr := pauseRepositoryEvidence(root)
+		if repoErr != nil {
+			return pauseResumeUnknownOutcome(fmt.Sprintf("Recovery evidence is unknown: repository evidence could not be read (%v). Run `aether status` and retry when repository evidence is available.", repoErr)), nil
+		}
+		if currentRepository.Head != handoff.Repository.Head || currentRepository.DirtyDigest != handoff.Repository.DirtyDigest {
+			return pauseResumeConflictOutcome("Recovery evidence conflicts: repository HEAD or working bytes changed after the handoff. Run `aether status`, decide whether to keep those changes, then create or select an honest recovery point before `aether resume`."), nil
+		}
+		if !reflectPauseWorktreesEqual(handoff.Worktrees, pauseWorktreeEvidence(root, state.Worktrees)) {
+			return pauseResumeConflictOutcome("Recovery evidence conflicts: worktree evidence changed after the handoff. Run `aether status`, inspect the named worktrees, and choose which work is authoritative before resuming."), nil
+		}
+		if state.State == colony.StateEXECUTING {
+			if _, attempt, ok := loadRelevantBuildAttemptReadOnly(state); ok && buildAttemptProcessAlive(attempt) {
+				return pauseResumeConflictOutcome("Recovery evidence conflicts: the paused attempt still has a live worker process. Run `aether status` and wait for the worker's safe boundary before resuming."), nil
+			}
+		}
+	} else {
+		if !resumeStateIsRunnable(state) {
+			if resumeNoHandoff {
+				return pauseResumeUnknownOutcome("Recovery evidence is unknown: runtime state is not runnable and HANDOFF.md reconstruction is disabled. Run `aether status` and repair COLONY_STATE.json."), nil
+			}
+			handoffText, readErr := readHandoffDocument()
+			if readErr != nil {
+				return pauseResumeUnknownOutcome("Recovery evidence is unknown: neither runnable state nor a readable handoff exists. Run `aether status` and restore durable recovery evidence."), nil
+			}
+			restored, restoreErr := restoreStateFromHandoff(string(handoffText))
+			if restoreErr != nil {
+				return pauseResumeUnknownOutcome(fmt.Sprintf("Recovery evidence is unknown: HANDOFF.md cannot reconstruct a runnable point (%v). Run `aether status` and repair the named evidence.", restoreErr)), nil
+			}
+			state = restored
+			state.Paused = true
+			session = pauseResumeSessionFromFacts(facts, state, now)
+		} else {
+			if conflict := pauseResumeStateSessionConflict(state, facts.Session); conflict != "" {
+				return pauseResumeConflictOutcome(conflict), nil
+			}
+			if state.State == colony.StateEXECUTING {
+				if _, attempt, ok := loadRelevantBuildAttemptReadOnly(state); ok && buildAttemptProcessAlive(attempt) {
+					return pauseResumeConflictOutcome("Recovery evidence conflicts: durable state still names a live build attempt. Run `aether status` and wait for its safe boundary instead of redispatching finished work."), nil
+				}
+			}
+		}
+		provenance = colony.RecoveryProvenanceReconstructed
+		reconstructed = true
+		repository, repoErr := pauseRepositoryEvidence(root)
+		if repoErr != nil {
+			return pauseResumeUnknownOutcome(fmt.Sprintf("Recovery evidence is unknown: repository evidence could not be reconstructed (%v).", repoErr)), nil
+		}
+		handoffID := "reconstructed-" + pauseEpisodeHandoffID(state, session, repository)
+		resumeTxID := resumeTransactionID(handoffID)
+		boundary := "reconstructed_state_boundary"
+		if facts.State.Source.Provenance != LifecycleFactConfirmed {
+			boundary = "reconstructed_legacy_boundary"
+		}
+		handoff, err = buildPauseHandoff(facts, state, session, repository, now, handoffID, resumeTxID, boundary, "", provenance)
+		if err != nil {
+			return pauseResumeLifecycleOutcome{}, err
+		}
+	}
+
+	resumeTxID := resumeTransactionID(handoff.HandoffID)
+	config := pauseResumeTransactionConfig(resumeTxID, "resume")
+	if lifecycleTransactionHasIntentOrReceipt(resumeTxID) {
+		receipt, resumeErr := resumeLifecycleTransaction(config)
+		if resumeErr != nil {
+			return pauseResumeLifecycleOutcome{}, resumeErr
+		}
+		loaded, loadErr := loadValidatedPauseHandoffReferenceFromState()
+		if loadErr == nil {
+			handoff = loaded
+		}
+		return pauseResumeLifecycleOutcome{Handoff: handoff, Receipt: receipt, Provenance: provenance, StateEffect: receipt.StateEffect, Replay: true}, nil
+	}
+	if err := discardUncommittedLifecycleStaging(resumeTxID); err != nil {
+		return pauseResumeLifecycleOutcome{}, err
+	}
+
+	if reconstructed {
+		handoff.Transaction = pauseResumeTransactionReference(resumeTxID)
+		handoff.Receipt = &colony.LifecycleReceiptReference{ID: resumeTxID + "-receipt"}
+	}
+	handoffBytes, err := pauseResumeJSON(handoff)
+	if err != nil {
+		return pauseResumeLifecycleOutcome{}, fmt.Errorf("marshal resume handoff: %w", err)
+	}
+	reference := state.PauseHandoff
+	if reconstructed {
+		reference = &colony.PauseHandoffReference{
+			ID: handoff.HandoffID, TransactionID: handoff.Transaction.ID,
+			Digest: lifecycleDigest(handoffBytes), Path: pauseHandoffDataPath,
+		}
+	}
+	if reference == nil {
+		return pauseResumeLifecycleOutcome{}, fmt.Errorf("resume handoff reference is missing")
+	}
+
+	staleSession := pauseResumeSessionIsStale(session, now, handoff.Repository.Head)
+	state.Paused = false
+	state.PausedAt = nil
+	if state.State == colony.StateEXECUTING {
+		state.State = colony.StateREADY
+		state.BuildStartedAt = nil
+	}
+	if staleSession {
+		state.BuildStartedAt = nil
+	}
+	newRunID := "resume-" + compactLifecycleID(handoff.HandoffID)
+	state.RunID = &newRunID
+	state.PauseHandoff = reference
+	state.RecoveryProvenance = &provenance
+	state.Events = append(state.Events, pauseResumeLifecycleEvent(now, "resume", handoff.HandoffID, string(provenance)))
+
+	resumedAt := now.UTC().Format(time.RFC3339)
+	session.LastCommand = "resume"
+	session.LastCommandAt = resumedAt
+	session.CurrentPhase = state.CurrentPhase
+	session.CurrentMilestone = state.Milestone
+	session.SuggestedNext = nextCommandFromState(state)
+	session.ContextCleared = false
+	session.ResumedAt = &resumedAt
+	session.ActiveTodos = mergeShelfTodos(session.ActiveTodos, currentOpenTasks(state))
+	session.Summary = fmt.Sprintf("Recovery point %s resumed with %s provenance.", handoff.HandoffID, provenance)
+	session.PauseHandoff = reference
+	session.RecoveryProvenance = &provenance
+	session.BaselineCommit = handoff.Repository.Head
+
+	stateBytes, err := pauseResumeJSON(state)
+	if err != nil {
+		return pauseResumeLifecycleOutcome{}, fmt.Errorf("marshal resumed state: %w", err)
+	}
+	sessionBytes, err := pauseResumeJSON(session)
+	if err != nil {
+		return pauseResumeLifecycleOutcome{}, fmt.Errorf("marshal resumed session: %w", err)
+	}
+	contextText := renderContextSnapshot(state, session, session.SuggestedNext, session.Summary, "NO — recovery context is active")
+
+	tx, err := beginLifecycleTransaction(config)
+	if err != nil {
+		return pauseResumeLifecycleOutcome{}, err
+	}
+	if err := tx.DeclareWrite(lifecycleTransactionRootData, "COLONY_STATE.json", stateBytes); err != nil {
+		return pauseResumeLifecycleOutcome{}, err
+	}
+	if err := tx.DeclareWrite(lifecycleTransactionRootData, "session.json", sessionBytes); err != nil {
+		return pauseResumeLifecycleOutcome{}, err
+	}
+	if reconstructed {
+		if err := tx.DeclareWrite(lifecycleTransactionRootData, pauseHandoffDataPath, handoffBytes); err != nil {
+			return pauseResumeLifecycleOutcome{}, err
+		}
+	}
+	if err := tx.DeclareWrite(lifecycleTransactionRootRepository, filepath.Join(".aether", "CONTEXT.md"), []byte(contextText)); err != nil {
+		return pauseResumeLifecycleOutcome{}, err
+	}
+	if err := tx.DeclareRemoval(lifecycleTransactionRootRepository, filepath.Join(".aether", "HANDOFF.md")); err != nil {
+		return pauseResumeLifecycleOutcome{}, err
+	}
+	if staleSession {
+		if err := tx.DeclareRemoval(lifecycleTransactionRootData, "spawn-tree.txt"); err != nil {
+			return pauseResumeLifecycleOutcome{}, err
+		}
+		if err := tx.DeclareRemoval(lifecycleTransactionRootData, "spawn-runs.json"); err != nil {
+			return pauseResumeLifecycleOutcome{}, err
+		}
+	}
+	receipt, err := tx.Commit()
+	if err != nil {
+		return pauseResumeLifecycleOutcome{}, err
+	}
+	return pauseResumeLifecycleOutcome{
+		Handoff: handoff, Receipt: receipt, Provenance: provenance,
+		StateEffect: receipt.StateEffect,
+	}, nil
+}
+
+func replayPauseTransaction(reference colony.PauseHandoffReference) (pauseResumeLifecycleOutcome, error) {
+	if err := reference.Validate(); err != nil {
+		return pauseResumeLifecycleOutcome{}, fmt.Errorf("paused state has an invalid handoff reference: %w", err)
+	}
+	receipt, err := resumeLifecycleTransaction(pauseResumeTransactionConfig(reference.TransactionID, "pause"))
+	if err != nil {
+		return pauseResumeLifecycleOutcome{}, err
+	}
+	return loadPauseOutcome(receipt, true, pauseReplayMessage)
+}
+
+func loadPauseOutcome(receipt colony.LifecycleReceipt, replay bool, message string) (pauseResumeLifecycleOutcome, error) {
+	handoff, err := loadValidatedPauseHandoffReferenceFromState()
+	if err != nil {
+		return pauseResumeLifecycleOutcome{}, err
+	}
+	if handoff.Receipt == nil || handoff.Receipt.ID != receipt.ReceiptID || handoff.Transaction.ID != receipt.Transaction.ID {
+		return pauseResumeLifecycleOutcome{}, fmt.Errorf("pause handoff and transaction receipt do not cross-reference one another")
+	}
+	return pauseResumeLifecycleOutcome{
+		Handoff: handoff, Receipt: receipt, Provenance: colony.RecoveryProvenanceConfirmed,
+		StateEffect: receipt.StateEffect, Replay: replay, Message: message,
+	}, nil
+}
+
+func loadValidatedPauseHandoffReferenceFromState() (colony.PauseHandoff, error) {
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		return colony.PauseHandoff{}, err
+	}
+	if state.PauseHandoff == nil {
+		return colony.PauseHandoff{}, fmt.Errorf("state does not reference a pause handoff")
+	}
+	return loadValidatedPauseHandoff(*state.PauseHandoff)
+}
+
+func loadValidatedPauseHandoff(reference colony.PauseHandoffReference) (colony.PauseHandoff, error) {
+	if err := reference.Validate(); err != nil {
+		return colony.PauseHandoff{}, err
+	}
+	relative := strings.TrimSpace(reference.Path)
+	if relative == "" {
+		relative = pauseHandoffDataPath
+	}
+	clean := filepath.Clean(relative)
+	if filepath.IsAbs(relative) || clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) || clean != relative {
+		return colony.PauseHandoff{}, fmt.Errorf("handoff path %q is not a contained data path", relative)
+	}
+	content, err := os.ReadFile(filepath.Join(store.BasePath(), clean))
+	if err != nil {
+		return colony.PauseHandoff{}, err
+	}
+	if lifecycleDigest(content) != reference.Digest {
+		return colony.PauseHandoff{}, fmt.Errorf("handoff digest does not match state/session reference")
+	}
+	var handoff colony.PauseHandoff
+	if err := json.Unmarshal(content, &handoff); err != nil {
+		return colony.PauseHandoff{}, err
+	}
+	if err := handoff.Validate(); err != nil {
+		return colony.PauseHandoff{}, err
+	}
+	if handoff.HandoffID != reference.ID || handoff.Transaction.ID != reference.TransactionID {
+		return colony.PauseHandoff{}, fmt.Errorf("handoff identity conflicts with its reference")
+	}
+	return handoff, nil
+}
+
+func pauseResumeConflictOutcome(message string) pauseResumeLifecycleOutcome {
+	return pauseResumeLifecycleOutcome{
+		Provenance:  colony.RecoveryProvenanceConflicting,
+		StateEffect: colony.LifecycleStateEffectNone,
+		Message:     message,
+	}
+}
+
+func pauseResumeUnknownOutcome(message string) pauseResumeLifecycleOutcome {
+	return pauseResumeLifecycleOutcome{
+		Provenance:  colony.RecoveryProvenanceUnknown,
+		StateEffect: colony.LifecycleStateEffectNone,
+		Message:     message,
+	}
+}
+
+func pauseResumeTransactionConfig(transactionID, command string) lifecycleTransactionConfig {
+	return lifecycleTransactionConfig{
+		TransactionID: transactionID,
+		Command:       command,
+		Allowlist: lifecycleTransactionAllowlist{
+			RepositoryRoot:    resolveAetherRootPath(),
+			LifecycleDataRoot: store.BasePath(),
+		},
+		Fault: pauseResumeLifecycleFault,
+	}
+}
+
+func lifecycleTransactionHasIntentOrReceipt(transactionID string) bool {
+	journal := filepath.Join(store.BasePath(), "transactions", transactionID)
+	for _, name := range []string{"intent.json", "receipt.json"} {
+		if info, err := os.Lstat(filepath.Join(journal, name)); err == nil && info.Mode().IsRegular() {
+			return true
+		}
+	}
+	return false
+}
+
+// discardUncommittedLifecycleStaging removes only transaction-owned scratch
+// directories for an ID that never reached durable intent. Once intent exists,
+// recovery must use the coordinator journal and this helper refuses to act.
+func discardUncommittedLifecycleStaging(transactionID string) error {
+	if !lifecycleTransactionIDPattern.MatchString(transactionID) {
+		return fmt.Errorf("invalid lifecycle transaction id %q", transactionID)
+	}
+	journal := filepath.Join(store.BasePath(), "transactions", transactionID)
+	if _, err := os.Lstat(filepath.Join(journal, "intent.json")); err == nil {
+		return fmt.Errorf("lifecycle transaction %s has durable intent; resume it instead of discarding staging", transactionID)
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	for _, root := range []string{resolveAetherRootPath(), store.BasePath()} {
+		owned := filepath.Join(root, lifecycleTransactionDirectory, transactionID)
+		if !pathIsWithin(filepath.Join(root, lifecycleTransactionDirectory), owned) {
+			return fmt.Errorf("transaction staging path %q escaped its owned root", owned)
+		}
+		if err := os.RemoveAll(owned); err != nil {
+			return fmt.Errorf("discard uncommitted transaction staging %q: %w", owned, err)
+		}
+	}
+	return nil
+}
+
+func pauseResumeJSON(value interface{}) ([]byte, error) {
+	content, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append(content, '\n'), nil
+}
+
+func pauseResumeSessionFromFacts(facts LifecycleFacts, state colony.ColonyState, now time.Time) colony.SessionFile {
+	if facts.Session.Source.Provenance == LifecycleFactConfirmed {
+		return facts.Session.Value
+	}
+	goal := colonyStateGoalText(state)
+	sessionID := "session-" + compactLifecycleID(lifecycleDigest([]byte(strings.Join([]string{
+		goal, fmt.Sprint(state.CurrentPhase), pauseResumeRunID(state), resolveAetherRootPath(),
+	}, "\x00"))))
+	startedAt := now.UTC().Format(time.RFC3339)
+	if state.InitializedAt != nil {
+		startedAt = state.InitializedAt.UTC().Format(time.RFC3339)
+	}
+	return colony.SessionFile{
+		SessionID: sessionID, StartedAt: startedAt, ColonyGoal: goal,
+		ColonyMode: state.EffectiveColonyMode(), CurrentPhase: state.CurrentPhase,
+		CurrentMilestone: state.Milestone, SuggestedNext: nextCommandFromState(state),
+		ActiveTodos: currentOpenTasks(state), Summary: "Recovery session reconstructed from durable state.",
+	}
+}
+
+func pauseResumeRunID(state colony.ColonyState) string {
+	if state.RunID != nil && strings.TrimSpace(*state.RunID) != "" {
+		return strings.TrimSpace(*state.RunID)
+	}
+	if state.SessionID != nil && strings.TrimSpace(*state.SessionID) != "" {
+		return strings.TrimSpace(*state.SessionID)
+	}
+	if state.AcceptedCharter != nil && strings.TrimSpace(state.AcceptedCharter.EpisodeID) != "" {
+		return strings.TrimSpace(state.AcceptedCharter.EpisodeID)
+	}
+	return "legacy-episode"
+}
+
+func pauseEpisodeHandoffID(state colony.ColonyState, session colony.SessionFile, repository colony.LifecycleRepositoryEvidence) string {
+	material := strings.Join([]string{
+		"pause-handoff-v1", resolveAetherRootPath(), strings.TrimSpace(session.SessionID),
+		pauseResumeRunID(state), fmt.Sprint(state.CurrentPhase), colonyStateGoalText(state),
+		repository.Head, repository.DirtyDigest,
+	}, "\x00")
+	return "handoff-" + compactLifecycleID(lifecycleDigest([]byte(material)))
+}
+
+func compactLifecycleID(value string) string {
+	value = strings.TrimSpace(value)
+	value = strings.TrimPrefix(value, "sha256:")
+	var b strings.Builder
+	for _, r := range value {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '.' || r == '_' || r == '-' {
+			b.WriteRune(r)
+		}
+	}
+	clean := b.String()
+	if len(clean) > 24 {
+		clean = clean[:24]
+	}
+	if clean == "" {
+		return "unknown"
+	}
+	return clean
+}
+
+func resumeTransactionID(handoffID string) string {
+	return "resume-" + compactLifecycleID(handoffID)
+}
+
+func pauseResumeTransactionReference(transactionID string) colony.LifecycleTransactionReference {
+	return colony.LifecycleTransactionReference{
+		ID: transactionID, Stage: colony.TransactionStageVerified,
+		JournalPath: filepath.Join(store.BasePath(), "transactions", transactionID),
+	}
+}
+
+func pauseResumeStateSessionConflict(state colony.ColonyState, sessionFact LifecycleFact[colony.SessionFile]) string {
+	if sessionFact.Source.Provenance != LifecycleFactConfirmed {
+		return ""
+	}
+	session := sessionFact.Value
+	if state.Goal != nil && strings.TrimSpace(session.ColonyGoal) != "" && !goalsMatch(*state.Goal, session.ColonyGoal) {
+		return "Recovery evidence conflicts: state and session name different goals. Run `aether status`, decide which episode is authoritative, then run `aether resume`."
+	}
+	if session.CurrentPhase > 0 && state.CurrentPhase > 0 && session.CurrentPhase != state.CurrentPhase {
+		return "Recovery evidence conflicts: state and session name different current phases. Run `aether status`, choose the proven phase boundary, then run `aether resume`."
+	}
+	if state.SessionID != nil && strings.TrimSpace(*state.SessionID) != "" && strings.TrimSpace(session.SessionID) != "" && strings.TrimSpace(*state.SessionID) != strings.TrimSpace(session.SessionID) {
+		return "Recovery evidence conflicts: state and session name different session IDs. Run `aether status`, preserve both records, and choose the authoritative recovery episode."
+	}
+	return ""
+}
+
+// loadRelevantBuildAttemptReadOnly mirrors the selection rule used by build,
+// but uses direct file reads so determining a pause boundary cannot create
+// storage lock files before transaction intent exists.
+func loadRelevantBuildAttemptReadOnly(state colony.ColonyState) (string, buildAttemptRecord, bool) {
+	if store == nil {
+		return "", buildAttemptRecord{}, false
+	}
+	phaseIDs := make([]int, 0, len(state.Plan.Phases)+1)
+	seen := make(map[int]bool)
+	if state.CurrentPhase > 0 {
+		phaseIDs = append(phaseIDs, state.CurrentPhase)
+		seen[state.CurrentPhase] = true
+	}
+	for index := len(state.Plan.Phases) - 1; index >= 0; index-- {
+		phaseID := state.Plan.Phases[index].ID
+		if phaseID > 0 && !seen[phaseID] {
+			phaseIDs = append(phaseIDs, phaseID)
+			seen[phaseID] = true
+		}
+	}
+	var selectedRel string
+	var selected buildAttemptRecord
+	found := false
+	for _, phaseID := range phaseIDs {
+		pointerRel := latestBuildAttemptPointerPath(phaseID)
+		pointerBytes, err := os.ReadFile(filepath.Join(store.BasePath(), filepath.FromSlash(pointerRel)))
+		if err != nil {
+			continue
+		}
+		var pointer latestBuildAttemptPointer
+		if json.Unmarshal(pointerBytes, &pointer) != nil || strings.TrimSpace(pointer.AttemptID) == "" {
+			continue
+		}
+		attemptRel := strings.TrimPrefix(filepath.ToSlash(strings.TrimSpace(pointer.Path)), ".aether/data/")
+		if attemptRel == "" {
+			continue
+		}
+		attemptBytes, err := os.ReadFile(filepath.Join(store.BasePath(), filepath.FromSlash(attemptRel)))
+		if err != nil {
+			continue
+		}
+		var record buildAttemptRecord
+		if json.Unmarshal(attemptBytes, &record) != nil || record.ID != pointer.AttemptID || record.Phase != phaseID {
+			continue
+		}
+		if !found || record.UpdatedAt > selected.UpdatedAt {
+			selectedRel, selected, found = attemptRel, record, true
+		}
+	}
+	return selectedRel, selected, found
+}
+
+func pauseSafeBoundary(state colony.ColonyState) (boundary, attemptID string, pending bool) {
+	if _, attempt, ok := loadRelevantBuildAttemptReadOnly(state); ok {
+		attemptID = strings.TrimSpace(attempt.ID)
+		if state.State == colony.StateEXECUTING && buildAttemptProcessAlive(attempt) {
+			return "worker_completion_boundary", attemptID, true
+		}
+		if state.State == colony.StateEXECUTING {
+			return "interrupted_attempt_boundary", attemptID, false
+		}
+	}
+	switch state.State {
+	case colony.StateEXECUTING:
+		return "interrupted_execution_boundary", attemptID, false
+	case colony.StateBUILT:
+		return "post_build_verification_boundary", attemptID, false
+	case colony.StateCOMPLETED:
+		return "completed_episode_boundary", attemptID, false
+	case colony.StateIDLE:
+		return "idle_command_boundary", attemptID, false
+	default:
+		return "between_commands_boundary", attemptID, false
+	}
+}
+
+func buildPauseHandoff(
+	facts LifecycleFacts,
+	state colony.ColonyState,
+	session colony.SessionFile,
+	repository colony.LifecycleRepositoryEvidence,
+	now time.Time,
+	handoffID, transactionID, safeBoundary, attemptID string,
+	provenance colony.RecoveryProvenance,
+) (colony.PauseHandoff, error) {
+	contextBytes, contextErr := os.ReadFile(contextDocumentPath())
+	contextDigest := lifecycleTransactionMissingDigest
+	if contextErr == nil {
+		contextDigest = lifecycleDigest(contextBytes)
+	} else if !os.IsNotExist(contextErr) {
+		return colony.PauseHandoff{}, fmt.Errorf("read context evidence: %w", contextErr)
+	}
+
+	evidence := pauseHandoffEvidence(facts, repository, contextDigest)
+	transaction := pauseResumeTransactionReference(transactionID)
+	receipt := &colony.LifecycleReceiptReference{ID: transactionID + "-receipt"}
+	restartPoint := pauseRestartPoint(state)
+	handoff := colony.PauseHandoff{
+		SchemaVersion: colony.LifecycleSchemaVersion, HandoffID: handoffID,
+		Command: "pause", OutcomeKind: colony.OutcomeKindPaused, ProjectionRevision: "199-13",
+		PhaseID: state.CurrentPhase, TaskIDs: pauseTaskIDs(state), AttemptID: attemptID,
+		RunID: pauseResumeRunID(state), SafeBoundary: safeBoundary, RestartPoint: restartPoint,
+		ContextDigest: contextDigest, Repository: repository,
+		Worktrees: pauseWorktreeEvidence(resolveAetherRootPath(), state.Worktrees),
+		Lineage:   pauseWorkerLineage(facts.Actors.Value), Signals: pauseSignalSnapshot(facts.Signals.Value),
+		Changes: []colony.LifecycleChange{
+			{Target: ".aether/data/COLONY_STATE.json", Action: "write"},
+			{Target: ".aether/data/session.json", Action: "write"},
+			{Target: ".aether/data/" + pauseHandoffDataPath, Action: "write"},
+			{Target: ".aether/CONTEXT.md", Action: "write"},
+			{Target: ".aether/HANDOFF.md", Action: "write"},
+		},
+		Evidence: evidence, Verification: pauseVerificationEvidence(facts.Verification.Value),
+		Blockers: pauseBlockerEvidence(facts.Blockers.Value), Decisions: pauseDecisionEvidence(state, facts.Blockers.Value),
+		StateEffect: colony.LifecycleStateEffectCommitted, Transaction: transaction, Receipt: receipt,
+		Recovery: &colony.LifecycleRecovery{
+			Provenance: provenance,
+			Facts: []colony.LifecycleRecoveryFact{{
+				Name: "safe-boundary-handoff", Summary: fmt.Sprintf("Handoff %s records %s and restart point %s.", handoffID, safeBoundary, restartPoint),
+				Provenance: provenance, Evidence: append([]colony.LifecycleEvidence(nil), evidence...),
+			}},
+			Transaction: &transaction, Receipt: receipt,
+			SafeNextStep: "Run `aether resume`; it validates state, session, repository, worktrees, activity, and this receipt before mutation.",
+		},
+		Provenance: provenance,
+	}
+	if strings.TrimSpace(handoff.AttemptID) == "" && strings.TrimSpace(handoff.RunID) == "" {
+		handoff.RunID = session.SessionID
+	}
+	if err := handoff.Validate(); err != nil {
+		return colony.PauseHandoff{}, fmt.Errorf("validate pause handoff: %w", err)
+	}
+	_ = now // captured evidence timestamps already come from the lifecycle fact snapshot
+	return handoff, nil
+}
+
+func pauseRestartPoint(state colony.ColonyState) string {
+	for _, phase := range state.Plan.Phases {
+		if phase.ID != state.CurrentPhase {
+			continue
+		}
+		for _, task := range phase.Tasks {
+			if task.Status == colony.TaskCompleted {
+				continue
+			}
+			if task.ID != nil && strings.TrimSpace(*task.ID) != "" {
+				return fmt.Sprintf("phase %d task %s", state.CurrentPhase, strings.TrimSpace(*task.ID))
+			}
+			if strings.TrimSpace(task.Goal) != "" {
+				return fmt.Sprintf("phase %d: %s", state.CurrentPhase, strings.TrimSpace(task.Goal))
+			}
+		}
+	}
+	return fmt.Sprintf("phase %d next unresolved step", state.CurrentPhase)
+}
+
+func pauseTaskIDs(state colony.ColonyState) []string {
+	var ids []string
+	for _, phase := range state.Plan.Phases {
+		if phase.ID != state.CurrentPhase {
+			continue
+		}
+		for index, task := range phase.Tasks {
+			if task.Status == colony.TaskCompleted {
+				continue
+			}
+			id := fmt.Sprintf("%d.%d", phase.ID, index+1)
+			if task.ID != nil && strings.TrimSpace(*task.ID) != "" {
+				id = strings.TrimSpace(*task.ID)
+			}
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+func pauseHandoffEvidence(facts LifecycleFacts, repository colony.LifecycleRepositoryEvidence, contextDigest string) []colony.LifecycleEvidence {
+	evidence := []colony.LifecycleEvidence{
+		{ID: "state", Kind: "state", Source: facts.State.Source.Path, Digest: pauseFactDigest(facts.State.Source.Path), Summary: "Authoritative colony state at the pause boundary."},
+		{ID: "session", Kind: "session", Source: facts.Session.Source.Path, Digest: pauseFactDigest(facts.Session.Source.Path), Summary: "Session context present at the pause boundary."},
+		{ID: "context", Kind: "context", Source: contextDocumentPath(), Digest: contextDigest, Summary: "Context snapshot consumed by the handoff."},
+		{ID: "repository", Kind: "git", Source: repository.Root, Digest: repository.DirtyDigest, Summary: "Repository HEAD and content-sensitive dirty fingerprint."},
+		{ID: "actors", Kind: "lineage", Source: facts.Actors.Source.Path, Digest: pauseFactDigest(facts.Actors.Source.Path), Summary: "Actual worker lineage and statuses."},
+		{ID: "signals", Kind: "signals", Source: facts.Signals.Source.Path, Digest: pauseFactDigest(facts.Signals.Source.Path), Summary: "Active direction snapshot."},
+		{ID: "blockers", Kind: "decisions", Source: facts.Blockers.Source.Path, Digest: pauseFactDigest(facts.Blockers.Source.Path), Summary: "Unresolved owner/runtime decisions."},
+	}
+	return evidence
+}
+
+func pauseFactDigest(path string) string {
+	content, err := os.ReadFile(filepath.FromSlash(path))
+	if err != nil {
+		return lifecycleTransactionMissingDigest
+	}
+	return lifecycleDigest(content)
+}
+
+func pauseVerificationEvidence(facts LifecycleVerificationFacts) []colony.LifecycleVerification {
+	verification := make([]colony.LifecycleVerification, 0, len(facts.Gates)+1)
+	for _, gate := range facts.Gates {
+		verification = append(verification, colony.LifecycleVerification{
+			Name: strings.TrimSpace(gate.Name), Passed: gate.Passed,
+			EvidenceIDs: []string{"state", "repository"}, Detail: strings.TrimSpace(gate.Detail),
+		})
+	}
+	if len(verification) == 0 {
+		verification = append(verification, colony.LifecycleVerification{
+			Name: "recovery-evidence-readable", Passed: true,
+			EvidenceIDs: []string{"state", "session", "repository"}, Detail: "Required recovery sources were read without repair.",
+		})
+	}
+	return verification
+}
+
+func pauseBlockerEvidence(flags []colony.FlagEntry) []colony.LifecycleIssue {
+	var blockers []colony.LifecycleIssue
+	for index, flag := range flags {
+		if flag.Resolved {
+			continue
+		}
+		id := strings.TrimSpace(flag.ID)
+		if id == "" {
+			id = fmt.Sprintf("pending-%d", index+1)
+		}
+		summary := strings.TrimSpace(flag.Description)
+		if summary == "" {
+			summary = "Pending recovery decision"
+		}
+		blockers = append(blockers, colony.LifecycleIssue{ID: id, Summary: summary, EvidenceIDs: []string{"blockers"}})
+	}
+	return blockers
+}
+
+func pauseDecisionEvidence(state colony.ColonyState, flags []colony.FlagEntry) []colony.LifecycleDecision {
+	var decisions []colony.LifecycleDecision
+	for index, decision := range state.Memory.Decisions {
+		id := strings.TrimSpace(decision.ID)
+		if id == "" {
+			id = fmt.Sprintf("memory-decision-%d", index+1)
+		}
+		summary := strings.TrimSpace(decision.Claim)
+		if summary == "" {
+			summary = strings.TrimSpace(decision.Rationale)
+		}
+		if summary == "" {
+			continue
+		}
+		decisions = append(decisions, colony.LifecycleDecision{
+			ID: id, Scope: fmt.Sprintf("phase-%d", decision.Phase), Summary: summary, EvidenceIDs: []string{"state"},
+		})
+	}
+	for index, flag := range flags {
+		if flag.Resolved || !strings.EqualFold(strings.TrimSpace(flag.Type), "decision") {
+			continue
+		}
+		id := strings.TrimSpace(flag.ID)
+		if id == "" {
+			id = fmt.Sprintf("pending-decision-%d", index+1)
+		}
+		scope := "project"
+		if flag.Phase != nil {
+			scope = fmt.Sprintf("phase-%d", *flag.Phase)
+		}
+		decisions = append(decisions, colony.LifecycleDecision{ID: id, Scope: scope, Summary: strings.TrimSpace(flag.Description), EvidenceIDs: []string{"blockers"}})
+	}
+	return decisions
+}
+
+func pauseWorkerLineage(actors []LifecycleActorFact) []colony.LifecycleWorkerLineage {
+	lineage := make([]colony.LifecycleWorkerLineage, 0, len(actors))
+	for _, actor := range actors {
+		workerID := strings.TrimSpace(actor.Name)
+		caste := strings.TrimSpace(actor.Caste)
+		status := strings.TrimSpace(actor.Status)
+		if workerID == "" || caste == "" || status == "" {
+			continue
+		}
+		lineage = append(lineage, colony.LifecycleWorkerLineage{
+			WorkerID: workerID, ParentWorkerID: strings.TrimSpace(actor.Parent), Caste: caste, Status: status,
+		})
+	}
+	sort.Slice(lineage, func(i, j int) bool { return lineage[i].WorkerID < lineage[j].WorkerID })
+	return lineage
+}
+
+func pauseSignalSnapshot(signals []colony.PheromoneSignal) []colony.LifecycleSignalSnapshot {
+	var snapshot []colony.LifecycleSignalSnapshot
+	for _, signal := range signals {
+		if !signal.Active || strings.TrimSpace(signal.ID) == "" {
+			continue
+		}
+		digest := ""
+		if signal.ContentHash != nil {
+			digest = strings.TrimSpace(*signal.ContentHash)
+		}
+		if digest == "" {
+			digest = lifecycleDigest(signal.Content)
+		}
+		snapshot = append(snapshot, colony.LifecycleSignalSnapshot{
+			SignalID: strings.TrimSpace(signal.ID), Type: strings.TrimSpace(signal.Type), Digest: digest,
+		})
+	}
+	sort.Slice(snapshot, func(i, j int) bool { return snapshot[i].SignalID < snapshot[j].SignalID })
+	return snapshot
+}
+
+func pauseWorktreeEvidence(root string, entries []colony.WorktreeEntry) []colony.LifecycleWorktreeEvidence {
+	worktrees := make([]colony.LifecycleWorktreeEvidence, 0, len(entries))
+	for _, entry := range entries {
+		path := strings.TrimSpace(entry.Path)
+		absolute := path
+		if !filepath.IsAbs(absolute) {
+			absolute = filepath.Join(root, filepath.FromSlash(path))
+		}
+		head, _ := gitOutputAt(absolute, "rev-parse", "HEAD")
+		digest := lifecycleTransactionMissingDigest
+		if info, err := os.Stat(absolute); err == nil && info.IsDir() {
+			if dirty, dirtyErr := repositoryDirtyDigest(absolute); dirtyErr == nil {
+				digest = dirty
+			}
+		}
+		worktrees = append(worktrees, colony.LifecycleWorktreeEvidence{
+			ID: strings.TrimSpace(entry.ID), Path: path, Branch: strings.TrimSpace(entry.Branch),
+			Head: strings.TrimSpace(head), Digest: digest,
+		})
+	}
+	sort.Slice(worktrees, func(i, j int) bool {
+		if worktrees[i].ID == worktrees[j].ID {
+			return worktrees[i].Path < worktrees[j].Path
+		}
+		return worktrees[i].ID < worktrees[j].ID
+	})
+	return worktrees
+}
+
+func reflectPauseWorktreesEqual(left, right []colony.LifecycleWorktreeEvidence) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
+}
+
+func pauseRepositoryEvidence(root string) (colony.LifecycleRepositoryEvidence, error) {
+	head, err := gitOutputAt(root, "rev-parse", "HEAD")
+	if err != nil || strings.TrimSpace(head) == "" {
+		treeDigest, treeErr := repositoryTreeDigest(root)
+		if treeErr != nil {
+			if err == nil {
+				err = fmt.Errorf("empty HEAD")
+			}
+			return colony.LifecycleRepositoryEvidence{}, fmt.Errorf("read repository evidence: %w", errors.Join(err, treeErr))
+		}
+		return colony.LifecycleRepositoryEvidence{Root: root, Head: "unavailable", DirtyDigest: treeDigest}, nil
+	}
+	dirty, err := repositoryDirtyDigest(root)
+	if err != nil {
+		return colony.LifecycleRepositoryEvidence{}, fmt.Errorf("fingerprint repository changes: %w", err)
+	}
+	return colony.LifecycleRepositoryEvidence{Root: root, Head: strings.TrimSpace(head), DirtyDigest: dirty}, nil
+}
+
+func repositoryTreeDigest(root string) (string, error) {
+	var records []string
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		relative = filepath.ToSlash(relative)
+		if relative == "." {
+			return nil
+		}
+		if entry.IsDir() && (relative == ".git" || relative == ".aether-transactions" || relative == ".aether/data" || relative == ".aether/locks" ||
+			strings.HasPrefix(relative, ".git/") || strings.HasPrefix(relative, ".aether-transactions/") || strings.HasPrefix(relative, ".aether/data/") || strings.HasPrefix(relative, ".aether/locks/")) {
+			return filepath.SkipDir
+		}
+		if pauseOwnedRepositoryPath(relative) {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		switch {
+		case info.Mode().IsRegular():
+			content, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			records = append(records, relative+"\x00"+lifecycleDigest(content))
+		case info.Mode()&os.ModeSymlink != 0:
+			target, err := os.Readlink(path)
+			if err != nil {
+				return err
+			}
+			records = append(records, relative+"\x00symlink:"+target)
+		}
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+	sort.Strings(records)
+	return lifecycleDigest([]byte(strings.Join(records, "\n"))), nil
+}
+
+func gitOutputAt(root string, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), GitTimeout)
+	defer cancel()
+	gitArgs := append([]string{"-C", root}, args...)
+	output, err := exec.CommandContext(ctx, "git", gitArgs...).CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(output)))
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+// repositoryDirtyDigest is content-sensitive and ignores only the runtime's
+// own pause artifacts and transaction evidence. It therefore notices changed
+// working bytes even when porcelain's two-letter status is unchanged, while a
+// pause/resume replay does not conflict with files the same transaction owns.
+func repositoryDirtyDigest(root string) (string, error) {
+	status, err := gitOutputAt(root, "status", "--porcelain=v1", "--untracked-files=all")
+	if err != nil {
+		return "", err
+	}
+	lines := strings.Split(status, "\n")
+	var records []string
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		path := pausePorcelainPath(line)
+		if pauseOwnedRepositoryPath(path) {
+			continue
+		}
+		absolute := filepath.Join(root, filepath.FromSlash(path))
+		content, readErr := os.ReadFile(absolute)
+		digest := lifecycleTransactionMissingDigest
+		if readErr == nil {
+			digest = lifecycleDigest(content)
+		} else if !os.IsNotExist(readErr) {
+			return "", readErr
+		}
+		records = append(records, line+"\x00"+digest)
+	}
+	sort.Strings(records)
+	return lifecycleDigest([]byte(strings.Join(records, "\n"))), nil
+}
+
+func pausePorcelainPath(line string) string {
+	path := strings.TrimSpace(line)
+	if len(line) >= 4 {
+		path = strings.TrimSpace(line[3:])
+	}
+	if _, after, ok := strings.Cut(path, " -> "); ok {
+		path = after
+	}
+	return strings.Trim(path, `"`)
+}
+
+func pauseOwnedRepositoryPath(path string) bool {
+	path = filepath.ToSlash(strings.TrimSpace(path))
+	switch path {
+	case ".aether/HANDOFF.md", ".aether/CONTEXT.md":
+		return true
+	}
+	return strings.HasPrefix(path, ".aether/data/") ||
+		strings.HasPrefix(path, ".aether/locks/") ||
+		strings.HasPrefix(path, ".aether-transactions/") ||
+		strings.HasPrefix(path, ".aether/.aether-transactions/")
+}
+
+func pauseHandoffReferencesEqual(left, right colony.PauseHandoffReference) bool {
+	return left.ID == right.ID && left.TransactionID == right.TransactionID && left.Digest == right.Digest && left.Path == right.Path
+}
+
+func pauseResumeSessionIsStale(session colony.SessionFile, now time.Time, expectedHead string) bool {
+	startedAt, err := time.Parse(time.RFC3339, strings.TrimSpace(session.StartedAt))
+	if err != nil || now.Sub(startedAt) >= sessionStaleThreshold {
+		return true
+	}
+	return strings.TrimSpace(session.BaselineCommit) != "" && strings.TrimSpace(expectedHead) != "" && strings.TrimSpace(session.BaselineCommit) != strings.TrimSpace(expectedHead)
+}
+
+func pauseResumeLifecycleEvent(now time.Time, command, handoffID, detail string) string {
+	return fmt.Sprintf("%s|lifecycle_%s|%s|handoff=%s %s", now.UTC().Format(time.RFC3339), command, command, handoffID, detail)
+}
+
+func buildTransactionalHandoffDocument(now time.Time, state colony.ColonyState, session colony.SessionFile, handoff colony.PauseHandoff) string {
+	base := buildHandoffDocument(now.UTC(), state, session, "aether resume")
+	var b strings.Builder
+	b.WriteString(base)
+	if !strings.HasSuffix(base, "\n") {
+		b.WriteByte('\n')
+	}
+	b.WriteString("\n## Recovery Receipt\n")
+	b.WriteString("Handoff ID: ")
+	b.WriteString(handoff.HandoffID)
+	b.WriteString("\nSafe boundary: ")
+	b.WriteString(handoff.SafeBoundary)
+	b.WriteString("\nRestart point: ")
+	b.WriteString(handoff.RestartPoint)
+	b.WriteString("\nTransaction: ")
+	b.WriteString(handoff.Transaction.ID)
+	b.WriteString("\nReceipt: ")
+	if handoff.Receipt != nil {
+		b.WriteString(handoff.Receipt.ID)
+	}
+	b.WriteString("\nProvenance: ")
+	b.WriteString(string(handoff.Provenance))
+	b.WriteString("\n\nClose this handoff with `/ant-resume` (runtime: `aether resume`).\n")
+	return b.String()
+}
+
+func loadStateAfterLifecycleOutcome() colony.ColonyState {
+	var state colony.ColonyState
+	if store != nil && store.LoadJSON("COLONY_STATE.json", &state) == nil {
+		return normalizeLegacyColonyState(state)
+	}
+	return colony.ColonyState{}
+}
+
+func writeLegacySessionRedirectNotice() {
+	if legacySessionProcessRedirect == nil {
+		return
+	}
+	notice := legacySessionRedirectNotice(legacySessionProcessRedirect)
+	if notice != "" {
+		visualFprintln(stderr, notice)
+	}
 }
 
 func loadResumeState(handoffText string, noHandoff bool) (colony.ColonyState, bool, error) {

@@ -25,6 +25,8 @@ type pauseResume199Fixture struct {
 func newPauseResume199Fixture(t *testing.T) pauseResume199Fixture {
 	t.Helper()
 	saveGlobals(t)
+	pauseResumeLifecycleFault = nil
+	t.Cleanup(func() { pauseResumeLifecycleFault = nil })
 	root, dataDir := crashSafetyFixture(t)
 	now := time.Date(2026, time.September, 4, 9, 0, 0, 0, time.UTC)
 	goal := "Preserve one trustworthy recovery point"
@@ -36,11 +38,11 @@ func newPauseResume199Fixture(t *testing.T) pauseResume199Fixture {
 		Version:      "1",
 		Goal:         &goal,
 		State:        colony.StateREADY,
-		CurrentPhase: 199,
+		CurrentPhase: 1,
 		SessionID:    &sessionID,
 		RunID:        &runID,
 		Plan: colony.Plan{Phases: []colony.Phase{{
-			ID:     199,
+			ID:     1,
 			Name:   "front door",
 			Status: colony.PhaseInProgress,
 			Tasks: []colony.Task{
@@ -52,14 +54,14 @@ func newPauseResume199Fixture(t *testing.T) pauseResume199Fixture {
 			ID:        "memory-decision-1",
 			Claim:     "Resume from the partial task",
 			Rationale: "Completed work must not run twice",
-			Phase:     199,
+			Phase:     1,
 		}}},
 		GateResults: []colony.GateResultEntry{{
 			Name: "tests", Passed: true, Timestamp: now.Add(-time.Minute).Format(time.RFC3339), Detail: "focused checks passed",
 		}},
 		Worktrees: []colony.WorktreeEntry{{
 			ID: "worker-tree-1", Branch: "worktree-agent-1", Path: ".aether/worktrees/worker-tree-1",
-			Status: colony.WorktreeInProgress, Phase: 199, Agent: "builder-1",
+			Status: colony.WorktreeInProgress, Phase: 1, Agent: "builder-1",
 			CreatedAt: now.Add(-time.Hour).Format(time.RFC3339), UpdatedAt: now.Add(-time.Minute).Format(time.RFC3339),
 		}},
 	}
@@ -69,7 +71,7 @@ func newPauseResume199Fixture(t *testing.T) pauseResume199Fixture {
 	session := colony.SessionFile{
 		SessionID: sessionID, StartedAt: now.Add(-time.Hour).Format(time.RFC3339),
 		LastCommand: "build", LastCommandAt: now.Add(-time.Minute).Format(time.RFC3339),
-		ColonyGoal: goal, CurrentPhase: 199, SuggestedNext: "aether continue",
+		ColonyGoal: goal, CurrentPhase: 1, SuggestedNext: "aether continue",
 		Summary: "Builder completed task-done and is partway through task-active.",
 	}
 	if err := store.SaveJSON("session.json", session); err != nil {
@@ -87,7 +89,7 @@ func newPauseResume199Fixture(t *testing.T) pauseResume199Fixture {
 	}}}); err != nil {
 		t.Fatalf("save signals: %v", err)
 	}
-	phase := 199
+	phase := 1
 	if err := store.SaveJSON("pending-decisions.json", colony.FlagsFile{Version: "1", Decisions: []colony.FlagEntry{{
 		ID: "decision-1", Type: "decision", Description: "Keep the completed task", Phase: &phase,
 		Source: "owner", CreatedAt: now.Add(-time.Minute).Format(time.RFC3339),
@@ -218,6 +220,12 @@ func TestPauseResume199SafeBoundary(t *testing.T) {
 				if err == nil {
 					t.Fatalf("expected injected failure at %s", point)
 				}
+				interrupted := runnableFingerprint199(t, fixture.root, fixture.dataDir)
+				if point == "after_validation" || strings.HasPrefix(point, "after_stage:") || point == "after_intent" {
+					if interrupted != before {
+						t.Fatalf("%s changed runnable bytes before any target commit at %s: before=%s after=%s", command, point, before, interrupted)
+					}
+				}
 				pauseResumeLifecycleFault = nil
 				var outcome pauseResumeLifecycleOutcome
 				if command == "pause" {
@@ -238,9 +246,56 @@ func TestPauseResume199SafeBoundary(t *testing.T) {
 				if transactionReceiptCount199(t, fixture.dataDir) != map[string]int{"pause": 1, "resume": 2}[command] {
 					t.Fatalf("unexpected receipt count after recovered %s", command)
 				}
+				if command == "pause" {
+					_, err = pauseColonyAt(fixture.now.Add(3 * time.Minute))
+				} else {
+					_, err = resumeColonyAt(fixture.now.Add(3 * time.Minute))
+				}
+				if err != nil {
+					t.Fatalf("replay recovered %s: %v", command, err)
+				}
+				if replayed := runnableFingerprint199(t, fixture.root, fixture.dataDir); replayed != after {
+					t.Fatalf("%s replay changed restored bytes: restored=%s replay=%s", command, after, replayed)
+				}
 			})
 		}
 	}
+
+	t.Run("active_work_waits", func(t *testing.T) {
+		fixture := newPauseResume199Fixture(t)
+		state := load199State(t)
+		state.State = colony.StateEXECUTING
+		startedAt := fixture.now.Add(-time.Minute)
+		state.BuildStartedAt = &startedAt
+		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+			t.Fatalf("save executing state: %v", err)
+		}
+		attemptID := "attempt-live-199"
+		attemptRel := filepath.ToSlash(filepath.Join("build", "phase-1", "attempts", attemptID+".json"))
+		if err := store.SaveJSON(attemptRel, buildAttemptRecord{
+			SchemaVersion: buildAttemptSchemaVersion, ID: attemptID, Phase: 1,
+			Status: buildAttemptDispatching, ProcessID: os.Getpid(), UpdatedAt: fixture.now.Format(time.RFC3339),
+		}); err != nil {
+			t.Fatalf("save live attempt: %v", err)
+		}
+		if err := store.SaveJSON(latestBuildAttemptPointerPath(1), latestBuildAttemptPointer{
+			SchemaVersion: buildAttemptSchemaVersion, AttemptID: attemptID, Path: attemptRel, UpdatedAt: fixture.now.Format(time.RFC3339),
+		}); err != nil {
+			t.Fatalf("save latest attempt: %v", err)
+		}
+		before := runnableFingerprint199(t, fixture.root, fixture.dataDir)
+		_, err := pauseColonyAt(fixture.now)
+		var pending pauseBoundaryPendingError
+		if !errors.As(err, &pending) || pending.Boundary != "worker_completion_boundary" || pending.Attempt != attemptID {
+			t.Fatalf("active pause error = %#v, want named worker boundary for %s", err, attemptID)
+		}
+		if after := runnableFingerprint199(t, fixture.root, fixture.dataDir); after != before {
+			t.Fatalf("active pause mutated before safe boundary: before=%s after=%s", before, after)
+		}
+		if transactionReceiptCount199(t, fixture.dataDir) != 0 {
+			t.Fatal("active pause wrote a receipt before reaching its safe boundary")
+		}
+	})
 }
 
 func TestPauseResume199HandoffContents(t *testing.T) {
@@ -357,7 +412,7 @@ func TestPauseResume199Reconstructed(t *testing.T) {
 	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
 		t.Fatalf("save legacy paused state: %v", err)
 	}
-	write199File(t, filepath.Join(fixture.root, ".aether", "HANDOFF.md"), buildHandoffDocument(state, load199Session(t), fixture.now))
+	write199File(t, filepath.Join(fixture.root, ".aether", "HANDOFF.md"), buildHandoffDocument(fixture.now, state, load199Session(t), "aether resume"))
 	outcome, err := resumeColonyAt(fixture.now.Add(time.Minute))
 	if err != nil {
 		t.Fatalf("reconstruct resume: %v", err)
@@ -370,6 +425,18 @@ func TestPauseResume199Reconstructed(t *testing.T) {
 	}
 	if outcome.Handoff.HandoffID == "" || outcome.Receipt.ReceiptID == "" {
 		t.Fatal("reconstructed recovery was not bound to durable handoff/receipt evidence")
+	}
+	legacySessionPath := filepath.Join(fixture.dataDir, "colonies", "legacy", "session.json")
+	write199File(t, legacySessionPath, string(read199File(t, filepath.Join(fixture.dataDir, "session.json"))))
+	if err := os.Remove(filepath.Join(fixture.dataDir, "session.json")); err != nil {
+		t.Fatalf("remove top-level session: %v", err)
+	}
+	restored, err := ensureLegacySessionMirror(store)
+	if err != nil || restored {
+		t.Fatalf("read-only legacy session loader = restored:%t err:%v", restored, err)
+	}
+	if _, err := os.Stat(filepath.Join(fixture.dataDir, "session.json")); !os.IsNotExist(err) {
+		t.Fatalf("orientation recreated a top-level session outside the lifecycle transaction: %v", err)
 	}
 }
 
