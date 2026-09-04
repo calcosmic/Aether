@@ -77,7 +77,7 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 
 **Requirements:** SYNTH-01, CEC-01, CEC-02, CEC-04, CEC-08, LIFE-01..06, PROOF-01
 
-**Plans:** 13/34 plans executed
+**Plans:** 14/34 plans executed
 
 Plans:
 **Wave 1**
@@ -116,7 +116,7 @@ Plans:
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 199-12-PLAN.md — Add evidence-backed signal receipts and the scoped Swarm boundary.
+- [x] 199-12-PLAN.md — Add evidence-backed signal receipts and the scoped Swarm boundary.
 
 **Wave 9** *(blocked on Wave 8 completion)*
 

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 199-20-PLAN.md
-last_updated: "2026-09-04T00:10:43.164Z"
+stopped_at: Completed 199-12-PLAN.md
+last_updated: "2026-09-04T09:06:38.685Z"
 last_activity: 2026-09-04
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 34
-  completed_plans: 13
+  completed_plans: 14
   percent: 0
 ---
 
@@ -91,6 +91,7 @@ Last activity: 2026-09-04
 | Phase 199 P19 | 7min | 2 tasks | 5 files |
 | Phase 199 P11 | 29min | 3 tasks | 11 files |
 | Phase 199 P20 | 12min | 3 tasks | 9 files |
+| Phase 199 P12 | 16min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -234,6 +235,9 @@ Last activity: 2026-09-04
 - [Phase 199]: Claude and OpenCode init close with exact /ant-plan, while Codex closes with exact aether plan.
 - [Phase 199]: Guided init surfaces synthesize intent, while Go alone owns setup, persistence, territory evidence, refusal, and result truth.
 - [Phase 199]: Codex parity extends raw aether orchestration without restoring a native $ant-* lifecycle surface.
+- [Phase 199]: A signal can claim live delivery or acknowledgement only from linked named lifecycle evidence, and measured effect only from linked changed-decision evidence.
+- [Phase 199]: Swarm localizes only from an exact recorded active task ID and treats both dependencies and dependent tasks as the affected path; only other active tasks may continue independently.
+- [Phase 199]: Go remains the only signal mutator and evidence authority; wrappers invoke the runtime but cannot manufacture acknowledgement or causal-effect claims.
 
 ### Pending Todos
 
@@ -347,8 +351,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-04T00:10:43.156Z
-Stopped at: Completed 199-20-PLAN.md
+Last session: 2026-09-04T09:06:38.676Z
+Stopped at: Completed 199-12-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
