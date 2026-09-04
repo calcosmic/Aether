@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 199-13-PLAN.md
-last_updated: "2026-09-04T09:58:10.586Z"
+stopped_at: Completed 199-14-PLAN.md
+last_updated: "2026-09-04T11:16:23.533Z"
 last_activity: 2026-09-04
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 34
-  completed_plans: 15
-  percent: 44
+  completed_plans: 16
+  percent: 47
 ---
 
 # Project State
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-02)
 ## Current Position
 
 Phase: 199 (front-door-and-classic-contract) — EXECUTING
-Plan: 14 of 34
+Plan: 15 of 34
 Status: Ready to execute
 Last activity: 2026-09-04
 
@@ -93,6 +93,7 @@ Last activity: 2026-09-04
 | Phase 199 P20 | 12min | 3 tasks | 9 files |
 | Phase 199 P12 | 16min | 2 tasks | 6 files |
 | Phase 199 P13 | 40min | 2 tasks | 11 files |
+| Phase 199 P14 | 28min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -242,6 +243,9 @@ Last activity: 2026-09-04
 - [Phase 199]: Pause and resume use the handoff ID as their idempotency key, so interrupted commits resume one journal and verified replay returns one existing receipt.
 - [Phase 199]: Resume mutates only confirmed or explicitly reconstructed evidence; conflicting state, session, repository, worktree, activity, or receipt facts stop with no runnable-state write.
 - [Phase 199]: Legacy pause-colony/resume-colony inputs are exact-token pre-Cobra redirects only through 1.28 and never appear in Cobra aliases, help, completion, or canonical pause wrappers.
+- [Phase 199]: Hidden pre-Cobra lifecycle redirects are input migration only and are excluded from public wrapper inventory and alias repair. — Parser compatibility must not become product vocabulary.
+- [Phase 199]: Retired installed wrappers are deleted only when the managed header proves Aether ownership; same-named custom files survive unchanged. — A filename alone cannot authorize deletion of user content.
+- [Phase 199]: The current recovery contract teaches canonical resume only; bounded compatibility remains expiring parser plumbing. — There is one public return path while the migration window remains invisible.
 
 ### Pending Todos
 
@@ -355,8 +359,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-04T09:58:10.577Z
-Stopped at: Completed 199-13-PLAN.md
+Last session: 2026-09-04T11:16:23.524Z
+Stopped at: Completed 199-14-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

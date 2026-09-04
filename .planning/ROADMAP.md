@@ -77,7 +77,7 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 
 **Requirements:** SYNTH-01, CEC-01, CEC-02, CEC-04, CEC-08, LIFE-01..06, PROOF-01
 
-**Plans:** 15/34 plans executed
+**Plans:** 16/34 plans executed
 
 Plans:
 **Wave 1**
@@ -124,7 +124,7 @@ Plans:
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
-- [ ] 199-14-PLAN.md — Prune retired pause/resume aliases from managed public surfaces.
+- [x] 199-14-PLAN.md — Prune retired pause/resume aliases from managed public surfaces.
 - [ ] 199-15-PLAN.md — Separate verified and forced-incomplete seal outcomes transactionally.
 
 **Wave 11** *(blocked on Wave 10 completion)*
