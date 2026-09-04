@@ -62,6 +62,7 @@ completed: 2026-09-04
 2. **Task 1 GREEN: lifecycle renderer, init, and entomb routes** — `81ea2586` (feat)
 3. **Task 2 RED: failing worktree preservation-route contract** — `f5bf7707` (test)
 4. **Task 2 GREEN: clash and worktree preservation routes** — `04003065` (feat)
+5. **Wave 13 gate recovery: preservation assertion migration** — `a5940d9e` (test)
 
 ## Files Created/Modified
 
@@ -76,7 +77,7 @@ completed: 2026-09-04
 - `go test -race ./cmd -run '^(TestRuntimeRecoveryRoutes199|TestWorktree.*(Preserv|Reap|Clash))$' -count=1` — passed (16 tests).
 - `go build ./cmd` — passed.
 
-The known repository-wide baseline remains 8765 passing, 226 failing, and 11 skipped tests in unrelated mapped families; no focused regression was found in the owned lifecycle/worktree paths.
+The independent Wave 13 full-suite gate initially found 8788 passing, 228 failing, and 11 skipped tests. Both new failures were stale assertions in this plan's owned preservation tests; `a5940d9e` moves them to the locked inspection-plus-resume contract. The remaining 226 failures are the known unrelated mapped baseline.
 
 ## Decisions Made
 
@@ -104,7 +105,7 @@ None.
 
 ## Issues Encountered
 
-- The broad command-package suite is already known to carry unrelated mapped baseline failures. Focused lifecycle/worktree and race gates passed; no new owned failure was observed.
+- The broad command-package suite carries unrelated mapped baseline failures. Its Wave 13 gate exposed two owned stale assertions, which were migrated and verified in the focused route, worktree, race, and build gates.
 
 ## User Setup Required
 
