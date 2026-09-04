@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -324,6 +326,205 @@ func TestClassicContractCorpusCausalReceipts(t *testing.T) {
 			t.Errorf("%s lacks visual/replay/fault evidence", testCase.ID)
 		}
 	}
+}
+
+func loadClassicContractCorpus(t *testing.T) classicContractDocument {
+	t.Helper()
+	document, err := loadClassicContractDocument(filepath.Join(classicContractFixtureDir(t), "cases.json"))
+	if err != nil {
+		t.Fatalf("load Classic contract corpus: %v", err)
+	}
+	if err := validateClassicContractCorpus(document); err != nil {
+		t.Fatalf("validate Classic contract corpus: %v", err)
+	}
+	return document
+}
+
+func validateClassicContractCorpus(document classicContractDocument) error {
+	if err := validateClassicContractDocument(document); err != nil {
+		return err
+	}
+	required := make(map[string]bool, len(classicContractRequiredJourneyIDs))
+	for _, journeyID := range classicContractRequiredJourneyIDs {
+		required[journeyID] = true
+	}
+	platforms := make(map[string]map[string]bool, len(required))
+	for _, testCase := range document.Cases {
+		journeyID, _, ok := strings.Cut(testCase.ID, ".claude")
+		if !ok {
+			journeyID, _, ok = strings.Cut(testCase.ID, ".opencode")
+		}
+		if !ok {
+			return fmt.Errorf("case %q must end with .claude or .opencode", testCase.ID)
+		}
+		if !required[journeyID] {
+			return fmt.Errorf("unknown or combined journey %q", testCase.ID)
+		}
+		if platforms[journeyID] == nil {
+			platforms[journeyID] = map[string]bool{}
+		}
+		if platforms[journeyID][testCase.Platform] {
+			return fmt.Errorf("duplicate platform %q for journey %q", testCase.Platform, journeyID)
+		}
+		platforms[journeyID][testCase.Platform] = true
+		if testCase.Platform != strings.TrimPrefix(testCase.ID, journeyID+".") {
+			return fmt.Errorf("case %q platform %q does not match its ID", testCase.ID, testCase.Platform)
+		}
+		for _, field := range []string{"fixture", "requirement_ids", "pre_post_digest", "artifact_or_receipt", "structured_assertions"} {
+			value, ok := testCase.Expected.SemanticFields[field]
+			if !ok || len(value) == 0 || string(value) == "null" || string(value) == `""` {
+				return fmt.Errorf("case %q missing causal semantic field %q", testCase.ID, field)
+			}
+		}
+		if !slices.Contains(testCase.SourceCitations, "requirement:PROOF-01") {
+			return fmt.Errorf("case %q does not cite PROOF-01", testCase.ID)
+		}
+	}
+	for _, journeyID := range classicContractRequiredJourneyIDs {
+		got := platforms[journeyID]
+		if !got["claude"] || !got["opencode"] || len(got) != 2 {
+			return fmt.Errorf("required journey %q must have exactly Claude and OpenCode cases", journeyID)
+		}
+	}
+	if len(platforms) != len(required) || len(document.Cases) != len(required)*2 {
+		return fmt.Errorf("corpus has %d cases, want exactly %d platform-expanded required journeys", len(document.Cases), len(required)*2)
+	}
+	return nil
+}
+
+func cloneClassicContractDocument(t *testing.T, document classicContractDocument) classicContractDocument {
+	t.Helper()
+	data, err := json.Marshal(document)
+	if err != nil {
+		t.Fatalf("marshal Classic corpus clone: %v", err)
+	}
+	var clone classicContractDocument
+	if err := json.Unmarshal(data, &clone); err != nil {
+		t.Fatalf("unmarshal Classic corpus clone: %v", err)
+	}
+	return clone
+}
+
+func classicContractWithoutJourney(cases []classicContractCase, journeyID string) []classicContractCase {
+	result := make([]classicContractCase, 0, len(cases))
+	for _, testCase := range cases {
+		if strings.HasPrefix(testCase.ID, journeyID+".") {
+			continue
+		}
+		result = append(result, testCase)
+	}
+	return result
+}
+
+func assertClassicContractJourneyMatrix(t *testing.T, document classicContractDocument) {
+	t.Helper()
+	if err := validateClassicContractCorpus(document); err != nil {
+		t.Fatal(err)
+	}
+	counts := map[string]int{}
+	for _, testCase := range document.Cases {
+		counts[testCase.Group]++
+	}
+	for group, want := range map[string]int{"front-door": 6, "territory": 8, "autopilot": 10, "orientation": 14, "agency": 8, "pause-resume": 14, "closure": 18, "maintenance": 8} {
+		if counts[group] != want {
+			t.Errorf("%s cases = %d, want %d (both platforms)", group, counts[group], want)
+		}
+	}
+}
+
+func classicContractExecutePlatform(t *testing.T, platform string) {
+	t.Helper()
+	document := loadClassicContractCorpus(t)
+	harness := newCLIBlackBox(t)
+	for _, testCase := range document.Cases {
+		if testCase.Platform != platform {
+			continue
+		}
+		t.Run(testCase.ID, func(t *testing.T) {
+			classicContractAssertManagedWrapperAuthority(t, harness.sourceRoot, testCase)
+			before := classicContractDirectoryDigest(t, harness.repo)
+			result := harness.runWithEnv(t, testCase.Command.Environment, append([]string{testCase.Command.Name}, testCase.Command.Args...)...)
+			if result.ExitCode != testCase.Expected.ExitCode {
+				t.Fatalf("%s exit = %d, want %d\\nstdout:\\n%s\\nstderr:\\n%s", testCase.ID, result.ExitCode, testCase.Expected.ExitCode, result.Stdout, result.Stderr)
+			}
+			var envelope map[string]json.RawMessage
+			if err := json.Unmarshal([]byte(strings.TrimSpace(result.Stdout)), &envelope); err != nil {
+				t.Fatalf("%s JSON execution result: %v\\n%s", testCase.ID, err, result.Stdout)
+			}
+			if _, ok := envelope["ok"]; !ok {
+				t.Fatalf("%s has no structured ok field: %s", testCase.ID, result.Stdout)
+			}
+			after := classicContractDirectoryDigest(t, harness.repo)
+			if string(testCase.Expected.SemanticFields["pre_post_digest"]) == `"unchanged"` && before != after {
+				t.Fatalf("%s changed isolated state for an unchanged proof: before=%s after=%s", testCase.ID, before, after)
+			}
+			for _, assertion := range testCase.Expected.StateAssertions {
+				if assertion.Operator == "absent" {
+					if _, err := os.Stat(filepath.Join(harness.repo, filepath.FromSlash(assertion.Path))); !os.IsNotExist(err) {
+						t.Fatalf("%s expected artifact %s absent, stat err=%v", testCase.ID, assertion.Path, err)
+					}
+				}
+			}
+			visual := harness.runWithEnv(t, map[string]string{"AETHER_OUTPUT_MODE": "visual", "AETHER_PLATFORM": platform}, testCase.Command.Name)
+			for _, token := range testCase.Expected.RequiredTextTokens {
+				if !strings.Contains(visual.Stdout+visual.Stderr, token) {
+					t.Fatalf("%s visual result missing required beat %q", testCase.ID, token)
+				}
+			}
+			for _, token := range testCase.Expected.ForbiddenTextTokens {
+				if strings.Contains(visual.Stdout+visual.Stderr, token) {
+					t.Fatalf("%s visual result contains forbidden beat %q", testCase.ID, token)
+				}
+			}
+		})
+	}
+	harness.assertSourceUnchanged(t)
+}
+
+func classicContractAssertManagedWrapperAuthority(t *testing.T, root string, testCase classicContractCase) {
+	t.Helper()
+	for _, path := range []string{
+		filepath.Join(root, ".aether", "commands", testCase.Command.Name+".yaml"),
+		filepath.Join(root, "."+testCase.Platform, "commands", "ant", testCase.Command.Name+".md"),
+	} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("%s managed wrapper authority missing %s: %v", testCase.ID, path, err)
+		}
+		if strings.Contains(path, "/commands/ant/") && !strings.Contains(string(data), "Aether-managed: runtime spec at .aether/commands/") {
+			t.Fatalf("%s platform wrapper is not managed by canonical YAML: %s", testCase.ID, path)
+		}
+	}
+}
+
+func classicContractDirectoryDigest(t *testing.T, root string) string {
+	t.Helper()
+	var records []string
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		sum := sha256.Sum256(data)
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		records = append(records, filepath.ToSlash(rel)+":"+fmt.Sprintf("%x", sum))
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("digest isolated repo: %v", err)
+	}
+	sort.Strings(records)
+	sum := sha256.Sum256([]byte(strings.Join(records, "\\n")))
+	return fmt.Sprintf("sha256:%x", sum)
 }
 
 func classicContractFixtureDir(t *testing.T) string {

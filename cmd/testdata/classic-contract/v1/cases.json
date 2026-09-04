@@ -1,0 +1,5251 @@
+{
+  "schema_version": "classic-contract/v1",
+  "cases": [
+    {
+      "id": "front-door.help-no-colony.claude",
+      "group": "front-door",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:front-door.help-no-colony"
+      ],
+      "synthesis_decision": "SYN-199-01",
+      "cap_ids": [
+        "CAP-016"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:front-door.help-no-colony"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "front-door.help-no-colony",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "front-door.help-no-colony"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "front-door.help-no-colony.opencode",
+      "group": "front-door",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:front-door.help-no-colony"
+      ],
+      "synthesis_decision": "SYN-199-01",
+      "cap_ids": [
+        "CAP-016"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:front-door.help-no-colony"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "front-door.help-no-colony",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "front-door.help-no-colony"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "front-door.help-active-colony.claude",
+      "group": "front-door",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:front-door.help-active-colony"
+      ],
+      "synthesis_decision": "SYN-199-01",
+      "cap_ids": [
+        "CAP-017"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:front-door.help-active-colony"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "front-door.help-active-colony",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "front-door.help-active-colony"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "front-door.help-active-colony.opencode",
+      "group": "front-door",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:front-door.help-active-colony"
+      ],
+      "synthesis_decision": "SYN-199-01",
+      "cap_ids": [
+        "CAP-017"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:front-door.help-active-colony"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "front-door.help-active-colony",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "front-door.help-active-colony"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "front-door.init-first.claude",
+      "group": "front-door",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:front-door.init-first"
+      ],
+      "synthesis_decision": "SYN-199-01",
+      "cap_ids": [
+        "CAP-068"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:front-door.init-first"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "front-door.init-first",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "front-door.init-first"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "front-door.init-first.opencode",
+      "group": "front-door",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:front-door.init-first"
+      ],
+      "synthesis_decision": "SYN-199-01",
+      "cap_ids": [
+        "CAP-068"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:front-door.init-first"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "front-door.init-first",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "front-door.init-first"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "territory.fresh.claude",
+      "group": "territory",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:territory.fresh"
+      ],
+      "synthesis_decision": "SYN-199-02",
+      "cap_ids": [
+        "CAP-049"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:territory.fresh"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "territory.fresh",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "territory.fresh"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "territory.fresh.opencode",
+      "group": "territory",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:territory.fresh"
+      ],
+      "synthesis_decision": "SYN-199-02",
+      "cap_ids": [
+        "CAP-049"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:territory.fresh"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "territory.fresh",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "territory.fresh"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "territory.refreshed.claude",
+      "group": "territory",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:territory.refreshed"
+      ],
+      "synthesis_decision": "SYN-199-02",
+      "cap_ids": [
+        "CAP-059"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:territory.refreshed"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "territory.refreshed",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "territory.refreshed"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "territory.refreshed.opencode",
+      "group": "territory",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:territory.refreshed"
+      ],
+      "synthesis_decision": "SYN-199-02",
+      "cap_ids": [
+        "CAP-059"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:territory.refreshed"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "territory.refreshed",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "territory.refreshed"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "territory.unavailable.claude",
+      "group": "territory",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:territory.unavailable"
+      ],
+      "synthesis_decision": "SYN-199-02",
+      "cap_ids": [
+        "CAP-049"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:territory.unavailable"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "territory.unavailable",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "territory.unavailable"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "territory.unavailable.opencode",
+      "group": "territory",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:territory.unavailable"
+      ],
+      "synthesis_decision": "SYN-199-02",
+      "cap_ids": [
+        "CAP-049"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:territory.unavailable"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "territory.unavailable",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "territory.unavailable"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "territory.init-active-refusal.claude",
+      "group": "territory",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:territory.init-active-refusal"
+      ],
+      "synthesis_decision": "SYN-199-02",
+      "cap_ids": [
+        "CAP-059"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:territory.init-active-refusal"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "territory.init-active-refusal",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "territory.init-active-refusal"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "territory.init-active-refusal.opencode",
+      "group": "territory",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:territory.init-active-refusal"
+      ],
+      "synthesis_decision": "SYN-199-02",
+      "cap_ids": [
+        "CAP-059"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:territory.init-active-refusal"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "territory.init-active-refusal",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "territory.init-active-refusal"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "autopilot.valid.claude",
+      "group": "autopilot",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:autopilot.valid"
+      ],
+      "synthesis_decision": "SYN-199-05",
+      "cap_ids": [
+        "CAP-015"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:autopilot.valid"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "autopilot.valid",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "autopilot.valid"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "autopilot.valid.opencode",
+      "group": "autopilot",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:autopilot.valid"
+      ],
+      "synthesis_decision": "SYN-199-05",
+      "cap_ids": [
+        "CAP-015"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:autopilot.valid"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "autopilot.valid",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "autopilot.valid"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "autopilot.repair.claude",
+      "group": "autopilot",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:autopilot.repair"
+      ],
+      "synthesis_decision": "SYN-199-05",
+      "cap_ids": [
+        "CAP-018"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:autopilot.repair"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "autopilot.repair",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "autopilot.repair"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "autopilot.repair.opencode",
+      "group": "autopilot",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:autopilot.repair"
+      ],
+      "synthesis_decision": "SYN-199-05",
+      "cap_ids": [
+        "CAP-018"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:autopilot.repair"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "autopilot.repair",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "autopilot.repair"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "autopilot.debt.claude",
+      "group": "autopilot",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:autopilot.debt"
+      ],
+      "synthesis_decision": "SYN-199-05",
+      "cap_ids": [
+        "CAP-020"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:autopilot.debt"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "autopilot.debt",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "autopilot.debt"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "autopilot.debt.opencode",
+      "group": "autopilot",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:autopilot.debt"
+      ],
+      "synthesis_decision": "SYN-199-05",
+      "cap_ids": [
+        "CAP-020"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:autopilot.debt"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "autopilot.debt",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "autopilot.debt"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "autopilot.no-colony.claude",
+      "group": "autopilot",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:autopilot.no-colony"
+      ],
+      "synthesis_decision": "SYN-199-05",
+      "cap_ids": [
+        "CAP-027"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:autopilot.no-colony"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "autopilot.no-colony",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "autopilot.no-colony"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "autopilot.no-colony.opencode",
+      "group": "autopilot",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:autopilot.no-colony"
+      ],
+      "synthesis_decision": "SYN-199-05",
+      "cap_ids": [
+        "CAP-027"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:autopilot.no-colony"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "autopilot.no-colony",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "autopilot.no-colony"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "autopilot.authority-fence.claude",
+      "group": "autopilot",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:autopilot.authority-fence"
+      ],
+      "synthesis_decision": "SYN-199-05",
+      "cap_ids": [
+        "CAP-028"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:autopilot.authority-fence"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "autopilot.authority-fence",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "autopilot.authority-fence"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "autopilot.authority-fence.opencode",
+      "group": "autopilot",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:autopilot.authority-fence"
+      ],
+      "synthesis_decision": "SYN-199-05",
+      "cap_ids": [
+        "CAP-028"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:autopilot.authority-fence"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "autopilot.authority-fence",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "autopilot.authority-fence"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "orientation.status-full.claude",
+      "group": "orientation",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:orientation.status-full"
+      ],
+      "synthesis_decision": "SYN-199-03",
+      "cap_ids": [
+        "CAP-015"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:orientation.status-full"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "orientation.status-full",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "orientation.status-full"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "orientation.status-full.opencode",
+      "group": "orientation",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:orientation.status-full"
+      ],
+      "synthesis_decision": "SYN-199-03",
+      "cap_ids": [
+        "CAP-015"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:orientation.status-full"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "orientation.status-full",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "orientation.status-full"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "orientation.status-compact.claude",
+      "group": "orientation",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:orientation.status-compact"
+      ],
+      "synthesis_decision": "SYN-199-03",
+      "cap_ids": [
+        "CAP-018"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:orientation.status-compact"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "orientation.status-compact",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "orientation.status-compact"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "orientation.status-compact.opencode",
+      "group": "orientation",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:orientation.status-compact"
+      ],
+      "synthesis_decision": "SYN-199-03",
+      "cap_ids": [
+        "CAP-018"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:orientation.status-compact"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "orientation.status-compact",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "orientation.status-compact"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "orientation.phase.claude",
+      "group": "orientation",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:orientation.phase"
+      ],
+      "synthesis_decision": "SYN-199-03",
+      "cap_ids": [
+        "CAP-020"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:orientation.phase"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "orientation.phase",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "orientation.phase"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "orientation.phase.opencode",
+      "group": "orientation",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:orientation.phase"
+      ],
+      "synthesis_decision": "SYN-199-03",
+      "cap_ids": [
+        "CAP-020"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:orientation.phase"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "orientation.phase",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "orientation.phase"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "orientation.history.claude",
+      "group": "orientation",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:orientation.history"
+      ],
+      "synthesis_decision": "SYN-199-03",
+      "cap_ids": [
+        "CAP-027"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:orientation.history"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "orientation.history",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "orientation.history"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "orientation.history.opencode",
+      "group": "orientation",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:orientation.history"
+      ],
+      "synthesis_decision": "SYN-199-03",
+      "cap_ids": [
+        "CAP-027"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:orientation.history"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "orientation.history",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "orientation.history"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "orientation.watch-idle.claude",
+      "group": "orientation",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:orientation.watch-idle"
+      ],
+      "synthesis_decision": "SYN-199-03",
+      "cap_ids": [
+        "CAP-028"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:orientation.watch-idle"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "orientation.watch-idle",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "orientation.watch-idle"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "orientation.watch-idle.opencode",
+      "group": "orientation",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:orientation.watch-idle"
+      ],
+      "synthesis_decision": "SYN-199-03",
+      "cap_ids": [
+        "CAP-028"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:orientation.watch-idle"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "orientation.watch-idle",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "orientation.watch-idle"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "orientation.read-only.claude",
+      "group": "orientation",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:orientation.read-only"
+      ],
+      "synthesis_decision": "SYN-199-03",
+      "cap_ids": [
+        "CAP-050"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:orientation.read-only"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "orientation.read-only",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "orientation.read-only"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "orientation.read-only.opencode",
+      "group": "orientation",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:orientation.read-only"
+      ],
+      "synthesis_decision": "SYN-199-03",
+      "cap_ids": [
+        "CAP-050"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:orientation.read-only"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "orientation.read-only",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "orientation.read-only"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "orientation.unavailable.claude",
+      "group": "orientation",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:orientation.unavailable"
+      ],
+      "synthesis_decision": "SYN-199-03",
+      "cap_ids": [
+        "CAP-050"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:orientation.unavailable"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "orientation.unavailable",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "orientation.unavailable"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "orientation.unavailable.opencode",
+      "group": "orientation",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:orientation.unavailable"
+      ],
+      "synthesis_decision": "SYN-199-03",
+      "cap_ids": [
+        "CAP-050"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:orientation.unavailable"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "orientation.unavailable",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "orientation.unavailable"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "steering.focus.claude",
+      "group": "agency",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:steering.focus"
+      ],
+      "synthesis_decision": "SYN-199-04",
+      "cap_ids": [
+        "CAP-013"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:steering.focus"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "steering.focus",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "steering.focus"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "steering.focus.opencode",
+      "group": "agency",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:steering.focus"
+      ],
+      "synthesis_decision": "SYN-199-04",
+      "cap_ids": [
+        "CAP-013"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:steering.focus"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "steering.focus",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "steering.focus"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "steering.feedback.claude",
+      "group": "agency",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:steering.feedback"
+      ],
+      "synthesis_decision": "SYN-199-04",
+      "cap_ids": [
+        "CAP-013"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:steering.feedback"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "steering.feedback",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "steering.feedback"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "steering.feedback.opencode",
+      "group": "agency",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:steering.feedback"
+      ],
+      "synthesis_decision": "SYN-199-04",
+      "cap_ids": [
+        "CAP-013"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:steering.feedback"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "steering.feedback",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "steering.feedback"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "steering.redirect.claude",
+      "group": "agency",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:steering.redirect"
+      ],
+      "synthesis_decision": "SYN-199-04",
+      "cap_ids": [
+        "CAP-013"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:steering.redirect"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "steering.redirect",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "steering.redirect"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "steering.redirect.opencode",
+      "group": "agency",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:steering.redirect"
+      ],
+      "synthesis_decision": "SYN-199-04",
+      "cap_ids": [
+        "CAP-013"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:steering.redirect"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "steering.redirect",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "steering.redirect"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "steering.swarm.claude",
+      "group": "agency",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:steering.swarm"
+      ],
+      "synthesis_decision": "SYN-199-04",
+      "cap_ids": [
+        "CAP-013"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:steering.swarm"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "steering.swarm",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "steering.swarm"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "steering.swarm.opencode",
+      "group": "agency",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:steering.swarm"
+      ],
+      "synthesis_decision": "SYN-199-04",
+      "cap_ids": [
+        "CAP-013"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:steering.swarm"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "steering.swarm",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "steering.swarm"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "pause-resume.clean-handoff.claude",
+      "group": "pause-resume",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:pause-resume.clean-handoff"
+      ],
+      "synthesis_decision": "SYN-199-06",
+      "cap_ids": [
+        "CAP-032"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:pause-resume.clean-handoff"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "pause-resume.clean-handoff",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "pause-resume.clean-handoff"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "pause-resume.clean-handoff.opencode",
+      "group": "pause-resume",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:pause-resume.clean-handoff"
+      ],
+      "synthesis_decision": "SYN-199-06",
+      "cap_ids": [
+        "CAP-032"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:pause-resume.clean-handoff"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "pause-resume.clean-handoff",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "pause-resume.clean-handoff"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "pause-resume.stale-handoff.claude",
+      "group": "pause-resume",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:pause-resume.stale-handoff"
+      ],
+      "synthesis_decision": "SYN-199-06",
+      "cap_ids": [
+        "CAP-033"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:pause-resume.stale-handoff"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "pause-resume.stale-handoff",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "pause-resume.stale-handoff"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "pause-resume.stale-handoff.opencode",
+      "group": "pause-resume",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:pause-resume.stale-handoff"
+      ],
+      "synthesis_decision": "SYN-199-06",
+      "cap_ids": [
+        "CAP-033"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:pause-resume.stale-handoff"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "pause-resume.stale-handoff",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "pause-resume.stale-handoff"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "pause-resume.reconstruction.claude",
+      "group": "pause-resume",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:pause-resume.reconstruction"
+      ],
+      "synthesis_decision": "SYN-199-06",
+      "cap_ids": [
+        "CAP-034"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:pause-resume.reconstruction"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "pause-resume.reconstruction",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "pause-resume.reconstruction"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "pause-resume.reconstruction.opencode",
+      "group": "pause-resume",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:pause-resume.reconstruction"
+      ],
+      "synthesis_decision": "SYN-199-06",
+      "cap_ids": [
+        "CAP-034"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:pause-resume.reconstruction"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "pause-resume.reconstruction",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "pause-resume.reconstruction"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "pause-resume.legacy-hidden.claude",
+      "group": "pause-resume",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:pause-resume.legacy-hidden"
+      ],
+      "synthesis_decision": "SYN-199-06",
+      "cap_ids": [
+        "CAP-035"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:pause-resume.legacy-hidden"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "pause-resume.legacy-hidden",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "pause-resume.legacy-hidden"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "pause-resume.legacy-hidden.opencode",
+      "group": "pause-resume",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:pause-resume.legacy-hidden"
+      ],
+      "synthesis_decision": "SYN-199-06",
+      "cap_ids": [
+        "CAP-035"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:pause-resume.legacy-hidden"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "pause-resume.legacy-hidden",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "pause-resume.legacy-hidden"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "pause-resume.journal-fault.claude",
+      "group": "pause-resume",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:pause-resume.journal-fault"
+      ],
+      "synthesis_decision": "SYN-199-06",
+      "cap_ids": [
+        "CAP-060"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:pause-resume.journal-fault"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "pause-resume.journal-fault",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "pause-resume.journal-fault"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "pause-resume.journal-fault.opencode",
+      "group": "pause-resume",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:pause-resume.journal-fault"
+      ],
+      "synthesis_decision": "SYN-199-06",
+      "cap_ids": [
+        "CAP-060"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:pause-resume.journal-fault"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "pause-resume.journal-fault",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "pause-resume.journal-fault"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "pause-resume.conflict.claude",
+      "group": "pause-resume",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:pause-resume.conflict"
+      ],
+      "synthesis_decision": "SYN-199-06",
+      "cap_ids": [
+        "CAP-032"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:pause-resume.conflict"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "pause-resume.conflict",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "pause-resume.conflict"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "pause-resume.conflict.opencode",
+      "group": "pause-resume",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:pause-resume.conflict"
+      ],
+      "synthesis_decision": "SYN-199-06",
+      "cap_ids": [
+        "CAP-032"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:pause-resume.conflict"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "pause-resume.conflict",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "pause-resume.conflict"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "pause-resume.replay.claude",
+      "group": "pause-resume",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:pause-resume.replay"
+      ],
+      "synthesis_decision": "SYN-199-06",
+      "cap_ids": [
+        "CAP-033"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:pause-resume.replay"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "pause-resume.replay",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "pause-resume.replay"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "pause-resume.replay.opencode",
+      "group": "pause-resume",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:pause-resume.replay"
+      ],
+      "synthesis_decision": "SYN-199-06",
+      "cap_ids": [
+        "CAP-033"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:pause-resume.replay"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "pause-resume.replay",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "pause-resume.replay"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "seal.verified.claude",
+      "group": "closure",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:seal.verified"
+      ],
+      "synthesis_decision": "SYN-199-07",
+      "cap_ids": [
+        "CAP-026"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:seal.verified"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "seal.verified",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "seal.verified"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "seal.verified.opencode",
+      "group": "closure",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:seal.verified"
+      ],
+      "synthesis_decision": "SYN-199-07",
+      "cap_ids": [
+        "CAP-026"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:seal.verified"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "seal.verified",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "seal.verified"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "seal.incomplete-refusal.claude",
+      "group": "closure",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:seal.incomplete-refusal"
+      ],
+      "synthesis_decision": "SYN-199-07",
+      "cap_ids": [
+        "CAP-036"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:seal.incomplete-refusal"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "seal.incomplete-refusal",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "seal.incomplete-refusal"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "seal.incomplete-refusal.opencode",
+      "group": "closure",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:seal.incomplete-refusal"
+      ],
+      "synthesis_decision": "SYN-199-07",
+      "cap_ids": [
+        "CAP-036"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:seal.incomplete-refusal"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "seal.incomplete-refusal",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "seal.incomplete-refusal"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "seal.forced-residual.claude",
+      "group": "closure",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:seal.forced-residual"
+      ],
+      "synthesis_decision": "SYN-199-07",
+      "cap_ids": [
+        "CAP-037"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:seal.forced-residual"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "seal.forced-residual",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "seal.forced-residual"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "seal.forced-residual.opencode",
+      "group": "closure",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:seal.forced-residual"
+      ],
+      "synthesis_decision": "SYN-199-07",
+      "cap_ids": [
+        "CAP-037"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:seal.forced-residual"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "seal.forced-residual",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "seal.forced-residual"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "seal.owner-checkpoint.claude",
+      "group": "closure",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:seal.owner-checkpoint"
+      ],
+      "synthesis_decision": "SYN-199-07",
+      "cap_ids": [
+        "CAP-038"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:seal.owner-checkpoint"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "seal.owner-checkpoint",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "seal.owner-checkpoint"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "seal.owner-checkpoint.opencode",
+      "group": "closure",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:seal.owner-checkpoint"
+      ],
+      "synthesis_decision": "SYN-199-07",
+      "cap_ids": [
+        "CAP-038"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:seal.owner-checkpoint"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "seal.owner-checkpoint",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "seal.owner-checkpoint"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "entomb.verified.claude",
+      "group": "closure",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:entomb.verified"
+      ],
+      "synthesis_decision": "SYN-199-08",
+      "cap_ids": [
+        "CAP-006"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:entomb.verified"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "entomb.verified",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "entomb.verified"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "entomb.verified.opencode",
+      "group": "closure",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:entomb.verified"
+      ],
+      "synthesis_decision": "SYN-199-08",
+      "cap_ids": [
+        "CAP-006"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:entomb.verified"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "entomb.verified",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "entomb.verified"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "entomb.forced.claude",
+      "group": "closure",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:entomb.forced"
+      ],
+      "synthesis_decision": "SYN-199-08",
+      "cap_ids": [
+        "CAP-007"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:entomb.forced"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "entomb.forced",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "entomb.forced"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "entomb.forced.opencode",
+      "group": "closure",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:entomb.forced"
+      ],
+      "synthesis_decision": "SYN-199-08",
+      "cap_ids": [
+        "CAP-007"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:entomb.forced"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "entomb.forced",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "entomb.forced"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "entomb.corrupt-refusal.claude",
+      "group": "closure",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:entomb.corrupt-refusal"
+      ],
+      "synthesis_decision": "SYN-199-08",
+      "cap_ids": [
+        "CAP-006"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:entomb.corrupt-refusal"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "entomb.corrupt-refusal",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "entomb.corrupt-refusal"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "entomb.corrupt-refusal.opencode",
+      "group": "closure",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:entomb.corrupt-refusal"
+      ],
+      "synthesis_decision": "SYN-199-08",
+      "cap_ids": [
+        "CAP-006"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:entomb.corrupt-refusal"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "entomb.corrupt-refusal",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "entomb.corrupt-refusal"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "entomb.publish-fault.claude",
+      "group": "closure",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:entomb.publish-fault"
+      ],
+      "synthesis_decision": "SYN-199-08",
+      "cap_ids": [
+        "CAP-007"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:entomb.publish-fault"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "entomb.publish-fault",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "entomb.publish-fault"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "entomb.publish-fault.opencode",
+      "group": "closure",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:entomb.publish-fault"
+      ],
+      "synthesis_decision": "SYN-199-08",
+      "cap_ids": [
+        "CAP-007"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:entomb.publish-fault"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "entomb.publish-fault",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "entomb.publish-fault"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "entomb.replay.claude",
+      "group": "closure",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:entomb.replay"
+      ],
+      "synthesis_decision": "SYN-199-08",
+      "cap_ids": [
+        "CAP-006"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:entomb.replay"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "entomb.replay",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "entomb.replay"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "entomb.replay.opencode",
+      "group": "closure",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:entomb.replay"
+      ],
+      "synthesis_decision": "SYN-199-08",
+      "cap_ids": [
+        "CAP-006"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:entomb.replay"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "entomb.replay",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "entomb.replay"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "maintenance.migration.claude",
+      "group": "maintenance",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:maintenance.migration"
+      ],
+      "synthesis_decision": "SYN-199-09",
+      "cap_ids": [
+        "CAP-008"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:maintenance.migration"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "maintenance.migration",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "maintenance.migration"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "maintenance.migration.opencode",
+      "group": "maintenance",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:maintenance.migration"
+      ],
+      "synthesis_decision": "SYN-199-09",
+      "cap_ids": [
+        "CAP-008"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:maintenance.migration"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "maintenance.migration",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "maintenance.migration"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "maintenance.update.claude",
+      "group": "maintenance",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:maintenance.update"
+      ],
+      "synthesis_decision": "SYN-199-09",
+      "cap_ids": [
+        "CAP-019"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:maintenance.update"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "maintenance.update",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "maintenance.update"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "maintenance.update.opencode",
+      "group": "maintenance",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:maintenance.update"
+      ],
+      "synthesis_decision": "SYN-199-09",
+      "cap_ids": [
+        "CAP-019"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:maintenance.update"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "maintenance.update",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "maintenance.update"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "maintenance.cleanup.claude",
+      "group": "maintenance",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:maintenance.cleanup"
+      ],
+      "synthesis_decision": "SYN-199-09",
+      "cap_ids": [
+        "CAP-052"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:maintenance.cleanup"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "maintenance.cleanup",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "maintenance.cleanup"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "maintenance.cleanup.opencode",
+      "group": "maintenance",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:maintenance.cleanup"
+      ],
+      "synthesis_decision": "SYN-199-09",
+      "cap_ids": [
+        "CAP-052"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:maintenance.cleanup"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "maintenance.cleanup",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "maintenance.cleanup"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "maintenance.integrity.claude",
+      "group": "maintenance",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:maintenance.integrity"
+      ],
+      "synthesis_decision": "SYN-199-09",
+      "cap_ids": [
+        "CAP-053"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:maintenance.integrity"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "claude"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "maintenance.integrity",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "maintenance.integrity"
+        },
+        "fault_point": "before-mutation"
+      }
+    },
+    {
+      "id": "maintenance.integrity.opencode",
+      "group": "maintenance",
+      "kind": "behavior",
+      "historical_anchors": [
+        "classic:maintenance.integrity"
+      ],
+      "synthesis_decision": "SYN-199-09",
+      "cap_ids": [
+        "CAP-053"
+      ],
+      "source_citations": [
+        "requirement:PROOF-01",
+        "runtime:maintenance.integrity"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "maintenance.integrity",
+        "semantic_fields": {
+          "fixture": "isolated-empty-colony",
+          "requirement_ids": [
+            "PROOF-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "status-projection",
+          "structured_assertions": [
+            "ok",
+            "result.schema_version"
+          ]
+        },
+        "required_text_tokens": [
+          "Colony"
+        ],
+        "forbidden_text_tokens": [
+          "aether recover"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "absent"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/unsafe-write"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "maintenance.integrity"
+        },
+        "fault_point": "before-mutation"
+      }
+    }
+  ]
+}
