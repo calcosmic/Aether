@@ -352,10 +352,13 @@ func TestMaintenanceMutation199CrossRootRollback(t *testing.T) {
 	repoTarget := filepath.Join(fixture.repository, "managed.txt")
 	claudeTarget := filepath.Join(fixture.claude, "managed.txt")
 	writeMaintenanceMutation199File(t, repoTarget, []byte("repo-before"))
+	if err := os.Chmod(repoTarget, 0o600); err != nil {
+		t.Fatal(err)
+	}
 	writeMaintenanceMutation199File(t, claudeTarget, []byte("claude-before"))
 	plan := fixture.plan("maintenance-cross-root-rollback")
 	plan.Targets = []maintenanceMutationTarget{
-		{Root: lifecycleTransactionRootRepository, RelativeTarget: "managed.txt", Source: "hub/repo", Content: []byte("repo-after"), Managed: true},
+		{Root: lifecycleTransactionRootRepository, RelativeTarget: "managed.txt", Source: "hub/repo", Content: []byte("repo-after"), Mode: 0o755, Managed: true},
 		{Root: lifecycleTransactionRootClaudeHome, RelativeTarget: "managed.txt", Source: "hub/claude", Content: []byte("claude-after"), Managed: true},
 	}
 	plan.Rename = func(oldPath, newPath string) error {
@@ -373,6 +376,11 @@ func TestMaintenanceMutation199CrossRootRollback(t *testing.T) {
 	}
 	if string(mustReadLifecycleFixtureFile(t, repoTarget)) != "repo-before" || string(mustReadLifecycleFixtureFile(t, claudeTarget)) != "claude-before" {
 		t.Fatal("cross-root failure did not restore exact prior bytes")
+	}
+	if info, statErr := os.Stat(repoTarget); statErr != nil {
+		t.Fatalf("cross-root rollback target unavailable: %v", statErr)
+	} else if info.Mode().Perm() != 0o600 {
+		t.Fatalf("cross-root failure did not restore prior mode: %04o", info.Mode().Perm())
 	}
 }
 
