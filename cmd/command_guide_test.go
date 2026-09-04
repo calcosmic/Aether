@@ -508,6 +508,43 @@ func TestInitGuideAndWrappersCarryColonyModeChoice(t *testing.T) {
 	}
 }
 
+func TestCommandGuideInit199(t *testing.T) {
+	guide, err := buildCommandGuide("init", "codex")
+	if err != nil {
+		t.Fatalf("buildCommandGuide(init, codex): %v", err)
+	}
+	if guide.Intent != frontDoorInitDescription199 {
+		t.Errorf("init guide intent = %q, want %q", guide.Intent, frontDoorInitDescription199)
+	}
+	if guide.Category != commandGuideCategoryFullOrchestration || guide.SkillReference != commandGuideSkillCreation || guide.Literal {
+		t.Errorf("init guide lost Codex orchestration identity: %#v", guide)
+	}
+	wantRun := "AETHER_OUTPUT_MODE=visual aether init --colony-mode <selected colony|orchestrator> --charter-json '<synthesized charter JSON>' \"<refined goal>\""
+	if guide.RunCommand != wantRun {
+		t.Errorf("init guide runtime command = %q, want %q", guide.RunCommand, wantRun)
+	}
+
+	parts := append([]string{guide.Intent}, guide.PreSteps...)
+	parts = append(parts, guide.RunCommand)
+	parts = append(parts, guide.PostSteps...)
+	parts = append(parts, guide.DriftGuards...)
+	parts = append(parts, guide.RawBypass)
+	text := strings.Join(parts, "\n")
+	assertFrontDoorInitContract199(t, text)
+	if !strings.Contains(text, "Next Up: aether plan") {
+		t.Errorf("Codex guide does not render exact native closeout:\n%s", text)
+	}
+	for _, forbidden := range []string{"/ant-plan", "$ant-plan", "$ant-init", "aether lay-eggs"} {
+		if strings.Contains(text, forbidden) {
+			t.Errorf("Codex guide contains deferred or host-inappropriate guidance %q", forbidden)
+		}
+	}
+	assertNoDirectInitStateWrites199(t, text)
+	if !strings.Contains(guide.RawBypass, "raw") || !strings.Contains(guide.RawBypass, "aether init") {
+		t.Errorf("init guide lost raw aether init bypass: %q", guide.RawBypass)
+	}
+}
+
 func TestCommandGuideLiteralCommandsArePassthrough(t *testing.T) {
 	for _, command := range []string{"status", "focus", "reference-list", "update"} {
 		guide, err := buildCommandGuide(command, "codex")
