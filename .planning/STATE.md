@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 199-17-PLAN.md
-last_updated: "2026-09-04T15:32:58.576Z"
+stopped_at: Completed 199-18-PLAN.md
+last_updated: "2026-09-04T17:07:03.204Z"
 last_activity: 2026-09-04
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 34
-  completed_plans: 20
-  percent: 59
+  completed_plans: 21
+  percent: 62
 ---
 
 # Project State
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-02)
 ## Current Position
 
 Phase: 199 (front-door-and-classic-contract) — EXECUTING
-Plan: 18 of 34
+Plan: 19 of 34
 Status: Ready to execute
 Last activity: 2026-09-04
 
@@ -98,6 +98,7 @@ Last activity: 2026-09-04
 | Phase 199 P16 | 71min | 3 tasks | 8 files |
 | Phase 199 P22 | 13min | 2 tasks | 4 files |
 | Phase 199 P17 | 36min | 2 tasks | 8 files |
+| Phase 199 P18 | 80min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -259,6 +260,10 @@ Last activity: 2026-09-04
 - [Phase 199]: Keep invocation and owner confirmation separate from seal; platform wrappers call the Go runtime exactly once and never reproduce archive or clearing logic. — D-17 keeps sealed state reviewable until the owner explicitly chooses archive-and-clear.
 - [Phase 199]: Keep legacy recover and abandon tokens parseable but hidden, store-free, and zero-write so old automation receives safe migration guidance without retaining authority. — Parser compatibility must not preserve product vocabulary or mutation authority.
 - [Phase 199]: Read recovery evidence directly through LifecycleFacts and raw manifest/claims readers, while reserving all restoration for aether resume. — Expert diagnosis stays causally read-only and cannot become a second recovery owner.
+- [Phase 199]: Maintenance previews close over exact typed targets and expected baseline digests; commit never performs a second broad discovery pass.
+- [Phase 199]: Cleanup prefixes, globs, and content guesses are not deletion authority; a versioned aether-runtime manifest with exact path, owner, and current digest is required.
+- [Phase 199]: Registry identity is derived from the canonical repository path, and duplicate identity/path or active-plus-final-stats conflicts fail before any write.
+- [Phase 199]: A live maintenance interruption after durable intent attempts coordinator rollback immediately and returns its rollback receipt; unprovable rollback retains recovery-required evidence.
 
 ### Pending Todos
 
@@ -372,8 +377,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-04T15:32:58.567Z
-Stopped at: Completed 199-17-PLAN.md
+Last session: 2026-09-04T17:07:03.196Z
+Stopped at: Completed 199-18-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

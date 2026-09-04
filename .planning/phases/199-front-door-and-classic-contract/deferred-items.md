@@ -89,3 +89,19 @@
 - **Isolation check:** The exact manifest suite proves byte tamper, missing input, cross-reference disagreement, forced-marker loss, and nondeterminism fail closed. The exact transaction suite proves zero-write refusal, all five ordered stages, fault retention, exactly-once replay, forced truth, and verified success. Wrapper and source-hygiene tests also pass.
 - **Why deferred:** Making the old fixtures archive directly would require bypassing the exact owner confirmation or accepting unverifiable directory presence, both of which violate D-17 and Plan 199-16's locked archive contract. The broader suite also contains the already-recorded staged catalog, status, Next Up, archived-path, and suffixed-resume migrations.
 - **Follow-up:** Migrate the legacy entomb command fixtures to construct a valid `SealOutcome`/closure bundle and opt into `--confirm`, preserving any still-required ceremony or registry assertions under the verified transaction; require the full normal/race gates in Plan 199-29.
+
+## Plan 199-18 supersedes prefix-only data-clean deletion tests
+
+- **Found during:** Plan 199-18 cleanup compatibility verification (`go test ./cmd -run '^TestDataClean.*$' -count=1`).
+- **Observed:** `TestDataCleanConfirm` expects signals to be deleted solely because their IDs start with `test_` or `demo_`. Plan 199-18 deliberately removes that broad deletion authority: public `data-clean` now consumes a schema-versioned exact manifest whose owner and per-target baseline digest are validated before confirmation and commit. The prefix-sharing decoy and symlink/path-escape cases pass in the exact Plan 199-18 suite.
+- **Isolation check:** All 14 Plan 199-18 maintenance mutation tests pass in normal and race-enabled runs. Existing direct worker-debug retention helper tests and the complete `TestRegistry*` selection also pass.
+- **Why deferred:** Restoring prefix-only deletion would directly violate CAP-008 and the plan's locked requirement that no prefix or glob become deletion authority. The legacy fixture has no explicit owner marker or exact target digest, so it cannot safely be auto-migrated during this plan.
+- **Follow-up:** Replace the legacy prefix fixture with an owned cleanup manifest (or retire the unsafe expectation), then include it in the final Phase 199 normal/race gate.
+
+## Update closing-card compatibility fixture removes an already-absent command
+
+- **Found during:** Plan 199-18 update compatibility verification (`TestUpdateEndsWithTheCard/when_it_repaired_a_missing_command_copy`).
+- **Observed:** The fixture first asserts that `ant-pause-colony.md` is absent and then calls `os.Remove` on that same absent path before invoking update, so it fails during setup with `no such file or directory` rather than exercising the Plan 199-18 transaction path.
+- **Isolation check:** The exact 10-case update/migration/generated/platform/binary suite passes, along with the existing update dry-run, alias reconciliation, managed-pruning, custom-preservation, migration rollback, and `runUpdateSync` compatibility lanes.
+- **Why deferred:** Changing an unrelated contradictory fixture is outside Plan 199-18's declared command/test files and would not alter the transaction implementation.
+- **Follow-up:** Make the setup removal tolerate `os.IsNotExist`, or seed the file before removing it, when the legacy update-card fixtures are migrated.
