@@ -34,6 +34,7 @@ type maintenanceMutationTarget struct {
 	Source         string
 	Action         lifecycleTransactionAction
 	Content        []byte
+	ExpectedDigest string
 	Managed        bool
 }
 
@@ -183,6 +184,9 @@ func prepareMaintenanceMutation(plan maintenanceMutationPlan) (maintenanceMutati
 		if err != nil {
 			return preview, fmt.Errorf("maintenance mutation: read target baseline: %w", err)
 		}
+		if target.ExpectedDigest != "" && current.Digest != target.ExpectedDigest {
+			return preview, fmt.Errorf("maintenance mutation: baseline changed for %q", targetPath)
+		}
 		desiredDigest := lifecycleTransactionMissingDigest
 		change := maintenanceMutationChangeRemove
 		if action == lifecycleTransactionWrite {
@@ -242,6 +246,10 @@ func commitMaintenanceMutation(plan maintenanceMutationPlan) (maintenanceMutatio
 		if err != nil {
 			return result, err
 		}
+		declaration := tx.declarations[len(tx.declarations)-1]
+		if declaration.BeforeDigest != preview.Targets[index].CurrentDigest {
+			return result, fmt.Errorf("maintenance mutation: baseline changed for %q", declaration.TargetPath)
+		}
 		declared++
 	}
 	if declared == 0 {
@@ -276,7 +284,24 @@ func commitMaintenanceMutation(plan maintenanceMutationPlan) (maintenanceMutatio
 			result.Receipt = &recoveryReceipt
 			result.Recovery = recoveryReceipt.Recovery.SafeNextStep
 		default:
-			result.StateEffect = tx.progress.StateEffect
+			// A fault can arrive after replacement but before the coordinator
+			// records its final effect. In a live process we can still restore
+			// every staged pre-image; never report "none" or "committed"
+			// without a durable receipt while bytes may have changed.
+			if rollbackErr := tx.rollbackPreparedTargets(); rollbackErr == nil {
+				rollbackReceipt := tx.rolledBackResult()
+				result.StateEffect = rollbackReceipt.StateEffect
+				result.Receipt = &rollbackReceipt
+				result.Verification = append([]colony.LifecycleVerification(nil), rollbackReceipt.Verification...)
+				result.Recovery = rollbackReceipt.Recovery.SafeNextStep
+			} else {
+				cause := fmt.Errorf("maintenance commit failed (%v) and rollback failed: %w", commitErr, rollbackErr)
+				recoveryReceipt, recoveryErr := tx.recoveryResult(cause, lifecycleRecoveryProvenance(rollbackErr))
+				result.StateEffect = colony.LifecycleStateEffectRecoveryRequired
+				result.Receipt = &recoveryReceipt
+				result.Recovery = recoveryReceipt.Recovery.SafeNextStep
+				commitErr = recoveryErr
+			}
 		}
 	}
 	return result, commitErr

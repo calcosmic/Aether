@@ -279,4 +279,29 @@ func TestMaintenanceState199RegistryReceipt(t *testing.T) {
 	if len(registry.Colonies) != 1 || registry.Colonies[0].RepoPath != repo || registry.Colonies[0].RepoID != stableRepoIdentity(repo) || !registry.Colonies[0].Active || registry.Colonies[0].FinalStats != nil {
 		t.Fatalf("registry contents = %#v", registry)
 	}
+
+	beforeFault := append([]byte(nil), registryBytes...)
+	faultRequest := fixture.registryRequest("maintenance-registry-rollback", repo)
+	faultRequest.ExpectedBaseline = lifecycleDigest(beforeFault)
+	faultRequest.Goal = "must roll back"
+	faultRequest.Fault = func(point string) error {
+		if point == "after_target_commit:target-0001" {
+			return errors.New("injected registry failure")
+		}
+		return nil
+	}
+	faultPlan, err := prepareRegistryMutation(faultRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	faultResult, err := commitRegistryMutation(faultPlan)
+	if err == nil {
+		t.Fatal("registry fault unexpectedly committed")
+	}
+	if faultResult.StateEffect != colony.LifecycleStateEffectRolledBack || faultResult.Receipt == nil || faultResult.Receipt.Transaction.Stage != colony.TransactionStageRolledBack {
+		t.Fatalf("registry rollback result = %#v (err=%v)", faultResult, err)
+	}
+	if got := mustReadLifecycleFixtureFile(t, registryPath); !bytes.Equal(got, beforeFault) {
+		t.Fatalf("registry rollback did not restore exact bytes: %q", got)
+	}
 }

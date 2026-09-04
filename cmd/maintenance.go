@@ -12,106 +12,281 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/codex"
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
 )
 
+const (
+	maintenanceCleanupSchemaVersion = "maintenance-cleanup/v1"
+	maintenanceCleanupOwner         = "aether-runtime"
+	maintenanceCleanupCheckpoint    = "maintenance:data-clean:validated"
+	maintenanceCleanupManifestRel   = "maintenance/data-clean.json"
+)
+
+// maintenanceCleanupManifest is deletion authority. A filename prefix, age,
+// or glob match can suggest a candidate, but only an exact path with the
+// expected owner and byte digest may enter a cleanup transaction.
+type maintenanceCleanupManifest struct {
+	SchemaVersion string                     `json:"schema_version"`
+	Owner         string                     `json:"owner"`
+	Checkpoint    string                     `json:"checkpoint"`
+	Targets       []maintenanceCleanupTarget `json:"targets"`
+}
+
+type maintenanceCleanupTarget struct {
+	RelativePath string `json:"relative_path"`
+	Owner        string `json:"owner"`
+	Digest       string `json:"digest"`
+}
+
+type maintenanceCleanupRequest struct {
+	RepositoryRoot string
+	DataRoot       string
+	TransactionID  string
+	Manifest       maintenanceCleanupManifest
+	Rename         func(oldPath, newPath string) error
+	Fault          lifecycleTransactionFaultHook
+}
+
+type maintenanceCleanupPlan struct {
+	Request  maintenanceCleanupRequest
+	Preview  maintenanceMutationPreview
+	mutation maintenanceMutationPlan
+}
+
+// prepareMaintenanceCleanup is deliberately read-only. It reduces an
+// explicit cleanup manifest to the shared maintenance preview only after each
+// owned file still matches the manifest's exact digest.
+func prepareMaintenanceCleanup(request maintenanceCleanupRequest) (maintenanceCleanupPlan, error) {
+	plan := maintenanceCleanupPlan{}
+	request.RepositoryRoot = filepath.Clean(request.RepositoryRoot)
+	request.DataRoot = filepath.Clean(request.DataRoot)
+	request.TransactionID = strings.TrimSpace(request.TransactionID)
+	request.Manifest.Targets = append([]maintenanceCleanupTarget(nil), request.Manifest.Targets...)
+	plan.Request = request
+
+	if request.Manifest.SchemaVersion != maintenanceCleanupSchemaVersion {
+		return plan, fmt.Errorf("maintenance cleanup: schema_version must be %s", maintenanceCleanupSchemaVersion)
+	}
+	if request.Manifest.Owner != maintenanceCleanupOwner {
+		return plan, fmt.Errorf("maintenance cleanup: unknown manifest owner %q", request.Manifest.Owner)
+	}
+	if request.Manifest.Checkpoint != maintenanceCleanupCheckpoint {
+		return plan, fmt.Errorf("maintenance cleanup: checkpoint must be %q", maintenanceCleanupCheckpoint)
+	}
+	if request.TransactionID == "" {
+		return plan, fmt.Errorf("maintenance cleanup: transaction id is required")
+	}
+
+	targets := append([]maintenanceCleanupTarget(nil), request.Manifest.Targets...)
+	sort.Slice(targets, func(i, j int) bool { return targets[i].RelativePath < targets[j].RelativePath })
+	mutation := maintenanceMutationPlan{
+		SchemaVersion:   maintenanceMutationSchemaVersion,
+		Operation:       "data-clean",
+		TransactionID:   request.TransactionID,
+		SourceRoot:      request.RepositoryRoot,
+		DestinationRoot: request.DataRoot,
+		Checkpoint:      maintenanceCleanupCheckpoint,
+		Recovery:        "Preserve the named transaction journal and run `aether resume`, or rerun data-clean with a fresh exact manifest after a confirmed rollback.",
+		Allowlist: lifecycleTransactionAllowlist{
+			RepositoryRoot:    request.RepositoryRoot,
+			LifecycleDataRoot: request.DataRoot,
+		},
+		Rename: request.Rename,
+		Fault:  request.Fault,
+	}
+	seen := make(map[string]struct{}, len(targets))
+	for _, target := range targets {
+		if target.Owner != maintenanceCleanupOwner {
+			return plan, fmt.Errorf("maintenance cleanup: target %q has unknown owner %q", target.RelativePath, target.Owner)
+		}
+		if strings.TrimSpace(target.Digest) == "" || target.Digest == lifecycleTransactionMissingDigest {
+			return plan, fmt.Errorf("maintenance cleanup: target %q requires an existing baseline digest", target.RelativePath)
+		}
+		clean := filepath.Clean(filepath.FromSlash(strings.TrimSpace(target.RelativePath)))
+		if clean == "." || filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) || clean != filepath.FromSlash(target.RelativePath) {
+			return plan, fmt.Errorf("maintenance cleanup: target %q must be a canonical contained relative path", target.RelativePath)
+		}
+		if _, duplicate := seen[clean]; duplicate {
+			return plan, fmt.Errorf("maintenance cleanup: duplicate target %q", clean)
+		}
+		seen[clean] = struct{}{}
+		path := filepath.Join(request.DataRoot, clean)
+		info, err := os.Lstat(path)
+		if err != nil {
+			return plan, fmt.Errorf("maintenance cleanup: inspect target %q: %w", clean, err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return plan, fmt.Errorf("maintenance cleanup: target %q must be a regular non-symlink file", clean)
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return plan, fmt.Errorf("maintenance cleanup: read target %q: %w", clean, err)
+		}
+		if got := lifecycleDigest(content); got != target.Digest {
+			return plan, fmt.Errorf("maintenance cleanup: baseline changed for %q", clean)
+		}
+		mutation.Targets = append(mutation.Targets, maintenanceMutationTarget{
+			Root:           lifecycleTransactionRootData,
+			RelativeTarget: clean,
+			Source:         "exact cleanup manifest owned by " + maintenanceCleanupOwner,
+			Action:         lifecycleTransactionRemove,
+			ExpectedDigest: target.Digest,
+			Managed:        true,
+		})
+	}
+	preview, err := prepareMaintenanceMutation(mutation)
+	if err != nil {
+		return plan, err
+	}
+	plan.Preview = preview
+	plan.mutation = mutation
+	return plan, nil
+}
+
+func commitMaintenanceCleanup(plan maintenanceCleanupPlan) (maintenanceMutationResult, error) {
+	prepared, err := prepareMaintenanceCleanup(plan.Request)
+	if err != nil {
+		return maintenanceMutationResult{
+			SchemaVersion: maintenanceMutationSchemaVersion,
+			Operation:     "data-clean",
+			Preview:       plan.Preview,
+			StateEffect:   colony.LifecycleStateEffectNone,
+			Recovery:      plan.mutation.Recovery,
+		}, err
+	}
+	return commitMaintenanceMutation(prepared.mutation)
+}
+
 var dataCleanCmd = &cobra.Command{
 	Use:   "data-clean",
-	Short: "Remove test artifacts from colony data files",
+	Short: "Remove explicitly owned artifacts from an exact cleanup manifest",
 	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if store == nil {
-			outputErrorMessage("no store initialized")
-			return nil
-		}
+	RunE:  runMaintenanceDataClean,
+}
 
-		confirm, _ := cmd.Flags().GetBool("confirm")
-
-		// Worker-debug artifacts (D-04): reported in both dry-run and
-		// confirmed mode — unlike the pheromones `removed` field below,
-		// `worker_debug_prunable` is deliberately non-zero without
-		// --confirm, so data-clean without --confirm is still useful as an
-		// inspection command rather than reporting zeros for everything.
-		workerDebugDir := filepath.Join(store.BasePath(), "worker-debug")
-		wdTotal, wdPrunable, wdRemoved, wdErr := pruneWorkerDebugDirectory(workerDebugDir, confirm)
-		if wdErr != nil {
-			outputError(3, fmt.Sprintf("failed to prune worker-debug artifacts: %v", wdErr), nil)
-			return nil
-		}
-
-		// Load pheromones.json
-		data, err := store.ReadFile("pheromones.json")
-		if err != nil {
-			outputOK(map[string]interface{}{
-				"scanned":               true,
-				"removed":               0,
-				"dry_run":               !confirm,
-				"worker_debug_total":    wdTotal,
-				"worker_debug_prunable": wdPrunable,
-				"worker_debug_removed":  wdRemoved,
-			})
-			return nil
-		}
-
-		var pheromonesFile map[string]interface{}
-		if err := json.Unmarshal(data, &pheromonesFile); err != nil {
-			outputError(1, fmt.Sprintf("failed to parse pheromones.json: %v", err), nil)
-			return nil
-		}
-
-		rawSignals, _ := pheromonesFile["signals"].([]interface{})
-		if rawSignals == nil {
-			outputOK(map[string]interface{}{
-				"scanned":               true,
-				"removed":               0,
-				"dry_run":               !confirm,
-				"worker_debug_total":    wdTotal,
-				"worker_debug_prunable": wdPrunable,
-				"worker_debug_removed":  wdRemoved,
-			})
-			return nil
-		}
-
-		var kept []interface{}
-		removed := 0
-		for _, raw := range rawSignals {
-			signal, ok := raw.(map[string]interface{})
-			if !ok {
-				kept = append(kept, raw)
-				continue
-			}
-			if isTestArtifact(signal) {
-				removed++
-				continue
-			}
-			kept = append(kept, raw)
-		}
-
-		if confirm && removed > 0 {
-			pheromonesFile["signals"] = kept
-			if err := store.SaveJSON("pheromones.json", pheromonesFile); err != nil {
-				outputError(2, fmt.Sprintf("failed to save pheromones.json: %v", err), nil)
-				return nil
-			}
-		}
-
-		// In dry-run mode, report 0 removed (nothing was actually removed)
-		reportedRemoved := removed
-		if !confirm {
-			reportedRemoved = 0
-		}
-
-		outputOK(map[string]interface{}{
-			"scanned":               true,
-			"removed":               reportedRemoved,
-			"dry_run":               !confirm,
-			"worker_debug_total":    wdTotal,
-			"worker_debug_prunable": wdPrunable,
-			"worker_debug_removed":  wdRemoved,
+func runMaintenanceDataClean(cmd *cobra.Command, _ []string) error {
+	if store == nil {
+		return fmt.Errorf("data-clean: no store initialized")
+	}
+	confirm, _ := cmd.Flags().GetBool("confirm")
+	manifestRel, _ := cmd.Flags().GetString("manifest")
+	if strings.TrimSpace(manifestRel) == "" {
+		manifestRel = maintenanceCleanupManifestRel
+	}
+	manifest, manifestPath, manifestBytes, exists, err := loadMaintenanceCleanupManifest(store.BasePath(), manifestRel)
+	if err != nil {
+		outputError(2, err.Error(), map[string]interface{}{
+			"operation": "data-clean", "manifest": manifestRel,
+			"state_effect": colony.LifecycleStateEffectNone,
+			"recovery":     "Correct the exact owned manifest, then rerun data-clean preview.",
 		})
 		return nil
-	},
+	}
+	if exists {
+		relativeManifest, _ := filepath.Rel(filepath.Clean(store.BasePath()), manifestPath)
+		manifest.Targets = append(manifest.Targets, maintenanceCleanupTarget{
+			RelativePath: relativeManifest,
+			Owner:        maintenanceCleanupOwner,
+			Digest:       lifecycleDigest(manifestBytes),
+		})
+	}
+	repositoryRoot := filepath.Clean(repoRootFromStore(store))
+	idDigest := strings.NewReplacer(":", "-", "/", "-").Replace(lifecycleDigest(manifestBytes))
+	if len(idDigest) > 20 {
+		idDigest = idDigest[:20]
+	}
+	request := maintenanceCleanupRequest{
+		RepositoryRoot: repositoryRoot,
+		DataRoot:       filepath.Clean(store.BasePath()),
+		TransactionID:  "data-clean-" + idDigest,
+		Manifest:       manifest,
+	}
+	plan, err := prepareMaintenanceCleanup(request)
+	if err != nil {
+		outputError(2, err.Error(), map[string]interface{}{
+			"operation": "data-clean", "manifest": manifestRel,
+			"state_effect": colony.LifecycleStateEffectNone,
+			"recovery":     "Correct the exact owned manifest, then rerun data-clean preview.",
+		})
+		return nil
+	}
+	result := maintenanceMutationResult{
+		SchemaVersion: maintenanceMutationSchemaVersion,
+		Operation:     "data-clean",
+		Preview:       plan.Preview,
+		Targets:       append([]maintenanceMutationTargetPreview(nil), plan.Preview.Targets...),
+		StateEffect:   colony.LifecycleStateEffectNone,
+		Recovery:      plan.mutation.Recovery,
+	}
+	if confirm {
+		result, err = commitMaintenanceCleanup(plan)
+	}
+	removed := 0
+	if result.StateEffect == colony.LifecycleStateEffectCommitted {
+		for _, target := range result.Targets {
+			if target.Change == maintenanceMutationChangeRemove {
+				removed++
+			}
+		}
+	}
+	payload := map[string]interface{}{
+		"operation":             "data-clean",
+		"scanned":               true,
+		"removed":               removed,
+		"dry_run":               !confirm,
+		"manifest":              manifestRel,
+		"preview":               result.Preview,
+		"transaction":           result.Preview.TransactionID,
+		"receipt":               result.Receipt,
+		"state_effect":          result.StateEffect,
+		"verification":          result.Verification,
+		"recovery":              result.Recovery,
+		"worker_debug_total":    0,
+		"worker_debug_prunable": 0,
+		"worker_debug_removed":  0,
+	}
+	if err != nil {
+		outputError(3, err.Error(), payload)
+		return nil
+	}
+	outputOK(payload)
+	return nil
+}
+
+func loadMaintenanceCleanupManifest(dataRoot, relativePath string) (maintenanceCleanupManifest, string, []byte, bool, error) {
+	empty := maintenanceCleanupManifest{
+		SchemaVersion: maintenanceCleanupSchemaVersion,
+		Owner:         maintenanceCleanupOwner,
+		Checkpoint:    maintenanceCleanupCheckpoint,
+		Targets:       []maintenanceCleanupTarget{},
+	}
+	root := filepath.Clean(dataRoot)
+	clean := filepath.Clean(filepath.FromSlash(strings.TrimSpace(relativePath)))
+	if clean == "." || filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) || clean != filepath.FromSlash(relativePath) {
+		return empty, "", nil, false, fmt.Errorf("data-clean: manifest must be a canonical path below the lifecycle data root")
+	}
+	path := filepath.Join(root, clean)
+	if !pathIsWithin(root, path) {
+		return empty, "", nil, false, fmt.Errorf("data-clean: manifest escapes the lifecycle data root")
+	}
+	if err := rejectLifecycleSymlinkTarget(root, path); err != nil {
+		return empty, "", nil, false, err
+	}
+	raw, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		encoded, _ := json.Marshal(empty)
+		return empty, path, encoded, false, nil
+	}
+	if err != nil {
+		return empty, "", nil, false, fmt.Errorf("data-clean: read manifest: %w", err)
+	}
+	var manifest maintenanceCleanupManifest
+	if err := decodeLifecycleJSON(raw, &manifest); err != nil {
+		return empty, "", nil, false, fmt.Errorf("data-clean: decode manifest: %w", err)
+	}
+	return manifest, path, raw, true, nil
 }
 
 // pruneWorkerDebugDirectory applies the shared codex.WorkerDebugRetentionMaxAge
@@ -326,6 +501,7 @@ func isTestArtifact(signal map[string]interface{}) bool {
 
 func init() {
 	dataCleanCmd.Flags().Bool("confirm", false, "Confirm removal (default: dry-run)")
+	dataCleanCmd.Flags().String("manifest", maintenanceCleanupManifestRel, "Exact owned cleanup manifest below the lifecycle data root")
 	backupPruneGlobalCmd.Flags().Int("cap", 50, "Maximum backups to keep")
 
 	rootCmd.AddCommand(dataCleanCmd)
