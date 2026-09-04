@@ -197,6 +197,11 @@ func newEntombManifestFixture199(t *testing.T, disposition colony.SealDispositio
 		"disposition":    outcome.Disposition,
 		"owner_reason":   outcome.OwnerReason,
 	}
+	rollback := make(map[string]any, len(closure)+1)
+	for key, value := range closure {
+		rollback[key] = value
+	}
+	rollback["rollback"] = outcome.Rollback
 	report := "# Crowned Anthill\n\nOutcome: " + outcome.OutcomeID + "\nTransaction: " + outcome.Transaction.ID + "\nDisposition: " + string(outcome.Disposition) + "\n"
 	if disposition == colony.SealDispositionForcedIncomplete {
 		report = "# Forced seal record — completion not verified\n\nOutcome: " + outcome.OutcomeID + "\nTransaction: " + outcome.Transaction.ID + "\nDisposition: forced_incomplete\nOwner reason: " + outcome.OwnerReason + "\n"
@@ -210,7 +215,7 @@ func newEntombManifestFixture199(t *testing.T, disposition colony.SealDispositio
 		".aether/data/seal/learnings.json":       mustEntombManifestJSON199(t, closure),
 		".aether/data/pheromones.json":           []byte("{\"version\":\"2.0\",\"signals\":[]}\n"),
 		".aether/data/seal/checkpoints.json":     mustEntombManifestJSON199(t, closure),
-		".aether/data/seal/rollback.json":        mustEntombManifestJSON199(t, closure),
+		".aether/data/seal/rollback.json":        mustEntombManifestJSON199(t, rollback),
 		".aether/QUEEN.md":                       []byte("# Retained colony memory\n"),
 		".aether/HANDOFF.md":                     []byte("# Tombstone input\n"),
 		".aether/data/entomb/colony-archive.xml": []byte("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<colony-archive colony_id=\"" + outcome.OutcomeID + "\" sealed_at=\"2026-09-04T00:00:00Z\" version=\"1.0\"><pheromones version=\"1.0\" count=\"0\"></pheromones><queen-wisdom version=\"1.0\"></queen-wisdom><colony-registry version=\"1.0\"></colony-registry></colony-archive>"),
