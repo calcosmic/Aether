@@ -537,8 +537,18 @@ func TestPauseWrapperContract199(t *testing.T) {
 				t.Errorf("%s contains forbidden host-owned mutation/alias %q", path, forbidden)
 			}
 		}
-		if !strings.Contains(content, "Source: .aether/commands/pause.yaml") {
+		wantHeader := "<!-- Aether-managed: runtime spec at .aether/commands/pause.yaml. Synced by aether update. -->"
+		if !strings.HasPrefix(content, wantHeader+"\n") {
 			t.Errorf("%s does not declare canonical source linkage", path)
+		}
+	}
+	for _, legacyPath := range []string{
+		filepath.Join(repoRoot, ".claude", "commands", "ant-pause-colony.md"),
+		filepath.Join(repoRoot, ".claude", "commands", "ant", "pause-colony.md"),
+		filepath.Join(repoRoot, ".opencode", "commands", "ant", "pause-colony.md"),
+	} {
+		if _, err := os.Stat(legacyPath); !os.IsNotExist(err) {
+			t.Errorf("legacy public pause wrapper still exists at %s: %v", legacyPath, err)
 		}
 	}
 }
