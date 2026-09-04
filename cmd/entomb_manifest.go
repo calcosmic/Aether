@@ -268,7 +268,7 @@ func buildEntombArchiveManifest(input entombArchiveManifestInput) (colony.Archiv
 			Stage: colony.TransactionStageVerified,
 		},
 		Receipt: &colony.LifecycleReceiptReference{
-			ID: input.TransactionID + "-archive-receipt",
+			ID: input.TransactionID + "-receipt",
 		},
 		Provenance: colony.RecoveryProvenanceConfirmed,
 	}
