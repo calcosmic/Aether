@@ -370,7 +370,8 @@ func allowStopAfterRecentResume() bool {
 	if err := store.LoadJSON("session.json", &session); err != nil {
 		return false
 	}
-	if session.LastCommand != "resume-colony" {
+	session.LastCommand = normalizeLegacySessionCommand(session.LastCommand, resolveVersion())
+	if session.LastCommand != "resume" {
 		return false
 	}
 
@@ -639,6 +640,7 @@ func ensureSessionSummary(state colony.ColonyState, commandName, suggestedNext, 
 	if store == nil {
 		return
 	}
+	commandName = normalizeLegacySessionCommand(commandName, resolveVersion())
 
 	contextCleared := true
 	if _, err := syncColonyArtifacts(state, colonyArtifactOptions{

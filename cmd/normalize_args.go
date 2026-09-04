@@ -26,20 +26,34 @@ var legacySessionProcessRedirect *legacySessionRedirect
 
 func normalizeLegacySessionInvocation(args []string, version string) ([]string, *legacySessionRedirect) {
 	normalized := append([]string(nil), args...)
-	if len(normalized) < 2 || !versionBefore(version, legacySessionRedirectExpiry) {
+	if len(normalized) < 2 {
 		return normalized, nil
 	}
-	replacements := map[string]string{
-		"pause-colony":  "pause",
-		"resume-colony": "resume",
-	}
-	to, ok := replacements[normalized[1]]
-	if !ok {
+	to := normalizeLegacySessionCommand(normalized[1], version)
+	if to == normalized[1] {
 		return normalized, nil
 	}
 	redirect := &legacySessionRedirect{From: normalized[1], To: to, ExpiresAt: legacySessionRedirectExpiry}
 	normalized[1] = to
 	return normalized, redirect
+}
+
+// normalizeLegacySessionCommand is the one bounded compatibility boundary for
+// persisted and CLI lifecycle command tokens. It accepts only exact historic
+// values before the machine-checked 1.29 expiry; callers must persist and
+// route with the canonical result, never with the input token.
+func normalizeLegacySessionCommand(command, version string) string {
+	if !versionBefore(version, legacySessionRedirectExpiry) {
+		return command
+	}
+	switch command {
+	case "pause-colony":
+		return "pause"
+	case "resume-colony":
+		return "resume"
+	default:
+		return command
+	}
 }
 
 func legacySessionRedirectNotice(redirect *legacySessionRedirect) string {

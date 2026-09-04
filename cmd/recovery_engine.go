@@ -35,13 +35,7 @@ func normalizeBaseCommand(cmd string) string {
 		c = c[:idx]
 	}
 
-	// Map known aliases
-	switch c {
-	case "resume-colony":
-		return "resume"
-	}
-
-	return strings.TrimSpace(c)
+	return normalizeLegacySessionCommand(strings.TrimSpace(c), resolveVersion())
 }
 
 // classifyError returns an error class string based on substring matching
