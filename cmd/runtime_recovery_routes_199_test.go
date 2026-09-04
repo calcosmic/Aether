@@ -24,13 +24,19 @@ func TestRuntimeRecoveryRoutes199(t *testing.T) {
 		})
 	}
 
-	for _, name := range []string{"codex_visuals.go", "init_cmd.go", "entomb_cmd.go"} {
+	for _, name := range []string{
+		"codex_visuals.go", "init_cmd.go", "entomb_cmd.go", "clash.go",
+		"worktree_safety.go", "codex_build_worktree.go", "worktree_reap.go",
+	} {
 		t.Run("active literals "+name, func(t *testing.T) {
 			assertNoRetiredRuntimeRecoveryLiterals199(t, name)
 		})
 	}
 
-	for _, name := range []string{"visual preserved workspaces", "no-color preserved workspaces"} {
+	for _, name := range []string{
+		"visual preserved workspaces", "no-color preserved workspaces", "worktree preservation",
+		"clash forced cleanup", "cancelled worktree wave", "uncredited worktree receipt", "reap saved work",
+	} {
 		output := suggestions[name]
 		if !strings.Contains(output, "aether maintenance recovery-inspect") {
 			t.Fatalf("%s must offer the read-only preserved-work inspection route:\n%s", name, output)
@@ -56,6 +62,7 @@ func collectRuntimeRecoverySuggestions199(t *testing.T) map[string]string {
 		},
 	}
 	visual := renderResumeVisual(result, "", true)
+	preserved := worktreeSafety{Branch: "phase-7/builder-map", Reason: "worktree has uncommitted changes"}
 
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	var visualOut bytes.Buffer
@@ -76,6 +83,11 @@ func collectRuntimeRecoverySuggestions199(t *testing.T) map[string]string {
 		"visual preserved workspaces":   visualOut.String(),
 		"no-color preserved workspaces": noColorOut.String(),
 		"json lifecycle result":         jsonOut.String(),
+		"worktree preservation":          describeWorktreePreservation(preserved, "branch left unchanged"),
+		"clash forced cleanup":           clashPreservedWorkMessage199(preserved, "saved work before a forced cleanup"),
+		"cancelled worktree wave":        cancelledWorktreeWaveMessage199("Builder Map", "phase-7/builder-map"),
+		"uncredited worktree receipt":    uncreditedWorktreeReceiptMessage199("Builder Map", []string{"cmd/map.go"}, "phase-7/builder-map"),
+		"reap saved work":                worktreeReapSavedWorkMessage199("phase-7/builder-map", "one change stashed"),
 	}
 }
 
