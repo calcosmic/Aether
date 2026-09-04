@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -65,6 +66,23 @@ type entombTransactionResult struct {
 	Replay               bool
 }
 
+type entombFailureError struct {
+	Stage         string
+	TransactionID string
+	StateEffect   colony.LifecycleStateEffect
+	cause         error
+}
+
+func (err *entombFailureError) Error() string {
+	next := "retry `/ant-entomb --confirm` after inspecting the named source"
+	if err.TransactionID != "" {
+		next = fmt.Sprintf("inspect `.aether/data/transactions/%s/` and retry `/ant-entomb --confirm`", err.TransactionID)
+	}
+	return fmt.Sprintf("entomb %s failed: %v. Active colony state was retained; %s", err.Stage, err.cause, next)
+}
+
+func (err *entombFailureError) Unwrap() error { return err.cause }
+
 type entombPreparedSource struct {
 	Manifest entombArchiveSource
 	Actual   string
@@ -101,10 +119,21 @@ func runEntomb(cmd *cobra.Command, args []string) error {
 		Root: root, DataRoot: store.BasePath(), Confirmed: confirmed, Now: time.Now().UTC(),
 	})
 	if err != nil {
-		outputError(2, err.Error(), map[string]interface{}{
-			"active_state_retained": true,
-			"retry":                 `/ant-entomb --confirm`,
-		})
+		state := colony.ColonyState{}
+		if _, _, loaded, loadErr := loadEntombTransactionState(root, store.BasePath()); loadErr == nil {
+			state = loaded
+		}
+		failureResult, closeoutErr := entombFailureResultForState(state, err)
+		if closeoutErr != nil {
+			outputError(2, err.Error(), map[string]interface{}{"active_state_retained": true, "retry": `/ant-entomb --confirm`, "closeout_error": closeoutErr.Error()})
+			return nil
+		}
+		if shouldRenderVisualOutput(stderr) {
+			markRenderedCommandError(2)
+			writeVisualOutput(stderr, renderEntombFailureVisual(err, failureResult))
+			return nil
+		}
+		outputError(2, err.Error(), failureResult)
 		return nil
 	}
 	if result.AwaitingConfirmation {
@@ -239,7 +268,11 @@ func runEntombTransaction(input entombTransactionInput) (entombTransactionResult
 	}
 	receipt, err := tx.Commit()
 	if err != nil {
-		return entombTransactionResult{}, entombRetainedError("transaction", preflight.Transaction, err)
+		effect := colony.LifecycleStateEffectRetained
+		if tx.progress != nil && tx.progress.StateEffect.Valid() && tx.progress.StateEffect != colony.LifecycleStateEffectNone {
+			effect = tx.progress.StateEffect
+		}
+		return entombTransactionResult{}, entombFailureWithEffect("transaction", preflight.Transaction, effect, err)
 	}
 	result, err := loadPublishedEntombResult(preflight.ChamberPath, receipt, stages, false)
 	if err != nil {
@@ -939,15 +972,18 @@ func callEntombFault(fault entombTransactionFaultHook, point string) error {
 }
 
 func entombRetainedError(stage, transactionID string, cause error) error {
-	next := "retry `/ant-entomb --confirm` after inspecting the named source"
-	if transactionID != "" {
-		next = fmt.Sprintf("inspect `.aether/data/transactions/%s/` and retry `/ant-entomb --confirm`", transactionID)
+	return entombFailureWithEffect(stage, transactionID, colony.LifecycleStateEffectRetained, cause)
+}
+
+func entombFailureWithEffect(stage, transactionID string, effect colony.LifecycleStateEffect, cause error) error {
+	if !effect.Valid() || effect == colony.LifecycleStateEffectNone || effect == colony.LifecycleStateEffectCommitted {
+		effect = colony.LifecycleStateEffectRetained
 	}
-	return fmt.Errorf("entomb %s failed: %w. Active colony state was retained; %s", stage, cause, next)
+	return &entombFailureError{Stage: strings.TrimSpace(stage), TransactionID: strings.TrimSpace(transactionID), StateEffect: effect, cause: cause}
 }
 
 func entombResultMap(result entombTransactionResult) map[string]interface{} {
-	return map[string]interface{}{
+	payload := map[string]interface{}{
 		"entombed":              !result.AwaitingConfirmation,
 		"awaiting_confirmation": result.AwaitingConfirmation,
 		"confirmation":          result.Confirmation,
@@ -965,6 +1001,156 @@ func entombResultMap(result entombTransactionResult) map[string]interface{} {
 		"replay":                result.Replay,
 		"next":                  result.Next,
 	}
+	projection := entombLifecycleProjection(result)
+	outcome := colony.OutcomeKindArchived
+	effect := result.Receipt.StateEffect
+	summary := "The verified archive was published before active colony state was cleared."
+	if result.AwaitingConfirmation {
+		outcome = colony.OutcomeKindNoChange
+		effect = colony.LifecycleStateEffectNone
+		summary = "The archive preview is ready; active sealed state remains unchanged pending confirmation."
+	}
+	if !effect.Valid() {
+		effect = colony.LifecycleStateEffectCommitted
+	}
+	payload["outcome_kind"] = outcome
+	payload["state_effect"] = effect
+	payload["projection_revision"] = projection.ProjectionRevision
+	applyNextActionToResult(payload, nextAction{
+		Command:        projection.NextAction.RuntimeCommand,
+		Recommendation: projection.NextAction.Reason,
+		Projection:     &projection,
+	})
+	details := LifecycleCloseoutDetails{Summary: summary}
+	if !result.AwaitingConfirmation {
+		details.Evidence = []colony.LifecycleEvidence{
+			{ID: "entomb-archive-manifest", Kind: "manifest", Source: filepath.Join(result.ChamberPath, "manifest.json"), Digest: result.ManifestDigest, Summary: "Verified archive bytes and cross-references"},
+			{ID: "entomb-transaction-receipt", Kind: "receipt", Source: result.Receipt.Transaction.JournalPath, Summary: "Committed archive and clear transaction receipt"},
+		}
+		details.Verification = []colony.LifecycleVerification{{Name: "archive publication and clear", Passed: true, EvidenceIDs: []string{"entomb-archive-manifest", "entomb-transaction-receipt"}}}
+	}
+	if err := applyLifecycleCloseout(payload, "entomb", details); err != nil {
+		payload["lifecycle_closeout_error"] = err.Error()
+	}
+	return payload
+}
+
+func entombLifecycleProjection(result entombTransactionResult) LifecycleProjection {
+	revision := strings.TrimSpace(result.Receipt.ProjectionRevision)
+	if revision == "" {
+		revision = LifecycleProjectionRevision
+	}
+	closure := LifecycleClosureProjection{Status: "archived", Inspectable: true}
+	next := entombRuntimeCommand(result.Next)
+	reason := "The verified chamber exists and active colony state is clear; a new colony may now be founded."
+	standing := "Archived"
+	if result.AwaitingConfirmation {
+		closure = LifecycleClosureProjection{Status: "verified", Inspectable: true, ArchiveReady: true}
+		if result.Disposition == colony.SealDispositionForcedIncomplete {
+			closure.Status = "forced_incomplete"
+			closure.Forced = true
+			closure.OwnerReason = strings.TrimSpace(result.OwnerReason)
+		}
+		reason = "Confirm the separately authorized archive operation before any active state is cleared."
+		standing = "Sealed and retained pending archive confirmation"
+	}
+	effect := result.Receipt.StateEffect
+	if result.AwaitingConfirmation {
+		effect = colony.LifecycleStateEffectNone
+	} else if !effect.Valid() {
+		effect = colony.LifecycleStateEffectCommitted
+	}
+	return LifecycleProjection{
+		SchemaVersion:      LifecycleResultSchemaVersion,
+		Command:            "entomb",
+		OutcomeKind:        colony.OutcomeKindArchived,
+		ProjectionRevision: revision,
+		View:               LifecycleViewFocused,
+		Platform:           "codex",
+		Identity: LifecycleFact[LifecycleIdentityFacts]{Value: LifecycleIdentityFacts{
+			Name: result.ChamberName, Goal: result.Goal, Standing: standing,
+		}},
+		Goal:         LifecycleFact[string]{Value: result.Goal},
+		Standing:     LifecycleFact[string]{Value: standing},
+		Changes:      append([]colony.LifecycleChange(nil), result.Receipt.Changes...),
+		Evidence:     append([]colony.LifecycleEvidence(nil), result.Receipt.Evidence...),
+		Verification: append([]colony.LifecycleVerification(nil), result.Receipt.Verification...),
+		Warnings:     append([]colony.LifecycleIssue(nil), result.Receipt.Warnings...),
+		Debt:         append([]colony.LifecycleIssue(nil), result.Receipt.Debt...),
+		Blockers:     append([]colony.LifecycleIssue(nil), result.Receipt.Blockers...),
+		NextAction: LifecycleProjectedAction{
+			ID: "initialize", RuntimeCommand: next, DisplayCommand: next, Reason: reason,
+		},
+		Alternatives: []LifecycleActionChoice{{ID: "status", RuntimeCommand: "aether status", DisplayCommand: "aether status", Reason: "Inspect the cleared lifecycle state and archive reference."}},
+		StateEffect:  effect,
+		Closure:      closure,
+	}
+}
+
+func entombRuntimeCommand(command string) string {
+	command = strings.TrimSpace(command)
+	if strings.HasPrefix(command, "/ant-") {
+		return "aether " + strings.TrimPrefix(command, "/ant-")
+	}
+	return command
+}
+
+func entombFailureResultForState(state colony.ColonyState, cause error) (map[string]interface{}, error) {
+	failure := &entombFailureError{Stage: "archive", StateEffect: colony.LifecycleStateEffectRetained, cause: cause}
+	var typed *entombFailureError
+	if errors.As(cause, &typed) {
+		failure = typed
+	}
+	result, err := lifecycleCloseoutRefusalForState(
+		state,
+		"entomb",
+		cause.Error(),
+		"aether status",
+		"Inspect the retained sealed state and transaction journal before retrying the archive.",
+	)
+	if err != nil {
+		return nil, err
+	}
+	outcome := colony.OutcomeKindFailed
+	if failure.StateEffect == colony.LifecycleStateEffectRecoveryRequired {
+		outcome = colony.OutcomeKindRecoveryRequired
+	}
+	journal := ".aether/data/COLONY_STATE.json"
+	if failure.TransactionID != "" {
+		journal = filepath.ToSlash(filepath.Join(".aether", "data", "transactions", failure.TransactionID)) + "/"
+	}
+	evidence := colony.LifecycleEvidence{
+		ID:      emptyFallback(failure.TransactionID, "entomb-failure") + "-journal",
+		Kind:    "coordinator_journal",
+		Source:  journal,
+		Summary: fmt.Sprintf("Entomb %s failure retained its transaction evidence", emptyFallback(failure.Stage, "archive")),
+	}
+	result["outcome_kind"] = outcome
+	result["state_effect"] = failure.StateEffect
+	result["failure_stage"] = failure.Stage
+	result["transaction_id"] = failure.TransactionID
+	result["journal"] = journal
+	result["active_state_retained"] = failure.StateEffect == colony.LifecycleStateEffectRetained || failure.StateEffect == colony.LifecycleStateEffectRolledBack
+	result["retry"] = `/ant-entomb --confirm`
+	if err := applyLifecycleCloseout(result, "entomb", LifecycleCloseoutDetails{
+		Summary:      cause.Error(),
+		Evidence:     []colony.LifecycleEvidence{evidence},
+		Verification: []colony.LifecycleVerification{{Name: "archive publication and clear", Passed: false, EvidenceIDs: []string{evidence.ID}, Detail: cause.Error()}},
+		Blockers:     []colony.LifecycleIssue{{ID: "entomb-" + emptyFallback(failure.Stage, "archive") + "-failure", Summary: cause.Error(), EvidenceIDs: []string{evidence.ID}}},
+	}); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func renderEntombFailureVisual(cause error, result map[string]interface{}) string {
+	var b strings.Builder
+	b.WriteString(renderBanner("❌", "Entomb Not Completed"))
+	b.WriteString(visualDividerStr())
+	b.WriteString(strings.TrimSpace(cause.Error()))
+	b.WriteString("\nThe sealed colony remains available for inspection; no successful archive is claimed.\n\n")
+	b.WriteString(renderLifecycleCloseoutFromResult(result, "codex"))
+	return b.String()
 }
 
 func renderEntombConfirmationVisual(result map[string]interface{}) string {
@@ -978,8 +1164,8 @@ func renderEntombConfirmationVisual(result map[string]interface{}) string {
 	b.WriteString("\nRetained: colony memory, seal evidence, and tombstone input\n")
 	b.WriteString("Active sealed state will be cleared only after verification.\n\n")
 	b.WriteString(entombConfirmationCopy())
-	b.WriteString("\n\nRun `/ant-entomb --confirm` to archive and clear the colony.\n")
-	return b.String()
+	b.WriteString("\n")
+	return appendLifecycleCloseoutVisual(b.String(), result, "codex")
 }
 
 var tunnelsCmd = &cobra.Command{
@@ -1742,11 +1928,7 @@ func renderEntombVisual(result map[string]interface{}) string {
 			b.WriteString(" ──\n")
 		}
 	}
-	b.WriteString(renderNextUp(
-		`Run `+"`/ant-init \"next goal\"`"+` to found the next colony.`,
-		`Run `+"`/ant-status`"+` to inspect the cleared lifecycle state.`,
-	))
-	return b.String()
+	return appendLifecycleCloseoutVisual(b.String(), result, "codex")
 }
 
 func init() {

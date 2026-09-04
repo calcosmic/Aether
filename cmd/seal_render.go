@@ -97,10 +97,17 @@ type SealTransactionResult struct {
 // durable disposition, never on a loose force flag. The forced branch avoids
 // every verified-success discriminator by construction.
 func RenderSealOutcome(result SealTransactionResult) string {
+	structured, closeoutErr := sealLifecycleCloseoutResult(result)
+	var body string
 	if result.Outcome.Disposition == colony.SealDispositionForcedIncomplete {
-		return renderForcedSealOutcome(result)
+		body = renderForcedSealOutcome(result)
+	} else {
+		body = renderVerifiedSealOutcome(result)
 	}
-	return renderVerifiedSealOutcome(result)
+	if closeoutErr != nil {
+		return strings.TrimRight(body, "\n") + "\n\nCloseout unavailable: " + closeoutErr.Error() + "\n"
+	}
+	return appendLifecycleCloseoutVisual(body, structured, "codex")
 }
 
 func renderVerifiedSealOutcome(result SealTransactionResult) string {
@@ -117,7 +124,6 @@ func renderVerifiedSealOutcome(result SealTransactionResult) string {
 	b.WriteString("\nRecord: ")
 	b.WriteString(result.SummaryPath)
 	b.WriteString("\n")
-	b.WriteString(renderSealNextActions(result))
 	return b.String()
 }
 
@@ -144,18 +150,144 @@ func renderForcedSealOutcome(result SealTransactionResult) string {
 		b.WriteString("not recorded")
 	}
 	b.WriteString("\n")
-	b.WriteString(renderSealNextActions(result))
 	return b.String()
 }
 
-func renderSealNextActions(result SealTransactionResult) string {
-	primary := strings.TrimSpace(result.PrimaryNext)
-	if primary == "" {
-		primary = "aether status"
+// sealLifecycleCloseoutResult adapts the already-committed seal artifacts to
+// the shared terminal grammar. It deliberately does not resolve a next action:
+// the durable closure evidence supplies status and optional entomb authority.
+func sealLifecycleCloseoutResult(result SealTransactionResult) (map[string]interface{}, error) {
+	revision, err := sealCloseoutProjectionRevision(result)
+	if err != nil {
+		return nil, err
 	}
-	optional := strings.TrimSpace(result.OptionalNext)
-	if optional == "" {
-		optional = "aether entomb"
+	if strings.TrimSpace(result.PrimaryNext) != "aether status" {
+		return nil, fmt.Errorf("seal closeout requires aether status as the primary action")
 	}
-	return fmt.Sprintf("\nNext Up\nRun `%s` to inspect the retained closure record.\nOptional: run `%s` only when you choose to archive it.\n", primary, optional)
+	if strings.TrimSpace(result.OptionalNext) != "aether entomb" {
+		return nil, fmt.Errorf("seal closeout requires aether entomb as the optional action")
+	}
+
+	closure := LifecycleClosureProjection{
+		Status:       "verified",
+		Inspectable:  true,
+		ArchiveReady: true,
+	}
+	if result.Outcome.Disposition == colony.SealDispositionForcedIncomplete {
+		closure.Status = "forced_incomplete"
+		closure.Forced = true
+		closure.OwnerReason = strings.TrimSpace(result.Outcome.OwnerReason)
+	}
+	outcomeEvidence := append([]colony.LifecycleEvidence(nil), result.Outcome.Evidence...)
+	if closure.Forced {
+		for index := range outcomeEvidence {
+			if strings.Contains(strings.ToLower(outcomeEvidence[index].Summary), "crowned") {
+				outcomeEvidence[index].Summary = "Retained forced-incomplete closure evidence"
+			}
+		}
+	}
+	blockers := append([]colony.LifecycleIssue(nil), result.Outcome.Blockers...)
+	for _, item := range result.Evidence.UncompletedWork {
+		blockers = append(blockers, colony.LifecycleIssue{
+			ID:          strings.TrimSpace(item.ID),
+			Summary:     strings.TrimSpace(item.Summary),
+			EvidenceIDs: append([]string(nil), item.EvidenceIDs...),
+		})
+	}
+	projection := LifecycleProjection{
+		SchemaVersion:      LifecycleResultSchemaVersion,
+		Command:            "seal",
+		OutcomeKind:        result.Outcome.OutcomeKind,
+		ProjectionRevision: revision,
+		View:               LifecycleViewFocused,
+		Platform:           "codex",
+		Standing: LifecycleFact[string]{
+			Value:  "The sealed colony remains active and inspectable.",
+			Source: lifecycleSource("standing", result.SummaryPath, LifecycleFactConfirmed, ""),
+		},
+		Changes:        append([]colony.LifecycleChange(nil), result.Outcome.Changes...),
+		Evidence:       outcomeEvidence,
+		Verification:   append([]colony.LifecycleVerification(nil), result.Outcome.Verification...),
+		Warnings:       append([]colony.LifecycleIssue(nil), result.Outcome.Warnings...),
+		Debt:           append([]colony.LifecycleIssue(nil), result.Outcome.Debt...),
+		Blockers:       blockers,
+		OwnerDecisions: append([]colony.LifecycleDecision(nil), result.Outcome.Decisions...),
+		NextAction: LifecycleProjectedAction{
+			ID:             "inspect_sealed",
+			RuntimeCommand: result.PrimaryNext,
+			DisplayCommand: result.PrimaryNext,
+			Reason:         "The sealed colony remains active and inspectable.",
+		},
+		Alternatives: []LifecycleActionChoice{{
+			ID:             "entomb",
+			RuntimeCommand: result.OptionalNext,
+			DisplayCommand: result.OptionalNext,
+			Reason:         "Optionally archive and clear the sealed colony.",
+		}},
+		StateEffect: result.Outcome.StateEffect,
+		Transaction: &result.Outcome.Transaction,
+		Receipt:     &result.Receipt,
+		Closure:     closure,
+	}
+	closureRecordSummary := "Retained Crowned Anthill closure record"
+	if closure.Forced {
+		closureRecordSummary = "Retained forced-incomplete closure record"
+	}
+	evidence := []colony.LifecycleEvidence{
+		{ID: "seal-closure-record", Kind: "closure_record", Source: result.SummaryPath, Summary: closureRecordSummary},
+		{ID: "seal-transaction-receipt", Kind: "receipt", Source: result.Receipt.Transaction.JournalPath, Summary: "Committed seal transaction receipt"},
+	}
+	evidence = append(evidence, result.Receipt.Evidence...)
+	details := LifecycleCloseoutDetails{
+		Summary:      "Verified completion was sealed and retained for inspection.",
+		Evidence:     evidence,
+		Verification: append([]colony.LifecycleVerification(nil), result.Receipt.Verification...),
+	}
+	if closure.Forced {
+		details.Summary = "The owner force-sealed an incomplete colony for recordkeeping; completion was not verified."
+	}
+	structured := map[string]interface{}{
+		"sealed":              true,
+		"outcome_kind":        result.Outcome.OutcomeKind,
+		"state_effect":        result.Outcome.StateEffect,
+		"projection_revision": revision,
+		"disposition":         result.Outcome.Disposition,
+		"seal_outcome":        result.Outcome,
+		"lifecycle_receipt":   result.Receipt,
+		"summary":             result.SummaryPath,
+		"next":                result.PrimaryNext,
+		"optional_next":       result.OptionalNext,
+	}
+	applyNextActionToResult(structured, nextAction{
+		Command:        result.PrimaryNext,
+		Recommendation: projection.NextAction.Reason,
+		Alternatives:   []nextActionAlternative{{Command: result.OptionalNext, Explanation: projection.Alternatives[0].Reason}},
+		Projection:     &projection,
+	})
+	if err := applyLifecycleCloseout(structured, "seal", details); err != nil {
+		return nil, err
+	}
+	return structured, nil
+}
+
+func sealCloseoutProjectionRevision(result SealTransactionResult) (string, error) {
+	revisions := []string{
+		strings.TrimSpace(result.Outcome.ProjectionRevision),
+		strings.TrimSpace(result.Evidence.ProjectionRevision),
+		strings.TrimSpace(result.Receipt.ProjectionRevision),
+	}
+	revision := ""
+	for _, candidate := range revisions {
+		if candidate == "" {
+			continue
+		}
+		if revision != "" && candidate != revision {
+			return "", fmt.Errorf("seal closeout projection revisions disagree: %q and %q", revision, candidate)
+		}
+		revision = candidate
+	}
+	if revision == "" {
+		return "", fmt.Errorf("seal closeout requires a projection revision")
+	}
+	return revision, nil
 }
