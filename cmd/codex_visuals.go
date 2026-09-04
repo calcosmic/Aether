@@ -3685,13 +3685,9 @@ func renderPauseVisual(result map[string]interface{}) string {
 		b.WriteString(handoffPath)
 		b.WriteString("\n")
 	}
-	// The closing used to hand-write two alternatives, "aether resume-colony"
-	// and "aether resume" -- but resume is a declared Cobra ALIAS of
-	// resume-colony, so the two lines named the exact same command twice, one
-	// of them wrongly described as "the compact dashboard view instead". The
-	// card below is the one resolver's answer: it names the short command
-	// (resume, gated against the live command tree) as the primary and offers
-	// the genuinely different read-only quick view as an alternative.
+	// The closeout comes from the one lifecycle resolver so it names the
+	// canonical resume route once and may pair it only with a genuinely
+	// different read-only quick view.
 	b.WriteString(renderLifecycleClosing(result, "pause"))
 	return b.String()
 }
@@ -3730,7 +3726,7 @@ func renderResumeVisual(result map[string]interface{}, handoffText string, full 
 			b.WriteString(fmt.Sprintf("%d worker workspace(s) forgotten (their folder was already gone, nothing to keep)\n", cleaned))
 		}
 		if preserved > 0 {
-			b.WriteString(fmt.Sprintf("Kept %d worker workspace(s) because they still hold work — nothing was deleted. Run `aether recover` to see them.\n", preserved))
+			b.WriteString(fmt.Sprintf("Kept %d worker workspace(s) because they still hold work — nothing was deleted. Inspect them with `aether maintenance recovery-inspect` (State effect: none). To restore runnable lifecycle state, run `aether resume`.\n", preserved))
 		}
 	}
 

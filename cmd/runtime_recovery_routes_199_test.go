@@ -75,7 +75,7 @@ func collectRuntimeRecoverySuggestions199(t *testing.T) map[string]string {
 	return map[string]string{
 		"visual preserved workspaces":   visualOut.String(),
 		"no-color preserved workspaces": noColorOut.String(),
-		"json lifecycle result":          jsonOut.String(),
+		"json lifecycle result":         jsonOut.String(),
 	}
 }
 

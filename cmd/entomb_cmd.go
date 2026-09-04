@@ -1737,7 +1737,7 @@ func clearActiveColonyRuntimeFiles(aetherRoot, dataDir string) error {
 		for _, safety := range unsafe {
 			reportWorktreePreservation(safety, fmt.Sprintf("found in a worker workspace that was about to be cleared: %s", safety.Reason))
 		}
-		fmt.Fprintf(os.Stderr, "some worker workspaces still hold work, so they were left in place instead of being cleared -- run `aether recover` to see them\n")
+		fmt.Fprintf(os.Stderr, "some worker workspaces still hold work, so they were left in place instead of being cleared -- inspect them with `aether maintenance recovery-inspect` (State effect: none); restore runnable lifecycle state with `aether resume`\n")
 		return nil
 	}
 	if err := os.RemoveAll(worktreesDir); err != nil {
