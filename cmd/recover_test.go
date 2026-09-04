@@ -690,8 +690,19 @@ func TestRenderRecoverDiagnosis_ShowsFixableHint(t *testing.T) {
 
 	output := renderRecoverDiagnosis(issues, state, nil)
 
-	if !strings.Contains(output, "Fixable with --apply") {
-		t.Error("output should show fixable hint")
+	for _, want := range []string{
+		"aether maintenance recovery-inspect",
+		"state effect: none",
+		"aether resume",
+	} {
+		if !strings.Contains(output, want) {
+			t.Errorf("output should contain %q:\n%s", want, output)
+		}
+	}
+	for _, retired := range []string{"aether recover", "/ant-recover", "recover --apply", "--force"} {
+		if strings.Contains(output, retired) {
+			t.Errorf("output should not retain %q:\n%s", retired, output)
+		}
 	}
 }
 
@@ -852,9 +863,15 @@ func TestRecoverNextStep_WarningMissingAgents(t *testing.T) {
 	issues := []HealthIssue{
 		{Severity: "warning", Category: "missing_agents", Message: "Few agents"},
 	}
-	next, _ := recoverOverrideFromIssues(issues, colony.ColonyState{})
-	if !strings.Contains(next, "recover --apply") {
-		t.Errorf("next step for missing_agents should mention recover --apply, got: %s", next)
+	next, why := recoverOverrideFromIssues(issues, colony.ColonyState{})
+	if next != "aether maintenance recovery-inspect" {
+		t.Errorf("next step for missing_agents = %q, want maintenance inspection", next)
+	}
+	if !strings.Contains(why, "without changing state") || !strings.Contains(why, "aether resume") {
+		t.Errorf("missing_agents explanation must retain read-only inspection and resume restoration: %q", why)
+	}
+	if strings.Contains(next+why, "aether recover") || strings.Contains(next+why, "recover --apply") || strings.Contains(next+why, "--force") {
+		t.Errorf("missing_agents guidance retains retired recovery authority: %q %q", next, why)
 	}
 }
 
@@ -1651,11 +1668,15 @@ func TestWriteRecoverIssueLine_SafeCategory(t *testing.T) {
 	writeRecoverIssueLine(&b, issue)
 	output := b.String()
 
-	if !strings.Contains(output, "Fixable with --apply") {
-		t.Error("safe category should show 'Fixable with --apply'")
+	for _, want := range []string{"[critical] Stale workers", "aether maintenance recovery-inspect", "does not change state"} {
+		if !strings.Contains(output, want) {
+			t.Errorf("safe issue output should contain %q: %s", want, output)
+		}
 	}
-	if strings.Contains(output, "Needs confirmation") {
-		t.Error("safe category should NOT show 'Needs confirmation'")
+	for _, retired := range []string{"aether recover", "/ant-recover", "recover --apply", "--force"} {
+		if strings.Contains(output, retired) {
+			t.Errorf("safe issue output retains %q: %s", retired, output)
+		}
 	}
 }
 
@@ -1672,11 +1693,15 @@ func TestWriteRecoverIssueLine_DestructiveCategory(t *testing.T) {
 	writeRecoverIssueLine(&b, issue)
 	output := b.String()
 
-	if !strings.Contains(output, "Needs confirmation with --apply") {
-		t.Error("destructive category should show 'Needs confirmation with --apply'")
+	for _, want := range []string{"[warning] Worktree mismatch", "aether maintenance recovery-inspect", "does not change state"} {
+		if !strings.Contains(output, want) {
+			t.Errorf("destructive worktree output should contain %q: %s", want, output)
+		}
 	}
-	if strings.Contains(output, "Fixable with --apply") {
-		t.Error("destructive category should NOT show 'Fixable with --apply'")
+	for _, retired := range []string{"aether recover", "/ant-recover", "recover --apply", "--force"} {
+		if strings.Contains(output, retired) {
+			t.Errorf("destructive worktree output retains %q: %s", retired, output)
+		}
 	}
 }
 
@@ -1693,8 +1718,15 @@ func TestWriteRecoverIssueLine_DestructiveCategoryManifest(t *testing.T) {
 	writeRecoverIssueLine(&b, issue)
 	output := b.String()
 
-	if !strings.Contains(output, "Needs confirmation with --apply") {
-		t.Error("bad_manifest should show 'Needs confirmation with --apply'")
+	for _, want := range []string{"[critical] Corrupt manifest", "aether maintenance recovery-inspect", "does not change state"} {
+		if !strings.Contains(output, want) {
+			t.Errorf("destructive manifest output should contain %q: %s", want, output)
+		}
+	}
+	for _, retired := range []string{"aether recover", "/ant-recover", "recover --apply", "--force"} {
+		if strings.Contains(output, retired) {
+			t.Errorf("destructive manifest output retains %q: %s", retired, output)
+		}
 	}
 }
 
@@ -1775,9 +1807,15 @@ func TestRecoverNextStep_DirtyWorktree(t *testing.T) {
 	issues := []HealthIssue{
 		{Severity: "critical", Category: "dirty_worktree", Message: "Worktree mismatch"},
 	}
-	next, _ := recoverOverrideFromIssues(issues, colony.ColonyState{})
-	if !strings.Contains(next, "--force") {
-		t.Errorf("next step for dirty_worktree should mention --force, got: %s", next)
+	next, why := recoverOverrideFromIssues(issues, colony.ColonyState{})
+	if next != "aether maintenance recovery-inspect" {
+		t.Errorf("next step for dirty_worktree = %q, want maintenance inspection", next)
+	}
+	if !strings.Contains(why, "without changing state") || !strings.Contains(why, "aether resume") {
+		t.Errorf("dirty_worktree explanation must retain read-only inspection and resume restoration: %q", why)
+	}
+	if strings.Contains(next+why, "aether recover") || strings.Contains(next+why, "recover --apply") || strings.Contains(next+why, "--force") {
+		t.Errorf("dirty_worktree guidance retains retired recovery authority: %q %q", next, why)
 	}
 }
 
@@ -1785,8 +1823,14 @@ func TestRecoverNextStep_BadManifest(t *testing.T) {
 	issues := []HealthIssue{
 		{Severity: "critical", Category: "bad_manifest", Message: "Corrupt manifest"},
 	}
-	next, _ := recoverOverrideFromIssues(issues, colony.ColonyState{})
-	if !strings.Contains(next, "--force") {
-		t.Errorf("next step for bad_manifest should mention --force, got: %s", next)
+	next, why := recoverOverrideFromIssues(issues, colony.ColonyState{})
+	if next != "aether maintenance recovery-inspect" {
+		t.Errorf("next step for bad_manifest = %q, want maintenance inspection", next)
+	}
+	if !strings.Contains(why, "without changing state") || !strings.Contains(why, "aether resume") {
+		t.Errorf("bad_manifest explanation must retain read-only inspection and resume restoration: %q", why)
+	}
+	if strings.Contains(next+why, "aether recover") || strings.Contains(next+why, "recover --apply") || strings.Contains(next+why, "--force") {
+		t.Errorf("bad_manifest guidance retains retired recovery authority: %q %q", next, why)
 	}
 }
