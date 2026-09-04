@@ -205,7 +205,12 @@ var colonizeFinalizeCmd = &cobra.Command{
 		completionPath, _ := cmd.Flags().GetString("completion-file")
 		completion, err := loadExternalColonizeCompletion(completionPath)
 		if err != nil {
-			outputError(1, err.Error(), nil)
+			refusal, closeErr := lifecycleCloseoutRefusalFromDisk("colonize", err.Error(), "", "")
+			if closeErr != nil {
+				outputError(1, err.Error(), nil)
+			} else {
+				outputError(1, err.Error(), refusal)
+			}
 			return renderedErrorExit(1)
 		}
 		result, err := runCodexColonizeFinalize(skillWorkspaceRoot(), completion)
@@ -214,9 +219,47 @@ var colonizeFinalizeCmd = &cobra.Command{
 			return renderedErrorExit(1)
 		}
 		closeLifecycleCommand(result, "colonize", "", "")
-		outputWorkflow(result, renderColonizeVisual(result))
+		result["outcome_kind"] = colony.OutcomeKindCompleted
+		result["state_effect"] = colony.LifecycleStateEffectCommitted
+		if err := applyLifecycleCloseout(result, "colonize", colonizeLifecycleCloseoutDetails(result)); err != nil {
+			outputError(1, err.Error(), result)
+			return renderedErrorExit(1)
+		}
+		visual := appendLifecycleCloseoutVisual(renderColonizeVisual(result), result, detectPlatform())
+		outputWorkflow(result, visual)
 		return nil
 	},
+}
+
+func colonizeLifecycleCloseoutDetails(result map[string]interface{}) LifecycleCloseoutDetails {
+	details := LifecycleCloseoutDetails{Summary: "The surveyors published the verified territory result."}
+	if snapshotID := strings.TrimSpace(stringValue(result["territory_snapshot_id"])); snapshotID != "" {
+		details.Evidence = append(details.Evidence, colony.LifecycleEvidence{
+			ID: snapshotID, Kind: "territory", Source: territorySnapshotRelativePath, Summary: "Verified immutable territory snapshot",
+		})
+	}
+	if receipt, ok := result["lifecycle_receipt"].(colony.LifecycleReceipt); ok {
+		details.Evidence = append(details.Evidence, receipt.Evidence...)
+		details.Evidence = append(details.Evidence, colony.LifecycleEvidence{
+			ID: receipt.ReceiptID, Kind: "receipt", Source: receipt.Transaction.JournalPath, Summary: "Committed territory transaction receipt",
+		})
+		details.Verification = append(details.Verification, receipt.Verification...)
+		details.Changes = append(details.Changes, receipt.Changes...)
+		details.Warnings = append(details.Warnings, receipt.Warnings...)
+		details.Debt = append(details.Debt, receipt.Debt...)
+		details.Blockers = append(details.Blockers, receipt.Blockers...)
+	}
+	if len(details.Evidence) == 0 {
+		details.Evidence = append(details.Evidence, colony.LifecycleEvidence{
+			ID: "territory-survey", Kind: "territory", Source: strings.Join(stringSliceValue(result["survey_files"]), ", "), Summary: "Published territory survey artifacts",
+		})
+	}
+	for _, key := range []string{"state_note", "survey_warning", "codebase_graph_warning", "candidate_cleanup_warning"} {
+		if warning := strings.TrimSpace(stringValue(result[key])); warning != "" {
+			details.Warnings = append(details.Warnings, colony.LifecycleIssue{ID: "colonize-" + strings.ReplaceAll(key, "_", "-"), Summary: warning})
+		}
+	}
+	return details
 }
 
 func loadExternalColonizeCompletion(path string) (codexExternalColonizeCompletion, error) {

@@ -81,14 +81,15 @@ var initCmd = &cobra.Command{
 				publicGuidedInit := detectPlatform() == "claude" || detectPlatform() == "opencode"
 				if publicGuidedInit {
 					name := emptyFallback(strings.TrimSpace(ptrStr(existing.ColonyName)), "Unnamed colony")
-					outputError(1, fmt.Sprintf(
+					message := fmt.Sprintf(
 						"this repository already has an active colony %q with goal %q. No files were changed. Inspect it with /ant-status; use /ant-seal only after its accepted work is complete.",
-						name, ptrStr(existing.Goal)), nil)
+						name, ptrStr(existing.Goal))
+					outputInitActiveRefusal(existing, message)
 					return nil
 				}
 				if existing.Milestone == "Crowned Anthill" || existing.State == colony.StateCOMPLETED {
 					if sealInProgress(dataDir) {
-						outputError(1, "a seal operation appears to be in progress (COLONY_STATE.json has uncommitted changes with Crowned Anthill milestone). Wait for the seal to complete, commit the seal state, or run `aether entomb` first.", nil)
+						outputInitActiveRefusal(existing, "a seal operation appears to be in progress (COLONY_STATE.json has uncommitted changes with Crowned Anthill milestone). Wait for the seal to complete, commit the seal state, or run `aether entomb` first.")
 						return nil
 					}
 					// A sealed colony's state carries its whole history — phases,
@@ -97,11 +98,12 @@ var initCmd = &cobra.Command{
 					// told how to restore. Destroying a colony's memory requires
 					// saying so out loud.
 					if confirmed, _ := cmd.Flags().GetBool("confirm-reinit"); !confirmed {
-						outputError(1, fmt.Sprintf(
+						message := fmt.Sprintf(
 							"this repository has a sealed colony (goal: %q, %d phases). Re-initializing replaces its state. "+
 								"The preferred path is `aether entomb` to archive it properly. "+
 								"To proceed anyway, rerun with --confirm-reinit; the old state will be backed up under .aether/data/backups/ and can be restored by copying the .bak file back over COLONY_STATE.json.",
-							ptrStr(existing.Goal), len(existing.Plan.Phases)), nil)
+							ptrStr(existing.Goal), len(existing.Plan.Phases))
+						outputInitActiveRefusal(existing, message)
 						return nil
 					}
 					// Confirmed — fall through; the backup below preserves the state.
@@ -117,11 +119,12 @@ var initCmd = &cobra.Command{
 					// path: destroying a colony's memory requires saying so out
 					// loud, but it must be possible to say.
 					if confirmed, _ := cmd.Flags().GetBool("confirm-reinit"); !confirmed {
-						outputError(1, fmt.Sprintf(
+						message := fmt.Sprintf(
 							"this repository has an active colony (goal: %q, state: %s, phase %d). "+
 								"Starting a new one replaces it. If the work is finished, `aether seal` then `aether entomb` archives it properly. "+
 								"To abandon it and start fresh, rerun with --confirm-reinit; the old state is backed up under .aether/data/backups/ and can be restored by copying the .bak file back over COLONY_STATE.json.",
-							ptrStr(existing.Goal), existing.State, existing.CurrentPhase), nil)
+							ptrStr(existing.Goal), existing.State, existing.CurrentPhase)
+						outputInitActiveRefusal(existing, message)
 						return nil
 					}
 					// Confirmed — fall through; the backup below preserves the state.
@@ -452,6 +455,8 @@ var initCmd = &cobra.Command{
 		result["hive_seeded"] = hiveSeeded
 		result["proposals"] = proposals
 		result["suggested_next"] = suggestedNext
+		result["outcome_kind"] = colony.OutcomeKindCompleted
+		result["state_effect"] = colony.LifecycleStateEffectCommitted
 		if priorStateBackup != "" {
 			result["prior_state_backup"] = priorStateBackup
 			result["prior_state_restore"] = fmt.Sprintf("cp %q %q", priorStateBackup, statePath)
@@ -460,9 +465,31 @@ var initCmd = &cobra.Command{
 		// reads come from the same resolve, so they cannot name different
 		// commands (Phase 197 plan 04).
 		closeLifecycleCommand(result, "init", "", "")
-		outputWorkflow(result, renderFrontDoorInitVisual(state, setupOutcome, territory, dataDir, hiveSeeded, proposals, researchDocs...))
+		territoryID := emptyFallback(strings.TrimSpace(territory.SnapshotID), "territory-"+strings.ToLower(territory.OutcomeLabel()))
+		if err := applyLifecycleCloseout(result, "init", LifecycleCloseoutDetails{
+			Summary: "The owner-provided charter was accepted and the colony was created.",
+			Evidence: []colony.LifecycleEvidence{
+				{ID: sessionID, Kind: "accepted_charter", Source: statePath, Summary: "Persisted accepted charter"},
+				{ID: territoryID, Kind: "territory", Source: strings.Join(territory.EvidencePaths, ", "), Summary: "Territory result: " + territory.OutcomeLabel()},
+			},
+			Changes: []colony.LifecycleChange{{Target: "colony", Action: "initialized"}},
+		}); err != nil {
+			outputError(1, err.Error(), result)
+			return nil
+		}
+		visual := appendLifecycleCloseoutVisual(renderFrontDoorInitVisual(state, setupOutcome, territory, dataDir, hiveSeeded, proposals, researchDocs...), result, detectPlatform())
+		outputWorkflow(result, visual)
 		return nil
 	},
+}
+
+func outputInitActiveRefusal(state colony.ColonyState, message string) {
+	result, err := lifecycleCloseoutRefusalForState(state, "init", message, "aether status", "Inspect the active colony before deciding whether to replace it.")
+	if err != nil {
+		outputError(1, message, nil)
+		return
+	}
+	outputError(1, message, result)
 }
 
 func frontDoorScaffoldReady(aetherDir string) bool {
@@ -484,7 +511,6 @@ func frontDoorColonyName(repoRoot string) string {
 
 func renderFrontDoorInitVisual(state colony.ColonyState, setupOutcome string, territory SurveyFreshnessResult, dataDir string, hiveSeeded int, proposals []initProposal, researchDocs ...string) string {
 	goal := strings.TrimSpace(ptrStr(state.Goal))
-	name := emptyFallback(strings.TrimSpace(ptrStr(state.ColonyName)), "Unnamed colony")
 	accepted := state.AcceptedCharter
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("init"), "Colony Init"))
@@ -555,12 +581,6 @@ func renderFrontDoorInitVisual(state colony.ColonyState, setupOutcome string, te
 	}
 
 	b.WriteString(renderStageMarker("5. Closeout"))
-	b.WriteString("Colony: ")
-	b.WriteString(name)
-	b.WriteString("\nAccepted goal: ")
-	b.WriteString(goal)
-	b.WriteString("\nCreated: local Aether scaffold, COLONY_STATE.json, session.json, recovery handoff, activity log, and registry entry.\n")
-	b.WriteString("Next Up: /ant-plan\n")
 	return b.String()
 }
 

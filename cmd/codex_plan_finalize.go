@@ -68,7 +68,12 @@ var planFinalizeCmd = &cobra.Command{
 		completionPath, _ := cmd.Flags().GetString("completion-file")
 		completion, err := loadExternalPlanCompletion(completionPath)
 		if err != nil {
-			outputError(1, err.Error(), nil)
+			refusal, closeErr := lifecycleCloseoutRefusalFromDisk("plan", err.Error(), "", "")
+			if closeErr != nil {
+				outputError(1, err.Error(), nil)
+			} else {
+				outputError(1, err.Error(), refusal)
+			}
 			return renderedErrorExit(1)
 		}
 		result, err := runCodexPlanFinalize(skillWorkspaceRoot(), completion)
@@ -85,9 +90,51 @@ var planFinalizeCmd = &cobra.Command{
 		// overwrite that with an independently-resolved answer
 		// (applyNextActionToResult has no "already set" guard), silently
 		// undoing the fold-in this exact entry was about.
-		outputWorkflow(result, renderPlanVisual(result))
+		result["state_effect"] = colony.LifecycleStateEffectCommitted
+		if boolValue(result["planned"]) {
+			result["outcome_kind"] = colony.OutcomeKindCompleted
+		} else {
+			result["outcome_kind"] = colony.OutcomeKindInProgress
+		}
+		if err := applyLifecycleCloseout(result, "plan", planLifecycleCloseoutDetails(result)); err != nil {
+			outputError(1, err.Error(), result)
+			return renderedErrorExit(1)
+		}
+		visual := appendLifecycleCloseoutVisual(renderPlanVisual(result), result, detectPlatform())
+		outputWorkflow(result, visual)
 		return nil
 	},
+}
+
+func planLifecycleCloseoutDetails(result map[string]interface{}) LifecycleCloseoutDetails {
+	details := LifecycleCloseoutDetails{Summary: "Scout and Route-Setter evidence reached the declared planning boundary."}
+	if boolValue(result["planned"]) {
+		details.Summary = "Scout and Route-Setter evidence produced an accepted plan."
+	}
+	if revision, ok := planRevisionFromValue(result["plan_revision"]); ok {
+		details.Evidence = append(details.Evidence, colony.LifecycleEvidence{
+			ID: revision.ID, Kind: "plan", Source: "COLONY_STATE.json", Summary: "Accepted plan revision",
+		})
+	}
+	if evidenceHash := strings.TrimSpace(stringValue(result["evidence_hash"])); evidenceHash != "" {
+		details.Evidence = append(details.Evidence, colony.LifecycleEvidence{
+			ID: "planning-evidence", Kind: "digest", Digest: evidenceHash, Source: strings.TrimSpace(stringValue(result["planning_dir"])), Summary: "Scout and Route-Setter evidence digest",
+		})
+	}
+	if len(details.Evidence) == 0 {
+		details.Evidence = append(details.Evidence, colony.LifecycleEvidence{
+			ID: "planning-iteration", Kind: "planning", Source: strings.TrimSpace(stringValue(result["iteration_state"])), Summary: "Persisted planning iteration evidence",
+		})
+	}
+	for index, gap := range stringSliceValue(result["gaps"]) {
+		details.Blockers = append(details.Blockers, colony.LifecycleIssue{ID: fmt.Sprintf("planning-gap-%d", index+1), Summary: gap})
+	}
+	for _, key := range []string{"planning_warning", "research_warning", "clarification_warning"} {
+		if warning := strings.TrimSpace(stringValue(result[key])); warning != "" {
+			details.Warnings = append(details.Warnings, colony.LifecycleIssue{ID: "plan-" + strings.ReplaceAll(key, "_", "-"), Summary: warning})
+		}
+	}
+	return details
 }
 
 func loadExternalPlanCompletion(path string) (codexExternalPlanCompletion, error) {

@@ -7,11 +7,14 @@ package cmd
 // open items, and Next Up continue to come from the one projection.
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/storage"
 )
 
 const (
@@ -145,6 +148,42 @@ func applyLifecycleCloseout(result map[string]interface{}, command string, detai
 	result[nextActionChoicesKey] = append([]LifecycleActionChoice(nil), projection.NextAction.Choices...)
 	result[lifecycleCloseoutResultKey] = closeout
 	return nil
+}
+
+// lifecycleCloseoutRefusalForState builds a zero-write refusal from a state
+// the caller already inspected. It uses the existing next-action resolver and
+// then immediately projects that same answer into the shared closeout.
+func lifecycleCloseoutRefusalForState(state colony.ColonyState, command, summary, override, why string) (map[string]interface{}, error) {
+	result := map[string]interface{}{
+		"message":      strings.TrimSpace(summary),
+		"outcome_kind": colony.OutcomeKindRefused,
+		"state_effect": colony.LifecycleStateEffectNone,
+	}
+	in := nextActionInput{
+		State:       normalizeLegacyColonyState(state),
+		LastCommand: strings.TrimSpace(command),
+		NoColony:    colonyStateIsUnstarted(state),
+	}
+	if override = strings.TrimSpace(override); override != "" {
+		in.Override = &nextActionOverride{Command: override, Recommendation: strings.TrimSpace(why)}
+	}
+	applyNextActionToResult(result, resolveNextAction(in))
+	if err := applyLifecycleCloseout(result, command, LifecycleCloseoutDetails{Summary: summary}); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// lifecycleCloseoutRefusalFromDisk is the same adapter for a preflight that
+// has not loaded state. closeLifecycleCommand is read-only and remains the
+// sole place that resolves the action.
+func lifecycleCloseoutRefusalFromDisk(command, summary, override, why string) (map[string]interface{}, error) {
+	dataDir := storage.ResolveDataDir(context.Background())
+	state, _, err := loadColonyStateWithCompatibilityRepairReadOnlyFromPath(filepath.Join(dataDir, "COLONY_STATE.json"))
+	if err != nil {
+		state = colony.ColonyState{}
+	}
+	return lifecycleCloseoutRefusalForState(state, command, summary, override, why)
 }
 
 func buildLifecycleCloseout(projection LifecycleProjection, command string, outcome colony.OutcomeKind, effect colony.LifecycleStateEffect, details LifecycleCloseoutDetails) (LifecycleCloseout, error) {
@@ -391,6 +430,9 @@ func renderLifecycleCloseout(closeout LifecycleCloseout, platform string) string
 		case LifecycleCloseoutNextUp:
 			projection := LifecycleProjection{NextAction: closeout.NextUp, Alternatives: closeout.Alternatives}
 			b.WriteString(lifecycleCloseoutNextUpBody(projection, platform))
+			if command := lifecycleProjectionCommand(closeout.NextUp.RuntimeCommand, platform); command != "" {
+				fmt.Fprintf(&b, "Next Up: %s\n", command)
+			}
 		}
 	}
 	return b.String()
