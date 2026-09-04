@@ -292,9 +292,17 @@ func RenderAgencySignalResult(result AgencySignalResult) string {
 	b.WriteString("Acknowledgement: " + result.Acknowledgement + "\n")
 	b.WriteString("Effect: " + result.MeasuredEffect + "\n")
 	b.WriteString("Work effect: " + agencyWorkEffectLabel(result.WorkEffect, result.PausedJobID) + "\n")
+	primary := "Inspect all active colony guidance."
+	if candidate, ok := nextActionCandidateFor(candidatePheromones); ok {
+		primary = fmt.Sprintf("Run `%s` to inspect all active colony guidance.", candidate.Template)
+	}
+	alternative := "Inspect the colony to find the next safe lifecycle boundary."
+	if candidate, ok := nextActionCandidateFor(candidateStatus); ok {
+		alternative = fmt.Sprintf("Run `%s` to see the next safe lifecycle boundary.", candidate.Template)
+	}
 	b.WriteString(renderNextUp(
-		"Run `aether pheromones` to inspect all active colony guidance.",
-		"Run `aether status` to see the next safe lifecycle boundary.",
+		primary,
+		alternative,
 	))
 	return b.String()
 }
