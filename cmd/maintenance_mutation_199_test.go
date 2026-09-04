@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -219,7 +220,8 @@ func TestMaintenanceMutation199PlatformHomes(t *testing.T) {
 		{lifecycleTransactionRootOpenCodeHome, "command/build.md", "opencode"},
 		{lifecycleTransactionRootCodexHome, "agents/aether-builder.toml", "codex"},
 	} {
-		plan.Targets = append(plan.Targets, maintenanceMutationTarget{Root: target.root, RelativeTarget: target.rel, Source: "hub", Content: []byte(target.body), Managed: true})
+		label := []string{"Commands (claude)", "Agents (opencode)", "Agents (codex)"}[index]
+		plan.Targets = append(plan.Targets, maintenanceMutationTarget{Root: target.root, RelativeTarget: target.rel, Label: label, Source: "hub", Content: []byte(target.body), Managed: true})
 		_ = index
 	}
 	preview, err := prepareMaintenanceMutation(plan)
@@ -236,31 +238,48 @@ func TestMaintenanceMutation199PlatformHomes(t *testing.T) {
 	if len(result.Receipt.Changes) != 3 || len(result.Receipt.Verification) != 3 {
 		t.Fatalf("platform receipt = %#v", result.Receipt)
 	}
+	details, _, _ := maintenancePreviewSyncDetails(result.Preview)
+	if got := platformRestartTargets(details); !reflect.DeepEqual(got, []string{"Codex agents", "OpenCode agents"}) {
+		t.Fatalf("platform restart targets = %v; details = %#v", got, details)
+	}
 }
 
 func TestMaintenanceMutation199DownloadBinary(t *testing.T) {
 	fixture := newMaintenanceMutation199Fixture(t)
 	fetch := func(version, destDir string) (*downloader.DownloadResult, error) {
 		path := filepath.Join(destDir, "aether")
-		writeMaintenanceMutation199File(t, path, []byte("binary-"+version))
+		writeMaintenanceMutation199File(t, path, []byte("#!/bin/sh\nprintf '{\"version\":\""+version+"\"}\\n'\n"))
+		if err := os.Chmod(path, 0o755); err != nil {
+			t.Fatal(err)
+		}
 		return &downloader.DownloadResult{Success: true, Path: path, Version: version}, nil
 	}
 	staged, err := stageMaintenanceBinaryDownload("1.2.3", channelStable, fetch)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if staged.Version != "1.2.3" || string(staged.Content) != "binary-1.2.3" || staged.Name != "aether" {
+	if staged.Version != "1.2.3" || staged.Name != "aether" || staged.Mode.Perm() != 0o755 {
 		t.Fatalf("staged binary = %#v", staged)
 	}
 	plan := fixture.plan("maintenance-binary")
 	plan.DesiredVersion = staged.Version
-	plan.Targets = []maintenanceMutationTarget{{Root: lifecycleTransactionRootBinaryDestination, RelativeTarget: filepath.Base(fixture.binary), Source: staged.Source, Content: staged.Content, Managed: true}}
+	plan.Targets = []maintenanceMutationTarget{{Root: lifecycleTransactionRootBinaryDestination, RelativeTarget: filepath.Base(fixture.binary), Source: staged.Source, Content: staged.Content, Mode: staged.Mode, Managed: true}}
 	result, err := commitMaintenanceMutation(plan)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.StateEffect != colony.LifecycleStateEffectCommitted || string(mustReadLifecycleFixtureFile(t, fixture.binary)) != "binary-1.2.3" {
+	if result.StateEffect != colony.LifecycleStateEffectCommitted {
 		t.Fatalf("binary result = %#v", result)
+	}
+	info, err := os.Stat(fixture.binary)
+	if err != nil || info.Mode().Perm() != 0o755 {
+		t.Fatalf("installed binary mode = %v, err=%v", info.Mode(), err)
+	}
+	if err := verifyMaintenanceInstalledBinary(fixture.binary, staged.Version); err != nil {
+		t.Fatalf("installed binary verification failed: %v", err)
+	}
+	if len(result.Preview.Targets) != 1 || result.Preview.Targets[0].DesiredMode != 0o755 {
+		t.Fatalf("binary preview lost executable mode: %#v", result.Preview.Targets)
 	}
 
 	if _, err := stageMaintenanceBinaryDownload("1.2.3", channelStable, func(string, string) (*downloader.DownloadResult, error) {
@@ -295,9 +314,19 @@ func TestMaintenanceMutation199VersionAgreement(t *testing.T) {
 	if err := validateMaintenanceVersionAgreement(root, hub, "1.2.3"); err != nil {
 		t.Fatal(err)
 	}
+	if err := validateMaintenanceVersionAgreement(filepath.Join(root, "cmd"), hub, "1.2.3"); err != nil {
+		t.Fatalf("source subdirectory was not normalized to module root: %v", err)
+	}
 	writeMaintenanceMutation199File(t, filepath.Join(root, "npm", "package.json"), []byte(`{"version":"1.2.4"}`))
 	if err := validateMaintenanceVersionAgreement(root, hub, "1.2.3"); err == nil {
 		t.Fatal("source/npm version mismatch was accepted")
+	}
+}
+
+func TestMaintenanceMutation199UpdateFlagContract(t *testing.T) {
+	usage := updateCmd.Flags().Lookup("sync-platform-homes").Usage
+	if strings.Contains(strings.ToLower(usage), "for dev") || !strings.Contains(strings.ToLower(usage), "stable") {
+		t.Fatalf("update --sync-platform-homes help contradicts dev isolation: %q", usage)
 	}
 }
 

@@ -60,6 +60,12 @@ func TestE2EStableUpdateDetectsCriticalStale(t *testing.T) {
 		t.Fatalf("expected valid JSON output: %v, output: %s", err, buf.String())
 	}
 	inner, _ := result["result"].(map[string]interface{})
+	if inner["state_effect"] != "none" || inner["receipt"] != nil {
+		t.Fatalf("critical refusal must report no durable change: %#v", inner)
+	}
+	if strings.TrimSpace(fmt.Sprint(inner["recovery"])) == "" {
+		t.Fatalf("critical refusal has no safe recovery: %#v", inner)
+	}
 	stale, _ := inner["stale_publish"].(map[string]interface{})
 	if stale["classification"] != "critical" {
 		t.Errorf("expected classification=critical, got: %v", stale["classification"])
@@ -76,6 +82,12 @@ func TestE2EStableUpdateDetectsCriticalStale(t *testing.T) {
 	recovery, _ := stale["recovery_command"].(string)
 	if !strings.Contains(recovery, "aether publish") {
 		t.Errorf("expected recovery_command to contain 'aether publish', got: %v", recovery)
+	}
+	if _, err := os.Stat(filepath.Join(repoDir, ".aether", "data", "transactions")); !os.IsNotExist(err) {
+		t.Fatalf("critical preflight created transaction evidence: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(homeDir, ".aether", "bin", "aether")); !os.IsNotExist(err) {
+		t.Fatalf("critical preflight touched binary destination: %v", err)
 	}
 }
 
@@ -149,6 +161,7 @@ func TestE2EUpdateDetectsInfoStale(t *testing.T) {
 
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
+	createInstalledUpdatePlatformRoots(t, homeDir)
 
 	hubDir := filepath.Join(homeDir, ".aether")
 	createHubWithExpectedCounts(t, hubDir)
@@ -234,6 +247,7 @@ func TestE2EUpdateDetectsOK(t *testing.T) {
 
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
+	createInstalledUpdatePlatformRoots(t, homeDir)
 
 	hubDir := filepath.Join(homeDir, ".aether")
 	createHubWithExpectedCounts(t, hubDir)
@@ -315,7 +329,7 @@ func TestE2EUpdateDryRunDetectsCriticalStale(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	rootCmd.SetArgs([]string{"update", "--dry-run"})
+	rootCmd.SetArgs([]string{"update", "--dry-run", "--download-binary"})
 	defer rootCmd.SetArgs([]string{})
 
 	err = rootCmd.Execute()
@@ -328,6 +342,9 @@ func TestE2EUpdateDryRunDetectsCriticalStale(t *testing.T) {
 		t.Fatalf("expected valid JSON output: %v, output: %s", err, buf.String())
 	}
 	inner, _ := result["result"].(map[string]interface{})
+	if inner["state_effect"] != "none" || inner["receipt"] != nil {
+		t.Fatalf("critical dry-run must report no durable change: %#v", inner)
+	}
 	stale, _ := inner["stale_publish"].(map[string]interface{})
 	if stale["classification"] != "critical" {
 		t.Errorf("expected classification=critical, got: %v", stale["classification"])
@@ -409,6 +426,7 @@ func TestE2EUpdateVisualBannerForInfoStale(t *testing.T) {
 
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
+	createInstalledUpdatePlatformRoots(t, homeDir)
 
 	hubDir := filepath.Join(homeDir, ".aether")
 	createHubWithExpectedCounts(t, hubDir)
@@ -462,5 +480,88 @@ func TestE2EUpdateVisualBannerForInfoStale(t *testing.T) {
 	}
 	if !strings.Contains(output, fmt.Sprintf("Commands (claude): 5 found, expected %d", expectedClaudeCommandCount)) {
 		t.Errorf("expected component count in output, got: %s", output)
+	}
+}
+
+func TestE2EUpdateVisualBannerForWarningStale(t *testing.T) {
+	t.Setenv("AETHER_HUB_DIR", "")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	createInstalledUpdatePlatformRoots(t, homeDir)
+	hubDir := filepath.Join(homeDir, ".aether")
+	createHubWithExpectedCounts(t, hubDir)
+	if err := os.WriteFile(filepath.Join(hubDir, "version.json"), []byte(`{"version":"1.0.21"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	repoDir := t.TempDir()
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(oldDir)
+	if err := os.Chdir(repoDir); err != nil {
+		t.Fatal(err)
+	}
+	oldVersion := Version
+	Version = "1.0.20"
+	defer func() { Version = oldVersion }()
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	var buf bytes.Buffer
+	stdout = &buf
+	rootCmd.SetArgs([]string{"update", "--dry-run"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("warning stale update failed: %v", err)
+	}
+	output := buf.String()
+	if !strings.Contains(output, "S T A L E") || !strings.Contains(output, "Classification: warning") {
+		t.Fatalf("warning stale banner missing: %s", output)
+	}
+}
+
+func TestE2EUpdateEarlyFailureUsesTypedNoChangeContract(t *testing.T) {
+	t.Setenv("AETHER_HUB_DIR", "")
+	saveGlobals(t)
+	resetRootCmd(t)
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	repoDir := t.TempDir()
+	t.Setenv("AETHER_ROOT", repoDir)
+	t.Setenv("COLONY_DATA_DIR", filepath.Join(repoDir, ".aether", "data"))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(oldDir)
+	if err := os.Chdir(repoDir); err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	stdout = &buf
+	rootCmd.SetArgs([]string{"update"})
+	if err := rootCmd.Execute(); err == nil {
+		t.Fatal("missing hub validation unexpectedly succeeded")
+	}
+	var envelope map[string]interface{}
+	if err := json.Unmarshal(buf.Bytes(), &envelope); err != nil {
+		t.Fatalf("early failure did not emit typed JSON: %v\n%s", err, buf.String())
+	}
+	result, _ := envelope["result"].(map[string]interface{})
+	if result["operation"] != "update" || result["state_effect"] != "none" || result["receipt"] != nil {
+		t.Fatalf("early failure contract = %#v", result)
+	}
+	if strings.TrimSpace(fmt.Sprint(result["recovery"])) == "" {
+		t.Fatalf("early failure has no recovery: %#v", result)
+	}
+}
+
+func createInstalledUpdatePlatformRoots(t *testing.T, homeDir string) {
+	t.Helper()
+	for _, root := range []string{filepath.Join(homeDir, ".claude"), filepath.Join(homeDir, ".codex")} {
+		if err := os.MkdirAll(root, 0o755); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
