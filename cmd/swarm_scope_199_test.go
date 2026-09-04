@@ -19,7 +19,7 @@ func TestSwarmScope199(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	targetID, dependencyID, independentID := "job-target", "job-base", "job-docs"
+	targetID, dependencyID, dependentID, independentID := "job-target", "job-base", "job-dependent", "job-docs"
 	state := colony.ColonyState{
 		State:        colony.StateEXECUTING,
 		CurrentPhase: 1,
@@ -28,6 +28,7 @@ func TestSwarmScope199(t *testing.T) {
 			Tasks: []colony.Task{
 				{ID: &dependencyID, Goal: "Prepare the dependency", Status: colony.TaskCompleted},
 				{ID: &targetID, Goal: "Repair the affected path", Status: colony.TaskInProgress, DependsOn: []string{dependencyID}},
+				{ID: &dependentID, Goal: "Wait for the affected repair", Status: colony.TaskInProgress, DependsOn: []string{targetID}},
 				{ID: &independentID, Goal: "Continue independent documentation", Status: colony.TaskInProgress},
 			},
 		}}},
@@ -47,8 +48,8 @@ func TestSwarmScope199(t *testing.T) {
 	if contract.AffectedJobID != targetID {
 		t.Fatalf("affected job = %q, want %q", contract.AffectedJobID, targetID)
 	}
-	if got := strings.Join(contract.DependencyPath, ","); got != dependencyID {
-		t.Fatalf("dependency path = %q, want %q", got, dependencyID)
+	if got, want := strings.Join(contract.DependencyPath, ","), dependencyID+","+dependentID; got != want {
+		t.Fatalf("dependency path = %q, want %q", got, want)
 	}
 	if got := strings.Join(contract.IndependentJobIDs, ","); got != independentID {
 		t.Fatalf("independent jobs = %q, want %q", got, independentID)
