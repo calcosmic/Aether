@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 199-25-PLAN.md
-last_updated: "2026-09-04T21:57:52.318Z"
+stopped_at: Completed 199-32-PLAN.md
+last_updated: "2026-09-04T22:18:39.400Z"
 last_activity: 2026-09-04
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 34
-  completed_plans: 25
-  percent: 74
+  completed_plans: 26
+  percent: 76
 ---
 
 # Project State
@@ -103,6 +103,7 @@ Last activity: 2026-09-04
 | Phase 199 P21 | 16 min | 3 tasks | 8 files |
 | Phase 199 P24 | 10 min | 2 tasks | 5 files |
 | Phase 199 P25 | 59min | 2 tasks | 4 files |
+| Phase 199 P32 | 9min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -277,6 +278,8 @@ Last activity: 2026-09-04
 - [Phase 199]: Only the active state's exact archive reference makes live context markers part of chamber inspection. — Historical chambers remain judged by their own published bytes.
 - [Phase 199]: Archive repair targets are closed to manifest-owned entries or exact active context files. — Desired archive bytes must preserve published manifest and closure identity.
 - [Phase 199]: Archive repair approval binds manifest, complete inspection baseline, seal disposition, and shared mutation preview. — Plan 18 remains the sole mutation, journal, rollback, and receipt engine.
+- [Phase 199]: Use raw aether resume as the sole lifecycle-restoration command. — One recovery door keeps inspection read-only and restoration unambiguous.
+- [Phase 199]: Use aether maintenance recovery-inspect only to inspect preserved work with State effect: none. — Inspection must never become a second lifecycle state mutator.
 
 ### Pending Todos
 
@@ -390,8 +393,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-04T21:57:52.144Z
-Stopped at: Completed 199-25-PLAN.md
+Last session: 2026-09-04T22:18:39.392Z
+Stopped at: Completed 199-32-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
