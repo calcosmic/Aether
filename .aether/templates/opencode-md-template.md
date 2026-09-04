@@ -53,9 +53,8 @@ Agent definitions live in `.opencode/agents/*.md` (Markdown with YAML frontmatte
 
 | Command | Purpose |
 |---------|---------|
-| `/ant-resume` | Quick session restore |
-| `/ant-resume-colony` | Full recovery view |
-| `/ant-pause-colony` | Save state and create handoff |
+| `/ant-pause` | Stop at a safe boundary and save one resumable handoff |
+| `/ant-resume` | Validate and restore the safest honest recovery point |
 
 ### Lifecycle
 
