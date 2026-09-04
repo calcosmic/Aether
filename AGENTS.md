@@ -361,7 +361,8 @@ Since Codex CLI has no slash commands, all colony operations use the `aether` CL
 
 | Command | Purpose |
 |---------|---------|
-| `aether resume` | Restore colony context from handoff (`resume-colony` alias) |
+| `aether pause` | Stop at a safe boundary and save one resumable handoff |
+| `aether resume` | Validate and restore the safest honest recovery point |
 
 ### Lifecycle
 

@@ -336,8 +336,8 @@ flowchart TD
     redirect["/ant-redirect\nHard constraint"]:::signal
 
     %% Session management
-    pause["/ant-pause-colony\nSave state"]:::session
-    resume["/ant-resume-colony\nRestore context"]:::session
+    pause["/ant-pause\nSave a resumable handoff"]:::session
+    resume["/ant-resume\nValidate and restore safely"]:::session
 
     %% Connections
     node --> node2
@@ -623,9 +623,8 @@ Manage session state for handoff between conversations, so you can safely `/clea
 
 | Command | Description |
 |---------|-------------|
-| `/ant-pause-colony` | Save colony state and create a handoff document at `.aether/HANDOFF.md`. Optionally suggests committing uncommitted work. Flag: `--no-visual`. |
-| `/ant-resume-colony` | Full session restore from pause -- loads state, displays pheromones with strength bars, phase progress, survey freshness, and handoff context. Clears paused state and removes HANDOFF.md. Flag: `--no-visual`. |
-| `/ant-resume` | Quick session restore after `/clear` or new session. Detects codebase drift, computes next-step guidance, and displays a compact dashboard with memory health. Includes blocking guards for missing plans or interrupted builds. |
+| `/ant-pause` | Stop at a safe boundary and save one structured, resumable handoff. |
+| `/ant-resume` | Validate and restore the safest honest recovery point: a clean handoff is **Confirmed**; unclean interruptions may be **Reconstructed** from durable evidence; **Conflicting** or **Unknown** evidence stops without changing state. |
 
 ---
 
