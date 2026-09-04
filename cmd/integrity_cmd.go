@@ -143,7 +143,84 @@ func buildIntegrityInspection(ctx string, channel runtimeChannel, hubDir string)
 		checkHubCompanionFiles(hubDir),
 		checkDownstreamSimulation(hubDir, hubVersion, binaryVersion, channel),
 	)
+	if archiveInspection, ok := inspectCurrentArchiveForIntegrity(); ok {
+		checks = append(checks, integrityCheckForArchiveInspection(archiveInspection))
+	}
 	return finalizeIntegrityInspection(ctx, string(channel), hubDir, checks)
+}
+
+// integrityCheckForArchiveInspection keeps the expert integrity view on the
+// same typed digest result used by chamber verification and repair preflight.
+// No archive fact is reconstructed from directory presence here.
+func integrityCheckForArchiveInspection(inspection archiveMaintenanceInspectionResult) integrityCheck {
+	status := "fail"
+	recovery := "aether maintenance archive-inspect"
+	if inspection.Valid {
+		status = "pass"
+		recovery = ""
+	}
+	return integrityCheck{
+		Name:            "Chamber/context integrity",
+		Status:          status,
+		Message:         inspection.IntegrityLine,
+		RecoveryCommand: recovery,
+		Details: map[string]interface{}{
+			"chamber_path":              inspection.ChamberPath,
+			"manifest_digest":           inspection.ManifestDigest,
+			"baseline_digest":           inspection.BaselineDigest,
+			"manifest_verified":         inspection.ManifestVerified,
+			"content_digests_verified":  inspection.ContentVerified,
+			"cross_references_verified": inspection.CrossReferencesVerified,
+			"context_verified":          inspection.ContextVerified,
+			"seal_disposition":          inspection.SealDisposition,
+			"entries_checked":           inspection.EntriesChecked,
+			"references_checked":        inspection.ReferencesChecked,
+			"findings":                  inspection.Findings,
+		},
+	}
+}
+
+// inspectCurrentArchiveForIntegrity discovers only an explicit active archive
+// reference. A repository with no entombed colony simply has no archive line;
+// a malformed reference becomes a failing typed line rather than being
+// silently treated as a directory.
+func inspectCurrentArchiveForIntegrity() (archiveMaintenanceInspectionResult, bool) {
+	root := filepath.Clean(resolveAetherRootPath())
+	dataRoot := filepath.Join(root, ".aether", "data")
+	if configured := strings.TrimSpace(os.Getenv("COLONY_DATA_DIR")); configured != "" {
+		dataRoot = filepath.Clean(configured)
+	}
+	stateBytes, err := readLifecycleEvidenceFile(filepath.Join(dataRoot, "COLONY_STATE.json"))
+	if err != nil {
+		return archiveMaintenanceInspectionResult{}, false
+	}
+	var state colony.ColonyState
+	if err := decodeLifecycleJSON(stateBytes, &state); err != nil || state.ArchiveReference == nil || strings.TrimSpace(state.ArchiveReference.Path) == "" {
+		return archiveMaintenanceInspectionResult{}, false
+	}
+	manifestPath := filepath.Join(root, filepath.FromSlash(state.ArchiveReference.Path))
+	inspection, inspectErr := inspectArchiveMaintenance(archiveMaintenanceInspectRequest{
+		RepositoryRoot: root,
+		DataRoot:       dataRoot,
+		ChamberPath:    filepath.Dir(manifestPath),
+	})
+	if inspectErr != nil {
+		inspection = archiveMaintenanceInspectionResult{
+			SchemaVersion: archiveMaintenanceInspectionSchemaVersion,
+			OperationID:   "archive.inspect",
+			ChamberPath:   filepath.Dir(manifestPath),
+			ManifestPath:  manifestPath,
+			Findings: []maintenanceInspectionFinding{{
+				Code: "archive_reference", Summary: inspectErr.Error(),
+				SourcePath:      filepath.Join(dataRoot, "COLONY_STATE.json"),
+				EvidencePaths:   []string{filepath.Join(dataRoot, "COLONY_STATE.json"), manifestPath},
+				RecoveryCommand: "aether maintenance archive-inspect",
+			}},
+			StateEffect: colony.LifecycleStateEffectNone,
+		}
+		inspection = finalizeArchiveMaintenanceInspection(inspection, []string{filepath.Join(dataRoot, "COLONY_STATE.json") + "=" + lifecycleDigest(stateBytes)})
+	}
+	return inspection, true
 }
 
 func finalizeIntegrityInspection(ctx, channel, hubDir string, checks []integrityCheck) integrityInspectionResult {

@@ -23,7 +23,7 @@ func TestMaintenanceArchive199InspectReadOnly(t *testing.T) {
 	inspection, err := inspectArchiveMaintenance(archiveMaintenanceInspectRequest{
 		RepositoryRoot: fixture.root,
 		DataRoot:       fixture.dataRoot,
-		ChamberPath:   entombed.ChamberPath,
+		ChamberPath:    entombed.ChamberPath,
 	})
 	if err != nil {
 		t.Fatalf("inspect archive: %v", err)
@@ -75,7 +75,7 @@ func TestMaintenanceArchive199ManifestRefusal(t *testing.T) {
 	inspection, err := inspectArchiveMaintenance(archiveMaintenanceInspectRequest{
 		RepositoryRoot: fixture.root,
 		DataRoot:       fixture.dataRoot,
-		ChamberPath:   entombed.ChamberPath,
+		ChamberPath:    entombed.ChamberPath,
 	})
 	if err != nil {
 		t.Fatalf("tamper must return typed inspection evidence, not a hard failure: %v", err)
