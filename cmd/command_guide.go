@@ -159,6 +159,40 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 			"Keep the shorthand and non-interactive automation examples aligned across command-guide, canonical YAML, and both managed wrappers.",
 		},
 	}
+	catalog["pause"] = commandGuideDefinition{
+		Category:   commandGuideCategoryLiteral,
+		Intent:     "Use `aether pause` and `aether resume` as the only public pause and return commands. Pause stops at a runtime-confirmed safe boundary and commits one resumable handoff.",
+		Literal:    true,
+		RunCommand: "AETHER_OUTPUT_MODE=visual aether pause $ARGUMENTS",
+		RawBypass:  "Literal passthrough is the default; the Go runtime owns safe-boundary detection and every handoff write.",
+		DriftGuards: []string{
+			"Relay the runtime handoff, receipt, provenance, state effect, and next action without inventing another return route.",
+			"Codex must not inspect, select, or edit recovery evidence or lifecycle state.",
+		},
+	}
+	catalog["resume"] = commandGuideDefinition{
+		Category: commandGuideCategoryLiteral,
+		Intent: "Validate and restore the safest honest recovery point through the Go runtime. Keep its provenance groups distinct: " +
+			"Confirmed, Reconstructed, Conflicting, and Unknown.",
+		Literal:    true,
+		RunCommand: "AETHER_OUTPUT_MODE=visual aether resume $ARGUMENTS",
+		RawBypass:  "Literal passthrough is the only public recovery path; the Go runtime owns evidence classification and restoration.",
+		DriftGuards: []string{
+			"Conflicting or Unknown evidence stops with state effect none; relay the named conflict or missing fact and the runtime's exact next action.",
+			"Codex must not inspect, select, or edit recovery evidence or lifecycle state.",
+		},
+	}
+	catalog["entomb"] = commandGuideDefinition{
+		Category:   commandGuideCategoryLiteral,
+		Intent:     "Archive and clear a sealed colony only when the owner separately chooses this optional post-seal action.",
+		Literal:    true,
+		RunCommand: "AETHER_OUTPUT_MODE=visual aether entomb $ARGUMENTS",
+		RawBypass:  "Literal passthrough is the default; the Go runtime owns confirmation, archive verification, publication, and active-state clearing.",
+		DriftGuards: []string{
+			"Keep sealed state available for review until the owner explicitly invokes this command.",
+			"Never invoke entomb automatically or fold it into the seal workflow.",
+		},
+	}
 
 	catalog["init"] = commandGuideDefinition{
 		Category:       commandGuideCategoryFullOrchestration,
@@ -418,6 +452,8 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 			"Summarize actual final-review workers, blockers if any, and the runtime seal result.",
 			"Use `.aether/data/seal/final-review.json` and review ledgers for durable final-review findings; do not rely on chat-only summaries.",
 			"Follow the runtime's Porter readiness output, but do not run delivery commands unless the user selects them.",
+			"After sealing, run `AETHER_OUTPUT_MODE=visual aether status` first to review the retained sealed state; `aether entomb` is a separate optional owner-confirmed archive-and-clear action.",
+			"Never invoke entomb automatically; sealing retains active state for owner review.",
 		},
 		DriftGuards: intelligentCommandDriftGuards("seal", commandGuideSkillBuildCycle),
 		RawBypass:   "If the user explicitly asks for raw/exact/no-orchestration seal, run their literal `aether seal ...` command.",
@@ -475,7 +511,6 @@ func commandGuideLiteralCommands() []string {
 		"organize",
 		"patrol",
 		"pause",
-		"pause-colony",
 		"phase",
 		"pheromones",
 		"porter",
@@ -483,13 +518,11 @@ func commandGuideLiteralCommands() []string {
 		"profile",
 		"queen-compose",
 		"quick",
-		"recover",
 		"redirect",
 		"reference-index",
 		"reference-list",
 		"reference-match",
 		"resume",
-		"resume-colony",
 		"run",
 		"shelf",
 		"shelf-add",
