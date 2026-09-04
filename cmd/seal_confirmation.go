@@ -270,6 +270,17 @@ func renderSealConfirmationQuestionVisual(question, nextCommand string) string {
 	return renderDecisionBlock("❓", "Finish This Project?", question, "Answer with: "+nextCommand) + "\n"
 }
 
+// renderSealPreflightConfirmationQuestionVisual is the honest Phase 199
+// confirmation surface. It consumes the typed preflight so the forced branch
+// cannot accidentally inherit the verified branch's success-oriented title.
+func renderSealPreflightConfirmationQuestionVisual(preflight SealPreflight, nextCommand string) string {
+	question := SealConfirmationCopy(preflight)
+	if preflight.Disposition == colony.SealDispositionForcedIncomplete {
+		return renderDecisionBlock("⛔", "Forced Incomplete Closure", question, "Answer with: "+nextCommand) + "\n"
+	}
+	return renderDecisionBlock("❓", "Verified Colony Closure", question, "Answer with: "+nextCommand) + "\n"
+}
+
 // sealConfirmationAnswerCommand is the exact command the owner runs to
 // record an answer — the single source both the printed prose and the
 // JSON result's "next" field use, so two surfaces can never name different

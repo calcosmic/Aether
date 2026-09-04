@@ -235,6 +235,9 @@ func runSealPlanOnly(root string, force bool, forceReason string) (map[string]in
 	if store == nil {
 		return nil, fmt.Errorf("no store initialized")
 	}
+	if force || strings.TrimSpace(forceReason) != "" {
+		return nil, fmt.Errorf("owner-forced closure is unavailable through plan-only, wrappers, workers, or finalizers")
+	}
 	state, incompletePhases, err := validateSealReady(force)
 	if err != nil {
 		return nil, err
@@ -278,8 +281,6 @@ func runSealPlanOnly(root string, force bool, forceReason string) (map[string]in
 		RequiresFinalizer: true,
 		FinalizeSurface:   "awaiting_wrapper_completion",
 		FinalizerCommand:  "AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <file>",
-		Force:             force,
-		ForceReason:       strings.TrimSpace(forceReason),
 		WorkerTimeout:     int(effectiveContinueReviewTimeout(0) / time.Second),
 		Dispatches:        dispatches,
 		DispatchContract: map[string]interface{}{
@@ -346,9 +347,6 @@ func runSealPlanOnly(root string, force bool, forceReason string) (map[string]in
 }
 
 func sealAfterDiscussNext(force bool) string {
-	if force {
-		return "aether seal --force"
-	}
 	return "aether seal"
 }
 
@@ -374,7 +372,7 @@ func validateSealReady(force bool) (colony.ColonyState, []string, error) {
 		}
 	}
 	if len(incomplete) > 0 && !force {
-		return state, incomplete, fmt.Errorf("all phases must be completed before sealing the colony — or, if the work was finished outside the colony or you want to move on anyway, seal with `aether seal --force --reason \"why\"` (records an owner override naming the %d unverified phase(s))", len(incomplete))
+		return state, incomplete, fmt.Errorf("normal seal requires verified completion; %d phase(s) remain unverified", len(incomplete))
 	}
 	blockers, _ := checkSealBlockers(store, state)
 	if len(blockers) > 0 && !force {
@@ -424,28 +422,25 @@ func runSealFinalize(root string, completion externalSealCompletion) error {
 	if err := validateFinalizerManifestFreshness("seal_manifest", manifest.GeneratedAt, time.Now().UTC()); err != nil {
 		return err
 	}
+	if manifest.Force || strings.TrimSpace(manifest.ForceReason) != "" {
+		return fmt.Errorf("seal-finalize cannot carry --force or a force reason; forced-incomplete closure requires a direct owner command")
+	}
 
-	state, incompletePhases, err := validateSealReady(manifest.Force)
+	state, incompletePhases, err := validateSealReady(false)
 	if err != nil {
 		return err
-	}
-	if manifest.Force && (len(incompletePhases) > 0) && strings.TrimSpace(manifest.ForceReason) == "" {
-		return fmt.Errorf("force-sealing past %d unverified phase(s) requires a reason — rerun `aether seal --plan-only --force --reason \"why\"` so the override is recorded honestly", len(incompletePhases))
 	}
 	if err := validateFinalizerManifestColonyMode("seal_manifest", manifest.ColonyMode, state); err != nil {
 		return err
 	}
 	phase, ok := finalCompletedPhase(state)
 	if !ok {
-		if !manifest.Force {
-			return fmt.Errorf("no completed final phase found for seal review")
-		}
-		phase = state.Plan.Phases[len(state.Plan.Phases)-1]
+		return fmt.Errorf("no completed final phase found for seal review")
 	}
 	if manifest.Phase != phase.ID {
 		return fmt.Errorf("seal_manifest phase = %d, current final phase = %d", manifest.Phase, phase.ID)
 	}
-	if err := unresolvedOrchestratorBoundaryGuidanceError("seal", state, sealAfterDiscussNext(manifest.Force), manifest.BoundaryQuestions); err != nil {
+	if err := unresolvedOrchestratorBoundaryGuidanceError("seal", state, sealAfterDiscussNext(false), manifest.BoundaryQuestions); err != nil {
 		return err
 	}
 
@@ -484,16 +479,11 @@ func runSealFinalize(root string, completion externalSealCompletion) error {
 	if err := store.SaveJSON(sealFinalReviewReportRel, report); err != nil {
 		return fmt.Errorf("failed to write seal final review report: %w", err)
 	}
-	if !report.Passed && !manifest.Force {
+	if !report.Passed {
 		return fmt.Errorf("%s", renderSealFinalReviewBlockers(sealFinalReviewGate{Report: report, ReportRel: sealFinalReviewReportRel, Ran: true}))
 	}
 	override := sealOverride{
-		Forced:           manifest.Force,
-		Reason:           strings.TrimSpace(manifest.ForceReason),
 		IncompletePhases: incompletePhases,
-	}
-	if manifest.Force && !report.Passed {
-		override.OverriddenReviewBlocks = len(report.BlockingIssues)
 	}
 
 	// D-04..D-07: this is seal's DEFAULT flow (unlike build/continue, seal's
@@ -596,7 +586,7 @@ func sealFinalReviewFindings(flow []codexContinueWorkerFlowStep) []sealFinalRevi
 				AgentName:   agentName,
 				Category:    "blocker",
 				Description: blocker,
-				Suggestion:  "Resolve before sealing the colony, or rerun seal with --force only if the risk is intentionally accepted.",
+				Suggestion:  "Resolve this risk before sealing the colony.",
 				Blocking:    true,
 			})
 		}
@@ -1212,7 +1202,7 @@ func renderSealFinalReviewBlockers(gate sealFinalReviewGate) string {
 		b.WriteString(issue)
 		b.WriteString("\n")
 	}
-	b.WriteString("Resolve the blockers and rerun `aether seal`, or rerun with `aether seal --force` only if you intentionally accept the risk.")
+	b.WriteString("Resolve the blockers and rerun `aether seal`.")
 	return b.String()
 }
 
