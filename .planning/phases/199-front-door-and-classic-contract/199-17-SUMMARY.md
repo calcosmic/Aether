@@ -46,7 +46,7 @@ patterns-established:
 
 requirements-completed: [CEC-04, LIFE-01, LIFE-04, LIFE-05]
 
-duration: 28min
+duration: 36min
 completed: 2026-09-04
 ---
 
@@ -56,9 +56,9 @@ completed: 2026-09-04
 
 ## Performance
 
-- **Duration:** 28 minutes
+- **Duration:** 36 minutes
 - **Started:** 2026-09-04T14:56:20Z
-- **Completed:** 2026-09-04T15:24:20Z
+- **Completed:** 2026-09-04T15:32:09Z
 - **Tasks:** 2/2
 - **Files changed:** 8 implementation/test/wrapper files
 
@@ -77,6 +77,7 @@ Each task was committed atomically:
 1. **Task 1: Route legacy recovery and abandonment to canonical owner choices**
    - `f3a09ce6` — test(199-17): add failing legacy recovery contract tests (RED)
    - `c12861a8` — feat(199-17): retire legacy recovery mutators (GREEN)
+   - `934a8303` — fix(199-17): bind recovery scan to lifecycle data root
 2. **Task 2: Remove recover from public source/generated surfaces**
    - `934a1a71` — chore(199-17): remove public recover command surfaces
 
@@ -101,7 +102,21 @@ Each task was committed atomically:
 
 ## Deviations from Plan
 
-None - plan executed exactly as written.
+### Auto-fixed Issues
+
+**1. [Rule 1 - Bug] Bound recovery scanners to the configured lifecycle data root**
+
+- **Found during:** Final Task 1 correctness audit
+- **Issue:** `LifecycleFacts` correctly loaded a configured `COLONY_DATA_DIR`, but the retained stuck-state scanners reconstructed the default `<repo>/.aether/data` path and could omit evidence stored elsewhere.
+- **Fix:** Derived the scan root from the state fact's provenance path, with the repository default only as a fallback, and moved the zero-write fixture data outside the repository to lock the behavior.
+- **Files modified:** `cmd/maintenance_cmd.go`, `cmd/legacy_recovery_199_test.go`
+- **Verification:** The strengthened maintenance fixture failed by losing `stale_spawned` before the fix, then all 13 combined normal and race cases passed.
+- **Committed in:** `934a8303`
+
+---
+
+**Total deviations:** 1 auto-fixed (1 Rule 1 bug)
+**Impact on plan:** The fix keeps the planned diagnostic contract correct for supported custom data roots without expanding public surface or mutation authority.
 
 ## Automated Checks
 
@@ -111,6 +126,7 @@ None - plan executed exactly as written.
 - PASS — root help and Bash completion emit neither hidden legacy command.
 - PASS — Task 2 source hygiene: 7 `TestCommandSourceHygiene` cases with all four recover surfaces absent.
 - PASS — combined Plan 199-17 selection: 13 cases across the legacy runtime contract and source hygiene.
+- PASS — the same 13-case focused selection with the Go race detector after binding scanners to the configured data root.
 - PASS — all four canonical/generated resume files retain their pre-deletion Git object hashes.
 - PASS — `git diff --check` across the RED, GREEN, and public-surface commits.
 
@@ -118,6 +134,7 @@ None - plan executed exactly as written.
 
 - RED commit `f3a09ce6` captured all intended failures before production edits: public discovery, mutating recover/abandon behavior, and missing maintenance diagnosis.
 - GREEN commit `c12861a8` follows the RED commit and makes the exact six-case contract pass without weakening the tests.
+- Post-GREEN regression commit `934a8303` strengthens the existing zero-write fixture with a non-default lifecycle data root and fixes the path binding it exposed.
 
 ## Known Stubs
 
@@ -150,7 +167,7 @@ None - no external service configuration required.
 ## Self-Check: PASSED
 
 - The four implementation/test files and this summary exist; the four declared recover surfaces are absent, and all four resume surfaces remain present.
-- RED/GREEN commits `f3a09ce6` and `c12861a8`, plus cleanup commit `934a1a71`, resolve in Git in the documented order.
+- RED/GREEN commits `f3a09ce6` and `c12861a8`, cleanup commit `934a1a71`, and data-root fix `934a8303` resolve in Git in the documented order.
 - The combined 13-case focused gate passes, summary whitespace is clean, and protected pre-existing paths remain unstaged.
 
 ---
