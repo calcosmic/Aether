@@ -58,11 +58,11 @@ type codexAgentDefinition struct {
 
 func installSyncPairs() []installSyncPair {
 	return []installSyncPair{
-		{srcRel: ".claude/commands/ant", destRel: ".claude/commands", label: "Commands (claude)", cleanup: true, mapRelPath: claudeCommandDestRelPath, cleanupInclude: neverSyncPath, cleanupLegacyClaude: true},
+		{srcRel: ".claude/commands/ant", destRel: ".claude/commands", label: "Commands (claude)", cleanup: true, mapRelPath: claudeCommandDestRelPath, cleanupInclude: isManagedNonRetiredFlatClaudeCommandPath, cleanupLegacyClaude: true},
 		{srcRel: ".claude/agents/ant", destRel: ".claude/agents/ant", label: "Agents (claude)", cleanup: true},
 		{srcRel: ".opencode/commands/ant", destRel: ".opencode/command", label: "Commands (opencode home)", cleanup: true, cleanupInclude: neverSyncPath, cleanupLegacyClaude: true},
 		{srcRel: ".opencode/agents", destRel: ".opencode/agent", label: "Agents (opencode home)", cleanup: false, validate: validateOpenCodeAgentFile},
-		{srcRel: ".opencode/commands/ant", destRel: ".config/opencode/commands/ant", label: "Commands (opencode)", cleanup: true, cleanupInclude: neverSyncPath, cleanupLegacyClaude: true},
+		{srcRel: ".opencode/commands/ant", destRel: ".config/opencode/commands/ant", label: "Commands (opencode)", cleanup: true, cleanupInclude: isNonRetiredCommandPath, cleanupLegacyClaude: true},
 		{srcRel: ".opencode/agents", destRel: ".config/opencode/agents", label: "Agents (opencode)", cleanup: false, validate: validateOpenCodeAgentFile},
 		{srcRel: ".codex/agents", destRel: ".codex/agents", label: "Agents (codex)", cleanup: false, preserveLocalChanges: true, validate: validateCodexAgentFile, include: isShippedAetherCodexAgent},
 	}
@@ -70,11 +70,11 @@ func installSyncPairs() []installSyncPair {
 
 func platformHomeHubSyncPairs() []installSyncPair {
 	return []installSyncPair{
-		{srcRel: "commands/claude", destRel: ".claude/commands", label: "Commands (claude)", cleanup: true, mapRelPath: claudeCommandDestRelPath, cleanupInclude: neverSyncPath, cleanupLegacyClaude: true},
+		{srcRel: "commands/claude", destRel: ".claude/commands", label: "Commands (claude)", cleanup: true, mapRelPath: claudeCommandDestRelPath, cleanupInclude: isManagedNonRetiredFlatClaudeCommandPath, cleanupLegacyClaude: true},
 		{srcRel: "agents-claude", destRel: ".claude/agents/ant", label: "Agents (claude)", cleanup: true},
 		{srcRel: "commands/opencode", destRel: ".opencode/command", label: "Commands (opencode home)", cleanup: true, cleanupInclude: neverSyncPath, cleanupLegacyClaude: true},
 		{srcRel: "agents", destRel: ".opencode/agent", label: "Agents (opencode home)", cleanup: false, validate: validateOpenCodeAgentFile},
-		{srcRel: "commands/opencode", destRel: ".config/opencode/commands/ant", label: "Commands (opencode)", cleanup: true, cleanupInclude: neverSyncPath, cleanupLegacyClaude: true},
+		{srcRel: "commands/opencode", destRel: ".config/opencode/commands/ant", label: "Commands (opencode)", cleanup: true, cleanupInclude: isNonRetiredCommandPath, cleanupLegacyClaude: true},
 		{srcRel: "agents", destRel: ".config/opencode/agents", label: "Agents (opencode)", cleanup: false, validate: validateOpenCodeAgentFile},
 		{srcRel: "codex", destRel: ".codex/agents", label: "Agents (codex)", cleanup: false, preserveLocalChanges: true, validate: validateCodexAgentFile, include: isShippedAetherCodexAgent},
 	}
@@ -384,6 +384,24 @@ func isManagedFlatClaudeCommandPath(relPath string) bool {
 	return strings.HasPrefix(base, "ant-") && filepath.Ext(base) == ".md"
 }
 
+func isManagedNonRetiredFlatClaudeCommandPath(relPath string) bool {
+	return isManagedFlatClaudeCommandPath(relPath) && isNonRetiredCommandPath(relPath)
+}
+
+func isNonRetiredCommandPath(relPath string) bool {
+	return !isRetiredLifecycleWrapperPath(relPath)
+}
+
+func isRetiredLifecycleWrapperPath(path string) bool {
+	base := filepath.Base(filepath.Clean(path))
+	if filepath.Ext(base) != ".md" {
+		return false
+	}
+	name := strings.TrimSuffix(base, ".md")
+	name = strings.TrimPrefix(name, "ant-")
+	return name == "pause-colony" || name == "resume-colony"
+}
+
 // isGeneratedAetherCommandWrapper marks a file as Aether-managed for
 // update/prune. It accepts both the current header and the legacy
 // "Generated from" form so downstream repos installed before the header
@@ -688,16 +706,12 @@ func pruneGeneratedCommandFiles(dir string) syncResult {
 	return pruneGeneratedCommandFilesMatching(dir, func(string) bool { return true })
 }
 
-// pruneRetiredGeneratedCommandFiles removes only generated wrappers whose
-// public wrapper name is no longer canonical. Parser-only argv redirects are
-// deliberately absent from wrapperCommandNames, so they cannot keep a stale
-// installed file alive or become eligible for alias repair.
+// pruneRetiredGeneratedCommandFiles removes only generated wrappers for the
+// two bounded parser-only lifecycle tokens. A freshly supplied command may not
+// exist in this binary's wrapper registry yet, so registry absence alone can
+// never authorize deletion.
 func pruneRetiredGeneratedCommandFiles(dir string) syncResult {
-	return pruneGeneratedCommandFilesMatching(dir, func(path string) bool {
-		name := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
-		name = strings.TrimPrefix(name, "ant-")
-		return !wrapperCommandNames[name]
-	})
+	return pruneGeneratedCommandFilesMatching(dir, isRetiredLifecycleWrapperPath)
 }
 
 func pruneGeneratedCommandFilesMatching(dir string, shouldRemove func(path string) bool) syncResult {
