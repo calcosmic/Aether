@@ -166,7 +166,7 @@ func (p SealPreflight) Validate() error {
 		if p.OutcomeKind != colony.OutcomeKindVerifiedCompletion {
 			return fmt.Errorf("verified seal has outcome kind %q", p.OutcomeKind)
 		}
-		if len(p.UnresolvedItems) > 0 || len(p.IncompletePhaseIDs) > 0 || len(p.IncompleteTaskIDs) > 0 || len(p.FailedGates) > 0 || len(p.SkippedGates) > 0 || len(p.MissingEvidence) > 0 || len(p.ResidualRisks) > 0 {
+		if len(p.UnresolvedItems) > 0 || len(p.IncompletePhaseIDs) > 0 || len(p.IncompleteTaskIDs) > 0 || len(p.FailedGates) > 0 || len(p.SkippedGates) > 0 || len(p.MissingEvidence) > 0 {
 			return fmt.Errorf("verified seal contains unresolved completion evidence")
 		}
 		if p.OwnerReason != "" || p.Rollback != nil {
@@ -266,8 +266,11 @@ func (p *SealPreflight) collectEvidence(facts LifecycleFacts) {
 
 func (p *SealPreflight) collectOwnerCheckpoints(flags []colony.FlagEntry) {
 	for _, flag := range flags {
+		flagType := strings.ToLower(strings.TrimSpace(flag.Type))
 		checkpoint := SealOwnerCheckpoint{ID: strings.TrimSpace(flag.ID), Summary: strings.TrimSpace(flag.Description), Resolved: flag.Resolved}
-		p.OwnerCheckpoints = append(p.OwnerCheckpoints, checkpoint)
+		if flagType != "issue" {
+			p.OwnerCheckpoints = append(p.OwnerCheckpoints, checkpoint)
+		}
 		if flag.Resolved {
 			continue
 		}
@@ -277,7 +280,14 @@ func (p *SealPreflight) collectOwnerCheckpoints(flags []colony.FlagEntry) {
 		}
 		issue := colony.LifecycleIssue{ID: id, Summary: checkpoint.Summary, EvidenceIDs: []string{"owner_checkpoint:" + id}}
 		p.ResidualRisks = append(p.ResidualRisks, issue)
-		p.addUnresolved("owner_checkpoint", id, checkpoint.Summary, issue.EvidenceIDs)
+		if flagType == "issue" {
+			continue
+		}
+		kind := "owner_checkpoint"
+		if flagType == "blocker" {
+			kind = "blocker"
+		}
+		p.addUnresolved(kind, id, checkpoint.Summary, issue.EvidenceIDs)
 	}
 }
 

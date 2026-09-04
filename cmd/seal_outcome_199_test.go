@@ -105,6 +105,18 @@ func TestSealOutcome199VerifiedPreflight(t *testing.T) {
 	if preflight.PrimaryNext != "aether status" || preflight.OptionalNext != "aether entomb" {
 		t.Fatalf("post-seal actions = %q / %q", preflight.PrimaryNext, preflight.OptionalNext)
 	}
+
+	factsWithRisk := sealOutcome199Facts()
+	factsWithRisk.Blockers.Value = append(factsWithRisk.Blockers.Value, colony.FlagEntry{
+		ID: "issue-risk", Type: "issue", Description: "A non-blocking follow-up remains open",
+	})
+	withRisk, err := BuildSealPreflight(factsWithRisk, SealPreflightRequest{Caller: SealCallerDirectOwner})
+	if err != nil {
+		t.Fatalf("a residual issue was incorrectly upgraded into incomplete work: %v", err)
+	}
+	if len(withRisk.ResidualRisks) != 1 || len(withRisk.UnresolvedItems) != 0 {
+		t.Fatalf("residual issue partition = risks:%#v unresolved:%#v", withRisk.ResidualRisks, withRisk.UnresolvedItems)
+	}
 }
 
 func TestSealOutcome199IncompleteRefusal(t *testing.T) {

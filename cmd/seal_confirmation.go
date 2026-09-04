@@ -377,6 +377,12 @@ func renderSealPreflightCard(preflight SealPreflight) string {
 			b.WriteString("  - " + formatSealUnresolvedItem(item) + "\n")
 		}
 	}
+	if len(preflight.ResidualRisks) > 0 {
+		b.WriteString(fmt.Sprintf("Residual risks retained: %d\n", len(preflight.ResidualRisks)))
+		for _, risk := range preflight.ResidualRisks {
+			b.WriteString(fmt.Sprintf("  - [%s] %s\n", strings.TrimSpace(risk.ID), strings.TrimSpace(risk.Summary)))
+		}
+	}
 	b.WriteString("Retained after closure: active state, receipt, evidence, findings, learnings, signals, checkpoints, and rollback record.\n")
 	return b.String()
 }
