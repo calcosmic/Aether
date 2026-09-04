@@ -1,5 +1,5 @@
 name: ant-init
-description: "🥚 Initialize Aether colony through the Aether CLI runtime"
+description: "Start a guided colony for one goal."
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether init --colony-mode <colony|orchestrator> --charter-json '<synthesized charter JSON>' \"<refined goal>\""
@@ -8,9 +8,22 @@ codex_orchestration:
   skill: "aether-colony-creation"
   guide: "aether command-guide init --platform codex"
   drift_guard: "Update this YAML, Claude/OpenCode wrappers, the Codex skill, and cmd/command_guide.go together."
+guided_contract:
+  stages:
+    - "Stage 1 — Queen opening"
+    - "Stage 2 — Setup"
+    - "Stage 3 — Accepted intent"
+    - "Stage 4 — Territory"
+    - "Stage 5 — Closeout"
+  runtime_authority: "Go owns setup, registry updates, accepted-charter persistence, colony state creation, territory evidence, and init result truth."
+  accepted_charter: "Persist the owner-approved goal and material constraints as accepted-charter/v1 through aether init."
+  territory: "Territory result is exactly one of Fresh, Refreshed, Stale—refresh required, or Unavailable."
+  active_colony_refusal: "An existing active colony is refused before storage opens; the refusal changes no files."
+  claude_opencode_closeout: "/ant-plan"
+  codex_closeout: "aether plan"
 ceremony_contract:
   class: "guided_ritual"
-  authority: "Go owns colony state creation, session files, charter persistence, and canonical init visuals."
+  authority: "Go owns setup, registry updates, accepted-charter persistence, colony state creation, territory evidence, and init result truth."
   wrapper_role: "Ask scoping questions and synthesize an approved charter, then pass that charter to Go; do not write state files directly."
 intent_refinement:
   - "Shelf Backlog collects the user's chosen shelf IDs only; Approval spends them inside the same `aether init` call, after consent."
@@ -26,6 +39,8 @@ intent_refinement:
   - "Separate deterministic scan warnings from AI-synthesized pheromones. README/changelog/license/formatter suggestions are housekeeping, not strategic colony guidance."
   - "Suggest at most 3 synthesized pheromones, and only when they are specific to the user's clarified intent. Let the user approve each one before writing it."
   - "Run `AETHER_OUTPUT_MODE=visual aether init --colony-mode <selected colony|orchestrator> --charter-json '<synthesized charter JSON>' \"<refined goal>\"` after approval."
+  - "Do not require a separate setup command before init; the runtime performs safe automatic bootstrap during Stage 2 — Setup."
+  - "After success, show the exact Claude/OpenCode closeout `Next Up: /ant-plan`; ranked runtime proposals may inform context but do not replace the normal guided next step."
 wrapper_additions:
   stage_skeleton: |
     Every init stage except Required Cross-Stage State and Cross-Platform Drift

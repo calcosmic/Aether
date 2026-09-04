@@ -125,7 +125,7 @@ func TestInitSuggestedNextMatchesTopProposal(t *testing.T) {
 	}
 }
 
-func TestInitWrapperAsksNextMove(t *testing.T) {
+func TestInitWrapperClosesAtPlan(t *testing.T) {
 	for _, path := range []string{"../.claude/commands/ant/init.md", "../.claude/commands/ant-init.md", "../.opencode/commands/ant/init.md"} {
 		raw, err := os.ReadFile(path)
 		if err != nil {
@@ -133,14 +133,16 @@ func TestInitWrapperAsksNextMove(t *testing.T) {
 		}
 		text := string(raw)
 		for _, anchor := range []string{
-			"ranked `proposals`",
-			"one option per proposal",
-			"I'll decide later",
-			"run nothing until the user\npicks",
+			"Ranked `proposals`",
+			"do not replace the normal guided handoff",
+			"Next Up: /ant-plan",
 		} {
 			if !strings.Contains(text, anchor) {
-				t.Fatalf("%s lost the post-init choice contract anchor %q", path, anchor)
+				t.Fatalf("%s lost the post-init /ant-plan contract anchor %q", path, anchor)
 			}
+		}
+		if !strings.HasSuffix(strings.TrimSpace(text), "Next Up: /ant-plan") {
+			t.Fatalf("%s does not end at the exact guided plan command", path)
 		}
 	}
 }
