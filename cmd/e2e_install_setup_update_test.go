@@ -17,6 +17,7 @@ import (
 // in sequence within temp directories, verifying data flows correctly and
 // protected directories (data/, dreams/) are never overwritten.
 func TestE2EInstallSetupUpdateFlow(t *testing.T) {
+	isolateUpdateE2ERepositoryRoot(t)
 	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
 	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
@@ -432,6 +433,7 @@ func TestE2EInstallSetupUpdateFlow(t *testing.T) {
 // directory contains data/ or dreams/ files, setup and update never overwrite
 // local user data.
 func TestE2EInstallSetupProtectedDirsFromHub(t *testing.T) {
+	isolateUpdateE2ERepositoryRoot(t)
 	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
 	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)

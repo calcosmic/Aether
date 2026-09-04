@@ -11,9 +11,20 @@ import (
 	"time"
 )
 
+// isolateUpdateE2ERepositoryRoot makes these process-local integration tests
+// exercise the repository selected by their cwd. Other command tests may set
+// explicit lifecycle-root overrides, which are authoritative in production and
+// therefore must not bleed into a downstream-update fixture.
+func isolateUpdateE2ERepositoryRoot(t *testing.T) {
+	t.Helper()
+	t.Setenv("AETHER_ROOT", "")
+	t.Setenv("COLONY_DATA_DIR", "")
+}
+
 // TestE2ERegressionStablePublishUpdate proves the full stable pipeline:
 // publish -> downstream update -> version agreement.
 func TestE2ERegressionStablePublishUpdate(t *testing.T) {
+	isolateUpdateE2ERepositoryRoot(t)
 	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
 	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
@@ -84,6 +95,7 @@ func TestE2ERegressionStablePublishUpdate(t *testing.T) {
 // TestE2ERegressionDevPublishUpdate proves the full dev pipeline:
 // dev publish -> dev update -> version agreement.
 func TestE2ERegressionDevPublishUpdate(t *testing.T) {
+	isolateUpdateE2ERepositoryRoot(t)
 	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
 	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
@@ -154,6 +166,7 @@ func TestE2ERegressionDevPublishUpdate(t *testing.T) {
 // TestE2ERegressionStalePublishDetection proves stale publish is caught at
 // the downstream update boundary with critical classification and recovery command.
 func TestE2ERegressionStalePublishDetection(t *testing.T) {
+	isolateUpdateE2ERepositoryRoot(t)
 	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
 	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
@@ -313,6 +326,7 @@ func TestE2ERegressionChannelIsolation(t *testing.T) {
 // instantly. This test proves the full downstream publish-update-init-plan pipeline
 // works without hanging.
 func TestE2ERegressionStuckPlanInvestigation(t *testing.T) {
+	isolateUpdateE2ERepositoryRoot(t)
 	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
 	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
