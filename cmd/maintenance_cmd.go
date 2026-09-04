@@ -1,7 +1,11 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -9,7 +13,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const maintenanceCatalogSchemaVersion = "maintenance-catalog/v1"
+const (
+	maintenanceCatalogSchemaVersion            = "maintenance-catalog/v1"
+	maintenanceRecoveryInspectionSchemaVersion = "maintenance-recovery-inspection/v1"
+)
 
 type maintenanceInspectionFinding struct {
 	Code            string   `json:"code"`
@@ -60,6 +67,23 @@ type maintenanceLandingResult struct {
 	StateEffect   colony.LifecycleStateEffect `json:"state_effect"`
 }
 
+type maintenanceRecoveryInspectionResult struct {
+	SchemaVersion  string                            `json:"schema_version"`
+	OperationID    string                            `json:"operation_id"`
+	Command        string                            `json:"command"`
+	OutcomeKind    colony.OutcomeKind                `json:"outcome_kind"`
+	Explanation    string                            `json:"explanation"`
+	Issues         []HealthIssue                     `json:"issues"`
+	Findings       []maintenanceInspectionFinding    `json:"findings"`
+	Evidence       []maintenanceInspectionEvidence   `json:"evidence"`
+	Verification   maintenanceInspectionVerification `json:"verification"`
+	Provenance     []LifecycleFactSource             `json:"provenance"`
+	Lifecycle      LifecycleProjection               `json:"lifecycle"`
+	StateEffect    colony.LifecycleStateEffect       `json:"state_effect"`
+	RecoveryAction string                            `json:"recovery_action"`
+	NextAction     string                            `json:"next_action"`
+}
+
 var maintenanceCmd = &cobra.Command{
 	Use:         "maintenance",
 	Short:       "Inspect or repair Aether internals with preview and rollback.",
@@ -68,8 +92,17 @@ var maintenanceCmd = &cobra.Command{
 	RunE:        runMaintenanceLanding,
 }
 
+var maintenanceRecoveryInspectCmd = &cobra.Command{
+	Use:         "recovery-inspect",
+	Short:       "Inspect recovery evidence without changing colony state",
+	Args:        cobra.NoArgs,
+	Annotations: map[string]string{"aether.io/read-only": "true"},
+	RunE:        runMaintenanceRecoveryInspect,
+}
+
 func init() {
 	rootCmd.AddCommand(maintenanceCmd)
+	maintenanceCmd.AddCommand(maintenanceRecoveryInspectCmd)
 }
 
 func runMaintenanceLanding(cmd *cobra.Command, _ []string) error {
@@ -102,6 +135,7 @@ func buildMaintenanceCatalog(platform string) maintenanceCatalog {
 	}
 	return maintenanceCatalog{
 		Inspection: []maintenanceOperation{
+			readOnly("recovery.inspect", "Recovery evidence and stuck-state diagnosis", "aether maintenance recovery-inspect", maintenanceRecoveryInspectionSchemaVersion),
 			readOnly("integrity.inspect", "Release and hub integrity", "aether integrity", integrityInspectionSchemaVersion),
 			readOnly("source.parity.inspect", "Generated and source parity", "aether source-check", sourceCheckResultSchemaVersion),
 			readOnly("registry.inspect", "Registered colony inventory", "aether registry-list", "registry-inspection/v1"),
@@ -121,6 +155,303 @@ func buildMaintenanceCatalog(platform string) maintenanceCatalog {
 			mutating("chamber.create", "Create a chamber archive", "aether chamber-create --name <chamber>", false, "Remove only the staged chamber named by a failed transaction receipt."),
 		},
 	}
+}
+
+func runMaintenanceRecoveryInspect(_ *cobra.Command, _ []string) error {
+	root := resolveAetherRootPath()
+	facts, loadErr := loadLifecycleFacts(root, store, time.Now().UTC().Truncate(time.Second))
+	result := buildMaintenanceRecoveryInspection(facts, detectPlatform(), loadErr)
+	outputWorkflow(result, renderMaintenanceRecoveryInspection(result))
+	return nil
+}
+
+func buildMaintenanceRecoveryInspection(facts LifecycleFacts, platform string, loadErr error) maintenanceRecoveryInspectionResult {
+	issues := inspectRecoveryIssuesReadOnly(facts)
+	if loadErr != nil {
+		issues = append(issues, issueCritical("state", facts.State.Source.Path, fmt.Sprintf("Lifecycle evidence could not be loaded: %v", loadErr)))
+	}
+	if issues == nil {
+		issues = []HealthIssue{}
+	}
+
+	provenance := facts.Sources()
+	evidence := make([]maintenanceInspectionEvidence, 0, len(provenance)+1)
+	for _, source := range provenance {
+		paths := splitMaintenanceEvidencePaths(source.Path)
+		evidence = append(evidence, maintenanceInspectionEvidence{
+			Scope:   source.Domain,
+			Paths:   paths,
+			Checked: len(paths),
+			Status:  string(source.Provenance),
+		})
+	}
+	scanPaths := maintenanceRecoveryScanPaths(facts)
+	evidence = append(evidence, maintenanceInspectionEvidence{
+		Scope:   "stuck-state scanners",
+		Paths:   scanPaths,
+		Checked: len(scanPaths),
+		Status:  maintenanceRecoveryEvidenceStatus(issues),
+	})
+
+	findings := make([]maintenanceInspectionFinding, 0, len(issues))
+	for _, issue := range issues {
+		paths := splitMaintenanceEvidencePaths(issue.File)
+		finding := maintenanceInspectionFinding{
+			Code:            "recovery." + issue.Category,
+			Summary:         issue.Message,
+			EvidencePaths:   paths,
+			RecoveryCommand: "aether resume",
+		}
+		if len(paths) > 0 {
+			finding.SourcePath = paths[0]
+		}
+		findings = append(findings, finding)
+	}
+
+	outcome := colony.OutcomeKindNoChange
+	verificationStatus := "pass"
+	if len(issues) > 0 {
+		outcome = colony.OutcomeKindRecoveryRequired
+		verificationStatus = "attention_required"
+	}
+	return maintenanceRecoveryInspectionResult{
+		SchemaVersion: maintenanceRecoveryInspectionSchemaVersion,
+		OperationID:   "recovery.inspect",
+		Command:       "maintenance recovery-inspect",
+		OutcomeKind:   outcome,
+		Explanation:   "Recovery evidence was inspected without repairing, normalizing, or restoring any durable state. Resume remains the only recovery owner.",
+		Issues:        issues,
+		Findings:      findings,
+		Evidence:      evidence,
+		Verification: maintenanceInspectionVerification{
+			Status:        verificationStatus,
+			EvidenceCount: len(evidence),
+			FindingCount:  len(findings),
+		},
+		Provenance:     provenance,
+		Lifecycle:      projectLifecycle(facts, LifecycleViewFocused, platform),
+		StateEffect:    colony.LifecycleStateEffectNone,
+		RecoveryAction: "aether resume",
+		NextAction:     "aether resume",
+	}
+}
+
+// inspectRecoveryIssuesReadOnly retains the useful recover scanners without
+// calling their repair-capable orchestration. The state and manifest readers
+// below use os.ReadFile directly so an inspection cannot create lock files or
+// normalize legacy bytes on disk.
+func inspectRecoveryIssuesReadOnly(facts LifecycleFacts) []HealthIssue {
+	dataDir := filepath.Join(facts.Root, ".aether", "data")
+	var issues []HealthIssue
+	issues = append(issues, scanStaleSpawnedWorkers(dataDir)...)
+
+	if facts.State.Source.Provenance != LifecycleFactConfirmed {
+		message := facts.State.Source.Diagnostic
+		if strings.TrimSpace(message) == "" {
+			message = "Colony state is not confirmed by durable evidence"
+		}
+		issues = append(issues, issueCritical("state", facts.State.Source.Path, message))
+		issues = append(issues, scanMissingAgentFiles()...)
+		return issues
+	}
+
+	state := facts.State.Value
+	manifest := loadRecoveryManifestReadOnly(dataDir, state.CurrentPhase)
+	issues = append(issues, scanBadManifest(state, dataDir)...)
+	issues = append(issues, scanMissingBuildPacketReadOnly(state, manifest)...)
+	issues = append(issues, scanPartialPhaseReadOnly(state, dataDir, manifest)...)
+	issues = append(issues, scanDirtyWorktrees(state)...)
+	issues = append(issues, scanBrokenSurvey(state, dataDir)...)
+	issues = append(issues, scanMissingAgentFiles()...)
+	issues = append(issues, scanUnreconciledWorkerChangesReadOnly(facts.Root, dataDir, state, manifest)...)
+	return issues
+}
+
+func loadRecoveryManifestReadOnly(dataDir string, phaseID int) codexContinueManifest {
+	if phaseID < 1 {
+		return codexContinueManifest{}
+	}
+	rel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseID), "manifest.json"))
+	raw, err := os.ReadFile(filepath.Join(dataDir, filepath.FromSlash(rel)))
+	if err != nil {
+		return codexContinueManifest{}
+	}
+	var manifest codexBuildManifest
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		return codexContinueManifest{}
+	}
+	return codexContinueManifest{Present: true, Path: rel, Data: manifest}
+}
+
+func scanMissingBuildPacketReadOnly(state colony.ColonyState, manifest codexContinueManifest) []HealthIssue {
+	if state.State != colony.StateEXECUTING && state.State != colony.StateBUILT || state.CurrentPhase < 1 {
+		return nil
+	}
+	if manifest.Present && !manifest.Data.PlanOnly && len(manifest.Data.Dispatches) > 0 {
+		return nil
+	}
+	return []HealthIssue{fixableIssue(issueCritical(
+		"missing_build_packet",
+		fmt.Sprintf("build/phase-%d/manifest.json", state.CurrentPhase),
+		fmt.Sprintf("No build packet for phase %d (state=%s)", state.CurrentPhase, state.State),
+	))}
+}
+
+func scanPartialPhaseReadOnly(state colony.ColonyState, dataDir string, manifest codexContinueManifest) []HealthIssue {
+	if state.State != colony.StateEXECUTING || state.CurrentPhase < 1 {
+		return nil
+	}
+	var issues []HealthIssue
+	if manifest.Present && len(manifest.Data.Dispatches) > 0 {
+		allTerminal := true
+		for _, dispatch := range manifest.Data.Dispatches {
+			if dispatch.Status != "completed" && dispatch.Status != "failed" {
+				allTerminal = false
+				break
+			}
+		}
+		if allTerminal {
+			continueRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", state.CurrentPhase), "continue.json"))
+			if _, err := os.Stat(filepath.Join(dataDir, filepath.FromSlash(continueRel))); os.IsNotExist(err) {
+				issues = append(issues, fixableIssue(issueWarning("partial_phase", continueRel, "Build completed but continue not run")))
+			}
+		}
+	}
+	if !manifest.Present {
+		for _, phase := range state.Plan.Phases {
+			if phase.ID == state.CurrentPhase && phase.Status == colony.PhaseInProgress {
+				issues = append(issues, fixableIssue(issueWarning(
+					"partial_phase",
+					"COLONY_STATE.json",
+					fmt.Sprintf("Phase %d marked in_progress but never built", state.CurrentPhase),
+				)))
+				break
+			}
+		}
+	}
+	return issues
+}
+
+func scanUnreconciledWorkerChangesReadOnly(root, dataDir string, state colony.ColonyState, manifest codexContinueManifest) []HealthIssue {
+	status, err := gitOutputAt(root, "status", "--short")
+	if err != nil || strings.TrimSpace(status) == "" {
+		return nil
+	}
+	var changed []string
+	for _, line := range strings.Split(status, "\n") {
+		if len(line) < 3 {
+			continue
+		}
+		path := strings.TrimSpace(line[2:])
+		if path == "" {
+			continue
+		}
+		if parts := strings.Split(path, " -> "); len(parts) == 2 {
+			changed = append(changed, strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]))
+			continue
+		}
+		changed = append(changed, path)
+	}
+
+	recorded := make(map[string]bool)
+	var claims codexBuildClaims
+	if raw, err := os.ReadFile(filepath.Join(dataDir, "last-build-claims.json")); err == nil && json.Unmarshal(raw, &claims) == nil {
+		for _, path := range append(append(append([]string{}, claims.FilesCreated...), claims.FilesModified...), claims.TestsWritten...) {
+			recorded[strings.TrimSpace(path)] = true
+		}
+		for _, claim := range claims.TaskClaims {
+			for _, path := range append(append(append([]string{}, claim.FilesCreated...), claim.FilesModified...), claim.TestsWritten...) {
+				recorded[strings.TrimSpace(path)] = true
+			}
+		}
+	}
+	if state.CurrentPhase > 0 && manifest.Present {
+		for _, dispatch := range manifest.Data.Dispatches {
+			for _, path := range dispatch.Outputs {
+				recorded[strings.TrimSpace(path)] = true
+			}
+		}
+	}
+
+	var unreconciled []string
+	for _, path := range changed {
+		if !recorded[path] {
+			unreconciled = append(unreconciled, path)
+		}
+	}
+	sort.Strings(unreconciled)
+	if len(unreconciled) == 0 {
+		return nil
+	}
+	return []HealthIssue{fixableIssue(issueWarning(
+		"unreconciled_worker_changes",
+		"git working tree",
+		fmt.Sprintf("%d unreconciled file change(s) not recorded by any worker", len(unreconciled)),
+	))}
+}
+
+func splitMaintenanceEvidencePaths(raw string) []string {
+	var paths []string
+	for _, path := range strings.Split(raw, ",") {
+		path = strings.TrimSpace(path)
+		if path != "" && path != "(unavailable)" && !containsString(paths, path) {
+			paths = append(paths, filepath.ToSlash(path))
+		}
+	}
+	sort.Strings(paths)
+	if paths == nil {
+		return []string{}
+	}
+	return paths
+}
+
+func maintenanceRecoveryScanPaths(facts LifecycleFacts) []string {
+	dataDir := filepath.Join(facts.Root, ".aether", "data")
+	paths := []string{
+		filepath.Join(dataDir, "COLONY_STATE.json"),
+		filepath.Join(dataDir, "spawn-runs.json"),
+		filepath.Join(dataDir, "last-build-claims.json"),
+	}
+	if facts.State.Value.CurrentPhase > 0 {
+		phaseDir := filepath.Join(dataDir, "build", fmt.Sprintf("phase-%d", facts.State.Value.CurrentPhase))
+		paths = append(paths, filepath.Join(phaseDir, "manifest.json"), filepath.Join(phaseDir, "continue.json"))
+	}
+	for i := range paths {
+		paths[i] = filepath.ToSlash(paths[i])
+	}
+	sort.Strings(paths)
+	return paths
+}
+
+func maintenanceRecoveryEvidenceStatus(issues []HealthIssue) string {
+	if len(issues) > 0 {
+		return "attention_required"
+	}
+	return "pass"
+}
+
+func renderMaintenanceRecoveryInspection(result maintenanceRecoveryInspectionResult) string {
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("maintenance"), "Recovery Inspection"))
+	b.WriteString(visualDividerStr())
+	b.WriteString(result.Explanation)
+	b.WriteString("\n\n")
+	b.WriteString(renderStageMarker("Evidence"))
+	for _, source := range result.Provenance {
+		fmt.Fprintf(&b, "%s: %s — %s\n", source.Domain, source.Provenance, source.Path)
+	}
+	b.WriteString("\n")
+	b.WriteString(renderStageMarker("Diagnosis"))
+	if len(result.Issues) == 0 {
+		b.WriteString("No stuck-state condition was found in the available evidence.\n")
+	} else {
+		for _, issue := range result.Issues {
+			fmt.Fprintf(&b, "%s [%s]: %s\n", strings.ToUpper(issue.Severity), issue.Category, issue.Message)
+		}
+	}
+	b.WriteString("State effect: none\n")
+	b.WriteString(renderNextUp("Run `aether resume`; it is the only command allowed to restore lifecycle progress."))
+	return b.String()
 }
 
 func newMaintenanceOperation(platform, id, label, command, mutationClass string, preview, transaction bool, receipt, recovery string) maintenanceOperation {
