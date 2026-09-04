@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 199-14-PLAN.md
-last_updated: "2026-09-04T11:16:23.533Z"
+stopped_at: Completed 199-15-PLAN.md
+last_updated: "2026-09-04T12:30:30.101Z"
 last_activity: 2026-09-04
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 34
-  completed_plans: 16
-  percent: 47
+  completed_plans: 17
+  percent: 50
 ---
 
 # Project State
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-02)
 ## Current Position
 
 Phase: 199 (front-door-and-classic-contract) — EXECUTING
-Plan: 15 of 34
+Plan: 16 of 34
 Status: Ready to execute
 Last activity: 2026-09-04
 
@@ -94,6 +94,7 @@ Last activity: 2026-09-04
 | Phase 199 P12 | 16min | 2 tasks | 6 files |
 | Phase 199 P13 | 40min | 2 tasks | 11 files |
 | Phase 199 P14 | 28min | 2 tasks | 9 files |
+| Phase 199 P15 | 65min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -246,6 +247,10 @@ Last activity: 2026-09-04
 - [Phase 199]: Hidden pre-Cobra lifecycle redirects are input migration only and are excluded from public wrapper inventory and alias repair. — Parser compatibility must not become product vocabulary.
 - [Phase 199]: Retired installed wrappers are deleted only when the managed header proves Aether ownership; same-named custom files survive unchanged. — A filename alone cannot authorize deletion of user content.
 - [Phase 199]: The current recovery contract teaches canonical resume only; bounded compatibility remains expiring parser plumbing. — There is one public return path while the migration window remains invisible.
+- [Phase 199]: Use one typed SealPreflight and durable SealOutcome as completion truth; only a direct owner may request forced_incomplete with --force and a nonblank reason.
+- [Phase 199]: Commit every authoritative seal artifact through the lifecycle transaction while retaining active COLONY_STATE.json for review; status remains primary and entomb optional.
+- [Phase 199]: Treat issue-severity findings as retained residual risks, while blockers and unresolved owner checkpoints prevent normal verified closure.
+- [Phase 199]: Permit Hive promotion only after verified closure under promote/unset policy, after sanitization and sensitivity filtering, with deterministic replay-safe receipts.
 
 ### Pending Todos
 
@@ -359,8 +364,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-04T11:16:23.524Z
-Stopped at: Completed 199-14-PLAN.md
+Last session: 2026-09-04T12:30:30.092Z
+Stopped at: Completed 199-15-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
