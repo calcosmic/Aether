@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 199-12-PLAN.md
-last_updated: "2026-09-04T09:06:38.685Z"
+stopped_at: Completed 199-13-PLAN.md
+last_updated: "2026-09-04T09:58:10.586Z"
 last_activity: 2026-09-04
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 34
-  completed_plans: 14
-  percent: 0
+  completed_plans: 15
+  percent: 44
 ---
 
 # Project State
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-02)
 ## Current Position
 
 Phase: 199 (front-door-and-classic-contract) — EXECUTING
-Plan: 13 of 34
+Plan: 14 of 34
 Status: Ready to execute
 Last activity: 2026-09-04
 
@@ -92,6 +92,7 @@ Last activity: 2026-09-04
 | Phase 199 P11 | 29min | 3 tasks | 11 files |
 | Phase 199 P20 | 12min | 3 tasks | 9 files |
 | Phase 199 P12 | 16min | 2 tasks | 6 files |
+| Phase 199 P13 | 40min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -238,6 +239,9 @@ Last activity: 2026-09-04
 - [Phase 199]: A signal can claim live delivery or acknowledgement only from linked named lifecycle evidence, and measured effect only from linked changed-decision evidence.
 - [Phase 199]: Swarm localizes only from an exact recorded active task ID and treats both dependencies and dependent tasks as the affected path; only other active tasks may continue independently.
 - [Phase 199]: Go remains the only signal mutator and evidence authority; wrappers invoke the runtime but cannot manufacture acknowledgement or causal-effect claims.
+- [Phase 199]: Pause and resume use the handoff ID as their idempotency key, so interrupted commits resume one journal and verified replay returns one existing receipt.
+- [Phase 199]: Resume mutates only confirmed or explicitly reconstructed evidence; conflicting state, session, repository, worktree, activity, or receipt facts stop with no runnable-state write.
+- [Phase 199]: Legacy pause-colony/resume-colony inputs are exact-token pre-Cobra redirects only through 1.28 and never appear in Cobra aliases, help, completion, or canonical pause wrappers.
 
 ### Pending Todos
 
@@ -351,8 +355,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-04T09:06:38.676Z
-Stopped at: Completed 199-12-PLAN.md
+Last session: 2026-09-04T09:58:10.577Z
+Stopped at: Completed 199-13-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
