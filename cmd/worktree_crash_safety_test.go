@@ -282,8 +282,14 @@ func TestResumeReportsPreservedWorkInPlainEnglish(t *testing.T) {
 	if !strings.Contains(output, branch) {
 		t.Errorf("expected report to name the branch %q, got: %s", branch, output)
 	}
-	if !strings.Contains(output, "aether recover") {
-		t.Errorf("expected report to contain a recovery command the user can type, got: %s", output)
+	if !strings.Contains(output, "aether maintenance recovery-inspect") {
+		t.Errorf("expected report to contain the read-only inspection command, got: %s", output)
+	}
+	if !strings.Contains(output, "State effect: none") {
+		t.Errorf("expected report to state that inspection has no state effect, got: %s", output)
+	}
+	if !strings.Contains(output, "aether resume") {
+		t.Errorf("expected report to route lifecycle restoration through resume, got: %s", output)
 	}
 
 	lower := strings.ToLower(output)
