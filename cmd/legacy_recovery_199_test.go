@@ -295,3 +295,55 @@ func TestLegacyRecoveryCommands199MaintenanceDiagnosis(t *testing.T) {
 		t.Fatalf("maintenance diagnosis lost the existing stale-worker scanner: %#v", issues)
 	}
 }
+
+func TestLegacyRecoveryCommands199ManagedPruning(t *testing.T) {
+	fixture := newMaintenanceMutation199Fixture(t)
+	source := filepath.Join(fixture.hub, "system", "commands", "claude")
+	if err := os.MkdirAll(source, 0o755); err != nil {
+		t.Fatalf("create source-absent command directory: %v", err)
+	}
+
+	managedPath := filepath.Join(fixture.claude, "ant-abandon.md")
+	writeMaintenanceMutation199File(t, managedPath, []byte("<!-- Aether-managed: runtime spec at .aether/commands/abandon.yaml. Synced by aether update. -->\nretired abandon wrapper\n"))
+	customPath := filepath.Join(fixture.claude, "custom", "ant-abandon.md")
+	customBytes := []byte("# Project-owned abandon command\n\nThis file is not Aether-managed.\n")
+	writeMaintenanceMutation199File(t, customPath, customBytes)
+
+	plan := fixture.plan("legacy-recovery-abandon-pruning")
+	if err := appendMaintenanceSyncTargets(&plan, maintenanceSyncSpec{
+		Root:            lifecycleTransactionRootClaudeHome,
+		SourceDir:       source,
+		DestinationBase: ".",
+		Options: syncOptions{
+			cleanup:        true,
+			cleanupInclude: isManagedFlatClaudeCommandPath,
+		},
+	}); err != nil {
+		t.Fatalf("prepare managed reconciliation: %v", err)
+	}
+
+	preview, err := prepareMaintenanceMutation(plan)
+	if err != nil {
+		t.Fatalf("preview managed reconciliation: %v", err)
+	}
+	if len(preview.Targets) != 1 || !maintenancePreviewHas199(preview, "ant-abandon.md", maintenanceMutationChangeRemove) {
+		t.Fatalf("managed abandon wrapper was not selected alone for pruning: %#v", preview.Targets)
+	}
+	if maintenancePreviewHasTarget199(preview, filepath.Join("custom", "ant-abandon.md")) {
+		t.Fatalf("unmanaged same-name command entered the managed target set: %#v", preview.Targets)
+	}
+
+	if _, err := commitMaintenanceMutation(plan); err != nil {
+		t.Fatalf("commit managed reconciliation: %v", err)
+	}
+	if _, err := os.Stat(managedPath); !os.IsNotExist(err) {
+		t.Fatalf("source-absent managed abandon wrapper survived pruning: %v", err)
+	}
+	got, err := os.ReadFile(customPath)
+	if err != nil {
+		t.Fatalf("read unmanaged same-name command after reconciliation: %v", err)
+	}
+	if !bytes.Equal(got, customBytes) {
+		t.Fatalf("unmanaged same-name command changed:\nwant: %q\ngot:  %q", customBytes, got)
+	}
+}
