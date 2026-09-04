@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 199-26-PLAN.md
-last_updated: "2026-09-04T18:18:49.000Z"
+stopped_at: Completed 199-21-PLAN.md
+last_updated: "2026-09-04T20:35:09.915Z"
 last_activity: 2026-09-04
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 34
-  completed_plans: 22
-  percent: 65
+  completed_plans: 23
+  percent: 68
 ---
 
 # Project State
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-02)
 ## Current Position
 
 Phase: 199 (front-door-and-classic-contract) — EXECUTING
-Plan: 21 of 34
+Plan: 23 of 34
 Status: Ready to execute
 Last activity: 2026-09-04
 
@@ -100,6 +100,7 @@ Last activity: 2026-09-04
 | Phase 199 P17 | 36min | 2 tasks | 8 files |
 | Phase 199 P18 | 80min | 2 tasks | 8 files |
 | Phase 199 P26 | 62min | 3 tasks | 9 files |
+| Phase 199 P21 | 16 min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -268,6 +269,9 @@ Last activity: 2026-09-04
 - [Phase 199]: Focused closeouts consume an existing LifecycleProjection and fail closed on revision disagreement. — This keeps lifecycle policy and Next Up owned by one projection.
 - [Phase 199]: Zero-write refusals resolve from already-read, read-only state facts. — Rendering must not initialize a store or create lock files.
 - [Phase 199]: Sealed colonies keep status primary and entomb optional; only verified archive-and-clear may offer init. — This preserves owner review authority and prevents failed archival from claiming a fresh-start boundary.
+- [Phase 199]: Resume wrappers invoke the Go runtime exactly once and render its Confirmed, Reconstructed, Conflicting, or Unknown result without inspecting or selecting recovery evidence themselves.
+- [Phase 199]: The existing Codex command guide exposes pause and resume only; bounded legacy parser compatibility remains invisible runtime plumbing.
+- [Phase 199]: After seal, status is the primary review action and entomb remains a separate optional owner-confirmed archive-and-clear action.
 
 ### Pending Todos
 
@@ -381,10 +385,10 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-04T18:17:59.523Z
-Stopped at: Completed 199-26-PLAN.md
+Last session: 2026-09-04T20:35:09.907Z
+Stopped at: Completed 199-21-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
 
-- Execute 199-21-PLAN.md, the first incomplete Phase 199 plan.
+- Execute 199-23-PLAN.md, the first incomplete Phase 199 plan.
