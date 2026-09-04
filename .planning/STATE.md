@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 199-18-PLAN.md
-last_updated: "2026-09-04T17:07:03.204Z"
+stopped_at: Completed 199-26-PLAN.md
+last_updated: "2026-09-04T18:18:49.000Z"
 last_activity: 2026-09-04
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 34
-  completed_plans: 21
-  percent: 62
+  completed_plans: 22
+  percent: 65
 ---
 
 # Project State
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-02)
 ## Current Position
 
 Phase: 199 (front-door-and-classic-contract) — EXECUTING
-Plan: 19 of 34
+Plan: 21 of 34
 Status: Ready to execute
 Last activity: 2026-09-04
 
@@ -99,6 +99,7 @@ Last activity: 2026-09-04
 | Phase 199 P22 | 13min | 2 tasks | 4 files |
 | Phase 199 P17 | 36min | 2 tasks | 8 files |
 | Phase 199 P18 | 80min | 2 tasks | 8 files |
+| Phase 199 P26 | 62min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -264,6 +265,9 @@ Last activity: 2026-09-04
 - [Phase 199]: Cleanup prefixes, globs, and content guesses are not deletion authority; a versioned aether-runtime manifest with exact path, owner, and current digest is required.
 - [Phase 199]: Registry identity is derived from the canonical repository path, and duplicate identity/path or active-plus-final-stats conflicts fail before any write.
 - [Phase 199]: A live maintenance interruption after durable intent attempts coordinator rollback immediately and returns its rollback receipt; unprovable rollback retains recovery-required evidence.
+- [Phase 199]: Focused closeouts consume an existing LifecycleProjection and fail closed on revision disagreement. — This keeps lifecycle policy and Next Up owned by one projection.
+- [Phase 199]: Zero-write refusals resolve from already-read, read-only state facts. — Rendering must not initialize a store or create lock files.
+- [Phase 199]: Sealed colonies keep status primary and entomb optional; only verified archive-and-clear may offer init. — This preserves owner review authority and prevents failed archival from claiming a fresh-start boundary.
 
 ### Pending Todos
 
@@ -377,10 +381,10 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-04T17:07:03.196Z
-Stopped at: Completed 199-18-PLAN.md
+Last session: 2026-09-04T18:17:59.523Z
+Stopped at: Completed 199-26-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Execute 199-21-PLAN.md, the first incomplete Phase 199 plan.

@@ -77,7 +77,7 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 
 **Requirements:** SYNTH-01, CEC-01, CEC-02, CEC-04, CEC-08, LIFE-01..06, PROOF-01
 
-**Plans:** 21/34 plans executed
+**Plans:** 22/34 plans executed
 
 Plans:
 **Wave 1**
@@ -136,7 +136,7 @@ Plans:
 
 - [x] 199-17-PLAN.md — Retire recover/abandon as public lifecycle commands.
 - [x] 199-18-PLAN.md — Route maintenance mutations through preview, transaction, and rollback.
-- [ ] 199-26-PLAN.md — Ratchet focused lifecycle closeouts after all affected implementations.
+- [x] 199-26-PLAN.md — Ratchet focused lifecycle closeouts after all affected implementations.
 
 **Wave 13** *(blocked on Wave 12 completion)*
 
