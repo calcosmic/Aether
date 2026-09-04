@@ -83,11 +83,11 @@ func collectRuntimeRecoverySuggestions199(t *testing.T) map[string]string {
 		"visual preserved workspaces":   visualOut.String(),
 		"no-color preserved workspaces": noColorOut.String(),
 		"json lifecycle result":         jsonOut.String(),
-		"worktree preservation":          describeWorktreePreservation(preserved, "branch left unchanged"),
-		"clash forced cleanup":           clashPreservedWorkMessage199(preserved, "saved work before a forced cleanup"),
-		"cancelled worktree wave":        cancelledWorktreeWaveMessage199("Builder Map", "phase-7/builder-map"),
-		"uncredited worktree receipt":    uncreditedWorktreeReceiptMessage199("Builder Map", []string{"cmd/map.go"}, "phase-7/builder-map"),
-		"reap saved work":                worktreeReapSavedWorkMessage199("phase-7/builder-map", "one change stashed"),
+		"worktree preservation":         describeWorktreePreservation(preserved, "branch left unchanged"),
+		"clash forced cleanup":          clashPreservedWorkMessage199(preserved, "saved work before a forced cleanup"),
+		"cancelled worktree wave":       cancelledWorktreeWaveMessage199("Builder Map", "phase-7/builder-map"),
+		"uncredited worktree receipt":   uncreditedWorktreeReceiptMessage199("Builder Map", []string{"cmd/map.go"}, "phase-7/builder-map"),
+		"reap saved work":               worktreeReapSavedWorkMessage199("phase-7/builder-map", "one change stashed"),
 	}
 }
 

@@ -552,9 +552,7 @@ func reconcileWorktreeWave(root string, phase colony.Phase, wave int, outcomes [
 			// worker in the same wave already synced.
 			preserveWorktree = true
 			if len(conflicts) > 0 {
-				emitVisualProgress(fmt.Sprintf(
-					"%s finished part of its work, but this round was cancelled because two workers changed the same file — nothing was copied into the project. Its work is kept on branch %s; to get it back, run: aether recover",
-					outcome.dispatch.WorkerName, session.Branch))
+				emitVisualProgress(cancelledWorktreeWaveMessage199(outcome.dispatch.WorkerName, session.Branch))
 			} else {
 				resolveWorktreePartialReceipts(root, phase, outcome, ledger)
 			}
@@ -640,16 +638,22 @@ func resolveWorktreePartialReceipts(root string, phase colony.Phase, outcome *wo
 	ledger.record(outcome.dispatch.WorkerName, resolved)
 
 	if len(resolved.UncreditedPaths) > 0 {
-		emitVisualProgress(fmt.Sprintf(
-			"%s changed %d file(s) it never proved finished (%s) — those changes were NOT copied into the project and are kept on branch %s; run: aether recover",
-			outcome.dispatch.WorkerName, len(resolved.UncreditedPaths),
-			strings.Join(resolved.UncreditedPaths, ", "), outcome.session.Branch))
+		emitVisualProgress(uncreditedWorktreeReceiptMessage199(
+			outcome.dispatch.WorkerName, resolved.UncreditedPaths, outcome.session.Branch))
 	}
 	// WR-01 (195-REVIEW.md): this used to print only two of the twelve named
 	// refusal rules, so a receipt refused for being out of scope, for
 	// laundering a path, or for claiming a file the worker's own result never
 	// reported vanished with no owner-visible trace at all.
 	reportCoherentJobReceiptRefusals(outcome.dispatch.WorkerName, resolved.Violations)
+}
+
+func cancelledWorktreeWaveMessage199(workerName, branch string) string {
+	return fmt.Sprintf("%s finished part of its work, but this round was cancelled because two workers changed the same file — nothing was copied into the project. Its work is kept on branch %s. Inspect it with `aether maintenance recovery-inspect` (State effect: none). To restore runnable lifecycle state, run `aether resume`.", workerName, branch)
+}
+
+func uncreditedWorktreeReceiptMessage199(workerName string, paths []string, branch string) string {
+	return fmt.Sprintf("%s changed %d file(s) it never proved finished (%s) — those changes were NOT copied into the project and are kept on branch %s. Inspect them with `aether maintenance recovery-inspect` (State effect: none). To restore runnable lifecycle state, run `aether resume`.", workerName, len(paths), strings.Join(paths, ", "), branch)
 }
 
 // detectWorktreeWaveConflicts finds every same-wave ownership violation: a

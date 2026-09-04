@@ -169,7 +169,7 @@ func runWorktreeReap(cmd *cobra.Command, args []string) error {
 				preservedBranches = append(preservedBranches, entry.Branch)
 				continue
 			}
-			visualFprintf(stderr, "Removing worker workspace on branch %s — its changes were saved first (%s). To get them back, run: aether recover\n", entry.Branch, detail)
+			visualFprintln(stderr, worktreeReapSavedWorkMessage199(entry.Branch, detail))
 			if removeErr := removeGitWorktree(root, safety.Path, entry.Branch); removeErr != nil {
 				remaining = append(remaining, entry)
 				preservedBranches = append(preservedBranches, entry.Branch)
@@ -190,6 +190,10 @@ func runWorktreeReap(cmd *cobra.Command, args []string) error {
 		"preserved": preservedBranches,
 	})
 	return nil
+}
+
+func worktreeReapSavedWorkMessage199(branch, detail string) string {
+	return fmt.Sprintf("Removing worker workspace on branch %s — its changes were saved first (%s). Inspect the saved work with `aether maintenance recovery-inspect` (State effect: none). To restore runnable lifecycle state, run `aether resume`.", branch, detail)
 }
 
 // worktreeReapCandidates computes the safety verdict for every worktree

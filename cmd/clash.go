@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -253,7 +254,7 @@ var worktreeCleanupCmd = &cobra.Command{
 				})
 				return nil
 			}
-			reportWorktreePreservation(safety, fmt.Sprintf("removing anyway (--force) — its changes were saved first (%s). To get them back, run: aether recover", detail))
+			fmt.Fprintln(os.Stderr, clashPreservedWorkMessage199(safety, fmt.Sprintf("removing anyway (--force) — its changes were saved first (%s)", detail)))
 		}
 
 		if err := removeGitWorktree(root, wtPath, branch); err != nil {
@@ -267,6 +268,13 @@ var worktreeCleanupCmd = &cobra.Command{
 		})
 		return nil
 	},
+}
+
+// clashPreservedWorkMessage199 keeps the forced-cleanup preservation notice on
+// the same read-only inspection and resume routes as every other saved-worker
+// path. The branch and save evidence remain part of the emitted message.
+func clashPreservedWorkMessage199(safety worktreeSafety, detail string) string {
+	return describeWorktreePreservation(safety, detail)
 }
 
 func init() {

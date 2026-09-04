@@ -274,7 +274,8 @@ func describeWorktreePreservation(safety worktreeSafety, detail string) string {
 		detail = safety.Reason
 	}
 	return fmt.Sprintf("Kept the work on branch %s instead of deleting it (%s). "+
-		"To get it back, run: aether recover", branch, detail)
+		"Inspect it with `aether maintenance recovery-inspect` (State effect: none). "+
+		"To restore runnable lifecycle state, run `aether resume`.", branch, detail)
 }
 
 // reportWorktreePreservation writes the plain-English preservation line to
