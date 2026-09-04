@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -66,6 +69,40 @@ func TestRuntimeRecoveryCompatibility199(t *testing.T) {
 	t.Run("recovery candidates use canonical command", func(t *testing.T) {
 		if got := normalizeBaseCommand(legacyResume); got != "resume" {
 			t.Fatalf("recovery command = %q, want canonical resume", got)
+		}
+	})
+
+	t.Run("recovery output keeps diagnosis read only and restoration canonical", func(t *testing.T) {
+		state := colony.ColonyState{State: colony.StateEXECUTING}
+		for _, issue := range []HealthIssue{
+			{Category: "stale_spawned", Severity: "critical", Fixable: true},
+			{Category: "dirty_worktree", Severity: "critical", Fixable: true},
+			{Category: "missing_agents", Severity: "warning", Fixable: true},
+		} {
+			output := renderRecoverDiagnosis([]HealthIssue{issue}, state, nil)
+			if !strings.Contains(output, "aether maintenance recovery-inspect") || !strings.Contains(output, "aether resume") {
+				t.Fatalf("recovery output must provide inspection and resume routes:\n%s", output)
+			}
+			assertNoRetiredRuntimeRecoverySuggestion199(t, output)
+		}
+	})
+
+	t.Run("owned runtime literals and parity guide have no retired suggestions", func(t *testing.T) {
+		for _, name := range []string{"recover_visuals.go", "recover_repair.go", "worktree.go"} {
+			assertNoRetiredRuntimeRecoveryLiterals199(t, name)
+		}
+		parityPath := filepath.Join("..", ".aether", "docs", "PARITY_CLASSIC_VS_GO.md")
+		body, err := os.ReadFile(parityPath)
+		if err != nil {
+			t.Fatalf("read parity guide: %v", err)
+		}
+		for _, retired := range []string{"aether recover", "recover --apply", "/ant-recover"} {
+			if strings.Contains(string(body), retired) {
+				t.Errorf("parity guide retains retired route %q", retired)
+			}
+		}
+		if !strings.Contains(string(body), "aether maintenance recovery-inspect") || !strings.Contains(string(body), "aether resume") {
+			t.Fatal("parity guide must prove maintenance inspection and resume")
 		}
 	})
 }
