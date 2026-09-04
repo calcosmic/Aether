@@ -301,7 +301,44 @@ var runCompatibilityCmd = &cobra.Command{
 			}
 			return nil
 		}
-		outputWorkflow(result, renderRunCompatibilityVisual(result))
+		if _, ok := lifecycleCloseoutProjectionFromValue(result[lifecycleProjectionKey]); !ok {
+			if preflight, found := autopilotPreflightFromValue(result["preflight"]); found {
+				projection := preflight.Projection
+				result[lifecycleProjectionKey] = &projection
+			} else {
+				override, why := lifecycleOverrideFromResult(result)
+				closeLifecycleCommand(result, "run", override, why)
+			}
+		}
+		if result["outcome_kind"] == nil {
+			switch {
+			case boolValue(result["dry_run"]):
+				result["outcome_kind"] = colony.OutcomeKindNoChange
+			case boolValue(result["completed"]):
+				result["outcome_kind"] = colony.OutcomeKindCompleted
+			default:
+				result["outcome_kind"] = colony.OutcomeKindInProgress
+			}
+		}
+		if result["state_effect"] == nil {
+			if result["last_report"] != nil {
+				result["state_effect"] = colony.LifecycleStateEffectCommitted
+			} else {
+				result["state_effect"] = colony.LifecycleStateEffectNone
+			}
+		}
+		if err := applyLifecycleCloseout(result, "run", LifecycleCloseoutDetails{
+			Summary: "Autopilot stopped at its declared bounded lifecycle decision.",
+			Evidence: []colony.LifecycleEvidence{{
+				ID: "autopilot-terminal-report", Kind: "report", Source: autopilotStatePath,
+				Summary: "Bounded autopilot terminal report",
+			}},
+		}); err != nil {
+			outputError(1, err.Error(), result)
+			return nil
+		}
+		visual := appendLifecycleCloseoutVisual(renderRunCompatibilityVisual(result), result, detectPlatform())
+		outputWorkflow(result, visual)
 		return nil
 	},
 }
@@ -984,6 +1021,14 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 				decision := autopilotRunDecisionForCode(classifyAutopilotRunError(ctx, err), opts.Headless, map[string]interface{}{"phase": phase.ID, "stage": "build"})
 				return finish(state, decision, err), nil
 			}
+			if _, ok := lifecycleCloseoutProjectionFromValue(buildResult[lifecycleProjectionKey]); ok {
+				if err := applyLifecycleCloseout(buildResult, "build", LifecycleCloseoutDetails{
+					Summary: "The selected phase dispatch reached its declared build boundary.",
+				}); err != nil {
+					decision := autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{"phase": phase.ID, "stage": "build_closeout"})
+					return finish(state, decision, err), nil
+				}
+			}
 			if decision, active := evaluateAutopilotRunStage(buildResult, baseline, baseline, opts.Headless); active && decision.Code == autopilotTriggerMissingAuthority {
 				return finish(state, decision, nil), nil
 			}
@@ -996,6 +1041,7 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 				"dispatches":    buildResult["dispatch_count"],
 				"state":         buildResult["state"],
 				"next":          buildResult["next"],
+				"closeout":      buildResult[lifecycleCloseoutResultKey],
 			})
 
 			visualCheckpoints, checkpointErr := runAutopilotMaterializeVisual(root, phase.ID, buildResult)

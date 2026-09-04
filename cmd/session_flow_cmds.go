@@ -122,9 +122,20 @@ var pauseColonyCmd = &cobra.Command{
 				result := map[string]interface{}{
 					"paused": false, "safe_boundary": pending.Boundary,
 					"attempt_id": pending.Attempt, "state_effect": colony.LifecycleStateEffectNone,
-					"message": pending.Error(), "next": "aether pause",
+					"outcome_kind": colony.OutcomeKindNoChange,
+					"message":      pending.Error(), "next": "aether pause",
 				}
-				outputWorkflow(result, pending.Error()+"\n")
+				closeLifecycleCommand(result, "pause", "aether pause", "The current work has not reached a safe pause boundary yet.")
+				if closeErr := applyLifecycleCloseout(result, "pause", LifecycleCloseoutDetails{
+					Summary: pending.Error(),
+					Evidence: []colony.LifecycleEvidence{{
+						ID: pending.Attempt, Kind: "safe_boundary", Summary: "The requested safe boundary is still pending",
+					}},
+				}); closeErr != nil {
+					outputError(1, closeErr.Error(), result)
+					return nil
+				}
+				outputWorkflow(result, pending.Error()+"\n"+renderLifecycleCloseoutFromResult(result, detectPlatform()))
 				return nil
 			}
 			renderRecoveryMenu("pause", err.Error(), []string{"aether status", "aether pause"})
@@ -150,9 +161,23 @@ var pauseColonyCmd = &cobra.Command{
 			result["message"] = outcome.Message
 		}
 		closeLifecycleCommand(result, "pause", "", "")
-		visual := renderPauseVisual(result)
+		pauseSummary := "The colony paused at a validated safe boundary."
 		if outcome.Replay {
-			visual = pauseReplayMessage + "\n"
+			pauseSummary = "The existing validated pause receipt was replayed without changing the saved handoff."
+		}
+		if err := applyLifecycleCloseout(result, "pause", LifecycleCloseoutDetails{
+			Summary: pauseSummary,
+			Evidence: []colony.LifecycleEvidence{
+				{ID: outcome.Handoff.HandoffID, Kind: "handoff", Source: handoffDocumentPath(), Summary: "Validated safe-boundary handoff"},
+				{ID: outcome.Receipt.ReceiptID, Kind: "receipt", Source: pauseHandoffDataPath, Summary: "Durable pause receipt"},
+			},
+		}); err != nil {
+			outputError(1, err.Error(), result)
+			return nil
+		}
+		visual := appendLifecycleCloseoutVisual(renderPauseVisual(result), result, detectPlatform())
+		if outcome.Replay {
+			visual = pauseReplayMessage + "\n" + renderLifecycleCloseoutFromResult(result, detectPlatform())
 		}
 		outputWorkflow(result, visual)
 		return nil
@@ -217,9 +242,20 @@ var resumeColonyCmd = &cobra.Command{
 			result := map[string]interface{}{
 				"resumed": false, "provenance": outcome.Provenance,
 				"state_effect": outcome.StateEffect, "message": outcome.Message,
-				"next": "aether status",
+				"outcome_kind": colony.OutcomeKindRecoveryRequired,
+				"next":         "aether status",
 			}
-			outputWorkflow(result, outcome.Message+"\n")
+			closeLifecycleCommand(result, "resume", "aether status", "Inspect the conflicting recovery evidence before trying again.")
+			if closeErr := applyLifecycleCloseout(result, "resume", LifecycleCloseoutDetails{
+				Summary: outcome.Message,
+				Blockers: []colony.LifecycleIssue{{
+					ID: "resume-provenance-" + string(outcome.Provenance), Summary: "Recovery evidence is " + string(outcome.Provenance),
+				}},
+			}); closeErr != nil {
+				outputError(1, closeErr.Error(), result)
+				return nil
+			}
+			outputWorkflow(result, outcome.Message+"\n"+renderLifecycleCloseoutFromResult(result, detectPlatform()))
 			return nil
 		}
 
@@ -238,9 +274,23 @@ var resumeColonyCmd = &cobra.Command{
 		}
 		closeLifecycleCommand(result, "picking the project back up",
 			stringValue(result["resume_override_command"]), stringValue(result["resume_override_why"]))
-		visual := renderResumeVisual(result, "", true)
+		resumeSummary := "The validated recovery point was restored."
+		if outcome.Replay {
+			resumeSummary = "The existing resume receipt was replayed without applying the recovery twice."
+		}
+		if err := applyLifecycleCloseout(result, "resume", LifecycleCloseoutDetails{
+			Summary: resumeSummary,
+			Evidence: []colony.LifecycleEvidence{
+				{ID: outcome.Handoff.HandoffID, Kind: "handoff", Source: handoffDocumentPath(), Summary: "Validated recovery handoff"},
+				{ID: outcome.Receipt.ReceiptID, Kind: "receipt", Source: pauseHandoffDataPath, Summary: "Durable resume receipt"},
+			},
+		}); err != nil {
+			outputError(1, err.Error(), result)
+			return nil
+		}
+		visual := appendLifecycleCloseoutVisual(renderResumeVisual(result, "", true), result, detectPlatform())
 		if outcome.Replay && outcome.Message != "" {
-			visual = outcome.Message + "\n"
+			visual = outcome.Message + "\n" + renderLifecycleCloseoutFromResult(result, detectPlatform())
 		}
 		outputWorkflow(result, visual)
 		return nil
