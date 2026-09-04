@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
+	"gopkg.in/yaml.v3"
 )
 
 type entombTransactionFixture199 struct {
@@ -274,6 +275,101 @@ func TestEntombTransaction199Success(t *testing.T) {
 	for _, want := range []string{result.ManifestDigest, result.Receipt.ReceiptID, "verified", `/ant-init "next goal"`} {
 		if !strings.Contains(string(tombstone), want) {
 			t.Fatalf("tombstone omitted %q\n%s", want, tombstone)
+		}
+	}
+}
+
+func TestEntombWrapperContract199(t *testing.T) {
+	const (
+		description = "Archive and clear the sealed colony."
+		runtimeCall = "AETHER_OUTPUT_MODE=visual aether entomb $ARGUMENTS"
+		source      = ".aether/commands/entomb.yaml"
+	)
+	repoRoot := filepath.Clean("..")
+	yamlPath := filepath.Join(repoRoot, filepath.FromSlash(source))
+	rawYAML, err := os.ReadFile(yamlPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var spec struct {
+		Name        string `yaml:"name"`
+		Description string `yaml:"description"`
+		Runtime     struct {
+			Command string `yaml:"command"`
+		} `yaml:"runtime"`
+		CeremonyContract struct {
+			Authority   string `yaml:"authority"`
+			WrapperRole string `yaml:"wrapper_role"`
+		} `yaml:"ceremony_contract"`
+		Guardrails []string `yaml:"guardrails"`
+	}
+	if err := yaml.Unmarshal(rawYAML, &spec); err != nil {
+		t.Fatal(err)
+	}
+	if spec.Name != "ant-entomb" || spec.Description != description || spec.Runtime.Command != runtimeCall {
+		t.Fatalf("canonical entomb wrapper contract drifted: %+v", spec)
+	}
+	canonicalContract := strings.ToLower(strings.Join(append([]string{
+		spec.CeremonyContract.Authority,
+		spec.CeremonyContract.WrapperRole,
+	}, spec.Guardrails...), "\n"))
+	for _, required := range []string{
+		"separate", "optional", "preview", "confirmation", "stage archive",
+		"write digest manifest", "verify bytes and cross-references",
+		"publish chamber and tombstone", "clear active state", "typed runtime result",
+		"exactly once", "do not copy", "do not parse", "do not clear", "do not fabricate",
+	} {
+		if !strings.Contains(canonicalContract, required) {
+			t.Errorf("canonical wrapper contract lacks %q:\n%s", required, string(rawYAML))
+		}
+	}
+
+	wrapperPaths := []string{
+		filepath.Join(repoRoot, ".claude", "commands", "ant-entomb.md"),
+		filepath.Join(repoRoot, ".claude", "commands", "ant", "entomb.md"),
+		filepath.Join(repoRoot, ".opencode", "commands", "ant", "entomb.md"),
+	}
+	var canonicalBody string
+	for _, path := range wrapperPaths {
+		raw, readErr := os.ReadFile(path)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		text := string(raw)
+		wantHeader := "<!-- Aether-managed: runtime spec at " + source + ". Synced by aether update. -->"
+		if !strings.HasPrefix(text, wantHeader+"\n") {
+			t.Errorf("%s lacks canonical source linkage", path)
+		}
+		if !strings.Contains(text, `description: "`+description+`"`) {
+			t.Errorf("%s description does not match the canonical sentence", path)
+		}
+		if strings.Count(text, runtimeCall) != 1 {
+			t.Errorf("%s has %d runtime calls, want exactly one", path, strings.Count(text, runtimeCall))
+		}
+		lower := strings.ToLower(text)
+		for _, required := range []string{
+			"separate", "optional", "preview", "confirmation", "stage archive",
+			"write digest manifest", "verify bytes and cross-references",
+			"publish chamber and tombstone", "clear active state", "typed runtime result",
+			"exactly once", "do not copy", "do not parse", "do not clear", "do not fabricate",
+		} {
+			if !strings.Contains(lower, required) {
+				t.Errorf("%s lacks %q", path, required)
+			}
+		}
+		for _, forbidden := range []string{
+			"cp -", "cp ", "rsync ", "jq ", "colony_state.json", "os.readfile", "writefile(",
+			"removeall(", "rm -", "aether seal", "after seal automatically", "automatically invoke",
+		} {
+			if strings.Contains(lower, forbidden) {
+				t.Errorf("%s contains forbidden wrapper-side archive/parse/clear/auto-seal behavior %q", path, forbidden)
+			}
+		}
+		body := strings.TrimSpace(strings.Join(strings.Split(text, "\n")[5:], "\n"))
+		if canonicalBody == "" {
+			canonicalBody = body
+		} else if body != canonicalBody {
+			t.Errorf("generated wrapper %s is not semantically identical to the other entomb wrappers", path)
 		}
 	}
 }

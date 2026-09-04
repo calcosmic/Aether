@@ -1,8 +1,12 @@
 name: ant-entomb
-description: "⚰️ Entomb completed colony in chambers"
+description: "Archive and clear the sealed colony."
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether entomb $ARGUMENTS"
+ceremony_contract:
+  authority: "The Go runtime owns the preflight preview, confirmation, Stage archive, Write digest manifest, Verify bytes and cross-references, Publish chamber and tombstone, and Clear active state."
+  wrapper_role: "Keep entomb separate and optional after seal, invoke the runtime exactly once when the owner chooses it, and report the typed runtime result."
 guardrails:
-  - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
+  - "Do not copy archive bytes, do not parse visual output, do not clear or write active state, and do not fabricate verification from this command spec."
+  - "Never invoke entomb from the seal workflow; it remains a separately chosen owner action."
   - "If docs and runtime disagree, runtime wins."
