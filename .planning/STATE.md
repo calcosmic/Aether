@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 199-15-PLAN.md
-last_updated: "2026-09-04T12:30:30.101Z"
+stopped_at: Completed 199-16-PLAN.md
+last_updated: "2026-09-04T14:17:12.692Z"
 last_activity: 2026-09-04
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 34
-  completed_plans: 17
-  percent: 50
+  completed_plans: 18
+  percent: 53
 ---
 
 # Project State
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-02)
 ## Current Position
 
 Phase: 199 (front-door-and-classic-contract) — EXECUTING
-Plan: 16 of 34
+Plan: 17 of 34
 Status: Ready to execute
 Last activity: 2026-09-04
 
@@ -95,6 +95,7 @@ Last activity: 2026-09-04
 | Phase 199 P13 | 40min | 2 tasks | 11 files |
 | Phase 199 P14 | 28min | 2 tasks | 9 files |
 | Phase 199 P15 | 65min | 2 tasks | 7 files |
+| Phase 199 P16 | 71min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -251,6 +252,9 @@ Last activity: 2026-09-04
 - [Phase 199]: Commit every authoritative seal artifact through the lifecycle transaction while retaining active COLONY_STATE.json for review; status remains primary and entomb optional.
 - [Phase 199]: Treat issue-severity findings as retained residual risks, while blockers and unresolved owner checkpoints prevent normal verified closure.
 - [Phase 199]: Permit Hive promotion only after verified closure under promote/unset policy, after sanitization and sensitivity filtering, with deterministic replay-safe receipts.
+- [Phase 199]: Derive one stable entomb transaction and chamber identity from the verified seal outcome so interruption resumes instead of creating duplicate archives. — Stable identity makes retry and replay converge on one chamber and receipt.
+- [Phase 199]: Treat an archive as valid only when every enumerated source byte, digest, kind, path, and closure cross-reference verifies before any publication or clear. — Directory existence cannot prove content integrity or closure truth.
+- [Phase 199]: Keep invocation and owner confirmation separate from seal; platform wrappers call the Go runtime exactly once and never reproduce archive or clearing logic. — D-17 keeps sealed state reviewable until the owner explicitly chooses archive-and-clear.
 
 ### Pending Todos
 
@@ -364,8 +368,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-04T12:30:30.092Z
-Stopped at: Completed 199-15-PLAN.md
+Last session: 2026-09-04T14:17:12.684Z
+Stopped at: Completed 199-16-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

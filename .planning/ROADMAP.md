@@ -77,7 +77,7 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 
 **Requirements:** SYNTH-01, CEC-01, CEC-02, CEC-04, CEC-08, LIFE-01..06, PROOF-01
 
-**Plans:** 17/34 plans executed
+**Plans:** 18/34 plans executed
 
 Plans:
 **Wave 1**
@@ -129,7 +129,7 @@ Plans:
 
 **Wave 11** *(blocked on Wave 10 completion)*
 
-- [ ] 199-16-PLAN.md — Verify archive content before optional entomb clears active state.
+- [x] 199-16-PLAN.md — Verify archive content before optional entomb clears active state.
 - [ ] 199-22-PLAN.md — Remove old pause-colony surfaces and repair canonical rule/playbook guidance.
 
 **Wave 12** *(blocked on Wave 11 completion)*
