@@ -77,7 +77,7 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 
 **Requirements:** SYNTH-01, CEC-01, CEC-02, CEC-04, CEC-08, LIFE-01..06, PROOF-01
 
-**Plans:** 23/34 plans executed
+**Plans:** 24/34 plans executed
 
 Plans:
 **Wave 1**
@@ -141,7 +141,7 @@ Plans:
 **Wave 13** *(blocked on Wave 12 completion)*
 
 - [x] 199-21-PLAN.md — Align the sole resume surface and existing Codex lifecycle guidance.
-- [ ] 199-24-PLAN.md — Remove abandon from canonical and generated public surfaces.
+- [x] 199-24-PLAN.md — Remove abandon from canonical and generated public surfaces.
 - [ ] 199-25-PLAN.md — Verify chamber/context truth before transactional archive repair.
 - [ ] 199-32-PLAN.md — Replace retired recovery suggestions in active Go lifecycle and preserved-work output.
 
