@@ -361,9 +361,11 @@ func inspectArchiveMaintenance(request archiveMaintenanceInspectRequest) (archiv
 		code := archiveClosureFindingCode(err, manifest.Seal.Disposition)
 		lower := strings.ToLower(err.Error())
 		switch {
+		case strings.Contains(lower, "size/digest"), strings.Contains(lower, " is missing"):
+			result.ContentVerified = false
 		case strings.Contains(lower, "cross-reference"), strings.Contains(lower, "seal outcome conflicts"):
 			result.CrossReferencesVerified = false
-		case strings.Contains(lower, "manifest"):
+		case strings.HasPrefix(lower, "manifest digest"), strings.HasPrefix(lower, "archive manifest"):
 			result.ManifestVerified = false
 		default:
 			result.ContentVerified = false
