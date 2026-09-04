@@ -150,7 +150,7 @@ None. Empty issue/evidence slices are stable typed results for genuinely empty d
 
 - The repository-wide suite was not used as this plan's acceptance gate because the execution handoff records 199 known staged Phase 199 migration failures. The exact plan-owned runtime, maintenance, help/completion, source-hygiene, and whitespace checks are green; no new focused Plan 199-17 failure remains.
 - Existing internal recovery scanners and legacy renderer/repair helpers remain available for the later scoped runtime vocabulary migration in Plan 199-34; no active public command calls those mutators from this plan's handlers.
-- The installed progress updater looks only for a body `Progress:` line and the advance handler initially derived `0%` from completed phases. The registered frontmatter handler restored the plan-count truth to 20/34 (`59%`). The requirements handler does not parse this repository's bold em-dash checkbox format; all four plan requirements were already checked complete, so `REQUIREMENTS.md` correctly needed no edit.
+- The installed progress updater looks only for a body `Progress:` line, while state-writing handlers derive the frontmatter percentage from completed phases and reset 20/34 plans to `0%`. A post-handoff audit caught the final session update undoing the first correction; the registered frontmatter handler was therefore made the last state mutation and a post-commit readback verified 20/34 (`59%`), Plan 18, and matching ROADMAP progress. The requirements handler does not parse this repository's bold em-dash checkbox format; all four plan requirements were already checked complete, so `REQUIREMENTS.md` correctly needed no edit.
 - Protected pre-existing `.planning/config.json`, `.gsd/`, and `199-PATTERNS.md` changes remained untouched and unstaged.
 
 ## User Setup Required
@@ -168,7 +168,7 @@ None - no external service configuration required.
 
 - The four implementation/test files and this summary exist; the four declared recover surfaces are absent, and all four resume surfaces remain present.
 - RED/GREEN commits `f3a09ce6` and `c12861a8`, cleanup commit `934a1a71`, and data-root fix `934a8303` resolve in Git in the documented order.
-- The combined 13-case focused gate passes, summary whitespace is clean, and protected pre-existing paths remain unstaged.
+- The combined 13-case focused gate passes, STATE directly reads 20/34 (`59%`) with Plan 18 next, ROADMAP reads 20/34, summary whitespace is clean, and protected pre-existing paths remain unstaged.
 
 ---
 *Phase: 199-front-door-and-classic-contract*
