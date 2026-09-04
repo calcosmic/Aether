@@ -37,7 +37,10 @@ func newLegacyRecovery199Fixture(t *testing.T) legacyRecovery199Fixture {
 
 	root := t.TempDir()
 	home := t.TempDir()
-	dataDir := filepath.Join(root, ".aether", "data")
+	// Keep lifecycle data outside the repository so the contract proves every
+	// reader follows the configured Store root instead of assuming the default
+	// .aether/data location.
+	dataDir := filepath.Join(home, "colony-data")
 	hub := filepath.Join(home, ".aether-hub")
 	for _, dir := range []string{dataDir, hub} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -114,7 +117,7 @@ func (fixture legacyRecovery199Fixture) fingerprint(t *testing.T) legacyRecovery
 		t.Fatalf("read git status: %v", err)
 	}
 	return legacyRecovery199Fingerprint{
-		trees:     fingerprintLegacyRecovery199Trees(t, fixture.root, fixture.hub),
+		trees:     fingerprintLegacyRecovery199Trees(t, fixture.root, fixture.dataDir, fixture.hub),
 		gitHead:   head,
 		gitStatus: status,
 	}

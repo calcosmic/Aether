@@ -241,7 +241,7 @@ func buildMaintenanceRecoveryInspection(facts LifecycleFacts, platform string, l
 // below use os.ReadFile directly so an inspection cannot create lock files or
 // normalize legacy bytes on disk.
 func inspectRecoveryIssuesReadOnly(facts LifecycleFacts) []HealthIssue {
-	dataDir := filepath.Join(facts.Root, ".aether", "data")
+	dataDir := maintenanceRecoveryDataDir(facts)
 	var issues []HealthIssue
 	issues = append(issues, scanStaleSpawnedWorkers(dataDir)...)
 
@@ -265,6 +265,23 @@ func inspectRecoveryIssuesReadOnly(facts LifecycleFacts) []HealthIssue {
 	issues = append(issues, scanMissingAgentFiles()...)
 	issues = append(issues, scanUnreconciledWorkerChangesReadOnly(facts.Root, dataDir, state, manifest)...)
 	return issues
+}
+
+// maintenanceRecoveryDataDir binds the scanners to the same state source that
+// LifecycleFacts inspected. COLONY_DATA_DIR may legitimately place lifecycle
+// evidence outside the repository's default .aether/data directory.
+func maintenanceRecoveryDataDir(facts LifecycleFacts) string {
+	statePath := strings.TrimSpace(facts.State.Source.Path)
+	if statePath != "" && statePath != "(unavailable)" && !strings.Contains(statePath, ",") {
+		statePath = filepath.FromSlash(statePath)
+		if !filepath.IsAbs(statePath) {
+			statePath = filepath.Join(facts.Root, statePath)
+		}
+		if filepath.Base(statePath) == "COLONY_STATE.json" {
+			return filepath.Dir(statePath)
+		}
+	}
+	return filepath.Join(facts.Root, ".aether", "data")
 }
 
 func loadRecoveryManifestReadOnly(dataDir string, phaseID int) codexContinueManifest {
@@ -406,7 +423,7 @@ func splitMaintenanceEvidencePaths(raw string) []string {
 }
 
 func maintenanceRecoveryScanPaths(facts LifecycleFacts) []string {
-	dataDir := filepath.Join(facts.Root, ".aether", "data")
+	dataDir := maintenanceRecoveryDataDir(facts)
 	paths := []string{
 		filepath.Join(dataDir, "COLONY_STATE.json"),
 		filepath.Join(dataDir, "spawn-runs.json"),
