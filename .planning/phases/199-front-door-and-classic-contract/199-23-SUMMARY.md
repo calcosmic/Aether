@@ -87,6 +87,19 @@ completed: 2026-09-04
 
 None.
 
+## Wave 14 Gate Recovery
+
+The Wave 14 full-suite gate found a stale parent assertion in
+`TestSealWrapperCeremonyContract`. The test still required the retired claim
+that Autopilot never finishes a project, while the managed wrappers correctly
+state that it never seals, stops at the explicit seal boundary, and leaves
+owner-supplied force and confirmation to the Go runtime. The assertion was
+migrated without changing production guidance in `639fff56`.
+
+- Focused ceremony, wrapper-contract, build-cycle, and source-hygiene tests: 16 passed.
+- Focused race gate: 16 passed.
+- `go build ./cmd/aether`: passed.
+
 ## User Setup Required
 
 None - no external service configuration required.
