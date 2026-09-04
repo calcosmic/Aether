@@ -308,6 +308,8 @@ func TestMaintenanceMutation199ChannelIsolation(t *testing.T) {
 func TestMaintenanceMutation199VersionAgreement(t *testing.T) {
 	root := t.TempDir()
 	hub := t.TempDir()
+	writeMaintenanceMutation199File(t, filepath.Join(root, "go.mod"), []byte("module github.com/calcosmic/Aether\n"))
+	writeMaintenanceMutation199File(t, filepath.Join(root, "cmd", "aether", "main.go"), []byte("package main\n"))
 	writeMaintenanceMutation199File(t, filepath.Join(root, ".aether", "version.json"), []byte(`{"version":"1.2.3"}`))
 	writeMaintenanceMutation199File(t, filepath.Join(root, "npm", "package.json"), []byte(`{"version":"1.2.3"}`))
 	writeMaintenanceMutation199File(t, filepath.Join(hub, "system", "version.json"), []byte(`{"version":"1.2.3"}`))
