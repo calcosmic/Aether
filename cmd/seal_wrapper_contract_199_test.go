@@ -40,10 +40,8 @@ func TestSealWrapperContract199(t *testing.T) {
 				}
 			}
 			for _, forbidden := range []string{
-				"Force-seal (owner override",
-				"Force the seal",
 				"--force --reason \"<their words>\"",
-				"Automatic mode (autopilot) never finishes a project",
+				"then rerun with `--force",
 			} {
 				if strings.Contains(text, forbidden) {
 					t.Errorf("%s must not create force authority or auto-close: found %q", relativePath, forbidden)

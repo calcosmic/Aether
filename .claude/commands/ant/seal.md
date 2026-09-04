@@ -8,6 +8,14 @@ You are the **Queen**. Seal the colony through the runtime manifest/finalizer co
 
 Use the Go `aether` CLI as the source of truth. The wrapper only dispatches host-platform agents and reports their terminal results back to the runtime.
 
+## Closure Contract
+
+Close a verified colony, or explicitly record an owner-forced incomplete closure.
+Force flags pass only when directly supplied by the owner. The Go runtime owns final review, preflight, confirmation, transaction, and rendering. A forced-incomplete closure is not verified success.
+
+The wrapper never offers, constructs, or reruns a force command. If an owner directly supplies force flags to the runtime, preserve them verbatim; never invent the
+reason. Do not ask to Force the seal from wrapper guidance.
+
 ## Raw Bypass
 
 If the user explicitly asks for raw, exact, direct, or no-orchestration seal, run:
@@ -28,17 +36,11 @@ aether host seal $ARGUMENTS
 
 Parse `result.seal_manifest`. If the runtime returns blockers or recovery guidance, surface that output and stop. Do not fabricate review results.
 
-**Force-seal (owner override, asked — never assumed):** when the runtime
-refuses because phases were never verified (work finished outside the colony)
-or blockers are open, and the user wants to move on, present the choice as a
-real question (the AskUserQuestion tool): "Force the seal — files the project
-away now, recording exactly what was skipped and why" versus "Keep working —
-resolve what's blocking first". If they choose force, ask them (in the same
-question or a follow-up) for a one-line reason in their own words, then rerun
-with `--force --reason "<their words>"`. The override is permanent history:
-the colony's record and its summary will name every unverified phase and the
-reason. NEVER add `--force` on your own initiative, and never invent the
-reason.
+**Force-seal (owner override, runtime-only):** the runtime alone validates a
+direct owner force request and records its reason. The wrapper does not create
+force authority, offer an override choice, or construct force flags. NEVER add `--force` on your own initiative, and never invent the
+reason. AskUserQuestion remains available only for the runtime's explicit
+owner-confirmation question.
 
 Save the full JSON envelope to a temporary manifest file outside `.aether/data/`. The ceremony commands read that file so the final-review display uses the same runtime manifest.
 
@@ -185,9 +187,9 @@ command on your own initiative, and never infer a "yes" from anything else the u
 Only after that command reports the answer as recorded should you rerun `aether seal` (or
 `aether seal-finalize` with the same completion file) to actually finish.
 
-**Automatic mode (autopilot) never finishes a project.** It runs up to the last phase and
-then stops, handing the user the finishing command as their next step — it never answers
-the question itself and never treats silence as a yes.
+Autopilot never seals a project. It stops at the explicit seal boundary and
+leaves final review, confirmation, and any owner-supplied force request to the
+Go runtime.
 
 ## Post-Seal Delivery
 
@@ -199,6 +201,11 @@ Do not run delivery commands automatically. If the runtime says the colony is se
 - skip delivery for now
 
 Run selected delivery actions sequentially and stop on first failure.
+
+## Post-Seal Review
+
+After sealing, run `AETHER_OUTPUT_MODE=visual aether status` first to review the retained sealed state; `aether entomb` is a separate optional owner-confirmed archive-and-clear action.
+Never invoke entomb automatically; sealing retains active state for owner review.
 
 ## Guardrails
 
