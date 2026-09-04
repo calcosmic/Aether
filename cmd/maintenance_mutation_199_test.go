@@ -248,7 +248,7 @@ func TestMaintenanceMutation199DownloadBinary(t *testing.T) {
 	fixture := newMaintenanceMutation199Fixture(t)
 	fetch := func(version, destDir string) (*downloader.DownloadResult, error) {
 		path := filepath.Join(destDir, "aether")
-		writeMaintenanceMutation199File(t, path, []byte("#!/bin/sh\nprintf '{\"version\":\""+version+"\"}\\n'\n"))
+		writeMaintenanceMutation199File(t, path, []byte("#!/bin/sh\nprintf '{\"ok\":true,\"result\":\""+version+"\"}\\n'\n"))
 		if err := os.Chmod(path, 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -280,6 +280,21 @@ func TestMaintenanceMutation199DownloadBinary(t *testing.T) {
 	}
 	if len(result.Preview.Targets) != 1 || result.Preview.Targets[0].DesiredMode != 0o755 {
 		t.Fatalf("binary preview lost executable mode: %#v", result.Preview.Targets)
+	}
+	manifestPaths, err := filepath.Glob(filepath.Join(filepath.Dir(fixture.binary), lifecycleTransactionDirectory, plan.TransactionID, "*", "manifest.json"))
+	if err != nil || len(manifestPaths) != 1 {
+		t.Fatalf("binary root manifest paths = %v, err=%v", manifestPaths, err)
+	}
+	var manifest lifecycleTransactionRootManifest
+	readJSON199(t, manifestPaths[0], &manifest)
+	if len(manifest.Targets) != 1 || os.FileMode(manifest.Targets[0].Mode).Perm() != 0o755 {
+		t.Fatalf("binary root manifest lost executable mode: %#v", manifest.Targets)
+	}
+	if err := os.Chmod(fixture.binary, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := commitMaintenanceMutation(plan); err == nil {
+		t.Fatal("verified binary receipt accepted post-commit executable-mode drift")
 	}
 
 	if _, err := stageMaintenanceBinaryDownload("1.2.3", channelStable, func(string, string) (*downloader.DownloadResult, error) {
