@@ -543,6 +543,30 @@ func TestCommandGuideInit199(t *testing.T) {
 	if !strings.Contains(guide.RawBypass, "raw") || !strings.Contains(guide.RawBypass, "aether init") {
 		t.Errorf("init guide lost raw aether init bypass: %q", guide.RawBypass)
 	}
+
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("find repository root: %v", err)
+	}
+	skillPath := filepath.Join(repoRoot, ".aether", "skills", "colony", commandGuideSkillCreation, "SKILL.md")
+	rawSkill, err := os.ReadFile(skillPath)
+	if err != nil {
+		t.Fatalf("read Codex creation skill: %v", err)
+	}
+	skillText := strings.ReplaceAll(string(rawSkill), "\r\n", "\n")
+	assertFrontDoorInitContract199(t, skillText)
+	if !strings.Contains(skillText, "aether command-guide init --platform codex") || !strings.Contains(skillText, "aether init") {
+		t.Error("Codex creation skill no longer orchestrates raw aether init through command-guide")
+	}
+	if !strings.HasSuffix(strings.TrimSpace(skillText), "Next Up: aether plan") {
+		t.Errorf("Codex creation skill does not close with exact aether plan:\n%s", skillText)
+	}
+	for _, forbidden := range []string{"/ant-plan", "$ant-", "aether lay-eggs"} {
+		if strings.Contains(skillText, forbidden) {
+			t.Errorf("Codex creation skill contains deferred native lifecycle vocabulary %q", forbidden)
+		}
+	}
+	assertNoDirectInitStateWrites199(t, skillText)
 }
 
 func TestCommandGuideLiteralCommandsArePassthrough(t *testing.T) {

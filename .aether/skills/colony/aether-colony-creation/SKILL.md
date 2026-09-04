@@ -16,11 +16,14 @@ version: "1.0"
 ## Purpose
 
 Give Codex the same intelligent init behavior that Claude Code and OpenCode get
-from slash-command wrappers. The Go runtime still owns state. Codex owns the
-conversation before the state is created.
+from their guided wrappers while keeping Codex's native `aether` vocabulary.
+Codex owns the clarification conversation; the Go runtime owns every durable
+fact and mutation.
 
 For beginners: the binary can create files, but Codex can ask the human better
 questions first. This skill is the question-and-synthesis layer.
+
+Go owns setup, registry updates, accepted-charter persistence, colony state creation, territory evidence, and init result truth.
 
 ## Required First Step
 
@@ -39,19 +42,32 @@ If the user explicitly says raw, exact, no interview, no orchestration, or "just
 run this exact command", run the literal CLI command they provided. Say briefly
 that the Codex synthesis layer was bypassed.
 
-## Init Flow
+## Stage 1 — Queen opening
 
-1. Read the user's raw goal.
+1. Read the owner's raw goal and name the repository being initialized.
 2. Run deterministic context gathering:
 
 ```bash
 AETHER_OUTPUT_MODE=json aether init-research --goal "<raw goal>" --target .
 ```
 
-3. Ask one compact batch of 4-7 questions when the goal is vague or broad.
+If the runtime reports an existing active colony, relay its identity and goal,
+then stop on its native status or seal guidance.
+
+An existing active colony is refused before storage opens; the refusal changes no files.
+
+## Stage 2 — Setup
+
+Do not require a separate setup command. The final `aether init` call performs
+safe automatic bootstrap and reports `Ready`, `Bootstrapped`, or an actionable
+failure. Do not reproduce setup, registry, or storage work in this skill.
+
+## Stage 3 — Accepted intent
+
+1. Ask one compact batch of 4-7 questions when the goal is vague or broad.
    Cover target users, success criteria, non-goals, constraints, risk tolerance,
    affected systems, and the first useful milestone.
-4. Synthesize the raw goal, answers, and init-research findings into:
+2. Synthesize the raw goal, answers, and init-research findings into:
    - `refined_goal`
    - `problem_statement`
    - `success_criteria`
@@ -59,22 +75,39 @@ AETHER_OUTPUT_MODE=json aether init-research --goal "<raw goal>" --target .
    - `non_goals`
    - `risks`
    - `first_milestone`
-5. Ask the user to choose the colony mode before state creation:
+3. Ask the user to choose the colony mode before state creation:
    - Colony Mode: the existing default lifecycle with fewer prompts.
    - Orchestrator Mode: guided boundary questions at phase points for tighter
      user control.
    Default to Colony Mode when the user skips the choice or the host is
    non-interactive.
-6. Keep deterministic housekeeping separate from strategy. README, changelog,
+4. Keep deterministic housekeeping separate from strategy. README, changelog,
    license, formatter, or CI suggestions are scan warnings, not strategic
    pheromones.
-7. Suggest at most 3 strategic pheromones only when they are specific to the
+5. Suggest at most 3 strategic pheromones only when they are specific to the
    clarified user intent. Ask approval before writing any signal.
-8. Start the colony through the runtime:
+6. Start the colony through the runtime:
 
 ```bash
 AETHER_OUTPUT_MODE=visual aether init --colony-mode <selected colony|orchestrator> --charter-json '<synthesized charter JSON>' "<refined goal>"
 ```
+
+Persist the owner-approved goal and material constraints as accepted-charter/v1 through aether init.
+
+## Stage 4 — Territory
+
+Read the territory outcome from the successful runtime result; do not inspect
+survey files or infer freshness in the skill.
+
+Territory result is exactly one of Fresh, Refreshed, Stale—refresh required, or Unavailable.
+
+Relay its evidence and any safe recovery guidance exactly.
+
+## Stage 5 — Closeout
+
+Summarize the colony name, accepted goal, runtime-created artifacts, and typed
+territory result. Do not translate the next command into Claude/OpenCode or a
+deferred Codex-native lifecycle surface.
 
 ## Guardrails
 
@@ -85,3 +118,5 @@ AETHER_OUTPUT_MODE=visual aether init --colony-mode <selected colony|orchestrato
 - Do not keep asking serial questions. Ask one compact batch, then synthesize.
 - If Claude/OpenCode init wrapper behavior changes, update
   `.aether/commands/init.yaml`, this skill, and `cmd/command_guide.go` together.
+
+Next Up: aether plan
