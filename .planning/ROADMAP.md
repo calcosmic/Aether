@@ -77,7 +77,7 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 
 **Requirements:** SYNTH-01, CEC-01, CEC-02, CEC-04, CEC-08, LIFE-01..06, PROOF-01
 
-**Plans:** 29/34 plans executed
+**Plans:** 30/34 plans executed
 
 Plans:
 **Wave 1**
@@ -153,7 +153,7 @@ Plans:
 
 **Wave 15** *(blocked on Wave 14 completion)*
 
-- [ ] 199-27-PLAN.md — Execute every cross-platform Classic journey and public-command parity case.
+- [x] 199-27-PLAN.md — Execute every cross-platform Classic journey and public-command parity case.
 - [ ] 199-31-PLAN.md — Migrate active product guides and interrupted-execution benchmarks to the sole pause/resume contract.
 
 **Wave 16** *(blocked on Wave 15 completion)*
