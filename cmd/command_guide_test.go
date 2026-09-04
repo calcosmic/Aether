@@ -668,6 +668,47 @@ func TestCommandGuideLifecycle199(t *testing.T) {
 	}
 }
 
+func TestCommandGuideBuildCycle199(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("find repository root: %v", err)
+	}
+
+	guide, err := buildCommandGuide("seal", "codex")
+	if err != nil {
+		t.Fatalf("build seal command guide: %v", err)
+	}
+	guideText := strings.Join(append(append([]string{guide.Intent}, guide.PreSteps...), guide.PostSteps...), "\n")
+	skillPath := filepath.Join(repoRoot, ".aether", "skills", "colony", commandGuideSkillBuildCycle, "SKILL.md")
+	skill, err := os.ReadFile(skillPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", skillPath, err)
+	}
+
+	for label, text := range map[string]string{"command guide": guideText, "build-cycle skill": string(skill)} {
+		for _, required := range []string{
+			"automatic typed territory freshness",
+			"equal guided-build/Autopilot choice",
+			"displayed Autopilot bounds",
+			"concrete repair/debt receipts",
+			"independent safe-path continuation",
+			"explicit seal",
+			"Phase 200–205/native `$ant-*` scope fence",
+			"Force flags pass only when directly supplied by the owner.",
+			"A forced-incomplete closure is not verified success.",
+		} {
+			if !strings.Contains(text, required) {
+				t.Errorf("%s missing %q", label, required)
+			}
+		}
+		for _, forbidden := range []string{"auto-seal", "auto-entomb", "Codex-native `$ant-*` skill"} {
+			if strings.Contains(text, forbidden) {
+				t.Errorf("%s must not introduce %q", label, forbidden)
+			}
+		}
+	}
+}
+
 func TestInsertPhaseCommandGuideDocumentsGuidedAndExplicitForms(t *testing.T) {
 	guide, err := buildCommandGuide("insert-phase", "codex")
 	if err != nil {
