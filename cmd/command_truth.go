@@ -607,22 +607,18 @@ func renderBumpVersionVisual(result map[string]interface{}) string {
 	return b.String()
 }
 
-func runMigrateState(dryRun bool) (map[string]interface{}, error) {
-	originalData, err := store.ReadFile("COLONY_STATE.json")
-	if err != nil {
-		return nil, fmt.Errorf("COLONY_STATE.json not found: %w", err)
-	}
+func prepareStateMigrationMutation(repositoryRoot, dataRoot string, originalData []byte, now time.Time) (maintenanceMutationPlan, map[string]interface{}, error) {
 	var raw map[string]interface{}
 	if err := json.Unmarshal(originalData, &raw); err != nil {
-		return nil, fmt.Errorf("COLONY_STATE.json not found: %w", err)
+		return maintenanceMutationPlan{}, nil, fmt.Errorf("COLONY_STATE.json is not valid JSON: %w", err)
 	}
 	fromVersion := strings.TrimSpace(stringValue(raw["version"]))
 	if fromVersion == "" {
 		fromVersion = "legacy"
 	}
 	var state colony.ColonyState
-	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
-		return nil, fmt.Errorf("legacy state is not compatible with automatic migration: %w", err)
+	if err := json.Unmarshal(originalData, &state); err != nil {
+		return maintenanceMutationPlan{}, nil, fmt.Errorf("legacy state is not compatible with automatic migration: %w", err)
 	}
 	originalEvidencePolicy := state.Plan.EvidencePolicy
 	state.Plan.EvidencePolicy = inferredPlanEvidencePolicy(state.Plan)
@@ -641,14 +637,28 @@ func runMigrateState(dryRun bool) (map[string]interface{}, error) {
 		}
 	}
 
+	plan := maintenanceMutationPlan{
+		SchemaVersion:   maintenanceMutationSchemaVersion,
+		Operation:       "migrate-state",
+		TransactionID:   "migrate-state-" + now.UTC().Format("20060102T150405.000000000Z"),
+		SourceRoot:      dataRoot,
+		DestinationRoot: dataRoot,
+		CurrentVersion:  fromVersion,
+		DesiredVersion:  "3.0",
+		Checkpoint:      "maintenance:migrate-state:validated",
+		Recovery:        "aether resume",
+		Allowlist: lifecycleTransactionAllowlist{
+			RepositoryRoot:    repositoryRoot,
+			LifecycleDataRoot: dataRoot,
+		},
+	}
 	if fromVersion == "3.0" && originalEvidencePolicy == state.Plan.EvidencePolicy && originalEvidencePolicy != "" && modesBackfilled == 0 {
-		return map[string]interface{}{
+		return plan, map[string]interface{}{
 			"mode":            "migrate-state",
 			"migrated":        false,
 			"from":            fromVersion,
 			"to":              "3.0",
 			"reason":          "already current",
-			"dry_run":         dryRun,
 			"evidence_policy": string(state.Plan.EvidencePolicy),
 			"next":            "aether medic --deep",
 		}, nil
@@ -662,30 +672,70 @@ func runMigrateState(dryRun bool) (map[string]interface{}, error) {
 		}
 	}
 	state.Events = append(trimmedEvents(state.Events),
-		fmt.Sprintf("%s|state_migrated|migrate-state|Migrated COLONY_STATE.json from %s to 3.0; plan evidence policy=%s", time.Now().UTC().Format(time.RFC3339), fromVersion, state.Plan.EvidencePolicy),
+		fmt.Sprintf("%s|state_migrated|migrate-state|Migrated COLONY_STATE.json from %s to 3.0; plan evidence policy=%s", now.UTC().Format(time.RFC3339), fromVersion, state.Plan.EvidencePolicy),
 	)
-	backupPath := ""
-	if !dryRun {
-		backupPath = filepath.Join("backups", fmt.Sprintf("COLONY_STATE.pre-migrate.%s.json", time.Now().UTC().Format("20060102-150405")))
-		if err := store.AtomicWrite(backupPath, originalData); err != nil {
-			return nil, fmt.Errorf("write migration backup: %w", err)
-		}
-		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
-			return nil, fmt.Errorf("write migrated state: %w", err)
-		}
+	migratedData, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return maintenanceMutationPlan{}, nil, fmt.Errorf("marshal migrated state: %w", err)
 	}
-	return map[string]interface{}{
+	migratedData = append(migratedData, '\n')
+	backupPath := filepath.Join("backups", fmt.Sprintf("COLONY_STATE.pre-migrate.%s.json", now.UTC().Format("20060102-150405.000000000")))
+	plan.Targets = []maintenanceMutationTarget{
+		{Root: lifecycleTransactionRootData, RelativeTarget: backupPath, Source: "COLONY_STATE.json byte-exact preimage", Action: lifecycleTransactionWrite, Content: originalData, Managed: true},
+		{Root: lifecycleTransactionRootData, RelativeTarget: "COLONY_STATE.json", Source: "schema migration 3.0", Action: lifecycleTransactionWrite, Content: migratedData, Managed: true},
+	}
+	return plan, map[string]interface{}{
 		"mode":             "migrate-state",
-		"migrated":         !dryRun,
+		"migrated":         false,
 		"from":             fromVersion,
 		"to":               "3.0",
-		"dry_run":          dryRun,
 		"evidence_policy":  string(state.Plan.EvidencePolicy),
 		"modes_backfilled": modesBackfilled,
-		"backup_path":      backupPath,
+		"backup_path":      filepath.ToSlash(backupPath),
 		"rollback_command": migrationRollbackCommand(backupPath),
 		"next":             "aether medic --deep",
 	}, nil
+}
+
+func runMigrateState(dryRun bool) (map[string]interface{}, error) {
+	if store == nil {
+		return nil, fmt.Errorf("no store initialized")
+	}
+	originalData, err := store.ReadFile("COLONY_STATE.json")
+	if err != nil {
+		return nil, fmt.Errorf("COLONY_STATE.json not found: %w", err)
+	}
+	dataRoot := filepath.Clean(store.BasePath())
+	repositoryRoot := repoRootFromStore(store)
+	if repositoryRoot == "" || repositoryRoot == dataRoot {
+		repositoryRoot = filepath.Dir(dataRoot)
+	}
+	plan, result, err := prepareStateMigrationMutation(repositoryRoot, dataRoot, originalData, time.Now().UTC())
+	if err != nil {
+		return nil, err
+	}
+	preview, err := prepareMaintenanceMutation(plan)
+	if err != nil {
+		return nil, err
+	}
+	result["dry_run"] = dryRun
+	result["preview"] = preview
+	result["state_effect"] = colony.LifecycleStateEffectNone
+	result["recovery"] = plan.Recovery
+	if dryRun || len(plan.Targets) == 0 {
+		return result, nil
+	}
+	mutation, err := commitMaintenanceMutation(plan)
+	result["transaction"] = mutation.Preview.TransactionID
+	result["receipt"] = mutation.Receipt
+	result["state_effect"] = mutation.StateEffect
+	result["verification"] = mutation.Verification
+	result["recovery"] = mutation.Recovery
+	result["migrated"] = mutation.StateEffect == colony.LifecycleStateEffectCommitted
+	if err != nil {
+		return result, fmt.Errorf("migrate state transaction: %w", err)
+	}
+	return result, nil
 }
 
 func migrationRollbackCommand(backupPath string) string {
@@ -697,6 +747,9 @@ func migrationRollbackCommand(backupPath string) string {
 }
 
 func runMigrateStateRollback(backupPath string, dryRun bool) (map[string]interface{}, error) {
+	if store == nil {
+		return nil, fmt.Errorf("no store initialized")
+	}
 	cleanPath, err := validateMigrationBackupPath(backupPath)
 	if err != nil {
 		return nil, err
@@ -709,32 +762,59 @@ func runMigrateStateRollback(backupPath string, dryRun bool) (map[string]interfa
 	if err := json.Unmarshal(backupData, &restored); err != nil {
 		return nil, fmt.Errorf("migration rollback backup is not valid colony state: %w", err)
 	}
-
-	safetyBackup := ""
-	if !dryRun {
-		safetyBackup = filepath.Join("backups", fmt.Sprintf("COLONY_STATE.pre-rollback.%s.json", time.Now().UTC().Format("20060102-150405.000000000")))
-		if err := store.UpdateFile("COLONY_STATE.json", func(current []byte) ([]byte, error) {
-			if len(current) == 0 {
-				return nil, fmt.Errorf("COLONY_STATE.json not found")
-			}
-			if err := store.AtomicWrite(safetyBackup, current); err != nil {
-				return nil, fmt.Errorf("write pre-rollback safety backup: %w", err)
-			}
-			return backupData, nil
-		}); err != nil {
-			return nil, fmt.Errorf("restore migration backup: %w", err)
-		}
+	current, err := store.ReadFile("COLONY_STATE.json")
+	if err != nil {
+		return nil, fmt.Errorf("COLONY_STATE.json not found: %w", err)
 	}
-
-	return map[string]interface{}{
+	now := time.Now().UTC()
+	safetyBackup := filepath.Join("backups", fmt.Sprintf("COLONY_STATE.pre-rollback.%s.json", now.Format("20060102-150405.000000000")))
+	dataRoot := filepath.Clean(store.BasePath())
+	repositoryRoot := repoRootFromStore(store)
+	if repositoryRoot == "" || repositoryRoot == dataRoot {
+		repositoryRoot = filepath.Dir(dataRoot)
+	}
+	plan := maintenanceMutationPlan{
+		SchemaVersion: maintenanceMutationSchemaVersion, Operation: "migrate-state-rollback",
+		TransactionID: "migrate-state-rollback-" + now.Format("20060102T150405.000000000Z"),
+		SourceRoot:    dataRoot, DestinationRoot: dataRoot,
+		CurrentVersion: "3.0", DesiredVersion: restored.Version,
+		Checkpoint: "maintenance:migrate-state-rollback:validated", Recovery: "aether resume",
+		Allowlist: lifecycleTransactionAllowlist{RepositoryRoot: repositoryRoot, LifecycleDataRoot: dataRoot},
+		Targets: []maintenanceMutationTarget{
+			{Root: lifecycleTransactionRootData, RelativeTarget: safetyBackup, Source: "COLONY_STATE.json byte-exact pre-rollback image", Action: lifecycleTransactionWrite, Content: current, Managed: true},
+			{Root: lifecycleTransactionRootData, RelativeTarget: "COLONY_STATE.json", Source: filepath.ToSlash(cleanPath), Action: lifecycleTransactionWrite, Content: backupData, Managed: true},
+		},
+	}
+	preview, err := prepareMaintenanceMutation(plan)
+	if err != nil {
+		return nil, err
+	}
+	result := map[string]interface{}{
 		"mode":          "migrate-state-rollback",
-		"rolled_back":   !dryRun,
+		"rolled_back":   false,
 		"dry_run":       dryRun,
 		"restored_from": filepath.ToSlash(cleanPath),
 		"safety_backup": filepath.ToSlash(safetyBackup),
 		"state_version": restored.Version,
 		"next":          "aether medic --deep",
-	}, nil
+		"preview":       preview,
+		"state_effect":  colony.LifecycleStateEffectNone,
+		"recovery":      plan.Recovery,
+	}
+	if dryRun {
+		return result, nil
+	}
+	mutation, err := commitMaintenanceMutation(plan)
+	result["rolled_back"] = mutation.StateEffect == colony.LifecycleStateEffectCommitted
+	result["state_effect"] = mutation.StateEffect
+	result["transaction"] = mutation.Preview.TransactionID
+	result["receipt"] = mutation.Receipt
+	result["verification"] = mutation.Verification
+	result["recovery"] = mutation.Recovery
+	if err != nil {
+		return result, fmt.Errorf("restore migration backup transaction: %w", err)
+	}
+	return result, nil
 }
 
 func validateMigrationBackupPath(path string) (string, error) {

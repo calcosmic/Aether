@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,8 +11,454 @@ import (
 	"unicode/utf8"
 
 	"github.com/BurntSushi/toml"
+	"github.com/calcosmic/Aether/pkg/colony"
 	"gopkg.in/yaml.v3"
 )
+
+const maintenanceMutationSchemaVersion = "maintenance-mutation/v1"
+
+type maintenanceMutationChange string
+
+const (
+	maintenanceMutationChangeWrite     maintenanceMutationChange = "write"
+	maintenanceMutationChangeRemove    maintenanceMutationChange = "remove"
+	maintenanceMutationChangeUnchanged maintenanceMutationChange = "unchanged"
+)
+
+// maintenanceMutationTarget is the exact, ownership-proven input to the
+// shared lifecycle transaction. A target is never discovered again during
+// commit: preview and commit operate on this same closed set.
+type maintenanceMutationTarget struct {
+	Root           lifecycleTransactionRootKind
+	RelativeTarget string
+	Source         string
+	Action         lifecycleTransactionAction
+	Content        []byte
+	Managed        bool
+}
+
+type maintenanceMutationPlan struct {
+	SchemaVersion   string
+	Operation       string
+	TransactionID   string
+	SourceRoot      string
+	DestinationRoot string
+	Channel         runtimeChannel
+	CurrentVersion  string
+	DesiredVersion  string
+	Checkpoint      string
+	Recovery        string
+	Allowlist       lifecycleTransactionAllowlist
+	Targets         []maintenanceMutationTarget
+	Rename          func(oldPath, newPath string) error
+	Fault           lifecycleTransactionFaultHook
+}
+
+type maintenanceMutationTargetPreview struct {
+	Root           lifecycleTransactionRootKind `json:"root"`
+	RelativeTarget string                       `json:"target"`
+	Source         string                       `json:"source"`
+	Change         maintenanceMutationChange    `json:"change"`
+	CurrentDigest  string                       `json:"current_digest"`
+	DesiredDigest  string                       `json:"desired_digest"`
+	CommitOrder    int                          `json:"commit_order"`
+}
+
+type maintenanceMutationPreview struct {
+	SchemaVersion   string                             `json:"schema_version"`
+	Operation       string                             `json:"operation"`
+	TransactionID   string                             `json:"transaction_id"`
+	SourceRoot      string                             `json:"source_root"`
+	DestinationRoot string                             `json:"destination_root"`
+	Channel         runtimeChannel                     `json:"channel,omitempty"`
+	CurrentVersion  string                             `json:"current_version,omitempty"`
+	DesiredVersion  string                             `json:"desired_version,omitempty"`
+	Checkpoint      string                             `json:"checkpoint"`
+	CommitOrder     []string                           `json:"commit_order"`
+	Targets         []maintenanceMutationTargetPreview `json:"targets"`
+	Recovery        string                             `json:"recovery"`
+}
+
+type maintenanceMutationResult struct {
+	SchemaVersion string                             `json:"schema_version"`
+	Operation     string                             `json:"operation"`
+	Preview       maintenanceMutationPreview         `json:"preview"`
+	Targets       []maintenanceMutationTargetPreview `json:"targets"`
+	StateEffect   colony.LifecycleStateEffect        `json:"state_effect"`
+	Receipt       *colony.LifecycleReceipt           `json:"receipt,omitempty"`
+	Verification  []colony.LifecycleVerification     `json:"verification,omitempty"`
+	Recovery      string                             `json:"recovery"`
+}
+
+// prepareMaintenanceMutation is read-only. It resolves and validates each
+// exact target with the lifecycle coordinator, records before/after digests,
+// and assigns the order that commit will use without creating staging or a
+// journal.
+func prepareMaintenanceMutation(plan maintenanceMutationPlan) (maintenanceMutationPreview, error) {
+	preview := maintenanceMutationPreview{
+		SchemaVersion:   plan.SchemaVersion,
+		Operation:       strings.TrimSpace(plan.Operation),
+		TransactionID:   strings.TrimSpace(plan.TransactionID),
+		SourceRoot:      filepath.Clean(plan.SourceRoot),
+		DestinationRoot: filepath.Clean(plan.DestinationRoot),
+		Channel:         plan.Channel,
+		CurrentVersion:  normalizeVersion(plan.CurrentVersion),
+		DesiredVersion:  normalizeVersion(plan.DesiredVersion),
+		Checkpoint:      strings.TrimSpace(plan.Checkpoint),
+		Recovery:        strings.TrimSpace(plan.Recovery),
+	}
+	if preview.SchemaVersion != maintenanceMutationSchemaVersion {
+		return preview, fmt.Errorf("maintenance mutation: schema_version must be %s", maintenanceMutationSchemaVersion)
+	}
+	if preview.Operation == "" || preview.TransactionID == "" {
+		return preview, fmt.Errorf("maintenance mutation: operation and transaction id are required")
+	}
+	if preview.Checkpoint == "" || preview.Recovery == "" {
+		return preview, fmt.Errorf("maintenance mutation: checkpoint and recovery action are required")
+	}
+	for label, root := range map[string]string{"source": plan.SourceRoot, "destination": plan.DestinationRoot} {
+		if strings.TrimSpace(root) == "" || !filepath.IsAbs(root) || filepath.Clean(root) != root {
+			return preview, fmt.Errorf("maintenance mutation: %s root must be a canonical absolute path", label)
+		}
+		info, err := os.Lstat(root)
+		if err != nil {
+			return preview, fmt.Errorf("maintenance mutation: inspect %s root: %w", label, err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+			return preview, fmt.Errorf("maintenance mutation: %s root must be a real directory", label)
+		}
+	}
+	if plan.Channel != "" && plan.Channel != channelStable && plan.Channel != channelDev {
+		return preview, fmt.Errorf("maintenance mutation: unsupported channel %q", plan.Channel)
+	}
+	if plan.Allowlist.Hub.Path != "" {
+		want := lifecycleTransactionHubStable
+		if plan.Channel == channelDev {
+			want = lifecycleTransactionHubDev
+		}
+		if plan.Allowlist.Hub.Channel != want {
+			return preview, fmt.Errorf("maintenance mutation: %s operation cannot use %s hub", plan.Channel, plan.Allowlist.Hub.Channel)
+		}
+	}
+	if plan.Channel == channelDev {
+		for _, target := range plan.Targets {
+			switch target.Root {
+			case lifecycleTransactionRootClaudeHome, lifecycleTransactionRootOpenCodeHome, lifecycleTransactionRootCodexHome:
+				return preview, fmt.Errorf("maintenance mutation: dev channel cannot write stable platform homes")
+			}
+		}
+	}
+
+	tx, err := beginLifecycleTransaction(lifecycleTransactionConfig{
+		TransactionID: plan.TransactionID,
+		Command:       plan.Operation,
+		Allowlist:     plan.Allowlist,
+		Rename:        plan.Rename,
+		Fault:         plan.Fault,
+	})
+	if err != nil {
+		return preview, err
+	}
+	seen := make(map[string]bool, len(plan.Targets))
+	for index, target := range plan.Targets {
+		if !target.Managed {
+			return preview, fmt.Errorf("maintenance mutation: target %q has no managed ownership proof", target.RelativeTarget)
+		}
+		action := target.Action
+		if action == "" {
+			action = lifecycleTransactionWrite
+		}
+		if action != lifecycleTransactionWrite && action != lifecycleTransactionRemove {
+			return preview, fmt.Errorf("maintenance mutation: target %q has invalid action %q", target.RelativeTarget, action)
+		}
+		root, targetPath, clean, err := tx.resolveTarget(target.Root, target.RelativeTarget)
+		if err != nil {
+			return preview, err
+		}
+		if seen[targetPath] {
+			return preview, fmt.Errorf("maintenance mutation: duplicate target %q", targetPath)
+		}
+		seen[targetPath] = true
+		current, err := readLifecycleFileState(targetPath)
+		if err != nil {
+			return preview, fmt.Errorf("maintenance mutation: read target baseline: %w", err)
+		}
+		desiredDigest := lifecycleTransactionMissingDigest
+		change := maintenanceMutationChangeRemove
+		if action == lifecycleTransactionWrite {
+			desiredDigest = lifecycleDigest(target.Content)
+			change = maintenanceMutationChangeWrite
+		}
+		if current.Digest == desiredDigest {
+			change = maintenanceMutationChangeUnchanged
+		}
+		entry := maintenanceMutationTargetPreview{
+			Root: root.Kind, RelativeTarget: clean, Source: strings.TrimSpace(target.Source),
+			Change: change, CurrentDigest: current.Digest, DesiredDigest: desiredDigest, CommitOrder: index + 1,
+		}
+		preview.Targets = append(preview.Targets, entry)
+		preview.CommitOrder = append(preview.CommitOrder, fmt.Sprintf("%d:%s:%s", index+1, root.Kind, filepath.ToSlash(clean)))
+	}
+	return preview, nil
+}
+
+func commitMaintenanceMutation(plan maintenanceMutationPlan) (maintenanceMutationResult, error) {
+	preview, err := prepareMaintenanceMutation(plan)
+	result := maintenanceMutationResult{
+		SchemaVersion: maintenanceMutationSchemaVersion,
+		Operation:     strings.TrimSpace(plan.Operation),
+		Preview:       preview,
+		Targets:       append([]maintenanceMutationTargetPreview(nil), preview.Targets...),
+		StateEffect:   colony.LifecycleStateEffectNone,
+		Recovery:      strings.TrimSpace(plan.Recovery),
+	}
+	if err != nil {
+		return result, err
+	}
+	tx, err := beginLifecycleTransaction(lifecycleTransactionConfig{
+		TransactionID: plan.TransactionID,
+		Command:       plan.Operation,
+		Allowlist:     plan.Allowlist,
+		Rename:        plan.Rename,
+		Fault:         plan.Fault,
+	})
+	if err != nil {
+		return result, err
+	}
+	declared := 0
+	for index, target := range plan.Targets {
+		if preview.Targets[index].Change == maintenanceMutationChangeUnchanged {
+			continue
+		}
+		action := target.Action
+		if action == "" {
+			action = lifecycleTransactionWrite
+		}
+		if action == lifecycleTransactionRemove {
+			err = tx.DeclareRemoval(target.Root, target.RelativeTarget)
+		} else {
+			err = tx.DeclareWrite(target.Root, target.RelativeTarget, target.Content)
+		}
+		if err != nil {
+			return result, err
+		}
+		declared++
+	}
+	if declared == 0 {
+		if receipt, ok, loadErr := tx.loadCommittedReceipt(); ok || loadErr != nil {
+			if loadErr != nil {
+				return result, loadErr
+			}
+			result.StateEffect = receipt.StateEffect
+			result.Receipt = &receipt
+			result.Verification = append([]colony.LifecycleVerification(nil), receipt.Verification...)
+			return result, nil
+		}
+		return result, nil
+	}
+	receipt, commitErr := tx.Commit()
+	if commitErr == nil {
+		result.StateEffect = receipt.StateEffect
+		result.Receipt = &receipt
+		result.Verification = append([]colony.LifecycleVerification(nil), receipt.Verification...)
+		return result, nil
+	}
+	if tx.progress != nil && tx.intent != nil {
+		switch tx.progress.StateEffect {
+		case colony.LifecycleStateEffectRolledBack:
+			rollbackReceipt := tx.rolledBackResult()
+			result.StateEffect = rollbackReceipt.StateEffect
+			result.Receipt = &rollbackReceipt
+			result.Verification = append([]colony.LifecycleVerification(nil), rollbackReceipt.Verification...)
+		case colony.LifecycleStateEffectRecoveryRequired:
+			recoveryReceipt, _ := tx.recoveryResult(commitErr, lifecycleRecoveryProvenance(commitErr))
+			result.StateEffect = colony.LifecycleStateEffectRecoveryRequired
+			result.Receipt = &recoveryReceipt
+			result.Recovery = recoveryReceipt.Recovery.SafeNextStep
+		default:
+			result.StateEffect = tx.progress.StateEffect
+		}
+	}
+	return result, commitErr
+}
+
+type maintenanceSyncSpec struct {
+	Root                lifecycleTransactionRootKind
+	SourceDir           string
+	DestinationBase     string
+	Options             syncOptions
+	PruneRetiredAliases bool
+	CleanupOwned        func(relativePath string, content []byte) bool
+}
+
+// appendMaintenanceSyncTargets converts an existing sync contract into a
+// read-only exact manifest. Cleanup is intentionally conservative: only a
+// generated Aether ownership header can authorize removal of a stale command.
+func appendMaintenanceSyncTargets(plan *maintenanceMutationPlan, spec maintenanceSyncSpec) error {
+	if plan == nil {
+		return fmt.Errorf("maintenance sync: plan is required")
+	}
+	info, err := os.Lstat(spec.SourceDir)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("maintenance sync: inspect source: %w", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return fmt.Errorf("maintenance sync: source must be a real directory")
+	}
+	roots, err := resolveLifecycleTransactionRoots(plan.Allowlist)
+	if err != nil {
+		return err
+	}
+	root, ok := roots[spec.Root]
+	if !ok {
+		return fmt.Errorf("maintenance sync: destination root %s is not configured", spec.Root)
+	}
+	base := filepath.Clean(spec.DestinationBase)
+	if base == "" {
+		base = "."
+	}
+	if filepath.IsAbs(base) || base == ".." || strings.HasPrefix(base, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("maintenance sync: destination base escapes root")
+	}
+	sourceFiles, err := listMaintenanceRegularFiles(spec.SourceDir)
+	if err != nil {
+		return err
+	}
+	if spec.Options.include != nil {
+		sourceFiles = filterSyncFiles(sourceFiles, spec.Options.include)
+	}
+	sourceFiles, _ = filterIgnoredSyncFiles(sourceFiles)
+	destinationSet := make(map[string]bool, len(sourceFiles))
+	added := make(map[string]bool)
+	for _, sourceRel := range sourceFiles {
+		destRel := mapSyncDestRelPath(sourceRel, spec.Options.mapRelPath)
+		if destRel == "" || syncPathProtected(destRel, spec.Options.protectedDirs, spec.Options.protectedFiles) {
+			continue
+		}
+		targetRel := filepath.Clean(filepath.Join(base, destRel))
+		destinationSet[filepath.ToSlash(destRel)] = true
+		sourcePath := filepath.Join(spec.SourceDir, sourceRel)
+		content, err := os.ReadFile(sourcePath)
+		if err != nil {
+			return fmt.Errorf("maintenance sync: read %s: %w", sourcePath, err)
+		}
+		if spec.Options.validate != nil {
+			if err := spec.Options.validate(sourcePath, sourceRel, content); err != nil {
+				return err
+			}
+		}
+		destinationPath := filepath.Join(root.Path, targetRel)
+		if existing, readErr := os.ReadFile(destinationPath); readErr == nil {
+			if spec.Options.merge != nil {
+				content, err = spec.Options.merge(content, existing)
+				if err != nil {
+					return fmt.Errorf("maintenance sync: merge %s: %w", destinationPath, err)
+				}
+			} else if spec.Options.preserveLocalChanges && !bytes.Equal(content, existing) {
+				content = existing
+			}
+		} else if !os.IsNotExist(readErr) {
+			return fmt.Errorf("maintenance sync: read destination %s: %w", destinationPath, readErr)
+		}
+		plan.Targets = append(plan.Targets, maintenanceMutationTarget{
+			Root: spec.Root, RelativeTarget: targetRel, Source: sourcePath,
+			Action: lifecycleTransactionWrite, Content: content, Managed: true,
+		})
+		added[filepath.ToSlash(targetRel)] = true
+	}
+
+	if !spec.Options.cleanup && !spec.PruneRetiredAliases {
+		return nil
+	}
+	destinationDir := filepath.Join(root.Path, base)
+	destFiles, err := listMaintenanceRegularFilesIfPresent(destinationDir)
+	if err != nil {
+		return err
+	}
+	cleanupFilter := spec.Options.cleanupInclude
+	if cleanupFilter == nil {
+		cleanupFilter = spec.Options.include
+	}
+	for _, destRel := range destFiles {
+		if destinationSet[filepath.ToSlash(destRel)] || syncPathProtected(destRel, spec.Options.protectedDirs, spec.Options.protectedFiles) {
+			continue
+		}
+		retired := spec.PruneRetiredAliases && isRetiredLifecycleWrapperPath(destRel)
+		if !retired && (!spec.Options.cleanup || (cleanupFilter != nil && !cleanupFilter(destRel))) {
+			continue
+		}
+		targetPath := filepath.Join(destinationDir, destRel)
+		content, err := os.ReadFile(targetPath)
+		if err != nil {
+			return fmt.Errorf("maintenance sync: read cleanup target %s: %w", targetPath, err)
+		}
+		owned := isGeneratedAetherCommandWrapper(content)
+		if !owned && spec.CleanupOwned != nil {
+			owned = spec.CleanupOwned(destRel, content)
+		}
+		if !owned {
+			continue
+		}
+		targetRel := filepath.Clean(filepath.Join(base, destRel))
+		if added[filepath.ToSlash(targetRel)] {
+			continue
+		}
+		plan.Targets = append(plan.Targets, maintenanceMutationTarget{
+			Root: spec.Root, RelativeTarget: targetRel, Source: "managed generated wrapper ownership header",
+			Action: lifecycleTransactionRemove, Managed: true,
+		})
+		added[filepath.ToSlash(targetRel)] = true
+	}
+	return nil
+}
+
+func listMaintenanceRegularFiles(root string) ([]string, error) {
+	var files []string
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if path == root {
+			return nil
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			return fmt.Errorf("maintenance sync: symbolic link is not an owned file: %s", path)
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("maintenance sync: non-regular source file: %s", path)
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		files = append(files, rel)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(files)
+	return files, nil
+}
+
+func listMaintenanceRegularFilesIfPresent(root string) ([]string, error) {
+	if _, err := os.Lstat(root); os.IsNotExist(err) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+	return listMaintenanceRegularFiles(root)
+}
 
 type installSyncPair struct {
 	srcRel               string

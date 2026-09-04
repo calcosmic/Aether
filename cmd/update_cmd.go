@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -9,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/downloader"
 	"github.com/spf13/cobra"
@@ -31,7 +33,7 @@ var updateCmd = &cobra.Command{
 		"If you need an unreleased local runtime fix from an Aether source checkout,\n" +
 		"run `aether publish --package-dir <Aether checkout>` in the Aether repo first.",
 	Args: cobra.NoArgs,
-	RunE: runUpdate,
+	RunE: runMaintenanceUpdate,
 }
 
 var (
@@ -52,262 +54,428 @@ func init() {
 	rootCmd.AddCommand(updateCmd)
 }
 
-func runUpdate(cmd *cobra.Command, args []string) error {
+// runMaintenanceUpdate is the public update path. It first builds one exact
+// target manifest, emits that same manifest for --dry-run, and otherwise hands
+// every changed repository/platform/binary target to LifecycleTransaction.
+// The older sync kernels remain below for install/backward-compatible unit
+// coverage, but update itself no longer commits through them directly.
+func runMaintenanceUpdate(cmd *cobra.Command, _ []string) error {
 	channel := runtimeChannelFromFlag(cmd.Flags())
-
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("cannot determine home directory: %w", err)
+	}
+	repositoryRoot, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("cannot determine working directory: %w", err)
+	}
+	repositoryRoot, err = filepath.Abs(repositoryRoot)
+	if err != nil {
+		return fmt.Errorf("resolve repository root: %w", err)
+	}
+	if store == nil {
+		return fmt.Errorf("update requires an initialized lifecycle store")
+	}
+	repoVersionBefore := ""
+	if marker, ok := readInstalledVersionMarker(repositoryRoot); ok {
+		repoVersionBefore = marker.Version
+	}
+	aliasSurfacesMissingBefore := missingDeclaredAliasSurfaces(homeDir)
+	dataRoot := filepath.Clean(store.BasePath())
+	hubRoot := filepath.Clean(resolveHubPathForHome(homeDir, channel))
+	hubVersion := normalizeVersion(readHubVersionAtPath(hubRoot))
+	if hubVersion == "" {
+		return fmt.Errorf("Aether hub not installed; run aether install first")
+	}
+	if err := validateMaintenanceVersionAgreement(repositoryRoot, hubRoot, hubVersion); err != nil {
+		return err
+	}
+	if isAetherSourceCheckout(repositoryRoot) {
+		check := runSourceCheck(repositoryRoot)
+		if !check.OK {
+			return fmt.Errorf("maintenance update: source/generated parity check failed")
+		}
 	}
 
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
 	force, _ := cmd.Flags().GetBool("force")
 	syncPlatformHomes, _ := cmd.Flags().GetBool("sync-platform-homes")
-
-	// Check hub exists
-	hubDir := resolveHubPathForHome(homeDir, channel)
-	hubVersion := readHubVersionAtPath(hubDir)
-	if hubVersion == "" {
-		outputErrorMessage("Aether hub not installed. Run \"aether install\" first.")
-		return nil
-	}
-
-	// Read hub version for comparison
-	binaryVersion := resolveVersion()
 	downloadBinary, _ := cmd.Flags().GetBool("download-binary")
-	binaryMode := updateBinaryRefreshMode(downloadBinary, dryRun)
-
-	// Get repo directory
-	repoDir, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("cannot determine working directory: %w", err)
-	}
-
-	// Captured before any sync writes the marker: this is what the repo was
-	// on when the user asked, and it is what `/ant-update` must report back.
-	repoVersionBefore := ""
-	if marker, ok := readInstalledVersionMarker(repoDir); ok {
-		repoVersionBefore = marker.Version
-	}
-
-	// Sync companion files from hub
-	if dryRun {
-		mode := "safe (new files only)"
-		if force {
-			mode = "force (overwrite changed + remove stale)"
-		}
-		result := map[string]interface{}{
-			"message":             fmt.Sprintf("Dry run — would sync companion files from hub [%s]", mode),
-			"hub_version":         hubVersion,
-			"local_version":       resolveVersion(),
-			"force":               force,
-			"binary_refresh_mode": binaryMode,
-			"binary_refresh_note": updateBinaryRefreshNote(binaryMode, channel),
-			"actions": []string{
-				"Ensure repo-local .aether/data, dreams, oracle, locks, QUEEN.md, and .gitignore",
-				"Prune stale generated repo-local agents, commands, and shipped skills",
-				"Refresh repo-level platform guidance (AGENTS.md, .codex/CODEX.md, .opencode/OPENCODE.md) when managed by Aether",
-				"Refresh global Claude/OpenCode/Codex commands and agents from the hub",
-				"Sync .claude/settings.json",
-				fmt.Sprintf("Do not change the installed %s binary unless --download-binary is also used", defaultBinaryName(channel)),
+	now := time.Now().UTC()
+	plan := maintenanceMutationPlan{
+		SchemaVersion:   maintenanceMutationSchemaVersion,
+		Operation:       "update",
+		TransactionID:   "update-" + now.Format("20060102T150405.000000000Z"),
+		SourceRoot:      hubRoot,
+		DestinationRoot: repositoryRoot,
+		Channel:         channel,
+		CurrentVersion:  resolveVersion(),
+		DesiredVersion:  hubVersion,
+		Checkpoint:      "maintenance:update:validated",
+		Recovery:        "aether resume",
+		Allowlist: lifecycleTransactionAllowlist{
+			RepositoryRoot:    repositoryRoot,
+			LifecycleDataRoot: dataRoot,
+			Hub: lifecycleTransactionHubRoot{
+				Channel: maintenanceHubChannel(channel),
+				Path:    hubRoot,
 			},
+		},
+	}
+	if err := appendMaintenanceUpdateRepositoryTargets(&plan, hubRoot, repositoryRoot, force, now); err != nil {
+		return err
+	}
+	if shouldSyncPlatformHomes(channel, syncPlatformHomes) {
+		if channel == channelDev {
+			return fmt.Errorf("maintenance update: dev channel is isolated from stable platform homes")
 		}
-		staleResult := checkStalePublish(hubDir, hubVersion, binaryVersion, channel, []map[string]interface{}{})
-		result["stale_publish"] = staleResultToMap(staleResult)
-		visual := renderUpdateVisual(repoDir, hubVersion, binaryVersion, renderRepoVersionTransition(repoVersionBefore, hubVersion, true), force, true, []map[string]interface{}{
-			{"label": "Local state scaffold", "copied": 0, "skipped": 0},
-			{"label": "Repo .aether cleanup", "copied": 0, "skipped": 0},
-			{"label": "Prune legacy repo platform assets", "copied": 0, "skipped": 0},
-			{"label": "Prune shipped repo skills", "copied": 0, "skipped": 0},
-			{"label": "Settings (claude)", "copied": 0, "skipped": 0},
-			{"label": "Rules (claude)", "copied": 0, "skipped": 0},
-		}, 0, 0, nil, binaryMode, hubVersion == binaryVersion, result)
-		if staleResult.Classification != staleOK {
-			visual += renderStalePublishBanner(staleResult)
-		}
-		outputWorkflow(result, visual)
-		if staleResult.Classification == staleCritical {
-			return fmt.Errorf("stale publish detected: %s", staleResult.Message)
-		}
-	} else {
-		syncResult := runUpdateSync(hubDir, repoDir, force)
-		if len(syncResult.errors) > 0 {
-			outputError(2, fmt.Sprintf("update failed with %d sync error(s)", len(syncResult.errors)), map[string]interface{}{
-				"hub_version":         hubVersion,
-				"local_version":       resolveVersion(),
-				"force":               force,
-				"details":             syncResult.details,
-				"binary_refresh_mode": binaryMode,
-				"binary_refresh_note": updateBinaryRefreshNote(binaryMode, channel),
-			})
-			return nil
-		}
-		docResults, docCopied, docSkipped, docErrors := syncProjectDocs(filepath.Join(hubDir, "system"), repoDir)
-		syncResult.details = append(syncResult.details, docResults...)
-		syncResult.copied += docCopied
-		syncResult.skipped += docSkipped
-		if len(docErrors) > 0 {
-			syncResult.errors = append(syncResult.errors, docErrors...)
-			outputError(2, fmt.Sprintf("update failed with %d sync error(s)", len(syncResult.errors)), map[string]interface{}{
-				"hub_version":         hubVersion,
-				"local_version":       resolveVersion(),
-				"force":               force,
-				"details":             syncResult.details,
-				"binary_refresh_mode": binaryMode,
-				"binary_refresh_note": updateBinaryRefreshNote(binaryMode, channel),
-			})
-			return nil
-		}
-		// Read which declared alias command wrappers (e.g. pause-colony) are
-		// missing from any platform-home surface BEFORE the ordinary sync
-		// runs. The sync below is what actually restores a missing wrapper
-		// -- it already exists in the hub source -- this snapshot is only
-		// so the repair can be named afterward instead of only showing up
-		// as a larger copied-file count.
-		aliasSurfacesMissingBefore := missingDeclaredAliasSurfaces(homeDir)
-
-		platformResults, platformErrors := syncPlatformHomeAssetsFromHub(hubDir, homeDir, channel, syncPlatformHomes)
-		syncResult.details = append(syncResult.details, platformResults...)
-		for _, entry := range platformResults {
-			syncResult.copied += intValue(entry["copied"])
-			syncResult.skipped += intValue(entry["skipped"])
-		}
-		if len(platformErrors) > 0 {
-			syncResult.errors = append(syncResult.errors, platformErrors...)
-			outputError(2, fmt.Sprintf("update failed with %d sync error(s)", len(syncResult.errors)), map[string]interface{}{
-				"hub_version":         hubVersion,
-				"local_version":       resolveVersion(),
-				"force":               force,
-				"details":             syncResult.details,
-				"binary_refresh_mode": binaryMode,
-				"binary_refresh_note": updateBinaryRefreshNote(binaryMode, channel),
-			})
-			return nil
-		}
-		preTsHostStaleResult := checkStalePublish(hubDir, hubVersion, binaryVersion, channel, syncResult.details)
-		if preTsHostStaleResult.Classification != staleCritical {
-			if _, err := os.Stat(tsHostHubDir(hubDir)); err == nil {
-				if tsHostErr := syncTsHostFromHub(hubDir, repoDir); tsHostErr != nil {
-					syncResult.errors = append(syncResult.errors, fmt.Sprintf("TS host sync failed: %v", tsHostErr))
-				} else if tsHostErr := ensureTsHostBuilt(repoDir); tsHostErr != nil {
-					syncResult.errors = append(syncResult.errors, fmt.Sprintf("TS host build failed: %v", tsHostErr))
-				}
-			} else if err != nil && !os.IsNotExist(err) {
-				syncResult.errors = append(syncResult.errors, fmt.Sprintf("TS host hub check failed: %v", err))
-			}
-			if len(syncResult.errors) > 0 {
-				outputError(2, fmt.Sprintf("update failed with %d sync error(s)", len(syncResult.errors)), map[string]interface{}{
-					"hub_version":         hubVersion,
-					"local_version":       resolveVersion(),
-					"force":               force,
-					"details":             syncResult.details,
-					"binary_refresh_mode": binaryMode,
-					"binary_refresh_note": updateBinaryRefreshNote(binaryMode, channel),
-				})
-				return nil
-			}
-		}
-
-		mirrorRestored := false
-		if restored, err := ensureLegacySessionMirror(store); err == nil {
-			mirrorRestored = restored
-		}
-		restartTargets := platformRestartTargets(syncResult.details)
-		removed := syncDetailsRemoved(syncResult.details)
-		message := fmt.Sprintf("Updated: %d files copied, %d unchanged", syncResult.copied, syncResult.skipped)
-		if removed > 0 {
-			message += fmt.Sprintf(", %d removed", removed)
-		}
-		if restartNote := platformRestartMessage(restartTargets); restartNote != "" {
-			message += ". " + restartNote
-		}
-		// Name each declared alias wrapper the sync above just restored --
-		// in plain words, not only as a larger copied-file count. Empty
-		// when nothing was missing.
-		aliasRepairReport := diffAliasRepairs(aliasSurfacesMissingBefore)
-		if repairMsg := aliasRepairReport.Message(); repairMsg != "" {
-			message += " " + repairMsg
-		}
-		// Stamp the repo with the hub version it just synced from, so a later
-		// `aether status` can tell the user when this repo has fallen behind.
-		// Non-fatal: a missing stamp costs a notification, not correctness.
-		if err := writeInstalledVersionMarker(repoDir, hubVersion); err != nil {
-			fmt.Fprintf(os.Stderr, "note: could not record synced version for this repo: %v\n", err)
-		}
-
-		staleResult := checkStalePublish(hubDir, hubVersion, binaryVersion, channel, syncResult.details)
-		result := map[string]interface{}{
-			"message":                 message,
-			"hub_version":             hubVersion,
-			"local_version":           binaryVersion,
-			"repo_version_before":     repoVersionBefore,
-			"repo_version_after":      hubVersion,
-			"repo_was_behind":         repoVersionBefore != "" && repoVersionBefore != normalizeVersion(hubVersion),
-			"force":                   force,
-			"removed":                 removed,
-			"details":                 syncResult.details,
-			"binary_refresh_mode":     binaryMode,
-			"binary_refresh_note":     updateBinaryRefreshNote(binaryMode, channel),
-			"legacy_session_restored": mirrorRestored,
-			"restart_required":        len(restartTargets) > 0,
-			"restart_targets":         restartTargets,
-			"codex_restart_required":  len(restartTargets) > 0,
-			"codex_restart_targets":   restartTargets,
-			"stale_publish":           staleResultToMap(staleResult),
-			"alias_wrapper_repairs":   aliasRepairReport.Repairs,
-		}
-		// The run's own outcome -- whether it repaired a missing command copy
-		// or found nothing to do -- is a fact about what just happened, so it
-		// enters the one resolver's input as the "changed" report rather than
-		// being appended after the card as a second, separate line.
-		closeLifecycleCommand(result, updateLastCommandFact(aliasRepairReport.Message()), "", "")
-		visual := renderUpdateVisual(repoDir, hubVersion, binaryVersion, renderRepoVersionTransition(repoVersionBefore, hubVersion, false), force, false, syncResult.details, syncResult.copied, syncResult.skipped, restartTargets, binaryMode, hubVersion == binaryVersion, result)
-		if staleResult.Classification != staleOK {
-			visual += renderStalePublishBanner(staleResult)
-		}
-		outputWorkflow(result, visual)
-		if staleResult.Classification == staleCritical {
-			return fmt.Errorf("stale publish detected: %s", staleResult.Message)
+		if err := appendMaintenanceUpdatePlatformTargets(&plan, hubRoot, homeDir); err != nil {
+			return err
 		}
 	}
-
-	// Download binary if requested
-	if downloadBinary && !dryRun {
+	if downloadBinary {
 		versionFlag, _ := cmd.Flags().GetString("binary-version")
-		if normalizeVersion(versionFlag) == "latest" {
-			versionFlag = ""
+		versionFlag = normalizeVersion(versionFlag)
+		if versionFlag == "" || versionFlag == "latest" {
+			versionFlag = hubVersion
 		}
-		version, err := resolveReleaseVersion(versionFlag)
+		if versionFlag != hubVersion {
+			return fmt.Errorf("maintenance update: binary version %s must match companion version %s", versionFlag, hubVersion)
+		}
+		staged, err := stageMaintenanceBinaryDownload(versionFlag, channel, downloader.DownloadBinary)
 		if err != nil {
 			return err
 		}
-
-		destDir := filepath.Join(homeDir, defaultBinaryDestSubdirForChannel(channel))
-		outputWorkflow(map[string]interface{}{
-			"message": fmt.Sprintf("Downloading aether %s binary...", version),
-		}, renderBinaryActionVisual("Binary Download", fmt.Sprintf("Downloading aether %s binary...", version), version, destDir))
-
-		result, err := downloader.DownloadBinary(version, destDir)
+		destinationDir := filepath.Join(homeDir, defaultBinaryDestSubdirForChannel(channel))
+		destination, err := filepath.Abs(filepath.Join(destinationDir, staged.Name))
 		if err != nil {
-			return fmt.Errorf("file sync succeeded but binary download failed: %w", err)
+			return fmt.Errorf("resolve binary destination: %w", err)
 		}
-		result, err = alignDownloadedBinaryToChannel(result, destDir, channel)
-		if err != nil {
-			return fmt.Errorf("file sync succeeded but channel binary rename failed: %w", err)
-		}
-
-		outputWorkflow(map[string]interface{}{
-			"message": fmt.Sprintf("Binary installed to %s", result.Path),
-			"path":    result.Path,
-			"version": result.Version,
-		}, renderBinaryActionVisual("Binary Ready", fmt.Sprintf("Binary installed to %s", result.Path), result.Version, result.Path))
-	} else if downloadBinary && dryRun {
-		outputWorkflow(map[string]interface{}{
-			"message": "Would download binary from GitHub Releases",
-		}, renderBinaryActionVisual("Binary Download", "Would download binary from GitHub Releases", "", ""))
+		plan.Allowlist.BinaryDestination = destination
+		plan.Targets = append(plan.Targets, maintenanceMutationTarget{
+			Root: lifecycleTransactionRootBinaryDestination, RelativeTarget: filepath.Base(destination),
+			Source: staged.Source, Action: lifecycleTransactionWrite, Content: staged.Content, Managed: true,
+		})
 	}
 
+	preview, err := prepareMaintenanceMutation(plan)
+	if err != nil {
+		return err
+	}
+	if dryRun {
+		result := map[string]interface{}{
+			"operation": "update", "preview": preview, "state_effect": "none",
+			"binary_refresh_mode": updateBinaryRefreshMode(downloadBinary, true), "recovery": plan.Recovery,
+		}
+		details, copied, skipped := maintenancePreviewSyncDetails(preview)
+		stale := checkStalePublish(hubRoot, hubVersion, resolveVersion(), channel, details)
+		result["stale_publish"] = staleResultToMap(stale)
+		outputWorkflow(result, renderUpdateVisual(repositoryRoot, hubVersion, resolveVersion(), renderRepoVersionTransition(repoVersionBefore, hubVersion, true), force, true, details, copied, skipped, nil, updateBinaryRefreshMode(downloadBinary, true), hubVersion == resolveVersion(), result))
+		return nil
+	}
+
+	mutation, err := commitMaintenanceMutation(plan)
+	result := map[string]interface{}{
+		"operation": "update", "preview": mutation.Preview, "targets": mutation.Targets,
+		"transaction": mutation.Preview.TransactionID, "receipt": mutation.Receipt,
+		"state_effect": mutation.StateEffect, "verification": mutation.Verification,
+		"recovery": mutation.Recovery, "hub_version": hubVersion,
+		"local_version": resolveVersion(), "binary_refresh_mode": updateBinaryRefreshMode(downloadBinary, false),
+	}
+	details, copied, skipped := maintenancePreviewSyncDetails(mutation.Preview)
+	aliasRepairReport := diffAliasRepairs(aliasSurfacesMissingBefore)
+	message := fmt.Sprintf("Updated: %d files copied, %d unchanged", copied, skipped)
+	if repair := aliasRepairReport.Message(); repair != "" {
+		message += ". " + repair
+	}
+	result["message"] = message
+	result["alias_wrapper_repairs"] = aliasRepairReport.Repairs
+	result["stale_publish"] = staleResultToMap(checkStalePublish(hubRoot, hubVersion, resolveVersion(), channel, details))
+	if err != nil {
+		outputWorkflow(result, renderMaintenanceMutationPreview(mutation.Preview, false))
+		return err
+	}
+	closeLifecycleCommand(result, updateLastCommandFact(aliasRepairReport.Message()), "", "")
+	restartTargets := platformRestartTargets(details)
+	outputWorkflow(result, renderUpdateVisual(repositoryRoot, hubVersion, resolveVersion(), renderRepoVersionTransition(repoVersionBefore, hubVersion, false), force, false, details, copied, skipped, restartTargets, updateBinaryRefreshMode(downloadBinary, false), hubVersion == resolveVersion(), result))
 	return nil
+}
+
+func maintenancePreviewSyncDetails(preview maintenanceMutationPreview) ([]map[string]interface{}, int, int) {
+	type counts struct{ copied, skipped, removed int }
+	order := []lifecycleTransactionRootKind{}
+	byRoot := map[lifecycleTransactionRootKind]*counts{}
+	for _, target := range preview.Targets {
+		count := byRoot[target.Root]
+		if count == nil {
+			count = &counts{}
+			byRoot[target.Root] = count
+			order = append(order, target.Root)
+		}
+		switch target.Change {
+		case maintenanceMutationChangeWrite:
+			count.copied++
+		case maintenanceMutationChangeRemove:
+			count.removed++
+		default:
+			count.skipped++
+		}
+	}
+	var details []map[string]interface{}
+	totalCopied, totalSkipped := 0, 0
+	for _, root := range order {
+		count := byRoot[root]
+		details = append(details, map[string]interface{}{"label": "Transaction root " + string(root), "copied": count.copied, "skipped": count.skipped, "removed": count.removed})
+		totalCopied += count.copied
+		totalSkipped += count.skipped
+	}
+	return details, totalCopied, totalSkipped
+}
+
+func maintenanceHubChannel(channel runtimeChannel) lifecycleTransactionHubChannel {
+	if channel == channelDev {
+		return lifecycleTransactionHubDev
+	}
+	return lifecycleTransactionHubStable
+}
+
+func appendMaintenanceUpdateRepositoryTargets(plan *maintenanceMutationPlan, hubRoot, repositoryRoot string, force bool, now time.Time) error {
+	hubSystem := filepath.Join(hubRoot, "system")
+	localAether := filepath.Join(repositoryRoot, ".aether")
+	if !isAetherSourceCheckout(repositoryRoot) {
+		for _, pair := range repoSyncPairs() {
+			if pair.consumerOnly || pair.hubRel != "." {
+				base := filepath.Clean(filepath.Join(".aether", filepath.FromSlash(pair.destRel)))
+				spec := maintenanceSyncSpec{
+					Root: lifecycleTransactionRootRepository, SourceDir: filepath.Join(hubSystem, filepath.FromSlash(pair.hubRel)), DestinationBase: base,
+					Options:             syncOptions{cleanup: pair.cleanup, preserveLocalChanges: !force && pair.preserveLocalChanges, protectedDirs: map[string]bool{"data": true, "dreams": true, "oracle": true, "locks": true, "checkpoints": true, "archive": true, "backups": true, "chambers": true, "temp": true}, protectedFiles: map[string]bool{"QUEEN.md": true, "CROWNED-ANTHILL.md": true}, validate: pair.validate, include: pair.include, mapRelPath: pair.mapRelPath, cleanupInclude: pair.cleanupInclude, merge: pair.merge},
+					PruneRetiredAliases: pair.cleanupLegacyClaude,
+				}
+				if pair.consumerOnly {
+					spec.CleanupOwned = func(relativePath string, _ []byte) bool { return isManagedAetherSystemPath(relativePath) }
+				}
+				if err := appendMaintenanceSyncTargets(plan, spec); err != nil {
+					return fmt.Errorf("plan %s: %w", pair.label, err)
+				}
+			}
+		}
+		if err := appendMaintenanceLegacyRepositoryTargets(plan, hubSystem, repositoryRoot); err != nil {
+			return err
+		}
+	}
+
+	if err := appendMaintenanceProjectDocTargets(plan, hubSystem, repositoryRoot); err != nil {
+		return err
+	}
+	if err := appendMaintenanceTsHostTargets(plan, hubRoot); err != nil {
+		return err
+	}
+	if err := appendMaintenanceScaffoldTargets(plan, localAether); err != nil {
+		return err
+	}
+	marker, err := json.MarshalIndent(installedVersionMarker{Version: normalizeVersion(plan.DesiredVersion), UpdatedAt: now.Format(time.RFC3339)}, "", "  ")
+	if err != nil {
+		return err
+	}
+	plan.Targets = append(plan.Targets, maintenanceMutationTarget{
+		Root: lifecycleTransactionRootRepository, RelativeTarget: filepath.Join(".aether", filepath.FromSlash(installedVersionMarkerRel)),
+		Source: "selected hub version manifest", Action: lifecycleTransactionWrite, Content: append(marker, '\n'), Managed: true,
+	})
+	return nil
+}
+
+func appendMaintenanceProjectDocTargets(plan *maintenanceMutationPlan, hubSystem, repositoryRoot string) error {
+	for _, spec := range []projectDocSpec{
+		{templateRel: filepath.Join("templates", "agents-md-template.md"), destRel: "AGENTS.md", managedFn: isAetherManagedAgentsDoc},
+		{templateRel: filepath.Join("templates", "codex-md-template.md"), destRel: filepath.Join(".codex", "CODEX.md"), managedFn: isAetherManagedCodexDoc},
+		{templateRel: filepath.Join("templates", "opencode-md-template.md"), destRel: filepath.Join(".opencode", "OPENCODE.md"), managedFn: isAetherManagedOpenCodeDoc},
+	} {
+		source := filepath.Join(hubSystem, spec.templateRel)
+		data, err := os.ReadFile(source)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		destination := filepath.Join(repositoryRoot, spec.destRel)
+		if existing, readErr := os.ReadFile(destination); readErr == nil && !spec.managedFn(string(existing)) {
+			continue
+		} else if readErr != nil && !os.IsNotExist(readErr) {
+			return readErr
+		}
+		plan.Targets = append(plan.Targets, maintenanceMutationTarget{Root: lifecycleTransactionRootRepository, RelativeTarget: spec.destRel, Source: source, Action: lifecycleTransactionWrite, Content: []byte(renderProjectDocTemplate(string(data))), Managed: true})
+	}
+	return nil
+}
+
+func appendMaintenanceScaffoldTargets(plan *maintenanceMutationPlan, localAether string) error {
+	files := []struct {
+		rel     string
+		content string
+	}{
+		{".aether/WHAT-IS-THIS.md", "# What is this directory?\n\nThis is Aether's colony state for this repository — durable working memory, not a build cache.\n"},
+		{".aether/QUEEN.md", queenDefaultContent},
+	}
+	for _, file := range files {
+		if _, err := os.Lstat(filepath.Join(filepath.Dir(localAether), filepath.FromSlash(file.rel))); err == nil {
+			continue
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+		plan.Targets = append(plan.Targets, maintenanceMutationTarget{Root: lifecycleTransactionRootRepository, RelativeTarget: filepath.FromSlash(file.rel), Source: "Aether local-state schema", Action: lifecycleTransactionWrite, Content: []byte(file.content), Managed: true})
+	}
+	gitignore := filepath.Join(localAether, ".gitignore")
+	content := "# Aether local state - not versioned\ndata/\ncheckpoints/\nlocks/\ndreams/\noracle/\nts-host/node_modules/\n"
+	if current, err := os.ReadFile(gitignore); err == nil {
+		if strings.Contains(string(current), "ts-host/node_modules") {
+			content = string(current)
+		} else {
+			content = strings.TrimRight(string(current), "\n") + "\nts-host/node_modules/\n"
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	plan.Targets = append(plan.Targets, maintenanceMutationTarget{Root: lifecycleTransactionRootRepository, RelativeTarget: ".aether/.gitignore", Source: "Aether local-state schema", Action: lifecycleTransactionWrite, Content: []byte(content), Managed: true})
+	return nil
+}
+
+func appendMaintenanceLegacyRepositoryTargets(plan *maintenanceMutationPlan, hubSystem, repositoryRoot string) error {
+	for _, base := range []string{filepath.Join(".claude", "commands"), filepath.Join(".opencode", "commands", "ant")} {
+		root := filepath.Join(repositoryRoot, base)
+		files, err := listMaintenanceRegularFilesIfPresent(root)
+		if err != nil {
+			return err
+		}
+		for _, rel := range files {
+			data, err := os.ReadFile(filepath.Join(root, rel))
+			if err != nil {
+				return err
+			}
+			if !isGeneratedAetherCommandWrapper(data) {
+				continue
+			}
+			plan.Targets = append(plan.Targets, maintenanceMutationTarget{Root: lifecycleTransactionRootRepository, RelativeTarget: filepath.Join(base, rel), Source: "legacy generated wrapper ownership header", Action: lifecycleTransactionRemove, Managed: true})
+		}
+	}
+	localSkills := filepath.Join(repositoryRoot, ".aether", "skills")
+	for _, rel := range listFilesRecursive(localSkills) {
+		localPath := filepath.Join(localSkills, rel)
+		hubPath := filepath.Join(hubSystem, "skills", rel)
+		local, localErr := os.ReadFile(localPath)
+		hub, hubErr := os.ReadFile(hubPath)
+		if localErr == nil && hubErr == nil && bytes.Equal(local, hub) {
+			plan.Targets = append(plan.Targets, maintenanceMutationTarget{Root: lifecycleTransactionRootRepository, RelativeTarget: filepath.Join(".aether", "skills", rel), Source: hubPath + " exact shipped match", Action: lifecycleTransactionRemove, Managed: true})
+		}
+	}
+	return nil
+}
+
+func appendMaintenanceTsHostTargets(plan *maintenanceMutationPlan, hubRoot string) error {
+	source := tsHostHubDir(hubRoot)
+	if _, err := os.Lstat(source); os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	if err := validateTsHostHubArtifacts(hubRoot); err != nil {
+		return err
+	}
+	if err := appendMaintenanceSyncTargets(plan, maintenanceSyncSpec{Root: lifecycleTransactionRootRepository, SourceDir: filepath.Join(source, "dist"), DestinationBase: filepath.Join(".aether", "ts-host", "dist"), Options: syncOptions{cleanup: true}, CleanupOwned: func(string, []byte) bool { return true }}); err != nil {
+		return err
+	}
+	for _, name := range []string{"package.json", "package-lock.json"} {
+		data, err := os.ReadFile(filepath.Join(source, name))
+		if err != nil {
+			return err
+		}
+		plan.Targets = append(plan.Targets, maintenanceMutationTarget{Root: lifecycleTransactionRootRepository, RelativeTarget: filepath.Join(".aether", "ts-host", name), Source: filepath.Join(source, name), Action: lifecycleTransactionWrite, Content: data, Managed: true})
+	}
+	return nil
+}
+
+func appendMaintenanceUpdatePlatformTargets(plan *maintenanceMutationPlan, hubRoot, homeDir string) error {
+	claudeRoot := filepath.Join(homeDir, ".claude")
+	codexRoot := filepath.Join(homeDir, ".codex")
+	needClaude, needOpenCode, needCodex := false, false, false
+	for _, pair := range platformHomeHubSyncPairs() {
+		if _, err := os.Lstat(filepath.Join(hubRoot, "system", filepath.FromSlash(pair.srcRel))); os.IsNotExist(err) {
+			continue
+		} else if err != nil {
+			return err
+		}
+		switch {
+		case strings.HasPrefix(filepath.ToSlash(pair.destRel), ".claude/"):
+			needClaude = true
+		case strings.HasPrefix(filepath.ToSlash(pair.destRel), ".codex/"):
+			needCodex = true
+		default:
+			needOpenCode = true
+		}
+	}
+	for label, root := range map[string]string{"Claude": claudeRoot, "Codex": codexRoot} {
+		if (label == "Claude" && !needClaude) || (label == "Codex" && !needCodex) {
+			continue
+		}
+		info, err := os.Lstat(root)
+		if err != nil {
+			return fmt.Errorf("maintenance update: %s home is unavailable; run aether install first: %w", label, err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+			return fmt.Errorf("maintenance update: %s home is not a real directory", label)
+		}
+	}
+	if needClaude {
+		plan.Allowlist.ClaudeHome = claudeRoot
+	}
+	if needOpenCode {
+		plan.Allowlist.OpenCodeHome = homeDir
+	}
+	if needCodex {
+		plan.Allowlist.CodexHome = codexRoot
+	}
+	for _, pair := range platformHomeHubSyncPairs() {
+		sourceDir := filepath.Join(hubRoot, "system", filepath.FromSlash(pair.srcRel))
+		if _, err := os.Lstat(sourceDir); os.IsNotExist(err) {
+			continue
+		} else if err != nil {
+			return err
+		}
+		rootKind := lifecycleTransactionRootOpenCodeHome
+		base := filepath.FromSlash(pair.destRel)
+		if strings.HasPrefix(filepath.ToSlash(pair.destRel), ".claude/") {
+			rootKind = lifecycleTransactionRootClaudeHome
+			base = strings.TrimPrefix(filepath.ToSlash(pair.destRel), ".claude/")
+		} else if strings.HasPrefix(filepath.ToSlash(pair.destRel), ".codex/") {
+			rootKind = lifecycleTransactionRootCodexHome
+			base = strings.TrimPrefix(filepath.ToSlash(pair.destRel), ".codex/")
+		}
+		err := appendMaintenanceSyncTargets(plan, maintenanceSyncSpec{
+			Root: rootKind, SourceDir: sourceDir, DestinationBase: filepath.FromSlash(base),
+			Options:             syncOptions{cleanup: pair.cleanup, preserveLocalChanges: pair.preserveLocalChanges, validate: pair.validate, include: pair.include, mapRelPath: pair.mapRelPath, cleanupInclude: pair.cleanupInclude},
+			PruneRetiredAliases: pair.cleanupLegacyClaude,
+		})
+		if err != nil {
+			return fmt.Errorf("plan %s: %w", pair.label, err)
+		}
+	}
+	return nil
+}
+
+func renderMaintenanceMutationPreview(preview maintenanceMutationPreview, dryRun bool) string {
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("update"), "Maintenance Update"))
+	if dryRun {
+		b.WriteString("Preview only — no targets were changed.\n")
+	} else {
+		b.WriteString("Maintenance transaction completed.\n")
+	}
+	fmt.Fprintf(&b, "Version: %s -> %s\n", preview.CurrentVersion, preview.DesiredVersion)
+	for _, target := range preview.Targets {
+		fmt.Fprintf(&b, "- %s %s:%s (%s -> %s)\n", target.Change, target.Root, filepath.ToSlash(target.RelativeTarget), target.CurrentDigest, target.DesiredDigest)
+	}
+	b.WriteString(renderNextUp("Use `aether resume` only if the transaction reports recovery required."))
+	return b.String()
 }
 
 // updateLastCommandFact is what update reports it did, fed to the one
@@ -438,6 +606,52 @@ func readHubVersion(path string) string {
 		return "unknown"
 	}
 	return v.Version
+}
+
+// validateMaintenanceVersionAgreement binds a maintenance transaction to one
+// release identity. Source checkouts must agree across the canonical Go asset
+// version and npm package; the selected hub must carry the same version before
+// any destination is staged.
+func validateMaintenanceVersionAgreement(sourceRoot, hubRoot, desiredVersion string) error {
+	desiredVersion = normalizeVersion(strings.TrimSpace(desiredVersion))
+	if desiredVersion == "" {
+		return fmt.Errorf("maintenance update: desired version is required")
+	}
+	hubVersion := normalizeVersion(readHubVersionAtPath(hubRoot))
+	if hubVersion == "" {
+		return fmt.Errorf("maintenance update: selected hub has no version manifest")
+	}
+	if hubVersion != desiredVersion {
+		return fmt.Errorf("maintenance update: hub version %s does not match desired version %s", hubVersion, desiredVersion)
+	}
+
+	sourceVersionPath := filepath.Join(sourceRoot, ".aether", "version.json")
+	npmVersionPath := filepath.Join(sourceRoot, "npm", "package.json")
+	_, sourceStatErr := os.Stat(sourceVersionPath)
+	_, npmStatErr := os.Stat(npmVersionPath)
+	if !isAetherSourceCheckout(sourceRoot) && (sourceStatErr != nil || npmStatErr != nil) {
+		return nil
+	}
+	if sourceStatErr != nil {
+		return fmt.Errorf("maintenance update: source version manifest unavailable: %w", sourceStatErr)
+	}
+	if npmStatErr != nil {
+		return fmt.Errorf("maintenance update: npm version manifest unavailable: %w", npmStatErr)
+	}
+	sourceVersion, err := readJSONVersion(sourceVersionPath)
+	if err != nil {
+		return fmt.Errorf("maintenance update: read source version: %w", err)
+	}
+	npmVersion, err := readJSONVersion(npmVersionPath)
+	if err != nil {
+		return fmt.Errorf("maintenance update: read npm version: %w", err)
+	}
+	sourceVersion = normalizeVersion(sourceVersion)
+	npmVersion = normalizeVersion(npmVersion)
+	if sourceVersion != npmVersion || sourceVersion != desiredVersion {
+		return fmt.Errorf("maintenance update: version disagreement source=%s npm=%s hub=%s desired=%s", sourceVersion, npmVersion, hubVersion, desiredVersion)
+	}
+	return nil
 }
 
 // --- stale-publish detection ---
