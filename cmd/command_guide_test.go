@@ -590,6 +590,84 @@ func TestCommandGuideLiteralCommandsArePassthrough(t *testing.T) {
 	}
 }
 
+func TestCommandGuideLifecycle199(t *testing.T) {
+	const statusBeforeOptionalEntomb = "After sealing, run `AETHER_OUTPUT_MODE=visual aether status` first to review the retained sealed state; `aether entomb` is a separate optional owner-confirmed archive-and-clear action."
+
+	guides := make(map[string]commandGuideResult)
+	for _, command := range []string{"pause", "resume", "seal", "entomb"} {
+		guide, err := buildCommandGuide(command, "codex")
+		if err != nil {
+			t.Fatalf("buildCommandGuide(%q, codex): %v", command, err)
+		}
+		guides[command] = guide
+	}
+	if guides["pause"].RunCommand != "AETHER_OUTPUT_MODE=visual aether pause $ARGUMENTS" {
+		t.Errorf("pause guide does not delegate to the canonical runtime: %q", guides["pause"].RunCommand)
+	}
+	if guides["resume"].RunCommand != "AETHER_OUTPUT_MODE=visual aether resume $ARGUMENTS" {
+		t.Errorf("resume guide does not delegate to the canonical runtime: %q", guides["resume"].RunCommand)
+	}
+
+	var guideParts []string
+	for _, command := range []string{"pause", "resume", "seal", "entomb"} {
+		guide := guides[command]
+		guideParts = append(guideParts, guide.Intent)
+		guideParts = append(guideParts, guide.PreSteps...)
+		guideParts = append(guideParts, guide.RunCommand)
+		guideParts = append(guideParts, guide.PostSteps...)
+		guideParts = append(guideParts, guide.DriftGuards...)
+	}
+	guideText := strings.Join(guideParts, "\n")
+	for _, required := range []string{
+		"`aether pause` and `aether resume`",
+		"Confirmed", "Reconstructed", "Conflicting", "Unknown",
+		"state effect none", "must not inspect, select, or edit",
+		statusBeforeOptionalEntomb,
+		"Never invoke entomb automatically",
+	} {
+		if !strings.Contains(guideText, required) {
+			t.Errorf("Codex lifecycle command-guide lacks %q", required)
+		}
+	}
+
+	for _, retired := range []string{"recover", "resume-colony", "pause-colony"} {
+		if _, err := buildCommandGuide(retired, "codex"); err == nil {
+			t.Errorf("retired public lifecycle route %q is still documented by command-guide", retired)
+		}
+	}
+
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("find repository root: %v", err)
+	}
+	skillPath := filepath.Join(repoRoot, ".aether", "skills", "colony", "colony-lifecycle", "SKILL.md")
+	rawSkill, err := os.ReadFile(skillPath)
+	if err != nil {
+		t.Fatalf("read lifecycle skill: %v", err)
+	}
+	skillText := strings.ReplaceAll(string(rawSkill), "\r\n", "\n")
+	for _, required := range []string{
+		"`aether pause` and `aether resume`",
+		"Confirmed", "Reconstructed", "Conflicting", "Unknown",
+		"state effect none", "must not inspect, select, or edit",
+		statusBeforeOptionalEntomb,
+		"Never invoke entomb automatically",
+	} {
+		if !strings.Contains(skillText, required) {
+			t.Errorf("existing Codex lifecycle skill lacks %q", required)
+		}
+	}
+	for _, forbidden := range []string{
+		"aether recover", "/ant-recover", "resume-colony", "pause-colony", "$ant-",
+		"After seal, suggest entomb", "after seal automatically", "automatically invoke entomb",
+		"write COLONY_STATE.json", "edit session.json", "remove HANDOFF.md",
+	} {
+		if strings.Contains(skillText, forbidden) {
+			t.Errorf("existing Codex lifecycle skill contains retired/host-owned lifecycle guidance %q", forbidden)
+		}
+	}
+}
+
 func TestInsertPhaseCommandGuideDocumentsGuidedAndExplicitForms(t *testing.T) {
 	guide, err := buildCommandGuide("insert-phase", "codex")
 	if err != nil {
