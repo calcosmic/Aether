@@ -647,45 +647,32 @@ var sealCmd = &cobra.Command{
 			return nil
 		}
 
-		// The same readiness rules as the heavy path: with --force the
-		// all-phases-completed rule becomes an owner override (recorded
-		// with a reason), because sometimes the work was finished OUTSIDE
-		// the colony, or the colony is wedged on its own gates, and the
-		// owner's call to file the project away must win.
-		state, incompletePhases, err := validateSealReady(forceFlag)
+		root := resolveAetherRootPath()
+		facts, err := loadLifecycleFacts(root, store, time.Now().UTC())
 		if err != nil {
 			renderRecoveryMenu("seal", err.Error(), nil)
 			return nil
 		}
-
-		// Check for blocker-severity flags
-		blockers, issues := checkSealBlockers(store, state)
-		if len(blockers) > 0 {
-			if !forceFlag {
-				renderRecoveryMenu("seal", renderBlockerSummary(blockers, issues), nil)
-				return nil
-			}
-			// --force: warn but continue
-			visualFprintln(stdout, fmt.Sprintf("WARNING: Overriding %d blocker(s) with --force", len(blockers)))
-		} else if len(issues) > 0 {
-			visualFprintln(stdout, fmt.Sprintf("NOTE: %d unresolved issue-severity flag(s)", len(issues)))
-		}
-
-		override := sealOverride{Forced: forceFlag, Reason: strings.TrimSpace(forceReason), IncompletePhases: incompletePhases, OverriddenBlockers: len(blockers)}
-		if forceFlag && (len(incompletePhases) > 0 || len(blockers) > 0) && override.Reason == "" {
-			renderRecoveryMenu("seal", fmt.Sprintf("force-sealing overrides %d unverified phase(s) and %d open blocker(s) — a reason is required so the override is recorded honestly: rerun with `--reason \"why\"`", len(incompletePhases), len(blockers)), nil)
+		preflight, err := BuildSealPreflight(facts, SealPreflightRequest{
+			Caller: SealCallerDirectOwner, Force: forceFlag, Reason: forceReason,
+		})
+		if err != nil {
+			renderRecoveryMenu("seal", err.Error(), nil)
 			return nil
 		}
-
-		// D-04..D-07: the shared confirmation gate (card, wisdom review,
-		// question) every path to completeSealRuntime goes through.
-		proceed, review, pending := runSealConfirmationGate(state, blockers, issues)
+		proceed, pending := runSealPreflightConfirmationGate(preflight)
 		if !proceed {
 			outputOK(pending)
 			return nil
 		}
-
-		return completeSealRuntime(state, override, review)
+		override := sealOverride{
+			Forced: forceFlag, Reason: preflight.OwnerReason,
+			OverriddenBlockers: len(preflight.ResidualRisks),
+		}
+		for _, phaseID := range preflight.IncompletePhaseIDs {
+			override.IncompletePhases = append(override.IncompletePhases, fmt.Sprintf("phase %d", phaseID))
+		}
+		return completeSealRuntime(facts.State.Value, override, sealWisdomReview{}, preflight)
 	},
 }
 
@@ -718,6 +705,7 @@ type sealWisdomReview struct {
 	HivePromotedCount     int
 	HivePromotionFailures int
 	Beats                 string
+	FinalReview           *sealFinalReviewReport
 }
 
 // runSealWisdomReview runs the eight-ant curation pass plus the local/hive
@@ -864,117 +852,869 @@ func runSealWisdomReview(state colony.ColonyState) sealWisdomReview {
 	}
 }
 
-func completeSealRuntime(state colony.ColonyState, override sealOverride, review sealWisdomReview) error {
-	// Ceremony Step 3: Expire all FOCUS pheromones, preserve REDIRECT (D-03).
-	// Any expired FOCUS signal that was ever reinforced is preserved in
-	// long-term memory by expireSignalsByType itself (198.1-04, FEED-04); the
-	// promotion count isn't surfaced in the seal beat, so it's discarded here.
-	expiredFOCUSCount, _ := expireSignalsByType(store, "FOCUS")
+// SealTransactionInput is the complete, already-authorized payload for one
+// retained closure. Tests and the command path use the same entry point so
+// crash recovery cannot diverge from ordinary seal behavior.
+type SealTransactionInput struct {
+	Root                       string
+	DataRoot                   string
+	HubRoot                    string
+	Facts                      LifecycleFacts
+	State                      colony.ColonyState
+	Session                    colony.SessionFile
+	Preflight                  SealPreflight
+	FinalReview                sealFinalReviewReport
+	Review                     sealWisdomReview
+	Warnings                   []string
+	ShelfCandidates            []colony.ShelfEntry
+	ReviewBacklog              []colony.ReviewLedgerEntry
+	Now                        time.Time
+	Fault                      lifecycleTransactionFaultHook
+	DisablePostCommitPromotion bool
+}
 
-	now := time.Now().UTC().Format(time.RFC3339)
+type sealReceiptEnvelope struct {
+	Disposition colony.SealDisposition  `json:"disposition"`
+	OwnerReason string                  `json:"owner_reason,omitempty"`
+	Receipt     colony.LifecycleReceipt `json:"receipt"`
+}
+
+type sealRollbackRecord struct {
+	SchemaVersion string                    `json:"schema_version"`
+	TransactionID string                    `json:"transaction_id"`
+	OutcomeKind   colony.OutcomeKind        `json:"outcome_kind"`
+	Disposition   colony.SealDisposition    `json:"disposition"`
+	OwnerReason   string                    `json:"owner_reason,omitempty"`
+	Rollback      *colony.LifecycleRollback `json:"rollback,omitempty"`
+}
+
+type sealFindingsRecord struct {
+	SchemaVersion string                   `json:"schema_version"`
+	TransactionID string                   `json:"transaction_id"`
+	OutcomeKind   colony.OutcomeKind       `json:"outcome_kind"`
+	Disposition   colony.SealDisposition   `json:"disposition"`
+	OwnerReason   string                   `json:"owner_reason,omitempty"`
+	Findings      []sealFinalReviewFinding `json:"findings"`
+}
+
+type sealLearningsRecord struct {
+	SchemaVersion string                 `json:"schema_version"`
+	TransactionID string                 `json:"transaction_id"`
+	OutcomeKind   colony.OutcomeKind     `json:"outcome_kind"`
+	Disposition   colony.SealDisposition `json:"disposition"`
+	OwnerReason   string                 `json:"owner_reason,omitempty"`
+	Learnings     []colony.PhaseLearning `json:"retained_learnings"`
+	FutureWork    []SealUnresolvedItem   `json:"uncompleted_future_work"`
+}
+
+type sealCheckpointsRecord struct {
+	SchemaVersion string                 `json:"schema_version"`
+	TransactionID string                 `json:"transaction_id"`
+	OutcomeKind   colony.OutcomeKind     `json:"outcome_kind"`
+	Disposition   colony.SealDisposition `json:"disposition"`
+	OwnerReason   string                 `json:"owner_reason,omitempty"`
+	Checkpoints   []SealOwnerCheckpoint  `json:"owner_checkpoints"`
+}
+
+// SealTransactionID is stable across retry and replay. It uses only the
+// pre-seal episode and typed authority facts, never bytes the transaction is
+// about to mutate.
+func SealTransactionID(input SealTransactionInput) string {
+	episode := ""
+	if input.State.AcceptedCharter != nil {
+		episode = strings.TrimSpace(input.State.AcceptedCharter.EpisodeID)
+	}
+	if episode == "" && input.State.SessionID != nil {
+		episode = strings.TrimSpace(*input.State.SessionID)
+	}
+	goal := ""
+	if input.State.Goal != nil {
+		goal = strings.TrimSpace(*input.State.Goal)
+	}
+	seed := struct {
+		Episode     string
+		Goal        string
+		CapturedAt  string
+		Disposition colony.SealDisposition
+		Reason      string
+	}{
+		Episode:     episode,
+		Goal:        goal,
+		CapturedAt:  input.Preflight.FactsCapturedAt,
+		Disposition: input.Preflight.Disposition,
+		Reason:      input.Preflight.OwnerReason,
+	}
+	content, _ := json.Marshal(seed)
+	digest := strings.TrimPrefix(lifecycleDigest(content), "sha256:")
+	if len(digest) > 20 {
+		digest = digest[:20]
+	}
+	return "seal-" + digest
+}
+
+// CommitSealTransaction commits the retained state, report, registry,
+// evidence, signals, event, outcome and application receipt through the shared
+// lifecycle coordinator. A retry resumes durable intent or returns the exact
+// already-verified artifacts; it never appends a second event.
+func CommitSealTransaction(input SealTransactionInput) (SealTransactionResult, error) {
+	if err := input.Preflight.Validate(); err != nil {
+		return SealTransactionResult{}, fmt.Errorf("seal transaction preflight: %w", err)
+	}
+	root, err := filepath.Abs(strings.TrimSpace(input.Root))
+	if err != nil || strings.TrimSpace(input.Root) == "" {
+		return SealTransactionResult{}, fmt.Errorf("seal transaction: repository root is required")
+	}
+	root = filepath.Clean(root)
+	dataRoot := strings.TrimSpace(input.DataRoot)
+	if dataRoot == "" {
+		dataRoot = filepath.Join(root, ".aether", "data")
+	}
+	dataRoot, err = filepath.Abs(dataRoot)
+	if err != nil {
+		return SealTransactionResult{}, err
+	}
+	dataRoot = filepath.Clean(dataRoot)
+	hubRoot := strings.TrimSpace(input.HubRoot)
+	if hubRoot == "" {
+		hubRoot = resolveHubPathQuiet()
+	}
+	if hubRoot == "" {
+		return SealTransactionResult{}, fmt.Errorf("seal transaction: hub root is required for the registry transition")
+	}
+	hubRoot, err = filepath.Abs(hubRoot)
+	if err != nil {
+		return SealTransactionResult{}, err
+	}
+	hubRoot = filepath.Clean(hubRoot)
+	if input.Now.IsZero() {
+		input.Now = time.Now().UTC()
+	} else {
+		input.Now = input.Now.UTC()
+	}
+	if err := os.MkdirAll(filepath.Join(root, ".aether"), 0o755); err != nil {
+		return SealTransactionResult{}, err
+	}
+	if err := os.MkdirAll(dataRoot, 0o755); err != nil {
+		return SealTransactionResult{}, err
+	}
+	if err := os.MkdirAll(filepath.Join(hubRoot, "registry"), 0o755); err != nil {
+		return SealTransactionResult{}, err
+	}
+
+	input.Root, input.DataRoot, input.HubRoot = root, dataRoot, hubRoot
+	txID := SealTransactionID(input)
+	config := lifecycleTransactionConfig{
+		TransactionID: txID,
+		Command:       "seal",
+		Allowlist: lifecycleTransactionAllowlist{
+			RepositoryRoot:    root,
+			LifecycleDataRoot: dataRoot,
+			Hub: lifecycleTransactionHubRoot{
+				Channel: lifecycleTransactionHubStable,
+				Path:    hubRoot,
+			},
+		},
+		Fault: input.Fault,
+	}
+	journalIntent := filepath.Join(dataRoot, "transactions", txID, "intent.json")
+	if _, statErr := os.Stat(journalIntent); statErr == nil {
+		receipt, resumeErr := resumeLifecycleTransaction(config)
+		if resumeErr != nil {
+			return SealTransactionResult{}, resumeErr
+		}
+		if receipt.StateEffect != colony.LifecycleStateEffectCommitted {
+			return SealTransactionResult{}, fmt.Errorf("seal transaction %s resumed with %s", txID, receipt.StateEffect)
+		}
+		result, loadErr := loadSealTransactionResult(input, txID, true)
+		if loadErr != nil {
+			return SealTransactionResult{}, loadErr
+		}
+		return finishSealPostCommitPromotions(input, result)
+	} else if !os.IsNotExist(statErr) {
+		return SealTransactionResult{}, statErr
+	}
+
+	artifacts, err := buildSealTransactionArtifacts(input, txID)
+	if err != nil {
+		return SealTransactionResult{}, err
+	}
+	tx, err := beginLifecycleTransaction(config)
+	if err != nil {
+		return SealTransactionResult{}, err
+	}
+	for _, target := range artifacts {
+		if err := tx.DeclareWrite(target.Root, target.Path, target.Content); err != nil {
+			return SealTransactionResult{}, err
+		}
+	}
+	if _, err := tx.Commit(); err != nil {
+		return SealTransactionResult{}, err
+	}
+	result, err := loadSealTransactionResult(input, txID, false)
+	if err != nil {
+		return SealTransactionResult{}, err
+	}
+	return finishSealPostCommitPromotions(input, result)
+}
+
+type sealTransactionArtifact struct {
+	Root    lifecycleTransactionRootKind
+	Path    string
+	Content []byte
+}
+
+func buildSealTransactionArtifacts(input SealTransactionInput, txID string) ([]sealTransactionArtifact, error) {
+	evidence, signals, queenBytes, err := buildSealClosureEvidence(input, txID)
+	if err != nil {
+		return nil, err
+	}
+	transaction := colony.LifecycleTransactionReference{
+		ID:          txID,
+		Stage:       colony.TransactionStageVerified,
+		JournalPath: filepath.Join(input.DataRoot, "transactions", txID),
+	}
+	receipt := colony.LifecycleReceipt{
+		SchemaVersion:      colony.LifecycleSchemaVersion,
+		ReceiptID:          txID + "-seal-receipt",
+		Command:            "seal",
+		OutcomeKind:        input.Preflight.OutcomeKind,
+		ProjectionRevision: input.Preflight.ProjectionRevision,
+		Evidence:           append([]colony.LifecycleEvidence{}, input.Preflight.Evidence...),
+		Verification:       sealLifecycleVerifications(input.Preflight),
+		Warnings:           append([]colony.LifecycleIssue{}, input.Preflight.ResidualRisks...),
+		StateEffect:        colony.LifecycleStateEffectCommitted,
+		Transaction:        transaction,
+		Provenance:         colony.RecoveryProvenanceConfirmed,
+	}
+	if input.Preflight.Disposition == colony.SealDispositionForcedIncomplete {
+		receipt.Decisions = []colony.LifecycleDecision{{
+			ID:          "owner-forced-incomplete-closure",
+			Scope:       "seal",
+			Summary:     input.Preflight.OwnerReason,
+			EvidenceIDs: []string{"seal-force-authority"},
+		}}
+	}
+	if err := receipt.Validate(); err != nil {
+		return nil, fmt.Errorf("seal receipt: %w", err)
+	}
+	receiptBytes, err := marshalSealJSON(receipt)
+	if err != nil {
+		return nil, err
+	}
+	receiptReference := &colony.LifecycleReceiptReference{ID: receipt.ReceiptID, Digest: lifecycleDigest(receiptBytes)}
+	outcome := buildSealOutcome(input.Preflight, txID, transaction, receiptReference, receipt)
+	if err := outcome.Validate(); err != nil {
+		return nil, fmt.Errorf("seal outcome: %w", err)
+	}
+
+	state := input.State
+	now := input.Now.Format(time.RFC3339)
 	state.State = colony.StateCOMPLETED
 	state.Milestone = "Crowned Anthill"
 	state.MilestoneUpdatedAt = &now
-	if override.overrodeAnything() {
-		// A forced seal is a real event in the colony's history, not a
-		// footnote: name what was skipped and why, so the Archaeologist and
-		// anyone reading history sees an honest record.
-		state.Events = append(trimmedEvents(state.Events), fmt.Sprintf(
-			"%s|sealed_forced|seal|Colony force-sealed by owner (%d unverified phase(s), %d overridden blocker(s)): %s",
-			now, len(override.IncompletePhases), override.OverriddenBlockers+override.OverriddenReviewBlocks, override.Reason,
-		))
-	} else {
-		state.Events = append(trimmedEvents(state.Events), fmt.Sprintf("%s|sealed|seal|Colony sealed at Crowned Anthill", now))
+	state.LifecycleReceipt = &receipt
+	state.SealOutcome = &outcome
+	eventKind := "sealed_verified"
+	eventSummary := "Verified colony closure recorded"
+	if outcome.Disposition == colony.SealDispositionForcedIncomplete {
+		eventKind = "sealed_forced_incomplete"
+		eventSummary = "Owner-forced incomplete closure recorded: " + outcome.OwnerReason
+	}
+	state.Events = append(trimmedEvents(state.Events), fmt.Sprintf("%s|%s|seal|%s", now, eventKind, eventSummary))
+
+	session := input.Session
+	session.LastCommand = "seal"
+	session.LastCommandAt = now
+	session.CurrentPhase = state.CurrentPhase
+	session.CurrentMilestone = state.Milestone
+	session.SuggestedNext = "aether status"
+	session.Summary = eventSummary
+	session.LifecycleReceipt = &receipt
+	session.SealOutcome = &outcome
+
+	finalReview := input.FinalReview
+	finalReview.TransactionID = txID
+	finalReview.Disposition = outcome.Disposition
+	finalReview.OwnerReason = outcome.OwnerReason
+	finalReview.ClosureEvidence = &evidence
+	if finalReview.GeneratedAt == "" {
+		finalReview.GeneratedAt = now
 	}
 
-	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
-		outputError(2, fmt.Sprintf("failed to save colony state: %v", err), nil)
-		return nil
+	findings := sealFindingsRecord{
+		SchemaVersion: colony.LifecycleSchemaVersion, TransactionID: txID,
+		OutcomeKind: outcome.OutcomeKind, Disposition: outcome.Disposition,
+		OwnerReason: outcome.OwnerReason, Findings: append([]sealFinalReviewFinding{}, finalReview.Findings...),
+	}
+	learnings := sealLearningsRecord{
+		SchemaVersion: colony.LifecycleSchemaVersion, TransactionID: txID,
+		OutcomeKind: outcome.OutcomeKind, Disposition: outcome.Disposition,
+		OwnerReason: outcome.OwnerReason, Learnings: append([]colony.PhaseLearning{}, state.Memory.PhaseLearnings...),
+		FutureWork: append([]SealUnresolvedItem{}, input.Preflight.UnresolvedItems...),
+	}
+	checkpoints := sealCheckpointsRecord{
+		SchemaVersion: colony.LifecycleSchemaVersion, TransactionID: txID,
+		OutcomeKind: outcome.OutcomeKind, Disposition: outcome.Disposition,
+		OwnerReason: outcome.OwnerReason, Checkpoints: append([]SealOwnerCheckpoint{}, input.Preflight.OwnerCheckpoints...),
+	}
+	rollback := sealRollbackRecord{
+		SchemaVersion: colony.LifecycleSchemaVersion, TransactionID: txID,
+		OutcomeKind: outcome.OutcomeKind, Disposition: outcome.Disposition,
+		OwnerReason: outcome.OwnerReason, Rollback: outcome.Rollback,
+	}
+	receiptEnvelope := sealReceiptEnvelope{Disposition: outcome.Disposition, OwnerReason: outcome.OwnerReason, Receipt: receipt}
+
+	crowned := buildTransactionalSealSummary(state, input, evidence, receipt)
+	eventBytes, err := buildSealEventBusBytes(input, outcome)
+	if err != nil {
+		return nil, err
+	}
+	registryBytes, err := buildSealRegistryBytes(input, state)
+	if err != nil {
+		return nil, err
 	}
 
-	// Shelf candidate detection (before archiving)
-	candidates, _ := detectShelfCandidates(state, store)
-	if len(candidates) > 0 {
-		visualFprintln(stdout, shelfCandidateSummary(candidates))
+	values := []struct {
+		root  lifecycleTransactionRootKind
+		path  string
+		value any
+	}{
+		{lifecycleTransactionRootData, "COLONY_STATE.json", state},
+		{lifecycleTransactionRootData, "session.json", session},
+		{lifecycleTransactionRootData, "seal/outcome.json", outcome},
+		{lifecycleTransactionRootData, "seal/receipt.json", receiptEnvelope},
+		{lifecycleTransactionRootData, "seal/closure-evidence.json", evidence},
+		{lifecycleTransactionRootData, sealFinalReviewReportRel, finalReview},
+		{lifecycleTransactionRootData, "seal/findings.json", findings},
+		{lifecycleTransactionRootData, "seal/learnings.json", learnings},
+		{lifecycleTransactionRootData, "seal/checkpoints.json", checkpoints},
+		{lifecycleTransactionRootData, "seal/rollback.json", rollback},
+		{lifecycleTransactionRootData, "pheromones.json", signals},
+	}
+	artifacts := []sealTransactionArtifact{
+		{Root: lifecycleTransactionRootRepository, Path: filepath.Join(".aether", "CROWNED-ANTHILL.md"), Content: []byte(crowned)},
+		{Root: lifecycleTransactionRootRepository, Path: filepath.Join(".aether", "QUEEN.md"), Content: queenBytes},
+	}
+	for _, entry := range values {
+		content, marshalErr := marshalSealJSON(entry.value)
+		if marshalErr != nil {
+			return nil, marshalErr
+		}
+		artifacts = append(artifacts, sealTransactionArtifact{Root: entry.root, Path: entry.path, Content: content})
+	}
+	artifacts = append(artifacts,
+		sealTransactionArtifact{Root: lifecycleTransactionRootData, Path: "event-bus.jsonl", Content: eventBytes},
+		sealTransactionArtifact{Root: lifecycleTransactionRootHubStable, Path: filepath.Join("registry", "registry.json"), Content: registryBytes},
+	)
+	return artifacts, nil
+}
+
+func buildSealOutcome(preflight SealPreflight, txID string, transaction colony.LifecycleTransactionReference, receipt *colony.LifecycleReceiptReference, lifecycleReceipt colony.LifecycleReceipt) colony.SealOutcome {
+	outcome := colony.SealOutcome{
+		SchemaVersion:      colony.LifecycleSchemaVersion,
+		OutcomeID:          txID + "-outcome",
+		Command:            "seal",
+		OutcomeKind:        preflight.OutcomeKind,
+		ProjectionRevision: preflight.ProjectionRevision,
+		Disposition:        preflight.Disposition,
+		CompletedPhases:    append([]int{}, preflight.CompletedPhaseIDs...),
+		IncompletePhases:   append([]int{}, preflight.IncompletePhaseIDs...),
+		IncompleteTaskIDs:  append([]string{}, preflight.IncompleteTaskIDs...),
+		FailedGates:        sealLifecycleVerificationsForGates(preflight.FailedGates, false),
+		SkippedGates:       sealLifecycleVerificationsForGates(preflight.SkippedGates, false),
+		OwnerReason:        preflight.OwnerReason,
+		Rollback:           preflight.Rollback,
+		Evidence:           append([]colony.LifecycleEvidence{}, preflight.Evidence...),
+		Verification:       append([]colony.LifecycleVerification{}, lifecycleReceipt.Verification...),
+		Warnings:           append([]colony.LifecycleIssue{}, preflight.ResidualRisks...),
+		StateEffect:        colony.LifecycleStateEffectCommitted,
+		Transaction:        transaction,
+		Receipt:            receipt,
+		Provenance:         colony.RecoveryProvenanceConfirmed,
+	}
+	for _, issue := range preflight.MissingEvidence {
+		outcome.MissingEvidence = append(outcome.MissingEvidence, colony.LifecycleEvidence{ID: issue.ID, Kind: "missing", Summary: issue.Summary})
+	}
+	for _, item := range preflight.UnresolvedItems {
+		outcome.UnresolvedEvidence = append(outcome.UnresolvedEvidence, colony.LifecycleEvidence{ID: item.Kind + ":" + item.ID, Kind: item.Kind, Summary: item.Summary})
+	}
+	if preflight.Disposition == colony.SealDispositionForcedIncomplete {
+		outcome.Decisions = []colony.LifecycleDecision{{ID: "owner-forced-incomplete-closure", Scope: "seal", Summary: preflight.OwnerReason, EvidenceIDs: []string{"seal-force-authority"}}}
+	}
+	return outcome
+}
+
+func sealLifecycleVerifications(preflight SealPreflight) []colony.LifecycleVerification {
+	result := sealLifecycleVerificationsForGates(preflight.PassedGates, true)
+	result = append(result, sealLifecycleVerificationsForGates(preflight.FailedGates, false)...)
+	result = append(result, sealLifecycleVerificationsForGates(preflight.SkippedGates, false)...)
+	return result
+}
+
+func sealLifecycleVerificationsForGates(gates []colony.GateResultEntry, passed bool) []colony.LifecycleVerification {
+	result := make([]colony.LifecycleVerification, 0, len(gates))
+	for _, gate := range gates {
+		result = append(result, colony.LifecycleVerification{Name: gate.Name, Passed: passed, EvidenceIDs: []string{"gate:" + gate.Name}, Detail: gate.Detail})
+	}
+	return result
+}
+
+func buildSealClosureEvidence(input SealTransactionInput, txID string) (SealClosureEvidence, colony.PheromoneFile, []byte, error) {
+	repositoryIdentity := stableRepoIdentity(input.Root)
+	if repositoryIdentity == "" {
+		repositoryIdentity = "path_" + strings.TrimPrefix(lifecycleDigest([]byte(input.Root)), "sha256:")[:12]
+	}
+	evidence := SealClosureEvidence{
+		SchemaVersion: colony.LifecycleSchemaVersion, TransactionID: txID,
+		OutcomeKind: input.Preflight.OutcomeKind, Disposition: input.Preflight.Disposition,
+		OwnerReason:      input.Preflight.OwnerReason,
+		Checkpoints:      append([]SealOwnerCheckpoint{}, input.Preflight.OwnerCheckpoints...),
+		ResidualRisks:    append([]colony.LifecycleIssue{}, input.Preflight.ResidualRisks...),
+		UncompletedWork:  append([]SealUnresolvedItem{}, input.Preflight.UnresolvedItems...),
+		RetainedContents: append([]SealPreservedContent{}, input.Preflight.PreservedContents...),
+		PrimaryNext:      input.Preflight.PrimaryNext, OptionalNext: input.Preflight.OptionalNext,
+		ProjectionRevision: input.Preflight.ProjectionRevision,
+	}
+	stateSource := emptyFallback(strings.TrimSpace(input.Facts.State.Source.Path), filepath.Join(input.DataRoot, "COLONY_STATE.json"))
+	for _, learning := range input.State.Memory.PhaseLearnings {
+		evidence.Memory = append(evidence.Memory, sealMemoryProvenance(learning.ID, "phase_learning", stateSource, "COLONY_STATE.json", repositoryIdentity, "project", learning, []string{"phase-learning:" + learning.ID}, nil, txID))
+	}
+	for _, decision := range input.State.Memory.Decisions {
+		evidence.Memory = append(evidence.Memory, sealMemoryProvenance(decision.ID, "decision", stateSource, "COLONY_STATE.json", repositoryIdentity, "colony", decision, nil, []string{decision.ID}, txID))
+	}
+	instinctSource := emptyFallback(strings.TrimSpace(input.Facts.Memory.Source.Path), filepath.Join(input.DataRoot, "instincts.json"))
+	policy := string(currentHiveRuntimePolicy())
+	queenPath := filepath.Join(input.Root, ".aether", "QUEEN.md")
+	queenBefore, readErr := os.ReadFile(queenPath)
+	if readErr != nil && !os.IsNotExist(readErr) {
+		return SealClosureEvidence{}, colony.PheromoneFile{}, nil, readErr
+	}
+	queen := string(queenBefore)
+	for _, instinct := range input.Facts.Memory.Value.Instincts {
+		memory := sealMemoryProvenance(instinct.ID, "instinct", instinctSource, "instincts.json", repositoryIdentity, "colony", instinct, []string{instinct.Provenance.Evidence}, nil, txID)
+		evidence.Memory = append(evidence.Memory, memory)
+		action := strings.TrimSpace(instinct.Action)
+		sensitive := sealContentSensitive(action)
+		sanitized, sanitizeErr := colony.SanitizeSignalContent(action)
+		eligible := instinct.Confidence >= 0.8 && action != "" && !sensitive && sanitizeErr == nil
+		allowed := eligible && input.Preflight.Disposition == colony.SealDispositionVerified && policy == string(hivePolicyPromote)
+		decision := SealWisdomDecision{
+			ID: instinct.ID, Source: instinctSource, Scope: "cross_project_candidate", Digest: lifecycleDigest([]byte(action)),
+			Domain: instinct.Domain, Confidence: instinct.Confidence, Policy: policy, Sensitive: sensitive,
+			Eligible: eligible, PromotionAllowed: allowed, TransactionID: txID,
+		}
+		switch {
+		case sensitive:
+			decision.Sanitization, decision.Reason = "blocked_sensitive", "content matched the private or credential boundary"
+		case sanitizeErr != nil:
+			decision.Sanitization, decision.Reason = "blocked", sanitizeErr.Error()
+		case !eligible:
+			decision.Sanitization, decision.Reason = "passed", "content remains local because it is below the promotion threshold"
+		case input.Preflight.Disposition == colony.SealDispositionForcedIncomplete:
+			decision.Sanitization, decision.Reason = "passed", "forced-incomplete closure never promotes cross-project wisdom"
+		case policy != string(hivePolicyPromote):
+			decision.Sanitization, decision.Reason = "passed", "resolved Hive policy prohibits promotion"
+		default:
+			decision.Sanitization, decision.Reason = "passed", "eligible only after the verified seal transaction commits"
+		}
+		evidence.Wisdom = append(evidence.Wisdom, decision)
+		if sanitizeErr == nil && !sensitive && sanitized != "" && !strings.Contains(queen, sanitized) {
+			if !strings.HasSuffix(queen, "\n") && queen != "" {
+				queen += "\n"
+			}
+			queen += fmt.Sprintf("\n## Retained at seal (%s)\n- %s\n", txID, sanitized)
+		}
+	}
+	if len(queenBefore) > 0 {
+		evidence.Memory = append(evidence.Memory, sealMemoryProvenance("queen-local", "queen_memory", queenPath, "QUEEN.md", repositoryIdentity, "project", string(queenBefore), []string{"queen:pre-seal"}, nil, txID))
 	}
 
-	// Scan for high-severity open findings before building summary
-	warnings := scanHighSeverityOpen(store)
-	finalReview := loadSealFinalReviewForSummary(store)
-	reviewBacklog := collectOpenReviewBacklog(store, 10)
+	version := "2.0"
+	signals := colony.PheromoneFile{Version: &version, Signals: append([]colony.PheromoneSignal{}, input.Facts.Signals.Value...)}
+	for index := range signals.Signals {
+		signal := &signals.Signals[index]
+		content := strings.TrimSpace(extractText(signal.Content))
+		decision := SealSignalDecision{
+			ID: signal.ID, Type: signal.Type, Source: emptyFallback(signal.Source, input.Facts.Signals.Source.Path), Scope: "project",
+			Digest: lifecycleDigest([]byte(content)), Privacy: "project_local", Sensitive: sealContentSensitive(content), TransactionID: txID,
+		}
+		if strings.EqualFold(signal.Type, "FOCUS") && signal.Active {
+			decision.Classification = "expired_at_closure"
+			signal.Active = false
+			archivedAt := input.Now.Format(time.RFC3339)
+			signal.ArchivedAt = &archivedAt
+		} else if signal.Active {
+			decision.Classification = "retained"
+		} else {
+			decision.Classification = "already_expired"
+		}
+		evidence.Signals = append(evidence.Signals, decision)
+	}
+	return evidence, signals, []byte(queen), nil
+}
 
-	// Archive reviews directory alongside CROWNED-ANTHILL.md
-	aetherDir := filepath.Dir(store.BasePath())
-	_ = copyDirIfExists(filepath.Join(filepath.Dir(store.BasePath()), "data", "reviews"), filepath.Join(aetherDir, "reviews-archive"))
+func sealMemoryProvenance(id, kind, source, storeName, repositoryIdentity, scope string, value any, evidenceIDs, decisionIDs []string, txID string) SealMemoryProvenance {
+	content, _ := json.Marshal(value)
+	sensitive := sealContentSensitive(string(content))
+	sanitization := "passed"
+	if sensitive {
+		sanitization = "blocked_sensitive"
+	}
+	return SealMemoryProvenance{
+		ID: id, Kind: kind, Source: source, Store: storeName, RepositoryIdentity: repositoryIdentity,
+		Scope: scope, Digest: lifecycleDigest(content), EvidenceIDs: compactSealStrings(evidenceIDs), DecisionIDs: compactSealStrings(decisionIDs),
+		Sanitization: sanitization, Sensitive: sensitive, TransactionID: txID,
+	}
+}
 
-	// Build enrichment data for CROWNED-ANTHILL.md
+func compactSealStrings(values []string) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			result = append(result, value)
+		}
+	}
+	return result
+}
+
+func sealContentSensitive(content string) bool {
+	lower := strings.ToLower(content)
+	for _, marker := range []string{"password=", "password:", "api_key", "api-key", "secret=", "secret:", "access_token", "private key", "bearer "} {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func buildTransactionalSealSummary(state colony.ColonyState, input SealTransactionInput, evidence SealClosureEvidence, receipt colony.LifecycleReceipt) string {
+	if input.Preflight.Disposition == colony.SealDispositionForcedIncomplete {
+		var b strings.Builder
+		b.WriteString("# Forced seal record — completion not verified\n\n")
+		b.WriteString("The owner closed this colony for recordkeeping without verification of completion.\n\n")
+		b.WriteString("## Owner reason\n\n")
+		b.WriteString(input.Preflight.OwnerReason + "\n\n")
+		b.WriteString("## Uncompleted work\n\n")
+		for _, item := range evidence.UncompletedWork {
+			b.WriteString("- " + item.Summary + "\n")
+		}
+		b.WriteString("\n## Retained evidence\n\n")
+		b.WriteString("- Transaction: " + evidence.TransactionID + "\n")
+		b.WriteString("- Receipt: " + receipt.ReceiptID + "\n")
+		b.WriteString("- Active state remains at `.aether/data/COLONY_STATE.json`.\n")
+		return b.String()
+	}
 	enrichment := sealEnrichment{
 		LearningsCount:        len(state.Memory.PhaseLearnings),
-		InstinctsPromoted:     review.PromotedInstinctNames,
-		HiveEligible:          review.HiveEligibleCount,
-		HivePromoted:          review.HivePromotedCount,
-		HivePromotionFailures: review.HivePromotionFailures,
-		SignalsExpired:        expiredFOCUSCount,
-		FlagsResolved:         countResolvedFlags(store),
-		ShelfCandidates:       candidates,
-		FinalReview:           finalReview,
-		ReviewBacklog:         reviewBacklog,
-		ConsolidationReport:   review.Consolidation.ReportPath,
-		Override:              override,
+		InstinctsPromoted:     input.Review.PromotedInstinctNames,
+		HiveEligible:          input.Review.HiveEligibleCount,
+		HivePromoted:          input.Review.HivePromotedCount,
+		HivePromotionFailures: input.Review.HivePromotionFailures,
+		SignalsExpired:        countSealSignalClassification(evidence.Signals, "expired_at_closure"),
+		FlagsResolved:         countResolvedSealCheckpoints(evidence.Checkpoints),
+		ShelfCandidates:       input.ShelfCandidates,
+		FinalReview:           &input.FinalReview,
+		ReviewBacklog:         input.ReviewBacklog,
+		ConsolidationReport:   input.Review.Consolidation.ReportPath,
 	}
+	return buildSealSummary(state, input.Now.Format(time.RFC3339), input.Warnings, enrichment)
+}
 
-	summaryPath := filepath.Join(aetherDir, "CROWNED-ANTHILL.md")
-	summary := buildSealSummary(state, now, warnings, enrichment)
-	if err := os.WriteFile(summaryPath, []byte(summary), 0644); err != nil {
-		outputError(2, fmt.Sprintf("failed to write %s: %v", summaryPath, err), nil)
+func countSealSignalClassification(decisions []SealSignalDecision, classification string) int {
+	count := 0
+	for _, decision := range decisions {
+		if decision.Classification == classification {
+			count++
+		}
+	}
+	return count
+}
+
+func countResolvedSealCheckpoints(checkpoints []SealOwnerCheckpoint) int {
+	count := 0
+	for _, checkpoint := range checkpoints {
+		if checkpoint.Resolved {
+			count++
+		}
+	}
+	return count
+}
+
+func buildSealEventBusBytes(input SealTransactionInput, outcome colony.SealOutcome) ([]byte, error) {
+	path := filepath.Join(input.DataRoot, "event-bus.jsonl")
+	before, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	if len(before) > 0 && before[len(before)-1] != '\n' {
+		before = append(before, '\n')
+	}
+	expires := input.Now.Add(30 * 24 * time.Hour).Format(time.RFC3339)
+	consolidationPayload, _ := json.Marshal(map[string]any{"status": "retained", "transaction_id": outcome.Transaction.ID})
+	sealPayload, _ := json.Marshal(map[string]any{"outcome_id": outcome.OutcomeID, "disposition": outcome.Disposition, "owner_reason": outcome.OwnerReason})
+	eventsToAppend := []events.Event{
+		{ID: outcome.Transaction.ID + "-consolidation", Topic: "consolidation.seal", Payload: consolidationPayload, Source: "seal", Timestamp: input.Now.Format(time.RFC3339), TTLDays: 30, ExpiresAt: expires},
+		{ID: outcome.Transaction.ID + "-event", Topic: events.CeremonyTopicChamberSeal, Payload: sealPayload, Source: "aether-seal", Timestamp: input.Now.Format(time.RFC3339), TTLDays: 30, ExpiresAt: expires},
+	}
+	for _, event := range eventsToAppend {
+		line, marshalErr := json.Marshal(event)
+		if marshalErr != nil {
+			return nil, marshalErr
+		}
+		before = append(before, line...)
+		before = append(before, '\n')
+	}
+	return before, nil
+}
+
+func buildSealRegistryBytes(input SealTransactionInput, state colony.ColonyState) ([]byte, error) {
+	path := filepath.Join(input.HubRoot, "registry", "registry.json")
+	var registry registryData
+	if content, err := os.ReadFile(path); err == nil {
+		if err := json.Unmarshal(content, &registry); err != nil {
+			return nil, fmt.Errorf("decode registry: %w", err)
+		}
+	} else if !os.IsNotExist(err) {
+		return nil, err
+	}
+	goal := ""
+	if state.Goal != nil {
+		goal = strings.TrimSpace(*state.Goal)
+	}
+	found := false
+	for index := range registry.Colonies {
+		if filepath.Clean(registry.Colonies[index].RepoPath) != input.Root {
+			continue
+		}
+		registry.Colonies[index].Active = false
+		registry.Colonies[index].LastGoal = goal
+		found = true
+	}
+	if !found {
+		registry.Colonies = append(registry.Colonies, registryEntry{RepoPath: input.Root, Active: false, LastGoal: goal, RegisteredAt: input.Now.Format(time.RFC3339)})
+	}
+	return marshalSealJSON(registry)
+}
+
+func marshalSealJSON(value any) ([]byte, error) {
+	content, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append(content, '\n'), nil
+}
+
+func loadSealTransactionResult(input SealTransactionInput, txID string, replay bool) (SealTransactionResult, error) {
+	var outcome colony.SealOutcome
+	if err := readSealTransactionJSON(filepath.Join(input.DataRoot, "seal", "outcome.json"), &outcome); err != nil {
+		return SealTransactionResult{}, err
+	}
+	var envelope sealReceiptEnvelope
+	if err := readSealTransactionJSON(filepath.Join(input.DataRoot, "seal", "receipt.json"), &envelope); err != nil {
+		return SealTransactionResult{}, err
+	}
+	var evidence SealClosureEvidence
+	if err := readSealTransactionJSON(filepath.Join(input.DataRoot, "seal", "closure-evidence.json"), &evidence); err != nil {
+		return SealTransactionResult{}, err
+	}
+	if outcome.Transaction.ID != txID || envelope.Receipt.Transaction.ID != txID || evidence.TransactionID != txID {
+		return SealTransactionResult{}, fmt.Errorf("seal transaction artifacts do not agree on transaction %s", txID)
+	}
+	if err := outcome.Validate(); err != nil {
+		return SealTransactionResult{}, err
+	}
+	if err := envelope.Receipt.Validate(); err != nil {
+		return SealTransactionResult{}, err
+	}
+	return SealTransactionResult{
+		TransactionID: txID, Outcome: outcome, Receipt: envelope.Receipt, Evidence: evidence,
+		SummaryPath: filepath.Join(input.Root, ".aether", "CROWNED-ANTHILL.md"),
+		PrimaryNext: evidence.PrimaryNext, OptionalNext: evidence.OptionalNext, Replay: replay,
+	}, nil
+}
+
+func readSealTransactionJSON(path string, destination any) error {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(content, destination); err != nil {
+		return fmt.Errorf("decode %s: %w", path, err)
+	}
+	return nil
+}
+
+func finishSealPostCommitPromotions(input SealTransactionInput, result SealTransactionResult) (SealTransactionResult, error) {
+	if input.DisablePostCommitPromotion || result.Outcome.Disposition != colony.SealDispositionVerified {
+		return result, nil
+	}
+	existing, found, err := loadSealPromotionReceipts(input.DataRoot, result.TransactionID)
+	if err != nil {
+		return result, err
+	}
+	if found {
+		result.Promotions = existing
+		applySealPromotionReceipts(&result)
+		return result, nil
+	}
+	for _, decision := range result.Evidence.Wisdom {
+		if !decision.PromotionAllowed || decision.Promoted {
+			continue
+		}
+		var candidate *colony.InstinctEntry
+		for index := range input.Facts.Memory.Value.Instincts {
+			if input.Facts.Memory.Value.Instincts[index].ID == decision.ID {
+				candidate = &input.Facts.Memory.Value.Instincts[index]
+				break
+			}
+		}
+		if candidate == nil {
+			continue
+		}
+		receipt := SealPromotionReceipt{
+			SchemaVersion: colony.LifecycleSchemaVersion, ReceiptID: result.TransactionID + "-hive-" + candidate.ID,
+			TransactionID: result.TransactionID, WisdomID: candidate.ID, Policy: decision.Policy, SourceDigest: decision.Digest,
+		}
+		reference := "seal-receipt:" + result.Receipt.ReceiptID + ":" + candidate.ID
+		repoName := filepath.Base(input.Root)
+		alreadyPromoted, lookupErr := sealHivePromotionAlreadyRecorded(input.HubRoot, reference)
+		if lookupErr != nil {
+			receipt.Reason = lookupErr.Error()
+		} else if alreadyPromoted {
+			receipt.Promoted = true
+		} else if err := promoteToHiveWithReference(candidate.Action, candidate.Domain, repoName, candidate.Confidence, reference); err != nil {
+			receipt.Reason = err.Error()
+		} else {
+			receipt.Promoted = true
+		}
+		result.Promotions = append(result.Promotions, receipt)
+	}
+	if len(result.Promotions) > 0 {
+		if err := storeSealPromotionReceipts(input.DataRoot, result.Promotions); err != nil {
+			return result, err
+		}
+	}
+	applySealPromotionReceipts(&result)
+	return result, nil
+}
+
+type sealPromotionReceiptFile struct {
+	SchemaVersion string                 `json:"schema_version"`
+	Receipts      []SealPromotionReceipt `json:"receipts"`
+}
+
+func loadSealPromotionReceipts(dataRoot, transactionID string) ([]SealPromotionReceipt, bool, error) {
+	path := filepath.Join(dataRoot, "seal", "hive-promotion-receipts.json")
+	var file sealPromotionReceiptFile
+	if err := readSealTransactionJSON(path, &file); err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	for _, receipt := range file.Receipts {
+		if receipt.TransactionID != transactionID {
+			return nil, false, fmt.Errorf("seal promotion receipt %s belongs to transaction %s, not %s", receipt.ReceiptID, receipt.TransactionID, transactionID)
+		}
+	}
+	return file.Receipts, true, nil
+}
+
+func sealHivePromotionAlreadyRecorded(hubRoot, reference string) (bool, error) {
+	wisdom, err := loadWisdomLocked(hubRoot)
+	if err != nil {
+		return false, err
+	}
+	for _, entry := range wisdom.Entries {
+		for _, evidence := range entry.Evidence {
+			if evidence.Reference == reference {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+func applySealPromotionReceipts(result *SealTransactionResult) {
+	if result == nil || len(result.Promotions) == 0 {
+		return
+	}
+	byWisdomID := make(map[string]SealPromotionReceipt, len(result.Promotions))
+	for _, receipt := range result.Promotions {
+		byWisdomID[receipt.WisdomID] = receipt
+	}
+	for index := range result.Evidence.Wisdom {
+		receipt, ok := byWisdomID[result.Evidence.Wisdom[index].ID]
+		if !ok {
+			continue
+		}
+		result.Evidence.Wisdom[index].Promoted = receipt.Promoted
+		result.Evidence.Wisdom[index].PromotionReceiptID = receipt.ReceiptID
+	}
+}
+
+func storeSealPromotionReceipts(dataRoot string, receipts []SealPromotionReceipt) error {
+	content, err := marshalSealJSON(sealPromotionReceiptFile{SchemaVersion: colony.LifecycleSchemaVersion, Receipts: receipts})
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(dataRoot, "seal", "hive-promotion-receipts.json")
+	return atomicReplaceLifecycleTarget(path, content, 0o644, os.Rename)
+}
+
+func completeSealRuntime(state colony.ColonyState, override sealOverride, review sealWisdomReview, supplied ...SealPreflight) error {
+	root := resolveAetherRootPath()
+	now := time.Now().UTC()
+	facts, err := loadLifecycleFacts(root, store, now)
+	if err != nil {
+		outputError(2, fmt.Sprintf("failed to load seal evidence: %v", err), nil)
 		return nil
 	}
-	emitLifecycleCeremony(events.CeremonyTopicChamberSeal, events.CeremonyPayload{
-		Phase:     state.CurrentPhase,
-		PhaseName: "Crowned Anthill",
-		Status:    "sealed",
-		Message:   "Colony sealed at Crowned Anthill",
-		Completed: completedPhaseCount(state),
-		Total:     len(state.Plan.Phases),
-	}, "aether-seal")
-	updateSessionSummary("seal", "aether entomb", "Colony sealed")
-
-	// Hub registry (RECLAIM-02, non-blocking): the sealed colony's entry goes
-	// inactive with its final goal recorded, so `aether registry-list` reads
-	// as a true history of colonies on this machine.
-	sealGoal := ""
-	if state.Goal != nil {
-		sealGoal = strings.TrimSpace(*state.Goal)
+	preflight := SealPreflight{}
+	if len(supplied) > 0 {
+		preflight = supplied[0]
+	} else {
+		request := SealPreflightRequest{Caller: SealCallerDirectOwner, Force: override.Forced, Reason: override.Reason}
+		preflight, err = BuildSealPreflight(facts, request)
+		if err != nil {
+			renderRecoveryMenu("seal", err.Error(), nil)
+			return nil
+		}
 	}
-	if _, regErr := upsertColonyRegistryEntry(filepath.Dir(filepath.Dir(store.BasePath())), sealGoal, nil, false); regErr != nil {
-		fmt.Fprintf(os.Stderr, "warning: could not update hub registry at seal: %v\n", regErr)
+	finalReview := review.FinalReview
+	if finalReview == nil {
+		finalReview = loadSealFinalReviewForSummary(store)
+	}
+	if finalReview == nil {
+		finalReview = &sealFinalReviewReport{GeneratedAt: now.Format(time.RFC3339), Source: "seal-transaction", Passed: preflight.Disposition == colony.SealDispositionVerified}
+	}
+	candidates, _ := detectShelfCandidates(state, store)
+	input := SealTransactionInput{
+		Root: root, DataRoot: store.BasePath(), HubRoot: resolveHubPathQuiet(), Facts: facts,
+		State: state, Session: facts.Session.Value, Preflight: preflight, FinalReview: *finalReview, Review: review,
+		Warnings: scanHighSeverityOpen(store), ShelfCandidates: candidates, ReviewBacklog: collectOpenReviewBacklog(store, 10), Now: now,
+	}
+	transactionResult, err := CommitSealTransaction(input)
+	if err != nil {
+		outputError(2, fmt.Sprintf("seal transaction did not commit: %v", err), nil)
+		return nil
 	}
 
 	result := map[string]interface{}{
-		"sealed":    true,
-		"milestone": state.Milestone,
-		"summary":   summaryPath,
-		"next":      "aether entomb",
+		"sealed": true, "outcome_kind": transactionResult.Outcome.OutcomeKind,
+		"disposition": transactionResult.Outcome.Disposition, "seal_outcome": transactionResult.Outcome,
+		"lifecycle_receipt": transactionResult.Receipt, "summary": transactionResult.SummaryPath,
+		"next": transactionResult.PrimaryNext, "optional_next": transactionResult.OptionalNext,
 	}
-	if override.overrodeAnything() {
+	if transactionResult.Outcome.Disposition == colony.SealDispositionForcedIncomplete {
 		result["force_sealed"] = true
-		result["force_reason"] = override.Reason
-		result["unverified_phases"] = override.IncompletePhases
+		result["force_reason"] = transactionResult.Outcome.OwnerReason
+		result["unverified_phases"] = transactionResult.Outcome.IncompletePhases
 		result["overridden_blockers"] = override.OverriddenBlockers + override.OverriddenReviewBlocks
+	} else {
+		result["milestone"] = "Crowned Anthill"
 	}
-	addOrchestratorBoundaryGuidance(result, "seal", state, "aether entomb", nil)
-	// "seal" is one of the words this repo invented (S-05); the plain phrase
-	// below is what "what changed" actually reports, so the sentence never
-	// needs the jargon word explained a second time right next to itself.
-	closeLifecycleRun(result, state, "signing the project off as finished")
-	outputWorkflow(result, renderSealVisual(result, state, summaryPath))
-
-	if shouldRenderVisualOutput(stdout) {
-		writeVisualOutput(stdout, renderStageMarker("Post-Seal: Delivery Readiness"))
-		readinessSummary := buildPorterReadinessSummary()
-		writeVisualOutput(stdout, readinessSummary)
-		writeVisualOutput(stdout, "\nRun `aether porter check` to validate and deliver.\n")
-	}
+	outputWorkflow(result, RenderSealOutcome(transactionResult))
 	return nil
 }
 

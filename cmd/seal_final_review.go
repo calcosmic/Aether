@@ -78,6 +78,10 @@ type sealFinalReviewReport struct {
 	QueenLearningWarning  string                        `json:"queen_learning_warning,omitempty"`
 	Passed                bool                          `json:"passed"`
 	BlockingIssues        []string                      `json:"blocking_issues,omitempty"`
+	TransactionID         string                        `json:"transaction_id,omitempty"`
+	Disposition           colony.SealDisposition        `json:"disposition,omitempty"`
+	OwnerReason           string                        `json:"owner_reason,omitempty"`
+	ClosureEvidence       *SealClosureEvidence          `json:"closure_evidence,omitempty"`
 }
 
 type sealFinalReviewFinding struct {
@@ -430,6 +434,14 @@ func runSealFinalize(root string, completion externalSealCompletion) error {
 	if err != nil {
 		return err
 	}
+	facts, err := loadLifecycleFacts(root, store, time.Now().UTC())
+	if err != nil {
+		return err
+	}
+	preflight, err := BuildSealPreflight(facts, SealPreflightRequest{Caller: SealCallerFinalizer})
+	if err != nil {
+		return err
+	}
 	if err := validateFinalizerManifestColonyMode("seal_manifest", manifest.ColonyMode, state); err != nil {
 		return err
 	}
@@ -449,25 +461,18 @@ func runSealFinalize(root string, completion externalSealCompletion) error {
 		return err
 	}
 	findings := sealFinalReviewFindings(flow)
-	ledgerWrites, err := persistSealFinalReviewFindings(phase.ID, phase.Name, findings)
-	if err != nil {
-		return err
-	}
 	reusableLessons := sealFinalReviewReusableLessons(flow, findings)
-	queenLearningsWritten, queenLearningWarning := writeSealReusableLessonsToQueen(phase.ID, reusableLessons)
 	report := sealFinalReviewReport{
-		Phase:                 phase.ID,
-		PhaseName:             phase.Name,
-		GeneratedAt:           time.Now().UTC().Format(time.RFC3339),
-		ReviewDepth:           string(colony.VerificationDepthHeavy),
-		Source:                "seal-finalize",
-		Workers:               flow,
-		Findings:              findings,
-		PostSealBacklog:       sealFinalReviewBacklog(findings),
-		ReusableLessons:       reusableLessons,
-		LedgerWrites:          ledgerWrites,
-		QueenLearningsWritten: queenLearningsWritten,
-		QueenLearningWarning:  queenLearningWarning,
+		Phase:           phase.ID,
+		PhaseName:       phase.Name,
+		GeneratedAt:     time.Now().UTC().Format(time.RFC3339),
+		ReviewDepth:     string(colony.VerificationDepthHeavy),
+		Source:          "seal-finalize",
+		Workers:         flow,
+		Findings:        findings,
+		PostSealBacklog: sealFinalReviewBacklog(findings),
+		ReusableLessons: reusableLessons,
+		LedgerWrites:    map[string]int{},
 	}
 	blockers := append(sealReviewBlockingIssues(flow), sealReviewFindingBlockingIssues(findings)...)
 	report.BlockingIssues = uniqueSortedStrings(blockers)
@@ -476,9 +481,6 @@ func runSealFinalize(root string, completion externalSealCompletion) error {
 	if !report.Passed && len(report.BlockingIssues) == 0 {
 		report.BlockingIssues = []string{"final seal review did not produce completed required review evidence"}
 	}
-	if err := store.SaveJSON(sealFinalReviewReportRel, report); err != nil {
-		return fmt.Errorf("failed to write seal final review report: %w", err)
-	}
 	if !report.Passed {
 		return fmt.Errorf("%s", renderSealFinalReviewBlockers(sealFinalReviewGate{Report: report, ReportRel: sealFinalReviewReportRel, Ran: true}))
 	}
@@ -486,25 +488,12 @@ func runSealFinalize(root string, completion externalSealCompletion) error {
 		IncompletePhases: incompletePhases,
 	}
 
-	// D-04..D-07: this is seal's DEFAULT flow (unlike build/continue, seal's
-	// interactive wrapper is host-mediated -- 198-RESEARCH.md Pitfall 5), so
-	// the same confirmation gate the direct `aether seal` command uses must
-	// run here too, or the owner is never actually asked on the path most
-	// seals take. Fold the review's own blocking findings in as named
-	// problems alongside checkSealBlockers's blockers/issues, so the card
-	// and question name everything currently outstanding.
-	flagBlockers, flagIssues := checkSealBlockers(store, state)
-	var reviewFailingChecks []string
-	if !report.Passed {
-		reviewFailingChecks = report.BlockingIssues
-	}
-	proceed, review, pending := runSealConfirmationGate(state, flagBlockers, flagIssues, reviewFailingChecks...)
+	proceed, pending := runSealPreflightConfirmationGate(preflight)
 	if !proceed {
 		outputOK(pending)
 		return nil
 	}
-
-	return completeSealRuntime(state, override, review)
+	return completeSealRuntime(state, override, sealWisdomReview{FinalReview: &report}, preflight)
 }
 
 func mergeExternalSealReviewResults(manifest sealPlanManifest, results []codexContinueExternalDispatch) ([]codexContinueWorkerFlowStep, error) {

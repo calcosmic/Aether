@@ -101,9 +101,9 @@ func writeSealStateOfPlayCategory(b *strings.Builder, label string, items []stri
 // never an inference from card wording.
 func sealConfirmationQuestionText(namedProblems []string) string {
 	if len(namedProblems) == 0 {
-		return "Finish this project?"
+		return "Seal this verified colony and write its Crowned Anthill record? [y/N]"
 	}
-	return fmt.Sprintf("Finish anyway with %d check(s) failing: %s?", len(namedProblems), strings.Join(namedProblems, "; "))
+	return fmt.Sprintf("Force-seal this incomplete colony with %d unresolved item(s)? This records an owner override; it does not verify completion. [y/N]", len(namedProblems))
 }
 
 // sealConfirmationAnswerSource is "seal-force-confirmation" when the
@@ -333,4 +333,50 @@ func runSealConfirmationGate(state colony.ColonyState, blockers, issues []colony
 		"question":                    question,
 		"next":                        nextCommand,
 	}
+}
+
+// runSealPreflightConfirmationGate is the Phase 199 owner boundary. Unlike the
+// compatibility gate above it performs no review or persistence before the
+// answer: the typed preflight is the only input, and every later effect belongs
+// to CommitSealTransaction.
+func runSealPreflightConfirmationGate(preflight SealPreflight) (bool, map[string]interface{}) {
+	visualFprint(stdout, renderSealPreflightCard(preflight))
+	question := SealConfirmationCopy(preflight)
+	recordedAnswer := loadSealConfirmationRecordedAnswer(store, question)
+	named := make([]string, 0, len(preflight.UnresolvedItems))
+	for _, item := range preflight.UnresolvedItems {
+		named = append(named, item.Summary)
+	}
+	decision := decideSealConfirmation(sealConfirmationInput{NamedProblems: named, RecordedAnswer: recordedAnswer})
+	if decision.Proceed {
+		return true, nil
+	}
+	source := "seal-confirmation"
+	if preflight.Disposition == colony.SealDispositionForcedIncomplete {
+		source = "seal-force-confirmation"
+	}
+	next := sealConfirmationAnswerCommand(question, source)
+	visualFprint(stdout, renderSealPreflightConfirmationQuestionVisual(preflight, next))
+	return false, map[string]interface{}{
+		"sealed": false, "awaiting_owner_confirmation": true,
+		"outcome_kind": preflight.OutcomeKind, "disposition": preflight.Disposition,
+		"owner_reason": preflight.OwnerReason, "unresolved_items": preflight.UnresolvedItems,
+		"question": question, "next": next,
+	}
+}
+
+func renderSealPreflightCard(preflight SealPreflight) string {
+	var b strings.Builder
+	b.WriteString(renderStageMarker("Seal Preflight"))
+	b.WriteString(fmt.Sprintf("Outcome: %s\n", preflight.OutcomeKind))
+	b.WriteString(fmt.Sprintf("Completed phases: %d; completed tasks: %d\n", len(preflight.CompletedPhaseIDs), len(preflight.CompletedTaskIDs)))
+	b.WriteString(fmt.Sprintf("Passed gates: %d; evidence records: %d; owner checkpoints: %d\n", len(preflight.PassedGates), len(preflight.Evidence), len(preflight.OwnerCheckpoints)))
+	if len(preflight.UnresolvedItems) > 0 {
+		b.WriteString(fmt.Sprintf("Unresolved items: %d\n", len(preflight.UnresolvedItems)))
+		for _, item := range preflight.UnresolvedItems {
+			b.WriteString("  - " + formatSealUnresolvedItem(item) + "\n")
+		}
+	}
+	b.WriteString("Retained after closure: active state, receipt, evidence, findings, learnings, signals, checkpoints, and rollback record.\n")
+	return b.String()
 }

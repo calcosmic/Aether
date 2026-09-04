@@ -113,6 +113,9 @@ func BuildSealPreflight(facts LifecycleFacts, request SealPreflightRequest) (Sea
 	preflight.collectEvidence(facts)
 	preflight.collectOwnerCheckpoints(facts.Blockers.Value)
 	preflight.collectConsistency(facts)
+	if len(facts.State.Value.Plan.Phases) == 0 {
+		preflight.addUnresolved("missing_plan", "plan", "no colony plan exists to verify", []string{"fact:state"})
+	}
 	preflight.sort()
 
 	if request.Force {
@@ -233,8 +236,10 @@ func (p *SealPreflight) collectEvidence(facts LifecycleFacts) {
 		facts.State.Source,
 		facts.Progress.Source,
 		facts.Verification.Source,
-		facts.Blockers.Source,
 		facts.Evidence.Source,
+	}
+	if facts.Blockers.Source.Provenance == LifecycleFactMalformed || facts.Blockers.Source.Provenance == LifecycleFactUnavailable {
+		required = append(required, facts.Blockers.Source)
 	}
 	for _, source := range required {
 		id := "fact:" + strings.TrimSpace(source.Domain)
@@ -344,9 +349,28 @@ func (p *SealPreflight) sort() {
 func (p SealPreflight) unresolvedSummary() string {
 	items := make([]string, 0, len(p.UnresolvedItems))
 	for _, item := range p.UnresolvedItems {
-		items = append(items, item.Summary)
+		items = append(items, formatSealUnresolvedItem(item))
 	}
 	return strings.Join(items, "; ")
+}
+
+func formatSealUnresolvedItem(item SealUnresolvedItem) string {
+	kind := strings.TrimSpace(item.Kind)
+	id := strings.TrimSpace(item.ID)
+	summary := strings.TrimSpace(item.Summary)
+	if summary == "" {
+		summary = id
+	}
+	if kind == "" && id == "" {
+		return summary
+	}
+	label := kind
+	if label == "" {
+		label = id
+	} else if id != "" {
+		label += ":" + id
+	}
+	return fmt.Sprintf("[%s] %s", label, summary)
 }
 
 func sealPreservedContents() []SealPreservedContent {

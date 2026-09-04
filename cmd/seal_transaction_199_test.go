@@ -50,7 +50,7 @@ func newSealTransaction199Fixture(t *testing.T, forced bool) sealTransaction199F
 	facts.Session.Source.Path = filepath.Join(dataRoot, "session.json")
 	facts.Verification.Source.Path = filepath.Join(dataRoot, "seal", "final-review.json")
 	facts.Memory.Value.Instincts = []colony.InstinctEntry{
-		{ID: "public-pattern", Action: "Keep closure receipts linked to their transaction", Domain: "lifecycle", Confidence: 0.95, Provenance: colony.InstinctProvenance{Source: "phase-199", Evidence: "gate:tests"}},
+		{ID: "public-pattern", Action: "Keep .aether/data/seal/receipt.json linked to its lifecycle transaction so replay can verify the closure", Domain: "lifecycle", Confidence: 0.95, Provenance: colony.InstinctProvenance{Source: "phase-199", Evidence: "gate:tests"}},
 		{ID: "secret-pattern", Action: "password=never-export-this", Domain: "security", Confidence: 0.99, Provenance: colony.InstinctProvenance{Source: "private-review", Evidence: "finding:secret"}},
 	}
 	facts.State.Value.Memory.PhaseLearnings = []colony.PhaseLearning{{
@@ -179,6 +179,16 @@ func TestSealTransaction199Atomic(t *testing.T) {
 
 func TestSealTransaction199ReplayExactlyOnce(t *testing.T) {
 	fixture := newSealTransaction199Fixture(t, false)
+	t.Setenv("AETHER_HUB_DIR", fixture.HubRoot)
+	t.Setenv(hivePolicyEnv, "promote")
+	resetHivePolicyWarnOnceForTest()
+	fixture.Input.DisablePostCommitPromotion = false
+	if err := os.MkdirAll(filepath.Join(fixture.HubRoot, "hive"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(fixture.HubRoot, hiveWisdomPath), []byte("{\"version\":2,\"entries\":[]}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	first, err := CommitSealTransaction(fixture.Input)
 	if err != nil {
 		t.Fatal(err)
@@ -202,6 +212,14 @@ func TestSealTransaction199ReplayExactlyOnce(t *testing.T) {
 	if len(registry.Colonies) != 1 || registry.Colonies[0].Active {
 		t.Fatalf("registry transition replayed incorrectly: %+v", registry)
 	}
+	if len(first.Promotions) != 1 || !first.Promotions[0].Promoted || !reflect.DeepEqual(first.Promotions, second.Promotions) {
+		t.Fatalf("promotion receipts were not replayed exactly once: first=%+v second=%+v", first.Promotions, second.Promotions)
+	}
+	var wisdom hiveWisdomData
+	readJSON199(t, filepath.Join(fixture.HubRoot, hiveWisdomPath), &wisdom)
+	if len(wisdom.Entries) != 1 || len(wisdom.Entries[0].Evidence) != 1 {
+		t.Fatalf("Hive promotion replayed instead of reusing its linked receipt: %+v", wisdom)
+	}
 }
 
 func TestSealTransaction199ForcedTruth(t *testing.T) {
@@ -222,17 +240,28 @@ func TestSealTransaction199ForcedTruth(t *testing.T) {
 			t.Fatalf("%s lost forced discriminator/reason:\n%s", path, content)
 		}
 	}
-	for _, color := range []bool{false, true} {
-		output := RenderSealOutcome(result)
-		if !strings.Contains(output, "⛔ FORCED SEAL — COMPLETION NOT VERIFIED") || !strings.Contains(output, "The colony was force-sealed for recordkeeping. Completion was not verified.") {
-			t.Fatalf("forced render missing exact truth copy:\n%s", output)
-		}
-		lower := strings.ToLower(output)
-		for _, forbidden := range []string{"crowned anthill", "all phases completed", "goal achieved", "final form", "✅"} {
-			if strings.Contains(lower, strings.ToLower(forbidden)) {
-				t.Fatalf("forced render contains forbidden success discriminator %q (color=%v):\n%s", forbidden, color, output)
+	for _, mode := range []struct {
+		name       string
+		forceColor string
+		noColor    string
+	}{
+		{name: "visual", forceColor: "1"},
+		{name: "no-color", noColor: "1"},
+	} {
+		t.Run(mode.name, func(t *testing.T) {
+			t.Setenv("AETHER_FORCE_COLOR", mode.forceColor)
+			t.Setenv("NO_COLOR", mode.noColor)
+			output := RenderSealOutcome(result)
+			if !strings.Contains(output, "⛔ FORCED SEAL — COMPLETION NOT VERIFIED") || !strings.Contains(output, "The colony was force-sealed for recordkeeping. Completion was not verified.") {
+				t.Fatalf("forced render missing exact truth copy:\n%s", output)
 			}
-		}
+			lower := strings.ToLower(output)
+			for _, forbidden := range []string{"crowned anthill", "all phases completed", "goal achieved", "final form", "✅"} {
+				if strings.Contains(lower, strings.ToLower(forbidden)) {
+					t.Fatalf("forced render contains forbidden success discriminator %q:\n%s", forbidden, output)
+				}
+			}
+		})
 	}
 }
 
