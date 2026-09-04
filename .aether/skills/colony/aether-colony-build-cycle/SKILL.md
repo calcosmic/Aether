@@ -34,6 +34,18 @@ aether command-guide <colonize|plan|build|continue|swarm|seal> --platform codex
 If this skill and `command-guide` disagree, follow `command-guide` and update
 the skill.
 
+## Phase 199 Front-Door Contract
+
+- Require automatic typed territory freshness from the runtime before planning;
+  do not inspect or infer it from files.
+- Offer an equal guided-build/Autopilot choice after an accepted plan, without
+  preselecting either route. Show displayed Autopilot bounds before it runs.
+- Keep concrete repair/debt receipts from runtime results, and allow independent safe-path continuation while only the unsafe or blocked path pauses.
+- Autopilot stops at explicit seal. Force flags pass only when directly supplied by the owner. A forced-incomplete closure is not verified success.
+- Phase 200–205/native `$ant-*` scope fence: this existing Codex lifecycle
+  skill documents runtime behavior only; it neither creates nor implies a new
+  native lifecycle surface.
+
 ## Raw Bypass
 
 If the user explicitly says raw, exact, no orchestration, or "just run this
@@ -399,6 +411,11 @@ AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow seal --completion-
 
 15. Follow runtime Porter readiness output only after `seal-finalize` succeeds.
    Do not run delivery commands unless the user chooses them.
+16. Keep sealing explicit: the Go runtime owns final review, preflight,
+    confirmation, transaction, and rendering. After sealing, run
+    `AETHER_OUTPUT_MODE=visual aether status` first to review retained state;
+    `aether entomb` remains a separate optional owner-confirmed archive-and-clear
+    action. Never invoke entomb automatically.
 
 ## Guardrails
 

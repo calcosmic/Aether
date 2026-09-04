@@ -658,7 +658,7 @@ func TestCommandGuideLifecycle199(t *testing.T) {
 		}
 	}
 	for _, forbidden := range []string{
-		"aether recover", "/ant-recover", "resume-colony", "pause-colony", "$ant-",
+		"aether recover", "/ant-recover", "resume-colony", "pause-colony", "Create Codex-native `$ant-*` skills",
 		"After seal, suggest entomb", "after seal automatically", "automatically invoke entomb",
 		"write COLONY_STATE.json", "edit session.json", "remove HANDOFF.md",
 	} {
@@ -674,11 +674,17 @@ func TestCommandGuideBuildCycle199(t *testing.T) {
 		t.Fatalf("find repository root: %v", err)
 	}
 
-	guide, err := buildCommandGuide("seal", "codex")
-	if err != nil {
-		t.Fatalf("build seal command guide: %v", err)
+	var guideParts []string
+	for _, command := range []string{"plan", "build", "seal"} {
+		guide, err := buildCommandGuide(command, "codex")
+		if err != nil {
+			t.Fatalf("build %s command guide: %v", command, err)
+		}
+		guideParts = append(guideParts, guide.Intent)
+		guideParts = append(guideParts, guide.PreSteps...)
+		guideParts = append(guideParts, guide.PostSteps...)
 	}
-	guideText := strings.Join(append(append([]string{guide.Intent}, guide.PreSteps...), guide.PostSteps...), "\n")
+	guideText := strings.Join(guideParts, "\n")
 	skillPath := filepath.Join(repoRoot, ".aether", "skills", "colony", commandGuideSkillBuildCycle, "SKILL.md")
 	skill, err := os.ReadFile(skillPath)
 	if err != nil {

@@ -284,11 +284,12 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 		},
 		RunCommand: "AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <approved temp completion JSON>",
 		PostSteps: []string{
+			"Phase 199 contract: require automatic typed territory freshness from the runtime before planning; do not inspect or infer it from files.",
 			"If the JSON finalizer returns `requires_next_iteration: true`, do not render final closeout or claim a completed plan; request a fresh `aether host plan` manifest with the same loop controls and repeat Scout -> Route-Setter -> finalizer.",
 			"After the JSON finalizer succeeds with a completed plan, run `AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow plan --completion-file <approved temp completion JSON>`.",
 			"Summarize depth, phase count, planning confidence, `planning_loop.stop_reason`, and actual planning workers.",
 			"For a revision, surface the accepted `plan_revision` reason and preserved/superseded/replacement phase IDs, and discard all packets from the parent revision.",
-			"Route to `aether build 1` or the runtime-surfaced next build command.",
+			"Offer an equal guided-build/Autopilot choice after plan acceptance; neither route is preselected or recommended. Route guided work to `aether build 1` or the runtime-surfaced next build command.",
 		},
 		DriftGuards: intelligentCommandDriftGuards("plan", commandGuideSkillBuildCycle),
 		RawBypass:   "If the user explicitly asks for raw/exact/no-orchestration plan, run their literal `aether plan ...` command.",
@@ -382,6 +383,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 		},
 		RunCommand: "AETHER_OUTPUT_MODE=json aether build-finalize <phase> --completion-file <Go-owned completion_path returned by build-completion-stage>",
 		PostSteps: []string{
+			"For Autopilot, show displayed Autopilot bounds before runtime work begins, preserve concrete repair/debt receipts from runtime results, and allow independent safe-path continuation while only unsafe or blocked work pauses.",
 			"After the JSON finalizer succeeds, run `AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file <Go-owned completion_path>`.",
 			"Read the finalizer's own answer instead of assuming a job finished whole: each dispatch's `completed_task_ids` is what the runtime actually credited, and `recovery_job` set to true means part of the job was proven and part was not. `unfinished_task_ids` lists what remains, `parent_attempt_id` and `retry_attempt_id` link the appended recovery attempt to the original one, and `recovery_command` is the exact command that redispatches only the unfinished tasks. Relay `recovery_command`; never ask a new worker to redo credited work.",
 			"In worktree mode one job takes one worktree, one branch, and one merge-back. The runtime admits receipts, syncs only what it admitted back to the project root, then credits. Anything the worker touched but never proved is neither synced nor destroyed -- it stays on a preserved branch the runtime names, and must be reported that way rather than as lost or as done.",
@@ -431,6 +433,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 		Literal:        false,
 		PreSteps: []string{
 			"Load the aether-colony-build-cycle Codex skill.",
+			"Keep explicit seal: Force flags pass only when directly supplied by the owner. The Go runtime owns final review, preflight, confirmation, transaction, and rendering. A forced-incomplete closure is not verified success. Phase 200–205/native `$ant-*` scope fence remains intact.",
 			"Run `AETHER_OUTPUT_MODE=visual aether status` and confirm the colony is ready to seal.",
 			"Run `aether host seal $ARGUMENTS` to fetch the seal manifest via the TS host. Parse `result.seal_manifest`; do not parse visual output.",
 			"If runtime reports blockers or recovery guidance, surface that output and stop.",
