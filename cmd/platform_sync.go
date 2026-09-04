@@ -58,11 +58,11 @@ type codexAgentDefinition struct {
 
 func installSyncPairs() []installSyncPair {
 	return []installSyncPair{
-		{srcRel: ".claude/commands/ant", destRel: ".claude/commands", label: "Commands (claude)", cleanup: true, mapRelPath: claudeCommandDestRelPath, cleanupInclude: isManagedFlatClaudeCommandPath, cleanupLegacyClaude: true},
+		{srcRel: ".claude/commands/ant", destRel: ".claude/commands", label: "Commands (claude)", cleanup: true, mapRelPath: claudeCommandDestRelPath, cleanupInclude: neverSyncPath, cleanupLegacyClaude: true},
 		{srcRel: ".claude/agents/ant", destRel: ".claude/agents/ant", label: "Agents (claude)", cleanup: true},
-		{srcRel: ".opencode/commands/ant", destRel: ".opencode/command", label: "Commands (opencode home)", cleanup: false},
+		{srcRel: ".opencode/commands/ant", destRel: ".opencode/command", label: "Commands (opencode home)", cleanup: true, cleanupInclude: neverSyncPath, cleanupLegacyClaude: true},
 		{srcRel: ".opencode/agents", destRel: ".opencode/agent", label: "Agents (opencode home)", cleanup: false, validate: validateOpenCodeAgentFile},
-		{srcRel: ".opencode/commands/ant", destRel: ".config/opencode/commands/ant", label: "Commands (opencode)", cleanup: true},
+		{srcRel: ".opencode/commands/ant", destRel: ".config/opencode/commands/ant", label: "Commands (opencode)", cleanup: true, cleanupInclude: neverSyncPath, cleanupLegacyClaude: true},
 		{srcRel: ".opencode/agents", destRel: ".config/opencode/agents", label: "Agents (opencode)", cleanup: false, validate: validateOpenCodeAgentFile},
 		{srcRel: ".codex/agents", destRel: ".codex/agents", label: "Agents (codex)", cleanup: false, preserveLocalChanges: true, validate: validateCodexAgentFile, include: isShippedAetherCodexAgent},
 	}
@@ -70,11 +70,11 @@ func installSyncPairs() []installSyncPair {
 
 func platformHomeHubSyncPairs() []installSyncPair {
 	return []installSyncPair{
-		{srcRel: "commands/claude", destRel: ".claude/commands", label: "Commands (claude)", cleanup: true, mapRelPath: claudeCommandDestRelPath, cleanupInclude: isManagedFlatClaudeCommandPath, cleanupLegacyClaude: true},
+		{srcRel: "commands/claude", destRel: ".claude/commands", label: "Commands (claude)", cleanup: true, mapRelPath: claudeCommandDestRelPath, cleanupInclude: neverSyncPath, cleanupLegacyClaude: true},
 		{srcRel: "agents-claude", destRel: ".claude/agents/ant", label: "Agents (claude)", cleanup: true},
-		{srcRel: "commands/opencode", destRel: ".opencode/command", label: "Commands (opencode home)", cleanup: false},
+		{srcRel: "commands/opencode", destRel: ".opencode/command", label: "Commands (opencode home)", cleanup: true, cleanupInclude: neverSyncPath, cleanupLegacyClaude: true},
 		{srcRel: "agents", destRel: ".opencode/agent", label: "Agents (opencode home)", cleanup: false, validate: validateOpenCodeAgentFile},
-		{srcRel: "commands/opencode", destRel: ".config/opencode/commands/ant", label: "Commands (opencode)", cleanup: true},
+		{srcRel: "commands/opencode", destRel: ".config/opencode/commands/ant", label: "Commands (opencode)", cleanup: true, cleanupInclude: neverSyncPath, cleanupLegacyClaude: true},
 		{srcRel: "agents", destRel: ".config/opencode/agents", label: "Agents (opencode)", cleanup: false, validate: validateOpenCodeAgentFile},
 		{srcRel: "codex", destRel: ".codex/agents", label: "Agents (codex)", cleanup: false, preserveLocalChanges: true, validate: validateCodexAgentFile, include: isShippedAetherCodexAgent},
 	}
@@ -399,17 +399,38 @@ func isGeneratedAetherCommandWrapper(data []byte) bool {
 }
 
 func removeLegacyClaudeCommandNamespace(commandsDir string) ([]string, []string) {
+	var removed []string
+	var errs []string
+
+	// Platform command homes can contain user-authored files beside Aether's
+	// generated wrappers. Generic filename cleanup cannot distinguish those
+	// owners, so only the managed header may authorize a stale-wrapper removal.
+	if homeDir, ok := platformHomeFromCommandDir(commandsDir); ok {
+		for _, commandDir := range platformCommandHomeDirs(homeDir) {
+			pruned := pruneRetiredGeneratedCommandFiles(commandDir)
+			for _, rel := range pruned.removed {
+				removed = append(removed, filepath.ToSlash(filepath.Join(commandDir, rel)))
+			}
+			errs = append(errs, pruned.errors...)
+		}
+	}
+
+	// Only Claude's old nested namespace is retired wholesale. The same
+	// function is also invoked after OpenCode sync so parser-only files copied
+	// later in the pair order are pruned before the operation completes.
+	if !strings.HasSuffix(filepath.ToSlash(filepath.Clean(commandsDir)), "/.claude/commands") {
+		return removed, errs
+	}
 	legacyDir := filepath.Join(commandsDir, "ant")
 	entries, err := os.ReadDir(legacyDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil
+			return removed, errs
 		}
-		return nil, []string{fmt.Sprintf("read legacy Claude commands %s: %v", legacyDir, err)}
+		errs = append(errs, fmt.Sprintf("read legacy Claude commands %s: %v", legacyDir, err))
+		return removed, errs
 	}
 
-	var removed []string
-	var errs []string
 	for _, entry := range entries {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".md" {
 			continue
@@ -440,6 +461,32 @@ func removeLegacyClaudeCommandNamespace(commandsDir string) ([]string, []string)
 	}
 
 	return removed, errs
+}
+
+func platformHomeFromCommandDir(commandsDir string) (string, bool) {
+	clean := filepath.ToSlash(filepath.Clean(commandsDir))
+	for _, suffix := range []string{
+		".claude/commands",
+		".opencode/command",
+		".config/opencode/commands/ant",
+	} {
+		needle := "/" + suffix
+		if strings.HasSuffix(clean, needle) {
+			home := strings.TrimSuffix(clean, needle)
+			if home != "" {
+				return filepath.FromSlash(home), true
+			}
+		}
+	}
+	return "", false
+}
+
+func platformCommandHomeDirs(homeDir string) []string {
+	return []string{
+		filepath.Join(homeDir, ".claude", "commands"),
+		filepath.Join(homeDir, ".opencode", "command"),
+		filepath.Join(homeDir, ".config", "opencode", "commands", "ant"),
+	}
 }
 
 func appendSyncResult(details *[]map[string]interface{}, totals *updateSyncResult, label string, result syncResult) {
@@ -489,7 +536,7 @@ func declaredAliasSurfaces(homeDir string) []declaredAliasSurfaceStatus {
 	for _, sub := range rootCmd.Commands() {
 		for _, alias := range sub.Aliases {
 			alias = strings.TrimSpace(alias)
-			if alias == "" || seen[alias] {
+			if alias == "" || seen[alias] || !wrapperCommandNames[alias] {
 				continue
 			}
 			seen[alias] = true
@@ -638,6 +685,22 @@ func pruneLegacyRepoPlatformAssets(repoDir string) syncResult {
 }
 
 func pruneGeneratedCommandFiles(dir string) syncResult {
+	return pruneGeneratedCommandFilesMatching(dir, func(string) bool { return true })
+}
+
+// pruneRetiredGeneratedCommandFiles removes only generated wrappers whose
+// public wrapper name is no longer canonical. Parser-only argv redirects are
+// deliberately absent from wrapperCommandNames, so they cannot keep a stale
+// installed file alive or become eligible for alias repair.
+func pruneRetiredGeneratedCommandFiles(dir string) syncResult {
+	return pruneGeneratedCommandFilesMatching(dir, func(path string) bool {
+		name := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+		name = strings.TrimPrefix(name, "ant-")
+		return !wrapperCommandNames[name]
+	})
+}
+
+func pruneGeneratedCommandFilesMatching(dir string, shouldRemove func(path string) bool) syncResult {
 	result := syncResult{}
 	info, err := os.Stat(dir)
 	if err != nil {
@@ -653,6 +716,9 @@ func pruneGeneratedCommandFiles(dir string) syncResult {
 
 	_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() || filepath.Ext(path) != ".md" {
+			return nil
+		}
+		if shouldRemove != nil && !shouldRemove(path) {
 			return nil
 		}
 		data, readErr := os.ReadFile(path)
