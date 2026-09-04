@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 199-32-PLAN.md
-last_updated: "2026-09-04T22:18:39.400Z"
+stopped_at: Completed 199-23-PLAN.md
+last_updated: "2026-09-04T22:48:03Z"
 last_activity: 2026-09-04
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 34
-  completed_plans: 26
-  percent: 76
+  completed_plans: 27
+  percent: 79
 ---
 
 # Project State
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-02)
 ## Current Position
 
 Phase: 199 (front-door-and-classic-contract) — EXECUTING
-Plan: 23 of 34
+Plan: 27 of 34
 Status: Ready to execute
 Last activity: 2026-09-04
 
@@ -104,6 +104,7 @@ Last activity: 2026-09-04
 | Phase 199 P24 | 10 min | 2 tasks | 5 files |
 | Phase 199 P25 | 59min | 2 tasks | 4 files |
 | Phase 199 P32 | 9min | 2 tasks | 8 files |
+| Phase 199 P23 | 6 min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -280,6 +281,8 @@ Last activity: 2026-09-04
 - [Phase 199]: Archive repair approval binds manifest, complete inspection baseline, seal disposition, and shared mutation preview. — Plan 18 remains the sole mutation, journal, rollback, and receipt engine.
 - [Phase 199]: Use raw aether resume as the sole lifecycle-restoration command. — One recovery door keeps inspection read-only and restoration unambiguous.
 - [Phase 199]: Use aether maintenance recovery-inspect only to inspect preserved work with State effect: none. — Inspection must never become a second lifecycle state mutator.
+- [Phase 199]: Managed wrappers preserve a force flag supplied directly by the owner but never offer, construct, or rerun force authority; forced-incomplete closure is not verified success.
+- [Phase 199]: Codex lifecycle guidance keeps status as the primary post-seal review and entomb a separate optional owner-confirmed action.
 
 ### Pending Todos
 
@@ -393,10 +396,10 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-04T22:18:39.392Z
-Stopped at: Completed 199-32-PLAN.md
+Last session: 2026-09-04T22:48:03Z
+Stopped at: Completed 199-23-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
 
-- Execute 199-23-PLAN.md, the first incomplete Phase 199 plan.
+- Execute 199-27-PLAN.md, the next incomplete Phase 199 plan.
