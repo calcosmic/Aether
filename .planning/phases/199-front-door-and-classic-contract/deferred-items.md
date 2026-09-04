@@ -113,3 +113,11 @@
 - **Isolation check:** Every Plan 199-18-owned update, stale-publish, binary-mode, deterministic no-spawn, registry, cleanup, source-hygiene, and wiring case passes after gate recovery. The only other broad-name failure is the already-recorded contradictory update closing-card setup.
 - **Why deferred:** Suggested-next policy was changed by later lifecycle projection/closeout plans and is outside the bounded Plan 199-18 maintenance repair. Reintroducing an older build recommendation here would split lifecycle truth.
 - **Follow-up:** Migrate this hook expectation with its owning lifecycle projection snapshot work, then rerun the final Phase 199 full normal/race gates.
+
+## Curation command tests leak `AETHER_ROOT` into later package tests
+
+- **Found during:** Plan 199-18 second Wave 12 gate recovery after the full command suite reported order-only update integration failures.
+- **Observed:** `TestCurationDryRunFalse` sets `AETHER_ROOT` to its temporary repository, then defers `os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))`; the deferred argument is captured after the assignment, so cleanup restores the same path after the temporary repository is removed. Running that test immediately before `TestE2EInstallSetupUpdateFlow` and `TestE2ERegressionStuckPlanInvestigation` reproduced both failures at repaired HEAD `e5f5912e`.
+- **Isolation check:** Both update tests passed alone 5/5, together 10/10, and shuffled together 10/10. The contaminated trio passed at Wave 11 `fed7e709` and pre-recovery `e23ba946`, whose update handler used raw cwd, but failed once update correctly honored the lifecycle root. Explicitly clearing `AETHER_ROOT` and `COLONY_DATA_DIR` in cwd-driven update fixtures made the contaminated trio pass 10/10 and the broader shuffled curation/install/regression selection pass 3/3.
+- **Why deferred:** `cmd/curation_cmds_test.go` is outside Plan 199-18's maintenance-update ownership. Changing production update to ignore an explicit lifecycle root would weaken root safety, so this recovery fixes the directly owned fixtures and leaves the unrelated test cleanup for its owner.
+- **Follow-up:** Replace each self-restoring curation environment defer with `t.Setenv` or capture the original value before assignment, then add a package-level environment-isolation ratchet.
