@@ -361,24 +361,40 @@ func BuildSwarmInterventionContract(projection LifecycleProjection, evidence Swa
 		return contract, nil
 	}
 
+	tasks := make(map[string]colony.Task)
 	active := make(map[string]colony.Task)
 	for _, task := range projection.Tasks.Value {
 		id := ""
 		if task.ID != nil {
 			id = strings.TrimSpace(*task.ID)
 		}
-		if id != "" && task.Status == colony.TaskInProgress {
+		if id == "" {
+			continue
+		}
+		tasks[id] = task
+		if task.Status == colony.TaskInProgress {
 			active[id] = task
 		}
 	}
-	affected, ok := active[jobID]
+	_, ok := active[jobID]
 	if !ok {
 		return SwarmInterventionContract{}, fmt.Errorf("affected job %q is not present as active lifecycle evidence", jobID)
 	}
 	contract.AffectedJobID = jobID
-	contract.DependencyPath = agencyIDs(affected.DependsOn)
+	affectedPath := map[string]bool{}
+	agencyCollectTaskDependencies(jobID, tasks, affectedPath, map[string]bool{})
+	for candidate := range tasks {
+		if candidate != jobID && agencyTaskDependsOn(candidate, jobID, tasks, map[string]bool{}) {
+			affectedPath[candidate] = true
+		}
+	}
+	delete(affectedPath, jobID)
+	for id := range affectedPath {
+		contract.DependencyPath = append(contract.DependencyPath, id)
+	}
+	sort.Strings(contract.DependencyPath)
 	for candidate := range active {
-		if candidate == jobID || agencyContainsID(contract.DependencyPath, candidate) {
+		if candidate == jobID || affectedPath[candidate] {
 			continue
 		}
 		contract.IndependentJobIDs = append(contract.IndependentJobIDs, candidate)
@@ -397,6 +413,46 @@ func BuildSwarmInterventionContract(projection LifecycleProjection, evidence Swa
 		contract.ResumePoint = "after verified finalizer result at checkpoint " + contract.AffectedCheckpoint
 	}
 	return contract, nil
+}
+
+func agencyCollectTaskDependencies(taskID string, tasks map[string]colony.Task, path, visited map[string]bool) {
+	if visited[taskID] {
+		return
+	}
+	visited[taskID] = true
+	task, ok := tasks[taskID]
+	if !ok {
+		return
+	}
+	for _, rawDependency := range task.DependsOn {
+		dependency := strings.TrimSpace(rawDependency)
+		if dependency == "" {
+			continue
+		}
+		path[dependency] = true
+		agencyCollectTaskDependencies(dependency, tasks, path, visited)
+	}
+}
+
+func agencyTaskDependsOn(taskID, targetID string, tasks map[string]colony.Task, visited map[string]bool) bool {
+	if visited[taskID] {
+		return false
+	}
+	visited[taskID] = true
+	task, ok := tasks[taskID]
+	if !ok {
+		return false
+	}
+	for _, rawDependency := range task.DependsOn {
+		dependency := strings.TrimSpace(rawDependency)
+		if dependency == targetID {
+			return true
+		}
+		if dependency != "" && agencyTaskDependsOn(dependency, targetID, tasks, visited) {
+			return true
+		}
+	}
+	return false
 }
 
 // RenderSwarmInterventionContract formats the typed preflight without adding
