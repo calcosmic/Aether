@@ -660,6 +660,11 @@ func resumeColonyAt(now time.Time) (pauseResumeLifecycleOutcome, error) {
 	if err != nil {
 		return pauseResumeLifecycleOutcome{}, err
 	}
+	if staleSession && tracer != nil {
+		_ = tracer.LogIntervention(newRunID, "resume.spawn-clear", "resume", map[string]interface{}{
+			"reason": "stale_session",
+		})
+	}
 	return pauseResumeLifecycleOutcome{
 		Handoff: handoff, Receipt: receipt, Provenance: provenance,
 		StateEffect: receipt.StateEffect,
