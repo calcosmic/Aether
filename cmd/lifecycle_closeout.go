@@ -533,9 +533,10 @@ func lifecycleCloseoutNextUpBody(projection LifecycleProjection, platform string
 	return strings.TrimPrefix(rendered, renderBanner(commandEmoji("next-up"), "Next Up"))
 }
 
-// appendLifecycleCloseoutVisual replaces the old shared closing card when it
-// is the terminal section, then appends the focused closeout. Result bodies
-// retain their command-specific evidence; a second Next Up card does not.
+// appendLifecycleCloseoutVisual inserts the focused closeout before the shared
+// resolver card when that card is the terminal section. Result bodies retain
+// their command-specific evidence, while the one resolver-owned card remains
+// the final answer on screen and in the machine-readable envelope.
 func appendLifecycleCloseoutVisual(body string, result map[string]interface{}, platform string) string {
 	closeout, ok := lifecycleCloseoutFromResult(result)
 	if !ok {
@@ -543,7 +544,12 @@ func appendLifecycleCloseoutVisual(body string, result map[string]interface{}, p
 	}
 	legacy := renderBanner(commandEmoji("status"), "What Next")
 	if index := strings.LastIndex(body, legacy); index >= 0 {
-		body = strings.TrimRight(body[:index], "\n") + "\n"
+		prefix := strings.TrimRight(body[:index], "\n")
+		card := strings.TrimLeft(body[index:], "\n")
+		if prefix != "" {
+			prefix += "\n"
+		}
+		return prefix + renderLifecycleCloseout(closeout, platform) + card
 	}
 	if body != "" && !strings.HasSuffix(body, "\n") {
 		body += "\n"

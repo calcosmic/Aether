@@ -49,12 +49,11 @@ func sessionLifecycleSurfaces() []lifecycleSurfaceCase {
 			keep:    []string{"Handoff"},
 		},
 		{
-			name: "resuming, full form",
-			args: []string{"resume-colony"},
-			// "resume-colony" itself is not fed to the resolver as the
-			// LastCommand: "colony" is a word this repo invented (S-05), and
-			// the production code passes the plain phrase below instead so
-			// the "what changed" sentence never needs it explained twice.
+			name: "resuming, canonical form",
+			args: []string{"resume"},
+			// The canonical public command is not fed to the resolver as the
+			// LastCommand: the production code passes the plain phrase below so
+			// the "what changed" sentence stays human-readable.
 			command: "picking the project back up",
 			prepare: sessionReadyState,
 			keep:    []string{"Goal: "},
