@@ -260,6 +260,9 @@ var resumeColonyCmd = &cobra.Command{
 		}
 
 		result := buildResumeDashboardResult()
+		if staleSignals := detectStaleFocusSignals(store, loadStateAfterLifecycleOutcome().CurrentPhase); len(staleSignals) > 0 {
+			result["stale_signals"] = staleSignals
+		}
 		result["resumed"] = true
 		result["handoff_found"] = outcome.Handoff.HandoffID != ""
 		result["handoff_path"] = handoffDocumentPath()

@@ -228,9 +228,9 @@ func TestResumeColonyRestoresSessionAndClearsHandoff(t *testing.T) {
 		t.Fatalf("failed to seed handoff: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"resume-colony"})
+	rootCmd.SetArgs([]string{"resume"})
 	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("resume-colony returned error: %v", err)
+		t.Fatalf("resume returned error: %v", err)
 	}
 
 	if !strings.Contains(buf.String(), `"resumed":true`) {
@@ -245,8 +245,8 @@ func TestResumeColonyRestoresSessionAndClearsHandoff(t *testing.T) {
 	if err := store.LoadJSON("session.json", &updated); err != nil {
 		t.Fatalf("failed to reload session: %v", err)
 	}
-	if updated.LastCommand != "resume-colony" {
-		t.Fatalf("session.LastCommand = %q, want resume-colony", updated.LastCommand)
+	if updated.LastCommand != "resume" {
+		t.Fatalf("session.LastCommand = %q, want resume", updated.LastCommand)
 	}
 	if updated.ContextCleared {
 		t.Fatal("expected ContextCleared to be false after resume")
@@ -315,7 +315,7 @@ func TestResumeColonyRestoresInvalidStateFromHandoffSnapshot(t *testing.T) {
 		t.Fatalf("failed to corrupt state: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"resume-colony"})
+	rootCmd.SetArgs([]string{"resume"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("resume-colony returned error: %v", err)
 	}
@@ -376,7 +376,7 @@ func TestResumeColonyRestoresInvalidStateFromLegacyHandoff(t *testing.T) {
 		t.Fatalf("failed to corrupt state: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"resume-colony"})
+	rootCmd.SetArgs([]string{"resume"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("resume-colony returned error: %v", err)
 	}
@@ -448,7 +448,7 @@ func TestResumeColonyNoHandoffRejectsBrokenState(t *testing.T) {
 		},
 	})
 
-	rootCmd.SetArgs([]string{"resume-colony", "--no-handoff"})
+	rootCmd.SetArgs([]string{"resume", "--no-handoff"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("resume-colony returned error: %v", err)
 	}
@@ -510,7 +510,7 @@ func TestResumeColonyWarnsAndBlocksOnHandoffGoalMismatch(t *testing.T) {
 		},
 	})
 
-	rootCmd.SetArgs([]string{"resume-colony"})
+	rootCmd.SetArgs([]string{"resume"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("resume-colony returned error: %v", err)
 	}
@@ -574,7 +574,7 @@ func TestResumeColonyRotatesStaleSpawnTreeForPausedColony(t *testing.T) {
 		t.Fatalf("failed to seed spawn tree: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"resume-colony"})
+	rootCmd.SetArgs([]string{"resume"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("resume-colony returned error: %v", err)
 	}
@@ -631,7 +631,7 @@ func TestResumeColonyNormalizesLegacyPausedStateToReady(t *testing.T) {
 		t.Fatalf("failed to seed session: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"resume-colony"})
+	rootCmd.SetArgs([]string{"resume"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("resume-colony returned error: %v", err)
 	}
@@ -898,7 +898,7 @@ func TestResumeColonyGCOphanedWorktrees(t *testing.T) {
 		t.Fatalf("seed session: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"resume-colony"})
+	rootCmd.SetArgs([]string{"resume"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("resume-colony returned error: %v", err)
 	}
@@ -1002,7 +1002,7 @@ func TestResumeDetectsStaleFocusSignals(t *testing.T) {
 		t.Fatalf("seed session: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"resume-colony"})
+	rootCmd.SetArgs([]string{"resume"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("resume-colony returned error: %v", err)
 	}
@@ -1063,7 +1063,7 @@ func TestResumeNoStaleWhenSourcePhaseMatchesCurrent(t *testing.T) {
 		t.Fatalf("seed session: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"resume-colony"})
+	rootCmd.SetArgs([]string{"resume"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("resume-colony returned error: %v", err)
 	}
@@ -1118,7 +1118,7 @@ func TestResumeNilSourcePhaseNotFlagged(t *testing.T) {
 		t.Fatalf("seed session: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"resume-colony"})
+	rootCmd.SetArgs([]string{"resume"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("resume-colony returned error: %v", err)
 	}
@@ -1173,7 +1173,7 @@ func TestResumeOnlyFocusFlaggedNotRedirect(t *testing.T) {
 		t.Fatalf("seed session: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"resume-colony"})
+	rootCmd.SetArgs([]string{"resume"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("resume-colony returned error: %v", err)
 	}
@@ -1228,7 +1228,7 @@ func TestResumeInactiveFocusNotFlagged(t *testing.T) {
 		t.Fatalf("seed session: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"resume-colony"})
+	rootCmd.SetArgs([]string{"resume"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("resume-colony returned error: %v", err)
 	}
