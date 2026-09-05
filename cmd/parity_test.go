@@ -35,10 +35,8 @@ var yamlToRuntimeName = map[string]string{
 	"insert-phase":   "phase-insert",
 	"memory-details": "memory-metrics",
 	"patrol":         "patrol-check",
-	"pause-colony":   "pause",
 	"pheromones":     "pheromone-display",
 	"profile":        "profile-read",
-	"resume":         "resume-colony",
 	"shelf":          "shelf-list",
 }
 

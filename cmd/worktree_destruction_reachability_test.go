@@ -1331,7 +1331,7 @@ var lifecycleEntryCommands = []string{
 	"build",
 	"continue",
 	"init",
-	"resume-colony",
+	"resume",
 	"run",
 	"build-finalize",
 	"continue-finalize",

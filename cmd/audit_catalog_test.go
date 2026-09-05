@@ -53,12 +53,12 @@ func TestCatalogCompleteness(t *testing.T) {
 	}
 
 	// All lifecycle commands must appear in the catalog.
-	// Note: wrapper names /ant-resume, /ant-patrol, /ant-profile map to
-	// compound Cobra names resume-colony, patrol-check, profile-read.
+	// Note: wrapper names /ant-patrol and /ant-profile map to compound Cobra
+	// names; resume is itself the public runtime command.
 	expectedLifecycle := []string{
 		"init", "discuss", "colonize", "plan", "build", "continue",
-		"seal", "entomb", "publish", "update", "recover", "status",
-		"resume-colony", "watch", "patrol-check", "profile-read",
+		"seal", "entomb", "publish", "update", "status", "resume",
+		"watch", "patrol-check", "profile-read",
 	}
 	var missing []string
 	for _, name := range expectedLifecycle {

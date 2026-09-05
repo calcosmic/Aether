@@ -486,7 +486,6 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 
 func commandGuideLiteralCommands() []string {
 	return []string{
-		"abandon",
 		"archaeology",
 		"ask",
 		"assumptions",
@@ -508,6 +507,7 @@ func commandGuideLiteralCommands() []string {
 		"interpret",
 		"lay-eggs",
 		"maturity",
+		"maintenance",
 		"medic",
 		"memory-details",
 		"migrate-state",

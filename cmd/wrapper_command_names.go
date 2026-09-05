@@ -13,7 +13,6 @@ package cmd
 // .claude/commands/ant/*.md, so adding or removing a wrapper without updating
 // this map fails the build.
 var wrapperCommandNames = map[string]bool{
-	"abandon":         true,
 	"archaeology":     true,
 	"ask":             true,
 	"assumptions":     true,
@@ -40,6 +39,7 @@ var wrapperCommandNames = map[string]bool{
 	"interpret":       true,
 	"lay-eggs":        true,
 	"maturity":        true,
+	"maintenance":     true,
 	"medic":           true,
 	"memory-details":  true,
 	"migrate-state":   true,
@@ -55,7 +55,6 @@ var wrapperCommandNames = map[string]bool{
 	"profile":         true,
 	"queen-compose":   true,
 	"quick":           true,
-	"recover":         true,
 	"redirect":        true,
 	"reference-index": true,
 	"reference-list":  true,
