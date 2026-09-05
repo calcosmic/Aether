@@ -255,7 +255,6 @@ const (
 	candidateSeal            nextActionCandidateKey = "seal"
 	candidateEntomb          nextActionCandidateKey = "entomb"
 	candidateResume          nextActionCandidateKey = "resume"
-	candidateResumeColony    nextActionCandidateKey = "resume_colony"
 	candidateResumeDashboard nextActionCandidateKey = "resume_dashboard"
 	candidateStatus          nextActionCandidateKey = "status"
 	candidateFlags           nextActionCandidateKey = "flags"
@@ -343,18 +342,8 @@ var nextActionCandidates = []nextActionCandidate{
 		Why:      "Reload where things stand, so you can carry on without repeating yourself.",
 	},
 	{
-		Key:      candidateResumeColony,
-		Template: "aether resume-colony",
-		Why:      "Reload the fuller picture: the saved notes, the open questions and the task list.",
-	},
-	{
-		// A read-only, non-mutating look at where things stand. Genuinely
-		// distinct from candidateResume: "aether resume" and "aether
-		// resume-colony" are two names for the exact same command (resume is
-		// a declared Cobra alias of resume-colony), so offering both as if
-		// they were different choices recommends one thing twice. This is the
-		// quick view the pause card's "without the detail" alternative always
-		// meant.
+		// A read-only, non-mutating look at where things stand. It is distinct
+		// from candidateResume, which is the sole lifecycle restoration route.
 		Key:      candidateResumeDashboard,
 		Template: "aether resume-dashboard",
 		Why:      "Look at a quick view of where things stand, without restoring anything.",
@@ -539,7 +528,7 @@ func projectedLifecycleCommand(command string) bool {
 		return false
 	}
 	switch fields[1] {
-	case "init", "plan", "build", "run", "resume", "resume-colony", "seal", "entomb":
+	case "init", "plan", "build", "run", "resume", "seal", "entomb":
 		return true
 	default:
 		return false

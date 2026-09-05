@@ -177,7 +177,7 @@ func renderAbandonPreviewVisual(summary map[string]interface{}) string {
 	}
 	b.WriteString("\nThe state is backed up first and can be restored, but the colony stops here.\n")
 	if withWork := intValue(summary["worker_workspaces_with_work"]); withWork > 0 {
-		b.WriteString("Worker workspaces that still hold unsaved or unmerged work will be kept, not deleted, even after --confirm -- run `aether recover` afterward to see them.\n")
+		b.WriteString("Worker workspaces that still hold unsaved or unmerged work will be kept, not deleted. Run `aether maintenance recovery-inspect` to inspect preserved work; run `aether resume` only if you choose to restore a runnable lifecycle.\n")
 	}
 	b.WriteString("If this work is actually finished, `aether seal` then `aether entomb` archives it properly instead.\n")
 	b.WriteString(renderNextUp(
