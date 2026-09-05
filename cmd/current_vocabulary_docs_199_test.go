@@ -93,4 +93,51 @@ func TestCurrentVocabularyDocs199(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("interrupted-execution-benchmark-uses-one-resume-door", func(t *testing.T) {
+		benchmarkSources := []string{
+			"bench/RUNBOOK.md",
+			"bench/harness/permitted-inputs.md",
+			"bench/tasks/03-interrupted-execution.md",
+		}
+		for _, source := range benchmarkSources {
+			content, readErr := os.ReadFile(filepath.Join(root, source))
+			if readErr != nil {
+				t.Fatalf("read %s: %v", source, readErr)
+			}
+			if retired := retiredCurrentLifecycleCommand199.FindString(string(content)); retired != "" {
+				t.Errorf("%s scripts retired interruption command %q", source, retired)
+			}
+			for _, lane := range []string{"aether-interactive", "aether-autopilot"} {
+				if got := scriptedAetherResumeCommand199(t, source, string(content), lane); got != "/ant-resume" {
+					t.Errorf("%s %s scripted resume = %q, want exactly /ant-resume", source, lane, got)
+				}
+			}
+		}
+	})
+}
+
+func scriptedAetherResumeCommand199(t *testing.T, source, content, lane string) string {
+	t.Helper()
+	if source == "bench/harness/permitted-inputs.md" {
+		section := regexp.MustCompile(`(?ms)^## ` + regexp.QuoteMeta(lane) + ` 03-interrupted-execution\n(.*?)(?:^## |\z)`).FindStringSubmatch(content)
+		if len(section) != 2 {
+			t.Errorf("%s does not contain the %s interrupted-execution rules", source, lane)
+			return ""
+		}
+		command := regexp.MustCompile("(?s)Permitted response:\\*\\*\\s*run exactly `([^`]+)`").FindStringSubmatch(section[1])
+		if len(command) != 2 {
+			t.Errorf("%s does not give one exact scripted resume command for %s", source, lane)
+			return ""
+		}
+		return strings.TrimSpace(command[1])
+	}
+
+	displayLane := strings.ReplaceAll(lane, "-", " ")
+	command := regexp.MustCompile(`(?mi)^\|\s*(?:` + regexp.QuoteMeta(lane) + `|` + regexp.QuoteMeta(displayLane) + `)\s*\|\s*([^|]+?)\s*\|\s*$`).FindStringSubmatch(content)
+	if len(command) != 2 {
+		t.Errorf("%s does not contain the %s resume-table row", source, lane)
+		return ""
+	}
+	return strings.TrimSpace(command[1])
 }
