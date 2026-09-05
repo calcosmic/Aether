@@ -55,7 +55,7 @@ completed: 2026-09-06
 
 - Added the exact 34 CAP, 10 synthesis, 17 locked-decision, and 12 requirement coverage rows; each points to a current artifact and named passing proof.
 - Added the four-table human audit generated from the signed JSON source and preserved the original Classic historical evidence/dispositions.
-- Added a `git ls-files` inventory that classifies 206 tracked path/family token keys into current documentation, active runtime, hidden parser compatibility, or historical/test evidence.
+- Added a `git ls-files` inventory that classifies 208 tracked path/family token keys into current documentation, active runtime, hidden parser compatibility, or historical/test evidence.
 - Enforced D-17 status-first review ordering across all eight current/generated guide surfaces and reused Plan 32/34 executed proofs.
 - Removed two discovered active suggestions that leaked retired vocabulary.
 
