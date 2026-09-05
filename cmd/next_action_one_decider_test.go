@@ -54,6 +54,7 @@ type deciderFixture struct {
 	name        string
 	state       colony.ColonyState
 	wantCommand string
+	wantChoices []string
 }
 
 func oneDeciderFixtures(t *testing.T) []deciderFixture {
@@ -82,7 +83,7 @@ func oneDeciderFixtures(t *testing.T) []deciderFixture {
 		{
 			// Named branch 1 of the 2 the plan requires to survive the merge:
 			// a phase interrupted before it did any work.
-			name: "the abandoned-build redispatch branch: an interrupted build that never started is restarted",
+			name: "an interrupted build without start evidence is reconciled through resume",
 			state: normalizedFixtureState(t, colony.ColonyState{
 				Version:      "1.0",
 				Goal:         fixtureGoal("Ship the billing rewrite"),
@@ -94,12 +95,12 @@ func oneDeciderFixtures(t *testing.T) []deciderFixture {
 					fixturePhase(2, "Billing engine", colony.PhaseInProgress),
 				}},
 			}),
-			wantCommand: "aether build 2 --force",
+			wantCommand: "aether resume",
 		},
 		{
 			// Named branch 2 of 2: a build that started long ago with no
 			// dispatch record behind it. Only nextCommandFromState had this.
-			name: "the absent-manifest branch: a long-stalled build with no dispatch record is restarted",
+			name: "a stalled build with no dispatch record is reconciled through resume",
 			state: normalizedFixtureState(t, colony.ColonyState{
 				Version:        "1.0",
 				Goal:           fixtureGoal("Ship the billing rewrite"),
@@ -112,7 +113,7 @@ func oneDeciderFixtures(t *testing.T) []deciderFixture {
 					fixturePhase(2, "Billing engine", colony.PhaseInProgress),
 				}},
 			}),
-			wantCommand: "aether build 2 --force",
+			wantCommand: "aether resume",
 		},
 		{
 			name: "a paused project is picked back up",
@@ -143,7 +144,7 @@ func oneDeciderFixtures(t *testing.T) []deciderFixture {
 			wantCommand: "aether seal",
 		},
 		{
-			name: "a signed-off project is filed away",
+			name: "a signed-off project is reviewed before optional archiving",
 			state: normalizedFixtureState(t, colony.ColonyState{
 				Version:   "1.0",
 				Goal:      fixtureGoal("Ship the billing rewrite"),
@@ -153,10 +154,10 @@ func oneDeciderFixtures(t *testing.T) []deciderFixture {
 					fixturePhase(1, "Foundations", colony.PhaseCompleted),
 				}},
 			}),
-			wantCommand: "aether entomb",
+			wantCommand: "aether status",
 		},
 		{
-			name: "a ready project starts the next unfinished phase",
+			name: "a ready project exposes coequal guided and autopilot execution",
 			state: normalizedFixtureState(t, colony.ColonyState{
 				Version:      "1.0",
 				Goal:         fixtureGoal("Ship the billing rewrite"),
@@ -169,17 +170,17 @@ func oneDeciderFixtures(t *testing.T) []deciderFixture {
 					fixturePhase(3, "Reporting", colony.PhasePending),
 				}},
 			}),
-			wantCommand: "aether build 2",
+			wantChoices: []string{"aether build 2", "aether run"},
 		},
 		{
-			name: "a project with a goal but no phases is talked through first",
+			name: "a project with a goal but no phases is planned",
 			state: normalizedFixtureState(t, colony.ColonyState{
 				Version:   "1.0",
 				Goal:      fixtureGoal("Ship the billing rewrite"),
 				State:     colony.StateREADY,
 				Milestone: "First Mound",
 			}),
-			wantCommand: "aether discuss",
+			wantCommand: "aether plan",
 		},
 	}
 }
@@ -201,6 +202,29 @@ func TestEveryDeciderAgreesOnTheNextCommand(t *testing.T) {
 			answer := resolveNextAction(loadNextActionInput())
 			if answer.Command != fixture.wantCommand {
 				t.Fatalf("the one resolver answered %q, want %q", answer.Command, fixture.wantCommand)
+			}
+			wantCommands := append([]string(nil), fixture.wantChoices...)
+			if fixture.wantCommand != "" {
+				wantCommands = []string{fixture.wantCommand}
+			}
+			if got := nextActionRuntimeCommands(answer); !sameStrings(got, wantCommands) {
+				t.Fatalf("the one resolver exposed commands %q, want %q", got, wantCommands)
+			}
+			if len(fixture.wantChoices) > 0 {
+				primary, _ := workflowSuggestionsForState(fixture.state)
+				if strings.Contains(primary, "aether ") || nextCommandFromState(fixture.state) != "" || nextCommandForHookState(fixture.state) != "" {
+					t.Fatalf("a coequal action set acquired a primary through a legacy adapter: workflow=%q snapshot=%q hook=%q", primary, nextCommandFromState(fixture.state), nextCommandForHookState(fixture.state))
+				}
+				suggestions := nextUpSuggestionsForState(fixture.state)
+				if len(suggestions) != len(fixture.wantChoices) {
+					t.Fatalf("next-up choices = %q, want %q", suggestions, fixture.wantChoices)
+				}
+				for i, command := range fixture.wantChoices {
+					if got := commandFromSuggestion(t, "nextUpSuggestionsForState", suggestions[i]); got != command {
+						t.Errorf("next-up choice %d = %q, want %q", i, got, command)
+					}
+				}
+				return
 			}
 
 			primary, _ := workflowSuggestionsForState(fixture.state)
@@ -232,6 +256,18 @@ func TestEveryDeciderAgreesOnTheNextCommand(t *testing.T) {
 			}
 		})
 	}
+}
+
+func sameStrings(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // TestNoSurvivingDeciderSpellsItsOwnCommand is the structural half of the

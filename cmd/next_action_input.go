@@ -66,6 +66,11 @@ func loadNextActionInputForCommand(lastCommand string) nextActionInput {
 	}
 
 	in.Recovery = loadActiveRecoveryGuidanceReadOnly(in.State, store.BasePath())
+	// Keep the disk-backed resolver input equivalent to the explicit-state
+	// adapter input. Without this fact, the status/card path called a stalled
+	// dispatch ordinary "continue" while every lifecycle adapter correctly
+	// routed the same open operation through canonical resume.
+	in.BuildLooksAbandoned = buildLooksAbandoned(in.State)
 	in.HandoffExists = fileExists(handoffDocumentPath())
 	pf := colony.PheromoneFile{Signals: facts.Signals.Value}
 	in.Signals = extractSignalTextsFrom(&pf, 8)
