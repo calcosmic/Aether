@@ -134,11 +134,20 @@ func TestRecommendedCommandIsAlwaysAvailable(t *testing.T) {
 	for _, tc := range nextActionLifecycleCases() {
 		t.Run(tc.name, func(t *testing.T) {
 			got := resolveNextAction(tc.input(t))
-			if got.Command == "" {
-				t.Fatal("the resolver produced no command at all")
+			commands := []string{got.Command}
+			for _, choice := range got.Projection.NextAction.Choices {
+				commands = append(commands, choice.RuntimeCommand)
 			}
-			if _, ok := availableCommand(got.Command); !ok {
-				t.Errorf("recommended command %q is not a registered command", got.Command)
+			if strings.TrimSpace(got.Command) == "" && (got.Projection == nil || len(got.Projection.NextAction.Choices) == 0) {
+				t.Fatal("the resolver produced neither a command nor an executable choice")
+			}
+			for _, command := range commands {
+				if strings.TrimSpace(command) == "" {
+					continue
+				}
+				if _, ok := availableCommand(command); !ok {
+					t.Errorf("recommended command %q is not registered", command)
+				}
 			}
 			for _, alt := range got.Alternatives {
 				if _, ok := availableCommand(alt.Command); !ok {
@@ -205,11 +214,8 @@ func TestCommandArgumentsSurviveTheGate(t *testing.T) {
 	// And through the resolver: a phase number reaches the recommendation.
 	state := normalizedFixtureState(t, readyPhaseFixtureState(t, 7))
 	got := resolveNextAction(nextActionInput{State: state})
-	if !strings.Contains(got.Command, " 7") {
-		t.Errorf("recommended command %q lost the phase number", got.Command)
-	}
-	if !strings.Contains(got.Recommendation, "7") {
-		t.Errorf("recommendation prose %q does not name the phase", got.Recommendation)
+	if got.Projection == nil || len(got.Projection.NextAction.Choices) != 2 || got.Projection.NextAction.Choices[0].RuntimeCommand != "aether build 7" || got.Projection.NextAction.Choices[1].RuntimeCommand != "aether run" {
+		t.Errorf("ready phase choices = %#v, want canonical build 7 and run choices", got.Projection)
 	}
 }
 
