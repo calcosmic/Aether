@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -94,16 +95,24 @@ func TestPhase199GateReceiptSchema(t *testing.T) {
 			}
 		})
 	}
+	for name, receipt := range map[string]phase199GateReceipt{
+		"incomplete": receipt,
+		"partial":    phase199PartialReceipt(t),
+	} {
+		t.Run("final mode rejects "+name, func(t *testing.T) {
+			if err := validatePhase199GateReceiptForMode(receipt, time.Now().UTC(), true); err == nil {
+				t.Fatalf("final-mode validator accepted %s receipt", name)
+			}
+		})
+	}
 }
 
 func TestPhase199GateReceipt(t *testing.T) {
 	root := findTestModuleRoot(t)
 	receipt := loadPhase199GateReceipt(t)
-	if err := validatePhase199GateReceiptSchema(receipt, time.Now().UTC()); err != nil {
+	finalMode := phase199GateReceiptFinalMode()
+	if err := validatePhase199GateReceiptForMode(receipt, time.Now().UTC(), finalMode); err != nil {
 		t.Fatalf("gate receipt schema: %v", err)
-	}
-	if receipt.Status != "complete" {
-		t.Fatalf("receipt status = %q, want complete after both exact repository gates succeed", receipt.Status)
 	}
 	if err := validatePhase199ReceiptRepository(root, receipt.Repository); err != nil {
 		t.Fatalf("gate receipt repository identity: %v", err)
@@ -112,6 +121,23 @@ func TestPhase199GateReceipt(t *testing.T) {
 	if !phase199FingerprintSetsEqual(receipt.Protected, actual) {
 		t.Fatalf("protected ownership fingerprint changed or receipt is stale\nreceipt: %#v\nactual:  %#v", receipt.Protected, actual)
 	}
+	if err := validatePhase199ReceiptEvidenceOnlyChanges(root, receipt.Repository.Revision); err != nil {
+		t.Fatalf("gate receipt source freshness: %v", err)
+	}
+}
+
+func phase199GateReceiptFinalMode() bool {
+	return flag.Lookup("test.run").Value.String() == "^TestPhase199GateReceipt$"
+}
+
+func validatePhase199GateReceiptForMode(receipt phase199GateReceipt, now time.Time, finalMode bool) error {
+	if err := validatePhase199GateReceiptSchema(receipt, now); err != nil {
+		return err
+	}
+	if finalMode && receipt.Status != "complete" {
+		return fmt.Errorf("receipt status = %q, want complete for final receipt verification", receipt.Status)
+	}
+	return nil
 }
 
 func loadPhase199GateReceipt(t *testing.T) phase199GateReceipt {
@@ -138,7 +164,7 @@ func validatePhase199GateReceiptSchema(receipt phase199GateReceipt, now time.Tim
 	if receipt.SchemaVersion != phase199GateReceiptVersion || receipt.Phase != "199" || receipt.Plan != "29" {
 		return fmt.Errorf("unexpected receipt identity schema=%q phase=%q plan=%q", receipt.SchemaVersion, receipt.Phase, receipt.Plan)
 	}
-	if receipt.Status != "incomplete" && receipt.Status != "complete" {
+	if receipt.Status != "incomplete" && receipt.Status != "partial" && receipt.Status != "complete" {
 		return fmt.Errorf("unsupported receipt status %q", receipt.Status)
 	}
 	if _, err := time.Parse(time.RFC3339Nano, receipt.CreatedAt); err != nil {
@@ -156,11 +182,15 @@ func validatePhase199GateReceiptSchema(receipt phase199GateReceipt, now time.Tim
 		}
 		return nil
 	}
-	if len(receipt.Gates) != 2 {
-		return fmt.Errorf("complete receipt has %d gates, want exactly 2", len(receipt.Gates))
+	wantGateCount := 2
+	if receipt.Status == "partial" {
+		wantGateCount = 1
+	}
+	if len(receipt.Gates) != wantGateCount {
+		return fmt.Errorf("%s receipt has %d gates, want exactly %d", receipt.Status, len(receipt.Gates), wantGateCount)
 	}
 	wantCommands := []string{"go test ./...", "go test ./... -race"}
-	for index, want := range wantCommands {
+	for index, want := range wantCommands[:wantGateCount] {
 		gate := receipt.Gates[index]
 		if gate.Command != want {
 			return fmt.Errorf("gate %d command = %q, want exact %q", index, gate.Command, want)
@@ -217,6 +247,26 @@ func validatePhase199ReceiptRepository(root string, repository phase199ReceiptRe
 	return nil
 }
 
+func validatePhase199ReceiptEvidenceOnlyChanges(root, revision string) error {
+	command := exec.Command("git", "diff", "--name-only", revision)
+	command.Dir = root
+	output, err := command.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("list changes since tested revision: %w", err)
+	}
+	allowed := map[string]bool{
+		phase199GateReceiptPath: true,
+		".planning/phases/199-front-door-and-classic-contract/199-CLASSIC-COVERAGE.md": true,
+		".planning/phases/199-front-door-and-classic-contract/199-29-SUMMARY.md":       true,
+	}
+	for _, path := range strings.Fields(string(output)) {
+		if !allowed[path] {
+			return fmt.Errorf("post-tested change %q is not explicitly evidence-only", path)
+		}
+	}
+	return nil
+}
+
 func collectPhase199ProtectedFingerprints(t *testing.T, root string) []phase199ProtectedFingerprintRecord {
 	t.Helper()
 	result := make([]phase199ProtectedFingerprintRecord, 0, len(phase199ProtectedReceiptPaths))
@@ -234,7 +284,9 @@ func phase199ProtectedFingerprintForPath(t *testing.T, root, slashPath string) p
 	if err != nil {
 		t.Fatalf("stat protected path %s: %v", slashPath, err)
 	}
-	output, err := exec.Command("git", "status", "--porcelain=v1", "--untracked-files=all", "--", slashPath).CombinedOutput()
+	command := exec.Command("git", "status", "--porcelain=v1", "--untracked-files=all", "--", slashPath)
+	command.Dir = root
+	output, err := command.CombinedOutput()
 	if err != nil {
 		t.Fatalf("classify protected path %s: %v", slashPath, err)
 	}
@@ -344,6 +396,14 @@ func phase199ValidCompleteReceipt(t *testing.T) phase199GateReceipt {
 		{Command: "go test ./... -race", ExitCode: 0, StartedAt: now.Add(-time.Minute).Format(time.RFC3339Nano), FinishedAt: now.Format(time.RFC3339Nano), Revision: base.Repository.Revision, Tree: base.Repository.Tree, OutputSHA256: strings.Repeat("b", 64)},
 	}
 	return base
+}
+
+func phase199PartialReceipt(t *testing.T) phase199GateReceipt {
+	t.Helper()
+	receipt := phase199ValidCompleteReceipt(t)
+	receipt.Status = "partial"
+	receipt.Gates = receipt.Gates[:1]
+	return receipt
 }
 
 func clonePhase199GateReceipt(t *testing.T, receipt phase199GateReceipt) phase199GateReceipt {
