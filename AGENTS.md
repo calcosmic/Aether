@@ -411,8 +411,21 @@ aether oracle "release parity"
 
 # After completing a colony
 aether seal
-aether init "next project goal"
 ```
+
+### Sealed colony: review before archive
+
+After `aether seal`, whether it is verified or a forced-incomplete closure, the
+active colony remains retained for review; a forced-incomplete seal is never
+verified completion.
+
+1. First run `aether status` to review the retained sealed state.
+2. `aether entomb` is an optional, explicit owner-invoked archive-and-clear
+   alternative; it is never automatic or required after sealing.
+3. A forced-incomplete marker remains visible in `aether status` and optional
+   `aether entomb`.
+4. Only after a successful archive-and-clear receipt has verified the archive
+   and cleared active state may you run `aether init` for a new goal.
 
 ---
 

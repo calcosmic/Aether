@@ -252,7 +252,7 @@ func readD17GuideSection199(t *testing.T, root string, guide d17Guide199) string
 	if end := strings.Index(section, "\n---"); end >= 0 {
 		section = section[:end]
 	}
-	return section
+	return strings.ReplaceAll(strings.Join(strings.Fields(section), " "), "`", "")
 }
 
 func d17StatusPrimary199(section string, guide d17Guide199) bool {
@@ -268,7 +268,7 @@ func d17EntombOptional199(section string) bool {
 }
 
 func d17InitAfterArchiveClear199(section string, guide d17Guide199) bool {
-	precondition := "Only after a successful archive-and-clear receipt has verified the archive and cleared active state may you run " + guide.init + "."
+	precondition := "Only after a successful archive-and-clear receipt has verified the archive and cleared active state may you run " + guide.init + " for a new goal."
 	return strings.Contains(section, precondition) &&
 		strings.Index(section, guide.init) > strings.Index(section, guide.entomb)
 }

@@ -65,8 +65,8 @@ creating a second recovery effect.
 ### Lifecycle
 | Command | Purpose |
 |---------|---------|
-| `/ant-seal` | Seal colony (Crowned Anthill) |
-| `/ant-entomb` | Archive completed colony |
+| `/ant-seal` | Seal colony and retain active state for review |
+| `/ant-entomb` | Optional explicit owner-invoked archive-and-clear alternative |
 | `/ant-maturity` | View colony maturity journey |
 | `/ant-update` | Update system files from hub |
 | `/ant-migrate-state` | Migrate colony state between versions |
@@ -115,10 +115,25 @@ After /clear or session break:
 10. /ant-status                            (see where you left off)
 
 After completing a colony:
-11. /ant-seal                              (mark as complete)
-12. /ant-entomb                            (archive to chambers)
-13. /ant-init "next project goal"          (start fresh colony)
+11. /ant-seal                              (seal and retain active state for review)
+12. /ant-status                            (review the retained sealed state first)
+13. /ant-entomb                            (optional explicit owner-invoked archive-and-clear alternative)
+14. /ant-init "next project goal"          (only after a successful archive-and-clear receipt)
 ```
+
+### Sealed colony: review before archive
+
+After `/ant-seal`, whether it is verified or a forced-incomplete closure, the
+active colony remains retained for review; a forced-incomplete seal is never
+verified completion.
+
+1. First run `/ant-status` to review the retained sealed state.
+2. `/ant-entomb` is an optional, explicit owner-invoked archive-and-clear
+   alternative; it is never automatic or required after sealing.
+3. A forced-incomplete marker remains visible in `/ant-status` and optional
+   `/ant-entomb`.
+4. Only after a successful archive-and-clear receipt has verified the archive
+   and cleared active state may you run `/ant-init` for a new goal.
 
 ## Worker Castes
 
