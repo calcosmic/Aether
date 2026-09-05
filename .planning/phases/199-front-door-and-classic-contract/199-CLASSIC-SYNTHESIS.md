@@ -133,6 +133,51 @@ Every row below is owned by Phase 199, has exactly one selected disposition, and
 
 Coverage result: 34 routed rows, 34 selected dispositions, zero retirements, and zero unrouted Phase 199 ledger entries.
 
+### Signed implemented capability evidence
+
+The historical disposition and source citations above remain authoritative. This
+addendum signs the current implementation artifact and named passing proof for
+every routed row; the machine-readable source is
+`199-CLASSIC-COVERAGE.json` and its rendered audit is
+`199-CLASSIC-COVERAGE.md`.
+
+| Capability | Implemented artifact | Passing proof |
+|---|---|---|
+| CAP-006 | `cmd/entomb_cmd.go` | `TestLifecycleCloseout199Entomb` |
+| CAP-007 | `cmd/entomb_cmd.go` | `TestEntombManifest199Build` |
+| CAP-008 | `cmd/maintenance.go` | `TestMaintenanceState199CleanupOwnership` |
+| CAP-013 | `cmd/pheromone_write.go` | `TestPheromoneLifecycle_FocusSignal` |
+| CAP-015 | `cmd/history.go` | `TestLifecycleHistory199FocusedProjection` |
+| CAP-016 | `.aether/commands/help.yaml` | `TestCommandGuideLifecycle199` |
+| CAP-017 | `cmd/init_cmd.go` | `TestLifecycleCloseout199Init` |
+| CAP-018 | `cmd/status.go` | `TestLifecycleStatus199FullOrder` |
+| CAP-019 | `cmd/command_truth.go` | `TestMigrateStateRollbackRestoresExactBackupAndKeepsSafetyCopy` |
+| CAP-020 | `cmd/next_action.go` | `TestLifecycleNextAction` |
+| CAP-026 | `cmd/seal_final_review.go` | `TestLifecycleCloseout199Seal` |
+| CAP-027 | `cmd/phase.go` | `TestLifecyclePhase199List` |
+| CAP-028 | `cmd/phase.go` | `TestLifecyclePhase199FocusedProjection` |
+| CAP-032 | `cmd/session_flow_cmds.go` | `TestLifecycleCloseout199Resume` |
+| CAP-033 | `cmd/session_flow_cmds.go` | `TestResumeWrapperContract199` |
+| CAP-034 | `cmd/autopilot_policy.go` | `TestAutopilotContract199CompletionDoesNotSeal` |
+| CAP-035 | `cmd/normalize_args.go` | `TestRuntimeRecoveryCompatibility199` |
+| CAP-036 | `cmd/codex_workflow_cmds.go` | `TestLifecycleCloseout199Seal` |
+| CAP-037 | `cmd/consolidation_lifecycle.go` | `TestLifecycleCloseout199Seal` |
+| CAP-038 | `cmd/seal_final_review.go` | `TestLifecycleCloseout199ForcedSeal` |
+| CAP-039 | `cmd/codex_workflow_cmds.go` | `TestLifecycleCloseout199Refusal` |
+| CAP-040 | `cmd/codex_visuals.go` | `TestLifecycleCloseout199Seal` |
+| CAP-041 | `cmd/seal_confirmation.go` | `TestLifecycleCloseout199ForcedSeal` |
+| CAP-042 | `cmd/hive_policy.go` | `TestSealPromotionSurvivesWithRepoNameInText` |
+| CAP-049 | `cmd/survey_staleness.go` | `TestLifecycleCloseout199Colonize` |
+| CAP-050 | `cmd/status.go` | `TestLifecycleStatus199NoInventedEvidence` |
+| CAP-052 | `cmd/entomb_cmd.go` | `TestEntombManifest199CrossReferences` |
+| CAP-053 | `cmd/update_cmd.go` | `TestMaintenanceMutation199Update` |
+| CAP-059 | `cmd/survey_staleness.go` | `TestLifecycleCloseout199Colonize` |
+| CAP-060 | `cmd/session_flow_cmds.go` | `TestLifecycleCloseout199Pause` |
+| CAP-062 | `cmd/skills.go` | `TestMaintenanceSkills199` |
+| CAP-064 | `cmd/entomb_cmd.go` | `TestEntombManifest199Deterministic` |
+| CAP-065 | `cmd/maintenance.go` | `TestMaintenanceInspectionStructuredResult` |
+| CAP-068 | `cmd/init_cmd.go` | `TestInitWithCharterJSONFlag` |
+
 ## Locked owner-decision traceability
 
 The “Synthesis row” column deliberately uses the human area label so the authoritative synthesis identifier remains unique in the decision table.

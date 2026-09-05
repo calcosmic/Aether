@@ -40,6 +40,9 @@ func TestClassicCoverage199RequiredFields(t *testing.T) {
 	if err := validateClassicCoverage199RequiredFields(document); err != nil {
 		t.Fatal(err)
 	}
+	if err := validateClassicCoverage199Audit(document); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestClassicCoverage199ProofResolution(t *testing.T) {
@@ -190,6 +193,28 @@ func validateClassicCoverage199PassingStatus(document classicCoverage199Document
 	for _, row := range document.Rows {
 		if row.Status != "PASS" {
 			return fmt.Errorf("%s/%s status is %q, want PASS", row.Type, row.ID, row.Status)
+		}
+	}
+	return nil
+}
+
+func validateClassicCoverage199Audit(document classicCoverage199Document) error {
+	root := findTestModuleRootForClassicCoverage199()
+	path := filepath.Join(root, ".planning", "phases", "199-front-door-and-classic-contract", "199-CLASSIC-COVERAGE.md")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read coverage audit: %w", err)
+	}
+	audit := string(raw)
+	for _, group := range []string{"GOAL", "REQ", "RESEARCH", "CONTEXT"} {
+		if !strings.Contains(audit, "## "+group+"\n") {
+			return fmt.Errorf("coverage audit lacks %s table", group)
+		}
+	}
+	for _, row := range document.Rows {
+		needle := "| " + row.ID + " | " + row.Disposition + " | "
+		if !strings.Contains(audit, needle) {
+			return fmt.Errorf("coverage audit lacks rendered row for %s/%s", row.Type, row.ID)
 		}
 	}
 	return nil
