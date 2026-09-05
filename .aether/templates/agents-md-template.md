@@ -53,7 +53,8 @@ Agent definitions live in `.codex/agents/*.toml` (TOML format).
 | `aether focus "<area>"` | Guide colony attention |
 | `aether redirect "<pattern>"` | Hard constraint -- avoid this |
 | `aether pheromones` | View active signals |
-| `aether seal` | Seal completed colony |
+| `aether seal` | Seal colony and retain active state for review |
+| `aether entomb` | Optional explicit owner-invoked archive-and-clear alternative |
 
 ---
 
@@ -82,9 +83,25 @@ aether continue                     # Verify and advance
 aether run                          # Or autopilot all phases
 
 # After completing:
-aether seal                         # Mark colony complete
-aether entomb                       # Archive
+aether seal                         # Seal and retain active state for review
+aether status                       # Review the retained sealed state first
+aether entomb                       # Optional explicit owner-invoked archive-and-clear alternative
+aether init "next project goal"     # Only after a successful archive-and-clear receipt
 ```
+
+### Sealed colony: review before archive
+
+After `aether seal`, whether it is verified or a forced-incomplete closure, the
+active colony remains retained for review; a forced-incomplete seal is never
+verified completion.
+
+1. First run `aether status` to review the retained sealed state.
+2. `aether entomb` is an optional, explicit owner-invoked archive-and-clear
+   alternative; it is never automatic or required after sealing.
+3. A forced-incomplete marker remains visible in `aether status` and optional
+   `aether entomb`.
+4. Only after a successful archive-and-clear receipt has verified the archive
+   and cleared active state may you run `aether init` for a new goal.
 
 ---
 
