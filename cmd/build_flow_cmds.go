@@ -231,6 +231,7 @@ var printNextUpCmd = &cobra.Command{
 			return nil
 		}
 
+		answer := resolveNextAction(nextActionInputForState(state, ""))
 		suggestions := nextUpSuggestionsForState(state)
 
 		result := map[string]interface{}{
@@ -238,6 +239,7 @@ var printNextUpCmd = &cobra.Command{
 			"current_phase": state.CurrentPhase,
 			"state":         string(state.State),
 		}
+		applyNextActionToResult(result, answer)
 		outputWorkflow(result, renderNextUpVisual(suggestions))
 		return nil
 	},
@@ -249,6 +251,17 @@ var printNextUpCmd = &cobra.Command{
 // differently from the other deciders. It now returns the one answer.
 func nextUpSuggestionsForState(state colony.ColonyState) []string {
 	answer := resolveNextAction(nextActionInputForState(state, ""))
+	if answer.Projection != nil && len(answer.Projection.NextAction.Choices) > 0 {
+		suggestions := make([]string, 0, len(answer.Projection.NextAction.Choices))
+		for _, choice := range answer.Projection.NextAction.Choices {
+			if line := nextActionSuggestionLine(choice.RuntimeCommand, choice.Reason); line != "" {
+				suggestions = append(suggestions, line)
+			}
+		}
+		if len(suggestions) > 0 {
+			return suggestions
+		}
+	}
 	return []string{nextActionPrimarySuggestion(answer)}
 }
 

@@ -125,6 +125,7 @@ type nextActionCase struct {
 	name         string
 	input        func(t *testing.T) nextActionInput
 	wantCommand  string
+	wantChoices  []string
 	wantContains []string
 }
 
@@ -140,8 +141,8 @@ func nextActionLifecycleCases() []nextActionCase {
 					Milestone: "First Mound",
 				})}
 			},
-			wantCommand:  "aether discuss",
-			wantContains: []string{"aether plan", "aether colonize"},
+			wantCommand:  "aether plan",
+			wantContains: []string{"aether status", "aether history"},
 		},
 		{
 			name: "a build that is running is told to verify and advance",
@@ -213,7 +214,7 @@ func nextActionLifecycleCases() []nextActionCase {
 					}},
 				})}
 			},
-			wantCommand: "aether entomb",
+			wantCommand: "aether status",
 		},
 		{
 			name: "a ready phase is told to start that phase by number",
@@ -230,7 +231,7 @@ func nextActionLifecycleCases() []nextActionCase {
 					}},
 				})}
 			},
-			wantCommand: "aether build 2",
+			wantChoices: []string{"aether build 2", "aether run"},
 		},
 		{
 			name: "an interrupted build that never started is told to restart it",
@@ -247,7 +248,7 @@ func nextActionLifecycleCases() []nextActionCase {
 					}},
 				})}
 			},
-			wantCommand: "aether build 2 --force",
+			wantCommand: "aether resume",
 		},
 		{
 			name: "a failed phase is told to run that phase again",
@@ -264,7 +265,7 @@ func nextActionLifecycleCases() []nextActionCase {
 					}},
 				})}
 			},
-			wantCommand: "aether build 2",
+			wantCommand: "aether resume",
 		},
 		{
 			name: "a planning blocker is told to look at the blocker before anything else",
@@ -288,7 +289,7 @@ func nextActionLifecycleCases() []nextActionCase {
 					},
 				}
 			},
-			wantCommand: "aether flags --status active",
+			wantCommand: "aether resume",
 		},
 		{
 			name: "no colony at all is told how to start one",
@@ -306,6 +307,16 @@ func TestResolveNextActionCoversEveryLifecycleState(t *testing.T) {
 			got := resolveNextAction(tc.input(t))
 			if got.Command != tc.wantCommand {
 				t.Fatalf("recommended command = %q, want %q", got.Command, tc.wantCommand)
+			}
+			if len(tc.wantChoices) > 0 {
+				if got.Projection == nil || len(got.Projection.NextAction.Choices) != len(tc.wantChoices) {
+					t.Fatalf("choices = %#v, want %v", got.Projection, tc.wantChoices)
+				}
+				for index, want := range tc.wantChoices {
+					if got.Projection.NextAction.Choices[index].RuntimeCommand != want {
+						t.Errorf("choice %d = %q, want %q", index, got.Projection.NextAction.Choices[index].RuntimeCommand, want)
+					}
+				}
 			}
 			for _, want := range tc.wantContains {
 				found := false
@@ -342,8 +353,8 @@ func TestResolveNextActionUsesTheRecoveryReportCommand(t *testing.T) {
 	guidance := writeRecoveryReportFixture(t, state, "aether build 2 --force")
 
 	got := resolveNextAction(nextActionInput{State: state, Recovery: guidance})
-	if got.Command != "aether build 2 --force" {
-		t.Fatalf("blocked build recommended %q, want the targeted recovery command from the report", got.Command)
+	if got.Command != "aether resume" {
+		t.Fatalf("blocked build recommended %q, want the canonical resume recovery door", got.Command)
 	}
 	if !got.Recovery.Blocked {
 		t.Error("recovery field does not report the build as blocked")

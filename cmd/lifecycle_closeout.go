@@ -554,5 +554,9 @@ func appendLifecycleCloseoutVisual(body string, result map[string]interface{}, p
 	if body != "" && !strings.HasSuffix(body, "\n") {
 		body += "\n"
 	}
-	return body + renderLifecycleCloseout(closeout, platform)
+	body += renderLifecycleCloseout(closeout, platform)
+	if answer, ok := nextActionFromResult(result); ok {
+		return body + "\n" + renderNextActionCardForPlatform(answer, platform)
+	}
+	return body
 }

@@ -51,7 +51,6 @@ var criterionTwoLifecycleCommands = []string{
 	"resuming",
 	"sealing/finishing",
 	"updating",
-	"recovering",
 	"checking status",
 }
 
@@ -108,7 +107,7 @@ func lifecycleCoverageCases(t *testing.T) []lifecycleCoverageCase {
 	discussingCase := findLifecycleCase(t, startupLifecycleSurfaces(), "talking the goal through")
 	planningCase := findLifecycleCase(t, startupLifecycleSurfaces(), "drawing up the plan")
 	pausingCase := findLifecycleCase(t, sessionLifecycleSurfaces(), "pausing")
-	resumingCase := findLifecycleCase(t, sessionLifecycleSurfaces(), "resuming, full form")
+	resumingCase := findLifecycleCase(t, sessionLifecycleSurfaces(), "resuming, canonical form")
 
 	buildingSurface := findWorkLoopSurface(t, workLoopSurfaces(), "building a phase")
 	continuingSurface := findWorkLoopSurface(t, workLoopSurfaces(), "checking the work")
@@ -160,11 +159,6 @@ func lifecycleCoverageCases(t *testing.T) []lifecycleCoverageCase {
 			name:     "updating",
 			visual:   lifecycleUpdateVisual,
 			envelope: lifecycleUpdateEnvelope,
-		},
-		{
-			name:     "recovering",
-			visual:   lifecycleRecoverVisual,
-			envelope: lifecycleRecoverEnvelope,
 		},
 		{
 			name:     "checking status",
@@ -303,24 +297,24 @@ func TestEveryLifecycleCommandEndsWithNextAction(t *testing.T) {
 			if !strings.Contains(visual, marker) {
 				t.Fatalf("%s does not end with the shared card at all:\n%s", c.name, visual)
 			}
-			screenCommand := commandInClosing(t, c.name, visual)
-
 			envelope := c.envelope(t)
-			envelopeCommand, ok := envelope[nextActionCommandKey].(string)
-			if !ok || strings.TrimSpace(envelopeCommand) == "" {
-				t.Fatalf("%s emits no %q in its machine-readable answer; a wrapper cannot read the next step out of it",
-					c.name, nextActionCommandKey)
+			envelopeCommands := envelopeNextActionCommands(envelope)
+			if len(envelopeCommands) == 0 {
+				t.Fatalf("%s emits neither a %q nor exact %q in its machine-readable answer; a wrapper cannot read the next step out of it",
+					c.name, nextActionCommandKey, nextActionChoicesKey)
 			}
-			if screenCommand != envelopeCommand {
-				t.Errorf("%s: the screen recommends %q, the machine-readable answer says %q -- the two disagree",
-					c.name, screenCommand, envelopeCommand)
-			}
-			if !strings.HasPrefix(envelopeCommand, "aether ") {
-				t.Errorf("%s: the machine-readable command is %q, which is not something a wrapper can execute",
-					c.name, envelopeCommand)
-			}
-			if _, ok := availableCommand(envelopeCommand); !ok {
-				t.Errorf("%s recommends %q, which this build of the program does not have", c.name, envelopeCommand)
+			for _, envelopeCommand := range envelopeCommands {
+				if !strings.Contains(visual, "`"+envelopeCommand+"`") {
+					t.Errorf("%s: the machine-readable answer names %q, which does not appear on the screen card",
+						c.name, envelopeCommand)
+				}
+				if !strings.HasPrefix(envelopeCommand, "aether ") {
+					t.Errorf("%s: the machine-readable command is %q, which is not something a wrapper can execute",
+						c.name, envelopeCommand)
+				}
+				if _, ok := availableCommand(envelopeCommand); !ok {
+					t.Errorf("%s recommends %q, which this build of the program does not have", c.name, envelopeCommand)
+				}
 			}
 			if _, ok := envelope[nextActionRecommendationKey]; !ok {
 				t.Errorf("%s carries no plain-English reason (%q) beside its command", c.name, nextActionRecommendationKey)
@@ -338,6 +332,34 @@ func TestEveryLifecycleCommandEndsWithNextAction(t *testing.T) {
 			}
 		})
 	}
+}
+
+// envelopeNextActionCommands keeps a deliberate coequal action set coequal in
+// this end-to-end assertion. Most lifecycle states carry next_command; an
+// accepted plan instead carries two exact, registered next_choices and no
+// invented primary. Both shapes are executable wrapper contracts.
+func envelopeNextActionCommands(envelope map[string]interface{}) []string {
+	if command := strings.TrimSpace(stringValue(envelope[nextActionCommandKey])); command != "" {
+		return []string{command}
+	}
+	var commands []string
+	switch choices := envelope[nextActionChoicesKey].(type) {
+	case []LifecycleActionChoice:
+		for _, choice := range choices {
+			if command := strings.TrimSpace(choice.RuntimeCommand); command != "" {
+				commands = append(commands, command)
+			}
+		}
+	case []interface{}:
+		for _, entry := range choices {
+			if choice, ok := entry.(map[string]interface{}); ok {
+				if command := strings.TrimSpace(stringValue(choice["runtime_command"])); command != "" {
+					commands = append(commands, command)
+				}
+			}
+		}
+	}
+	return commands
 }
 
 // envelopeAlternativeCommands reads the alternatives list out of an envelope,
@@ -425,11 +447,11 @@ func assertLifecyclePlatformCorrectness(t *testing.T, commandName, label string)
 // than trusted to the parameter alone.
 func assertResumingPlatformCorrectness(t *testing.T) {
 	t.Helper()
-	resumingCase := findLifecycleCase(t, sessionLifecycleSurfaces(), "resuming, full form")
+	resumingCase := findLifecycleCase(t, sessionLifecycleSurfaces(), "resuming, canonical form")
 	answer := runLifecycleSurface(t, resumingCase, false).answer
-
-	if !strings.HasPrefix(answer.Command, "aether ") {
-		t.Errorf("resuming's machine-readable command is %q, which is not something a wrapper can execute", answer.Command)
+	commands := nextActionRuntimeCommands(answer)
+	if len(commands) == 0 {
+		t.Fatal("resuming resolved no executable next action")
 	}
 
 	platforms := []struct{ platform, prefix string }{
@@ -440,10 +462,31 @@ func assertResumingPlatformCorrectness(t *testing.T) {
 	for _, tc := range platforms {
 		t.Setenv("AETHER_PLATFORM", tc.platform)
 		rendered := stripANSI(renderNextActionCardForPlatform(answer, tc.platform))
-		got := commandInClosing(t, "resuming ("+tc.platform+")", rendered)
-		if !strings.HasPrefix(got, tc.prefix) {
-			t.Errorf("resuming on %s shows %q; this platform's owner types commands beginning %q",
-				tc.platform, got, tc.prefix)
+		for _, command := range commands {
+			display := lifecycleProjectionCommand(command, tc.platform)
+			if !strings.Contains(rendered, "`"+display+"`") {
+				t.Errorf("resuming on %s omits %q from its card:\n%s", tc.platform, display, rendered)
+			}
+			if !strings.HasPrefix(display, tc.prefix) {
+				t.Errorf("resuming on %s shows %q; this platform's owner types commands beginning %q",
+					tc.platform, display, tc.prefix)
+			}
 		}
 	}
+}
+
+func nextActionRuntimeCommands(answer nextAction) []string {
+	if command := strings.TrimSpace(answer.Command); command != "" {
+		return []string{command}
+	}
+	if answer.Projection == nil {
+		return nil
+	}
+	commands := make([]string, 0, len(answer.Projection.NextAction.Choices))
+	for _, choice := range answer.Projection.NextAction.Choices {
+		if command := strings.TrimSpace(choice.RuntimeCommand); command != "" {
+			commands = append(commands, command)
+		}
+	}
+	return commands
 }

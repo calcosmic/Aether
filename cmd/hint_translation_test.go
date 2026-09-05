@@ -105,7 +105,11 @@ func TestNextUpIsTheOnlyNextUpFunnel(t *testing.T) {
 		t.Fatalf("glob cmd sources: %v", err)
 	}
 	for _, file := range files {
-		if strings.HasSuffix(file, "_test.go") || filepath.Base(file) == "codex_visuals.go" {
+		if strings.HasSuffix(file, "_test.go") || map[string]bool{
+			"codex_visuals.go":      true,
+			"next_action_card.go":   true,
+			"lifecycle_closeout.go": true,
+		}[filepath.Base(file)] {
 			continue
 		}
 		data, err := os.ReadFile(file)

@@ -38,7 +38,40 @@ var statusCmd = &cobra.Command{
 		}
 		projection := projectLifecycle(facts, view, detectPlatform())
 		projection.Command = "status"
-		outputWorkflow(projection, renderLifecycleStatus(projection, lifecycleStatusOutputWidth()))
+
+		// Status alone can see a live worker roster and guided actions. Feed
+		// those facts into the same resolver used by every lifecycle closeout,
+		// then carry its answer in both the screen's final card and the JSON
+		// envelope. The dashboard remains the full projection; the card is its
+		// focused, actionable closing summary.
+		state := facts.State.Value
+		overrideCommand, overrideWhy := statusOverrideFacts(
+			statusActiveWorkers(store, state),
+			loadGuidedActions(store, skillWorkspaceRoot()),
+		)
+		input := nextActionInput{Facts: facts, LastCommand: "status"}
+		if overrideCommand != "" {
+			input.Override = &nextActionOverride{Command: overrideCommand, Recommendation: overrideWhy}
+		}
+		answer := resolveNextAction(input)
+		projection = applyNextActionDetailOverride(projection, input.Override)
+		projection, projectionNotes := gateLifecycleProjection(projection)
+		answer.Projection = &projection
+		answer.Command = projection.NextAction.RuntimeCommand
+		answer.Recommendation = projection.NextAction.Reason
+		answer.Alternatives = legacyAlternativesFromProjection(projection)
+		answer.Notes = append(answer.Notes, projectionNotes...)
+
+		result := map[string]interface{}{
+			"schema_version":      projection.SchemaVersion,
+			"command":             projection.Command,
+			"outcome_kind":        projection.OutcomeKind,
+			"projection_revision": projection.ProjectionRevision,
+			"projection":          projection,
+		}
+		applyNextActionToResult(result, answer)
+		visual := renderLifecycleStatus(projection, lifecycleStatusOutputWidth()) + "\n" + renderNextActionCard(answer)
+		outputWorkflow(result, visual)
 		return nil
 	},
 }

@@ -424,7 +424,7 @@ func TestPrintNextUpCompleted(t *testing.T) {
 	}
 }
 
-func TestPrintNextUpUsesTargetedRecoveryCommand(t *testing.T) {
+func TestPrintNextUpUsesCanonicalResumeForBlockedRecovery(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 	dataDir := setupBuildFlowTest(t)
@@ -457,11 +457,11 @@ func TestPrintNextUpUsesTargetedRecoveryCommand(t *testing.T) {
 	}
 
 	output := stdout.(*bytes.Buffer).String()
-	if !strings.Contains(output, "aether build 1 --task 1.1") {
-		t.Fatalf("expected targeted recovery command, got: %s", output)
+	if !strings.Contains(output, "aether resume") {
+		t.Fatalf("expected canonical resume recovery command, got: %s", output)
 	}
-	if strings.Contains(output, "Run `aether continue` to verify work and advance") {
-		t.Fatalf("expected print-next-up to avoid generic continue when targeted recovery exists, got: %s", output)
+	if strings.Contains(output, "aether build 1 --task 1.1") {
+		t.Fatalf("print-next-up revived a targeted recovery door, got: %s", output)
 	}
 }
 
@@ -496,6 +496,9 @@ func TestPrintNextUpReadyUsesCurrentPhaseBuild(t *testing.T) {
 	output := stdout.(*bytes.Buffer).String()
 	if !strings.Contains(output, "aether build 2") {
 		t.Fatalf("expected ready colony to suggest build 2, got: %s", output)
+	}
+	if !strings.Contains(output, "aether run") {
+		t.Fatalf("expected ready colony to expose the coequal Autopilot choice, got: %s", output)
 	}
 	if strings.Contains(output, "aether build 3") {
 		t.Fatalf("expected ready colony to avoid skipping phase 2, got: %s", output)

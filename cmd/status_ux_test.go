@@ -188,11 +188,11 @@ func TestWorkflowSuggestionsFailedPhase(t *testing.T) {
 		},
 	})
 
-	if !strings.Contains(primary, "aether build") {
-		t.Errorf("expected 'aether build' in failed phase suggestion, got: %s", primary)
+	if !strings.Contains(primary, "aether resume") {
+		t.Errorf("expected canonical resume for a failed phase, got: %s", primary)
 	}
-	if !strings.Contains(primary, "retry") {
-		t.Errorf("expected 'retry' in failed phase suggestion, got: %s", primary)
+	if !strings.Contains(primary, "reconciles") {
+		t.Errorf("expected reconciliation explanation for a failed phase, got: %s", primary)
 	}
 }
 

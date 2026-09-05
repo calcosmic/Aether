@@ -329,8 +329,8 @@ func lifecycleProjectionDecision(facts LifecycleFacts, blockers []colony.Lifecyc
 		} else {
 			closure.Status = "verified"
 		}
-		return lifecycleAction("inspect_sealed", "aether status", "The sealed colony remains active and inspectable.", evidence), []LifecycleActionChoice{
-			lifecycleChoice("entomb", "aether entomb", "Optionally archive and clear the sealed colony."),
+		return lifecycleAction("inspect_sealed", "aether status", "The finished project's record remains active and available to inspect.", evidence), []LifecycleActionChoice{
+			lifecycleChoice("entomb", "aether entomb", "Optionally archive and clear the finished project's retained record."),
 			lifecycleChoice("history", "aether history", "Review the retained lifecycle history."),
 		}, outcome, closure, provenance
 	}
@@ -340,8 +340,8 @@ func lifecycleProjectionDecision(facts LifecycleFacts, blockers []colony.Lifecyc
 		closure.Status = "sealed_legacy"
 		closure.Inspectable = true
 		closure.ArchiveReady = true
-		return lifecycleAction("inspect_sealed", "aether status", "This older sealed record remains available to inspect. It does not contain enough evidence to call the closure verified.", evidence), []LifecycleActionChoice{
-			lifecycleChoice("entomb", "aether entomb", "Optionally archive and clear the sealed colony."),
+		return lifecycleAction("inspect_sealed", "aether status", "This older finished record remains available to inspect. It does not contain enough evidence to call the closure verified.", evidence), []LifecycleActionChoice{
+			lifecycleChoice("entomb", "aether entomb", "Optionally archive and clear the finished project's retained record."),
 			lifecycleChoice("history", "aether history", "Review the retained lifecycle history."),
 		}, colony.OutcomeKindNoChange, closure, colony.RecoveryProvenanceReconstructed
 	}

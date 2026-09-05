@@ -167,14 +167,14 @@ func TestRecoveryCommandFromDiskIsGated(t *testing.T) {
 	newNextActionFixtureStore(t)
 	state := normalizedFixtureState(t, blockedBuildFixtureState(t))
 
-	t.Run("a live recovery command is used verbatim", func(t *testing.T) {
+	t.Run("a legacy targeted recovery command is gated behind canonical resume", func(t *testing.T) {
 		guidance := writeRecoveryReportFixture(t, state, "aether build 2 --force")
 		got := resolveNextAction(nextActionInput{State: state, Recovery: guidance})
-		if got.Command != "aether build 2 --force" {
-			t.Fatalf("command = %q, want the report's own command", got.Command)
+		if got.Command != "aether resume" {
+			t.Fatalf("command = %q, want canonical resume", got.Command)
 		}
-		if len(got.Notes) != 0 {
-			t.Errorf("a live command was substituted anyway: %v", got.Notes)
+		if strings.Contains(got.Command, "--force") {
+			t.Errorf("targeted redispatch leaked through recovery guidance: %q", got.Command)
 		}
 	})
 
@@ -187,8 +187,8 @@ func TestRecoveryCommandFromDiskIsGated(t *testing.T) {
 		if _, ok := availableCommand(got.Command); !ok {
 			t.Fatalf("the fallback %q is not a registered command either", got.Command)
 		}
-		if len(got.Notes) == 0 {
-			t.Error("the owner was silently redirected: no note records the substitution")
+		if got.Command != "aether resume" {
+			t.Errorf("a dead recovery report must still route to canonical resume, got %q", got.Command)
 		}
 	})
 }
@@ -250,10 +250,18 @@ func TestNoCommandIsSpelledInlineAtABranch(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			got := resolveNextAction(tc.input(t))
 			commands := []string{got.Command}
+			if got.Projection != nil {
+				for _, choice := range got.Projection.NextAction.Choices {
+					commands = append(commands, choice.RuntimeCommand)
+				}
+			}
 			for _, alt := range got.Alternatives {
 				commands = append(commands, alt.Command)
 			}
 			for _, command := range commands {
+				if strings.TrimSpace(command) == "" {
+					continue
+				}
 				shape := normalise(command)
 				if fromSet[command] || fromSet[shape] {
 					continue

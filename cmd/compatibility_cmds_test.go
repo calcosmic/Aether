@@ -494,8 +494,8 @@ func TestSwarmCompatibilityWatchShowsRecoveryGuidance(t *testing.T) {
 
 	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
 	result := env["result"].(map[string]interface{})
-	if result["next"] != "aether build 1 --task 1.1" {
-		t.Fatalf("next = %v, want targeted recovery command", result["next"])
+	if result["next"] != "aether resume" {
+		t.Fatalf("next = %v, want canonical resume recovery command", result["next"])
 	}
 	if result["recovery_summary"] != "Recover the blocked task before rerunning verification" {
 		t.Fatalf("recovery_summary = %v, want blocked recovery summary", result["recovery_summary"])

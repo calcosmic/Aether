@@ -50,7 +50,14 @@ func TestResolverCommandsArePlatformNeutral(t *testing.T) {
 				os.Setenv("AETHER_PLATFORM", platform)
 				got := resolveNextAction(tc.input(t))
 
-				assertNeutral(t, platform, got.Command)
+				if got.Command != "" {
+					assertNeutral(t, platform, got.Command)
+				}
+				if got.Projection != nil {
+					for _, choice := range got.Projection.NextAction.Choices {
+						assertNeutral(t, platform, choice.RuntimeCommand)
+					}
+				}
 				for _, alt := range got.Alternatives {
 					assertNeutral(t, platform, alt.Command)
 				}

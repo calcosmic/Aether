@@ -261,6 +261,12 @@ func TestNextActionCardRendersEveryField(t *testing.T) {
 	// coverage below quietly stops being coverage.
 	value := reflect.ValueOf(answer)
 	for i := 0; i < value.NumField(); i++ {
+		// This deliberately exercises the legacy adapter path. Production
+		// answers carry a projection, but the adapter must continue to render
+		// every pre-projection field for callers migrating one surface at a time.
+		if value.Type().Field(i).Name == "Projection" {
+			continue
+		}
 		if value.Field(i).IsZero() {
 			t.Fatalf("the fixture leaves %s empty, so nothing below proves the card renders it",
 				value.Type().Field(i).Name)

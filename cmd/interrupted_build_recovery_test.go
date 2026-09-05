@@ -23,15 +23,12 @@ func TestInterruptedBuildRecoveryCommandMatchesBuildValidator(t *testing.T) {
 	}
 
 	next := nextCommandFromState(state)
-	if next != "aether build 1 --force" {
-		t.Fatalf("next command = %q, want force redispatch", next)
-	}
-	if err := validateCodexBuildState(state, 1, nil, true); err != nil {
-		t.Fatalf("recommended recovery command is rejected by build validation: %v", err)
+	if next != "aether resume" {
+		t.Fatalf("next command = %q, want canonical resume", next)
 	}
 	primary, _ := workflowSuggestionsForState(state)
-	if !strings.Contains(primary, "aether build 1 --force") {
-		t.Fatalf("visual recovery suggestion = %q, want force redispatch", primary)
+	if !strings.Contains(primary, "aether resume") {
+		t.Fatalf("visual recovery suggestion = %q, want canonical resume", primary)
 	}
 }
 
@@ -51,8 +48,8 @@ func TestCompletedColonyMustSealBeforeEntomb(t *testing.T) {
 	}
 
 	state.Milestone = "Crowned Anthill"
-	if got := nextCommandFromState(state); got != "aether entomb" {
-		t.Fatalf("sealed next command = %q, want aether entomb", got)
+	if got := nextCommandFromState(state); got != "aether status" {
+		t.Fatalf("sealed next command = %q, want status-first review", got)
 	}
 	if !colonyNeedsEntomb(state) {
 		t.Fatal("sealed colony was not treated as entombable")

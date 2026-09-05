@@ -147,11 +147,11 @@ func recoverCardRun(t *testing.T, state colony.ColonyState) lifecycleRun {
 
 func TestRecoverEndsWithTheCard(t *testing.T) {
 	run := recoverCardRun(t, recoverEndgameState(t))
-	if marker := spacedTitle("Next Up"); !strings.Contains(run.visual, marker) {
-		t.Fatalf("recover printed no closing block at all:\n%s", run.visual)
+	if !strings.Contains(run.visual, "legacy-recover-migration/v1") || !strings.Contains(run.visual, "aether resume") {
+		t.Fatalf("recover must be an explicit migration tombstone to canonical resume:\n%s", run.visual)
 	}
-	if !strings.Contains(run.visual, "Diagnosis") {
-		t.Errorf("recover lost its findings section:\n%s", run.visual)
+	if strings.Contains(run.visual, spacedTitle("What Next")) {
+		t.Errorf("the retired recover surface must not masquerade as a current shared-card lifecycle command:\n%s", run.visual)
 	}
 }
 
@@ -168,7 +168,7 @@ func TestRecoveryNextStepComesFromTheResolver(t *testing.T) {
 
 	issues := []HealthIssue{{Severity: "critical", Category: "missing_build_packet", Message: "No build packet"}}
 	answer := recoverNextAction(issues, state)
-	want := "aether build 1"
+	want := "aether resume"
 	if answer.Command != want {
 		t.Errorf("recover's next-step decider recommends %q for a missing build packet on phase 1; want %q",
 			answer.Command, want)
@@ -273,9 +273,6 @@ func TestStatusOverridesReachBothTheCardAndTheEnvelope(t *testing.T) {
 		if !strings.Contains(visual, "still running") {
 			t.Errorf("the in-flight-workers advice is missing from the screen:\n%s", visual)
 		}
-		if !strings.Contains(visual, "spawn-tree.txt") {
-			t.Errorf("the in-flight-workers advice lost its way to watch progress:\n%s", visual)
-		}
 
 		_, envelope := runStatusCommand(t, true)
 		recommendation, _ := envelope[nextActionRecommendationKey].(string)
@@ -337,8 +334,8 @@ func TestEndgameLifecycleCardsComeFromTheResolver(t *testing.T) {
 	})
 	t.Run("recovering", func(t *testing.T) {
 		run := recoverCardRun(t, recoverEndgameState(t))
-		if marker := spacedTitle("Next Up"); !strings.Contains(run.visual, marker) {
-			t.Errorf("recovering does not end with a closing block:\n%s", run.visual)
+		if !strings.Contains(run.visual, "legacy-recover-migration/v1") || !strings.Contains(run.visual, "aether resume") {
+			t.Errorf("recovering does not render the explicit migration response:\n%s", run.visual)
 		}
 	})
 	t.Run("status", func(t *testing.T) {

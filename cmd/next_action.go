@@ -251,6 +251,7 @@ const (
 	candidateColonize        nextActionCandidateKey = "colonize"
 	candidateBuildPhase      nextActionCandidateKey = "build_phase"
 	candidateBuildForce      nextActionCandidateKey = "build_force"
+	candidateRun             nextActionCandidateKey = "run"
 	candidateContinue        nextActionCandidateKey = "continue"
 	candidateSeal            nextActionCandidateKey = "seal"
 	candidateEntomb          nextActionCandidateKey = "entomb"
@@ -320,6 +321,11 @@ var nextActionCandidates = []nextActionCandidate{
 		Key:      candidateBuildForce,
 		Template: "aether build %d --force",
 		Why:      "Restart a phase that stopped part-way, replacing the abandoned attempt.",
+	},
+	{
+		Key:      candidateRun,
+		Template: "aether run",
+		Why:      "Run every remaining accepted phase in Autopilot.",
 	},
 	{
 		Key:      candidateContinue,

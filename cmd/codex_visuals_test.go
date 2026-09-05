@@ -1351,8 +1351,8 @@ func TestWorkflowSuggestionsForPausedFlagSuggestsResume(t *testing.T) {
 	}
 }
 
-func TestWorkflowSuggestionsForInterruptedExecutingSuggestsRestartBuild(t *testing.T) {
-	goal := "Interrupted build should restart clearly"
+func TestWorkflowSuggestionsForInterruptedExecutingSuggestsResume(t *testing.T) {
+	goal := "Interrupted build should reconcile safely"
 	primary, _ := workflowSuggestionsForState(colony.ColonyState{
 		Goal:         &goal,
 		State:        colony.StateEXECUTING,
@@ -1365,8 +1365,8 @@ func TestWorkflowSuggestionsForInterruptedExecutingSuggestsRestartBuild(t *testi
 		},
 	})
 
-	if !strings.Contains(primary, "aether build 2") {
-		t.Fatalf("expected interrupted executing colony to suggest restarting build 2, got: %s", primary)
+	if !strings.Contains(primary, "aether resume") {
+		t.Fatalf("expected interrupted executing colony to suggest canonical resume, got: %s", primary)
 	}
 }
 
@@ -1397,15 +1397,15 @@ func TestWorkflowSuggestionsBlockBuildAfterPlanFinalizeFailure(t *testing.T) {
 			Phases: []colony.Phase{{ID: 1, Name: "Unsafe phase", Status: colony.PhaseReady}},
 		},
 	})
-	if !strings.Contains(primary, "aether flags --status active") {
-		t.Fatalf("expected active flags primary, got: %s", primary)
+	if !strings.Contains(primary, "aether resume") {
+		t.Fatalf("expected blocked lifecycle to use canonical resume, got: %s", primary)
 	}
 	all := primary + "\n" + strings.Join(alternatives, "\n")
 	if strings.Contains(all, "aether build 1") {
-		t.Fatalf("failed finalization must not suggest build:\n%s", all)
+		t.Fatalf("failed finalization must not suggest a direct build:\n%s", all)
 	}
-	if !strings.Contains(all, "aether plan --repair-artifact") {
-		t.Fatalf("expected repair-artifact alternative, got:\n%s", all)
+	if !strings.Contains(all, "aether status") || !strings.Contains(all, "aether history") {
+		t.Fatalf("expected evidence-preserving alternatives, got:\n%s", all)
 	}
 }
 

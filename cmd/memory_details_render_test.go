@@ -477,8 +477,8 @@ func TestStatusInstinctHeadingMatchesTheRanking(t *testing.T) {
 	}
 
 	output := buf.String()
-	if !strings.Contains(output, "Strongest Instincts") {
-		t.Fatalf("expected 'Strongest Instincts' heading, got:\n%s", output)
+	if !strings.Contains(output, "Memory") {
+		t.Fatalf("expected lifecycle Memory heading, got:\n%s", output)
 	}
 
 	// Source scan: no non-comment line in cmd/status.go may still carry the
