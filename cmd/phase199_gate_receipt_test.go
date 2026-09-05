@@ -36,6 +36,7 @@ type phase199GateReceipt struct {
 	CreatedAt     string                               `json:"created_at"`
 	Repository    phase199ReceiptRepository            `json:"repository"`
 	Protected     []phase199ProtectedFingerprintRecord `json:"protected_fingerprints"`
+	Preexisting   []phase199ProtectedFingerprintRecord `json:"preexisting_user_changes"`
 	Gates         []phase199GateRun                    `json:"gates"`
 }
 
@@ -121,6 +122,10 @@ func TestPhase199GateReceipt(t *testing.T) {
 	if !phase199FingerprintSetsEqual(receipt.Protected, actual) {
 		t.Fatalf("protected ownership fingerprint changed or receipt is stale\nreceipt: %#v\nactual:  %#v", receipt.Protected, actual)
 	}
+	preexisting := collectPhase199Fingerprints(t, root, []string{".planning/config.json"})
+	if !phase199FingerprintSetsEqual(receipt.Preexisting, preexisting) {
+		t.Fatalf("pre-existing user change fingerprint changed\nreceipt: %#v\nactual:  %#v", receipt.Preexisting, preexisting)
+	}
 	if err := validatePhase199ReceiptEvidenceOnlyChanges(root, receipt.Repository.Revision); err != nil {
 		t.Fatalf("gate receipt source freshness: %v", err)
 	}
@@ -176,6 +181,9 @@ func validatePhase199GateReceiptSchema(receipt phase199GateReceipt, now time.Tim
 	if err := validatePhase199ProtectedFingerprints(receipt.Protected); err != nil {
 		return err
 	}
+	if err := validatePhase199FingerprintSet(receipt.Preexisting, []string{".planning/config.json"}, "pre-existing user change"); err != nil {
+		return err
+	}
 	if receipt.Status == "incomplete" {
 		if len(receipt.Gates) != 0 {
 			return fmt.Errorf("incomplete receipt must not contain gate evidence")
@@ -217,10 +225,14 @@ func validatePhase199GateReceiptSchema(receipt phase199GateReceipt, now time.Tim
 }
 
 func validatePhase199ProtectedFingerprints(fingerprints []phase199ProtectedFingerprintRecord) error {
-	if len(fingerprints) != len(phase199ProtectedReceiptPaths) {
-		return fmt.Errorf("protected fingerprint count = %d, want %d", len(fingerprints), len(phase199ProtectedReceiptPaths))
+	return validatePhase199FingerprintSet(fingerprints, phase199ProtectedReceiptPaths, "protected")
+}
+
+func validatePhase199FingerprintSet(fingerprints []phase199ProtectedFingerprintRecord, paths []string, label string) error {
+	if len(fingerprints) != len(paths) {
+		return fmt.Errorf("%s fingerprint count = %d, want %d", label, len(fingerprints), len(paths))
 	}
-	for index, wantPath := range phase199ProtectedReceiptPaths {
+	for index, wantPath := range paths {
 		fingerprint := fingerprints[index]
 		if fingerprint.Path != wantPath || !phase199PathFingerprintIsValid(fingerprint.Before) || !phase199PathFingerprintIsValid(fingerprint.After) {
 			return fmt.Errorf("invalid protected fingerprint for %q", wantPath)
@@ -260,6 +272,9 @@ func validatePhase199ReceiptEvidenceOnlyChanges(root, revision string) error {
 		".planning/phases/199-front-door-and-classic-contract/199-29-SUMMARY.md":       true,
 	}
 	for _, path := range strings.Fields(string(output)) {
+		if path == ".planning/config.json" {
+			continue // fingerprinted above as a pre-existing user change, not post-test evidence.
+		}
 		if !allowed[path] {
 			return fmt.Errorf("post-tested change %q is not explicitly evidence-only", path)
 		}
@@ -269,8 +284,13 @@ func validatePhase199ReceiptEvidenceOnlyChanges(root, revision string) error {
 
 func collectPhase199ProtectedFingerprints(t *testing.T, root string) []phase199ProtectedFingerprintRecord {
 	t.Helper()
-	result := make([]phase199ProtectedFingerprintRecord, 0, len(phase199ProtectedReceiptPaths))
-	for _, path := range phase199ProtectedReceiptPaths {
+	return collectPhase199Fingerprints(t, root, phase199ProtectedReceiptPaths)
+}
+
+func collectPhase199Fingerprints(t *testing.T, root string, paths []string) []phase199ProtectedFingerprintRecord {
+	t.Helper()
+	result := make([]phase199ProtectedFingerprintRecord, 0, len(paths))
+	for _, path := range paths {
 		fingerprint := phase199ProtectedFingerprintForPath(t, root, path)
 		result = append(result, phase199ProtectedFingerprintRecord{Path: path, Before: fingerprint, After: fingerprint})
 	}

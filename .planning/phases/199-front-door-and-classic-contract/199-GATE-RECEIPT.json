@@ -55,5 +55,22 @@
       }
     }
   ],
+  "preexisting_user_changes": [
+    {
+      "path": ".planning/config.json",
+      "before": {
+        "status": "changed",
+        "type": "file",
+        "mode": "0644",
+        "digest": "90391e7387617c3d2e4311a4e0c559ed5a831e9b0d5849cd7063ee022c3572ff"
+      },
+      "after": {
+        "status": "changed",
+        "type": "file",
+        "mode": "0644",
+        "digest": "90391e7387617c3d2e4311a4e0c559ed5a831e9b0d5849cd7063ee022c3572ff"
+      }
+    }
+  ],
   "gates": []
 }
