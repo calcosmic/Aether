@@ -172,9 +172,10 @@ func TestCurrentVocabularyDocs199(t *testing.T) {
 			generated string
 			current   string
 			label     string
+			guide     d17Guide199
 		}{
-			{filepath.Join(temporaryRepo, ".opencode", "OPENCODE.md"), filepath.Join(root, "cmd", ".opencode", "OPENCODE.md"), "OpenCode"},
-			{filepath.Join(temporaryRepo, "AGENTS.md"), filepath.Join(root, "cmd", "AGENTS.md"), "Codex"},
+			{filepath.Join(temporaryRepo, ".opencode", "OPENCODE.md"), filepath.Join(root, "cmd", ".opencode", "OPENCODE.md"), "OpenCode", d17Guide199{host: "production-generated OpenCode guide", seal: "/ant-seal", status: "/ant-status", entomb: "/ant-entomb", init: "/ant-init"}},
+			{filepath.Join(temporaryRepo, "AGENTS.md"), filepath.Join(root, "cmd", "AGENTS.md"), "Codex", d17Guide199{host: "production-generated Codex guide", seal: "aether seal", status: "aether status", entomb: "aether entomb", init: "aether init"}},
 		} {
 			generated, readErr := os.ReadFile(generatedDoc.generated)
 			if readErr != nil {
@@ -186,6 +187,10 @@ func TestCurrentVocabularyDocs199(t *testing.T) {
 			}
 			if string(current) != string(generated) {
 				t.Errorf("%s drifted from production project-document generation", generatedDoc.current)
+			}
+			section := d17GuideSectionFromContent199(t, generatedDoc.guide, string(generated))
+			if !d17StatusPrimary199(section, generatedDoc.guide) || !d17EntombOptional199(section) || !d17InitAfterArchiveClear199(section, generatedDoc.guide) {
+				t.Errorf("production-generated %s guide lost the D-17 status-first, optional-entomb, archive-clear-before-init sequence", generatedDoc.label)
 			}
 			for _, command := range []string{"/ant-pause", "/ant-resume"} {
 				if generatedDoc.label == "Codex" {
@@ -243,12 +248,17 @@ func readD17GuideSection199(t *testing.T, root string, guide d17Guide199) string
 	if err != nil {
 		t.Fatalf("read %s: %v", guide.path, err)
 	}
-	start := strings.Index(string(content), d17GuideMarker199)
+	return d17GuideSectionFromContent199(t, guide, string(content))
+}
+
+func d17GuideSectionFromContent199(t *testing.T, guide d17Guide199, content string) string {
+	t.Helper()
+	start := strings.Index(content, d17GuideMarker199)
 	if start < 0 {
 		t.Errorf("%s (%s) is missing %q", guide.path, guide.host, d17GuideMarker199)
 		return ""
 	}
-	section := string(content)[start:]
+	section := content[start:]
 	if end := strings.Index(section, "\n---"); end >= 0 {
 		section = section[:end]
 	}
