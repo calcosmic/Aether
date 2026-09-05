@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 199-33-PLAN.md
-last_updated: "2026-09-05T00:29:17.342Z"
-last_activity: 2026-09-05
+stopped_at: Completed 199-28-PLAN.md
+last_updated: "2026-09-06T00:00:00Z"
+last_activity: 2026-09-06
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 34
-  completed_plans: 32
-  percent: 94
+  completed_plans: 33
+  percent: 97
 ---
 
 # Project State
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-02)
 ## Current Position
 
 Phase: 199 (front-door-and-classic-contract) — EXECUTING
-Plan: 28 of 34
+Plan: 29 of 34
 Status: Ready to execute
 Last activity: 2026-09-05
 
@@ -110,6 +110,7 @@ Last activity: 2026-09-05
 | Phase 199 P27 | 12 min | 2 tasks | 4 files |
 | Phase 199 P31 | 35min | 2 tasks | 8 files |
 | Phase 199 P33 | 31min | 2 tasks | 9 files |
+| Phase 199 P28 | 1d 1h | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -289,6 +290,8 @@ Last activity: 2026-09-05
 - [Phase 199]: Managed wrappers preserve a force flag supplied directly by the owner but never offer, construct, or rerun force authority; forced-incomplete closure is not verified success.
 - [Phase 199]: Codex lifecycle guidance keeps status as the primary post-seal review and entomb a separate optional owner-confirmed action.
 - [Phase 199]: Sealed colonies stay reviewable through status; entomb is optional and only verified archive-and-clear permits init. — D-17 lifecycle guidance must preserve owner review and forced-incomplete truth across generated surfaces.
+- [Phase 199]: Use a 73-row JSON ledger as the exact source for Phase 199 coverage and proof. — Exact cardinality and named proof resolution prevent presence-only signoff.
+- [Phase 199]: Treat retired lifecycle spellings as exact tracked path/family inventory entries; only normalize_args.go accepts old input through 1.29. — Current documentation and runtime output cannot hide behind historical evidence.
 
 ### Pending Todos
 
@@ -402,8 +405,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-05T00:29:17.332Z
-Stopped at: Completed 199-33-PLAN.md
+Last session: 2026-09-05T22:32:38.128Z
+Stopped at: Completed 199-28-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

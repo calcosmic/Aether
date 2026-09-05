@@ -77,7 +77,7 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 
 **Requirements:** SYNTH-01, CEC-01, CEC-02, CEC-04, CEC-08, LIFE-01..06, PROOF-01
 
-**Plans:** 32/34 plans executed
+**Plans:** 33/34 plans executed
 
 Plans:
 **Wave 1**
@@ -162,7 +162,7 @@ Plans:
 
 **Wave 17** *(blocked on Wave 16 completion)*
 
-- [ ] 199-28-PLAN.md — Validate exact CAP/SYN/decision/requirement coverage and current vocabulary.
+- [x] 199-28-PLAN.md — Validate exact CAP/SYN/decision/requirement coverage and current vocabulary.
 
 **Wave 18** *(blocked on Wave 17 completion)*
 
