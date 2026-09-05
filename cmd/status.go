@@ -25,53 +25,23 @@ var statusCmd = &cobra.Command{
 	Args:        cobra.NoArgs,
 	Annotations: map[string]string{"aether.io/read-only": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		compact, _ := cmd.Flags().GetBool("compact")
-		root := resolveAetherRoot()
-		now := time.Now().UTC()
-		facts, err := loadLifecycleFacts(root, store, now)
+		state, err := loadActiveColonyStateReadOnly()
 		if err != nil {
-			facts = unavailableLifecycleFacts(root, now, err.Error())
+			if shouldRenderVisualOutput(stdout) && strings.Contains(colonyStateLoadMessage(err), "No colony initialized") {
+				writeVisualOutput(stdout, renderNoColonyStatusVisual())
+				return nil
+			}
+			renderRecoveryMenu("status", colonyStateLoadMessage(err), nil)
+			return nil
 		}
-		view := LifecycleViewFull
-		if compact {
-			view = LifecycleViewCompact
-		}
-		projection := projectLifecycle(facts, view, detectPlatform())
-		projection.Command = "status"
 
-		// Status alone can see a live worker roster and guided actions. Feed
-		// those facts into the same resolver used by every lifecycle closeout,
-		// then carry its answer in both the screen's final card and the JSON
-		// envelope. The dashboard remains the full projection; the card is its
-		// focused, actionable closing summary.
-		state := facts.State.Value
-		overrideCommand, overrideWhy := statusOverrideFacts(
-			statusActiveWorkers(store, state),
-			loadGuidedActions(store, skillWorkspaceRoot()),
-		)
-		input := nextActionInput{Facts: facts, LastCommand: "status"}
-		if overrideCommand != "" {
-			input.Override = &nextActionOverride{Command: overrideCommand, Recommendation: overrideWhy}
-		}
-		answer := resolveNextAction(input)
-		projection = applyNextActionDetailOverride(projection, input.Override)
-		projection, projectionNotes := gateLifecycleProjection(projection)
-		answer.Projection = &projection
-		answer.Command = projection.NextAction.RuntimeCommand
-		answer.Recommendation = projection.NextAction.Reason
-		answer.Alternatives = legacyAlternativesFromProjection(projection)
-		answer.Notes = append(answer.Notes, projectionNotes...)
-
-		result := map[string]interface{}{
-			"schema_version":      projection.SchemaVersion,
-			"command":             projection.Command,
-			"outcome_kind":        projection.OutcomeKind,
-			"projection_revision": projection.ProjectionRevision,
-			"projection":          projection,
-		}
-		applyNextActionToResult(result, answer)
-		visual := renderLifecycleStatus(projection, lifecycleStatusOutputWidth()) + "\n" + renderNextActionCard(answer)
-		outputWorkflow(result, visual)
+		// Keep the mature dashboard as the authoritative status payload and
+		// visual, then add the shared resolver answer through buildStatusResult.
+		// That helper folds one next-action card and its projection into the same
+		// map, so neither JSON nor the terminal loses dashboard facts or decides
+		// the next action twice.
+		result := buildStatusResult(state, store)
+		outputWorkflow(result, renderDashboard(state, store, result))
 		return nil
 	},
 }
