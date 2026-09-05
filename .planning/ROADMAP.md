@@ -77,7 +77,7 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 
 **Requirements:** SYNTH-01, CEC-01, CEC-02, CEC-04, CEC-08, LIFE-01..06, PROOF-01
 
-**Plans:** 31/34 plans executed
+**Plans:** 32/34 plans executed
 
 Plans:
 **Wave 1**
@@ -158,7 +158,7 @@ Plans:
 
 **Wave 16** *(blocked on Wave 15 completion)*
 
-- [ ] 199-33-PLAN.md — Make status review primary after seal across canonical and generated current guides.
+- [x] 199-33-PLAN.md — Make status review primary after seal across canonical and generated current guides.
 
 **Wave 17** *(blocked on Wave 16 completion)*
 

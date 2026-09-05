@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 199-31-PLAN.md
-last_updated: "2026-09-05T00:04:35Z"
+stopped_at: Completed 199-33-PLAN.md
+last_updated: "2026-09-05T00:29:17.342Z"
 last_activity: 2026-09-05
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 34
-  completed_plans: 31
-  percent: 91
+  completed_plans: 32
+  percent: 94
 ---
 
 # Project State
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-09-02)
 Phase: 199 (front-door-and-classic-contract) — EXECUTING
 Plan: 28 of 34
 Status: Ready to execute
-Last activity: 2026-09-04
+Last activity: 2026-09-05
 
 ## Performance Metrics
 
@@ -109,6 +109,7 @@ Last activity: 2026-09-04
 | Phase 199 P34 | 6 min | 2 tasks | 8 files |
 | Phase 199 P27 | 12 min | 2 tasks | 4 files |
 | Phase 199 P31 | 35min | 2 tasks | 8 files |
+| Phase 199 P33 | 31min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -287,6 +288,7 @@ Last activity: 2026-09-04
 - [Phase 199]: Use aether maintenance recovery-inspect only to inspect preserved work with State effect: none. — Inspection must never become a second lifecycle state mutator.
 - [Phase 199]: Managed wrappers preserve a force flag supplied directly by the owner but never offer, construct, or rerun force authority; forced-incomplete closure is not verified success.
 - [Phase 199]: Codex lifecycle guidance keeps status as the primary post-seal review and entomb a separate optional owner-confirmed action.
+- [Phase 199]: Sealed colonies stay reviewable through status; entomb is optional and only verified archive-and-clear permits init. — D-17 lifecycle guidance must preserve owner review and forced-incomplete truth across generated surfaces.
 
 ### Pending Todos
 
@@ -400,8 +402,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-04T23:07:48Z
-Stopped at: Completed 199-27-PLAN.md
+Last session: 2026-09-05T00:29:17.332Z
+Stopped at: Completed 199-33-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
