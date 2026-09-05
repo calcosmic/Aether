@@ -170,8 +170,8 @@ func TestSwarmDestroyRunsWorkerWavesAndReturnsStructuredResult(t *testing.T) {
 	if got := result["solution"]; got == "" {
 		t.Fatalf("expected solution in result, got %v", result)
 	}
-	if got := result["next"]; got != "aether build 1" {
-		t.Fatalf("next = %v, want aether build 1", got)
+	if got := result["next"]; got != "aether status" {
+		t.Fatalf("next = %v, want aether status", got)
 	}
 
 	if len(invoker.configs) != 4 {

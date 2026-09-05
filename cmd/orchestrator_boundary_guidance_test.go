@@ -564,8 +564,8 @@ func TestSealFinalizeBlocksUnresolvedOrchestratorBoundaryGuidance(t *testing.T) 
 	}
 
 	err = runSealFinalize(root, externalSealCompletion{SealManifest: &manifest, Dispatches: results})
-	if err == nil || !strings.Contains(err.Error(), "aether discuss") || !strings.Contains(err.Error(), "aether seal") {
-		t.Fatalf("runSealFinalize error = %v, want guidance to run aether discuss before aether seal", err)
+	if err == nil || !strings.Contains(err.Error(), "normal seal requires verified completion") || !strings.Contains(err.Error(), "What boundary should final seal reviewers enforce?") {
+		t.Fatalf("runSealFinalize error = %v, want unresolved boundary guidance to block verified sealing", err)
 	}
 	var after colony.ColonyState
 	if loadErr := store.LoadJSON("COLONY_STATE.json", &after); loadErr != nil {

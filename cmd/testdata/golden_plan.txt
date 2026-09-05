@@ -257,9 +257,10 @@ Phase 1 of 6: Contract and gap mapping. 0 phase(s) finished so far.
   - Generated 6 active phases with 76% confidence; planning loop stopped: pending
 
 ━━ 🐜 N E X T   U P ━━
-Run `/ant-build 1` — Phase 1 (Contract and gap mapping) is ready to start. Helpers will write the code for it and report back before anything is accepted.
-Alternative: Run `/ant-focus "area"` — Point the helpers at one area before the next build starts.
-Alternative: Run `/ant-status` — Look at the dashboard first, without changing anything.
-Alternative: Run `/ant-pheromones` — See the standing instructions you have given the helpers -- what to focus on and what to avoid.
+Choose guided operation or Autopilot; both execute the same accepted plan.
+Choice: Run `/ant-build 1` — Run the current phase with guided checkpoints.
+Choice: Run `/ant-run` — Run every remaining accepted phase in Autopilot.
+Alternative: Run `/ant-status` — Review the accepted plan before choosing a mode.
+Alternative: Run `/ant-pheromones` — Review the standing instructions before starting.
 
 Everything needed to pick this back up is written down, so it is safe to close this chat.

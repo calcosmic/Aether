@@ -30,6 +30,11 @@
     "literal": "Run `aether status` to confirm the repo is clear."
   },
   {
+    "file": "cmd/abandon_cmd.go",
+    "function": "renderLegacyAbandonMigration",
+    "literal": "Run `aether status` first to review the durable colony evidence."
+  },
+  {
     "file": "cmd/assumptions.go",
     "function": "runAssumptionList",
     "literal": "Run `aether assumption-validate --id \u003cid\u003e --note \"...\"` to confirm one, or rerun `aether assumptions-analyze` after the plan changes."
@@ -92,6 +97,16 @@
   {
     "file": "cmd/codex_colonize_finalize.go",
     "function": "runCodexColonizeFinalize",
+    "literal": "aether plan"
+  },
+  {
+    "file": "cmd/codex_colonize_finalize.go",
+    "function": "runTransactionalColonizeFinalize",
+    "literal": "aether init"
+  },
+  {
+    "file": "cmd/codex_colonize_finalize.go",
+    "function": "runTransactionalColonizeFinalize",
     "literal": "aether plan"
   },
   {
@@ -261,13 +276,13 @@
   },
   {
     "file": "cmd/codex_workflow_cmds.go",
-    "function": "completeSealRuntime",
-    "literal": "aether entomb"
+    "function": "territoryRefreshPlanResult",
+    "literal": "run the manifest surveyors, finalize the territory refresh, then resume `aether plan`"
   },
   {
     "file": "cmd/command_truth.go",
-    "function": "renderMaturityVisual",
-    "literal": "aether status"
+    "function": "prepareStateMigrationMutation",
+    "literal": "aether medic --deep"
   },
   {
     "file": "cmd/command_truth.go",
@@ -286,11 +301,6 @@
   },
   {
     "file": "cmd/command_truth.go",
-    "function": "runMigrateState",
-    "literal": "aether medic --deep"
-  },
-  {
-    "file": "cmd/command_truth.go",
     "function": "runMigrateStateRollback",
     "literal": "aether medic --deep"
   },
@@ -303,6 +313,11 @@
     "file": "cmd/command_truth.go",
     "function": "verifyCasteSurfaces",
     "literal": "aether medic --deep"
+  },
+  {
+    "file": "cmd/compatibility_cmds.go",
+    "function": "runCompatibilityAutopilot",
+    "literal": "aether seal"
   },
   {
     "file": "cmd/context.go",
@@ -345,24 +360,9 @@
     "literal": "Resolve with `aether discuss --resolve %s --answer \"...\"` after the user picks."
   },
   {
-    "file": "cmd/entomb_cmd.go",
-    "function": "\u003cpackage level\u003e",
-    "literal": "aether init \"next goal\""
-  },
-  {
-    "file": "cmd/entomb_cmd.go",
-    "function": "cobra:entomb",
-    "literal": "aether init \"next goal\""
-  },
-  {
-    "file": "cmd/entomb_cmd.go",
-    "function": "renderEntombVisual",
-    "literal": "`aether init \"next goal\"`"
-  },
-  {
-    "file": "cmd/entomb_cmd.go",
-    "function": "renderEntombVisual",
-    "literal": "`aether tunnels`"
+    "file": "cmd/maintenance_cmd.go",
+    "function": "renderMaintenanceRecoveryInspection",
+    "literal": "Run `aether resume`; it is the only command allowed to restore lifecycle progress."
   },
   {
     "file": "cmd/medic_cmd.go",
@@ -491,13 +491,13 @@
   },
   {
     "file": "cmd/recover.go",
-    "function": "renderNoColonyRecoverVisual",
-    "literal": "`aether init \"goal\"`"
+    "function": "renderLegacyRecoverMigration",
+    "literal": "Run `aether maintenance recovery-inspect` when you need read-only diagnostic evidence."
   },
   {
     "file": "cmd/recover.go",
-    "function": "renderNoColonyRecoverVisual",
-    "literal": "`aether lay-eggs`"
+    "function": "renderLegacyRecoverMigration",
+    "literal": "Run `aether resume` to continue or recover the recorded lifecycle."
   },
   {
     "file": "cmd/run_visuals.go",
@@ -527,12 +527,32 @@
   {
     "file": "cmd/session_flow_cmds.go",
     "function": "\u003cpackage level\u003e",
+    "literal": "aether pause"
+  },
+  {
+    "file": "cmd/session_flow_cmds.go",
+    "function": "\u003cpackage level\u003e",
     "literal": "aether resume"
+  },
+  {
+    "file": "cmd/session_flow_cmds.go",
+    "function": "\u003cpackage level\u003e",
+    "literal": "aether status"
+  },
+  {
+    "file": "cmd/session_flow_cmds.go",
+    "function": "cobra:pause",
+    "literal": "aether pause"
   },
   {
     "file": "cmd/session_flow_cmds.go",
     "function": "cobra:pause",
     "literal": "aether resume"
+  },
+  {
+    "file": "cmd/session_flow_cmds.go",
+    "function": "cobra:resume",
+    "literal": "aether status"
   },
   {
     "file": "cmd/status.go",
@@ -563,5 +583,10 @@
     "file": "cmd/swarm_cmd.go",
     "function": "swarmNextCommand",
     "literal": "aether status"
+  },
+  {
+    "file": "cmd/update_cmd.go",
+    "function": "renderMaintenanceMutationPreview",
+    "literal": "Use `aether resume` only if the transaction reports recovery required."
   }
 ]

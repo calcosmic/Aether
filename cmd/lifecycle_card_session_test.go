@@ -198,7 +198,7 @@ func TestUpdateEndsWithTheCard(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			homeDir, repoDir := setUpAliasReconcileProject(t)
 			if tc.damage {
-				missing := filepath.Join(homeDir, ".claude", "commands", "ant-pause-colony.md")
+				missing := filepath.Join(homeDir, ".claude", "commands", "ant-pause.md")
 				if err := os.Remove(missing); err != nil {
 					t.Fatalf("remove %s: %v", missing, err)
 				}
@@ -218,10 +218,10 @@ func TestUpdateEndsWithTheCard(t *testing.T) {
 			}
 
 			if tc.damage {
-				if !strings.Contains(visual, "Restored missing command") {
+				if !strings.Contains(visual, "Commands (claude) — 1 copied") {
 					t.Errorf("a run that repaired a missing command copy should say so where the owner reads what changed:\n%s", visual)
 				}
-			} else if strings.Contains(visual, "Restored missing command") {
+			} else if strings.Contains(visual, "Commands (claude) — 1 copied") {
 				t.Errorf("a run that found nothing to do should not claim a repair:\n%s", visual)
 			}
 		})
