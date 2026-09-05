@@ -102,8 +102,8 @@ selection, or a fully scripted answer.
   **Permitted response:** select the first-listed option. **Type:**
   first-option selection.
 - **Situation:** After the harness's SIGKILL and 120-second timer fire, the
-  operator resumes. **Permitted response:** run exactly `/ant-resume`, then
-  exactly `/ant-recover`, and nothing else. **Type:** scripted answer.
+  operator resumes. **Permitted response:** run exactly `/ant-resume` and
+  nothing else. **Type:** scripted answer.
 - **Situation:** Any other approval prompt before the kill or after the
   resume. **Permitted response:** approve. **Type:** approval.
 
@@ -144,8 +144,8 @@ selection, or a fully scripted answer.
   response:** supply the task's own prompt text verbatim. **Type:**
   scripted answer.
 - **Situation:** After the harness's SIGKILL and 120-second timer fire, the
-  operator resumes. **Permitted response:** run exactly `/ant-resume`, then
-  exactly `/ant-recover`, and nothing else. **Type:** scripted answer.
+  operator resumes. **Permitted response:** run exactly `/ant-resume` and
+  nothing else. **Type:** scripted answer.
 - **Situation:** `/ant-run` pauses for a smart-pause condition before the
   kill or after the resume. **Permitted response:** approve continuing, or
   select the first-listed option. **Type:** approval / first-option
@@ -172,3 +172,9 @@ re-phrasing of the goal, a manual file edit outside the documented resume
 command, a retry after an unexpected failure — is an unscripted intervention.
 Log it with `oplog_input unscripted "<what was typed>"` and continue; do not
 abandon the run and do not silently absorb it into a "clean" result.
+
+For an Aether interruption, `/ant-resume` validates a clean handoff or
+reconstructs the safest honest point from durable evidence. If it reports a
+conflict, the operator may log an explicit expert diagnostic using
+`/ant-maintenance recovery-inspect`, then issue a fresh `/ant-resume`; that
+diagnostic is never silently appended to the ordinary scripted action.

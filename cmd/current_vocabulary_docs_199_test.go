@@ -114,6 +114,16 @@ func TestCurrentVocabularyDocs199(t *testing.T) {
 				}
 			}
 		}
+
+		taskSpec, readErr := os.ReadFile(filepath.Join(root, "bench/tasks/03-interrupted-execution.md"))
+		if readErr != nil {
+			t.Fatalf("read interruption task specification: %v", readErr)
+		}
+		for _, required := range []string{"log the conflict", "/ant-maintenance recovery-inspect", "fresh `/ant-resume`", "not part of the ordinary"} {
+			if !strings.Contains(string(taskSpec), required) {
+				t.Errorf("interruption diagnostic exception must make %q explicit", required)
+			}
+		}
 	})
 }
 
@@ -139,5 +149,5 @@ func scriptedAetherResumeCommand199(t *testing.T, source, content, lane string) 
 		t.Errorf("%s does not contain the %s resume-table row", source, lane)
 		return ""
 	}
-	return strings.TrimSpace(command[1])
+	return strings.Trim(strings.TrimSpace(command[1]), "`")
 }
