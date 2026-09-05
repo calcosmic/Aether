@@ -522,25 +522,12 @@ func appendLifecycleFlagOnce(flags []colony.FlagEntry, candidate colony.FlagEntr
 	return append(flags, candidate)
 }
 
-func projectedLifecycleCommand(command string) bool {
-	fields := strings.Fields(strings.TrimSpace(command))
-	if len(fields) < 2 || fields[0] != "aether" {
-		return false
-	}
-	switch fields[1] {
-	case "init", "plan", "build", "run", "resume", "seal", "entomb":
-		return true
-	default:
-		return false
-	}
-}
-
 func applyNextActionDetailOverride(projection LifecycleProjection, override *nextActionOverride) LifecycleProjection {
 	if override == nil {
 		return projection
 	}
 	command := strings.TrimSpace(override.Command)
-	if command == "" || projectedLifecycleCommand(command) {
+	if command == "" {
 		return projection
 	}
 	if _, ok := availableCommand(command); !ok {
