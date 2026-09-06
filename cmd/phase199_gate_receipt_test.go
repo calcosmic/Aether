@@ -71,7 +71,7 @@ type phase199GateRun struct {
 func TestPhase199GateReceiptSchema(t *testing.T) {
 	receipt := loadPhase199GateReceipt(t)
 	if err := validatePhase199GateReceiptSchema(receipt, time.Now().UTC()); err != nil {
-		t.Fatalf("validate checked-in incomplete receipt schema: %v", err)
+		t.Fatalf("validate checked-in receipt schema: %v", err)
 	}
 
 	complete := phase199ValidCompleteReceipt(t)
@@ -97,7 +97,7 @@ func TestPhase199GateReceiptSchema(t *testing.T) {
 		})
 	}
 	for name, receipt := range map[string]phase199GateReceipt{
-		"incomplete": receipt,
+		"incomplete": phase199IncompleteReceipt(t),
 		"partial":    phase199PartialReceipt(t),
 	} {
 		t.Run("final mode rejects "+name, func(t *testing.T) {
@@ -423,6 +423,14 @@ func phase199PartialReceipt(t *testing.T) phase199GateReceipt {
 	receipt := phase199ValidCompleteReceipt(t)
 	receipt.Status = "partial"
 	receipt.Gates = receipt.Gates[:1]
+	return receipt
+}
+
+func phase199IncompleteReceipt(t *testing.T) phase199GateReceipt {
+	t.Helper()
+	receipt := phase199ValidCompleteReceipt(t)
+	receipt.Status = "incomplete"
+	receipt.Gates = nil
 	return receipt
 }
 
