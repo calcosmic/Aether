@@ -125,6 +125,7 @@ func (h *cliBlackBox) prepareZeroReviewerChecksOnlyFixture(t *testing.T) string 
 // reviewer worker dispatched (--skip-watchers) advances when the project's
 // own build/types/lint/tests commands all resolve and pass.
 func TestZeroReviewerPhaseAdvancesWhenFreeChecksPass(t *testing.T) {
+	t.Parallel()
 	harness := newCLIBlackBox(t)
 	logPath := harness.prepareBuildFixture(t)
 	harness.writeZeroReviewerVerificationCommands(t, "true", "true", "true", "true")
@@ -178,6 +179,7 @@ func TestZeroReviewerPhaseAdvancesWhenFreeChecksPass(t *testing.T) {
 // direction: with no reviewer worker dispatched, a failing project command
 // (tests) blocks advancement and the failing check is named in the report.
 func TestZeroReviewerPhaseIsBlockedWhenFreeChecksFail(t *testing.T) {
+	t.Parallel()
 	harness := newCLIBlackBox(t)
 	logPath := harness.prepareBuildFixture(t)
 	harness.writeZeroReviewerVerificationCommands(t, "true", "true", "true", "false")
@@ -216,6 +218,7 @@ func TestZeroReviewerPhaseIsBlockedWhenFreeChecksFail(t *testing.T) {
 // those alone, and warns in plain English rather than handing verification
 // responsibility to a reviewer.
 func TestZeroExecutedChecksStillRunsClaimsAndCriteria(t *testing.T) {
+	t.Parallel()
 	harness := newCLIBlackBox(t)
 	logPath := harness.prepareZeroReviewerChecksOnlyFixture(t)
 	env := map[string]string{
@@ -269,6 +272,7 @@ func TestZeroExecutedChecksStillRunsClaimsAndCriteria(t *testing.T) {
 // green -- the deterministic floor and a dispatched reviewer's failure do
 // not merge into a pass (D-06 adjacency).
 func TestDispatchedReviewerThatFailedStillBlocks(t *testing.T) {
+	t.Parallel()
 	harness := newCLIBlackBox(t)
 	logPath := harness.prepareBuildFixture(t)
 	harness.writeZeroReviewerVerificationCommands(t, "true", "true", "true", "true")

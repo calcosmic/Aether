@@ -307,10 +307,12 @@ func TestClassicContractCorpusRejectsMissingFrontDoorCase(t *testing.T) {
 }
 
 func TestClassicContractCorpusClaude(t *testing.T) {
+	t.Parallel()
 	classicContractExecutePlatform(t, "claude")
 }
 
 func TestClassicContractCorpusOpenCode(t *testing.T) {
+	t.Parallel()
 	classicContractExecutePlatform(t, "opencode")
 }
 
