@@ -1523,8 +1523,8 @@ func TestPauseResumePatrolPhaseAndHistoryVisualOutput(t *testing.T) {
 					Description: "Add missing resume and handoff flow",
 					Status:      colony.PhaseInProgress,
 					Tasks: []colony.Task{
-						{ID: &taskOneID, Goal: "Write pause-colony", Status: colony.TaskCompleted},
-						{ID: &taskTwoID, Goal: "Write resume-colony", Status: colony.TaskInProgress},
+						{ID: &taskOneID, Goal: "Write pause handoff", Status: colony.TaskCompleted},
+						{ID: &taskTwoID, Goal: "Write resume orientation", Status: colony.TaskInProgress},
 					},
 				},
 			},
@@ -1586,10 +1586,10 @@ func TestPauseResumePatrolPhaseAndHistoryVisualOutput(t *testing.T) {
 		}
 	}
 
-	checkVisual([]string{"pause-colony"}, "💾", "P A U S E   C O L O N Y", "HANDOFF.md", "aether resume")
-	checkVisual([]string{"resume-colony"}, "💾", "R E S U M E   C O L O N Y", "Session UX", "Active Signals", "Blockers", "Survey Context", "Source:", "aether build 1")
+	checkVisual([]string{"pause"}, "💾", "P A U S E   C O L O N Y", "HANDOFF.md", "aether resume")
+	checkVisual([]string{"resume"}, "💾", "R E S U M E   C O L O N Y", "Session UX", "Active Signals", "Blockers", "Survey Context", "Source:", "aether build 1")
 	checkVisual([]string{"patrol"}, "📊", "P A T R O L", "Signals: 1 active")
-	checkVisual([]string{"phase"}, "🧱", "Session UX", "Write resume-colony")
+	checkVisual([]string{"phase"}, "🧱", "Session UX", "Write resume orientation")
 	checkVisual([]string{"history"}, "📜", "Colony initialized", "Worker wave launched")
 }
 

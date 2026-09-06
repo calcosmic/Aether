@@ -848,8 +848,8 @@ func TestHookPreCompactUpdatesSessionSummary(t *testing.T) {
 	if session.LastCommand != "hook-pre-compact" {
 		t.Fatalf("LastCommand = %q, want hook-pre-compact", session.LastCommand)
 	}
-	if session.SuggestedNext != "aether build 1" {
-		t.Fatalf("SuggestedNext = %q, want aether build 1", session.SuggestedNext)
+	if session.SuggestedNext != "aether status" {
+		t.Fatalf("SuggestedNext = %q, want resolver-selected aether status", session.SuggestedNext)
 	}
 	if !strings.Contains(session.Summary, "manual") {
 		t.Fatalf("Summary = %q, want manual trigger context", session.Summary)
