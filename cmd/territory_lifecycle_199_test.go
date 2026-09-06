@@ -151,6 +151,10 @@ func TestTerritoryLifecycleUnavailableStops(t *testing.T) {
 }
 
 func TestTerritoryLifecycleTransactionalPublish(t *testing.T) {
+	runIsolatedProcessTest(t, "TestTerritoryLifecycleTransactionalPublish", testTerritoryLifecycleTransactionalPublish)
+}
+
+func testTerritoryLifecycleTransactionalPublish(t *testing.T) {
 	targetCount := len(requiredTerritoryArtifactPaths()) + 2 // snapshot metadata + colony state
 	for target := 1; target <= targetCount; target++ {
 		t.Run(fmt.Sprintf("target_%02d", target), func(t *testing.T) {

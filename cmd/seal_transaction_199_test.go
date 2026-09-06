@@ -342,6 +342,10 @@ func TestSealTransaction199WisdomPrivacy(t *testing.T) {
 }
 
 func TestSealTransaction199HivePolicy(t *testing.T) {
+	runIsolatedProcessTest(t, "TestSealTransaction199HivePolicy", testSealTransaction199HivePolicy)
+}
+
+func testSealTransaction199HivePolicy(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		policy string

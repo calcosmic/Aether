@@ -264,6 +264,10 @@ func lifecycleStatusEnvelope(t *testing.T) map[string]interface{} {
 // check, situation-specific "keep" content, plain-English wording, an
 // override reaching both halves) and is kept unchanged.
 func TestEveryLifecycleCommandEndsWithNextAction(t *testing.T) {
+	runIsolatedProcessTest(t, "TestEveryLifecycleCommandEndsWithNextAction", testEveryLifecycleCommandEndsWithNextAction)
+}
+
+func testEveryLifecycleCommandEndsWithNextAction(t *testing.T) {
 	cases := lifecycleCoverageCases(t)
 
 	// Anti-vacuity floor: a coverage test driving fewer commands than

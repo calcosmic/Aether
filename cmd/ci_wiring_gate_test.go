@@ -964,6 +964,8 @@ func TestReleaseGateCommandFailsATreeWithAFailingTest(t *testing.T) {
 // ci.yml, never a literal copy, so the table cannot drift from what CI
 // actually runs.
 func TestGateProbeCatchesEveryKnownGateNeutering(t *testing.T) {
+	t.Parallel()
+
 	repoRoot, err := repoRootForCommandSourceTest()
 	if err != nil {
 		t.Fatalf("failed to find repo root: %v", err)

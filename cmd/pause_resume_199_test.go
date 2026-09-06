@@ -188,6 +188,10 @@ func runnableFingerprint199(t *testing.T, root, dataDir string) string {
 }
 
 func TestPauseResume199SafeBoundary(t *testing.T) {
+	runIsolatedProcessTest(t, "TestPauseResume199SafeBoundary", testPauseResume199SafeBoundary)
+}
+
+func testPauseResume199SafeBoundary(t *testing.T) {
 	faults := []string{
 		"after_validation",
 		"after_stage:target-0001",

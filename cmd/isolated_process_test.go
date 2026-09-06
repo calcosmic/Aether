@@ -25,6 +25,10 @@ var isolatedProcessTestNames = map[string]struct{}{
 	"TestSuggestionOnlyCriticalExternalFinalizeFailsBeforeAdvancement": {},
 	"TestSuggestionOnlyCriticalDirectFlowFailsBeforeAdvancement":       {},
 	"TestFullLifecycleInDownstreamRepo":                                {},
+	"TestTerritoryLifecycleTransactionalPublish":                       {},
+	"TestPauseResume199SafeBoundary":                                   {},
+	"TestSealTransaction199HivePolicy":                                 {},
+	"TestEveryLifecycleCommandEndsWithNextAction":                      {},
 	isolatedProcessSuccessProbeName:                                    {},
 	isolatedProcessFailureProbeName:                                    {},
 }
