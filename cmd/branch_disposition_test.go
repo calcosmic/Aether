@@ -34,7 +34,7 @@ var disposedBranches = map[string]string{
 }
 
 // branchDispositionRecordPath is the written record, relative to the repo root.
-const branchDispositionRecordPath = ".planning/phases/196-see-what-it-cost/196-BRANCH-DISPOSITION.md"
+const branchDispositionRecordPath = ".planning/milestones/v1.27-phases/196-see-what-it-cost/196-BRANCH-DISPOSITION.md"
 
 // repoRootForDispositionTest walks up from this source file to the repository
 // root, so the test does not depend on the working directory.

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/calcosmic/Aether/pkg/exchange"
 	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
@@ -141,6 +142,9 @@ func runEntomb(cmd *cobra.Command, args []string) error {
 		outputWorkflow(payload, renderEntombConfirmationVisual(payload))
 		return nil
 	}
+	emitLifecycleCeremony(events.CeremonyTopicChamberEntomb, events.CeremonyPayload{
+		TaskID: result.ArchiveID, Task: result.ChamberName, Status: "entombed", Message: result.Goal,
+	}, "aether-entomb")
 	payload := entombResultMap(result)
 	outputWorkflow(payload, renderEntombVisual(payload))
 	return nil

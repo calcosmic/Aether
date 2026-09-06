@@ -488,7 +488,8 @@ func TestEntombEmitsChamberEntombCeremonyEvent(t *testing.T) {
 		}
 	}
 
-	rootCmd.SetArgs([]string{"entomb"})
+	seedVerifiedEntombLifecycleAt(t, aetherRoot, dataDir)
+	rootCmd.SetArgs([]string{"entomb", "--confirm"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("entomb returned error: %v", err)
 	}
@@ -499,7 +500,7 @@ func TestEntombEmitsChamberEntombCeremonyEvent(t *testing.T) {
 	if err := json.Unmarshal(persisted[len(persisted)-1].Payload, &payload); err != nil {
 		t.Fatalf("unmarshal payload: %v", err)
 	}
-	if payload.Status != "entombed" || payload.Message != goal || payload.Completed != 1 || payload.Total != 1 {
+	if payload.Status != "entombed" || payload.Message != goal {
 		t.Fatalf("payload = %+v", payload)
 	}
 	if payload.TaskID == "" || payload.Task == "" {

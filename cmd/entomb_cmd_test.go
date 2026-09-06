@@ -264,7 +264,7 @@ func TestEntombArchivesAndResetsSealedColony(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected new HANDOFF.md: %v", err)
 	}
-	for _, want := range []string{"entombed", "aether init", "aether tunnels"} {
+	for _, want := range []string{"archived", "Transaction receipt", "Retained"} {
 		if !strings.Contains(string(handoff), want) {
 			t.Fatalf("HANDOFF.md missing %q\n%s", want, string(handoff))
 		}
