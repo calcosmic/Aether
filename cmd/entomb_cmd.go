@@ -1083,6 +1083,7 @@ func entombLifecycleProjection(result entombTransactionResult) LifecycleProjecti
 		},
 		Alternatives: []LifecycleActionChoice{{ID: "status", RuntimeCommand: "aether status", DisplayCommand: "aether status", Reason: "Inspect the cleared lifecycle state and archive reference."}},
 		StateEffect:  effect,
+		Provenance:   colony.RecoveryProvenanceConfirmed,
 		Closure:      closure,
 	}
 }
