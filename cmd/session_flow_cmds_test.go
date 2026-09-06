@@ -463,8 +463,9 @@ func TestResumeColonyNoHandoffRejectsBrokenState(t *testing.T) {
 	if state.State != colony.State("BROKEN_STATE") {
 		t.Fatalf("state changed despite --no-handoff: %q", state.State)
 	}
-	if !strings.Contains(errBuf.String(), "HANDOFF.md fallback is disabled") {
-		t.Fatalf("expected no-handoff recovery message, got:\n%s", errBuf.String())
+	combined := outBuf.String() + errBuf.String()
+	if !strings.Contains(combined, "HANDOFF.md reconstruction is disabled") {
+		t.Fatalf("expected no-handoff recovery message, got:\n%s", combined)
 	}
 }
 
@@ -515,15 +516,9 @@ func TestResumeColonyWarnsAndBlocksOnHandoffGoalMismatch(t *testing.T) {
 		t.Fatalf("resume-colony returned error: %v", err)
 	}
 
-	errOutput := errBuf.String()
-	if !strings.Contains(errOutput, "COLONY_STATE.json is not runnable") {
-		t.Fatalf("expected broken-state handoff warning, got:\n%s", errOutput)
-	}
-	if !strings.Contains(errOutput, "does not match current COLONY_STATE.json goal") {
-		t.Fatalf("expected goal mismatch warning, got:\n%s", errOutput)
-	}
-	if !strings.Contains(errOutput, "appears to belong to a different colony") {
-		t.Fatalf("expected recovery error to block mismatched handoff, got:\n%s", errOutput)
+	errOutput := outBuf.String() + errBuf.String()
+	if !strings.Contains(errOutput, "does not match current COLONY_STATE.json goal") || !strings.Contains(errOutput, "appears to belong to a different colony") {
+		t.Fatalf("expected conflicting handoff evidence to block recovery, got:\n%s", errOutput)
 	}
 
 	var state colony.ColonyState
@@ -704,7 +699,7 @@ func TestResumeDashboardShowsNextPlannedPhaseAndSessionTodos(t *testing.T) {
 	}
 }
 
-func TestResumeDashboardRestoresLegacySessionMirror(t *testing.T) {
+func TestResumeDashboardClassifiesLegacySessionWithoutMirroring(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -755,20 +750,15 @@ func TestResumeDashboardRestoresLegacySessionMirror(t *testing.T) {
 	})
 
 	result := buildResumeDashboardResult()
-	sessionBlock, ok := result["session"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("expected session block, got %v", result)
+	if _, ok := result["session"]; ok {
+		t.Fatalf("read-only dashboard must not manufacture a session block from legacy data, got %v", result)
 	}
-	if summary := stringValue(sessionBlock["summary"]); summary != "Recovered from colony-scoped session" {
-		t.Fatalf("summary = %q, want restored legacy session summary", summary)
+	recovery := result["recovery"].(map[string]interface{})
+	if recovery["source"] != "COLONY_STATE.json" {
+		t.Fatalf("recovery source = %v, want COLONY_STATE.json", recovery["source"])
 	}
-
-	var mirrored colony.SessionFile
-	if err := store.LoadJSON("session.json", &mirrored); err != nil {
-		t.Fatalf("expected top-level session mirror to be restored: %v", err)
-	}
-	if mirrored.SessionID != "matching" {
-		t.Fatalf("restored session id = %q, want matching", mirrored.SessionID)
+	if _, err := os.Stat(filepath.Join(dataDir, "session.json")); !os.IsNotExist(err) {
+		t.Fatalf("read-only dashboard recreated a top-level session: %v", err)
 	}
 }
 

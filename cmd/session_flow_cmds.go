@@ -36,12 +36,13 @@ var resumeNoHandoff bool
 var pauseResumeLifecycleFault lifecycleTransactionFaultHook
 
 type pauseResumeLifecycleOutcome struct {
-	Handoff     colony.PauseHandoff
-	Receipt     colony.LifecycleReceipt
-	Provenance  colony.RecoveryProvenance
-	StateEffect colony.LifecycleStateEffect
-	Replay      bool
-	Message     string
+	Handoff          colony.PauseHandoff
+	Receipt          colony.LifecycleReceipt
+	Provenance       colony.RecoveryProvenance
+	StateEffect      colony.LifecycleStateEffect
+	Replay           bool
+	Message          string
+	WorktreesCleaned int
 }
 
 type pauseBoundaryPendingError struct {
@@ -274,6 +275,9 @@ var resumeColonyCmd = &cobra.Command{
 		result["replay"] = outcome.Replay
 		if outcome.Provenance == colony.RecoveryProvenanceReconstructed {
 			result["state_recovered_from_handoff"] = true
+		}
+		if outcome.WorktreesCleaned > 0 {
+			result["worktrees_preserved"] = map[string]interface{}{"cleaned": outcome.WorktreesCleaned, "preserved": 0}
 		}
 		closeLifecycleCommand(result, "picking the project back up",
 			stringValue(result["resume_override_command"]), stringValue(result["resume_override_why"]))
@@ -523,6 +527,12 @@ func resumeColonyAt(now time.Time) (pauseResumeLifecycleOutcome, error) {
 			if restoreErr != nil {
 				return pauseResumeUnknownOutcome(fmt.Sprintf("Recovery evidence is unknown: HANDOFF.md cannot reconstruct a runnable point (%v). Run `aether status` and repair the named evidence.", restoreErr)), nil
 			}
+			// A syntactically readable but non-runnable state is still evidence.
+			// Never let a handoff silently replace its known colony identity: that
+			// would turn a recovery attempt into cross-colony data loss.
+			if state.Goal != nil && strings.TrimSpace(*state.Goal) != "" && restored.Goal != nil && strings.TrimSpace(*restored.Goal) != "" && !goalsMatch(*state.Goal, *restored.Goal) {
+				return pauseResumeConflictOutcome("Recovery evidence conflicts: HANDOFF.md does not match current COLONY_STATE.json goal and appears to belong to a different colony. Run `aether status`, preserve both records, and choose the authoritative recovery point before `aether resume`."), nil
+			}
 			state = restored
 			state.Paused = true
 			session = pauseResumeSessionFromFacts(facts, state, now)
@@ -591,6 +601,25 @@ func resumeColonyAt(now time.Time) (pauseResumeLifecycleOutcome, error) {
 	}
 
 	staleSession := pauseResumeSessionIsStale(session, now, handoff.Repository.Head)
+	// A stale run must not leave its old worker roster attached to the next
+	// recovery episode.  Keep the historical evidence, but make that move part
+	// of this resume transaction: calling rotateSpawnTree after commit used to
+	// make the restoration only half durable when the process stopped between
+	// the state write and the archive copy.
+	spawnTreeArchive, spawnRunsArchive, spawnTreeBytes, spawnRunsBytes := resumeStaleSpawnArtifacts(resumeTxID, staleSession)
+	worktreesCleaned := 0
+	if staleSession {
+		remaining := make([]colony.WorktreeEntry, 0, len(state.Worktrees))
+		for _, entry := range state.Worktrees {
+			safety := worktreeDestructionSafety(root, entry)
+			if safety.Safe && safety.Reason == "worktree path no longer exists on disk" {
+				worktreesCleaned++
+				continue
+			}
+			remaining = append(remaining, entry)
+		}
+		state.Worktrees = remaining
+	}
 	state.Paused = false
 	state.PausedAt = nil
 	if state.State == colony.StateEXECUTING {
@@ -652,10 +681,20 @@ func resumeColonyAt(now time.Time) (pauseResumeLifecycleOutcome, error) {
 		return pauseResumeLifecycleOutcome{}, err
 	}
 	if staleSession {
-		if err := tx.DeclareRemoval(lifecycleTransactionRootData, "spawn-tree.txt"); err != nil {
+		if len(spawnTreeBytes) > 0 {
+			if err := tx.DeclareWrite(lifecycleTransactionRootData, spawnTreeArchive, spawnTreeBytes); err != nil {
+				return pauseResumeLifecycleOutcome{}, err
+			}
+		}
+		if err := tx.DeclareWrite(lifecycleTransactionRootData, "spawn-tree.txt", []byte{}); err != nil {
 			return pauseResumeLifecycleOutcome{}, err
 		}
-		if err := tx.DeclareRemoval(lifecycleTransactionRootData, "spawn-runs.json"); err != nil {
+		if len(spawnRunsBytes) > 0 {
+			if err := tx.DeclareWrite(lifecycleTransactionRootData, spawnRunsArchive, spawnRunsBytes); err != nil {
+				return pauseResumeLifecycleOutcome{}, err
+			}
+		}
+		if err := tx.DeclareWrite(lifecycleTransactionRootData, "spawn-runs.json", []byte{}); err != nil {
 			return pauseResumeLifecycleOutcome{}, err
 		}
 	}
@@ -668,10 +707,34 @@ func resumeColonyAt(now time.Time) (pauseResumeLifecycleOutcome, error) {
 			"reason": "stale_session",
 		})
 	}
-	return pauseResumeLifecycleOutcome{
+	outcome := pauseResumeLifecycleOutcome{
 		Handoff: handoff, Receipt: receipt, Provenance: provenance,
-		StateEffect: receipt.StateEffect,
-	}, nil
+		StateEffect: receipt.StateEffect, WorktreesCleaned: worktreesCleaned,
+	}
+	if worktreesCleaned > 0 {
+		outcome.Message = fmt.Sprintf("%d stale worker workspace record(s) were removed after the missing paths were proven empty.", worktreesCleaned)
+	}
+	return outcome, nil
+}
+
+// resumeStaleSpawnArtifacts snapshots stale roster data before the caller
+// declares its transaction targets.  The transaction ID provides a stable
+// archive identity, so replay resumes the same archive instead of creating a
+// timestamp-dependent second copy.
+func resumeStaleSpawnArtifacts(transactionID string, stale bool) (treeArchive, runsArchive string, treeBytes, runsBytes []byte) {
+	if !stale || store == nil {
+		return "", "", nil, nil
+	}
+	treeBytes, _ = os.ReadFile(filepath.Join(store.BasePath(), "spawn-tree.txt"))
+	runsBytes, _ = os.ReadFile(filepath.Join(store.BasePath(), "spawn-runs.json"))
+	archiveID := compactLifecycleID(transactionID)
+	if len(strings.TrimSpace(string(treeBytes))) > 0 {
+		treeArchive = filepath.Join("spawn-tree-archive", "spawn-tree."+archiveID+".txt")
+	}
+	if len(strings.TrimSpace(string(runsBytes))) > 0 {
+		runsArchive = filepath.Join("spawn-tree-archive", "spawn-runs."+archiveID+".json")
+	}
+	return treeArchive, runsArchive, treeBytes, runsBytes
 }
 
 func replayPauseTransaction(reference colony.PauseHandoffReference) (pauseResumeLifecycleOutcome, error) {
