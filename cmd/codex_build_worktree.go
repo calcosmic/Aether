@@ -949,7 +949,7 @@ func dispatchCodexBuildWorkersInRepo(ctx context.Context, phase colony.Phase, di
 func ensureGitRepository(root string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), GitTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", "-C", root, "rev-parse", "--show-toplevel")
+	cmd := readOnlyGitCommand(ctx, root, "rev-parse", "--show-toplevel")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("%v: %s", err, strings.TrimSpace(string(out)))
 	}
@@ -977,7 +977,7 @@ func allocateBuildWorktree(root string, phaseID int, dispatch codex.WorkerDispat
 
 	ctx, cancel := context.WithTimeout(context.Background(), GitTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", "-C", root, "worktree", "add", "-b", branch, absPath, "HEAD")
+	cmd := worktreeGitCommand(ctx, root, false, "worktree", "add", "-b", branch, absPath, "HEAD")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("git worktree add: %v: %s", err, strings.TrimSpace(string(out)))
 	}
@@ -1078,15 +1078,15 @@ func removeGitWorktree(root, absPath, branch string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), GitTimeout)
 	defer cancel()
 
-	if out, err := exec.CommandContext(ctx, "git", "-C", root, "worktree", "remove", absPath, "--force").CombinedOutput(); err != nil {
+	if out, err := worktreeGitCommand(ctx, root, false, "worktree", "remove", absPath, "--force").CombinedOutput(); err != nil {
 		// Do NOT continue to prune or branch deletion — the working copy
 		// still exists, so its branch is the only handle left on that work.
 		return fmt.Errorf("worktree remove: %v (output: %s)", err, string(out))
 	}
-	if out, err := exec.CommandContext(ctx, "git", "-C", root, "worktree", "prune").CombinedOutput(); err != nil {
+	if out, err := worktreeGitCommand(ctx, root, false, "worktree", "prune").CombinedOutput(); err != nil {
 		return fmt.Errorf("worktree prune: %v (output: %s)", err, string(out))
 	}
-	if out, err := exec.CommandContext(ctx, "git", "-C", root, "branch", "-D", branch).CombinedOutput(); err != nil {
+	if out, err := worktreeGitCommand(ctx, root, false, "branch", "-D", branch).CombinedOutput(); err != nil {
 		return fmt.Errorf("branch delete: %v (output: %s)", err, string(out))
 	}
 	return nil
@@ -1126,7 +1126,7 @@ func snapshotWorktreeStatus(worktreePath string) (map[string]string, error) {
 func snapshotGitStatus(root string) (map[string]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), GitTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", "-C", root, "status", "--porcelain", "--untracked-files=all")
+	cmd := readOnlyGitCommand(ctx, root, "status", "--porcelain", "--untracked-files=all")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("git status: %v: %s", err, strings.TrimSpace(string(out)))
@@ -1516,9 +1516,9 @@ func mergePhaseWorktrees(phaseNum int) (merged []string, failed []string, err er
 
 		// Merge
 		gitCtx, gitCancel := context.WithTimeout(context.Background(), GitTimeout)
-		coOut, coErr := exec.CommandContext(gitCtx, "git", "-C", root, "checkout", "main").CombinedOutput()
+		coOut, coErr := worktreeGitCommand(gitCtx, root, false, "checkout", "main").CombinedOutput()
 		if coErr != nil {
-			coOut2, coErr2 := exec.CommandContext(gitCtx, "git", "-C", root, "checkout", "master").CombinedOutput()
+			coOut2, coErr2 := worktreeGitCommand(gitCtx, root, false, "checkout", "master").CombinedOutput()
 			if coErr2 != nil {
 				gitCancel()
 				failed = append(failed, fmt.Sprintf("%s (checkout failed: %s / %s)", entry.Branch, string(coOut), string(coOut2)))
@@ -1526,7 +1526,7 @@ func mergePhaseWorktrees(phaseNum int) (merged []string, failed []string, err er
 			}
 		}
 
-		mergeOut, mergeErr := exec.CommandContext(gitCtx, "git", "-C", root, "merge", entry.Branch).CombinedOutput()
+		mergeOut, mergeErr := worktreeGitCommand(gitCtx, root, false, "merge", entry.Branch).CombinedOutput()
 		gitCancel()
 		if mergeErr != nil {
 			failed = append(failed, fmt.Sprintf("%s (merge failed: %s)", entry.Branch, string(mergeOut)))

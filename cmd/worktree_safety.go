@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -73,7 +72,7 @@ func worktreeDestructionSafety(root string, entry colony.WorktreeEntry) worktree
 	// restored backup) would silently report the ENCLOSING repo's status —
 	// "clean" if the root happens to be clean — rather than refusing (CR-02).
 	topCtx, topCancel := context.WithTimeout(context.Background(), GitTimeout)
-	topOut, topErr := exec.CommandContext(topCtx, "git", "-C", absPath, "rev-parse", "--show-toplevel").Output()
+	topOut, topErr := readOnlyGitCommand(topCtx, absPath, "rev-parse", "--show-toplevel").Output()
 	topCancel()
 	if topErr != nil {
 		result.Safe = false
@@ -91,7 +90,7 @@ func worktreeDestructionSafety(root string, entry colony.WorktreeEntry) worktree
 	// Step 3: dirty check. A guard that cannot see must refuse, never assume
 	// safe.
 	statusCtx, statusCancel := context.WithTimeout(context.Background(), GitTimeout)
-	statusOut, statusErr := exec.CommandContext(statusCtx, "git", "-C", absPath, "status", "--porcelain").CombinedOutput()
+	statusOut, statusErr := readOnlyGitCommand(statusCtx, absPath, "status", "--porcelain").CombinedOutput()
 	statusCancel()
 	if statusErr != nil {
 		result.Safe = false
@@ -149,7 +148,7 @@ func branchMergeSafety(root, branch string) worktreeSafety {
 	// mergePhaseWorktrees (cmd/codex_build_worktree.go).
 	integrationBranch := "main"
 	verifyCtx, verifyCancel := context.WithTimeout(context.Background(), GitTimeout)
-	if _, verifyErr := exec.CommandContext(verifyCtx, "git", "-C", root, "rev-parse", "--verify", "main").CombinedOutput(); verifyErr != nil {
+	if _, verifyErr := readOnlyGitCommand(verifyCtx, root, "rev-parse", "--verify", "main").CombinedOutput(); verifyErr != nil {
 		integrationBranch = "master"
 	}
 	verifyCancel()
@@ -157,7 +156,7 @@ func branchMergeSafety(root, branch string) worktreeSafety {
 	// "--" separates the revision range from any option flags, so a branch
 	// name beginning with "-" cannot be misread by git as a flag (CR-01).
 	revListCtx, revListCancel := context.WithTimeout(context.Background(), GitTimeout)
-	revListOut, revListErr := exec.CommandContext(revListCtx, "git", "-C", root, "rev-list", "--count",
+	revListOut, revListErr := readOnlyGitCommand(revListCtx, root, "rev-list", "--count",
 		integrationBranch+".."+branch, "--").CombinedOutput()
 	revListCancel()
 	if revListErr != nil {
@@ -230,7 +229,7 @@ func preserveWorktreeWork(root string, entry colony.WorktreeEntry, safety worktr
 		// Stash rather than discard — the exact command already used and
 		// tested at cmd/recover_repair.go's repairDirtyWorktree.
 		stashCtx, stashCancel := context.WithTimeout(context.Background(), GitTimeout)
-		stashOut, stashErr := exec.CommandContext(stashCtx, "git", "-C", absPath, "stash", "--include-untracked").CombinedOutput()
+		stashOut, stashErr := worktreeGitCommand(stashCtx, absPath, false, "stash", "--include-untracked").CombinedOutput()
 		stashCancel()
 		if stashErr != nil {
 			return false, "", fmt.Errorf("stash worktree changes: %w: %s", stashErr, strings.TrimSpace(string(stashOut)))
@@ -357,7 +356,7 @@ func scanUnrecordedWorktrees(root, worktreesDir string, knownPaths map[string]bo
 		// separate worker workspace" (which reads as an unsafe verdict on
 		// something that was never a worktree to begin with).
 		topCtx, topCancel := context.WithTimeout(context.Background(), GitTimeout)
-		topOut, topErr := exec.CommandContext(topCtx, "git", "-C", candidatePath, "rev-parse", "--show-toplevel").Output()
+		topOut, topErr := readOnlyGitCommand(topCtx, candidatePath, "rev-parse", "--show-toplevel").Output()
 		topCancel()
 		if topErr != nil {
 			// Not inside any git repository at all -- definitely not a
@@ -375,7 +374,7 @@ func scanUnrecordedWorktrees(root, worktreesDir string, knownPaths map[string]bo
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), GitTimeout)
-		branchOut, branchErr := exec.CommandContext(ctx, "git", "-C", candidatePath, "rev-parse", "--abbrev-ref", "HEAD").Output()
+		branchOut, branchErr := readOnlyGitCommand(ctx, candidatePath, "rev-parse", "--abbrev-ref", "HEAD").Output()
 		cancel()
 		if branchErr != nil {
 			// Confirmed a worktree root but branch name unreadable (e.g.

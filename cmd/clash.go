@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/calcosmic/Aether/pkg/colony"
@@ -28,7 +28,8 @@ var clashCheckCmd = &cobra.Command{
 		// List all worktrees and check if the file is modified in any of them
 		ctx, cancel := context.WithTimeout(context.Background(), GitTimeout)
 		defer cancel()
-		out, err := exec.CommandContext(ctx, "git", "worktree", "list", "--porcelain").Output()
+		root := resolveAetherRoot()
+		out, err := readOnlyGitCommand(ctx, root, "worktree", "list", "--porcelain").Output()
 		if err != nil {
 			if ctx.Err() == context.DeadlineExceeded {
 				outputError(2, fmt.Sprintf("git worktree list timed out after %v", GitTimeout), nil)
@@ -46,7 +47,7 @@ var clashCheckCmd = &cobra.Command{
 			// Check if file has changes in that worktree
 			diffCtx, diffCancel := context.WithTimeout(context.Background(), GitTimeout)
 			defer diffCancel()
-			diffCmd := exec.CommandContext(diffCtx, "git", "-C", wtPath, "diff", "--name-only", "HEAD", "--", file)
+			diffCmd := readOnlyGitCommand(diffCtx, wtPath, "diff", "--name-only", "HEAD", "--", file)
 			diffOut, diffErr := diffCmd.Output()
 			if diffErr == nil && strings.TrimSpace(string(diffOut)) != "" {
 				clashingWorktrees = append(clashingWorktrees, wtPath)
@@ -92,7 +93,8 @@ var clashSetupCmd = &cobra.Command{
 		driverCmd := "aether clash-check --file %A"
 		ctx, cancel := context.WithTimeout(context.Background(), GitTimeout)
 		defer cancel()
-		if err := exec.CommandContext(ctx, "git", "config", "--local", "merge.aether-clash.name", "Aether Clash Detection").Run(); err != nil {
+		root := resolveAetherRoot()
+		if err := worktreeGitCommand(ctx, root, false, "config", "--local", "merge.aether-clash.name", "Aether Clash Detection").Run(); err != nil {
 			if ctx.Err() == context.DeadlineExceeded {
 				outputError(2, fmt.Sprintf("git config timed out after %v", GitTimeout), nil)
 				return nil
@@ -100,7 +102,7 @@ var clashSetupCmd = &cobra.Command{
 			outputError(2, fmt.Sprintf("failed to set merge driver name: %v", err), nil)
 			return nil
 		}
-		if err := exec.CommandContext(ctx, "git", "config", "--local", "merge.aether-clash.driver", driverCmd).Run(); err != nil {
+		if err := worktreeGitCommand(ctx, root, false, "config", "--local", "merge.aether-clash.driver", driverCmd).Run(); err != nil {
 			if ctx.Err() == context.DeadlineExceeded {
 				outputError(2, fmt.Sprintf("git config timed out after %v", GitTimeout), nil)
 				return nil
@@ -129,7 +131,9 @@ var worktreeCreateCmd = &cobra.Command{
 		// Create worktree
 		ctx, cancel := context.WithTimeout(context.Background(), GitTimeout)
 		defer cancel()
-		out, err := exec.CommandContext(ctx, "git", "worktree", "add", branch, "-b", branch).CombinedOutput()
+		root := resolveAetherRoot()
+		worktreePath := filepath.Join(root, branch)
+		out, err := worktreeGitCommand(ctx, root, false, "worktree", "add", worktreePath, "-b", branch).CombinedOutput()
 		if err != nil {
 			if ctx.Err() == context.DeadlineExceeded {
 				outputError(2, fmt.Sprintf("git worktree add timed out after %v", GitTimeout), nil)
@@ -160,7 +164,7 @@ var worktreeCreateCmd = &cobra.Command{
 func resolveWorktreePathForBranch(root, branch string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), GitTimeout)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "git", "-C", root, "worktree", "list", "--porcelain").Output()
+	out, err := readOnlyGitCommand(ctx, root, "worktree", "list", "--porcelain").Output()
 	if err != nil {
 		return "", fmt.Errorf("git worktree list: %w", err)
 	}

@@ -221,7 +221,6 @@ func TestWorktreeAllocateRejectsInvalidName(t *testing.T) {
 	tmpDir := t.TempDir()
 	dataDir := tmpDir + "/.aether/data"
 	os.MkdirAll(dataDir, 0755)
-
 	state := `{"version":"3.0","goal":"test","state":"READY","current_phase":1,"plan":{"phases":[]},"events":[],"memory":{"phase_learnings":[],"decisions":[],"instincts":[]},"errors":{"records":[]}}`
 	os.WriteFile(dataDir+"/COLONY_STATE.json", []byte(state), 0644)
 
@@ -1713,6 +1712,7 @@ func TestCreateBlockerAppendsToExisting(t *testing.T) {
 // ===========================================================================
 
 func TestReadOnlyGitCommandDisablesAmbientMutationFeatures(t *testing.T) {
+	t.Setenv("GIT_OPTIONAL_LOCKS", "0")
 	command := readOnlyGitCommand(context.Background(), "/repo", "diff", "--name-only", "main..feature")
 	if got, want := command.Args, []string{"git", "-c", "core.fsmonitor=false", "-c", "maintenance.auto=false", "-c", "gc.auto=0", "-C", "/repo", "diff", "--name-only", "main..feature"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("read-only git args = %#v, want %#v", got, want)
@@ -1721,6 +1721,68 @@ func TestReadOnlyGitCommandDisablesAmbientMutationFeatures(t *testing.T) {
 		if !slices.Contains(command.Env, want) {
 			t.Fatalf("read-only git environment lacks %q: %#v", want, command.Env)
 		}
+	}
+	if command.WaitDelay != worktreeGitWaitDelay {
+		t.Fatalf("read-only git WaitDelay = %v, want %v", command.WaitDelay, worktreeGitWaitDelay)
+	}
+
+	writeCommand := worktreeGitCommand(context.Background(), "/repo", false, "worktree", "add", "/repo/.aether/worktrees/phase-1-builder", "-b", "phase-1/builder")
+	if slices.Contains(writeCommand.Env, "GIT_OPTIONAL_LOCKS=0") {
+		t.Fatal("write git command must retain required Git locks")
+	}
+	if writeCommand.WaitDelay != worktreeGitWaitDelay {
+		t.Fatalf("write git WaitDelay = %v, want %v", writeCommand.WaitDelay, worktreeGitWaitDelay)
+	}
+}
+
+func TestWorktreeAllocateUsesAetherRoot(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	var stdoutBuf, stderrBuf bytes.Buffer
+	stdout = &stdoutBuf
+	stderr = &stderrBuf
+
+	root := t.TempDir()
+	runGit(t, root, "init")
+	runGit(t, root, "config", "user.email", "test@example.com")
+	runGit(t, root, "config", "user.name", "Test")
+	runGit(t, root, "commit", "--allow-empty", "-m", "initial")
+
+	dataDir := filepath.Join(root, ".aether", "data")
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatalf("create data directory: %v", err)
+	}
+	s, err := storage.NewStore(dataDir)
+	if err != nil {
+		t.Fatalf("create store: %v", err)
+	}
+	store = s
+	t.Setenv("AETHER_ROOT", root)
+
+	rootCmd.SetArgs([]string{"worktree-allocate", "--agent", "root-anchor", "--phase", "1"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("worktree allocate: %v", err)
+	}
+	if stderrBuf.Len() != 0 {
+		t.Fatalf("worktree allocate stderr: %s", stderrBuf.String())
+	}
+
+	relPath := filepath.ToSlash(filepath.Join(worktreeBaseDir, "phase-1-root-anchor"))
+	absPath := filepath.Join(root, relPath)
+	if _, err := os.Stat(filepath.Join(absPath, ".git")); err != nil {
+		t.Fatalf("allocated worktree is not rooted under AETHER_ROOT: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(".aether", "worktrees", "phase-1-root-anchor")); err == nil {
+		t.Fatal("allocated worktree escaped into the process working directory")
+	}
+
+	var state colony.ColonyState
+	if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("load allocation state: %v", err)
+	}
+	if len(state.Worktrees) != 1 || state.Worktrees[0].Path != relPath {
+		t.Fatalf("stored worktree state = %#v, want one relative path %q", state.Worktrees, relPath)
 	}
 }
 
@@ -1820,6 +1882,9 @@ func TestWorktreeLifecycleFull(t *testing.T) {
 	tmpDir := t.TempDir()
 	dataDir := tmpDir + "/.aether/data"
 	os.MkdirAll(dataDir, 0755)
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte("module example.com/worktree-lifecycle\n\ngo 1.26\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
 
 	// Init git repo
 	runGit(t, tmpDir, "init")
@@ -1839,7 +1904,6 @@ func TestWorktreeLifecycleFull(t *testing.T) {
 	}
 
 	// Step 2: Allocate worktree via command
-	registerSourceWorktreeAllocation(t, "phase-1/builder-1")
 	rootCmd.SetArgs([]string{"worktree-allocate", "--agent", "builder-1", "--phase", "1"})
 	err := rootCmd.Execute()
 	_ = err // may fail in test env, check if state was updated
@@ -1919,6 +1983,8 @@ func TestWorktreeLifecycleFull(t *testing.T) {
 import "testing"
 func TestLifecycle(t *testing.T) {}
 `), 0644)
+		runGit(t, wtPath, "add", "cmd/lifecycle_test.go")
+		runGit(t, wtPath, "commit", "-m", "add lifecycle test")
 
 		resetRootCmd(t)
 		stdoutBuf.Reset()
