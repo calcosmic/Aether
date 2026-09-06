@@ -60,8 +60,8 @@ func TestAbandonPreviewDoesNotMutate(t *testing.T) {
 	}
 }
 
-// TestAbandonPreviewNamesWhatWouldBeLost keeps the preview specific. A generic
-// "are you sure" gives the operator nothing to decide with.
+// TestAbandonPreviewNamesWhatWouldBeLost keeps the hidden compatibility path
+// specific: the retired command must say that it has no authority to mutate.
 func TestAbandonPreviewNamesWhatWouldBeLost(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -81,10 +81,10 @@ func TestAbandonPreviewNamesWhatWouldBeLost(t *testing.T) {
 
 	got := buf.String()
 	for _, want := range []string{
-		"Build a thing I will regret", // the goal itself
-		"1 of 2 phases completed",     // concrete progress
-		"aether abandon --confirm",    // the way forward
-		"aether seal",                 // the alternative for finished work
+		"standalone abandon command is retired",
+		"did not change state",
+		"aether seal --force --reason",
+		"aether status",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("preview must mention %q, got:\n%s", want, got)
@@ -92,13 +92,19 @@ func TestAbandonPreviewNamesWhatWouldBeLost(t *testing.T) {
 	}
 }
 
-// TestAbandonConfirmedClearsColonyAndKeepsBackup is the feature, with the
-// backup assertion carrying the weight.
+// TestAbandonConfirmedClearsColonyAndKeepsBackup keeps the historical input
+// fail-closed: even a former confirmation flag cannot regain clear authority.
 func TestAbandonConfirmedClearsColonyAndKeepsBackup(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 	dataDir := setupBuildFlowTest(t)
 	abandonFixture(t, dataDir)
+	before, err := os.ReadFile(filepath.Join(dataDir, "COLONY_STATE.json"))
+	if err != nil {
+		t.Fatalf("read state before retired command: %v", err)
+	}
+	var buf strings.Builder
+	stdout = &buf
 
 	rootCmd.SetArgs([]string{"abandon", "--confirm"})
 	defer rootCmd.SetArgs([]string{})
@@ -106,33 +112,18 @@ func TestAbandonConfirmedClearsColonyAndKeepsBackup(t *testing.T) {
 		t.Fatalf("abandon --confirm returned error: %v", err)
 	}
 
-	var after colony.ColonyState
-	if err := store.LoadJSON("COLONY_STATE.json", &after); err != nil {
-		t.Fatalf("load state: %v", err)
-	}
-	if after.Goal != nil && strings.TrimSpace(*after.Goal) != "" {
-		t.Errorf("colony still has a goal after abandon: %q", ptrStr(after.Goal))
-	}
-	if after.State != colony.StateIDLE {
-		t.Errorf("state = %q, want IDLE", after.State)
-	}
-	if len(after.Plan.Phases) != 0 {
-		t.Errorf("phases survived abandon: %d", len(after.Plan.Phases))
-	}
-
-	backups, err := filepath.Glob(filepath.Join(dataDir, "backups", "COLONY_STATE.pre-abandon.*.bak"))
+	after, err := os.ReadFile(filepath.Join(dataDir, "COLONY_STATE.json"))
 	if err != nil {
-		t.Fatalf("glob backups: %v", err)
+		t.Fatalf("read state after retired command: %v", err)
 	}
-	if len(backups) == 0 {
-		t.Fatal("no backup written; the abandoned colony is unrecoverable")
+	if string(after) != string(before) {
+		t.Fatal("retired abandon --confirm mutated colony state")
 	}
-	raw, err := os.ReadFile(backups[0])
-	if err != nil {
-		t.Fatalf("read backup: %v", err)
+	if !strings.Contains(buf.String(), "standalone abandon command is retired") || !strings.Contains(buf.String(), `"state_effect":"none"`) {
+		t.Fatalf("retired abandon did not explain its zero-write behavior: %s", buf.String())
 	}
-	if !strings.Contains(string(raw), "Build a thing I will regret") {
-		t.Error("backup does not contain the abandoned colony's goal")
+	if backups, _ := filepath.Glob(filepath.Join(dataDir, "backups", "*.bak")); len(backups) != 0 {
+		t.Fatalf("retired abandon wrote unexpected backups: %v", backups)
 	}
 }
 

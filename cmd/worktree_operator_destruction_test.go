@@ -625,10 +625,10 @@ func TestRecoverApplyPreservesUnmergedOrphanBranch(t *testing.T) {
 		t.Fatalf("expected the unmerged commit to still be reachable from some ref, but `git log --all --oneline` shows: %s", string(logOut))
 	}
 
-	// D-02: report, don't stay silent.
+	// Retired recovery is intentionally a zero-write compatibility response.
 	combined := stdoutBuf.String() + stderrBuf.String() + realStderr
-	if !strings.Contains(combined, "left alone") && !strings.Contains(combined, "Kept the work") {
-		t.Errorf("expected a plain-language report that the branch was kept, got: %s", combined)
+	if !strings.Contains(combined, "standalone recover command is retired") || !strings.Contains(combined, "aether resume") {
+		t.Errorf("expected canonical recovery migration guidance, got: %s", combined)
 	}
 }
 
@@ -718,8 +718,11 @@ func TestRecoverApplyDeletesTrulyMergedOrphanBranch(t *testing.T) {
 	}
 
 	listOut, _ := exec.Command("git", "-C", tmpDir, "branch", "--list", "phase-4/orphan-merged").CombinedOutput()
-	if strings.TrimSpace(string(listOut)) != "" {
-		t.Errorf("expected a truly merged orphan branch to be deleted by `recover --apply`, but it still exists: %q", string(listOut))
+	if strings.TrimSpace(string(listOut)) == "" {
+		t.Errorf("retired recover unexpectedly deleted branch: %q", string(listOut))
+	}
+	if !strings.Contains(stdoutBuf.String()+stderrBuf.String(), "standalone recover command is retired") {
+		t.Errorf("retired recover did not report its no-op migration: stdout=%s stderr=%s", stdoutBuf.String(), stderrBuf.String())
 	}
 }
 
@@ -829,10 +832,11 @@ func TestAbandonPreservesUnrecordedWorktreeWithUncommittedWork(t *testing.T) {
 		t.Fatalf("expected the worker workspace's uncommitted file to survive `abandon --confirm`, but it is gone: stat %s: no such file or directory", wtPath+"/mid-build-notes.txt")
 	}
 
-	// D-02: report, don't stay silent.
+	// Retired abandon leaves every workspace untouched and routes the owner to
+	// the explicit forced-seal decision instead.
 	combined := stdoutBuf.String() + stderrBuf.String() + realStderr
-	if !strings.Contains(combined, "left in place") && !strings.Contains(combined, "Kept the work") {
-		t.Errorf("expected a plain-language report that the worker workspace's work was kept, got: %s", combined)
+	if !strings.Contains(combined, "standalone abandon command is retired") || !strings.Contains(combined, "aether seal --force --reason") {
+		t.Errorf("expected retired-command migration guidance, got: %s", combined)
 	}
 }
 
@@ -909,8 +913,8 @@ func TestAbandonStillClearsWorktreesDirectoryWhenTrulyEmpty(t *testing.T) {
 	}
 
 	worktreesDir := filepath.Join(tmpDir, ".aether", "worktrees")
-	if _, statErr := os.Stat(worktreesDir); statErr == nil {
-		t.Errorf("expected worktrees directory to be cleared when it holds no real worktree work, but it still exists")
+	if _, statErr := os.Stat(worktreesDir); statErr != nil {
+		t.Errorf("retired abandon must not delete the worktrees directory: %v", statErr)
 	}
 }
 
@@ -989,24 +993,12 @@ func TestAbandonPreviewMentionsWorkerWorkspacesWithWork(t *testing.T) {
 	if output == "" {
 		t.Fatalf("expected JSON output on stdout, got empty")
 	}
-	// Test mode captures the raw JSON envelope (outputOK), not the rendered
-	// visual (writeVisualOutput only fires for a real terminal) -- assert on
-	// the structured field the preview now carries, and separately confirm
-	// renderAbandonPreviewVisual actually turns that field into a
-	// plain-language sentence a human reading the real CLI output would see.
+	// Retired inputs deliberately expose a narrow no-op migration response,
+	// rather than a preview with destructive authority.
 	envelope := assertOKEnvelope(t, output)
 	result := envelope["result"].(map[string]interface{})
-	if withWork := intValue(result["worker_workspaces_with_work"]); withWork < 1 {
-		t.Errorf("expected worker_workspaces_with_work >= 1 in the preview, got %v (full output: %s)", result["worker_workspaces_with_work"], output)
-	}
-
-	summary := abandonColonySummary(colony.ColonyState{
-		Plan: colony.Plan{Phases: []colony.Phase{}},
-	})
-	summary["worker_workspaces_with_work"] = 1
-	visual := renderAbandonPreviewVisual(summary)
-	if !strings.Contains(visual, "unsaved") && !strings.Contains(visual, "unmerged") {
-		t.Errorf("expected the rendered preview to mention worker workspaces holding unsaved/unmerged work, got: %s", visual)
+	if result["state_effect"] != "none" || !strings.Contains(stringValue(result["explanation"]), "retired") {
+		t.Errorf("retired abandon preview did not fail closed: %v", result)
 	}
 
 	if content, readErr := os.ReadFile(wtPath + "/dirty.txt"); readErr != nil || string(content) != "dirty\n" {
