@@ -2,36 +2,36 @@
 gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
-status: executing
-stopped_at: Completed 199-28-PLAN.md
-last_updated: "2026-09-06T00:00:00Z"
-last_activity: 2026-09-06
+status: ready_to_plan
+stopped_at: Phase 199 complete (34/34 plans, 12/12 UAT) — ready to discuss Phase 200
+last_updated: 2026-09-06T22:50:33Z
+last_activity: 2026-09-07
 progress:
   total_phases: 7
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 34
-  completed_plans: 33
-  percent: 97
+  completed_plans: 34
+  percent: 100
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-09-02)
+See: .planning/PROJECT.md (updated 2026-09-07)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 199 — front-door-and-classic-contract
+**Current focus:** Phase 200 — iterative planning
 **Previous milestone:** v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02 (48/48 requirements; audit `tech_debt`, no blockers)
 **Product version:** v1.0.66 (installed and source binaries agree in the 2026-09-02 local check)
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
 
 ## Current Position
 
-Phase: 199 (front-door-and-classic-contract) — EXECUTING
-Plan: 29 of 34
-Status: Ready to execute
-Last activity: 2026-09-05
+Phase: 200
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-09-07
 
 ## Performance Metrics
 
@@ -292,6 +292,11 @@ Last activity: 2026-09-05
 - [Phase 199]: Sealed colonies stay reviewable through status; entomb is optional and only verified archive-and-clear permits init. — D-17 lifecycle guidance must preserve owner review and forced-incomplete truth across generated surfaces.
 - [Phase 199]: Use a 73-row JSON ledger as the exact source for Phase 199 coverage and proof. — Exact cardinality and named proof resolution prevent presence-only signoff.
 - [Phase 199]: Treat retired lifecycle spellings as exact tracked path/family inventory entries; only normalize_args.go accepts old input through 1.29. — Current documentation and runtime output cannot hide behind historical evidence.
+- [Phase 199 transition]: One read-only lifecycle projection now owns orientation and Next Up across the ordinary journey; absent facts stay explicit rather than being repaired during inspection.
+- [Phase 199 transition]: Pause/resume are the only public interruption and recovery pair; replay is exactly once, and conflicting evidence fails without runnable-state mutation.
+- [Phase 199 transition]: Verified seal and owner-forced incomplete seal remain distinct; sealed state stays reviewable, while optional entomb verifies archive content before clearing it.
+- [Phase 199 transition]: Expert maintenance separates zero-write inspection from exact previewed, rollback-capable mutation and preserves unmanaged/custom files.
+- [Phase 199 transition]: Claude/OpenCode `/ant-*` journeys and runtime-native Codex guidance share Go-owned truth, proven by the executable Classic corpus and final normal/race receipts.
 
 ### Pending Todos
 
@@ -318,7 +323,8 @@ Last activity: 2026-09-05
 - [x] Close and archive v1.27 with the audited debt acknowledged — complete 2026-09-02
 - [x] Initialize v1.28 Classic Colony Restoration from the comprehensive Dreams report — approved 2026-09-02
 - [x] Route the 72-row capability ledger without re-interviewing the owner — 72/72 routed; final dispositions require phase synthesis
-- [ ] Discuss Phase 199 and complete its front-door/lifecycle Classic-to-Go synthesis before implementation planning ← **current**
+- [x] Discuss, plan, execute, and verify Phase 199 — 34/34 plans and 12/12 UAT checks complete 2026-09-07
+- [ ] Discuss Phase 200 and complete its Scout/Route-Setter Classic-to-Go synthesis before implementation planning ← **current**
 - [ ] Run owner-watched proof only after v1.28 restoration is usable
 - [ ] Plan Phase 187: Crash-Safe Worktrees & Ecosystem Neutrality
 - [ ] Plan Phase 188: One Truth for Failures and Advances (independent — may run in parallel with 187)
@@ -336,6 +342,7 @@ Last activity: 2026-09-05
 - ℹ️ [Phase 198.2 verification] One real-world memory-pack UAT remains untested because the owner has not yet used the finished behavior on another project. It is acknowledged debt; review with `$gsd-audit-uat` and rerun with `$gsd-verify-work 198.2` after field use.
 - ℹ️ [Phase 198.2 transition] `phase.complete` returned Phase 198.3 correctly but again left the roadmap checkbox and STATE `current_phase` frontmatter stale; both were corrected inline. The transition mutation still needs a later runtime fix.
 - ℹ️ [Phase 198.2 side finding] This repo's local wisdom file contains backticks rejected by the current safety filter, so that local wisdom is withheld from helper prompts. This predates Phase 198.2 and was not changed here.
+- ℹ️ [Phase 199 carry-forward] `cmd/recover_repair.go` retains a pre-existing informational `build-reconcile` placeholder inside an unreachable legacy helper. It is not a public route; revisit only if the Phase 201 work-cycle/reconciliation design makes that helper live.
 - ~~Roadmap is unapproved~~ — resolved 2026-08-14. This line was stale: it said not to start Phase 172 until sign-off, and 172, 173 and part of 174 were then executed anyway. Recorded because a gate that gets ignored without anyone noticing is the failure mode this project keeps rediscovering.
 - **Phases 176, 177 and 178 are cut, not deferred.** If a future session finds Phase 173's delegation guards bounding a capability nobody has, that is expected and accepted — Phase 177 was the grant, and it was cut deliberately. Do not "restore" it.
 - **Phase 173 and Phase 178 carry research flags from the research phase.** Platform nested-spawn behaviour is MEDIUM confidence and both vendors broke it within the last quarter (Claude Code strips the Agent tool from some subagent types; OpenCode has an open "subagents can infinitely recurse, no max depth" defect). The skill supply-chain threat surface is actively evolving. Re-verify vendor docs and open issues at planning time for both
@@ -405,10 +412,11 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-05T22:32:38.128Z
-Stopped at: Completed 199-28-PLAN.md
+Last session: 2026-09-06T22:50:33Z
+Stopped at: Phase 199 complete and owner-verified; ready to discuss Phase 200
 Resume file: None
 
 ## Operator Next Steps
 
-- Execute the next incomplete Phase 199 plan.
+- Discuss Phase 200: Iterative Planning.
+- Plan Phase 200 after its Classic Scout/Route-Setter mechanism synthesis is recorded.

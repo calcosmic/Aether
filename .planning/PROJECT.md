@@ -37,6 +37,7 @@ That means:
 - **v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02**: 9 phases, 84 plans, 195 recorded tasks, and 48/48 requirements. The audit found no blocking requirement, integration, or end-to-end gaps; one Phase 198.2 real-project memory observation and documented warnings carry as explicit debt.
 - **Product version: v1.0.66** (installed and source binaries agree in the 2026-09-02 local check)
 - **v1.28 Classic Colony Restoration is active**: approved Phases 199-205 map 64 testable requirements and all 72 Classic capability rows. The authoritative brief is `.aether/dreams/2026-09-01-comprehensive-aether-colony-review.md`; the ledger is traceability, not another owner interview.
+- **Phase 199 — Front Door and Classic Contract is complete (2026-09-07)**: 34/34 plans and 12/12 owner UAT checks passed. The ordinary journey, shared lifecycle projection, safe pause/resume, honest seal/entomb split, expert maintenance boundary, and executable cross-platform Classic corpus are now delivered.
 - The priority implementation spec v3 (Downloads, 2026-08-21) is the ratified governing backlog (ruling D1); its order was amended by D12 on 2026-08-22 so v1.27 leads with team judgement, single verification, the cost line, the next-action card and Classic display restoration
 - Phase 194's end-to-end proof reduced the measured one-task bug fix from 8 workers to exactly 1 Builder plus the program's free checks on both the proposed and automatic paths; an explicit heavy request still produces 4 workers, proving the review pipeline remains live. Broader owner-watched proof follows restoration rather than preceding it.
 - Four parallel execution paths have been reduced to two since v1.24: the Go runtime (authoritative) and the thin markdown wrappers; `control-ts/` retired in v1.25, the playbooks no longer loaded, 39 zero-reader config files and 8 dead commands deleted in v1.26
@@ -284,6 +285,7 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 - The learning loop is fed at the source: build and check worker outcomes become failure records and observations through one guarded boundary on both lanes (quick and swarm too); instinct use is a recorded fact so QUEEN.md promotion can actually happen; finished checks, answered questions and failure streaks leave notes; expiring notes reach eternal memory; strong instincts reach the hive at every check under the existing switch; the memory drill-down shows real content; every CLAUDE.md learning claim names a test (FEED-01..06) -- v1.27 (Phase 198.1)
 - Memory reaches every relevant helper: plan and colonize delegate manifests carry the runtime-built memory capsule; Oracle research files and registers itself; the greeting shows preferences, strongest habits and the last helper note; dead capsule sections are removed under a writer invariant; survey content and the previous phase's outcome reach later briefs within named budgets (WIRE-01..07) -- v1.27 (Phase 198.2; one real-world UAT carried as acknowledged debt)
 - Overnight stamina: owner-eye work queues, genuine danger stops, replans survive restarts, elapsed/cost reporting is durable, blocker truth fails closed, external swarm evidence is issuance-bound, and the six-phase fixture completes unattended (STAM-01..06) -- v1.27 (Phase 198.3)
+- Front door and Classic lifecycle contract: one grouped normal journey, automatic territory freshness, one authoritative orientation model, exactly-once pause/resume, retained honest seal plus verified optional entomb, transaction-backed expert maintenance, and a versioned cross-platform behavior corpus (SYNTH-01, CEC-01/02/04/08, LIFE-01..06, PROOF-01) -- v1.28 (Phase 199)
 
 ### Active
 
@@ -337,10 +339,15 @@ Long-lived items not tied to a milestone:
 | v1.27 ends at Phase 198.3; Classic restoration is v1.28, not a Phase 198.4 questionnaire (2026-09-02) | The comprehensive report already records owner intent; the 72-row ledger is traceability and owner-watched proof follows restoration | Good |
 | Historical behavior is evidence, while the modern Go runtime remains state and safety authority | Restore outcomes and experience without reviving shell/wrapper state mutation | — Locked for v1.28 |
 | Classic feature names are investigation headings, not predetermined solutions (2026-09-02) | Every Phase 199-204 must reconstruct the exact historical mechanism and owner value, trace the current Go implementation, compare keep/restore/replace options, and plan from a written synthesis | — Locked for v1.28 |
+| One read-only lifecycle projection owns orientation and Next Up (Phase 199) | Help, status, phase, history, recovery, and closeouts agree; missing evidence remains explicitly unknown rather than being repaired or invented | Good — shipped and UAT-verified |
+| Pause/resume are the sole public interruption and recovery path (Phase 199) | Handoffs and recovery are transactional and replay-safe; retired names survive only as bounded hidden input compatibility | Good — shipped and UAT-verified |
+| Seal retains reviewable state; entomb separately verifies archive bytes before clearing (Phase 199) | Forced-incomplete closure remains owner-only and visibly unverified through status, archive, and replay | Good — shipped and UAT-verified |
+| Expert maintenance uses exact previewed targets and one rollback-capable transaction (Phase 199) | Read-only inspection stays mutation-free and Aether-managed cleanup preserves unmanaged/custom files | Good — shipped and UAT-verified |
+| Claude/OpenCode `/ant-*` surfaces and runtime-native Codex share Go-owned lifecycle truth (Phase 199) | A 73-row coverage ledger and executable public journeys prove behavior and state effects without claiming native Codex `$ant-*` support | Good — shipped and UAT-verified |
 
 ## Context
 
-Shipped v1.27 on 2026-09-02: 9 phases, 84 plans, 195 recorded tasks, 48/48 requirements; the final normal and race suites each reported 8,566 passing Go tests across 20 packages, and the TypeScript host reported 540 passing tests.
+Shipped v1.27 on 2026-09-02: 9 phases, 84 plans, 195 recorded tasks, 48/48 requirements; the final normal and race suites each reported 8,566 passing Go tests across 20 packages, and the TypeScript host reported 540 passing tests. Phase 199 then completed the first v1.28 restoration slice with 34 plans, an exact normal/race completion receipt, and 12/12 owner UAT checks.
 Tech stack: Go 1.24 runtime (`cmd/`, `pkg/`), thin markdown wrappers for Claude Code and OpenCode, runtime-native Codex lane, a kept TypeScript host for autopilot dispatch. Full normal and race suites remain the release gate.
 Owner feedback themes (2026-08-21/22): builds feel heavy for small jobs; the next step after a command is often unclear; projects get stuck with an expensive way out; the display feels thin compared with v5.4.0.
 Known debt: Phase 172.1 (CI gate environment), Phase 173's one pending human check, the TS-host probe-timeout twin, Phase 198.2's carried real-world memory-pack UAT, and the acknowledged deferred items in STATE.md. Closed by Phase 194: `.planning/WINDOWS.md` #1 — Probe/Auditor/Gatekeeper no longer double-dispatch at build and continue — and the small-job pipeline now proves one Builder plus checks. Closed by Phase 195: a decision-free one-worker build now takes the visible fast path while genuine owner decisions and explicit `--checkin` still pause.
@@ -356,7 +363,7 @@ These remain promising but are not the next best move:
 
 ## Next Move
 
-Discuss Phase 199, complete its targeted front-door/lifecycle Classic-to-Go synthesis, and only then create implementation plans from the recorded conclusions.
+Discuss Phase 200 and reconstruct the Classic Scout → Route-Setter planning loop before creating implementation plans for iterative planning.
 
 ## Evolution
 
@@ -430,4 +437,4 @@ This document evolves at phase transitions and milestone boundaries.
 - Do not move install/update/publish safety out of Go
 - Do not make visual output parsing authoritative
 
-*Last updated: 2026-09-02 after v1.28 requirements, roadmap, and synthesis method approval*
+*Last updated: 2026-09-07 after Phase 199*
