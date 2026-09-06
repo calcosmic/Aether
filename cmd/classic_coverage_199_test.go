@@ -3,6 +3,9 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
@@ -76,6 +79,34 @@ func TestClassicCoverage199RejectsInvalidRows(t *testing.T) {
 				t.Fatal("invalid coverage rows unexpectedly passed validation")
 			}
 		})
+	}
+}
+
+func TestClassicCoverage199ProofIndexRejectsCommentAndStringDecoys(t *testing.T) {
+	root := t.TempDir()
+	cmdRoot := filepath.Join(root, "cmd")
+	if err := os.MkdirAll(filepath.Join(cmdRoot, "testdata", "classic-contract", "v1"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cmdRoot, "decoy_test.go"), []byte("package cmd\n// func TestCommentDecoy() {}\nvar _ = \"func TestStringDecoy() {}\"\nfunc TestRealProof() {}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cmdRoot, "testdata", "classic-contract", "v1", "cases.json"), []byte(`{"cases":[{"id":"known-case"}]}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	index, err := buildClassicCoverage199ProofIndex(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, proof := range []string{"TestRealProof", "case:known-case"} {
+		if !index.has(proof) {
+			t.Fatalf("missing known proof %q", proof)
+		}
+	}
+	for _, proof := range []string{"TestCommentDecoy", "TestStringDecoy", "case:unknown-case"} {
+		if index.has(proof) {
+			t.Fatalf("accepted decoy or unknown proof %q", proof)
+		}
 	}
 }
 
@@ -175,13 +206,17 @@ func validateClassicCoverage199RequiredFields(document classicCoverage199Documen
 
 func validateClassicCoverage199ProofResolution(document classicCoverage199Document) error {
 	root := findTestModuleRootForClassicCoverage199()
+	index, err := buildClassicCoverage199ProofIndex(root)
+	if err != nil {
+		return err
+	}
 	for _, row := range document.Rows {
 		artifact := filepath.Join(root, filepath.FromSlash(row.Artifact))
 		if info, err := os.Stat(artifact); err != nil || info.IsDir() {
 			return fmt.Errorf("%s/%s artifact %q does not resolve", row.Type, row.ID, row.Artifact)
 		}
 		for _, proof := range row.Proofs {
-			if !classicCoverage199ProofExists(root, proof) {
+			if !index.has(proof) {
 				return fmt.Errorf("%s/%s proof %q does not resolve", row.Type, row.ID, proof)
 			}
 		}
@@ -242,22 +277,56 @@ func findTestModuleRootForClassicCoverage199() string {
 	}
 }
 
-func classicCoverage199ProofExists(root, proof string) bool {
+type classicCoverage199ProofIndex struct {
+	tests map[string]bool
+	cases map[string]bool
+}
+
+func (index classicCoverage199ProofIndex) has(proof string) bool {
 	if strings.HasPrefix(proof, "case:") {
-		raw, err := os.ReadFile(filepath.Join(root, "cmd", "testdata", "classic-contract", "v1", "cases.json"))
-		return err == nil && strings.Contains(string(raw), `"id": "`+strings.TrimPrefix(proof, "case:")+`"`)
+		return index.cases[strings.TrimPrefix(proof, "case:")]
 	}
+	return index.tests[proof]
+}
+
+func buildClassicCoverage199ProofIndex(root string) (classicCoverage199ProofIndex, error) {
+	index := classicCoverage199ProofIndex{tests: map[string]bool{}, cases: map[string]bool{}}
 	cmdRoot := filepath.Join(root, "cmd")
-	found := false
-	_ = filepath.WalkDir(cmdRoot, func(path string, entry os.DirEntry, err error) error {
-		if err != nil || found || entry.IsDir() || !strings.HasSuffix(path, "_test.go") {
+	err := filepath.WalkDir(cmdRoot, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() || !strings.HasSuffix(path, "_test.go") {
 			return nil
 		}
-		raw, readErr := os.ReadFile(path)
-		if readErr == nil && strings.Contains(string(raw), "func "+proof+"(") {
-			found = true
+		file, parseErr := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+		if parseErr != nil {
+			return parseErr
+		}
+		for _, declaration := range file.Decls {
+			if function, ok := declaration.(*ast.FuncDecl); ok && function.Recv == nil {
+				index.tests[function.Name.Name] = true
+			}
 		}
 		return nil
 	})
-	return found
+	if err != nil {
+		return classicCoverage199ProofIndex{}, fmt.Errorf("index classic coverage tests: %w", err)
+	}
+	raw, err := os.ReadFile(filepath.Join(cmdRoot, "testdata", "classic-contract", "v1", "cases.json"))
+	if err != nil {
+		return classicCoverage199ProofIndex{}, fmt.Errorf("read classic cases: %w", err)
+	}
+	var cases struct {
+		Cases []struct {
+			ID string `json:"id"`
+		} `json:"cases"`
+	}
+	if err := json.Unmarshal(raw, &cases); err != nil {
+		return classicCoverage199ProofIndex{}, fmt.Errorf("decode classic cases: %w", err)
+	}
+	for _, item := range cases.Cases {
+		index.cases[item.ID] = true
+	}
+	return index, nil
 }
