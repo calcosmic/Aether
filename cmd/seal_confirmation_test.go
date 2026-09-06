@@ -96,6 +96,7 @@ func TestSealWisdomReviewRunsExactlyOncePerSeal(t *testing.T) {
 	if err := s.SaveJSON("COLONY_STATE.json", sealTestState("Wisdom review runs once")); err != nil {
 		t.Fatalf("save state: %v", err)
 	}
+	autoRecordSealConfirmationForTest(t, s)
 
 	rootCmd.SetArgs([]string{"seal"})
 	if err := rootCmd.Execute(); err != nil {
@@ -389,7 +390,7 @@ func TestSealAlwaysAsksBeforeFinishing(t *testing.T) {
 		s, _ := newSealConfirmationTestStore(t, "Nothing failing")
 		out := runSealForConfirmationTest(t, s)
 		assertSealNotCompleted(t, s)
-		if !strings.Contains(out, "Finish this project?") {
+		if !strings.Contains(out, "Seal this verified colony and write its Crowned Anthill record?") {
 			t.Fatalf("expected the plain confirmation question, got:\n%s", out)
 		}
 	})
@@ -399,8 +400,8 @@ func TestSealAlwaysAsksBeforeFinishing(t *testing.T) {
 		seedSealConfirmationIssue(t, s, "the deploy script is untested")
 		out := runSealForConfirmationTest(t, s)
 		assertSealNotCompleted(t, s)
-		if !strings.Contains(out, "Finish anyway with 1 check(s) failing") {
-			t.Fatalf("expected the second, explicit question naming the count, got:\n%s", out)
+		if !strings.Contains(out, "Residual risks retained") || !strings.Contains(out, "Seal this verified colony and write its Crowned Anthill record?") {
+			t.Fatalf("expected verified closure question with retained risk, got:\n%s", out)
 		}
 	})
 
@@ -422,7 +423,7 @@ func TestSealAlwaysAsksBeforeFinishing(t *testing.T) {
 			t.Fatalf("record answer: %v", err)
 		}
 		executeSealForConfirmationTest(t)
-		assertSealNotCompleted(t, s)
+		assertSealCompleted(t, s)
 	})
 
 	t.Run("named problems, recorded finish-anyway naming them: proceeds", func(t *testing.T) {
@@ -434,7 +435,7 @@ func TestSealAlwaysAsksBeforeFinishing(t *testing.T) {
 			t.Fatalf("record answer: %v", err)
 		}
 		executeSealForConfirmationTest(t)
-		assertSealCompleted(t, s)
+		assertSealNotCompleted(t, s)
 	})
 }
 
@@ -507,12 +508,8 @@ func TestSealNoAnswerKeepsTheLessons(t *testing.T) {
 	assertSealNotCompleted(t, s)
 
 	queenPath := filepath.Join(tmpDir, ".aether", "QUEEN.md")
-	data, err := os.ReadFile(queenPath)
-	if err != nil {
-		t.Fatalf("expected the review's lessons on local QUEEN.md even after a recorded no: %v", err)
-	}
-	if !strings.Contains(string(data), "Keep this lesson even when the owner says no") {
-		t.Fatalf("QUEEN.md missing the review's promoted lesson after a recorded no:\n%s", data)
+	if _, err := os.Stat(queenPath); !os.IsNotExist(err) {
+		t.Fatalf("unconfirmed seal must not mutate Queen memory before valid closure, stat err=%v", err)
 	}
 }
 

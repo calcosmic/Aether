@@ -401,6 +401,7 @@ func TestSealRecoversMissingPlanFromPlanningArtifactWithoutPlanRef(t *testing.T)
 	store = s
 	var out strings.Builder
 	stdout = &out
+	stderr = &out
 
 	goal := "Seal with recovered plan"
 	if err := store.SaveJSON("COLONY_STATE.json", colony.ColonyState{
@@ -436,30 +437,21 @@ func TestSealRecoversMissingPlanFromPlanningArtifactWithoutPlanRef(t *testing.T)
 	}
 
 	summaryPath := filepath.Join(root, ".aether", "CROWNED-ANTHILL.md")
-	if _, err := os.Stat(summaryPath); err != nil {
-		t.Fatalf("expected seal summary at %s: %v", summaryPath, err)
+	if _, err := os.Stat(summaryPath); !os.IsNotExist(err) {
+		t.Fatalf("seal must not reconstruct a missing plan or write a closure summary, stat err=%v", err)
 	}
 
 	var persisted colony.ColonyState
 	if err := store.LoadJSON("COLONY_STATE.json", &persisted); err != nil {
 		t.Fatalf("failed to reload sealed state: %v", err)
 	}
-	if len(persisted.Plan.Phases) != 2 {
-		t.Fatalf("persisted phase count = %d, want 2", len(persisted.Plan.Phases))
-	}
-	for _, phase := range persisted.Plan.Phases {
-		if phase.Status != colony.PhaseCompleted {
-			t.Fatalf("phase %d status = %s, want completed", phase.ID, phase.Status)
-		}
+	if len(persisted.Plan.Phases) != 0 {
+		t.Fatalf("seal must retain the missing-plan state for owner repair, got %d phases", len(persisted.Plan.Phases))
 	}
 	if persisted.CurrentPhase != 2 {
 		t.Fatalf("current_phase = %d, want 2", persisted.CurrentPhase)
 	}
-	events := strings.Join(persisted.Events, "\n")
-	if !strings.Contains(events, "plan_recovered|state|Recovered 2 phases") {
-		t.Fatalf("expected plan recovery event, got %v", persisted.Events)
-	}
-	if !strings.Contains(events, "sealed|seal|Colony sealed at Crowned Anthill") {
-		t.Fatalf("expected seal event, got %v", persisted.Events)
+	if !strings.Contains(out.String(), "no colony plan exists to verify") {
+		t.Fatalf("expected typed missing-plan refusal, got %s", out.String())
 	}
 }

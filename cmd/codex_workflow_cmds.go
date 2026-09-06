@@ -1454,7 +1454,6 @@ func buildSealEventBusBytes(input SealTransactionInput, outcome colony.SealOutco
 		before = append(before, '\n')
 	}
 	expires := input.Now.Add(30 * 24 * time.Hour).Format(time.RFC3339)
-	consolidationPayload, _ := json.Marshal(map[string]any{"status": "retained", "transaction_id": outcome.Transaction.ID})
 	status := "sealed"
 	if outcome.Disposition == colony.SealDispositionForcedIncomplete {
 		status = "forced_incomplete"
@@ -1471,10 +1470,7 @@ func buildSealEventBusBytes(input SealTransactionInput, outcome colony.SealOutco
 	if err != nil {
 		return nil, err
 	}
-	eventsToAppend := []events.Event{
-		{ID: outcome.Transaction.ID + "-consolidation", Topic: "consolidation.seal", Payload: consolidationPayload, Source: "seal", Timestamp: input.Now.Format(time.RFC3339), TTLDays: 30, ExpiresAt: expires},
-		{ID: outcome.Transaction.ID + "-event", Topic: events.CeremonyTopicChamberSeal, Payload: sealPayload, Source: "aether-seal", Timestamp: input.Now.Format(time.RFC3339), TTLDays: 30, ExpiresAt: expires},
-	}
+	eventsToAppend := []events.Event{{ID: outcome.Transaction.ID + "-event", Topic: events.CeremonyTopicChamberSeal, Payload: sealPayload, Source: "aether-seal", Timestamp: input.Now.Format(time.RFC3339), TTLDays: 30, ExpiresAt: expires}}
 	for _, event := range eventsToAppend {
 		line, marshalErr := json.Marshal(event)
 		if marshalErr != nil {
