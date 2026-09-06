@@ -14,7 +14,6 @@ package cmd
 // this map fails the build.
 var wrapperCommandNames = map[string]bool{
 	"archaeology":      true,
-	"abandon":          true,
 	"ask":              true,
 	"assumptions":      true,
 	"build":            true,
@@ -60,9 +59,7 @@ var wrapperCommandNames = map[string]bool{
 	"reference-index":  true,
 	"reference-list":   true,
 	"reference-match":  true,
-	"recover":          true,
 	"resume":           true,
-	"resume-dashboard": true,
 	"run":              true,
 	"seal":             true,
 	"shelf":            true,

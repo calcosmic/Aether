@@ -415,9 +415,11 @@ func contextCapsuleDecisionFromRanked(item colony.RankedContextCandidate) Contex
 
 // resumeDashboardCmd returns a read-only session recovery dashboard.
 var resumeDashboardCmd = &cobra.Command{
-	Use:   "resume-dashboard",
-	Short: "Show session recovery information without restoring handoff state",
-	Args:  cobra.NoArgs,
+	Use:         "resume-dashboard",
+	Short:       "Show session recovery information without restoring handoff state",
+	Hidden:      true,
+	Args:        cobra.NoArgs,
+	Annotations: map[string]string{"aether.io/internal-only": "true", "aether.io/read-only": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if store == nil {
 			outputErrorMessage("no store initialized")

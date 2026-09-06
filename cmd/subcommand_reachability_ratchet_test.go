@@ -307,14 +307,18 @@ type registeredCommandInfo struct {
 
 // enumerateRegisteredCommands recursively walks the real, registered cobra
 // tree. Cobra's own generated "help" and "completion" commands are skipped —
-// they are not repo-owned and have no definition file to point at. Hidden
-// commands are NOT skipped: a hidden orphan is still an orphan.
+// they are not repo-owned and have no definition file to point at. A command
+// explicitly marked internal-only is parser or runtime compatibility plumbing,
+// not a public surface that needs a caller.
 func enumerateRegisteredCommands(root *cobra.Command) []registeredCommandInfo {
 	var out []registeredCommandInfo
 	var walk func(c *cobra.Command)
 	walk = func(c *cobra.Command) {
 		for _, child := range c.Commands() {
 			if child.Name() == "help" || child.Name() == "completion" {
+				continue
+			}
+			if child.Annotations["aether.io/internal-only"] == "true" {
 				continue
 			}
 			path := child.CommandPath()

@@ -56,7 +56,7 @@ func TestVisualOutputNeverLeaksRawWrapperCommands(t *testing.T) {
 		"Run `aether build 2 --force` to regenerate the build manifest.",
 		"Run `aether continue --skip-watchers --reconcile-task 2.1` to recover.",
 		"Run `aether update --force --download-binary` to refresh the runtime.",
-		"Run `aether recover --apply --force` to repair the manifest.",
+		"Run `aether maintenance recovery-inspect` to inspect recovery evidence.",
 		// skip-phase has no wrapper, so its flagged form must stay raw.
 		"Run `aether skip-phase 2 --force` only to abandon the phase.",
 	}, "\n")
@@ -82,7 +82,7 @@ func TestVisualOutputNeverLeaksRawWrapperCommands(t *testing.T) {
 				"/ant-update --force --download-binary",
 				// Recovery guidance is shown at the worst possible moment to
 				// hand someone a command they cannot type.
-				"/ant-recover --apply --force",
+				"/ant-maintenance recovery-inspect",
 			} {
 				if !strings.Contains(got, want) {
 					t.Errorf("expected %s in %s output, got:\n%s", want, platform, got)

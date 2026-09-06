@@ -31,7 +31,7 @@ var abandonCmd = &cobra.Command{
 	Short:        "Legacy forced-close migration route",
 	Hidden:       true,
 	Args:         cobra.NoArgs,
-	Annotations:  map[string]string{"aether.io/read-only": "true", "aether.io/store-free": "true"},
+	Annotations:  map[string]string{"aether.io/read-only": "true", "aether.io/store-free": "true", "aether.io/internal-only": "true"},
 	SilenceUsage: true,
 	RunE:         runAbandon,
 }
