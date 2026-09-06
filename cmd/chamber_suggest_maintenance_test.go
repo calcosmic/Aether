@@ -351,6 +351,39 @@ func TestChamberListGroupsByEffectiveScope(t *testing.T) {
 
 // --- Maintenance Tests ---
 
+func seedOwnedCleanupManifest(t *testing.T, s *storage.Store) map[string][]byte {
+	t.Helper()
+	owned := map[string][]byte{
+		"maintenance/test-owned-a.json": []byte("{\"artifact\":\"owned-a\"}\n"),
+		"maintenance/test-owned-b.json": []byte("{\"artifact\":\"owned-b\"}\n"),
+	}
+	for path, content := range owned {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(s.BasePath(), path)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(s.BasePath(), path), content, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	manifest := maintenanceCleanupManifest{
+		SchemaVersion: maintenanceCleanupSchemaVersion,
+		Owner:         maintenanceCleanupOwner,
+		Checkpoint:    maintenanceCleanupCheckpoint,
+		Targets: []maintenanceCleanupTarget{
+			{RelativePath: "maintenance/test-owned-a.json", Owner: maintenanceCleanupOwner, Digest: lifecycleDigest(owned["maintenance/test-owned-a.json"])},
+			{RelativePath: "maintenance/test-owned-b.json", Owner: maintenanceCleanupOwner, Digest: lifecycleDigest(owned["maintenance/test-owned-b.json"])},
+		},
+	}
+	manifestBytes, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(s.BasePath(), maintenanceCleanupManifestRel), manifestBytes, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return owned
+}
+
 func TestDataCleanDryRun(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -369,6 +402,7 @@ func TestDataCleanDryRun(t *testing.T) {
 		},
 	}
 	s.SaveJSON("pheromones.json", pf)
+	seedOwnedCleanupManifest(t, s)
 
 	rootCmd.SetArgs([]string{"data-clean"})
 
@@ -408,6 +442,7 @@ func TestDataCleanConfirm(t *testing.T) {
 		},
 	}
 	s.SaveJSON("pheromones.json", pf)
+	owned := seedOwnedCleanupManifest(t, s)
 
 	rootCmd.SetArgs([]string{"data-clean", "--confirm"})
 
@@ -418,18 +453,24 @@ func TestDataCleanConfirm(t *testing.T) {
 
 	env := parseEnvelope(t, buf.String())
 	result := env["result"].(map[string]interface{})
-	if result["removed"] != float64(2) {
-		t.Errorf("removed = %v, want 2 (test_ and demo_ entries)", result["removed"])
+	if result["removed"] != float64(3) {
+		t.Errorf("removed = %v, want 3 (two owned artifacts and their manifest)", result["removed"])
 	}
 	if result["dry_run"] != false {
 		t.Errorf("dry_run = %v, want false with --confirm", result["dry_run"])
 	}
 
-	// Verify the real signal is still there
+	// Prefixes are not deletion authority; all signals remain, while exactly
+	// the manifest-owned bytes were removed.
 	var updated colony.PheromoneFile
 	s.LoadJSON("pheromones.json", &updated)
-	if len(updated.Signals) != 1 {
-		t.Errorf("expected 1 signal remaining, got %d", len(updated.Signals))
+	if len(updated.Signals) != 3 {
+		t.Errorf("expected all 3 signals remaining, got %d", len(updated.Signals))
+	}
+	for path := range owned {
+		if _, err := os.Stat(filepath.Join(s.BasePath(), path)); !os.IsNotExist(err) {
+			t.Errorf("owned cleanup target %s still exists: %v", path, err)
+		}
 	}
 }
 
