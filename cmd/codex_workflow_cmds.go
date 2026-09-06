@@ -1455,7 +1455,22 @@ func buildSealEventBusBytes(input SealTransactionInput, outcome colony.SealOutco
 	}
 	expires := input.Now.Add(30 * 24 * time.Hour).Format(time.RFC3339)
 	consolidationPayload, _ := json.Marshal(map[string]any{"status": "retained", "transaction_id": outcome.Transaction.ID})
-	sealPayload, _ := json.Marshal(map[string]any{"outcome_id": outcome.OutcomeID, "disposition": outcome.Disposition, "owner_reason": outcome.OwnerReason})
+	status := "sealed"
+	if outcome.Disposition == colony.SealDispositionForcedIncomplete {
+		status = "forced_incomplete"
+	}
+	goal := ""
+	if input.State.Goal != nil {
+		goal = strings.TrimSpace(*input.State.Goal)
+	}
+	sealPayload, err := json.Marshal(events.CeremonyPayload{
+		Phase: input.State.CurrentPhase, PhaseName: "Crowned Anthill",
+		TaskID: outcome.OutcomeID, Task: "seal", Status: status, Message: goal,
+		Completed: len(outcome.CompletedPhases), Total: len(input.State.Plan.Phases),
+	})
+	if err != nil {
+		return nil, err
+	}
 	eventsToAppend := []events.Event{
 		{ID: outcome.Transaction.ID + "-consolidation", Topic: "consolidation.seal", Payload: consolidationPayload, Source: "seal", Timestamp: input.Now.Format(time.RFC3339), TTLDays: 30, ExpiresAt: expires},
 		{ID: outcome.Transaction.ID + "-event", Topic: events.CeremonyTopicChamberSeal, Payload: sealPayload, Source: "aether-seal", Timestamp: input.Now.Format(time.RFC3339), TTLDays: 30, ExpiresAt: expires},
