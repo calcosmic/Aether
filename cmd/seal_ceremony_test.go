@@ -451,9 +451,10 @@ func TestSealBlockerCheck(t *testing.T) {
 
 	_, errOut := runSealCmd(t, s, tmpDir, nil)
 
-	// Should output error containing BLOCKED
-	if !strings.Contains(errOut, "BLOCKED") {
-		t.Errorf("expected error output to contain 'BLOCKED', got: %s", errOut)
+	// Current preflight names the typed evidence refusal rather than a
+	// decorative blocker banner.
+	if !strings.Contains(errOut, "normal seal requires verified completion") {
+		t.Errorf("expected typed completion refusal, got: %s", errOut)
 	}
 	if !strings.Contains(errOut, "blk-001") {
 		t.Errorf("expected error output to contain blocker ID 'blk-001', got: %s", errOut)
@@ -495,9 +496,8 @@ func TestSealForceBlockers(t *testing.T) {
 	// override is recorded, never waved through silently.
 	out, _ := runSealCmd(t, s, tmpDir, []string{"--force", "--reason", "issue tracked externally; shipping"})
 
-	// Should contain the warning about overriding
-	if !strings.Contains(out, "WARNING: Overriding") {
-		t.Errorf("expected stdout to contain override warning, got: %s", out)
+	if !strings.Contains(out, "forced_incomplete_closure") || !strings.Contains(out, "issue tracked externally; shipping") {
+		t.Errorf("expected forced-incomplete transaction evidence, got: %s", out)
 	}
 
 	// Verify colony state WAS mutated (COMPLETED)
@@ -534,9 +534,8 @@ func TestSealIssueWarning(t *testing.T) {
 
 	out, _ := runSealCmd(t, s, tmpDir, nil)
 
-	// Should contain the NOTE about unresolved issues
-	if !strings.Contains(out, "NOTE:") {
-		t.Errorf("expected stdout to contain NOTE about issues, got: %s", out)
+	if !strings.Contains(out, "Residual risks retained") || !strings.Contains(out, "issue-001") {
+		t.Errorf("expected retained-risk transaction evidence, got: %s", out)
 	}
 
 	// Verify colony state WAS mutated (seal proceeded)
