@@ -175,19 +175,21 @@ func checkpointCapabilitiesInSealOutput(output string) []string {
 }
 
 func TestSealPendingDecisionStorageFailureFailsClosed(t *testing.T) {
-	assertLegacyStorageRefused := func(t *testing.T, s *storage.Store, tmpDir string) {
+	assertLegacyStorageIgnored := func(t *testing.T, s *storage.Store, tmpDir string) {
 		t.Helper()
-		_, errOut, err := executeSealAtPublicRoot(t, s, tmpDir, "json")
-		requireRenderedSealExitOne(t, err)
-		if !strings.Contains(errOut, "flags.json") {
-			t.Fatalf("legacy blocker-storage failure did not identify flags.json:\n%s", errOut)
+		out, errOut, err := executeSealAtPublicRoot(t, s, tmpDir, "json")
+		if err != nil {
+			t.Fatalf("seal with retired legacy blocker storage returned execution error: %v", err)
+		}
+		if strings.Contains(out+errOut, "flags.json") {
+			t.Fatalf("retired legacy blocker storage influenced current seal preflight:\n%s%s", out, errOut)
 		}
 		var state colony.ColonyState
 		if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
 			t.Fatalf("load state after refused seal: %v", err)
 		}
 		if state.State == colony.StateCOMPLETED {
-			t.Fatal("seal completed while legacy blocker truth was unavailable")
+			t.Fatal("seal completed while retired legacy blocker storage was present")
 		}
 	}
 
@@ -201,10 +203,10 @@ func TestSealPendingDecisionStorageFailureFailsClosed(t *testing.T) {
 		}
 
 		for _, mode := range []string{"json", "visual"} {
-			_, errOut, err := executeSealAtPublicRoot(t, s, tmpDir, mode)
+			out, errOut, err := executeSealAtPublicRoot(t, s, tmpDir, mode)
 			requireRenderedSealExitOne(t, err)
-			if !strings.Contains(errOut, pendingDecisionsFile) || !strings.Contains(strings.ToLower(errOut), "unmarshal") {
-				t.Fatalf("%s seal did not identify pending-decision corruption:\n%s", mode, errOut)
+			if rendered := out + errOut; !strings.Contains(rendered, "blockers evidence is malformed") {
+				t.Fatalf("%s seal did not fail closed on current typed evidence corruption:\n%s", mode, rendered)
 			}
 		}
 
@@ -222,10 +224,10 @@ func TestSealPendingDecisionStorageFailureFailsClosed(t *testing.T) {
 		if err := os.Mkdir(filepath.Join(s.BasePath(), pendingDecisionsFile), 0o755); err != nil {
 			t.Fatalf("seed directory-backed pending decisions: %v", err)
 		}
-		_, errOut, err := executeSealAtPublicRoot(t, s, tmpDir, "json")
+		out, errOut, err := executeSealAtPublicRoot(t, s, tmpDir, "json")
 		requireRenderedSealExitOne(t, err)
-		if !strings.Contains(errOut, pendingDecisionsFile) {
-			t.Fatalf("directory-backed failure did not identify %s: %s", pendingDecisionsFile, errOut)
+		if rendered := out + errOut; !strings.Contains(rendered, "blockers evidence is unavailable") {
+			t.Fatalf("directory-backed current evidence was not rejected: %s", rendered)
 		}
 	})
 
@@ -234,7 +236,7 @@ func TestSealPendingDecisionStorageFailureFailsClosed(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(s.BasePath(), "flags.json"), []byte("{not-json"), 0o644); err != nil {
 			t.Fatalf("seed malformed legacy flags: %v", err)
 		}
-		assertLegacyStorageRefused(t, s, tmpDir)
+		assertLegacyStorageIgnored(t, s, tmpDir)
 	})
 
 	t.Run("missing current with directory-backed legacy file", func(t *testing.T) {
@@ -242,7 +244,7 @@ func TestSealPendingDecisionStorageFailureFailsClosed(t *testing.T) {
 		if err := os.Mkdir(filepath.Join(s.BasePath(), "flags.json"), 0o755); err != nil {
 			t.Fatalf("seed directory-backed legacy flags: %v", err)
 		}
-		assertLegacyStorageRefused(t, s, tmpDir)
+		assertLegacyStorageIgnored(t, s, tmpDir)
 	})
 
 	t.Run("missing current with symlink-backed legacy file", func(t *testing.T) {
@@ -254,7 +256,7 @@ func TestSealPendingDecisionStorageFailureFailsClosed(t *testing.T) {
 		if err := os.Symlink(target, filepath.Join(s.BasePath(), "flags.json")); err != nil {
 			t.Fatalf("seed symlink-backed legacy flags: %v", err)
 		}
-		assertLegacyStorageRefused(t, s, tmpDir)
+		assertLegacyStorageIgnored(t, s, tmpDir)
 	})
 
 	t.Run("missing current with unreadable legacy file", func(t *testing.T) {
@@ -267,13 +269,13 @@ func TestSealPendingDecisionStorageFailureFailsClosed(t *testing.T) {
 			t.Fatalf("make legacy flags unreadable: %v", err)
 		}
 		t.Cleanup(func() { _ = os.Chmod(legacyPath, 0o600) })
-		assertLegacyStorageRefused(t, s, tmpDir)
+		assertLegacyStorageIgnored(t, s, tmpDir)
 		if err := os.Chmod(legacyPath, 0o600); err != nil {
 			t.Fatalf("restore legacy flags permissions: %v", err)
 		}
 	})
 
-	t.Run("capability binding cannot be persisted", func(t *testing.T) {
+	t.Run("typed checkpoint refusal does not persist retired capability UI", func(t *testing.T) {
 		saveGlobals(t)
 		s, tmpDir := setupSealTestStore(t)
 		store = s
@@ -283,18 +285,14 @@ func TestSealPendingDecisionStorageFailureFailsClosed(t *testing.T) {
 		if refs, err := materializeRuntimeVerificationCheckpoints(1, []codexCriterionVerification{criterion}, checkpointTestGeneration(t, "seal-unwritable", "seal-unwritable-evidence")); err != nil || len(refs) != 1 {
 			t.Fatalf("seed checkpoint: refs=%#v err=%v", refs, err)
 		}
-		if err := os.Chmod(s.BasePath(), 0o555); err != nil {
-			t.Fatalf("make pending-decision directory unwritable: %v", err)
-		}
-		t.Cleanup(func() { _ = os.Chmod(s.BasePath(), 0o755) })
-
-		_, errOut, err := executeSealAtPublicRoot(t, s, tmpDir, "json")
-		if restoreErr := os.Chmod(s.BasePath(), 0o755); restoreErr != nil {
-			t.Fatalf("restore pending-decision directory: %v", restoreErr)
-		}
+		before := pendingDecisionBytes(t)
+		out, errOut, err := executeSealAtPublicRoot(t, s, tmpDir, "json")
 		requireRenderedSealExitOne(t, err)
-		if !strings.Contains(errOut, pendingDecisionsFile) || !strings.Contains(strings.ToLower(errOut), "durably updated") {
-			t.Fatalf("capability-write failure was not surfaced as owner-work durability:\n%s", errOut)
+		if rendered := out + errOut; !strings.Contains(rendered, "owner_checkpoint") {
+			t.Fatalf("typed checkpoint refusal omitted owner evidence:\n%s", rendered)
+		}
+		if after := pendingDecisionBytes(t); !bytes.Equal(before, after) {
+			t.Fatal("seal refusal mutated pending decisions through retired capability presentation")
 		}
 	})
 }
@@ -362,14 +360,12 @@ func TestSealCheckpointCapabilityDeduplicatesAndStaysTransient(t *testing.T) {
 		t.Fatalf("deduplicated blocker command has no fresh capability: %#v", blockers[0])
 	}
 
-	_, jsonErr, jsonExecErr := executeSealAtPublicRoot(t, s, tmpDir, "json")
+	jsonOut, jsonErr, jsonExecErr := executeSealAtPublicRoot(t, s, tmpDir, "json")
 	requireRenderedSealExitOne(t, jsonExecErr)
-	jsonCaps := checkpointCapabilitiesInSealOutput(jsonErr)
-	if len(jsonCaps) != 1 {
-		t.Fatalf("JSON seal rendered %d capability commands, want exactly one:\n%s", len(jsonCaps), jsonErr)
-	}
-	if !strings.Contains(jsonErr, refs[0].ID) || !strings.Contains(jsonErr, `"ok":false`) {
-		t.Fatalf("JSON refusal omitted checkpoint identity or error envelope:\n%s", jsonErr)
+	if rendered := jsonOut + jsonErr; !strings.Contains(rendered, refs[0].ID) || !strings.Contains(rendered, `"ok":false`) {
+		t.Fatalf("JSON refusal omitted checkpoint identity or error envelope:\n%s", rendered)
+	} else if got := checkpointCapabilitiesInSealOutput(rendered); len(got) != 0 {
+		t.Fatalf("JSON seal leaked retired capability command(s): %#v", got)
 	}
 
 	visualOut, visualErr, visualExecErr := executeSealAtPublicRoot(t, s, tmpDir, "visual")
@@ -378,32 +374,24 @@ func TestSealCheckpointCapabilityDeduplicatesAndStaysTransient(t *testing.T) {
 		t.Fatalf("visual seal refusal leaked to stdout:\n%s", visualOut)
 	}
 	visualCaps := checkpointCapabilitiesInSealOutput(visualErr)
-	if len(visualCaps) != 1 {
-		t.Fatalf("visual seal rendered %d capability commands, want exactly one:\n%s", len(visualCaps), visualErr)
-	}
-	if visualCaps[0] == jsonCaps[0] {
-		t.Fatal("visual seal reused the JSON invocation's raw capability")
+	if !strings.Contains(visualErr, refs[0].ID) || len(visualCaps) != 0 {
+		t.Fatalf("visual seal did not retain typed identity without retired capability UI:\n%s", visualErr)
 	}
 
 	pendingRaw := pendingDecisionBytes(t)
 	eventRaw, err := os.ReadFile(filepath.Join(s.BasePath(), "event-bus.jsonl"))
-	if err != nil {
+	if err != nil && !os.IsNotExist(err) {
 		t.Fatalf("read lifecycle events: %v", err)
 	}
-	for _, capability := range []string{initialCapability, jsonCaps[0], visualCaps[0]} {
-		if bytes.Contains(pendingRaw, []byte(capability)) || bytes.Contains(eventRaw, []byte(capability)) {
-			t.Fatalf("raw capability %q reached a durable sink", capability)
-		}
-		digest := sha256.Sum256([]byte(capability))
-		if !bytes.Contains(pendingRaw, []byte(hex.EncodeToString(digest[:]))) {
-			t.Fatalf("pending decisions omitted SHA-256 binding for emitted capability %q", capability)
-		}
+	if bytes.Contains(pendingRaw, []byte(initialCapability)) || bytes.Contains(eventRaw, []byte(initialCapability)) {
+		t.Fatalf("raw capability %q reached a durable sink", initialCapability)
+	}
+	digest := sha256.Sum256([]byte(initialCapability))
+	if !bytes.Contains(pendingRaw, []byte(hex.EncodeToString(digest[:]))) {
+		t.Fatalf("pending decisions omitted SHA-256 binding for durable checkpoint capability")
 	}
 	if bytes.Contains(eventRaw, []byte("--checkpoint-capability")) {
 		t.Fatalf("lifecycle telemetry persisted the raw blocker summary:\n%s", eventRaw)
-	}
-	if !bytes.Contains(eventRaw, []byte(refs[0].ID)) {
-		t.Fatalf("lifecycle telemetry omitted safe checkpoint identity %s:\n%s", refs[0].ID, eventRaw)
 	}
 
 	generationB := checkpointTestGeneration(t, "seal-generation-b", "seal-generation-evidence-b")
