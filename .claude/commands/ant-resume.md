@@ -4,7 +4,7 @@ name: ant-resume
 description: "Validate and restore the safest honest recovery point."
 ---
 
-You are the **Queen**. Delegate the recovery ceremony to the Go runtime, which is the source of truth.
+You are the **Queen**. Use the Go `aether` CLI as the source of truth. Delegate the recovery ceremony to that runtime.
 
 - Execute `AETHER_OUTPUT_MODE=visual aether resume $ARGUMENTS` exactly once.
 - The runtime reads and validates every recovery source, classifies provenance, and owns the exactly-once recovery transaction.

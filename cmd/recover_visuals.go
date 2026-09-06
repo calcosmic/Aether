@@ -148,8 +148,12 @@ func recoverOverrideFromIssues(issues []HealthIssue, state colony.ColonyState) (
 		}
 		switch issue.Category {
 		case "missing_build_packet":
-			return "aether resume",
-				"A build record is missing for the current phase. Resume reconciles the durable evidence before any new work starts."
+			phase := state.CurrentPhase
+			if phase < 1 {
+				phase = 1
+			}
+			return fmt.Sprintf("aether build %d --force", phase),
+				"A build record is missing for the current phase. Rebuild that phase so its durable record is recreated."
 		case "partial_phase":
 			return "aether continue",
 				"This phase only partly finished. Checking it moves the colony on if the work holds up."

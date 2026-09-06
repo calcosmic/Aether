@@ -42,6 +42,11 @@ var statusCmd = &cobra.Command{
 			renderRecoveryMenu("status", colonyStateLoadMessage(err), nil)
 			return nil
 		}
+		root := resolveAetherRoot()
+		facts, factsErr := loadLifecycleFacts(root, store, time.Now().UTC())
+		if factsErr != nil {
+			facts = unavailableLifecycleFacts(root, time.Now().UTC(), factsErr.Error())
+		}
 
 		// Keep the mature dashboard as the authoritative status payload and
 		// visual, then add the shared resolver answer through buildStatusResult.
@@ -49,6 +54,9 @@ var statusCmd = &cobra.Command{
 		// map, so neither JSON nor the terminal loses dashboard facts or decides
 		// the next action twice.
 		result := buildStatusResult(state, store)
+		projection := projectLifecycle(facts, LifecycleViewFull, detectPlatform())
+		projection.Command = "status"
+		result["lifecycle"] = projection
 		outputWorkflow(result, renderDashboard(state, store, result))
 		return nil
 	},

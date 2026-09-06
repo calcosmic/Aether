@@ -61,6 +61,13 @@ wrapper: |
   - `/ant-maintenance skills inspect`
   - `/ant-maintenance skills diff --before <receipt> --after <receipt>`
 
+  Advanced runtime operations remain explicitly selectable:
+
+  - `aether maintenance recovery-inspect`
+  - `aether maintenance skills`
+  - `aether maintenance skills inspect`
+  - `aether maintenance skills diff --before <receipt> --after <receipt>`
+
   Do not expose root-level skill list, diff, or cache commands.
 
   - Do not write colony state, session, evidence, registry, chamber, hub, or generated files from this wrapper.

@@ -474,6 +474,9 @@ var initCmd = &cobra.Command{
 			return nil
 		}
 		visual := appendLifecycleCloseoutVisual(renderFrontDoorInitVisual(state, setupOutcome, territory, dataDir, hiveSeeded, proposals, researchDocs...), result, detectPlatform())
+		if answer, ok := nextActionFromResult(result); ok && strings.TrimSpace(answer.Command) != "" {
+			visual += "\nNext Up: " + lifecycleProjectionCommand(answer.Command, detectPlatform())
+		}
 		outputWorkflow(result, visual)
 		return nil
 	},

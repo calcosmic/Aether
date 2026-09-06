@@ -114,7 +114,14 @@ func TestMigratedLifecycleSurfacesAgree(t *testing.T) {
 		t.Fatalf("write the fixture project through the runtime's own store: %v", err)
 	}
 
-	want := resolveNextAction(loadNextActionInput()).Command
+	answer := resolveNextAction(loadNextActionInput())
+	want := answer.Command
+	if want == "" && answer.Projection != nil && len(answer.Projection.NextAction.Choices) > 0 {
+		// Equal execution modes deliberately have no preferred primary. The
+		// closing-card matcher reads the first rendered Run line, so compare it
+		// with the first equal choice without inventing a recommendation.
+		want = answer.Projection.NextAction.Choices[0].RuntimeCommand
+	}
 	if want == "" {
 		t.Fatal("the one resolver named no command for this project at all")
 	}
@@ -151,12 +158,22 @@ func TestMigratedLifecycleSurfacesArePlatformCorrect(t *testing.T) {
 			}
 
 			answer := resolveNextAction(loadNextActionInput())
-			// The value a wrapper and the automation EXECUTE is the runtime
-			// form on every platform. Handing `/ant-build 1` to a shell is a
-			// broken command, which is why the answer never carries one.
-			if !strings.HasPrefix(answer.Command, "aether ") {
-				t.Errorf("on %s the machine-readable answer is %q, which is not something that can be run",
-					tc.platform, answer.Command)
+			// Equal execution modes deliberately leave the primary blank; each
+			// emitted choice is still a runtime-form command for automation.
+			machineCommands := []string{answer.Command}
+			if answer.Projection != nil {
+				for _, choice := range answer.Projection.NextAction.Choices {
+					machineCommands = append(machineCommands, choice.RuntimeCommand)
+				}
+			}
+			for _, command := range machineCommands {
+				if command == "" {
+					continue
+				}
+				if !strings.HasPrefix(command, "aether ") {
+					t.Errorf("on %s the machine-readable answer is %q, which is not something that can be run",
+						tc.platform, command)
+				}
 			}
 			for _, alternative := range answer.Alternatives {
 				if !strings.HasPrefix(alternative.Command, "aether ") {
@@ -226,7 +243,15 @@ func TestEveryCommandTheSevenCanRecommendResolves(t *testing.T) {
 			}
 			answer := resolveNextAction(loadNextActionInput())
 
-			commands := []string{answer.Command}
+			commands := make([]string, 0, 1+len(answer.Alternatives))
+			if answer.Command != "" {
+				commands = append(commands, answer.Command)
+			}
+			if answer.Projection != nil {
+				for _, choice := range answer.Projection.NextAction.Choices {
+					commands = append(commands, choice.RuntimeCommand)
+				}
+			}
 			for _, alternative := range answer.Alternatives {
 				commands = append(commands, alternative.Command)
 			}

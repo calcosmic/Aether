@@ -12,7 +12,7 @@ The runtime output must preserve these visible contracts:
 
 - Empty line 1: `No colony is active`
 - Empty line 2: `Start a guided colony for one goal with /ant-init "goal".`
-  - Active standing: `Colony: {identity} | Goal: {accepted goal} | Episode: {episode} | Phase: {current}/{total} | Standing: {standing} | Ants: {acting castes or No ants are active} | Blockers: {count} | Next Up: {exact action}`
+- Active standing: `Colony: {identity} | Goal: {accepted goal} | Episode: {episode} | Phase: {current}/{total} | Standing: {standing} | Ants: {acting castes or No ants are active} | Blockers: {count} | Next Up: {exact action}`
 
 ## The Colony Lifecycle
 
