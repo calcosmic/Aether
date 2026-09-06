@@ -26,7 +26,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "front-door.help-no-colony",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -41,7 +41,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -87,7 +87,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "front-door.help-no-colony",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -102,7 +102,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -148,7 +148,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "front-door.help-active-colony",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -163,7 +163,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -209,7 +209,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "front-door.help-active-colony",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -224,7 +224,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -270,7 +270,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "front-door.init-first",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -285,7 +285,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -331,7 +331,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "front-door.init-first",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -346,7 +346,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -392,7 +392,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "territory.fresh",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -407,7 +407,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -453,7 +453,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "territory.fresh",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -468,7 +468,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -514,7 +514,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "territory.refreshed",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -529,7 +529,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -575,7 +575,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "territory.refreshed",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -590,7 +590,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -636,7 +636,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "territory.unavailable",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -651,7 +651,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -697,7 +697,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "territory.unavailable",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -712,7 +712,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -758,7 +758,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "territory.init-active-refusal",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -773,7 +773,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -819,7 +819,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "territory.init-active-refusal",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -834,7 +834,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -880,7 +880,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "autopilot.valid",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -895,7 +895,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -941,7 +941,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "autopilot.valid",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -956,7 +956,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -1002,7 +1002,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "autopilot.repair",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -1017,7 +1017,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -1063,7 +1063,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "autopilot.repair",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -1078,7 +1078,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -1124,7 +1124,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "autopilot.debt",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -1139,7 +1139,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -1185,7 +1185,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "autopilot.debt",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -1200,7 +1200,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -1246,7 +1246,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "autopilot.no-colony",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -1261,7 +1261,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -1307,7 +1307,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "autopilot.no-colony",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -1322,7 +1322,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -1368,7 +1368,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "autopilot.authority-fence",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -1383,7 +1383,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -1429,7 +1429,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "autopilot.authority-fence",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -1444,7 +1444,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -1490,7 +1490,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "orientation.status-full",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -1505,7 +1505,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -1551,7 +1551,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "orientation.status-full",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -1566,7 +1566,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -1612,7 +1612,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "orientation.status-compact",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -1627,7 +1627,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -1673,7 +1673,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "orientation.status-compact",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -1688,7 +1688,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -1734,7 +1734,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "orientation.phase",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -1749,7 +1749,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -1795,7 +1795,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "orientation.phase",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -1810,7 +1810,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -1856,7 +1856,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "orientation.history",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -1871,7 +1871,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -1917,7 +1917,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "orientation.history",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -1932,7 +1932,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -1978,7 +1978,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "orientation.watch-idle",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -1993,7 +1993,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -2039,7 +2039,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "orientation.watch-idle",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -2054,7 +2054,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -2100,7 +2100,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "orientation.read-only",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -2115,7 +2115,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -2161,7 +2161,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "orientation.read-only",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -2176,7 +2176,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -2222,7 +2222,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "orientation.unavailable",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -2237,7 +2237,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -2283,7 +2283,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "orientation.unavailable",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -2298,7 +2298,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -2344,7 +2344,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "steering.focus",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -2359,7 +2359,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -2405,7 +2405,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "steering.focus",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -2420,7 +2420,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -2466,7 +2466,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "steering.feedback",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -2481,7 +2481,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -2527,7 +2527,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "steering.feedback",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -2542,7 +2542,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -2588,7 +2588,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "steering.redirect",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -2603,7 +2603,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -2649,7 +2649,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "steering.redirect",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -2664,7 +2664,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -2710,7 +2710,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "steering.swarm",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -2725,7 +2725,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -2771,7 +2771,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "steering.swarm",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -2786,7 +2786,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -2832,7 +2832,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "pause-resume.clean-handoff",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -2847,7 +2847,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -2893,7 +2893,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "pause-resume.clean-handoff",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -2908,7 +2908,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -2954,7 +2954,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "pause-resume.stale-handoff",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -2969,7 +2969,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -3015,7 +3015,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "pause-resume.stale-handoff",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -3030,7 +3030,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -3076,7 +3076,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "pause-resume.reconstruction",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -3091,7 +3091,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -3137,7 +3137,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "pause-resume.reconstruction",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -3152,7 +3152,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -3198,7 +3198,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "pause-resume.legacy-hidden",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -3213,7 +3213,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -3259,7 +3259,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "pause-resume.legacy-hidden",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -3274,7 +3274,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -3320,7 +3320,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "pause-resume.journal-fault",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -3335,7 +3335,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -3381,7 +3381,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "pause-resume.journal-fault",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -3396,7 +3396,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -3442,7 +3442,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "pause-resume.conflict",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -3457,7 +3457,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -3503,7 +3503,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "pause-resume.conflict",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -3518,7 +3518,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -3564,7 +3564,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "pause-resume.replay",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -3579,7 +3579,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -3625,7 +3625,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "pause-resume.replay",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -3640,7 +3640,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -3686,7 +3686,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "seal.verified",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -3701,7 +3701,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -3747,7 +3747,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "seal.verified",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -3762,7 +3762,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -3808,7 +3808,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "seal.incomplete-refusal",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -3823,7 +3823,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -3869,7 +3869,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "seal.incomplete-refusal",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -3884,7 +3884,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -3930,7 +3930,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "seal.forced-residual",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -3945,7 +3945,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -3991,7 +3991,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "seal.forced-residual",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -4006,7 +4006,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -4052,7 +4052,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "seal.owner-checkpoint",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -4067,7 +4067,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -4113,7 +4113,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "seal.owner-checkpoint",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -4128,7 +4128,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -4174,7 +4174,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "entomb.verified",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -4189,7 +4189,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -4235,7 +4235,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "entomb.verified",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -4250,7 +4250,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -4296,7 +4296,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "entomb.forced",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -4311,7 +4311,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -4357,7 +4357,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "entomb.forced",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -4372,7 +4372,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -4418,7 +4418,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "entomb.corrupt-refusal",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -4433,7 +4433,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -4479,7 +4479,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "entomb.corrupt-refusal",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -4494,7 +4494,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -4540,7 +4540,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "entomb.publish-fault",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -4555,7 +4555,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -4601,7 +4601,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "entomb.publish-fault",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -4616,7 +4616,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -4662,7 +4662,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "entomb.replay",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -4677,7 +4677,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -4723,7 +4723,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "entomb.replay",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -4738,7 +4738,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -4784,7 +4784,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "maintenance.migration",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -4799,7 +4799,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -4845,7 +4845,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "maintenance.migration",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -4860,7 +4860,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -4906,7 +4906,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "maintenance.update",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -4921,7 +4921,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -4967,7 +4967,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "maintenance.update",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -4982,7 +4982,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -5028,7 +5028,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "maintenance.cleanup",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -5043,7 +5043,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -5089,7 +5089,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "maintenance.cleanup",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -5104,7 +5104,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -5150,7 +5150,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "maintenance.integrity",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -5165,7 +5165,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"
@@ -5211,7 +5211,7 @@
         }
       },
       "expected": {
-        "exit_code": 0,
+        "exit_code": 1,
         "outcome": "maintenance.integrity",
         "semantic_fields": {
           "fixture": "isolated-empty-colony",
@@ -5226,7 +5226,7 @@
           ]
         },
         "required_text_tokens": [
-          "Colony"
+          "colony"
         ],
         "forbidden_text_tokens": [
           "aether recover"

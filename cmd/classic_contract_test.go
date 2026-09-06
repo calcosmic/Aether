@@ -447,12 +447,23 @@ func classicContractExecutePlatform(t *testing.T, platform string) {
 			if result.ExitCode != testCase.Expected.ExitCode {
 				t.Fatalf("%s exit = %d, want %d\\nstdout:\\n%s\\nstderr:\\n%s", testCase.ID, result.ExitCode, testCase.Expected.ExitCode, result.Stdout, result.Stderr)
 			}
-			var envelope map[string]json.RawMessage
-			if err := json.Unmarshal([]byte(strings.TrimSpace(result.Stdout)), &envelope); err != nil {
-				t.Fatalf("%s JSON execution result: %v\\n%s", testCase.ID, err, result.Stdout)
+			response := result.Stdout
+			if result.ExitCode != 0 {
+				response = result.Stderr
 			}
-			if _, ok := envelope["ok"]; !ok {
-				t.Fatalf("%s has no structured ok field: %s", testCase.ID, result.Stdout)
+			var envelope map[string]json.RawMessage
+			if err := json.Unmarshal([]byte(strings.TrimSpace(response)), &envelope); err != nil {
+				t.Fatalf("%s JSON execution result: %v\\n%s", testCase.ID, err, response)
+			}
+			okValue, ok := envelope["ok"]
+			if !ok {
+				t.Fatalf("%s has no structured ok field: %s", testCase.ID, response)
+			}
+			if testCase.Expected.ExitCode == 0 && string(okValue) != "true" {
+				t.Fatalf("%s success response ok = %s, want true", testCase.ID, okValue)
+			}
+			if testCase.Expected.ExitCode != 0 && string(okValue) != "false" {
+				t.Fatalf("%s refusal response ok = %s, want false", testCase.ID, okValue)
 			}
 			after := classicContractDirectoryDigest(t, harness.repo)
 			if string(testCase.Expected.SemanticFields["pre_post_digest"]) == `"unchanged"` && before != after {

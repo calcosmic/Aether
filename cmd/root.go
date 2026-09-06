@@ -193,6 +193,18 @@ var rootCmd = &cobra.Command{
 		}
 
 		dataDir := storage.ResolveDataDir(context.Background())
+		// A first status inspection must be genuinely read-only.  Creating the
+		// store creates .aether/data and its sibling lock directory, which would
+		// turn a no-colony status request into a repository mutation.  Once a
+		// state file exists, status continues through the normal store-backed
+		// dashboard path.
+		if cmd.Name() == "status" && cmd.Annotations["aether.io/read-only"] == "true" {
+			if _, err := os.Stat(filepath.Join(dataDir, "COLONY_STATE.json")); errors.Is(err, os.ErrNotExist) {
+				store = nil
+				tracer = nil
+				return nil
+			}
+		}
 		s, err := storage.NewStore(dataDir)
 		if err != nil {
 			return fmt.Errorf("failed to initialize store: %w", err)

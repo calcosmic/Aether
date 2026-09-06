@@ -25,6 +25,14 @@ var statusCmd = &cobra.Command{
 	Args:        cobra.NoArgs,
 	Annotations: map[string]string{"aether.io/read-only": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if store == nil {
+			if shouldRenderVisualOutput(stdout) {
+				writeVisualOutput(stdout, renderNoColonyStatusVisual())
+				return nil
+			}
+			renderRecoveryMenu("status", colonyStateLoadMessage(errNoColonyInitialized), nil)
+			return nil
+		}
 		state, err := loadActiveColonyStateReadOnly()
 		if err != nil {
 			if shouldRenderVisualOutput(stdout) && strings.Contains(colonyStateLoadMessage(err), "No colony initialized") {

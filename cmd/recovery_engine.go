@@ -211,10 +211,15 @@ func recoveryOptionsForCommand(failedCmd string, errMsg string) []RecoveryOption
 func renderRecoveryMenu(failedCmd string, errMsg string, details interface{}) string {
 	options := recoveryOptionsForCommand(failedCmd, errMsg)
 
-	emitLoopBreakEvent("lifecycle_recovery",
-		recoveryTelemetrySignal(failedCmd, errMsg),
-		fmt.Sprintf("recovery menu displayed with %d option(s)", len(options)),
-		"aether-lifecycle")
+	// Status is expressly read-only. Its no-colony recovery response must not
+	// create an event stream or lock merely because the owner inspected an
+	// uninitialized repository.
+	if failedCmd != "status" {
+		emitLoopBreakEvent("lifecycle_recovery",
+			recoveryTelemetrySignal(failedCmd, errMsg),
+			fmt.Sprintf("recovery menu displayed with %d option(s)", len(options)),
+			"aether-lifecycle")
+	}
 
 	if shouldRenderVisualOutput(stderr) {
 		menu := buildVisualRecoveryMenu(failedCmd, errMsg, options)
