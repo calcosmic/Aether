@@ -143,6 +143,7 @@ func sealTransaction199Snapshot(t *testing.T, roots ...string) map[string][]byte
 }
 
 func TestSealTransaction199Atomic(t *testing.T) {
+	t.Parallel()
 	for target := 1; target <= 15; target++ {
 		t.Run(fmt.Sprintf("target-%02d", target), func(t *testing.T) {
 			fixture := newSealTransaction199Fixture(t, false)
@@ -266,6 +267,7 @@ func TestSealTransaction199ForcedTruth(t *testing.T) {
 }
 
 func TestSealTransaction199RetainsActiveState(t *testing.T) {
+	t.Parallel()
 	fixture := newSealTransaction199Fixture(t, false)
 	result, err := CommitSealTransaction(fixture.Input)
 	if err != nil {
@@ -282,6 +284,7 @@ func TestSealTransaction199RetainsActiveState(t *testing.T) {
 }
 
 func TestSealTransaction199MemoryProvenance(t *testing.T) {
+	t.Parallel()
 	fixture := newSealTransaction199Fixture(t, false)
 	result, err := CommitSealTransaction(fixture.Input)
 	if err != nil {
@@ -303,6 +306,7 @@ func TestSealTransaction199MemoryProvenance(t *testing.T) {
 }
 
 func TestSealTransaction199SignalRetention(t *testing.T) {
+	t.Parallel()
 	fixture := newSealTransaction199Fixture(t, false)
 	result, err := CommitSealTransaction(fixture.Input)
 	if err != nil {
@@ -319,6 +323,7 @@ func TestSealTransaction199SignalRetention(t *testing.T) {
 }
 
 func TestSealTransaction199WisdomPrivacy(t *testing.T) {
+	t.Parallel()
 	fixture := newSealTransaction199Fixture(t, false)
 	result, err := CommitSealTransaction(fixture.Input)
 	if err != nil {
@@ -378,6 +383,7 @@ func TestSealTransaction199HivePolicy(t *testing.T) {
 }
 
 func TestSealTransaction199NextActions(t *testing.T) {
+	t.Parallel()
 	fixture := newSealTransaction199Fixture(t, false)
 	result, err := CommitSealTransaction(fixture.Input)
 	if err != nil {
