@@ -701,8 +701,12 @@ func TestCLIInterruptedBuildResumesThroughForceRedispatch(t *testing.T) {
 		t.Fatalf("resume did not expose valid interrupted-build recovery: exit=%d\nstdout:\n%s\nstderr:\n%s", resume.ExitCode, resume.Stdout, resume.Stderr)
 	}
 	resumedState := harness.loadColonyState(t)
-	if resumedState.State != colony.StateEXECUTING || resumedState.BuildStartedAt != nil {
-		t.Fatalf("resumed interrupted state = %+v, want EXECUTING with cleared stale timestamp", resumedState)
+	if resumedState.State != colony.StateREADY || resumedState.BuildStartedAt != nil || resumedState.Plan.Phases[0].Status != colony.PhaseInProgress || resumedState.RecoveryProvenance == nil {
+		t.Fatalf("resumed interrupted state = %+v, want READY recovery orientation with the active phase retained", resumedState)
+	}
+	resumedAttempt := harness.loadBuildAttempt(t, 1)
+	if resumedAttempt.ID != interruptedAttempt.ID || resumedAttempt.Status != buildAttemptDispatching {
+		t.Fatalf("resume rewrote the interrupted build attempt before explicit redispatch: %+v", resumedAttempt)
 	}
 
 	env["AETHER_TEST_ADAPTER_MODE"] = "success"

@@ -929,12 +929,26 @@ func TestNearMissSuggestionOutput(t *testing.T) {
 		t.Fatalf("entomb returned error: %v", err)
 	}
 
-	output := buf.String()
-	if !strings.Contains(output, "eligible for hive promotion") {
-		t.Fatalf("expected suggestion about hive promotion in output, got: %s", output)
+	var response struct {
+		OK     bool `json:"ok"`
+		Result struct {
+			OutcomeKind        colony.OutcomeKind          `json:"outcome_kind"`
+			StateEffect        colony.LifecycleStateEffect `json:"state_effect"`
+			TransactionReceipt string                      `json:"transaction_receipt"`
+			Projection         LifecycleProjection         `json:"lifecycle_projection"`
+		} `json:"result"`
 	}
-	if !strings.Contains(output, "1 instincts eligible") {
-		t.Fatalf("expected '1 instincts eligible' in output, got: %s", output)
+	if err := json.Unmarshal(buf.Bytes(), &response); err != nil {
+		t.Fatalf("decode entomb lifecycle result: %v\n%s", err, buf.String())
+	}
+	if !response.OK || response.Result.OutcomeKind != colony.OutcomeKindArchived || response.Result.StateEffect != colony.LifecycleStateEffectCommitted {
+		t.Fatalf("entomb outcome = %+v, want committed archive", response.Result)
+	}
+	if response.Result.Projection.Provenance != colony.RecoveryProvenanceConfirmed || response.Result.Projection.NextAction.RuntimeCommand == "" || !strings.HasPrefix(response.Result.Projection.NextAction.RuntimeCommand, "aether init") {
+		t.Fatalf("entomb projection did not retain confirmed provenance and canonical next route: %+v", response.Result.Projection)
+	}
+	if response.Result.TransactionReceipt == "" {
+		t.Fatalf("entomb result omitted its committed transaction receipt: %+v", response.Result)
 	}
 }
 
