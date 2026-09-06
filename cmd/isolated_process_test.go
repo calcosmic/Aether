@@ -99,21 +99,31 @@ func runIsolatedTestBinaryWithBudget(t *testing.T, testName string, budget isola
 	if err := validateIsolatedProcessTestName(testName); err != nil {
 		return nil, err
 	}
-	if err := validateIsolatedProcessBudget(budget); err != nil {
+	deadline, hasDeadline := t.Deadline()
+	budget, err := clampIsolatedProcessBudgetForDeadline(budget, time.Now(), deadline, hasDeadline)
+	if err != nil {
 		return nil, err
 	}
 
-	return withIsolatedProcessTestHub(func(hubDir string) ([]byte, error) {
-		ctx, cancel := context.WithTimeout(context.Background(), budget.commandTimeout)
-		defer cancel()
+	ctx, cancel := context.WithTimeout(context.Background(), budget.commandTimeout)
+	defer cancel()
+	return withIsolatedProcessTestHub(ctx, func(hubDir string) ([]byte, error) {
+		contextDeadline, ok := ctx.Deadline()
+		if !ok {
+			return nil, errors.New("isolated process command context has no deadline")
+		}
+		childBudget, err := isolatedProcessBudgetForRemaining(budget, time.Until(contextDeadline))
+		if err != nil {
+			return nil, err
+		}
 
-		command, err := isolatedTestCommand(ctx, testName, hubDir, os.Getpid(), budget)
+		command, err := isolatedTestCommand(ctx, testName, hubDir, os.Getpid(), childBudget)
 		if err != nil {
 			return nil, err
 		}
 		output, runErr := command.CombinedOutput()
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			return output, errors.Join(runErr, fmt.Errorf("isolated child %s exceeded command timeout %s: %w", testName, budget.commandTimeout, ctxErr))
+			return output, errors.Join(runErr, fmt.Errorf("isolated child %s exceeded setup-and-command timeout %s: %w", testName, budget.commandTimeout, ctxErr))
 		}
 		return output, runErr
 	})
@@ -165,12 +175,45 @@ func isolatedProcessBudgetForDeadline(now, deadline time.Time, hasDeadline bool)
 	}, nil
 }
 
+func clampIsolatedProcessBudgetForDeadline(requested isolatedProcessBudget, now, deadline time.Time, hasDeadline bool) (isolatedProcessBudget, error) {
+	if err := validateIsolatedProcessBudget(requested); err != nil {
+		return isolatedProcessBudget{}, err
+	}
+	limit, err := isolatedProcessBudgetForDeadline(now, deadline, hasDeadline)
+	if err != nil {
+		return isolatedProcessBudget{}, err
+	}
+	if requested.commandTimeout > limit.commandTimeout {
+		requested.commandTimeout = limit.commandTimeout
+	}
+	maxTestTimeout := requested.commandTimeout - isolatedProcessChildExitCushion
+	if requested.testTimeout > maxTestTimeout {
+		requested.testTimeout = maxTestTimeout
+	}
+	if err := validateIsolatedProcessBudget(requested); err != nil {
+		return isolatedProcessBudget{}, err
+	}
+	return requested, nil
+}
+
+func isolatedProcessBudgetForRemaining(requested isolatedProcessBudget, remaining time.Duration) (isolatedProcessBudget, error) {
+	requested.commandTimeout = remaining
+	maxTestTimeout := remaining - isolatedProcessChildExitCushion
+	if requested.testTimeout > maxTestTimeout {
+		requested.testTimeout = maxTestTimeout
+	}
+	if err := validateIsolatedProcessBudget(requested); err != nil {
+		return isolatedProcessBudget{}, fmt.Errorf("insufficient time after isolated child hub setup: %w", err)
+	}
+	return requested, nil
+}
+
 func validateIsolatedProcessBudget(budget isolatedProcessBudget) error {
 	if budget.testTimeout <= 0 {
 		return fmt.Errorf("isolated child test timeout must be positive, got %s", budget.testTimeout)
 	}
-	if budget.commandTimeout <= budget.testTimeout {
-		return fmt.Errorf("isolated child command timeout %s must exceed test timeout %s", budget.commandTimeout, budget.testTimeout)
+	if budget.commandTimeout-budget.testTimeout < isolatedProcessChildExitCushion {
+		return fmt.Errorf("isolated child command timeout %s must leave test timeout %s the %s exit cushion", budget.commandTimeout, budget.testTimeout, isolatedProcessChildExitCushion)
 	}
 	return nil
 }
@@ -242,7 +285,10 @@ func isolatedProcessChildEnvironment(testName, hubDir string, parentPID int) []s
 	)
 }
 
-func withIsolatedProcessTestHub(run func(string) ([]byte, error)) (output []byte, err error) {
+func withIsolatedProcessTestHub(ctx context.Context, run func(string) ([]byte, error)) (output []byte, err error) {
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, fmt.Errorf("isolated process child hub setup deadline: %w", ctxErr)
+	}
 	hubDir, err := createIsolatedProcessTestHub()
 	if err != nil {
 		return nil, err
@@ -252,6 +298,9 @@ func withIsolatedProcessTestHub(run func(string) ([]byte, error)) (output []byte
 			err = errors.Join(err, fmt.Errorf("remove isolated process child hub %s: %w", hubDir, cleanupErr))
 		}
 	}()
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, fmt.Errorf("isolated process child hub setup exceeded deadline: %w", ctxErr)
+	}
 	return run(hubDir)
 }
 
@@ -396,8 +445,28 @@ func TestIsolatedProcessHelperDerivesBoundedBudget(t *testing.T) {
 		t.Fatalf("fallback budget = %+v", budget)
 	}
 
+	oversized := isolatedProcessBudget{testTimeout: 23 * time.Hour, commandTimeout: 24 * time.Hour}
+	budget, err = clampIsolatedProcessBudgetForDeadline(oversized, now, now.Add(90*time.Second), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if budget.commandTimeout != 80*time.Second || budget.testTimeout != 78*time.Second {
+		t.Fatalf("oversized explicit budget was not clamped to the live deadline: %+v", budget)
+	}
+
+	budget, err = isolatedProcessBudgetForRemaining(budget, 25*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if budget.commandTimeout != 25*time.Second || budget.testTimeout != 23*time.Second {
+		t.Fatalf("hub setup time was not charged against child execution: %+v", budget)
+	}
+
 	if _, err := isolatedProcessBudgetForDeadline(now, now.Add(isolatedProcessParentDeadlineCushion+isolatedProcessChildExitCushion), true); err == nil {
 		t.Fatal("deadline with no child execution room was accepted")
+	}
+	if _, err := clampIsolatedProcessBudgetForDeadline(oversized, now, now.Add(isolatedProcessParentDeadlineCushion+isolatedProcessChildExitCushion), true); err == nil {
+		t.Fatal("oversized explicit budget bypassed an insufficient live deadline")
 	}
 }
 
@@ -411,7 +480,7 @@ func TestIsolatedProcessHelperSeedsAndRemovesChildHub(t *testing.T) {
 
 	var childHubs []string
 	for iteration := 0; iteration < 2; iteration++ {
-		output, err := withIsolatedProcessTestHub(func(childHub string) ([]byte, error) {
+		output, err := withIsolatedProcessTestHub(context.Background(), func(childHub string) ([]byte, error) {
 			childHubs = append(childHubs, childHub)
 			if childHub == ambientHub {
 				return nil, errors.New("child reused ambient hub")
@@ -447,6 +516,19 @@ func TestIsolatedProcessHelperSeedsAndRemovesChildHub(t *testing.T) {
 	}
 	if _, err := os.Stat(ambientHub); err != nil {
 		t.Fatalf("child hub cleanup touched ambient hub: %v", err)
+	}
+
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	callbackRan := false
+	if _, err := withIsolatedProcessTestHub(canceled, func(string) ([]byte, error) {
+		callbackRan = true
+		return nil, nil
+	}); err == nil {
+		t.Fatal("canceled setup context was accepted")
+	}
+	if callbackRan {
+		t.Fatal("child callback ran after the setup deadline expired")
 	}
 }
 
