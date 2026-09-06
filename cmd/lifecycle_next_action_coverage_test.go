@@ -325,13 +325,10 @@ func TestEveryLifecycleCommandEndsWithNextAction(t *testing.T) {
 				}
 			}
 
-			if label, ok := lifecycleCoverageLabelForRendering[c.name]; ok {
-				assertLifecyclePlatformCorrectness(t, c.name, label)
-			} else {
-				assertResumingPlatformCorrectness(t)
-			}
 		})
 	}
+	assertLifecyclePlatformCorrectness(t, cases)
+	assertResumingPlatformCorrectness(t)
 }
 
 // envelopeNextActionCommands keeps a deliberate coequal action set coequal in
@@ -404,10 +401,11 @@ var lifecycleCoverageLabelForRendering = map[string]string{
 	"checking status":   "checking the status",
 }
 
-// assertLifecyclePlatformCorrectness is S-01 stated as a check, scoped to one
-// command: the spelling on screen follows the platform, and the machine-form
-// value migratedSurfaceRenderings drives from never does.
-func assertLifecyclePlatformCorrectness(t *testing.T, commandName, label string) {
+// assertLifecyclePlatformCorrectness is S-01 stated as a check for every
+// migrated command. Each platform gets one fixture and one real rendering map;
+// that map contains every migrated surface, so rebuilding it per command only
+// repeats the same production rendering work without adding coverage.
+func assertLifecyclePlatformCorrectness(t *testing.T, cases []lifecycleCoverageCase) {
 	t.Helper()
 	platforms := []struct{ platform, prefix string }{
 		{"claude", "/ant-"},
@@ -421,14 +419,21 @@ func assertLifecyclePlatformCorrectness(t *testing.T, commandName, label string)
 		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
 			t.Fatalf("write the fixture project: %v", err)
 		}
-		rendered, ok := migratedSurfaceRenderings(t, state)[label]
-		if !ok {
-			t.Fatalf("%s has no rendering labelled %q in migratedSurfaceRenderings", commandName, label)
-		}
-		got := commandInClosing(t, commandName+" ("+tc.platform+")", rendered)
-		if !strings.HasPrefix(got, tc.prefix) {
-			t.Errorf("%s on %s shows %q; this platform's owner types commands beginning %q",
-				commandName, tc.platform, got, tc.prefix)
+		renderings := migratedSurfaceRenderings(t, state)
+		for _, c := range cases {
+			label, ok := lifecycleCoverageLabelForRendering[c.name]
+			if !ok {
+				continue
+			}
+			rendered, ok := renderings[label]
+			if !ok {
+				t.Fatalf("%s has no rendering labelled %q in migratedSurfaceRenderings", c.name, label)
+			}
+			got := commandInClosing(t, c.name+" ("+tc.platform+")", rendered)
+			if !strings.HasPrefix(got, tc.prefix) {
+				t.Errorf("%s on %s shows %q; this platform's owner types commands beginning %q",
+					c.name, tc.platform, got, tc.prefix)
+			}
 		}
 	}
 }

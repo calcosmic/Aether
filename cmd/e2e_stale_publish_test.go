@@ -201,7 +201,7 @@ func TestE2EUpdateDetectsInfoStale(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	rootCmd.SetArgs([]string{"update"})
+	rootCmd.SetArgs([]string{"update", "--dry-run"})
 	defer rootCmd.SetArgs([]string{})
 
 	err = rootCmd.Execute()
@@ -214,6 +214,9 @@ func TestE2EUpdateDetectsInfoStale(t *testing.T) {
 		t.Fatalf("expected valid JSON output: %v, output: %s", err, buf.String())
 	}
 	inner, _ := result["result"].(map[string]interface{})
+	if inner["state_effect"] != "none" || inner["receipt"] != nil {
+		t.Fatalf("info dry-run must report no durable change: %#v", inner)
+	}
 	stale, _ := inner["stale_publish"].(map[string]interface{})
 	if stale["classification"] != "info" {
 		t.Errorf("expected classification=info, got: %v", stale["classification"])
@@ -234,6 +237,9 @@ func TestE2EUpdateDetectsInfoStale(t *testing.T) {
 	}
 	if !foundClaude {
 		t.Errorf("expected components to contain claude entry, got: %v", components)
+	}
+	if _, err := os.Stat(filepath.Join(repoDir, ".aether", "data", "transactions")); !os.IsNotExist(err) {
+		t.Fatalf("info dry-run created transaction evidence: %v", err)
 	}
 }
 
@@ -272,7 +278,7 @@ func TestE2EUpdateDetectsOK(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	rootCmd.SetArgs([]string{"update"})
+	rootCmd.SetArgs([]string{"update", "--dry-run"})
 	defer rootCmd.SetArgs([]string{})
 
 	err = rootCmd.Execute()
@@ -285,6 +291,9 @@ func TestE2EUpdateDetectsOK(t *testing.T) {
 		t.Fatalf("expected valid JSON output: %v, output: %s", err, buf.String())
 	}
 	inner, _ := result["result"].(map[string]interface{})
+	if inner["state_effect"] != "none" || inner["receipt"] != nil {
+		t.Fatalf("ok dry-run must report no durable change: %#v", inner)
+	}
 	stale, _ := inner["stale_publish"].(map[string]interface{})
 	if stale["classification"] != "ok" {
 		t.Errorf("expected classification=ok, got: %v", stale["classification"])
@@ -292,6 +301,9 @@ func TestE2EUpdateDetectsOK(t *testing.T) {
 	components, _ := stale["components"].([]interface{})
 	if len(components) > 0 {
 		t.Errorf("expected empty components for ok path, got: %v", components)
+	}
+	if _, err := os.Stat(filepath.Join(repoDir, ".aether", "data", "transactions")); !os.IsNotExist(err) {
+		t.Fatalf("ok dry-run created transaction evidence: %v", err)
 	}
 }
 
@@ -466,7 +478,7 @@ func TestE2EUpdateVisualBannerForInfoStale(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	rootCmd.SetArgs([]string{"update"})
+	rootCmd.SetArgs([]string{"update", "--dry-run"})
 	defer rootCmd.SetArgs([]string{})
 
 	err = rootCmd.Execute()
@@ -480,6 +492,9 @@ func TestE2EUpdateVisualBannerForInfoStale(t *testing.T) {
 	}
 	if !strings.Contains(output, fmt.Sprintf("Commands (claude): 5 found, expected %d", expectedClaudeCommandCount)) {
 		t.Errorf("expected component count in output, got: %s", output)
+	}
+	if _, err := os.Stat(filepath.Join(repoDir, ".aether", "data", "transactions")); !os.IsNotExist(err) {
+		t.Fatalf("visual info dry-run created transaction evidence: %v", err)
 	}
 }
 

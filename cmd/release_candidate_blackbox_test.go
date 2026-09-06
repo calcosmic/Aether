@@ -27,9 +27,13 @@ type stagedReleaseCandidate struct {
 	binary      string
 }
 
+type packedNPMConsumer struct {
+	dir    string
+	script string
+}
+
 func TestPackedNPMReleaseCandidateContract(t *testing.T) {
-	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
-	t.Setenv("AETHER_HUB_DIR", "")
+	t.Parallel()
 	if runtime.GOOS != "darwin" && runtime.GOOS != "linux" && runtime.GOOS != "windows" {
 		t.Skipf("npm bootstrap does not support %s", runtime.GOOS)
 	}
@@ -52,12 +56,14 @@ func TestPackedNPMReleaseCandidateContract(t *testing.T) {
 	}
 	candidate := stageReleaseCandidate(t, sourceRoot, version)
 	oldBinary := buildReleaseCandidateBinary(t, sourceRoot, t.TempDir(), "0.9.0")
+	consumer := installPackedNPMCandidate(t, candidate.npmPackage)
 
 	t.Run("packed npm installs the matching staged archive", func(t *testing.T) {
+		t.Parallel()
 		server := serveStagedRelease(t, candidate, candidate.archiveHash)
 		home := filepath.Join(t.TempDir(), "home")
 		dest := filepath.Join(t.TempDir(), "bin")
-		result := runPackedBootstrap(t, candidate.npmPackage, home, server.URL, "--dest", dest, "--", "version")
+		result := runPackedBootstrapScript(t, consumer, home, server.URL, "--dest", dest, "--", "version")
 		if result.ExitCode != 0 {
 			t.Fatalf("packed bootstrap failed: exit=%d\nstdout:\n%s\nstderr:\n%s", result.ExitCode, result.Stdout, result.Stderr)
 		}
@@ -74,6 +80,7 @@ func TestPackedNPMReleaseCandidateContract(t *testing.T) {
 	})
 
 	t.Run("checksum failure preserves the previous binary", func(t *testing.T) {
+		t.Parallel()
 		server := serveStagedRelease(t, candidate, strings.Repeat("0", 64))
 		home := filepath.Join(t.TempDir(), "home")
 		dest := filepath.Join(t.TempDir(), "bin")
@@ -81,7 +88,7 @@ func TestPackedNPMReleaseCandidateContract(t *testing.T) {
 		mustCopyExecutable(t, oldBinary, installed)
 		before := testFileSHA256(t, installed)
 
-		result := runPackedBootstrap(t, candidate.npmPackage, home, server.URL, "--dest", dest, "--", "version")
+		result := runPackedBootstrapScript(t, consumer, home, server.URL, "--dest", dest, "--", "version")
 		if result.ExitCode == 0 || !strings.Contains(result.Stderr, "Checksum mismatch") {
 			t.Fatalf("bad checksum was not rejected: exit=%d\nstdout:\n%s\nstderr:\n%s", result.ExitCode, result.Stdout, result.Stderr)
 		}
@@ -94,6 +101,7 @@ func TestPackedNPMReleaseCandidateContract(t *testing.T) {
 	})
 
 	t.Run("wrong version archive preserves the previous binary", func(t *testing.T) {
+		t.Parallel()
 		wrong := stageReleaseArchive(t, version, oldBinary)
 		wrong.npmPackage = candidate.npmPackage
 		server := serveStagedRelease(t, wrong, wrong.archiveHash)
@@ -103,7 +111,7 @@ func TestPackedNPMReleaseCandidateContract(t *testing.T) {
 		mustCopyExecutable(t, oldBinary, installed)
 		before := testFileSHA256(t, installed)
 
-		result := runPackedBootstrap(t, candidate.npmPackage, home, server.URL, "--dest", dest, "--", "version")
+		result := runPackedBootstrapScript(t, consumer, home, server.URL, "--dest", dest, "--", "version")
 		if result.ExitCode == 0 || !strings.Contains(result.Stderr, "Downloaded binary version mismatch") {
 			t.Fatalf("wrong-version archive was not rejected: exit=%d\nstdout:\n%s\nstderr:\n%s", result.ExitCode, result.Stdout, result.Stderr)
 		}
@@ -113,6 +121,7 @@ func TestPackedNPMReleaseCandidateContract(t *testing.T) {
 	})
 
 	t.Run("retry recovers the state left by interrupted activation", func(t *testing.T) {
+		t.Parallel()
 		server := serveStagedRelease(t, candidate, candidate.archiveHash)
 		home := filepath.Join(t.TempDir(), "home")
 		dest := filepath.Join(t.TempDir(), "bin")
@@ -120,7 +129,7 @@ func TestPackedNPMReleaseCandidateContract(t *testing.T) {
 		rollback := installed + ".previous"
 		mustCopyExecutable(t, oldBinary, rollback)
 
-		result := runPackedBootstrap(t, candidate.npmPackage, home, server.URL, "--dest", dest, "--", "version")
+		result := runPackedBootstrapScript(t, consumer, home, server.URL, "--dest", dest, "--", "version")
 		if result.ExitCode != 0 {
 			t.Fatalf("retry after interrupted activation failed: exit=%d\nstdout:\n%s\nstderr:\n%s", result.ExitCode, result.Stdout, result.Stderr)
 		}
@@ -133,10 +142,11 @@ func TestPackedNPMReleaseCandidateContract(t *testing.T) {
 	})
 
 	t.Run("packed candidate migrates and rolls back an n-1 colony without local data loss", func(t *testing.T) {
+		t.Parallel()
 		server := serveStagedRelease(t, candidate, candidate.archiveHash)
 		home := filepath.Join(t.TempDir(), "home")
 		dest := filepath.Join(t.TempDir(), "bin")
-		bootstrap := runPackedBootstrap(t, candidate.npmPackage, home, server.URL, "--dest", dest, "--", "version")
+		bootstrap := runPackedBootstrapScript(t, consumer, home, server.URL, "--dest", dest, "--", "version")
 		if bootstrap.ExitCode != 0 {
 			t.Fatalf("prepare packed migration candidate: exit=%d\nstdout:\n%s\nstderr:\n%s", bootstrap.ExitCode, bootstrap.Stdout, bootstrap.Stderr)
 		}
@@ -402,6 +412,15 @@ func dropEnvKeys(env []string, keys ...string) []string {
 
 func runPackedBootstrap(t *testing.T, packagePath, home, releaseURL string, args ...string) cliBlackBoxResult {
 	t.Helper()
+	return runPackedBootstrapScript(t, installPackedNPMCandidate(t, packagePath), home, releaseURL, args...)
+}
+
+// installPackedNPMCandidate installs the immutable packed candidate once for
+// callers that exercise several independent bootstrap outcomes. The node
+// wrapper only reads this consumer tree; each invocation below still receives
+// its own HOME and destination, where all runtime state is written.
+func installPackedNPMCandidate(t *testing.T, packagePath string) packedNPMConsumer {
+	t.Helper()
 	consumer := filepath.Join(t.TempDir(), "consumer")
 	if err := os.MkdirAll(consumer, 0755); err != nil {
 		t.Fatalf("create npm consumer: %v", err)
@@ -411,9 +430,16 @@ func runPackedBootstrap(t *testing.T, packagePath, home, releaseURL string, args
 	if combined, err := install.CombinedOutput(); err != nil {
 		t.Fatalf("install packed npm candidate: %v\n%s", err, combined)
 	}
-	script := filepath.Join(consumer, "node_modules", "aether-colony", "bin", "aether.js")
-	command := exec.Command("node", append([]string{script}, args...)...)
-	command.Dir = consumer
+	return packedNPMConsumer{
+		dir:    consumer,
+		script: filepath.Join(consumer, "node_modules", "aether-colony", "bin", "aether.js"),
+	}
+}
+
+func runPackedBootstrapScript(t *testing.T, consumer packedNPMConsumer, home, releaseURL string, args ...string) cliBlackBoxResult {
+	t.Helper()
+	command := exec.Command("node", append([]string{consumer.script}, args...)...)
+	command.Dir = consumer.dir
 	command.Env = replaceProcessEnv(dropEnvKeys(os.Environ(), "AETHER_HUB_DIR"), map[string]string{
 		"AETHER_OUTPUT_MODE":      "json",
 		"AETHER_RELEASE_BASE_URL": releaseURL,

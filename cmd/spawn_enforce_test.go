@@ -2,17 +2,49 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/agent"
 )
+
+// documentedCoordinatorSourceFiles returns the versioned command corpus plus
+// deliberate, nonignored local additions. It intentionally respects the
+// source tree's .gitignore rules: local data, caches, and generated artifacts
+// beneath .aether are not command documentation and must not make this source
+// audit depend on a developer's machine state.
+func documentedCoordinatorSourceFiles(repoRoot string) ([]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, "git", "-C", repoRoot,
+		"ls-files", "-z", "--cached", "--others", "--exclude-standard", "--",
+		".claude/commands/ant", ".opencode/commands/ant", ".aether")
+	output, err := command.Output()
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("list documented coordinator sources: %w", ctx.Err())
+		}
+		return nil, fmt.Errorf("list documented coordinator sources: %w", err)
+	}
+
+	files := make([]string, 0, bytes.Count(output, []byte{0}))
+	for _, entry := range bytes.Split(output, []byte{0}) {
+		if len(entry) == 0 {
+			continue
+		}
+		files = append(files, filepath.Join(repoRoot, filepath.FromSlash(string(entry))))
+	}
+	return files, nil
+}
 
 // WIRE-02 / D-13 / D-14.
 //
@@ -693,10 +725,9 @@ func TestSpawnRootSentinelsCoverEveryDocumentedCoordinatorParent(t *testing.T) {
 		t.Fatalf("resolve repo root: %v", err)
 	}
 
-	dirs := []string{
-		filepath.Join(repoRoot, ".claude", "commands", "ant"),
-		filepath.Join(repoRoot, ".opencode", "commands", "ant"),
-		filepath.Join(repoRoot, ".aether"),
+	files, err := documentedCoordinatorSourceFiles(repoRoot)
+	if err != nil {
+		t.Fatalf("list documented coordinator sources: %v", err)
 	}
 
 	parentRe := regexp.MustCompile(`--parent\s+"([^"]*)"`)
@@ -709,46 +740,31 @@ func TestSpawnRootSentinelsCoverEveryDocumentedCoordinatorParent(t *testing.T) {
 	var parentOccurrences []occurrence
 	names := map[string]bool{}
 
-	for _, dir := range dirs {
-		if _, statErr := os.Stat(dir); statErr != nil {
-			continue
+	for _, path := range files {
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			t.Fatalf("read %s: %v", path, readErr)
 		}
-		walkErr := filepath.Walk(dir, func(path string, info os.FileInfo, walkFileErr error) error {
-			if walkFileErr != nil {
-				return walkFileErr
+		for _, line := range strings.Split(string(data), "\n") {
+			if m := nameRe.FindStringSubmatch(line); m != nil {
+				names[m[1]] = true
 			}
-			if info.IsDir() {
-				return nil
+			if !strings.Contains(line, "spawn-log") {
+				continue
 			}
-			data, readErr := os.ReadFile(path)
-			if readErr != nil {
-				return readErr
+			m := parentRe.FindStringSubmatch(line)
+			if m == nil {
+				continue
 			}
-			for _, line := range strings.Split(string(data), "\n") {
-				if m := nameRe.FindStringSubmatch(line); m != nil {
-					names[m[1]] = true
-				}
-				if !strings.Contains(line, "spawn-log") {
-					continue
-				}
-				m := parentRe.FindStringSubmatch(line)
-				if m == nil {
-					continue
-				}
-				if strings.Contains(m[1], "{") {
-					continue
-				}
-				parentOccurrences = append(parentOccurrences, occurrence{value: m[1], file: path})
+			if strings.Contains(m[1], "{") {
+				continue
 			}
-			return nil
-		})
-		if walkErr != nil {
-			t.Fatalf("walk %s: %v", dir, walkErr)
+			parentOccurrences = append(parentOccurrences, occurrence{value: m[1], file: path})
 		}
 	}
 
 	if len(parentOccurrences) == 0 {
-		t.Fatalf("found no --parent literal(s) on spawn-log lines across %v — a test that finds nothing to check would pass vacuously forever", dirs)
+		t.Fatalf("found no --parent literal(s) on spawn-log lines across the documented command corpus — a test that finds nothing to check would pass vacuously forever")
 	}
 
 	var unrecognized []string
@@ -765,6 +781,46 @@ func TestSpawnRootSentinelsCoverEveryDocumentedCoordinatorParent(t *testing.T) {
 		sort.Strings(unrecognized)
 		t.Fatalf("found --parent literal(s) that are neither a coordinator sentinel (%s) nor a recorded child (--name literal) anywhere in the corpus:\n  %s",
 			strings.Join(spawnRootParentNames, ", "), strings.Join(unrecognized, "\n  "))
+	}
+}
+
+func TestDocumentedCoordinatorSourceFilesExcludeIgnoredLocalArtifacts(t *testing.T) {
+	repoRoot := t.TempDir()
+	init := exec.Command("git", "init", "-q", repoRoot)
+	if output, err := init.CombinedOutput(); err != nil {
+		t.Fatalf("initialize source fixture: %v\n%s", err, output)
+	}
+	if err := os.WriteFile(filepath.Join(repoRoot, ".gitignore"), []byte(".aether/temp/\n"), 0600); err != nil {
+		t.Fatalf("write fixture gitignore: %v", err)
+	}
+	ignored := filepath.Join(repoRoot, ".aether", "temp", "ignored-cache.md")
+	if err := os.MkdirAll(filepath.Dir(ignored), 0755); err != nil {
+		t.Fatalf("create ignored fixture directory: %v", err)
+	}
+	if err := os.WriteFile(ignored, []byte(`aether spawn-log --parent "IgnoredCoordinator"`), 0600); err != nil {
+		t.Fatalf("write ignored fixture: %v", err)
+	}
+	wrapper := filepath.Join(repoRoot, ".aether", "commands", "new-wrapper.md")
+	if err := os.MkdirAll(filepath.Dir(wrapper), 0755); err != nil {
+		t.Fatalf("create wrapper fixture directory: %v", err)
+	}
+	if err := os.WriteFile(wrapper, []byte(`aether spawn-log --parent "NewCoordinator"`), 0600); err != nil {
+		t.Fatalf("write wrapper fixture: %v", err)
+	}
+
+	files, err := documentedCoordinatorSourceFiles(repoRoot)
+	if err != nil {
+		t.Fatalf("list fixture sources: %v", err)
+	}
+	found := make(map[string]bool, len(files))
+	for _, path := range files {
+		found[path] = true
+	}
+	if found[ignored] {
+		t.Fatalf("ignored local artifact %s was admitted to the documented command corpus", ignored)
+	}
+	if !found[wrapper] {
+		t.Fatalf("nonignored wrapper %s was omitted from the documented command corpus", wrapper)
 	}
 }
 

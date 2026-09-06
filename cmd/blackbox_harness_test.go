@@ -114,6 +114,7 @@ func newCLIBlackBox(t *testing.T) *cliBlackBox {
 		home:       home,
 		sourceRoot: sourceRoot,
 		env: replaceProcessEnv(os.Environ(), map[string]string{
+			"AETHER_HUB_DIR":     "",
 			"AETHER_OUTPUT_MODE": "json",
 			"AETHER_ROOT":        repo,
 			"CODEX_HOME":         filepath.Join(home, ".codex"),
@@ -372,6 +373,7 @@ func replaceProcessEnv(base []string, replacements map[string]string) []string {
 }
 
 func TestCLIErrorEnvelopeExitsNonZero(t *testing.T) {
+	t.Parallel()
 	harness := newCLIBlackBox(t)
 
 	result := harness.run(t, "flag-add")
@@ -401,6 +403,7 @@ func TestCLIErrorEnvelopeExitsNonZero(t *testing.T) {
 }
 
 func TestCLIExternalAdapterBuildContract(t *testing.T) {
+	t.Parallel()
 	harness := newCLIBlackBox(t)
 	modes := []struct {
 		name        string
@@ -487,6 +490,7 @@ func TestCLIExternalAdapterBuildContract(t *testing.T) {
 }
 
 func TestCLIInternalWorkerAdapterOwnsProviderSelectionAndClaimsParsing(t *testing.T) {
+	t.Parallel()
 	harness := newCLIBlackBox(t)
 	harness.prepareBuildFixture(t)
 	tmpRoot := filepath.Join(filepath.Dir(harness.repo), "tmp")
@@ -574,6 +578,7 @@ func TestCLIInternalWorkerAdapterOwnsProviderSelectionAndClaimsParsing(t *testin
 }
 
 func TestCLIContinueEnforcesFreshCriterionEvidence(t *testing.T) {
+	t.Parallel()
 	harness := newCLIBlackBox(t)
 	adapterEnv := map[string]string{
 		"AETHER_ACTIVE_PLATFORM":     "codex",
@@ -657,6 +662,7 @@ func TestCLIContinueEnforcesFreshCriterionEvidence(t *testing.T) {
 }
 
 func TestCLIInterruptedBuildResumesThroughForceRedispatch(t *testing.T) {
+	t.Parallel()
 	harness := newCLIBlackBox(t)
 	logPath := harness.prepareBuildFixture(t)
 	env := map[string]string{
@@ -710,7 +716,7 @@ func TestCLIInterruptedBuildResumesThroughForceRedispatch(t *testing.T) {
 	}
 
 	env["AETHER_TEST_ADAPTER_MODE"] = "success"
-	retry := harness.runWithEnv(t, env, "build", "1", "--force", "--light", "--worker-timeout", "2s")
+	retry := harness.runWithEnv(t, env, "build", "1", "--force", "--light", "--worker-timeout", "30s")
 	if retry.ExitCode != 0 {
 		t.Fatalf("force redispatch failed: exit=%d\nstdout:\n%s\nstderr:\n%s", retry.ExitCode, retry.Stdout, retry.Stderr)
 	}
@@ -730,6 +736,7 @@ func TestCLIInterruptedBuildResumesThroughForceRedispatch(t *testing.T) {
 }
 
 func TestCLIPlanOnlyCompletionIsBoundAndIdempotent(t *testing.T) {
+	t.Parallel()
 	harness := newCLIBlackBox(t)
 	harness.prepareBuildFixture(t)
 
@@ -802,6 +809,7 @@ func TestCLIPlanOnlyCompletionIsBoundAndIdempotent(t *testing.T) {
 }
 
 func TestCLIVersionedPlanRevisionSurvivesRestartAndBindsNextBuild(t *testing.T) {
+	t.Parallel()
 	harness := newCLIBlackBox(t)
 	dataDir := filepath.Join(harness.repo, ".aether", "data")
 	oracleDir := filepath.Join(harness.repo, ".aether", "oracle")
@@ -897,8 +905,7 @@ func TestCLIVersionedPlanRevisionSurvivesRestartAndBindsNextBuild(t *testing.T) 
 // processes produce the replacement plan, the revision binds that evidence, and
 // the revised phase builds and verifies through real provider workers.
 func TestCLIProviderBackedPlanRevisionJourney(t *testing.T) {
-	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
-	t.Setenv("AETHER_HUB_DIR", "")
+	t.Parallel()
 	harness := newCLIBlackBox(t)
 	logPath := filepath.Join(filepath.Dir(harness.repo), "revision-adapter-invocations.jsonl")
 	providerEnv := map[string]string{
@@ -1017,14 +1024,14 @@ func TestCLIProviderBackedPlanRevisionJourney(t *testing.T) {
 		t.Fatalf("new process did not restore provider-backed revision context: exit=%d\nstdout:\n%s\nstderr:\n%s", resume.ExitCode, resume.Stdout, resume.Stderr)
 	}
 
-	build := harness.runWithEnv(t, providerEnv, "build", "2", "--light", "--worker-timeout", "2s")
+	build := harness.runWithEnv(t, providerEnv, "build", "2", "--light", "--worker-timeout", "30s")
 	assertBlackBoxSuccess(t, "build 2", build)
 	attempt := harness.loadBuildAttempt(t, 2)
 	if attempt.Status != buildAttemptBuilt || attempt.Claims == nil {
 		t.Fatalf("revised phase lacks durable provider-backed build evidence: %+v", attempt)
 	}
 
-	continued := harness.runWithEnv(t, providerEnv, "continue", "--verification-depth", "light", "--worker-timeout", "2s")
+	continued := harness.runWithEnv(t, providerEnv, "continue", "--verification-depth", "light", "--worker-timeout", "30s")
 	assertBlackBoxSuccess(t, "continue phase 2", continued)
 	report := harness.loadVerificationReport(t, 2)
 	if !report.Passed || !report.CriteriaEnforced || !report.CriteriaPassed {
@@ -1053,8 +1060,7 @@ func TestCLIProviderBackedPlanRevisionJourney(t *testing.T) {
 }
 
 func TestCLICompiledInstallToSealJourney(t *testing.T) {
-	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
-	t.Setenv("AETHER_HUB_DIR", "")
+	t.Parallel()
 	harness := newCLIBlackBox(t)
 	providerEnv := map[string]string{
 		"AETHER_ACTIVE_PLATFORM":     "codex",
@@ -1119,7 +1125,7 @@ func TestCLICompiledInstallToSealJourney(t *testing.T) {
 	focus := harness.run(t, "focus", "preserve deterministic acceptance evidence")
 	assertBlackBoxSuccess(t, "focus", focus)
 	for phaseNumber := 1; phaseNumber <= len(state.Plan.Phases); phaseNumber++ {
-		build := harness.runWithEnv(t, providerEnv, "build", fmt.Sprintf("%d", phaseNumber), "--light", "--worker-timeout", "2s")
+		build := harness.runWithEnv(t, providerEnv, "build", fmt.Sprintf("%d", phaseNumber), "--light", "--worker-timeout", "30s")
 		assertBlackBoxSuccess(t, fmt.Sprintf("build %d", phaseNumber), build)
 		attempt := harness.loadBuildAttempt(t, phaseNumber)
 		if attempt.Status != buildAttemptBuilt || attempt.Claims == nil {
@@ -1133,7 +1139,7 @@ func TestCLICompiledInstallToSealJourney(t *testing.T) {
 			t.Fatalf("implementation phase %d lacks project artifact evidence: %+v", phaseNumber, attempt)
 		}
 
-		continued := harness.runWithEnv(t, providerEnv, "continue", "--verification-depth", "light", "--worker-timeout", "2s")
+		continued := harness.runWithEnv(t, providerEnv, "continue", "--verification-depth", "light", "--worker-timeout", "30s")
 		assertBlackBoxSuccess(t, fmt.Sprintf("continue phase %d", phaseNumber), continued)
 		report := harness.loadVerificationReport(t, phaseNumber)
 		if !report.Passed || !report.CriteriaEnforced || !report.CriteriaPassed {
@@ -1181,8 +1187,7 @@ func TestCLICompiledInstallToSealJourney(t *testing.T) {
 }
 
 func TestCLICompiledInstallUpdateMigrationContract(t *testing.T) {
-	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
-	t.Setenv("AETHER_HUB_DIR", "")
+	t.Parallel()
 	harness := newCLIBlackBox(t)
 	install := harness.run(t, "install", "--package-dir", harness.sourceRoot, "--home-dir", harness.home, "--skip-build-binary")
 	assertBlackBoxSuccess(t, "install", install)
