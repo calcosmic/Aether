@@ -153,6 +153,10 @@ func assertBuildClaimsExist(t *testing.T, dir string) {
 // TestFullLifecycleInDownstreamRepo exercises the complete colony lifecycle
 // in a separate downstream repository.
 func TestFullLifecycleInDownstreamRepo(t *testing.T) {
+	runIsolatedProcessTest(t, "TestFullLifecycleInDownstreamRepo", testFullLifecycleInDownstreamRepo)
+}
+
+func testFullLifecycleInDownstreamRepo(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 	forceJSONOutputModeForTest(t)

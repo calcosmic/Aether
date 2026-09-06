@@ -539,6 +539,10 @@ func assertReviewerBoundaryResult(t *testing.T, result map[string]interface{}, s
 }
 
 func TestSuggestionOnlyCriticalDirectFlowFailsBeforeAdvancement(t *testing.T) {
+	runIsolatedProcessTest(t, "TestSuggestionOnlyCriticalDirectFlowFailsBeforeAdvancement", testSuggestionOnlyCriticalDirectFlowFailsBeforeAdvancement)
+}
+
+func testSuggestionOnlyCriticalDirectFlowFailsBeforeAdvancement(t *testing.T) {
 	tests := []struct {
 		name string
 		raw  string
@@ -581,6 +585,10 @@ func TestSuggestionOnlyCriticalDirectFlowFailsBeforeAdvancement(t *testing.T) {
 }
 
 func TestSuggestionOnlyCriticalExternalFinalizeFailsBeforeAdvancement(t *testing.T) {
+	runIsolatedProcessTest(t, "TestSuggestionOnlyCriticalExternalFinalizeFailsBeforeAdvancement", testSuggestionOnlyCriticalExternalFinalizeFailsBeforeAdvancement)
+}
+
+func testSuggestionOnlyCriticalExternalFinalizeFailsBeforeAdvancement(t *testing.T) {
 	tests := []struct {
 		name string
 		raw  string
@@ -753,6 +761,10 @@ func TestLegacyReviewerSeverityDirectNormalizationFailsClosed(t *testing.T) {
 }
 
 func TestLegacyReviewerSeverityExternalFinalizeFailsClosed(t *testing.T) {
+	runIsolatedProcessTest(t, "TestLegacyReviewerSeverityExternalFinalizeFailsClosed", testLegacyReviewerSeverityExternalFinalizeFailsClosed)
+}
+
+func testLegacyReviewerSeverityExternalFinalizeFailsClosed(t *testing.T) {
 	for _, fixture := range legacyReviewerSeverityFixtures() {
 		t.Run(fixture.name, func(t *testing.T) {
 			saveGlobals(t)
@@ -796,6 +808,10 @@ func TestLegacyReviewerSeverityExternalFinalizeFailsClosed(t *testing.T) {
 }
 
 func TestReviewerArtifactDirectFlowFailsClosed(t *testing.T) {
+	runIsolatedProcessTest(t, "TestReviewerArtifactDirectFlowFailsClosed", testReviewerArtifactDirectFlowFailsClosed)
+}
+
+func testReviewerArtifactDirectFlowFailsClosed(t *testing.T) {
 	for _, fixture := range reviewerArtifactInvalidFixtures(t) {
 		t.Run(fixture.name, func(t *testing.T) {
 			saveGlobals(t)
@@ -815,6 +831,10 @@ func TestReviewerArtifactDirectFlowFailsClosed(t *testing.T) {
 }
 
 func TestReviewerArtifactExternalFinalizeFailsClosed(t *testing.T) {
+	runIsolatedProcessTest(t, "TestReviewerArtifactExternalFinalizeFailsClosed", testReviewerArtifactExternalFinalizeFailsClosed)
+}
+
+func testReviewerArtifactExternalFinalizeFailsClosed(t *testing.T) {
 	for _, fixture := range reviewerArtifactInvalidFixtures(t) {
 		t.Run(fixture.name, func(t *testing.T) {
 			saveGlobals(t)
