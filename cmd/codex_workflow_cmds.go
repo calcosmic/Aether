@@ -665,6 +665,10 @@ var sealCmd = &cobra.Command{
 			outputOK(pending)
 			return nil
 		}
+		// Curation is a durable part of a valid direct-owner seal. It runs
+		// exactly once after typed preflight and owner confirmation, and its
+		// resulting evidence is committed by the lifecycle transaction below.
+		review := runSealWisdomReview(facts.State.Value)
 		override := sealOverride{
 			Forced: forceFlag, Reason: preflight.OwnerReason,
 			OverriddenBlockers: len(preflight.ResidualRisks),
@@ -672,7 +676,7 @@ var sealCmd = &cobra.Command{
 		for _, phaseID := range preflight.IncompletePhaseIDs {
 			override.IncompletePhases = append(override.IncompletePhases, fmt.Sprintf("phase %d", phaseID))
 		}
-		return completeSealRuntime(facts.State.Value, override, sealWisdomReview{}, preflight)
+		return completeSealRuntime(facts.State.Value, override, review, preflight)
 	},
 }
 

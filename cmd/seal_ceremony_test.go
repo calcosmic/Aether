@@ -67,6 +67,7 @@ func runSealCmd(t *testing.T, s *storage.Store, tmpDir string, args []string) (s
 
 	dataDir := filepath.Join(tmpDir, ".aether", "data")
 	t.Setenv("COLONY_DATA_DIR", dataDir)
+	t.Setenv("AETHER_ROOT", tmpDir)
 	// Seal promotes instincts into the hive at the hub. Belt-and-suspenders
 	// with the suite-wide TestMain isolation: whatever the global env is in
 	// this test's position in the run order, seal tests NEVER write the
@@ -79,15 +80,10 @@ func runSealCmd(t *testing.T, s *storage.Store, tmpDir string, args []string) (s
 	stdout = outBuf
 	stderr = errBuf
 
-	// D-04's confirmation gate (198-03) now asks before every seal
-	// completes. This helper predates the gate and is shared by tests
-	// exercising unrelated behavior (blockers, hive promotion, focus
-	// expiry, ...) -- none of which are testing the confirmation gate
-	// itself -- so auto-record the exact "yes" answer the current fixture
-	// will be asked for, the same way an owner running seal twice would.
-	// Tests that DO exercise the confirmation gate use rootCmd directly,
-	// bypassing this helper.
-	autoRecordSealConfirmationForTest(t, s)
+	// The current confirmation is derived from typed preflight facts. Record
+	// the exact answer an owner would submit on a second invocation; the old
+	// legacy-state helper could not cover forced-incomplete preflights.
+	autoRecordSealPreflightConfirmationForTest(t, s, tmpDir, args)
 
 	allArgs := append([]string{"seal"}, args...)
 	rootCmd.SetArgs(allArgs)
@@ -98,6 +94,37 @@ func runSealCmd(t *testing.T, s *storage.Store, tmpDir string, args []string) (s
 	return outBuf.String(), errBuf.String()
 }
 
+func autoRecordSealPreflightConfirmationForTest(t *testing.T, s *storage.Store, root string, args []string) {
+	t.Helper()
+	force := false
+	reason := ""
+	for index, arg := range args {
+		switch arg {
+		case "--force":
+			force = true
+		case "--reason":
+			if index+1 < len(args) {
+				reason = args[index+1]
+			}
+		}
+	}
+	facts, err := loadLifecycleFacts(root, s, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("load seal facts: %v", err)
+	}
+	preflight, err := BuildSealPreflight(facts, SealPreflightRequest{Caller: SealCallerDirectOwner, Force: force, Reason: reason})
+	if err != nil {
+		return // The command must render this preflight refusal itself.
+	}
+	source := "seal-confirmation"
+	if preflight.Disposition == colony.SealDispositionForcedIncomplete {
+		source = "seal-force-confirmation"
+	}
+	if _, err := recordSealConfirmationAnswer(SealConfirmationCopy(preflight), "yes", source); err != nil {
+		t.Fatalf("record seal confirmation: %v", err)
+	}
+}
+
 // executeSealAtPublicRoot exercises the same Execute boundary used by main.
 // Recovery menus render their own error payload, so callers must inspect both
 // stderr and the renderedCommandError returned after Cobra completes.
@@ -106,6 +133,7 @@ func executeSealAtPublicRoot(t *testing.T, s *storage.Store, tmpDir, mode string
 	saveGlobals(t)
 	resetRootCmd(t)
 	t.Setenv("COLONY_DATA_DIR", filepath.Join(tmpDir, ".aether", "data"))
+	t.Setenv("AETHER_ROOT", tmpDir)
 	t.Setenv("AETHER_HUB_DIR", filepath.Join(tmpDir, ".hub"))
 	t.Setenv("AETHER_OUTPUT_MODE", mode)
 	store = s
@@ -853,7 +881,6 @@ func TestCrownedAnthillEnrichment(t *testing.T) {
 		Decisions: []colony.FlagEntry{
 			{ID: "r1", Resolved: true},
 			{ID: "r2", Resolved: true},
-			{ID: "r3", Resolved: false},
 		},
 	}
 	_ = s.SaveJSON("pending-decisions.json", flags)
