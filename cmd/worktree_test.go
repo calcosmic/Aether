@@ -2,11 +2,14 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -1708,6 +1711,18 @@ func TestCreateBlockerAppendsToExisting(t *testing.T) {
 // ===========================================================================
 // checkClashesForWorktree helper tests
 // ===========================================================================
+
+func TestReadOnlyGitCommandDisablesAmbientMutationFeatures(t *testing.T) {
+	command := readOnlyGitCommand(context.Background(), "/repo", "diff", "--name-only", "main..feature")
+	if got, want := command.Args, []string{"git", "-c", "core.fsmonitor=false", "-c", "maintenance.auto=false", "-c", "gc.auto=0", "-C", "/repo", "diff", "--name-only", "main..feature"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("read-only git args = %#v, want %#v", got, want)
+	}
+	for _, want := range []string{"GIT_OPTIONAL_LOCKS=0", "GIT_PAGER=cat", "GIT_TERMINAL_PROMPT=0"} {
+		if !slices.Contains(command.Env, want) {
+			t.Fatalf("read-only git environment lacks %q: %#v", want, command.Env)
+		}
+	}
+}
 
 func TestCheckClashesForWorktree(t *testing.T) {
 	// Create a real git repo with two worktrees

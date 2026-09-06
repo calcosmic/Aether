@@ -607,19 +607,54 @@ func createBlocker(store *storage.Store, description string, source string) erro
 // given worktree AND in at least one other worktree. It reuses parseWorktreePaths
 // from cmd/clash.go (same package).
 // entryPath must be an absolute path to the worktree directory.
+//
+// Read-only Git inspection must neither acquire optional index locks nor invoke
+// interactive helpers.  Besides keeping the check causally read-only, this
+// prevents a merge-back probe from waiting behind an ambient fsmonitor or a
+// credential prompt that cannot answer in a non-interactive CLI invocation.
+func readOnlyGitCommand(ctx context.Context, directory string, args ...string) *exec.Cmd {
+	commandArgs := []string{
+		"-c", "core.fsmonitor=false",
+		"-c", "maintenance.auto=false",
+		"-c", "gc.auto=0",
+		"-C", directory,
+	}
+	commandArgs = append(commandArgs, args...)
+	command := exec.CommandContext(ctx, "git", commandArgs...)
+	replacements := map[string]string{
+		"GIT_OPTIONAL_LOCKS":  "0",
+		"GIT_PAGER":           "cat",
+		"GIT_TERMINAL_PROMPT": "0",
+	}
+	command.Env = make([]string, 0, len(os.Environ())+len(replacements))
+	for _, entry := range os.Environ() {
+		key, _, ok := strings.Cut(entry, "=")
+		if ok {
+			if _, replaced := replacements[key]; replaced {
+				continue
+			}
+		}
+		command.Env = append(command.Env, entry)
+	}
+	for _, key := range []string{"GIT_OPTIONAL_LOCKS", "GIT_PAGER", "GIT_TERMINAL_PROMPT"} {
+		command.Env = append(command.Env, key+"="+replacements[key])
+	}
+	return command
+}
+
 func checkClashesForWorktree(entryPath string, branch string) ([]string, error) {
 	// Derive repo root from the worktree path using git rev-parse
 	ctx, cancel := context.WithTimeout(context.Background(), GitTimeout)
 	defer cancel()
 
-	repoRootOut, err := exec.CommandContext(ctx, "git", "-C", entryPath, "rev-parse", "--show-toplevel").Output()
+	repoRootOut, err := readOnlyGitCommand(ctx, entryPath, "rev-parse", "--show-toplevel").Output()
 	if err != nil {
 		return nil, fmt.Errorf("git rev-parse --show-toplevel: %w", err)
 	}
 	repoRoot := strings.TrimSpace(string(repoRootOut))
 
 	// Get all worktree paths from the repo root
-	out, err := exec.CommandContext(ctx, "git", "-C", repoRoot, "worktree", "list", "--porcelain").Output()
+	out, err := readOnlyGitCommand(ctx, repoRoot, "worktree", "list", "--porcelain").Output()
 	if err != nil {
 		return nil, fmt.Errorf("git worktree list: %w", err)
 	}
@@ -627,14 +662,14 @@ func checkClashesForWorktree(entryPath string, branch string) ([]string, error) 
 
 	// Determine the base branch (main or master)
 	baseBranch := "main"
-	if err := exec.CommandContext(ctx, "git", "-C", repoRoot, "rev-parse", "--verify", baseBranch).Run(); err != nil {
+	if err := readOnlyGitCommand(ctx, repoRoot, "rev-parse", "--verify", baseBranch).Run(); err != nil {
 		baseBranch = "master"
 	}
 
 	// Get files modified in the target branch vs base branch
 	diffCtx, diffCancel := context.WithTimeout(context.Background(), GitTimeout)
 	defer diffCancel()
-	diffOut, err := exec.CommandContext(diffCtx, "git", "-C", repoRoot, "diff", "--name-only", baseBranch+".."+branch).Output()
+	diffOut, err := readOnlyGitCommand(diffCtx, repoRoot, "diff", "--name-only", baseBranch+".."+branch).Output()
 	if err != nil {
 		// No diff or no commits -- nothing to clash with
 		return nil, nil
@@ -669,7 +704,7 @@ func checkClashesForWorktree(entryPath string, branch string) ([]string, error) 
 			checkCtx, checkCancel := context.WithTimeout(context.Background(), GitTimeout)
 			defer checkCancel()
 			// Check if the file differs from base in the other worktree
-			checkOut, checkErr := exec.CommandContext(checkCtx, "git", "-C", wtPath, "diff", "--name-only", baseBranch, "--", file).Output()
+			checkOut, checkErr := readOnlyGitCommand(checkCtx, wtPath, "diff", "--name-only", baseBranch, "--", file).Output()
 			if checkErr != nil {
 				continue // If we can't check, skip it
 			}
