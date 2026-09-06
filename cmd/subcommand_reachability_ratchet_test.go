@@ -309,7 +309,9 @@ type registeredCommandInfo struct {
 // tree. Cobra's own generated "help" and "completion" commands are skipped —
 // they are not repo-owned and have no definition file to point at. A command
 // explicitly marked internal-only is parser or runtime compatibility plumbing,
-// not a public surface that needs a caller.
+// not a public surface that needs a caller. TestInternalOnlyCommandsAreAnExact-
+// ReviewedSet keeps that exception narrow: adding the annotation anywhere else
+// is a test failure until its classification is deliberately reviewed.
 func enumerateRegisteredCommands(root *cobra.Command) []registeredCommandInfo {
 	var out []registeredCommandInfo
 	var walk func(c *cobra.Command)
@@ -338,6 +340,78 @@ func enumerateRegisteredCommands(root *cobra.Command) []registeredCommandInfo {
 	}
 	walk(root)
 	return out
+}
+
+// TestInternalOnlyCommandsAreAnExactReviewedSet prevents the reachability
+// ratchet from becoming a generic escape hatch. These are compatibility-only
+// parser routes, not public front doors: all must be hidden, legacy-command migration
+// routes must be explicitly store-free, and maintenance remains in the normal
+// caller-backed population.
+func TestInternalOnlyCommandsAreAnExactReviewedSet(t *testing.T) {
+	want := map[string]map[string]string{
+		abandonCmd.CommandPath():         {"aether.io/read-only": "true", "aether.io/store-free": "true"},
+		recoverCmd.CommandPath():         {"aether.io/read-only": "true", "aether.io/store-free": "true"},
+		resumeDashboardCmd.CommandPath(): {"aether.io/read-only": "true"},
+	}
+	got := map[string]*cobra.Command{}
+	var walk func(*cobra.Command)
+	walk = func(command *cobra.Command) {
+		for _, child := range command.Commands() {
+			if child.Annotations["aether.io/internal-only"] == "true" {
+				got[child.CommandPath()] = child
+			}
+			walk(child)
+		}
+	}
+	walk(rootCmd)
+
+	if len(got) != len(want) {
+		t.Fatalf("internal-only command set = %v, want exactly %v", sortedCommandPaths(got), sortedAnnotationPaths(want))
+	}
+	for path, command := range got {
+		required, known := want[path]
+		if !known {
+			t.Errorf("%s is internal-only without an explicit reviewed classification", path)
+			continue
+		}
+		if !command.Hidden {
+			t.Errorf("%s is internal-only but public; compatibility plumbing must be hidden", path)
+		}
+		for key, value := range required {
+			if got := command.Annotations[key]; got != value {
+				t.Errorf("%s annotation %q = %q, want %q", path, key, got, value)
+			}
+		}
+	}
+	for path := range want {
+		if _, ok := got[path]; !ok {
+			t.Errorf("reviewed internal-only command %s is missing its annotation", path)
+		}
+	}
+
+	for _, command := range enumerateRegisteredCommands(rootCmd) {
+		if strings.HasPrefix(command.Path, "aether maintenance") && command.Hidden {
+			t.Errorf("%s is a hidden maintenance operation; maintenance must remain caller-backed public advanced surface", command.Path)
+		}
+	}
+}
+
+func sortedCommandPaths(commands map[string]*cobra.Command) []string {
+	paths := make([]string, 0, len(commands))
+	for path := range commands {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	return paths
+}
+
+func sortedAnnotationPaths(commands map[string]map[string]string) []string {
+	paths := make([]string, 0, len(commands))
+	for path := range commands {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	return paths
 }
 
 // buildCommandDefinitionIndex maps a command name (the first whitespace-

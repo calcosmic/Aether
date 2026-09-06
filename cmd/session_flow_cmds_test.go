@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -749,7 +750,19 @@ func TestResumeDashboardClassifiesLegacySessionWithoutMirroring(t *testing.T) {
 		ContextCleared: true,
 	})
 
+	// The legacy-session-missing branch is the historically dangerous one:
+	// older dashboard code could create a top-level session while merely
+	// rendering a recovery view. Snapshot both candidate trees before the read
+	// so the assertion proves every byte remains intact, not just that one
+	// expected file was absent afterward.
+	beforeData := snapshotProjectDataTree(t, dataDir)
+	beforeLegacy := snapshotProjectDataTree(t, legacyRoot)
 	result := buildResumeDashboardResult()
+	afterData := snapshotProjectDataTree(t, dataDir)
+	afterLegacy := snapshotProjectDataTree(t, legacyRoot)
+	if !reflect.DeepEqual(beforeData, afterData) || !reflect.DeepEqual(beforeLegacy, afterLegacy) {
+		t.Fatalf("read-only dashboard mutated legacy-session-missing evidence\ndata before=%#v\ndata after=%#v\nlegacy before=%#v\nlegacy after=%#v", beforeData, afterData, beforeLegacy, afterLegacy)
+	}
 	if _, ok := result["session"]; ok {
 		t.Fatalf("read-only dashboard must not manufacture a session block from legacy data, got %v", result)
 	}
