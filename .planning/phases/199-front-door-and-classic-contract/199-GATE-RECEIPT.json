@@ -2,7 +2,7 @@
   "schema_version": "phase199-gate-receipt/v1",
   "phase": "199",
   "plan": "29",
-  "status": "incomplete",
+  "status": "complete",
   "created_at": "2026-09-06T04:24:05.063130000Z",
   "repository": {
     "revision": "f42bd0b2c5f03b4dbcef8a4d06b3aac3061b4106",
@@ -72,5 +72,24 @@
       }
     }
   ],
-  "gates": []
+  "gates": [
+    {
+      "command": "go test ./...",
+      "exit_code": 0,
+      "started_at": "2026-09-06T07:25:54.418296000Z",
+      "finished_at": "2026-09-06T07:33:14.377717000Z",
+      "revision": "f42bd0b2c5f03b4dbcef8a4d06b3aac3061b4106",
+      "tree": "8e4a5d1c0afa06f4488dec0ee6fdb8e729c3ddba",
+      "output_sha256": "908c4b6e59b7e082df9d315ea75ce6b2b169016c8eac6f65e2b9fef618a7f9e9"
+    },
+    {
+      "command": "go test ./... -race",
+      "exit_code": 0,
+      "started_at": "2026-09-06T07:33:35.574557000Z",
+      "finished_at": "2026-09-06T07:43:23.097179000Z",
+      "revision": "f42bd0b2c5f03b4dbcef8a4d06b3aac3061b4106",
+      "tree": "8e4a5d1c0afa06f4488dec0ee6fdb8e729c3ddba",
+      "output_sha256": "bf34c203efca7772e02866733ca80d9a240a0f9a1179089e998259d140f3cd7a"
+    }
+  ]
 }
