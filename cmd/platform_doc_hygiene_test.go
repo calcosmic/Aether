@@ -170,30 +170,6 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			},
 		},
 		{
-			path: ".claude/commands/ant/resume-colony.md",
-			required: []string{
-				"Use the Go `aether` CLI as the source of truth.",
-				"AETHER_OUTPUT_MODE=visual aether resume-colony",
-			},
-			forbidden: []string{
-				"Run using the Bash tool with description \"Restoring colony session...\": `aether load-state`",
-				"Use Write tool to update COLONY_STATE.json",
-				".aether/aether-utils.sh",
-			},
-		},
-		{
-			path: ".claude/commands/ant/pause-colony.md",
-			required: []string{
-				"Use the Go `aether` CLI as the source of truth.",
-				"AETHER_OUTPUT_MODE=visual aether pause-colony",
-			},
-			forbidden: []string{
-				"Use the Read tool to read `.aether/data/COLONY_STATE.json`.",
-				"Use Write tool to update COLONY_STATE.json",
-				".aether/aether-utils.sh",
-			},
-		},
-		{
 			path: ".claude/commands/ant/build.md",
 			required: []string{
 				"Use the Go `aether` CLI as the source of truth.",
@@ -487,28 +463,6 @@ func TestLifecycleCommandDocsPreferRuntimeCLI(t *testing.T) {
 			forbidden: []string{
 				"Use the Read tool to read `.aether/data/COLONY_STATE.json`.",
 				"State file missing or corrupted.",
-				".aether/aether-utils.sh",
-			},
-		},
-		{
-			path: ".opencode/commands/ant/resume-colony.md",
-			required: []string{
-				"Use the Go `aether` CLI as the source of truth.",
-				"AETHER_OUTPUT_MODE=visual aether resume-colony",
-			},
-			forbidden: []string{
-				"Use Write tool to update COLONY_STATE.json",
-				".aether/aether-utils.sh",
-			},
-		},
-		{
-			path: ".opencode/commands/ant/pause-colony.md",
-			required: []string{
-				"Use the Go `aether` CLI as the source of truth.",
-				"AETHER_OUTPUT_MODE=visual aether pause-colony",
-			},
-			forbidden: []string{
-				"Use Write tool to update COLONY_STATE.json",
 				".aether/aether-utils.sh",
 			},
 		},

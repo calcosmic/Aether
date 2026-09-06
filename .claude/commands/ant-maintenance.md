@@ -12,6 +12,7 @@ The runtime owns the operation inventory and target resolution. The runtime owns
 
 ## Inspection
 
+- `recovery.inspect`
 - `integrity.inspect`
 - `source.parity.inspect`
 - `registry.inspect`

@@ -5,6 +5,7 @@ runtime:
   command: "AETHER_OUTPUT_MODE=visual aether maintenance $ARGUMENTS"
 inventory:
   inspection:
+    - recovery.inspect
     - integrity.inspect
     - source.parity.inspect
     - registry.inspect
@@ -35,6 +36,7 @@ wrapper: |
 
   ## Inspection
 
+  - `recovery.inspect`
   - `integrity.inspect`
   - `source.parity.inspect`
   - `registry.inspect`

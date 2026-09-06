@@ -53,6 +53,10 @@ wrapper: |
   - Empty line 2: `Start a guided colony for one goal with /ant-init "goal".`
   - Active standing: `Colony: {identity} | Goal: {accepted goal} | Episode: {episode} | Phase: {current}/{total} | Standing: {standing} | Ants: {acting castes or No ants are active} | Blockers: {count} | Next Up: {exact action}`
 
+  ## The Colony Lifecycle
+
+  For the runtime's detailed command contract, use `aether command-guide <command>`; use `aether recipes` to browse supported journeys.
+
   ## Normal journey
 
   - `/ant-init "goal"` — Start a guided colony for one goal.
