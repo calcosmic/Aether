@@ -6060,30 +6060,6 @@
     "output_mode": "unknown"
   },
   {
-    "name": "resume-dashboard",
-    "short_description": "Show session recovery information without restoring handoff state",
-    "flags": [],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
     "name": "review-ledger-read",
     "short_description": "Read entries from a domain review ledger",
     "flags": [

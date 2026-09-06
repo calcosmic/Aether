@@ -168,7 +168,7 @@ func TestRecoveryNextStepComesFromTheResolver(t *testing.T) {
 
 	issues := []HealthIssue{{Severity: "critical", Category: "missing_build_packet", Message: "No build packet"}}
 	answer := recoverNextAction(issues, state)
-	want := "aether resume"
+	want := "aether build 1 --force"
 	if answer.Command != want {
 		t.Errorf("recover's next-step decider recommends %q for a missing build packet on phase 1; want %q",
 			answer.Command, want)

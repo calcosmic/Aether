@@ -155,10 +155,13 @@ func TestInitRegistersColonyAndSeedsHive(t *testing.T) {
 // entry to inactive with its goal preserved — the registry reads as a true
 // history, not a list of ghosts marked forever active.
 func TestSealMarksRegistryEntryInactive(t *testing.T) {
+	saveGlobals(t)
+	s, repo := newTestStore(t)
+	store = s
+
 	hubDir := t.TempDir()
 	t.Setenv("AETHER_HUB_DIR", hubDir)
 
-	repo := "/tmp/example-colony"
 	if _, err := upsertColonyRegistryEntry(repo, "the goal", []string{"go"}, true); err != nil {
 		t.Fatalf("seed entry: %v", err)
 	}
