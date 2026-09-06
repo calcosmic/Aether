@@ -1,32 +1,5 @@
 [
   {
-    "name": "abandon",
-    "short_description": "Discard the current colony and start fresh",
-    "flags": [
-      "confirm"
-    ],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_lifecycle",
-    "since_version": "v1.0.53",
-    "historical_presence": {
-      "v1.0.53": true,
-      "v1.10": false,
-      "v1.11": false,
-      "v1.12": false,
-      "v1.13": false,
-      "v1.14": false,
-      "v1.17": false,
-      "v1.18": false,
-      "v1.19": false,
-      "v1.20": false,
-      "v1.21": false,
-      "v5.4.0": false
-    },
-    "stability_score": 8
-  },
-  {
     "name": "activity-log",
     "short_description": "Append an entry to the activity log",
     "flags": [
@@ -1773,9 +1746,10 @@
   },
   {
     "name": "data-clean",
-    "short_description": "Remove test artifacts from colony data files",
+    "short_description": "Remove explicitly owned artifacts from an exact cleanup manifest",
     "flags": [
-      "confirm"
+      "confirm",
+      "manifest"
     ],
     "parent_command": "",
     "has_subcommands": false,
@@ -1947,8 +1921,10 @@
   },
   {
     "name": "entomb",
-    "short_description": "Archive a sealed colony into chambers and reset the active state",
-    "flags": [],
+    "short_description": "Archive and clear the sealed colony.",
+    "flags": [
+      "confirm"
+    ],
     "parent_command": "",
     "has_subcommands": false,
     "output_mode": "unknown",
@@ -2977,7 +2953,7 @@
   },
   {
     "name": "history",
-    "short_description": "Show colony event history",
+    "short_description": "Show focused colony activity history",
     "flags": [
       "filter",
       "json",
@@ -4098,7 +4074,7 @@
   },
   {
     "name": "maturity",
-    "short_description": "View colony maturity journey",
+    "short_description": "Show evidence-backed colony health and readiness",
     "flags": [],
     "parent_command": "",
     "has_subcommands": false,
@@ -4698,7 +4674,7 @@
   },
   {
     "name": "pause",
-    "short_description": "Save colony state and write a handoff for later resumption",
+    "short_description": "Stop at a safe boundary and save one resumable handoff.",
     "flags": [],
     "parent_command": "",
     "has_subcommands": false,
@@ -4805,9 +4781,11 @@
   },
   {
     "name": "phase",
-    "short_description": "Display current phase details",
+    "short_description": "Display focused phase details",
     "flags": [
+      "all",
       "json",
+      "list",
       "number"
     ],
     "parent_command": "",
@@ -5852,34 +5830,6 @@
     "stability_score": 10
   },
   {
-    "name": "recover",
-    "short_description": "Rescue a stuck colony",
-    "flags": [
-      "apply",
-      "force",
-      "json"
-    ],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "json+visual",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
     "name": "redirect",
     "short_description": "Add a hard constraint for the colony",
     "flags": [],
@@ -5991,6 +5941,7 @@
       "domain",
       "goal",
       "path",
+      "remove",
       "repo",
       "tags"
     ],
@@ -6099,30 +6050,14 @@
     "output_mode": "unknown"
   },
   {
-    "name": "resume-colony",
-    "short_description": "Restore colony context from handoff and mark the session resumed",
+    "name": "resume",
+    "short_description": "Validate and restore the safest honest recovery point.",
     "flags": [
       "no-handoff"
     ],
     "parent_command": "",
     "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
+    "output_mode": "unknown"
   },
   {
     "name": "resume-dashboard",
@@ -7701,8 +7636,10 @@
   },
   {
     "name": "status",
-    "short_description": "Display colony dashboard",
-    "flags": [],
+    "short_description": "Show the complete authoritative colony snapshot.",
+    "flags": [
+      "compact"
+    ],
     "parent_command": "",
     "has_subcommands": false,
     "output_mode": "unknown",
@@ -8997,7 +8934,7 @@
   },
   {
     "name": "watch",
-    "short_description": "Compatibility alias for live worker activity",
+    "short_description": "Show the honest idle watch fallback",
     "flags": [
       "interval",
       "once"
@@ -9968,6 +9905,14 @@
       "v5.4.0": false
     },
     "stability_score": 91
+  },
+  {
+    "name": "recovery-inspect",
+    "short_description": "Inspect recovery evidence without changing colony state",
+    "flags": [],
+    "parent_command": "maintenance",
+    "has_subcommands": false,
+    "output_mode": "unknown"
   },
   {
     "name": "skills",
