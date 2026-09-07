@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -249,6 +250,118 @@ func TestPlanningScoutStageCompletedDirectAnswersResumeExactRouteSetter(t *testi
 	}
 }
 
+func TestPlanningScoutStageDecisionRejectsPartialAndStaleAnswersWithoutRoute(t *testing.T) {
+	root, manifest, result := planningScoutStageTestFixture(t)
+	result.DecisionCandidates = []planningDecisionCandidate{
+		planningScoutStageMaterialCandidate(result.NewEvidence[0].Reference, "decision-owner-authority"),
+		planningScoutStageMaterialCandidate(result.NewEvidence[0].Reference, "decision-visible-behavior"),
+	}
+	coordinated, err := coordinatePlanningScoutStage(root, manifest, planningScoutStageTestBytes(t, result))
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkpoint := coordinated.DecisionCheckpoint
+	partial := []planningScoutDecisionAnswer{{
+		DecisionID: checkpoint.Cards[0].DecisionID,
+		ChoiceID:   checkpoint.Cards[0].Choices[0].ID,
+		Answer:     checkpoint.Cards[0].Choices[0].Label,
+	}}
+	if _, err := buildPlanningScoutDecisionResumeToken(*checkpoint, partial); err == nil || !strings.Contains(err.Error(), "every card") {
+		t.Fatalf("partial decision error = %v", err)
+	}
+
+	answers := make([]planningScoutDecisionAnswer, 0, len(checkpoint.Cards))
+	for _, card := range checkpoint.Cards {
+		answers = append(answers, planningScoutDecisionAnswer{DecisionID: card.DecisionID, ChoiceID: card.Choices[0].ID, Answer: card.Choices[0].Label})
+	}
+	token, err := buildPlanningScoutDecisionResumeToken(*checkpoint, answers)
+	if err != nil {
+		t.Fatal(err)
+	}
+	staleBinding := planningDecisionResumeBindingFromToken(token)
+	staleBinding.FrontierReceiptHash = planningStageTestHash("e")
+	stale, err := issuePlanningDecisionResumeToken(staleBinding)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := resumePlanningScoutDecision(root, manifest.RunID, stale, time.Date(2026, time.September, 7, 19, 5, 0, 0, time.UTC)); err == nil || !strings.Contains(err.Error(), "stale") {
+		t.Fatalf("stale resume error = %v", err)
+	}
+	state := planningStageReceiptTestReadState(t, root, manifest.RunID)
+	if state.Stage != planningStageOwnerDecision || state.ActiveManifestID != "" || len(state.UsedAuthorizationIDs) != 1 {
+		t.Fatalf("rejected decision answer changed authority: %+v", state)
+	}
+}
+
+func TestPlanningScoutStageLateMaterialRoutesBeforeOwnerPause(t *testing.T) {
+	root, manifest, result := planningScoutStageTestFixtureAtPass(t, 2, planningStageTestState(planningStageScoutReady).Specification)
+	result.DecisionCandidates = []planningDecisionCandidate{
+		planningScoutStageMaterialCandidate(result.NewEvidence[0].Reference, "decision-late-risk"),
+	}
+
+	coordinated, err := coordinatePlanningScoutStage(root, manifest, planningScoutStageTestBytes(t, result))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if coordinated.DecisionCheckpoint != nil || coordinated.RouteDispatch == nil {
+		t.Fatalf("late material boundary = %+v, want Route-Setter before any owner pause", coordinated)
+	}
+	carried := coordinated.RouteDispatch.MaterialDecisionCandidates
+	if len(carried) != 1 || carried[0].StableID != "decision-late-risk" || len(carried[0].Evidence) != 1 || carried[0].Evidence[0].ID != result.NewEvidence[0].Reference.ID {
+		t.Fatalf("late material evidence was not carried into exact Route authorization: %+v", carried)
+	}
+	state := planningStageReceiptTestReadState(t, root, manifest.RunID)
+	if state.Stage != planningStageRouteRunning {
+		t.Fatalf("late material Scout paused at %q, want route_running", state.Stage)
+	}
+}
+
+func TestPlanningScoutStageContractAnswerCreatesSuccessorDraftAndBlocksRoute(t *testing.T) {
+	root, manifest, result, targetID := planningScoutStageContractFixture(t)
+	candidate := planningScoutStageMaterialCandidate(result.NewEvidence[0].Reference, "decision-change-requirement")
+	candidate.Impact = planningDecisionContractImpact{Behavior: "Keep the approved requirement wording."}
+	candidate.Choices = []planningDecisionChoice{{
+		ID:                  "change-contract",
+		Label:               "Change the approved requirement",
+		Consequence:         "The owner-visible contract gains the selected behavior before planning continues.",
+		Impact:              planningDecisionContractImpact{Behavior: "Require the selected owner-visible behavior."},
+		AffectedSemanticIDs: []string{targetID},
+	}}
+	result.DecisionCandidates = []planningDecisionCandidate{candidate}
+
+	coordinated, err := coordinatePlanningScoutStage(root, manifest, planningScoutStageTestBytes(t, result))
+	if err != nil {
+		t.Fatal(err)
+	}
+	card := coordinated.DecisionCheckpoint.Cards[0]
+	token, err := buildPlanningScoutDecisionResumeToken(*coordinated.DecisionCheckpoint, []planningScoutDecisionAnswer{{
+		DecisionID: card.DecisionID,
+		ChoiceID:   card.Choices[0].ID,
+		Answer:     card.Choices[0].Label,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resumed, err := resumePlanningScoutDecision(root, manifest.RunID, token, time.Date(2026, time.September, 7, 19, 10, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resumed.SuccessorSpecification == nil || resumed.RouteDispatch != nil {
+		t.Fatalf("contract answer = %+v, want successor draft and no Route-Setter", resumed)
+	}
+	successor := resumed.SuccessorSpecification.Revision
+	if successor.Status != colony.SpecStatusDraft || successor.PredecessorID != manifest.Specification.RevisionID || successor.ID == manifest.Specification.RevisionID {
+		t.Fatalf("successor specification = %+v, want distinct draft over approved predecessor", successor)
+	}
+	state := planningStageReceiptTestReadState(t, root, manifest.RunID)
+	if state.Stage != planningStageSpecApprovalRequired || state.PendingSpecification == nil || state.PendingSpecification.RevisionID != successor.ID {
+		t.Fatalf("contract answer state = %+v, want exact successor approval boundary", state)
+	}
+	if _, err := authorizePlanningScoutRoute(root, state, coordinated.DecisionCheckpoint.Batch.Decisions, &token); err == nil || !strings.Contains(err.Error(), "route_ready") {
+		t.Fatalf("Route-Setter dispatch before exact approval and reconciliation error = %v", err)
+	}
+}
+
 func planningScoutStageMaterialCandidate(evidence colony.PlanningEvidenceRef, stableID string) planningDecisionCandidate {
 	impact := planningDecisionContractImpact{Behavior: "Preserve the approved behavior contract."}
 	return planningDecisionCandidate{
@@ -267,6 +380,114 @@ func planningScoutStageMaterialCandidate(evidence colony.PlanningEvidenceRef, st
 		}},
 		ResumeInstruction: "Planning resumes at Route-Setter after every answer is bound.",
 	}
+}
+
+func planningScoutStageTestFixtureAtPass(t *testing.T, pass int, binding planningStageSpecificationBinding) (string, planningStageManifest, planningScoutStageResult) {
+	t.Helper()
+	root := t.TempDir()
+	return planningScoutStageTestFixtureInRoot(t, root, pass, binding)
+}
+
+func planningScoutStageTestFixtureInRoot(t *testing.T, root string, pass int, binding planningStageSpecificationBinding) (string, planningStageManifest, planningScoutStageResult) {
+	t.Helper()
+	state := planningStageTestState(planningStageScoutReady)
+	state.Pass = pass
+	state.Specification = binding
+	authorization := planningStageAuthorization{
+		ID:                fmt.Sprintf("authorization-scout-stage-%d", pass),
+		ExpectedCaste:     planningStageCasteScout,
+		InputFrontierHash: state.InputFrontierHash,
+		EvidenceFrontier:  []planningStageEvidenceBinding{{ID: "evidence", ContentHash: planningStageTestHash("1")}},
+		WeakestGap:        planningStageTestGap("receipt-gap"),
+	}
+	running, stageManifest, err := reducePlanningStage(state, planningStageTransition{To: planningStageScoutRunning, Authorization: &authorization})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stageManifest == nil {
+		t.Fatal("Scout dispatch did not emit a manifest")
+	}
+	if err := recordPlanningStageDispatch(root, running, *stageManifest, planningStageWriteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	manifest := *stageManifest
+	header := planningScoutStageTestHeader(t, manifest)
+	planningStageReceiptTestWriteJSON(t, filepath.Join(root, ".aether", "data", "planning", manifest.RunID, "run-header.json"), header)
+
+	record, err := normalizePlanningEvidence(planningEvidenceSource{
+		Kind:    colony.PlanningEvidenceResearch,
+		Origin:  fmt.Sprintf("scout:pass-%d:repository-observation", pass),
+		Content: []byte("The lifecycle transaction already provides a durable Scout receipt boundary."),
+		Scope: planningEvidenceScope{
+			GoalID:                  header.GoalID,
+			SessionID:               header.SessionID,
+			SpecificationRevisionID: manifest.Specification.RevisionID,
+			PlanRevisionID:          manifest.BasePlanRevisionID,
+		},
+		SourceRevision:       fmt.Sprintf("scout-result-revision-%d", pass),
+		ObservedAt:           time.Date(2026, time.September, 7, 18, pass, 0, 0, time.UTC),
+		ApplicableDimensions: []colony.PlanningDimension{colony.PlanningDimensionKnowledge},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gap := *planningStageTestGap(fmt.Sprintf("scout-unresolved-gap-%d", pass))
+	gap.EvidenceIDs = []string{record.Reference.ID}
+	result := planningScoutStageResult{
+		ResultType:           planningStageResultScout,
+		ManifestID:           manifest.ID,
+		ManifestHash:         manifest.ContentHash,
+		RunID:                manifest.RunID,
+		Pass:                 manifest.Pass,
+		Caste:                planningStageCasteScout,
+		Specification:        manifest.Specification,
+		BasePlanRevisionID:   manifest.BasePlanRevisionID,
+		BasePlanRevisionHash: manifest.BasePlanRevisionHash,
+		InputFrontierHash:    manifest.InputFrontierHash,
+		Findings: []planningScoutStageFinding{{
+			StableID:    fmt.Sprintf("scout-finding-stage-boundary-%d", pass),
+			Summary:     "The existing transaction can commit a Scout receipt before Route-Setter starts.",
+			EvidenceIDs: []string{record.Reference.ID},
+		}},
+		NewEvidence:    []planningEvidenceRecord{record},
+		UnresolvedGaps: []colony.PlanningGap{gap},
+	}
+	return root, manifest, result
+}
+
+func planningScoutStageContractFixture(t *testing.T) (string, planningStageManifest, planningScoutStageResult, string) {
+	t.Helper()
+	root := newSpecificationTestRepository(t, colony.ColonyState{})
+	request := specificationTestDraftRequest(t, colony.SpecScopeWholeGoal)
+	request.Scope.GoalID = "goal-200"
+	request.Scope.SessionID = "session-200"
+	draft, err := createSpecificationDraft(root, request, specificationMutationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	approved, err := approveSpecification(root, specificationApprovalRequest{
+		RevisionID:          draft.Revision.ID,
+		RevisionContentHash: draft.Revision.ContentHash,
+		ApprovalToken:       specificationApprovalToken(draft.Specification.ID, draft.Revision.ID, draft.Revision.ContentHash),
+		ApprovedBy:          "owner",
+		ApprovedAt:          request.CreatedAt.Add(time.Minute),
+	}, specificationMutationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	approvalHash, err := jsonSHA256(*approved.Revision.Approval)
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding := planningStageSpecificationBinding{
+		RevisionID:          approved.Revision.ID,
+		ContentHash:         approved.Revision.ContentHash,
+		Status:              colony.SpecStatusApproved,
+		ApprovalReceiptID:   approved.Revision.Approval.ID,
+		ApprovalReceiptHash: approvalHash,
+	}
+	_, manifest, result := planningScoutStageTestFixtureInRoot(t, root, 1, binding)
+	return root, manifest, result, approved.Revision.Requirements[0].ID
 }
 
 func planningScoutStageTestFixture(t *testing.T) (string, planningStageManifest, planningScoutStageResult) {
