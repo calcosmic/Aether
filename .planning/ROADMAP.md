@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 14/25 plans executed
+**Plans:** 15/25 plans executed
 
 Plans:
 
@@ -219,7 +219,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 200-15-PLAN.md — Finalize Route-Setter passes into cards, stops, or candidates.
+- [x] 200-15-PLAN.md — Finalize Route-Setter passes into cards, stops, or candidates.
 
 **Wave 7** *(blocked on Wave 6 completion)*
 

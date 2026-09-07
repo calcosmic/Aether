@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 200-14-PLAN.md
-last_updated: "2026-09-07T20:14:50.054Z"
+stopped_at: Completed 200-15-PLAN.md
+last_updated: "2026-09-07T21:03:02.868Z"
 last_activity: 2026-09-07
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 59
-  completed_plans: 48
+  completed_plans: 49
   percent: 14
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 15 of 25
+Plan: 16 of 25
 Status: Ready to execute
 Last activity: 2026-09-07
 
@@ -125,6 +125,7 @@ Last activity: 2026-09-07
 | Phase 200 P12 | 25 min | 2 tasks | 6 files |
 | Phase 200 P13 | 55 min | 3 tasks | 7 files |
 | Phase 200 P14 | 34m | 2 tasks | 3 files |
+| Phase 200 P15 | 42m | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -363,6 +364,9 @@ Last activity: 2026-09-07
 - [Phase 200]: Persist an answer-free boundary token with the first-pass batch; issue the completed resume token only after every exact card has an owner answer. — A completed resume token must never fabricate unanswered owner authority.
 - [Phase 200]: Bind later-pass material candidates into Route-Setter through the candidate snapshot hash and a content-addressed authorization envelope. — Plan 15 needs the exact evidence-bearing candidate set after the full pass, without widening the narrow worker manifest.
 - [Phase 200]: Contract-changing Scout answers minimally revise affected stable specification items and stop at exact approval plus scoped reconciliation. — An owner answer may propose a contract change but cannot itself approve the specification or authorize planning against stale scope.
+- [Phase 200]: Route-Setter supplies only an evidence-linked semantic proposal and five dimension proposals; Go owns accepted scores, weighted overall, weakest gap, stop reason, and every authority transition.
+- [Phase 200]: Bind later material choices to the completed Route card before owner review; equivalent answers resume the next Scout, while contract changes require a successor specification.
+- [Phase 200]: Persist stopped candidates as write-once pending_review run artifacts and leave active plan state unchanged until the explicit review and acceptance contract lands.
 
 ### Pending Todos
 
@@ -478,8 +482,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-07T20:14:50.045Z
-Stopped at: Completed 200-14-PLAN.md
+Last session: 2026-09-07T21:03:02.858Z
+Stopped at: Completed 200-15-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
