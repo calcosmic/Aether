@@ -285,6 +285,9 @@ func TestPlanningConfidenceGapRanksDeficitSeverityThenStableID(t *testing.T) {
 	proposal.Assessments[3].After = 40
 	proposal.Assessments[3].Before = 40
 	proposal.PriorScores.Set(colony.PlanningDimensionDependencies, 40)
+	proposal.Assessments[4].After = 80
+	proposal.Assessments[4].Before = 80
+	proposal.PriorScores.Set(colony.PlanningDimensionEffort, 80)
 	proposal.Assessments[3].RemainingGap.Severity = 7
 	setPlanningConfidenceTestGapID(&proposal.Assessments[2].RemainingGap, "gap-z")
 	setPlanningConfidenceTestGapID(&proposal.Assessments[3].RemainingGap, "gap-a")
