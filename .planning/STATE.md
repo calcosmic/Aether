@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 200-13-PLAN.md
-last_updated: "2026-09-07T19:32:27.807Z"
+stopped_at: Completed 200-14-PLAN.md
+last_updated: "2026-09-07T20:14:50.054Z"
 last_activity: 2026-09-07
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 59
-  completed_plans: 47
+  completed_plans: 48
   percent: 14
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 14 of 25
+Plan: 15 of 25
 Status: Ready to execute
 Last activity: 2026-09-07
 
@@ -124,6 +124,7 @@ Last activity: 2026-09-07
 | Phase 200 P11 | 35 min | 2 tasks | 3 files |
 | Phase 200 P12 | 25 min | 2 tasks | 6 files |
 | Phase 200 P13 | 55 min | 3 tasks | 7 files |
+| Phase 200 P14 | 34m | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -359,6 +360,9 @@ Last activity: 2026-09-07
 - [Phase 200]: The public planning boundary authorizes only one Scout stage and persists its exact run, specification, base-plan, preset, gap, and evidence bindings before any later worker or owner authority. — Route-Setter, scoring, candidate, acceptance, and activation authority belong to receipt-bound later stages.
 - [Phase 200]: Routine phase research is selected automatically from the preset, weakest gap, and evidence freshness, while material product ambiguity remains an owner decision after Scout evidence exists. — Research depth is a runtime policy; it is not an approval prompt and cannot self-approve a specification or plan.
 - [Phase 200]: Scout and configured repository research become planning evidence only through contained regular-file paths with source revision, freshness, applicability, hash, producer attribution, and privacy rejection. — Typed provenance keeps research useful without expanding filesystem or owner authority.
+- [Phase 200]: Persist an answer-free boundary token with the first-pass batch; issue the completed resume token only after every exact card has an owner answer. — A completed resume token must never fabricate unanswered owner authority.
+- [Phase 200]: Bind later-pass material candidates into Route-Setter through the candidate snapshot hash and a content-addressed authorization envelope. — Plan 15 needs the exact evidence-bearing candidate set after the full pass, without widening the narrow worker manifest.
+- [Phase 200]: Contract-changing Scout answers minimally revise affected stable specification items and stop at exact approval plus scoped reconciliation. — An owner answer may propose a contract change but cannot itself approve the specification or authorize planning against stale scope.
 
 ### Pending Todos
 
@@ -474,8 +478,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-07T19:32:27.798Z
-Stopped at: Completed 200-13-PLAN.md
+Last session: 2026-09-07T20:14:50.045Z
+Stopped at: Completed 200-14-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

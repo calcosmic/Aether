@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 13/25 plans executed
+**Plans:** 14/25 plans executed
 
 Plans:
 
@@ -215,7 +215,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 200-14-PLAN.md — Finalize Scout stages and route first-pass decisions correctly.
+- [x] 200-14-PLAN.md — Finalize Scout stages and route first-pass decisions correctly.
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
