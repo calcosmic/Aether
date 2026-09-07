@@ -966,6 +966,105 @@ func TestPlanCommandExposesWorkerTimeoutFlag(t *testing.T) {
 	}
 }
 
+func TestPlanCommandPresetFlags(t *testing.T) {
+	for _, flag := range []string{"preset", "target", "max-iterations"} {
+		if planCmd.Flags().Lookup(flag) == nil {
+			t.Fatalf("expected plan command to expose --%s", flag)
+		}
+	}
+}
+
+func TestCodexPlanPresetResolverExactValues(t *testing.T) {
+	tests := []struct {
+		name    string
+		target  int
+		passCap int
+	}{
+		{name: "fast", target: 80, passCap: 4},
+		{name: "balanced", target: 90, passCap: 6},
+		{name: "deep", target: 95, passCap: 8},
+		{name: "exhaustive", target: 99, passCap: 12},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			selection, err := resolvePlanningPreset(codexPlanOptions{Preset: tc.name, PresetSet: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if selection.PresetRequired || string(selection.Policy.ID) != tc.name || selection.Policy.TargetConfidence != tc.target || selection.Policy.PassCap != tc.passCap {
+				t.Fatalf("selection = %+v, want %s %d/%d", selection, tc.name, tc.target, tc.passCap)
+			}
+			if selection.SelectionSource != planningPresetSourceNamed {
+				t.Fatalf("selection source = %q, want %q", selection.SelectionSource, planningPresetSourceNamed)
+			}
+		})
+	}
+}
+
+func TestCodexPlanPresetResolverRequiresChoiceAndValidatesExplicitPair(t *testing.T) {
+	selection, err := resolvePlanningPreset(codexPlanOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !selection.PresetRequired || len(selection.Options) != 4 || selection.Policy.ID != "" {
+		t.Fatalf("unflagged selection = %+v, want four choices and no selected default", selection)
+	}
+
+	explicit, err := resolvePlanningPreset(codexPlanOptions{
+		TargetConfidence:    95,
+		TargetConfidenceSet: true,
+		MaxIterations:       8,
+		MaxIterationsSet:    true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if explicit.PresetRequired || explicit.Policy.ID != planningStagePresetDeep || explicit.SelectionSource != planningPresetSourceExplicitPair {
+		t.Fatalf("explicit pair selection = %+v", explicit)
+	}
+
+	invalid := []codexPlanOptions{
+		{Preset: "mystery", PresetSet: true},
+		{TargetConfidence: 90, TargetConfidenceSet: true},
+		{MaxIterations: 6, MaxIterationsSet: true},
+		{TargetConfidence: 69, TargetConfidenceSet: true, MaxIterations: 6, MaxIterationsSet: true},
+		{TargetConfidence: 90, TargetConfidenceSet: true, MaxIterations: 13, MaxIterationsSet: true},
+		{Preset: "fast", PresetSet: true, TargetConfidence: 90, TargetConfidenceSet: true, MaxIterations: 6, MaxIterationsSet: true},
+	}
+	for i, opts := range invalid {
+		if _, err := resolvePlanningPreset(opts); err == nil {
+			t.Errorf("invalid selection %d unexpectedly succeeded: %+v", i, opts)
+		}
+	}
+}
+
+func TestPlanCommandLegacyAcceptCannotMutate(t *testing.T) {
+	saveGlobals(t)
+	_, root := setupPhaseResearchManifestTest(t, researchProposalTestPhases())
+	before, err := os.ReadFile(filepath.Join(store.BasePath(), "COLONY_STATE.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = runCodexPlanWithOptions(root, codexPlanOptions{
+		PlanOnly:  true,
+		Preset:    "balanced",
+		PresetSet: true,
+		Accept:    true,
+	})
+	if err == nil || !strings.Contains(err.Error(), "aether plan --accept-candidate <candidate-id>") {
+		t.Fatalf("legacy --accept error = %v, want exact candidate acceptance guidance", err)
+	}
+	after, readErr := os.ReadFile(filepath.Join(store.BasePath(), "COLONY_STATE.json"))
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("legacy --accept changed colony state")
+	}
+}
+
 func TestPlanForceRecoversFromStaleInProgress(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
