@@ -73,6 +73,7 @@ Each TDD task used separate RED and GREEN gates; the discovered integration corr
 3. **Task 2 RED: Exact acceptance, stale, preservation, and replay contracts** - `82e98e37` (test)
 4. **Integration deviation: Admissible candidate base lineage** - `6ecba9ba` (fix)
 5. **Task 2 GREEN: Atomic exact candidate activation** - `3b26535c` (feat)
+6. **Post-plan gate fix: Exact deprecated-accept recovery guidance** - `7713d05` (fix)
 
 ## Files Created/Modified
 
@@ -108,10 +109,19 @@ Each TDD task used separate RED and GREEN gates; the discovered integration corr
 - **Verification:** `go test ./cmd -run 'TestPlanningRouteStage|TestCandidateAcceptanceBase' -count=1` passed, followed by the combined Plan 15/16 regression run in 133.082s.
 - **Committed in:** `6ecba9ba`
 
+**2. [Rule 1 - Bug] Restored the exact candidate-ID recovery shape for deprecated `--accept`**
+
+- **Found during:** Wave 7 post-plan regression gate
+- **Issue:** Plan 16's early candidate-operation validator correctly rejected bare `--accept`, but its replacement message omitted the literal `<candidate-id>` command shape required by the established CLI recovery contract.
+- **Fix:** The non-mutating migration error now tells the owner to inspect `aether plan --candidate` and run the exact `aether plan --accept-candidate <candidate-id> ...` command shown there.
+- **Files modified:** `cmd/plan_candidate.go`
+- **Verification:** The focused legacy-accept regression passes, and the combined Plan 15/16 suite passes 50 tests.
+- **Committed in:** `7713d05`
+
 ---
 
-**Total deviations:** 1 auto-fixed (1 Rule 3 blocking integration issue)
-**Impact on plan:** The correction is narrowly limited to the candidate producer/validator seam and makes the already-planned acceptance journey usable without granting any new worker or automatic activation authority.
+**Total deviations:** 2 auto-fixed (1 Rule 3 blocking integration issue, 1 Rule 1 recovery-guidance bug)
+**Impact on plan:** Both corrections are narrowly limited to the candidate producer/validator and migration-guidance seams. They make the planned acceptance journey usable without granting any new worker or automatic activation authority.
 
 ## Issues Encountered
 
@@ -138,6 +148,8 @@ None - no external service configuration required.
 - `go test ./cmd -run 'TestPlanCandidate.*Review|TestPlanCandidate.*Inputs|TestPlanCandidate.*Details|TestPlanCommand.*Candidate' -count=1` - passed after Task 1.
 - `go test ./cmd -run 'TestPlanCandidate.*Accept|TestPlanRevision.*Candidate|TestPlanRevision.*Replay|TestPlanRevision.*Stale' -count=1` - passed after Task 2.
 - `go test ./cmd -run 'TestPlanningRouteStage|TestCandidateAcceptanceBase|TestPlanCandidate|TestPlanRevision.*Candidate|TestPlanCommand.*Candidate' -count=1` - passed in 133.082s as the combined Plan 15/16 regression run.
+- `go test ./cmd -run '^TestPlanAcceptWithExistingPlanFailsLoudly$' -count=1` - passed after the Wave 7 recovery-guidance fix.
+- The combined Plan 15/16 regression command above was rerun after `7713d05` and passed all 50 selected tests.
 
 ## Next Phase Readiness
 
@@ -149,7 +161,7 @@ None - no external service configuration required.
 ## Self-Check: PASSED
 
 - All nine implementation/test files and this summary exist.
-- All five RED/GREEN/deviation commits are present in repository history.
+- All six RED/GREEN/deviation/post-plan fix commits are present in repository history.
 - The required Plan 16 tests and combined Plan 15/16 regression suite pass.
 
 ---
