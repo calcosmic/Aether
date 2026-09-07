@@ -196,7 +196,8 @@ func TestPlanRevisionCandidatePreservesCompletedCompatibleWork(t *testing.T) {
 	newTaskID := "2.1"
 	base := []colony.Phase{{
 		ID: 1, SemanticID: "phase-stable", Name: "Stable work", Status: colony.PhaseCompleted, WatcherFailureCount: 2,
-		Tasks: []colony.Task{{ID: &completedTaskID, SemanticID: "task-stable", Goal: "Keep this work", Status: colony.TaskCompleted}},
+		CandidateID: "old-candidate", CandidateContentHash: strings.Repeat("a", 64), PlanningTimelineID: "old-timeline", PlanningTimelineDigest: strings.Repeat("b", 64),
+		Tasks: []colony.Task{{ID: &completedTaskID, SemanticID: "task-stable", Goal: "Keep this work", Status: colony.TaskCompleted, CandidateID: "old-candidate", CandidateContentHash: strings.Repeat("a", 64)}},
 	}}
 	proposal := append(clonePhases(base), colony.Phase{
 		ID: 2, SemanticID: "phase-new", Name: "New work", Status: colony.PhasePending,
@@ -204,8 +205,18 @@ func TestPlanRevisionCandidatePreservesCompletedCompatibleWork(t *testing.T) {
 	})
 	proposal[0].Status = colony.PhasePending
 	proposal[0].WatcherFailureCount = 0
+	proposal[0].CandidateID = "new-candidate"
+	proposal[0].CandidateContentHash = strings.Repeat("c", 64)
+	proposal[0].PlanningTimelineID = "new-timeline"
+	proposal[0].PlanningTimelineDigest = strings.Repeat("d", 64)
 	proposal[0].Tasks[0].Status = colony.TaskPending
-	wantCompleted, err := json.Marshal(base[0])
+	proposal[0].Tasks[0].CandidateID = "new-candidate"
+	proposal[0].Tasks[0].CandidateContentHash = strings.Repeat("c", 64)
+	wantCompleted := clonePhases(proposal[:1])[0]
+	wantCompleted.Status = colony.PhaseCompleted
+	wantCompleted.WatcherFailureCount = 2
+	wantCompleted.Tasks[0].Status = colony.TaskCompleted
+	wantCompletedBytes, err := json.Marshal(wantCompleted)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,8 +233,8 @@ func TestPlanRevisionCandidatePreservesCompletedCompatibleWork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(gotCompleted) != string(wantCompleted) {
-		t.Fatalf("completed compatible work changed\nwant=%s\ngot=%s", wantCompleted, gotCompleted)
+	if string(gotCompleted) != string(wantCompletedBytes) {
+		t.Fatalf("completed lifecycle status or new authority binding changed\nwant=%s\ngot=%s", wantCompletedBytes, gotCompleted)
 	}
 	if len(preserved) != 1 || preserved[0] != 1 {
 		t.Fatalf("preserved phase ids = %v, want [1]", preserved)

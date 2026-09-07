@@ -191,7 +191,14 @@ func runPlanCandidateCommand(root string, inputs planCandidateCommandInputs) (ma
 		}
 		return planCandidateDetailResult(detail), true, nil
 	case planCandidateOperationAccept:
-		return nil, true, fmt.Errorf("candidate acceptance inputs are valid, but activation is not available in this build")
+		accepted, acceptErr := acceptPlanCandidate(root, planCandidateRequestFromInputs(inputs), planCandidateAcceptanceOptions{AcceptedBy: "owner"})
+		if acceptErr != nil {
+			return nil, true, acceptErr
+		}
+		return map[string]interface{}{
+			"operation": planCandidateOperationAccept, "candidate": accepted.Candidate,
+			"revision": accepted.Revision, "acceptance_receipt": accepted.Receipt, "replayed": accepted.Replayed,
+		}, true, nil
 	default:
 		return nil, false, nil
 	}
@@ -304,6 +311,9 @@ func loadPlanCandidateArtifact(root, requestedID string) (planCandidateArtifact,
 		if wanted != "" && candidate.ID != wanted {
 			continue
 		}
+		if wanted == "" && candidate.Status != colony.PlanCandidatePendingReview {
+			continue
+		}
 		if candidate.Timeline.RunID != runID {
 			return planCandidateArtifact{}, fmt.Errorf("candidate %s path does not match timeline run", candidate.ID)
 		}
@@ -364,9 +374,28 @@ func loadPlanCandidateRunHeader(root string, candidate colony.PlanCandidate) (pl
 	if err != nil {
 		return planningRunHeader{}, err
 	}
-	if header.Specification.RevisionID != candidate.SpecificationRevisionID || header.Specification.ContentHash != candidate.SpecificationRevisionHash ||
-		header.BasePlanRevisionID != candidate.BasePlanRevisionID || header.BasePlanRevisionHash != candidate.BasePlanRevisionHash {
+	if header.Specification.RevisionID != candidate.SpecificationRevisionID || header.Specification.ContentHash != candidate.SpecificationRevisionHash {
 		return planningRunHeader{}, fmt.Errorf("candidate %s does not match its immutable planning run header", candidate.ID)
+	}
+	state, err := loadSpecificationColonyState(root)
+	if err != nil {
+		return planningRunHeader{}, err
+	}
+	if candidate.Status == colony.PlanCandidateAccepted {
+		if err := validatePlanningState(state); err != nil {
+			return planningRunHeader{}, fmt.Errorf("candidate %s accepted state: %w", candidate.ID, err)
+		}
+		return header, nil
+	}
+	if err := validateCandidateRunBase(state.Plan, header); err != nil {
+		return planningRunHeader{}, fmt.Errorf("candidate %s: %w", candidate.ID, err)
+	}
+	base, _, err := candidateAcceptanceBase(state.Plan, candidate.CreatedAt)
+	if err != nil {
+		return planningRunHeader{}, err
+	}
+	if candidate.BasePlanRevisionID != base.ID || candidate.BasePlanRevisionHash != base.Hash {
+		return planningRunHeader{}, fmt.Errorf("candidate %s does not bind the immutable revision represented by its planning run base", candidate.ID)
 	}
 	return header, nil
 }

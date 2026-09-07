@@ -25,6 +25,458 @@ type codexPlanRevisionContext struct {
 	SupersededPhases  []colony.Phase            `json:"superseded_phases,omitempty"`
 }
 
+type planCandidateAcceptanceOptions struct {
+	AcceptedBy string
+	AcceptedAt time.Time
+	Fault      lifecycleTransactionFaultHook
+	Rename     func(oldPath, newPath string) error
+}
+
+type planCandidateAcceptanceResult struct {
+	Candidate colony.PlanCandidate         `json:"candidate"`
+	Revision  colony.PlanRevision          `json:"revision"`
+	Receipt   colony.PlanAcceptanceReceipt `json:"acceptance_receipt"`
+	Replayed  bool                         `json:"replayed"`
+}
+
+func planningRouteAcceptanceRepositoryPath(runID string) string {
+	return filepath.ToSlash(filepath.Join(".aether", "data", "planning", strings.TrimSpace(runID), "acceptance.json"))
+}
+
+// acceptPlanCandidate is the sole pending_review -> accepted authority. Every
+// refusal happens before the lifecycle transaction is opened, so stale input
+// cannot leave journals or partially mutate the plan frontier.
+func acceptPlanCandidate(root string, request planCandidateAcceptanceRequest, opts planCandidateAcceptanceOptions) (planCandidateAcceptanceResult, error) {
+	empty := planCandidateAcceptanceResult{}
+	artifact, err := loadPlanCandidateArtifact(root, request.CandidateID)
+	if err != nil {
+		return empty, fmt.Errorf("candidate_id: %w", err)
+	}
+	candidate := artifact.Candidate
+	if err := validatePlanCandidateAcceptanceRequest(candidate, request); err != nil {
+		return empty, err
+	}
+	state, err := loadSpecificationColonyState(root)
+	if err != nil {
+		return empty, err
+	}
+	if err := validatePlanningState(state); err != nil {
+		return empty, fmt.Errorf("validate current planning state: %w", err)
+	}
+
+	if candidate.Status == colony.PlanCandidateAccepted {
+		return replayAcceptedPlanCandidate(state, candidate)
+	}
+	if candidate.Status != colony.PlanCandidatePendingReview {
+		return empty, fmt.Errorf("candidate status %q cannot be accepted; only pending_review is eligible", candidate.Status)
+	}
+	if artifact.Stage.Stage != planningStageCandidateReady {
+		return empty, fmt.Errorf("candidate stage %q cannot be accepted; expected candidate_ready", artifact.Stage.Stage)
+	}
+	if pendingID := strings.TrimSpace(state.Plan.PendingCandidateID); pendingID != "" && pendingID != candidate.ID {
+		return empty, fmt.Errorf("candidate_id: current pending candidate is %q, not %q", pendingID, candidate.ID)
+	}
+	if _, err := verifiedPlanCandidateTimeline(root, candidate); err != nil {
+		return empty, err
+	}
+	if state.Specification == nil {
+		return empty, fmt.Errorf("specification_revision_id: candidate acceptance requires the current approved specification")
+	}
+	currentSpec, ok := currentSpecificationRevision(*state.Specification)
+	if !ok || currentSpec.Status != colony.SpecStatusApproved || currentSpec.Approval == nil {
+		return empty, fmt.Errorf("specification_revision_id: candidate acceptance requires the current approved specification")
+	}
+	if currentSpec.ID != candidate.SpecificationRevisionID {
+		return empty, fmt.Errorf("specification_revision_id: current revision is %q, candidate binds %q", currentSpec.ID, candidate.SpecificationRevisionID)
+	}
+	if currentSpec.ContentHash != candidate.SpecificationRevisionHash {
+		return empty, fmt.Errorf("specification_revision_hash: current revision no longer matches candidate")
+	}
+	if err := validateCandidateRunBase(state.Plan, artifact.Header); err != nil {
+		return empty, err
+	}
+	base, baseline, err := candidateAcceptanceBase(state.Plan, candidate.CreatedAt)
+	if err != nil {
+		return empty, err
+	}
+	if candidate.BasePlanRevisionID != base.ID {
+		return empty, fmt.Errorf("base_plan_revision_id: current base is %q, candidate binds %q", base.ID, candidate.BasePlanRevisionID)
+	}
+	if candidate.BasePlanRevisionHash != base.Hash {
+		return empty, fmt.Errorf("base_plan_revision_hash: current base no longer matches candidate")
+	}
+	computedProposalHash, err := planDefinitionHash(candidate.Proposal.Phases)
+	if err != nil {
+		return empty, fmt.Errorf("proposal_hash: %w", err)
+	}
+	if computedProposalHash != candidate.ProposalHash || candidate.Proposal.PlanHash != candidate.ProposalHash {
+		return empty, fmt.Errorf("proposal_hash: candidate proposal no longer matches its exact binding")
+	}
+
+	activatedPhases, preserved, err := preserveCompletedCandidateWork(state.Plan.Phases, candidate.Proposal.Phases)
+	if err != nil {
+		return empty, err
+	}
+	revision := candidate.Proposal
+	revision.Phases = activatedPhases
+	revision.PreservedPhaseIDs = preserved
+	if computed, hashErr := planDefinitionHash(revision.Phases); hashErr != nil || computed != revision.PlanHash {
+		if hashErr != nil {
+			return empty, fmt.Errorf("proposal_hash: %w", hashErr)
+		}
+		return empty, fmt.Errorf("proposal_hash: preserving completed work changed immutable proposal identity")
+	}
+	if err := validateCandidateProposalBase(revision, base); err != nil {
+		return empty, err
+	}
+
+	acceptedBy := strings.Join(strings.Fields(opts.AcceptedBy), " ")
+	if acceptedBy == "" {
+		acceptedBy = "owner"
+	}
+	acceptedAt := opts.AcceptedAt.UTC()
+	if acceptedAt.IsZero() {
+		acceptedAt = time.Now().UTC()
+	}
+	receipt, err := newPlanCandidateAcceptanceReceipt(candidate, request.AcceptanceToken, revision, acceptedBy, acceptedAt)
+	if err != nil {
+		return empty, err
+	}
+	candidate.Status = colony.PlanCandidateAccepted
+	candidate.Proposal = revision
+	candidate.Acceptance = &receipt
+	if err := validatePlanningRecordHashes(candidate); err != nil {
+		return empty, fmt.Errorf("accepted candidate: %w", err)
+	}
+	if err := candidate.Validate(); err != nil {
+		return empty, fmt.Errorf("accepted candidate: %w", err)
+	}
+
+	nextStage, _, err := reducePlanningStage(artifact.Stage, planningStageTransition{
+		To: planningStageAccepted, AcceptanceReceiptID: receipt.ID, AcceptanceReceiptHash: receipt.ContentHash,
+	})
+	if err != nil {
+		return empty, err
+	}
+	nextState := state
+	nextState.Plan.AcceptancePolicy = colony.PlanAcceptanceExplicitOwner
+	nextState.Plan.PendingCandidateID = ""
+	nextState.Plan.ActiveRevisionID = revision.ID
+	nextState.Plan.Phases = clonePhases(revision.Phases)
+	generatedAt := candidate.CreatedAt.UTC()
+	nextState.Plan.GeneratedAt = &generatedAt
+	confidence := planningConfidenceScores{}
+	for _, assessment := range candidate.DimensionAssessments {
+		confidence.Set(assessment.Dimension, assessment.After)
+	}
+	overallConfidence := float64(confidence.Overall) / 100
+	nextState.Plan.Confidence = &overallConfidence
+	nextState.Plan.EvidencePolicy = colony.PlanEvidenceBoundV1
+	nextState.Plan.Revisions = append([]colony.PlanRevision(nil), state.Plan.Revisions...)
+	if baseline != nil {
+		nextState.Plan.Revisions = append(nextState.Plan.Revisions, *baseline)
+	}
+	nextState.Plan.Revisions = append(nextState.Plan.Revisions, revision)
+	nextState.Plan.Candidates, err = appendAcceptedPlanCandidate(state.Plan.Candidates, candidate)
+	if err != nil {
+		return empty, err
+	}
+	nextState.State = colony.StateREADY
+	nextState.CurrentPhase = firstBuildablePhase(nextState.Plan.Phases)
+	nextState.BuildStartedAt = nil
+	nextState.Events = append(trimmedEvents(nextState.Events), fmt.Sprintf("%s|plan_candidate_accepted|plan-candidate-accept|Activated %s from exact candidate %s", acceptedAt.Format(time.RFC3339), revision.ID, candidate.ID))
+	if err := validatePlanningState(nextState); err != nil {
+		return empty, fmt.Errorf("validate accepted plan state: %w", err)
+	}
+
+	stateBytes, err := marshalSpecificationState(nextState)
+	if err != nil {
+		return empty, err
+	}
+	candidateBytes, err := marshalPlanningStageJSON(candidate)
+	if err != nil {
+		return empty, err
+	}
+	stageBytes, err := marshalPlanningStageJSON(nextStage)
+	if err != nil {
+		return empty, err
+	}
+	receiptBytes, err := marshalPlanningStageJSON(receipt)
+	if err != nil {
+		return empty, err
+	}
+	repositoryRoot, err := canonicalPlanningTimelineRoot(root)
+	if err != nil {
+		return empty, err
+	}
+	tx, err := beginLifecycleTransaction(lifecycleTransactionConfig{
+		TransactionID: "plan-candidate-accept-" + candidate.ContentHash[:24],
+		Command:       "plan-candidate-accept",
+		Allowlist: lifecycleTransactionAllowlist{
+			RepositoryRoot: repositoryRoot, LifecycleDataRoot: filepath.Join(repositoryRoot, ".aether", "data"),
+		},
+		Fault: opts.Fault, Rename: opts.Rename,
+	})
+	if err != nil {
+		return empty, err
+	}
+	for _, target := range []struct {
+		path    string
+		content []byte
+	}{
+		{path: "COLONY_STATE.json", content: stateBytes},
+		{path: planningStageDataRelativePath(planningRouteCandidateRepositoryPath(candidate.Timeline.RunID)), content: candidateBytes},
+		{path: planningStageDataRelativePath(planningStageStateRepositoryPath(candidate.Timeline.RunID)), content: stageBytes},
+		{path: planningStageDataRelativePath(planningRouteAcceptanceRepositoryPath(candidate.Timeline.RunID)), content: receiptBytes},
+	} {
+		if err := tx.DeclareWrite(lifecycleTransactionRootData, target.path, target.content); err != nil {
+			return empty, err
+		}
+	}
+	if err := tx.Validate(); err != nil {
+		return empty, err
+	}
+	if _, err := tx.Commit(); err != nil {
+		return empty, err
+	}
+	return planCandidateAcceptanceResult{Candidate: candidate, Revision: revision, Receipt: receipt}, nil
+}
+
+func validatePlanCandidateAcceptanceRequest(candidate colony.PlanCandidate, request planCandidateAcceptanceRequest) error {
+	bindings := []struct {
+		field string
+		got   string
+		want  string
+	}{
+		{field: "candidate_id", got: request.CandidateID, want: candidate.ID},
+		{field: "specification_revision_id", got: request.SpecificationRevisionID, want: candidate.SpecificationRevisionID},
+		{field: "specification_revision_hash", got: request.SpecificationRevisionHash, want: candidate.SpecificationRevisionHash},
+		{field: "base_plan_revision_id", got: request.BasePlanRevisionID, want: candidate.BasePlanRevisionID},
+		{field: "timeline_digest", got: request.TimelineDigest, want: candidate.Timeline.TimelineDigest},
+		{field: "proposal_hash", got: request.ProposalHash, want: candidate.ProposalHash},
+		{field: "acceptance_token", got: request.AcceptanceToken, want: planCandidateAcceptanceToken(candidate)},
+	}
+	for _, binding := range bindings {
+		if strings.TrimSpace(binding.got) != binding.want {
+			return fmt.Errorf("%s: supplied value does not match candidate %s", binding.field, candidate.ID)
+		}
+	}
+	return nil
+}
+
+func validateCandidateRunBase(plan colony.Plan, header planningRunHeader) error {
+	stateHash, err := planStateHash(plan)
+	if err != nil {
+		return fmt.Errorf("base_plan_revision_hash: hash current plan state: %w", err)
+	}
+	baseID, baseStateHash := planningBaseRevisionIdentity(plan, stateHash)
+	if header.BasePlanRevisionID != baseID {
+		return fmt.Errorf("base_plan_revision_id: planning run binds %q but current base is %q", header.BasePlanRevisionID, baseID)
+	}
+	if header.BasePlanRevisionHash != baseStateHash {
+		return fmt.Errorf("base_plan_revision_hash: plan state changed after candidate generation")
+	}
+	return nil
+}
+
+func validateCandidateProposalBase(revision colony.PlanRevision, base planCandidateBase) error {
+	wantNumber := base.Number + 1
+	wantParent := base.ID
+	if base.ID == "plan-unbound" {
+		wantParent = ""
+		wantNumber = 1
+	}
+	if revision.ParentID != wantParent || revision.Number != wantNumber {
+		return fmt.Errorf("base_plan_revision_id: candidate proposal does not extend exact base %q", base.ID)
+	}
+	return nil
+}
+
+func preserveCompletedCandidateWork(previous, proposal []colony.Phase) ([]colony.Phase, []int, error) {
+	result := clonePhases(proposal)
+	prefix, err := completedPlanPrefix(previous)
+	if err != nil {
+		return nil, nil, err
+	}
+	var preserved []int
+	bySemanticID := make(map[string]int, len(result))
+	for index := range result {
+		bySemanticID[strings.TrimSpace(result[index].SemanticID)] = index
+	}
+	for index := 0; index < prefix; index++ {
+		prior := previous[index]
+		candidateIndex, ok := bySemanticID[strings.TrimSpace(prior.SemanticID)]
+		if !ok || strings.TrimSpace(prior.SemanticID) == "" {
+			return nil, nil, fmt.Errorf("proposal_hash: candidate omits completed compatible phase %d", prior.ID)
+		}
+		priorHash, hashErr := completedPhaseCompatibilityHash(prior)
+		if hashErr != nil {
+			return nil, nil, hashErr
+		}
+		candidateHash, hashErr := completedPhaseCompatibilityHash(result[candidateIndex])
+		if hashErr != nil {
+			return nil, nil, hashErr
+		}
+		if priorHash != candidateHash {
+			return nil, nil, fmt.Errorf("proposal_hash: candidate changes completed phase %d", prior.ID)
+		}
+		result[candidateIndex].Status = prior.Status
+		result[candidateIndex].WatcherFailureCount = prior.WatcherFailureCount
+		priorTasks := make(map[string]colony.Task, len(prior.Tasks))
+		for _, task := range prior.Tasks {
+			priorTasks[strings.TrimSpace(task.SemanticID)] = task
+		}
+		for taskIndex := range result[candidateIndex].Tasks {
+			priorTask, found := priorTasks[strings.TrimSpace(result[candidateIndex].Tasks[taskIndex].SemanticID)]
+			if !found {
+				return nil, nil, fmt.Errorf("proposal_hash: candidate changes completed phase %d task membership", prior.ID)
+			}
+			result[candidateIndex].Tasks[taskIndex].Status = priorTask.Status
+		}
+		preserved = append(preserved, prior.ID)
+	}
+	return result, preserved, nil
+}
+
+func completedPhaseCompatibilityHash(phase colony.Phase) (string, error) {
+	copyPhase := clonePhases([]colony.Phase{phase})[0]
+	copyPhase.Status = ""
+	copyPhase.WatcherFailureCount = 0
+	copyPhase.SpecificationRevisionID = ""
+	copyPhase.SpecificationRevisionHash = ""
+	copyPhase.CandidateID = ""
+	copyPhase.CandidateContentHash = ""
+	copyPhase.PlanningTimelineID = ""
+	copyPhase.PlanningTimelineDigest = ""
+	copyPhase.AffectedSemanticIDs = nil
+	copyPhase.PreservedSemanticIDs = nil
+	for index := range copyPhase.Tasks {
+		copyPhase.Tasks[index].Status = ""
+		copyPhase.Tasks[index].SpecificationRevisionID = ""
+		copyPhase.Tasks[index].SpecificationRevisionHash = ""
+		copyPhase.Tasks[index].CandidateID = ""
+		copyPhase.Tasks[index].CandidateContentHash = ""
+		copyPhase.Tasks[index].PlanningTimelineID = ""
+		copyPhase.Tasks[index].PlanningTimelineDigest = ""
+		copyPhase.Tasks[index].AffectedSemanticIDs = nil
+		copyPhase.Tasks[index].PreservedSemanticIDs = nil
+	}
+	return jsonSHA256(copyPhase)
+}
+
+func newPlanCandidateAcceptanceReceipt(candidate colony.PlanCandidate, token string, revision colony.PlanRevision, acceptedBy string, acceptedAt time.Time) (colony.PlanAcceptanceReceipt, error) {
+	tokenHash := strings.TrimPrefix(lifecycleDigest([]byte(strings.TrimSpace(token))), "sha256:")
+	receipt := colony.PlanAcceptanceReceipt{
+		SchemaVersion: colony.PlanAcceptanceSchemaVersion,
+		CandidateID:   candidate.ID, CandidateContentHash: candidate.ContentHash,
+		SpecificationRevisionID: candidate.SpecificationRevisionID, SpecificationRevisionHash: candidate.SpecificationRevisionHash,
+		BasePlanRevisionID: candidate.BasePlanRevisionID, BasePlanRevisionHash: candidate.BasePlanRevisionHash,
+		TimelineID: candidate.Timeline.ID, TimelineDigest: candidate.Timeline.TimelineDigest,
+		ProposalHash: candidate.ProposalHash, AcceptanceTokenHash: tokenHash,
+		AcceptedBy: acceptedBy, AcceptedAt: acceptedAt.UTC(),
+		ActivatedPlanRevisionID: revision.ID, ActivatedPlanRevisionHash: revision.PlanHash,
+	}
+	hash, err := jsonSHA256(receipt)
+	if err != nil {
+		return colony.PlanAcceptanceReceipt{}, err
+	}
+	receipt.ContentHash = hash
+	receipt.ID = "plan-acceptance-" + hash[:12]
+	if err := receipt.Validate(); err != nil {
+		return colony.PlanAcceptanceReceipt{}, err
+	}
+	if err := validatePlanCandidateAcceptanceReceiptHash(receipt); err != nil {
+		return colony.PlanAcceptanceReceipt{}, err
+	}
+	return receipt, nil
+}
+
+func appendAcceptedPlanCandidate(existing []colony.PlanCandidate, accepted colony.PlanCandidate) ([]colony.PlanCandidate, error) {
+	result := append([]colony.PlanCandidate(nil), existing...)
+	for index := range result {
+		if result[index].ID != accepted.ID {
+			continue
+		}
+		if result[index].ContentHash != accepted.ContentHash || result[index].Status != colony.PlanCandidatePendingReview {
+			return nil, fmt.Errorf("candidate_id: retained candidate %q conflicts with exact acceptance", accepted.ID)
+		}
+		pending := accepted
+		pending.Status = colony.PlanCandidatePendingReview
+		pending.Acceptance = nil
+		retainedHash, hashErr := jsonSHA256(result[index])
+		if hashErr != nil {
+			return nil, hashErr
+		}
+		pendingHash, hashErr := jsonSHA256(pending)
+		if hashErr != nil {
+			return nil, hashErr
+		}
+		if retainedHash != pendingHash {
+			return nil, fmt.Errorf("candidate_id: retained candidate %q diverges from exact artifact", accepted.ID)
+		}
+		result[index] = accepted
+		return result, nil
+	}
+	return append(result, accepted), nil
+}
+
+func replayAcceptedPlanCandidate(state colony.ColonyState, candidate colony.PlanCandidate) (planCandidateAcceptanceResult, error) {
+	if candidate.Acceptance == nil {
+		return planCandidateAcceptanceResult{}, fmt.Errorf("candidate status accepted is missing its original receipt")
+	}
+	if err := validatePlanCandidateAcceptanceReceiptHash(*candidate.Acceptance); err != nil {
+		return planCandidateAcceptanceResult{}, err
+	}
+	expectedTokenHash := strings.TrimPrefix(lifecycleDigest([]byte(planCandidateAcceptanceToken(candidate))), "sha256:")
+	if candidate.Acceptance.AcceptanceTokenHash != expectedTokenHash {
+		return planCandidateAcceptanceResult{}, fmt.Errorf("acceptance_token: original receipt does not bind the exact candidate token")
+	}
+	if err := validatePlanningState(state); err != nil {
+		return planCandidateAcceptanceResult{}, fmt.Errorf("candidate_id: retained accepted state is invalid: %w", err)
+	}
+	for _, retained := range state.Plan.Candidates {
+		if retained.ID != candidate.ID {
+			continue
+		}
+		if retained.Status != colony.PlanCandidateAccepted || retained.Acceptance == nil || retained.Acceptance.ID != candidate.Acceptance.ID || retained.Acceptance.ContentHash != candidate.Acceptance.ContentHash {
+			return planCandidateAcceptanceResult{}, fmt.Errorf("candidate_id: accepted artifact diverges from retained state")
+		}
+		retainedHash, hashErr := jsonSHA256(retained)
+		if hashErr != nil {
+			return planCandidateAcceptanceResult{}, hashErr
+		}
+		artifactHash, hashErr := jsonSHA256(candidate)
+		if hashErr != nil {
+			return planCandidateAcceptanceResult{}, hashErr
+		}
+		if retainedHash != artifactHash {
+			return planCandidateAcceptanceResult{}, fmt.Errorf("candidate_id: accepted artifact diverges from retained state")
+		}
+		for _, revision := range state.Plan.Revisions {
+			if revision.ID == candidate.Acceptance.ActivatedPlanRevisionID && revision.PlanHash == candidate.Acceptance.ActivatedPlanRevisionHash {
+				return planCandidateAcceptanceResult{Candidate: retained, Revision: revision, Receipt: *retained.Acceptance, Replayed: true}, nil
+			}
+		}
+		return planCandidateAcceptanceResult{}, fmt.Errorf("candidate_id: accepted candidate revision is not retained")
+	}
+	return planCandidateAcceptanceResult{}, fmt.Errorf("candidate_id: accepted artifact is not retained in state")
+}
+
+func validatePlanCandidateAcceptanceReceiptHash(receipt colony.PlanAcceptanceReceipt) error {
+	want := receipt.ContentHash
+	payload := receipt
+	payload.ID = ""
+	payload.ContentHash = ""
+	got, err := jsonSHA256(payload)
+	if err != nil {
+		return err
+	}
+	if got != want || receipt.ID != "plan-acceptance-"+got[:12] {
+		return fmt.Errorf("acceptance receipt content hash does not match its immutable payload")
+	}
+	return nil
+}
+
 func planStateHash(plan colony.Plan) (string, error) {
 	// Missing and explicit legacy_unbound acceptance policies describe the
 	// same executable pre-Phase-200 plan. Canonicalize the additive migration

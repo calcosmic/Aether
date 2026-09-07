@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -159,7 +160,7 @@ func TestPlanCandidateAcceptActivatesInitialRevisionAtomically(t *testing.T) {
 	if err := validatePlanningState(state); err != nil {
 		t.Fatalf("accepted state is invalid: %v", err)
 	}
-	if state.Plan.AcceptancePolicy != colony.PlanAcceptanceExplicitOwner || state.Plan.ActiveRevisionID != result.Revision.ID || state.Plan.PendingCandidateID != "" || len(state.Plan.Revisions) != 1 || len(state.Plan.Candidates) != 1 {
+	if state.State != colony.StateREADY || state.CurrentPhase != 1 || state.Plan.AcceptancePolicy != colony.PlanAcceptanceExplicitOwner || state.Plan.ActiveRevisionID != result.Revision.ID || state.Plan.PendingCandidateID != "" || len(state.Plan.Revisions) != 1 || len(state.Plan.Candidates) != 1 {
 		t.Fatalf("accepted plan lineage = %+v, want one explicit-owner revision and candidate", state.Plan)
 	}
 	if state.Plan.Candidates[0].Status != colony.PlanCandidateAccepted || !reflect.DeepEqual(state.Plan.Candidates[0].Acceptance, &result.Receipt) || !reflect.DeepEqual(state.Plan.Phases, result.Revision.Phases) {
@@ -238,6 +239,49 @@ func TestPlanCandidateAcceptRejectsRejectedCandidateWithoutMutation(t *testing.T
 		t.Fatalf("rejected candidate acceptance error = %v, want status refusal", err)
 	}
 	planCandidateTestAssertSnapshot(t, root, before)
+}
+
+func TestPlanCandidateAcceptTransactionFaultLeavesFrontierByteIdentical(t *testing.T) {
+	root, candidate := planCandidateTestPending(t)
+	before := planCandidateTestSnapshot(t, root)
+	injected := errors.New("injected candidate acceptance fault")
+	_, err := acceptPlanCandidate(root, planCandidateTestAcceptanceRequest(candidate), planCandidateAcceptanceOptions{
+		AcceptedBy: "owner", AcceptedAt: time.Now().UTC(),
+		Fault: func(point string) error {
+			if point == "after_validation" {
+				return injected
+			}
+			return nil
+		},
+	})
+	if !errors.Is(err, injected) {
+		t.Fatalf("acceptance fault = %v, want injected transaction fault", err)
+	}
+	planCandidateTestAssertSnapshot(t, root, before)
+}
+
+func TestPlanCandidateAcceptCommandActivatesExactFrontier(t *testing.T) {
+	root, candidate := planCandidateTestPending(t)
+	request := planCandidateTestAcceptanceRequest(candidate)
+	result, handled, err := runPlanCandidateCommand(root, planCandidateCommandInputs{
+		AcceptCandidate: request.CandidateID, SpecificationRevisionID: request.SpecificationRevisionID,
+		SpecificationRevisionHash: request.SpecificationRevisionHash, BasePlanRevisionID: request.BasePlanRevisionID,
+		TimelineDigest: request.TimelineDigest, ProposalHash: request.ProposalHash, AcceptanceToken: request.AcceptanceToken,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !handled || result["operation"] != planCandidateOperationAccept || result["replayed"] != false {
+		t.Fatalf("candidate acceptance command result = %#v handled=%t", result, handled)
+	}
+	revision, ok := result["revision"].(colony.PlanRevision)
+	if !ok || revision.ID != candidate.Proposal.ID {
+		t.Fatalf("candidate acceptance command revision = %#v", result["revision"])
+	}
+	receipt, ok := result["acceptance_receipt"].(colony.PlanAcceptanceReceipt)
+	if !ok || receipt.CandidateID != candidate.ID || receipt.ActivatedPlanRevisionID != revision.ID {
+		t.Fatalf("candidate acceptance command receipt = %#v", result["acceptance_receipt"])
+	}
 }
 
 func planCandidateTestAcceptanceRequest(candidate colony.PlanCandidate) planCandidateAcceptanceRequest {
