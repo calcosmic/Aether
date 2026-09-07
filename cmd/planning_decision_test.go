@@ -374,6 +374,23 @@ func TestPlanningDecisionReuseResolutionSeparatesContractChanges(t *testing.T) {
 	if !reflect.DeepEqual(successor.AffectedSemanticIDs, []string{"requirement:export-01"}) || len(successor.RevisionEvidence) == 0 {
 		t.Fatalf("successor resolution lost affected IDs or revision evidence: %+v", successor)
 	}
+
+	missingIDs := planningDecisionResolutionRequest{
+		DecisionID:     "behavior-resolution",
+		ApprovedImpact: approved,
+		SelectedChoice: planningDecisionChoice{
+			ID: "unsafe-expand", Label: "Expand without IDs", Consequence: "Broaden the promised behavior.",
+			Impact: planningDecisionContractImpact{
+				Behavior:   "broader export semantics",
+				Scope:      approved.Scope,
+				Risk:       approved.Risk,
+				Acceptance: approved.Acceptance,
+			},
+		},
+	}
+	if _, err := resolvePlanningDecisionAnswer(missingIDs); err == nil || !strings.Contains(err.Error(), "affected semantic IDs") {
+		t.Fatalf("contract change without stable IDs error = %v", err)
+	}
 }
 
 func TestPlanningDecisionResumeExactRetryAndRejectsDrift(t *testing.T) {

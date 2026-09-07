@@ -336,6 +336,13 @@ func canonicalPlanningDecisionCandidate(candidate planningDecisionCandidate) pla
 	sort.Slice(candidate.Evidence, func(left, right int) bool {
 		return candidate.Evidence[left].ID < candidate.Evidence[right].ID
 	})
+	candidate.Choices = append([]planningDecisionChoice(nil), candidate.Choices...)
+	for i := range candidate.Choices {
+		candidate.Choices[i] = canonicalPlanningDecisionChoice(candidate.Choices[i])
+	}
+	sort.Slice(candidate.Choices, func(left, right int) bool {
+		return candidate.Choices[left].ID < candidate.Choices[right].ID
+	})
 	return candidate
 }
 
@@ -717,6 +724,9 @@ func resolvePlanningDecisionAnswer(request planningDecisionResolutionRequest) (p
 	approved := canonicalPlanningDecisionImpact(request.ApprovedImpact)
 	revisionEvidence := planningDecisionImpactDifferences(approved, selected.Impact)
 	affectedIDs := nonEmptyPlanningDecisionIDs(selected.AffectedSemanticIDs)
+	if len(revisionEvidence) > 0 && len(affectedIDs) == 0 {
+		return planningDecisionResolution{}, fmt.Errorf("contract-changing answer requires affected semantic IDs")
+	}
 	if len(affectedIDs) > 0 {
 		revisionEvidence = append(revisionEvidence, planningDecisionRevisionEvidence{
 			Dimension:           "affected_specification_items",
@@ -989,6 +999,14 @@ func validatePlanningDecisionResumeBinding(binding planningDecisionResumeBinding
 		}
 	} else if len(binding.AffectedSemanticIDs) == 0 || len(binding.RevisionEvidence) == 0 {
 		return fmt.Errorf("successor_spec_required requires affected IDs and revision evidence")
+	}
+	for i, evidence := range binding.RevisionEvidence {
+		if strings.TrimSpace(evidence.Dimension) == "" {
+			return fmt.Errorf("revision_evidence[%d] requires dimension", i)
+		}
+		if strings.TrimSpace(evidence.SelectedValue) == "" && len(evidence.AffectedSemanticIDs) == 0 {
+			return fmt.Errorf("revision_evidence[%d] requires a selected value or affected IDs", i)
+		}
 	}
 	return nil
 }
