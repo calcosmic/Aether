@@ -84,7 +84,7 @@ func TestDiscussMaterialBatchContainsAllFiveDomainsAndDecisionFields(t *testing.
 			ID:          "pd-material-" + domain,
 			Type:        clarificationDecisionType,
 			Description: formatClarificationDescription("Choose the "+domain+" contract", []string{"preserve current " + domain, "change " + domain}),
-			Source:      "wrapper:" + domain + ":contract",
+			Source:      "wrapper:" + domain + ":contract-" + domain,
 			GoalHash:    pendingDecisionGoalHash(goal),
 			SessionID:   sessionID,
 			Grounding:   "Repository evidence leaves two materially different " + domain + " outcomes.",
