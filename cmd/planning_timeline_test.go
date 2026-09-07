@@ -202,6 +202,247 @@ func TestPlanningTimelinePathAndSequenceRejectionsAreZeroMutation(t *testing.T) 
 	})
 }
 
+func TestPlanningTimelineReplayExactIsNoOpAndDivergenceConflicts(t *testing.T) {
+	root := t.TempDir()
+	card := validPlanningIterationCardForTest(t, 1, time.Date(2026, time.September, 7, 14, 9, 0, 0, time.UTC))
+	opts := planningTimelineAppendOptions{ReceiptID: "route-pass-replay"}
+	first, err := appendPlanningIterationCard(root, card, opts)
+	if err != nil {
+		t.Fatalf("append first: %v", err)
+	}
+	cardPath := filepath.Join(root, filepath.FromSlash(first.CardPath))
+	indexPath := filepath.Join(root, filepath.FromSlash(first.IndexPath))
+	cardBefore, err := os.ReadFile(cardPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	indexBefore, err := os.ReadFile(indexPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	replayed, err := appendPlanningIterationCard(root, card, opts)
+	if err != nil {
+		t.Fatalf("exact replay: %v", err)
+	}
+	if replayed.CardID != first.CardID || replayed.CardHash != first.CardHash || replayed.TimelineDigest != first.TimelineDigest {
+		t.Fatalf("exact replay returned a different binding\nfirst: %#v\nreplay: %#v", first, replayed)
+	}
+	if !reflect.DeepEqual(replayed.WriteReceipt, first.WriteReceipt) {
+		t.Fatal("exact replay returned a different lifecycle write receipt")
+	}
+	cardAfter, _ := os.ReadFile(cardPath)
+	indexAfter, _ := os.ReadFile(indexPath)
+	if !bytes.Equal(cardBefore, cardAfter) || !bytes.Equal(indexBefore, indexAfter) {
+		t.Fatal("exact replay rewrote card or index bytes")
+	}
+
+	divergent := clonePlanningTimelineTestCard(t, card)
+	divergent.DimensionAssessments[0].Rationale = "different evidence interpretation"
+	_, err = appendPlanningIterationCard(root, divergent, opts)
+	var conflict *planningTimelineConflictError
+	if !errors.As(err, &conflict) || !strings.Contains(err.Error(), "receipt") {
+		t.Fatalf("divergent replay error = %v, want typed receipt conflict", err)
+	}
+	cardAfterConflict, _ := os.ReadFile(cardPath)
+	indexAfterConflict, _ := os.ReadFile(indexPath)
+	if !bytes.Equal(cardBefore, cardAfterConflict) || !bytes.Equal(indexBefore, indexAfterConflict) {
+		t.Fatal("divergent replay changed the original chain")
+	}
+}
+
+func TestPlanningTimelineReplayResumesMatchingStagedIntent(t *testing.T) {
+	root := t.TempDir()
+	card := validPlanningIterationCardForTest(t, 1, time.Date(2026, time.September, 7, 14, 10, 0, 0, time.UTC))
+	opts := planningTimelineAppendOptions{
+		ReceiptID: "route-pass-resume",
+		Fault: func(point string) error {
+			if point == "after_intent" {
+				return errPlanningTimelineInjected
+			}
+			return nil
+		},
+	}
+	if _, err := appendPlanningIterationCard(root, card, opts); !errors.Is(err, errPlanningTimelineInjected) {
+		t.Fatalf("staged append error = %v, want injected fault", err)
+	}
+	assertPlanningTimelineTestArtifactsAbsent(t, root, card.RunID)
+
+	opts.Fault = nil
+	receipt, err := appendPlanningIterationCard(root, card, opts)
+	if err != nil {
+		t.Fatalf("resume exact staged append: %v", err)
+	}
+	if receipt.WriteReceipt.StateEffect != colony.LifecycleStateEffectCommitted {
+		t.Fatalf("resumed write receipt = %#v", receipt.WriteReceipt)
+	}
+	loaded, err := loadPlanningTimeline(root, card.RunID)
+	if err != nil {
+		t.Fatalf("load resumed timeline: %v", err)
+	}
+	if len(loaded.Cards) != 1 || loaded.Cards[0].ID != receipt.CardID {
+		t.Fatalf("resumed timeline = %#v", loaded)
+	}
+}
+
+func TestPlanningTimelineDigestLoadIsDeterministicAndDetectsTamper(t *testing.T) {
+	root := t.TempDir()
+	first, second := appendTwoPlanningTimelineTestCards(t, root)
+
+	loaded, err := loadPlanningTimeline(root, first.RunID)
+	if err != nil {
+		t.Fatalf("load timeline: %v", err)
+	}
+	again, err := loadPlanningTimeline(root, first.RunID)
+	if err != nil {
+		t.Fatalf("load timeline again: %v", err)
+	}
+	if loaded.Binding == nil || again.Binding == nil || !reflect.DeepEqual(loaded.Binding, again.Binding) {
+		t.Fatalf("timeline binding was not deterministic\nfirst: %#v\nagain: %#v", loaded.Binding, again.Binding)
+	}
+	if loaded.Binding.TimelineDigest != second.TimelineDigest || loaded.Binding.LastCardHash != second.CardHash {
+		t.Fatalf("loaded binding = %#v, final append = %#v", loaded.Binding, second)
+	}
+
+	tampered := readPlanningTimelineTestCard(t, root, first.CardPath)
+	tampered.EvidenceThatWouldChange = "tampered evidence guidance"
+	tamperedBytes, err := marshalPlanningTimelineJSON(tampered)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(first.CardPath)), tamperedBytes, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadPlanningTimeline(root, first.RunID); err == nil || !strings.Contains(err.Error(), "mutated") {
+		t.Fatalf("tampered timeline load error = %v", err)
+	}
+}
+
+func TestPlanningTimelineDigestRejectsReorderedIndexEvenWhenReaddressed(t *testing.T) {
+	root := t.TempDir()
+	first, second := appendTwoPlanningTimelineTestCards(t, root)
+	index := readPlanningTimelineTestIndex(t, root, second.IndexPath)
+	index.Entries[0], index.Entries[1] = index.Entries[1], index.Entries[0]
+	index.ID = ""
+	index.ContentHash = ""
+	hash, err := planningTimelineIndexContentHash(index)
+	if err != nil {
+		t.Fatal(err)
+	}
+	index.ContentHash = hash
+	index.ID = "planning-timeline-index-" + hash[:12]
+	content, err := marshalPlanningTimelineJSON(index)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(second.IndexPath)), content, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadPlanningTimeline(root, first.RunID); err == nil || !strings.Contains(err.Error(), "iteration") {
+		t.Fatalf("reordered index load error = %v", err)
+	}
+}
+
+func TestPlanningTimelineBoundAcceptedHistoryCannotBePrunedOrReordered(t *testing.T) {
+	root := t.TempDir()
+	first, _ := appendTwoPlanningTimelineTestCards(t, root)
+	loaded, err := loadPlanningTimeline(root, first.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Binding == nil {
+		t.Fatal("validated current timeline did not expose a binding")
+	}
+	revisions := []colony.PlanRevision{{
+		ID:                     "plan-r1-accepted",
+		PlanningTimelineID:     loaded.Binding.ID,
+		PlanningTimelineDigest: loaded.Binding.TimelineDigest,
+	}}
+	protection, err := planningTimelineProtectionFor(loaded, revisions)
+	if err != nil {
+		t.Fatalf("classify accepted timeline: %v", err)
+	}
+	if protection.Classification != planningTimelineAccepted || protection.Prunable || protection.Reorderable || protection.BoundRevisionID != revisions[0].ID {
+		t.Fatalf("accepted protection = %#v", protection)
+	}
+	for _, mutation := range []planningTimelineMutation{planningTimelineMutationPrune, planningTimelineMutationReorder} {
+		err := authorizePlanningTimelineMutation(loaded, revisions, mutation)
+		var protected *planningTimelineProtectedError
+		if !errors.As(err, &protected) {
+			t.Fatalf("accepted %s error = %v, want typed protection error", mutation, err)
+		}
+	}
+
+	candidate, err := planningTimelineProtectionFor(loaded, nil)
+	if err != nil {
+		t.Fatalf("classify candidate-only timeline: %v", err)
+	}
+	if candidate.Classification != planningTimelineCandidateOnly || !candidate.Prunable || candidate.Reorderable {
+		t.Fatalf("candidate-only protection = %#v", candidate)
+	}
+	if err := authorizePlanningTimelineMutation(loaded, nil, planningTimelineMutationPrune); err != nil {
+		t.Fatalf("candidate-only retention prune was blocked: %v", err)
+	}
+}
+
+func TestPlanningTimelineBoundRejectsDigestConflictAndClassifiesLegacyEvidence(t *testing.T) {
+	root := t.TempDir()
+	first, _ := appendTwoPlanningTimelineTestCards(t, root)
+	loaded, err := loadPlanningTimeline(root, first.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conflicting := []colony.PlanRevision{{
+		ID:                     "plan-r1-conflict",
+		PlanningTimelineID:     loaded.Binding.ID,
+		PlanningTimelineDigest: strings.Repeat("0", 64),
+	}}
+	if _, err := planningTimelineProtectionFor(loaded, conflicting); err == nil || !strings.Contains(err.Error(), "digest") {
+		t.Fatalf("accepted binding digest conflict = %v", err)
+	}
+
+	legacyRun := "legacy-run"
+	legacyDir := filepath.Join(root, ".aether", "data", "planning", legacyRun, "iterations")
+	if err := os.MkdirAll(legacyDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(legacyDir, "iteration-01-scout.json"), []byte("{\"legacy\":true}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	legacy, err := loadPlanningTimeline(root, legacyRun)
+	if err != nil {
+		t.Fatalf("load legacy evidence: %v", err)
+	}
+	if legacy.Classification != planningTimelineLegacyUnbound || legacy.Binding != nil || len(legacy.LegacyArtifacts) != 1 {
+		t.Fatalf("legacy timeline classification = %#v", legacy)
+	}
+	legacyProtection, err := planningTimelineProtectionFor(legacy, conflicting)
+	if err != nil {
+		t.Fatalf("classify legacy evidence: %v", err)
+	}
+	if legacyProtection.Classification != planningTimelineLegacyUnbound || legacyProtection.BoundRevisionID != "" {
+		t.Fatalf("legacy protection = %#v", legacyProtection)
+	}
+}
+
+func appendTwoPlanningTimelineTestCards(t *testing.T, root string) (planningTimelineAppendReceipt, planningTimelineAppendReceipt) {
+	t.Helper()
+	firstCard := validPlanningIterationCardForTest(t, 1, time.Date(2026, time.September, 7, 14, 11, 0, 0, time.UTC))
+	first, err := appendPlanningIterationCard(root, firstCard, planningTimelineAppendOptions{ReceiptID: "route-pass-one"})
+	if err != nil {
+		t.Fatalf("append first card: %v", err)
+	}
+	secondCard := validPlanningIterationCardForTest(t, 2, time.Date(2026, time.September, 7, 14, 12, 0, 0, time.UTC))
+	second, err := appendPlanningIterationCard(root, secondCard, planningTimelineAppendOptions{
+		ReceiptID:        "route-pass-two",
+		PreviousCardHash: first.CardHash,
+	})
+	if err != nil {
+		t.Fatalf("append second card: %v", err)
+	}
+	return first, second
+}
+
 func readPlanningTimelineTestCard(t *testing.T, root, relativePath string) colony.PlanningIterationCard {
 	t.Helper()
 	content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(relativePath)))
