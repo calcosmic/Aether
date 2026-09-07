@@ -184,6 +184,74 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
+**Plans:** 25 plans
+
+Plans:
+
+**Wave 1**
+
+- [ ] 200-01-PLAN.md — Define durable specification and iterative-planning authority contracts.
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 200-02-PLAN.md — Migrate and replay specification and planning records safely.
+- [ ] 200-03-PLAN.md — Build the shared planning-evidence catalogue.
+- [ ] 200-04-PLAN.md — Validate five confidence dimensions and deterministic stop policy.
+- [ ] 200-05-PLAN.md — Compute semantic before-to-after plan deltas.
+- [ ] 200-06-PLAN.md — Persist the append-only iteration-card timeline.
+- [ ] 200-07-PLAN.md — Enforce shared material-decision boundaries.
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 200-08-PLAN.md — Implement immutable specification lineage and projection.
+- [ ] 200-09-PLAN.md — Implement staged Scout and Route-Setter transition receipts.
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 200-10-PLAN.md — Expose the public specification lifecycle command.
+- [ ] 200-11-PLAN.md — Make discuss evidence-first and hand off to a draft specification.
+- [ ] 200-12-PLAN.md — Extend lifecycle facts and Next Up for planning authority states.
+- [ ] 200-13-PLAN.md — Start planning from an explicit preset and first Scout stage.
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 200-14-PLAN.md — Finalize Scout stages and route first-pass decisions correctly.
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 200-15-PLAN.md — Finalize Route-Setter passes into cards, stops, or candidates.
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 200-16-PLAN.md — Review and exactly accept a non-active plan candidate.
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [ ] 200-17-PLAN.md — Reconcile living specification and plan revisions by affected scope.
+- [ ] 200-18-PLAN.md — Gate build and Autopilot on one accepted-plan authority policy.
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
+- [ ] 200-19-PLAN.md — Render the approved terminal and JSON planning contract.
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
+- [ ] 200-20-PLAN.md — Synchronize evidence-first discuss wrappers and guidance.
+- [ ] 200-24-PLAN.md — Synchronize init closeout with the discuss-first journey.
+
+**Wave 11** *(blocked on Wave 10 completion)*
+
+- [ ] 200-21-PLAN.md — Synchronize staged planning wrappers and regressions.
+- [ ] 200-25-PLAN.md — Synchronize specification wrappers and public parity inventory.
+
+**Wave 12** *(blocked on Wave 11 completion)*
+
+- [ ] 200-22-PLAN.md — Publish Phase 200 contracts and platform guidance.
+
+**Wave 13** *(blocked on Wave 12 completion)*
+
+- [ ] 200-23-PLAN.md — Prove the Classic synthesis and full public planning journey.
+
 **Success criteria:**
 
 1. A cited mechanism study reconstructs the actual Classic Scout/Route-Setter loop and compares it with current Go planning, revision, and finalization before selecting the combined design.

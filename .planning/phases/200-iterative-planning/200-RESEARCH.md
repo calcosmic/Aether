@@ -288,13 +288,13 @@ No external service/package is required. Verify the existing Go toolchain and co
 |---|---|---|
 | — | None; recommendations derive from locked decisions and repository evidence. | — |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **SPEC body storage:** embed revisions in colony state or index immutable bodies. Prefer the design that makes approval plus impact one atomic transaction and prove crash/replay behavior. [VERIFIED scope: Agent's Discretion]
-2. **Diminishing threshold:** historical `<2 after pass 5` and current `<5 twice` are inputs, not a locked answer. Encode a named policy using novelty/materiality and table-test it. [VERIFIED: `3a5b81c2:.claude/commands/ant/plan.md:428-456`; `cmd/codex_plan_finalize.go:820-860`]
-3. **Semantic versus ordinal IDs:** retain ordinals for build compatibility; add immutable semantic IDs for trace/diff/impact. [VERIFIED: `cmd/contracts/plan.md:130-176`; `cmd/plan_revision.go:360-385`]
+1. **SPEC body storage — RESOLVED:** store the canonical immutable `SpecRevision` snapshots, lineage metadata, approval receipt, and impact classification inside the optional `ColonyState` specification aggregate so approval plus impact can commit in one atomic state transaction. Keep `.aether/SPEC.md` as a deterministic, repairable projection only; it is never parsed back into authority. [VERIFIED scope: Agent's Discretion; selected by the Phase-200 plans' `pkg/colony/specification.go` and lifecycle-transaction design]
+2. **Diminishing threshold — RESOLVED:** use a named `grounded_two_pass_lt2` policy: after at least three completed passes, diminishing returns requires two consecutive grounded Route-Setter passes that each cite fresh evidence, each move the Go-derived weighted overall by an absolute value below two points, and make no material semantic change. Any material residual gap converts the outcome to an owner-decision pause. [VERIFIED: `3a5b81c2:.claude/commands/ant/plan.md:428-456`; `cmd/codex_plan_finalize.go:820-860`; D-15]
+3. **Semantic versus ordinal IDs — RESOLVED:** retain existing ordinal phase/task identifiers strictly for build and display compatibility, and add immutable semantic IDs as the authoritative keys for traceability, semantic diff, specification impact, task/proof invalidation, and revision preservation. Reordering or renumbering alone must not change semantic identity. [VERIFIED: `cmd/contracts/plan.md:130-176`; `cmd/plan_revision.go:360-385`; D-03/D-11/D-12]
 
-None blocks planning because exact internal representation and thresholds are delegated while the observable/safety contracts are locked. [VERIFIED: Agent's Discretion]
+These were delegated implementation choices, and their exact selections are now fixed for planning. No unresolved research question remains. [VERIFIED: Agent's Discretion]
 
 ## Sources
 
