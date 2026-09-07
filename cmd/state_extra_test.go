@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
 )
 
@@ -1366,4 +1369,213 @@ func TestStateCheckpointNilStore(t *testing.T) {
 	if env["ok"] != true {
 		t.Fatalf("expected ok:true, got: %v", env["ok"])
 	}
+}
+
+func insertPhaseAcceptedPlanFixture(t *testing.T) (string, colony.ColonyState, string) {
+	t.Helper()
+	root, candidate := planCandidateTestPending(t)
+	if _, err := acceptPlanCandidate(root, planCandidateTestAcceptanceRequest(candidate), planCandidateAcceptanceOptions{AcceptedBy: "owner"}); err != nil {
+		t.Fatalf("accept insert-phase base candidate: %v", err)
+	}
+	s, err := storage.NewStore(filepath.Join(root, ".aether", "data"))
+	if err != nil {
+		t.Fatalf("open insert-phase fixture store: %v", err)
+	}
+	store = s
+	state := mustReadSpecificationTestState(t, root)
+	revision, ok := currentSpecificationRevision(*state.Specification)
+	if !ok {
+		t.Fatal("accepted insert-phase fixture has no current specification")
+	}
+	ids := planImpactSpecificationIDs(revision)
+	if len(ids) == 0 {
+		t.Fatal("accepted insert-phase fixture has no specification item IDs")
+	}
+	return root, state, ids[0]
+}
+
+func executeInsertPhaseForCurrentPlan(t *testing.T, args ...string) (map[string]interface{}, error) {
+	t.Helper()
+	resetRootCmd(t)
+	var out bytes.Buffer
+	stdout = &out
+	stderr = &out
+	rootCmd.SetArgs(append([]string{"insert-phase"}, args...))
+	err := rootCmd.Execute()
+	if out.Len() == 0 {
+		return nil, err
+	}
+	return parseEnvelope(t, out.String()), err
+}
+
+func TestInsertPhaseCandidatePreservesActiveRevisionAndAcceptsExactly(t *testing.T) {
+	saveGlobals(t)
+	root, before, specItemID := insertPhaseAcceptedPlanFixture(t)
+	predecessor, ok := activePlanRevision(before.Plan)
+	if !ok {
+		t.Fatal("fixture has no active plan revision")
+	}
+	predecessorBytes, err := json.Marshal(predecessor)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	envelope, err := executeInsertPhaseForCurrentPlan(t,
+		"login retries lose state",
+		"--after", "1",
+		"--spec-item", specItemID,
+		"--base-plan-revision", predecessor.ID,
+	)
+	if err != nil {
+		t.Fatalf("insert phase candidate: %v", err)
+	}
+	if envelope["ok"] != true {
+		t.Fatalf("insert phase envelope = %#v, want success", envelope)
+	}
+	result := envelope["result"].(map[string]interface{})
+	if result["candidate_created"] != true || result["inserted"] != false {
+		t.Fatalf("insert result = %#v, want non-active candidate", result)
+	}
+	candidateID, _ := result["candidate_id"].(string)
+	if candidateID == "" || result["review_command"] != "aether plan --candidate" || !strings.Contains(result["acceptance_command"].(string), candidateID) {
+		t.Fatalf("insert result omits exact review/accept path: %#v", result)
+	}
+
+	afterCandidate := mustReadSpecificationTestState(t, root)
+	if afterCandidate.Plan.ActiveRevisionID != before.Plan.ActiveRevisionID || !reflect.DeepEqual(afterCandidate.Plan.Phases, before.Plan.Phases) {
+		t.Fatalf("candidate changed active plan: before=%+v after=%+v", before.Plan, afterCandidate.Plan)
+	}
+	retained, ok := activePlanRevision(afterCandidate.Plan)
+	if !ok {
+		t.Fatal("active predecessor disappeared after candidate creation")
+	}
+	retainedBytes, err := json.Marshal(retained)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(retainedBytes, predecessorBytes) {
+		t.Fatal("candidate creation mutated predecessor PlanRevision bytes")
+	}
+
+	artifact, err := loadPlanCandidateArtifact(root, candidateID)
+	if err != nil {
+		t.Fatalf("load insert phase candidate: %v", err)
+	}
+	if artifact.Candidate.Status != colony.PlanCandidatePendingReview || artifact.Candidate.BasePlanRevisionID != predecessor.ID {
+		t.Fatalf("candidate binding = %+v, want pending against %s", artifact.Candidate, predecessor.ID)
+	}
+	accepted, err := acceptPlanCandidate(root, planCandidateTestAcceptanceRequest(artifact.Candidate), planCandidateAcceptanceOptions{AcceptedBy: "owner"})
+	if err != nil {
+		t.Fatalf("accept insert phase candidate through normal boundary: %v", err)
+	}
+	if accepted.Revision.ParentID != predecessor.ID || len(accepted.Revision.Phases) != len(before.Plan.Phases)+1 {
+		t.Fatalf("accepted insert revision = %+v, want one successor phase", accepted.Revision)
+	}
+}
+
+func TestInsertPhaseImmutableStableIDsAndCompletedStatus(t *testing.T) {
+	saveGlobals(t)
+	root, before, specItemID := insertPhaseAcceptedPlanFixture(t)
+	if len(before.Plan.Phases) == 0 {
+		t.Fatal("fixture has no phase")
+	}
+	before.Plan.Phases[0].Status = colony.PhaseCompleted
+	for index := range before.Plan.Phases[0].Tasks {
+		before.Plan.Phases[0].Tasks[index].Status = colony.TaskCompleted
+	}
+	if err := store.SaveJSON("COLONY_STATE.json", before); err != nil {
+		t.Fatal(err)
+	}
+	base := before.Plan.ActiveRevisionID
+
+	envelope, err := executeInsertPhaseForCurrentPlan(t,
+		"add covered corrective work",
+		"--after", "1",
+		"--spec-item", specItemID,
+		"--base-plan-revision", base,
+	)
+	if err != nil || envelope["ok"] != true {
+		t.Fatalf("insert candidate failed: envelope=%#v err=%v", envelope, err)
+	}
+	candidateID := envelope["result"].(map[string]interface{})["candidate_id"].(string)
+	artifact, err := loadPlanCandidateArtifact(root, candidateID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	original := before.Plan.Phases[0]
+	var preserved *colony.Phase
+	maxID := 0
+	for index := range artifact.Candidate.Proposal.Phases {
+		phase := &artifact.Candidate.Proposal.Phases[index]
+		if phase.ID > maxID {
+			maxID = phase.ID
+		}
+		if phase.SemanticID == original.SemanticID {
+			preserved = phase
+		}
+	}
+	if preserved == nil || preserved.ID != original.ID || preserved.SemanticID != original.SemanticID {
+		t.Fatalf("proposal did not preserve predecessor stable/display IDs: original=%+v proposal=%+v", original, artifact.Candidate.Proposal.Phases)
+	}
+	if maxID <= original.ID {
+		t.Fatalf("inserted phase reused/renumbered predecessor ordinal: %+v", artifact.Candidate.Proposal.Phases)
+	}
+
+	accepted, err := acceptPlanCandidate(root, planCandidateTestAcceptanceRequest(artifact.Candidate), planCandidateAcceptanceOptions{AcceptedBy: "owner"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var completed *colony.Phase
+	for index := range accepted.Revision.Phases {
+		if accepted.Revision.Phases[index].SemanticID == original.SemanticID {
+			completed = &accepted.Revision.Phases[index]
+		}
+	}
+	if completed == nil || completed.Status != colony.PhaseCompleted {
+		t.Fatalf("accepted insertion lost unaffected completion: %+v", accepted.Revision.Phases)
+	}
+}
+
+func TestInsertPhaseRefusesMissingCoverageWithoutWrites(t *testing.T) {
+	saveGlobals(t)
+	root, before, _ := insertPhaseAcceptedPlanFixture(t)
+	snapshot := planCandidateTestSnapshot(t, root)
+	envelope, err := executeInsertPhaseForCurrentPlan(t,
+		"unapproved new material scope", "--after", "1", "--base-plan-revision", before.Plan.ActiveRevisionID,
+	)
+	if err == nil || envelope == nil || envelope["ok"] != false || !strings.Contains(envelope["error"].(string), "specification coverage") {
+		t.Fatalf("missing coverage result = %#v err=%v", envelope, err)
+	}
+	planCandidateTestAssertSnapshot(t, root, snapshot)
+}
+
+func TestInsertPhaseRefusesActiveAttemptWithoutWrites(t *testing.T) {
+	saveGlobals(t)
+	root, before, specItemID := insertPhaseAcceptedPlanFixture(t)
+	before.State = colony.StateEXECUTING
+	if err := store.SaveJSON("COLONY_STATE.json", before); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := planCandidateTestSnapshot(t, root)
+	envelope, err := executeInsertPhaseForCurrentPlan(t,
+		"do not race active work", "--after", "1", "--spec-item", specItemID, "--base-plan-revision", before.Plan.ActiveRevisionID,
+	)
+	if err == nil || envelope == nil || envelope["ok"] != false || !strings.Contains(envelope["error"].(string), "active") {
+		t.Fatalf("active attempt result = %#v err=%v", envelope, err)
+	}
+	planCandidateTestAssertSnapshot(t, root, snapshot)
+}
+
+func TestInsertPhaseRefusesStaleBaseWithoutWrites(t *testing.T) {
+	saveGlobals(t)
+	root, before, specItemID := insertPhaseAcceptedPlanFixture(t)
+	snapshot := planCandidateTestSnapshot(t, root)
+	envelope, err := executeInsertPhaseForCurrentPlan(t,
+		"stale corrective request", "--after", "1", "--spec-item", specItemID, "--base-plan-revision", before.Plan.ActiveRevisionID+"-stale",
+	)
+	if err == nil || envelope == nil || envelope["ok"] != false || !strings.Contains(envelope["error"].(string), "base plan revision") {
+		t.Fatalf("stale base result = %#v err=%v", envelope, err)
+	}
+	planCandidateTestAssertSnapshot(t, root, snapshot)
 }
