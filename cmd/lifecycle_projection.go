@@ -305,7 +305,10 @@ func lifecycleProjectionDecision(facts LifecycleFacts, blockers []colony.Lifecyc
 		}, colony.OutcomeKindNoChange, closure, colony.RecoveryProvenanceUnknown
 	}
 	if facts.State.Source.Provenance == LifecycleFactMalformed || facts.State.Source.Provenance == LifecycleFactUnavailable ||
-		facts.Evidence.Source.Provenance == LifecycleFactMalformed || facts.Evidence.Source.Provenance == LifecycleFactUnavailable {
+		facts.Evidence.Source.Provenance == LifecycleFactMalformed || facts.Evidence.Source.Provenance == LifecycleFactUnavailable ||
+		facts.Specification.Source.Provenance == LifecycleFactMalformed || facts.Specification.Source.Provenance == LifecycleFactUnavailable ||
+		facts.Planning.Source.Provenance == LifecycleFactMalformed || facts.Planning.Source.Provenance == LifecycleFactUnavailable ||
+		facts.Intent.Source.Provenance == LifecycleFactMalformed || (facts.Root != "" && facts.Intent.Source.Provenance == LifecycleFactUnavailable) {
 		closure.Status = "unknown"
 		return lifecycleAction("resume", "aether resume", "Saved lifecycle evidence is incomplete or conflicting; resume is the single recovery door.", evidence), []LifecycleActionChoice{
 			lifecycleChoice("status", "aether status", "Inspect the retained evidence without changing it."),
@@ -365,6 +368,9 @@ func lifecycleProjectionDecision(facts LifecycleFacts, blockers []colony.Lifecyc
 			lifecycleChoice("status", "aether status", "Inspect the blockers without changing state."),
 			lifecycleChoice("history", "aether history", "Review the evidence leading to the block."),
 		}, colony.OutcomeKindRecoveryRequired, closure, provenance
+	}
+	if action, alternatives, outcome, handled := lifecycleAuthorityNextAction(facts, evidence); handled {
+		return action, alternatives, outcome, closure, provenance
 	}
 	if state.State == colony.StateCOMPLETED || lifecycleAllPhasesComplete(progress) {
 		closure.Status = "ready_to_seal"

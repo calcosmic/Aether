@@ -246,7 +246,10 @@ type nextActionCandidateKey string
 const (
 	candidateInit            nextActionCandidateKey = "init"
 	candidateDiscuss         nextActionCandidateKey = "discuss"
+	candidateSpec            nextActionCandidateKey = "spec"
 	candidatePlan            nextActionCandidateKey = "plan"
+	candidatePlanCandidate   nextActionCandidateKey = "plan_candidate"
+	candidatePlanAcceptExact nextActionCandidateKey = "plan_accept_exact"
 	candidatePlanRepair      nextActionCandidateKey = "plan_repair"
 	candidateColonize        nextActionCandidateKey = "colonize"
 	candidateBuildPhase      nextActionCandidateKey = "build_phase"
@@ -298,9 +301,24 @@ var nextActionCandidates = []nextActionCandidate{
 		Why:      "Talk the goal through first, so the plan is built on your answers instead of a guess.",
 	},
 	{
+		Key:      candidateSpec,
+		Template: "aether spec",
+		Why:      "Review the readable specification and explicitly approve or revise that exact contract.",
+	},
+	{
 		Key:      candidatePlan,
 		Template: "aether plan",
 		Why:      "Break the goal into numbered phases you can build one at a time.",
+	},
+	{
+		Key:      candidatePlanCandidate,
+		Template: "aether plan --candidate",
+		Why:      "Review the stopped plan candidate and its evidence; it is not active or buildable yet.",
+	},
+	{
+		Key:      candidatePlanAcceptExact,
+		Template: "aether plan --accept-candidate %s",
+		Why:      "Accept only the named candidate through the exact binding checks shown by its review.",
 	},
 	{
 		Key:      candidatePlanRepair,
@@ -402,6 +420,169 @@ func candidateCommand(key nextActionCandidateKey, args ...interface{}) (string, 
 		command = fmt.Sprintf(candidate.Template, args...)
 	}
 	return command, candidate.Why, true
+}
+
+func lifecycleActionFromCandidate(id string, key nextActionCandidateKey, reason string, evidence []colony.LifecycleEvidence, args ...interface{}) LifecycleProjectedAction {
+	command, fallbackReason, _ := candidateCommand(key, args...)
+	if strings.TrimSpace(reason) == "" {
+		reason = fallbackReason
+	}
+	return lifecycleAction(id, command, reason, evidence)
+}
+
+func lifecycleChoiceFromCandidate(id string, key nextActionCandidateKey, reason string, args ...interface{}) LifecycleActionChoice {
+	command, fallbackReason, _ := candidateCommand(key, args...)
+	if strings.TrimSpace(reason) == "" {
+		reason = fallbackReason
+	}
+	return lifecycleChoice(id, command, reason)
+}
+
+func lifecycleInspectionChoices() []LifecycleActionChoice {
+	return []LifecycleActionChoice{
+		lifecycleChoiceFromCandidate("status", candidateStatus, ""),
+		lifecycleChoiceFromCandidate("history", candidateHistory, ""),
+	}
+}
+
+func lifecycleSafeCommandToken(value string) bool {
+	value = strings.TrimSpace(value)
+	return value != "" && !strings.HasPrefix(value, "-") && len(strings.Fields(value)) == 1
+}
+
+// lifecycleAuthorityNextAction is the Phase-200 authority state table. It is
+// deliberately pure and lives beside the resolver's enumerable command set;
+// lifecycleProjectionDecision calls it before ordinary completion/build
+// routing so every surface receives the same answer.
+func lifecycleAuthorityNextAction(facts LifecycleFacts, evidence []colony.LifecycleEvidence) (LifecycleProjectedAction, []LifecycleActionChoice, colony.OutcomeKind, bool) {
+	intent := facts.Intent.Value
+	specification := facts.Specification.Value
+	planning := facts.Planning.Value
+
+	if intent.CharterAccepted && (intent.UnresolvedDiscussionCount > 0 || !specification.Present) {
+		return lifecycleActionFromCandidate(
+			"discuss",
+			candidateDiscuss,
+			"The project goal is accepted, but its material intent must be settled before the specification or plan can advance.",
+			evidence,
+		), lifecycleInspectionChoices(), colony.OutcomeKindNoChange, true
+	}
+
+	if specification.Present && (!specification.Approved || specification.Status != colony.SpecStatusApproved) {
+		return lifecycleActionFromCandidate(
+				"specification",
+				candidateSpec,
+				"The current specification is not approved; review or revise that exact contract before planning or building.",
+				evidence,
+			), []LifecycleActionChoice{
+				lifecycleChoiceFromCandidate("discuss", candidateDiscuss, "Reopen the owner intent behind this draft."),
+				lifecycleChoiceFromCandidate("status", candidateStatus, ""),
+				lifecycleChoiceFromCandidate("history", candidateHistory, ""),
+			}, colony.OutcomeKindNoChange, true
+	}
+
+	if planning.Stage == string(planningStageSpecApprovalRequired) {
+		return lifecycleActionFromCandidate(
+			"specification",
+			candidateSpec,
+			"Planning found a contract change; approve or revise the exact successor specification before this run can resume.",
+			evidence,
+		), lifecycleInspectionChoices(), colony.OutcomeKindNoChange, true
+	}
+
+	if planning.PendingCandidateID != "" && (planning.PendingCandidateStatus == colony.PlanCandidatePendingReview || planning.Stage == string(planningStageCandidateReady)) {
+		alternatives := make([]LifecycleActionChoice, 0, 3)
+		if lifecycleSafeCommandToken(planning.PendingCandidateID) {
+			alternatives = append(alternatives, lifecycleChoiceFromCandidate(
+				"accept_plan_candidate",
+				candidatePlanAcceptExact,
+				"Accept this candidate only after reviewing the exact specification, base-plan, timeline, and proposal bindings.",
+				planning.PendingCandidateID,
+			))
+		}
+		alternatives = append(alternatives, lifecycleInspectionChoices()...)
+		return lifecycleActionFromCandidate(
+			"review_plan_candidate",
+			candidatePlanCandidate,
+			"Planning stopped with a reviewable candidate. It remains inactive until you explicitly accept that exact candidate.",
+			evidence,
+		), alternatives, colony.OutcomeKindNoChange, true
+	}
+
+	switch planning.Stage {
+	case string(planningStageOwnerDecision):
+		return lifecycleActionFromCandidate(
+			"planning_owner_decision",
+			candidatePlan,
+			"Planning is paused at a material owner decision; reopen the bound planning run to answer it and resume the exact frontier.",
+			evidence,
+		), lifecycleInspectionChoices(), colony.OutcomeKindNoChange, true
+	case string(planningStageReconciliationRequired):
+		return lifecycleActionFromCandidate(
+				"reconcile_plan",
+				candidatePlan,
+				"The approved specification changed executable scope; resume planning to reconcile only the affected work.",
+				evidence,
+			), []LifecycleActionChoice{
+				lifecycleChoiceFromCandidate("specification", candidateSpec, "Review the approved specification and its impact first."),
+				lifecycleChoiceFromCandidate("status", candidateStatus, ""),
+				lifecycleChoiceFromCandidate("history", candidateHistory, ""),
+			}, colony.OutcomeKindNoChange, true
+	case string(planningStageCandidateReady):
+		return lifecycleActionFromCandidate(
+			"review_plan_candidate",
+			candidatePlanCandidate,
+			"Planning stopped at a candidate boundary; review the candidate before any execution command is available.",
+			evidence,
+		), lifecycleInspectionChoices(), colony.OutcomeKindNoChange, true
+	case "", string(planningStageAccepted):
+		// No active stage remains. Durable acceptance or legacy classification
+		// below decides whether execution is available.
+	default:
+		return lifecycleActionFromCandidate(
+			"resume_planning",
+			candidatePlan,
+			fmt.Sprintf("Planning run %s is at %s; reopen it to resume that exact saved stage.", planning.RunID, planning.Stage),
+			evidence,
+		), lifecycleInspectionChoices(), colony.OutcomeKindInProgress, true
+	}
+
+	if planning.AcceptanceBindingStatus == LifecyclePlanBindingAffected || (planning.AcceptedPlan && len(planning.AffectedUnresolvedSemanticIDs) > 0) {
+		return lifecycleActionFromCandidate(
+				"reconcile_plan",
+				candidatePlan,
+				"The accepted plan has affected unfinished scope; reconcile it through a new candidate before building or sealing.",
+				evidence,
+			), []LifecycleActionChoice{
+				lifecycleChoiceFromCandidate("specification", candidateSpec, "Review the specification revision that affected this plan."),
+				lifecycleChoiceFromCandidate("status", candidateStatus, ""),
+				lifecycleChoiceFromCandidate("history", candidateHistory, ""),
+			}, colony.OutcomeKindNoChange, true
+	}
+
+	if planning.AcceptanceBindingStatus == LifecyclePlanBindingInvalid {
+		return lifecycleActionFromCandidate(
+			"resume",
+			candidateResume,
+			"The active plan does not carry a complete valid acceptance binding; resume must reconcile the retained evidence.",
+			evidence,
+		), lifecycleInspectionChoices(), colony.OutcomeKindRecoveryRequired, true
+	}
+
+	if specification.Approved && !planning.AcceptedPlan && !planning.LegacyUnbound {
+		return lifecycleActionFromCandidate(
+				"plan",
+				candidatePlan,
+				"The specification is approved, but no plan candidate has been accepted yet.",
+				evidence,
+			), []LifecycleActionChoice{
+				lifecycleChoiceFromCandidate("specification", candidateSpec, "Review the approved contract before planning."),
+				lifecycleChoiceFromCandidate("status", candidateStatus, ""),
+				lifecycleChoiceFromCandidate("history", candidateHistory, ""),
+			}, colony.OutcomeKindNoChange, true
+	}
+
+	return LifecycleProjectedAction{}, nil, "", false
 }
 
 // ---------------------------------------------------------------------------
