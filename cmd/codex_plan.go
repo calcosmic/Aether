@@ -170,23 +170,168 @@ type phaseTaskTemplate struct {
 }
 
 type codexPlanOptions struct {
-	Refresh           bool
-	Synthetic         bool
-	PlanOnly          bool
-	Depth             string
-	PlanningDepth     string
-	VerificationDepth string
-	WorkerTimeout     time.Duration
-	TargetConfidence  int
-	MaxIterations     int
-	Accept            bool
-	RepairArtifact    bool
-	RevisionType      string
-	RevisionReason    string
-	RevisionEvidence  []string
-	ResearchDocs      []string
-	Territory         *SurveyFreshnessResult
-	RequireTerritory  bool
+	Refresh             bool
+	Synthetic           bool
+	PlanOnly            bool
+	Preset              string
+	PresetSet           bool
+	Depth               string
+	DepthSet            bool
+	PlanningDepth       string
+	VerificationDepth   string
+	WorkerTimeout       time.Duration
+	TargetConfidence    int
+	TargetConfidenceSet bool
+	MaxIterations       int
+	MaxIterationsSet    bool
+	Accept              bool
+	RepairArtifact      bool
+	RevisionType        string
+	RevisionReason      string
+	RevisionEvidence    []string
+	ResearchDocs        []string
+	Territory           *SurveyFreshnessResult
+	RequireTerritory    bool
+}
+
+const (
+	planningPresetSourceRequired     = "owner_required"
+	planningPresetSourceNamed        = "named_preset"
+	planningPresetSourceExplicitPair = "explicit_pair"
+)
+
+type planningPresetPolicy struct {
+	ID               planningStagePreset `json:"id"`
+	Label            string              `json:"label"`
+	TargetConfidence int                 `json:"target"`
+	PassCap          int                 `json:"max_iterations"`
+}
+
+type planningPresetSelection struct {
+	PresetRequired  bool                   `json:"preset_required"`
+	Options         []planningPresetPolicy `json:"preset_options"`
+	Policy          planningPresetPolicy   `json:"policy,omitempty"`
+	SelectionSource string                 `json:"selection_source"`
+}
+
+var planningPresetPolicies = []planningPresetPolicy{
+	{ID: planningStagePresetFast, Label: "Fast", TargetConfidence: 80, PassCap: 4},
+	{ID: planningStagePresetBalanced, Label: "Balanced", TargetConfidence: 90, PassCap: 6},
+	{ID: planningStagePresetDeep, Label: "Deep", TargetConfidence: 95, PassCap: 8},
+	{ID: planningStagePresetExhaustive, Label: "Exhaustive", TargetConfidence: 99, PassCap: 12},
+}
+
+func resolvePlanningPreset(opts codexPlanOptions) (planningPresetSelection, error) {
+	options := append([]planningPresetPolicy(nil), planningPresetPolicies...)
+	namedValue := strings.TrimSpace(opts.Preset)
+	namedSet := opts.PresetSet || namedValue != ""
+	depthValue := strings.TrimSpace(opts.Depth)
+	depthSet := opts.DepthSet || depthValue != ""
+
+	var named planningPresetPolicy
+	if namedSet {
+		var ok bool
+		named, ok = planningPresetPolicyByName(namedValue, false)
+		if !ok {
+			return planningPresetSelection{}, fmt.Errorf("invalid planning preset %q: choose fast, balanced, deep, or exhaustive", namedValue)
+		}
+	}
+	if depthSet {
+		legacy, ok := planningPresetPolicyByName(depthValue, true)
+		if !ok {
+			return planningPresetSelection{}, fmt.Errorf("invalid planning depth %q: choose fast, balanced, deep, or exhaustive", depthValue)
+		}
+		if namedSet && legacy.ID != named.ID {
+			return planningPresetSelection{}, fmt.Errorf("conflicting planning preset flags: --preset %s does not match --depth %s", named.ID, legacy.ID)
+		}
+		if !namedSet {
+			named = legacy
+			namedSet = true
+		}
+	}
+
+	targetSet := opts.TargetConfidenceSet || opts.TargetConfidence != 0
+	capSet := opts.MaxIterationsSet || opts.MaxIterations != 0
+	if targetSet != capSet {
+		return planningPresetSelection{}, fmt.Errorf("explicit planning bounds require both --target and --max-iterations")
+	}
+
+	var explicit planningPresetPolicy
+	if targetSet {
+		if opts.TargetConfidence < planningLoopMinTarget || opts.TargetConfidence > planningLoopMaxTarget {
+			return planningPresetSelection{}, fmt.Errorf("--target must be between %d and %d", planningLoopMinTarget, planningLoopMaxTarget)
+		}
+		if opts.MaxIterations < planningLoopMinIterations || opts.MaxIterations > planningLoopMaxIterations {
+			return planningPresetSelection{}, fmt.Errorf("--max-iterations must be between %d and %d", planningLoopMinIterations, planningLoopMaxIterations)
+		}
+		var ok bool
+		explicit, ok = planningPresetPolicyByBounds(opts.TargetConfidence, opts.MaxIterations)
+		if !ok {
+			return planningPresetSelection{}, fmt.Errorf("explicit planning bounds %d/%d do not match an exact preset: use 80/4, 90/6, 95/8, or 99/12", opts.TargetConfidence, opts.MaxIterations)
+		}
+	}
+
+	if namedSet && targetSet && (named.TargetConfidence != explicit.TargetConfidence || named.PassCap != explicit.PassCap) {
+		return planningPresetSelection{}, fmt.Errorf("conflicting planning preset and explicit bounds: %s is %d/%d, not %d/%d", named.ID, named.TargetConfidence, named.PassCap, explicit.TargetConfidence, explicit.PassCap)
+	}
+	if namedSet {
+		return planningPresetSelection{Options: options, Policy: named, SelectionSource: planningPresetSourceNamed}, nil
+	}
+	if targetSet {
+		return planningPresetSelection{Options: options, Policy: explicit, SelectionSource: planningPresetSourceExplicitPair}, nil
+	}
+	return planningPresetSelection{PresetRequired: true, Options: options, SelectionSource: planningPresetSourceRequired}, nil
+}
+
+func planningPresetPolicyByName(value string, aliases bool) (planningPresetPolicy, bool) {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	if aliases {
+		switch normalized {
+		case "quick", "light", string(colony.GranularitySprint):
+			normalized = string(planningStagePresetFast)
+		case "standard", "default", string(colony.GranularityMilestone):
+			normalized = string(planningStagePresetBalanced)
+		case string(colony.GranularityQuarter):
+			normalized = string(planningStagePresetDeep)
+		case "full", string(colony.GranularityMajor):
+			normalized = string(planningStagePresetExhaustive)
+		}
+	}
+	for _, policy := range planningPresetPolicies {
+		if string(policy.ID) == normalized {
+			return policy, true
+		}
+	}
+	return planningPresetPolicy{}, false
+}
+
+func planningPresetPolicyByBounds(target, passCap int) (planningPresetPolicy, bool) {
+	for _, policy := range planningPresetPolicies {
+		if policy.TargetConfidence == target && policy.PassCap == passCap {
+			return policy, true
+		}
+	}
+	return planningPresetPolicy{}, false
+}
+
+func planningPresetRequiredResult(state colony.ColonyState, selection planningPresetSelection) map[string]interface{} {
+	goal := ""
+	if state.Goal != nil {
+		goal = strings.TrimSpace(*state.Goal)
+	}
+	return map[string]interface{}{
+		"planned":          false,
+		"status":           string(planningStagePresetRequired),
+		"goal":             goal,
+		"preset_required":  true,
+		"preset_options":   append([]planningPresetPolicy(nil), selection.Options...),
+		"selected_preset":  "",
+		"selection_source": selection.SelectionSource,
+		"dispatches":       []codexPlanningDispatch{},
+		"dispatch_count":   0,
+		"state_effect":     "unchanged",
+		"next":             "choose Fast, Balanced, Deep, or Exhaustive with `aether plan --preset <name>`",
+	}
 }
 
 type codexPlanningLoop struct {
@@ -228,6 +373,8 @@ type codexPlanManifest struct {
 	Iteration                 int                              `json:"iteration,omitempty"`
 	TargetConfidence          int                              `json:"target_confidence,omitempty"`
 	MaxIterations             int                              `json:"max_iterations,omitempty"`
+	SelectedPreset            planningStagePreset              `json:"selected_preset,omitempty"`
+	PresetSelectionSource     string                           `json:"selection_source,omitempty"`
 	PreviousConfidence        int                              `json:"previous_confidence,omitempty"`
 	PreviousEvidenceHash      string                           `json:"previous_evidence_hash,omitempty"`
 	SelectedGaps              []string                         `json:"selected_gaps,omitempty"`
@@ -262,8 +409,6 @@ type codexPlanManifest struct {
 	ResearchProposalCard      string                           `json:"research_proposal_card,omitempty"`
 	ResearchAwaitingApproval  bool                             `json:"research_awaiting_approval,omitempty"`
 	ResearchWarning           string                           `json:"research_warning,omitempty"`
-	DepthProposal             depthProposal                    `json:"depth_proposal,omitempty"`
-	DepthProposalCard         string                           `json:"depth_proposal_card,omitempty"`
 	// ContextCapsule is the colony-prime grounding payload (state, decisions,
 	// phase learnings, instincts, hive wisdom, prior reviews, blockers, user
 	// preferences) for wrapper-spawned planning workers (the Route-Setter and
@@ -326,6 +471,13 @@ func runCodexPlan(root string, refresh bool, synthetic bool) (map[string]interfa
 }
 
 func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]interface{}, error) {
+	if opts.Accept {
+		return nil, fmt.Errorf("--accept no longer accepts or activates a plan. Review the pending candidate, then use `aether plan --accept-candidate <candidate-id>`")
+	}
+	preset, err := resolvePlanningPreset(opts)
+	if err != nil {
+		return nil, err
+	}
 	if store == nil {
 		return nil, fmt.Errorf("no store initialized")
 	}
@@ -334,6 +486,16 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	if err != nil {
 		return nil, fmt.Errorf("%s", colonyStateLoadMessage(err))
 	}
+	if state.Goal == nil || strings.TrimSpace(*state.Goal) == "" {
+		return nil, fmt.Errorf("No active colony goal. Run `aether init \"goal\"` first.")
+	}
+	if preset.PresetRequired {
+		return planningPresetRequiredResult(state, preset), nil
+	}
+	opts.Preset = string(preset.Policy.ID)
+	opts.Depth = string(preset.Policy.ID)
+	opts.TargetConfidence = preset.Policy.TargetConfidence
+	opts.MaxIterations = preset.Policy.PassCap
 	// Legacy non-git workspaces have no immutable source revision to bind. They
 	// retain the pre-199 planning behavior; repositories with a real revision
 	// use the strict automatic territory gate below.
@@ -409,9 +571,6 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	}
 
 	if len(state.Plan.Phases) > 0 && !opts.Refresh {
-		if opts.Accept {
-			return nil, fmt.Errorf("--accept has no effect while an existing plan is active: nothing was accepted. Re-run the loop with `aether plan --refresh --accept`, or adopt a validated on-disk phase-plan.json with `aether plan --repair-artifact`")
-		}
 		// Persist resolved verification depth only for non-plan-only paths.
 		state.VerificationDepth = verificationDepth
 		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
@@ -435,6 +594,12 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 			"planning_depth":             planningDepth,
 			"verification_depth":         verificationDepth,
 			"planning_loop":              resolvePlanningLoopOptions(planDepth, opts),
+			"preset_required":            false,
+			"preset_options":             preset.Options,
+			"selected_preset":            string(preset.Policy.ID),
+			"selection_source":           preset.SelectionSource,
+			"target_confidence":          preset.Policy.TargetConfidence,
+			"max_iterations":             preset.Policy.PassCap,
 			"verification_smart_default": verificationSmartDefault,
 			"planning_smart_default":     planningSmartDefault,
 			"planning_phase":             planningPhase,
@@ -1035,9 +1200,13 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 	}
 	verificationSmartDefault := opts.VerificationDepth == ""
 	planningSmartDefault := opts.PlanningDepth == ""
-	proposal := computeDepthProposal(state, granularity, planningDepth, verificationDepth,
-		planningSmartDefault, verificationSmartDefault)
-	proposalCard := renderDepthProposalCard(proposal)
+	preset, err := resolvePlanningPreset(opts)
+	if err != nil {
+		return nil, err
+	}
+	if preset.PresetRequired {
+		return planningPresetRequiredResult(state, preset), nil
+	}
 	planningPhase := colony.Phase{ID: 1}
 	if len(state.Plan.Phases) > 0 && !opts.Refresh {
 		nextPhase := firstBuildablePhase(state.Plan.Phases)
@@ -1062,6 +1231,12 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 			"planning_depth":             planningDepth,
 			"verification_depth":         verificationDepth,
 			"planning_loop":              resolvePlanningLoopOptions(planDepth, opts),
+			"preset_required":            false,
+			"preset_options":             preset.Options,
+			"selected_preset":            string(preset.Policy.ID),
+			"selection_source":           preset.SelectionSource,
+			"target_confidence":          preset.Policy.TargetConfidence,
+			"max_iterations":             preset.Policy.PassCap,
 			"verification_smart_default": verificationSmartDefault,
 			"planning_smart_default":     planningSmartDefault,
 			"planning_phase":             planningPhase,
@@ -1071,8 +1246,6 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 			"requires_finalizer":         false,
 			"unresolved_clarifications":  unresolvedClarifications,
 			"clarification_warning":      clarificationWarning,
-			"depth_proposal":             proposal,
-			"depth_proposal_card":        proposalCard,
 			"next":                       nextCommand,
 		}
 		addBoundaryQuestionResultFields(result, boundary)
@@ -1112,6 +1285,12 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 	planningLoop.Gaps = append([]string{}, iterationSeed.SelectedGaps...)
 
 	dispatches := plannedPlanningWorkersForGoal(root, *state.Goal)
+	for i := range dispatches {
+		if dispatches[i].Caste == "scout" {
+			dispatches = []codexPlanningDispatch{dispatches[i]}
+			break
+		}
+	}
 	specs := planningWorkerSpecsForGoal(*state.Goal)
 	iterationAppendix := planningIterationAppendix(iterationSeed, iteration) + renderPlanRevisionWorkerAppendix(root, revisionContext)
 	for i := range dispatches {
@@ -1123,25 +1302,6 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 	}
 	researchCandidates := phaseResearchCandidates(state, iterationSeed)
 	researchResult := computePhaseResearchProposalFields(planDepth, opts.Refresh, survey, researchCandidates, state.Plan.Phases, true)
-	researchDispatches := plannedPhaseResearchDispatches(root, planDepth, *state.Goal, researchCandidates, survey, opts.Refresh && iteration == 1, researchResult.Approved)
-	if len(researchDispatches) > 0 {
-		// The Route-Setter runs after the research wave; point it at the
-		// fresh RESEARCH.md files so findings shape the route. The pointer
-		// sentence stays first (it is what covers iteration 1, before any
-		// research has been written); the content injection below is
-		// additive and empty on iteration 1, byte-identical to the old
-		// pointer-only output.
-		researchContent := renderRouteSetterResearchContent(root, researchCandidates)
-		for i := range dispatches {
-			if dispatches[i].Caste == "route_setter" {
-				dispatches[i].Brief += "\n\n## Phase Research Available\n\nParallel research Scouts are writing per-phase findings to `.aether/data/phase-research/phase-N-research.md` during wave 1. Read each phase's research before finalizing the route, and fold its Recommended Approach and Gotchas into task constraints and hints.\n"
-				if researchContent != "" {
-					dispatches[i].Brief += "\n" + researchContent
-				}
-			}
-		}
-		dispatches = append(dispatches, researchDispatches...)
-	}
 	artifactSnapshots := snapshotRelativeFiles(root,
 		filepath.ToSlash(filepath.Join(".aether", "data", "planning")),
 		filepath.ToSlash(filepath.Join(".aether", "data", "phase-research")),
@@ -1176,6 +1336,8 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		Iteration:                iteration,
 		TargetConfidence:         planningLoop.TargetConfidence,
 		MaxIterations:            planningLoop.MaxIterations,
+		SelectedPreset:           preset.Policy.ID,
+		PresetSelectionSource:    preset.SelectionSource,
 		PreviousConfidence:       iterationSeed.PreviousConfidence,
 		PreviousEvidenceHash:     iterationSeed.PreviousEvidenceHash,
 		SelectedGaps:             append([]string{}, iterationSeed.SelectedGaps...),
@@ -1199,8 +1361,6 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		ResearchProposalCard:     researchResult.Card,
 		ResearchAwaitingApproval: researchResult.AwaitingApproval,
 		ResearchWarning:          researchResult.Warning,
-		DepthProposal:            proposal,
-		DepthProposalCard:        proposalCard,
 		ContextCapsule:           contextCapsule,
 	}
 	if opts.Territory != nil {
@@ -1231,6 +1391,10 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		"iteration":                  manifest.Iteration,
 		"target_confidence":          manifest.TargetConfidence,
 		"max_iterations":             manifest.MaxIterations,
+		"preset_required":            false,
+		"preset_options":             preset.Options,
+		"selected_preset":            string(preset.Policy.ID),
+		"selection_source":           preset.SelectionSource,
 		"previous_confidence":        manifest.PreviousConfidence,
 		"selected_gaps":              manifest.SelectedGaps,
 		"verification_smart_default": verificationSmartDefault,
@@ -1252,11 +1416,9 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		"research_proposal_card":     researchResult.Card,
 		"research_awaiting_approval": researchResult.AwaitingApproval,
 		"research_warning":           researchResult.Warning,
-		"depth_proposal":             proposal,
-		"depth_proposal_card":        proposalCard,
 		"next":                       "spawn wrapper planning agents, then record completion",
 		"wrapper_contract": map[string]interface{}{
-			"source_command":          "AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <fast|balanced|deep|exhaustive> --planning-depth <light|standard|deep> --target <70-99> --max-iterations <2-12>",
+			"source_command":          "AETHER_OUTPUT_MODE=json aether plan --plan-only --preset <fast|balanced|deep|exhaustive>",
 			"spawn_log_required":      true,
 			"spawn_complete_required": true,
 			"finalize_surface":        "pending",

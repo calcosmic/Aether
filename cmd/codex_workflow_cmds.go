@@ -64,6 +64,7 @@ var planCmd = &cobra.Command{
 		synthetic, _ := cmd.Flags().GetBool("synthetic")
 		planOnly, _ := cmd.Flags().GetBool("plan-only")
 		repairArtifact, _ := cmd.Flags().GetBool("repair-artifact")
+		preset, _ := cmd.Flags().GetString("preset")
 		depth, _ := cmd.Flags().GetString("depth")
 		planningDepth, _ := cmd.Flags().GetString("planning-depth")
 		verificationDepth, _ := cmd.Flags().GetString("verification-depth")
@@ -89,22 +90,27 @@ var planCmd = &cobra.Command{
 			return nil
 		}
 		result, err := runCodexPlanWithOptions(skillWorkspaceRoot(), codexPlanOptions{
-			Refresh:           refresh || forceAlias,
-			Synthetic:         synthetic,
-			PlanOnly:          planOnly,
-			Depth:             depth,
-			PlanningDepth:     planningDepth,
-			VerificationDepth: verificationDepth,
-			WorkerTimeout:     workerTimeout,
-			TargetConfidence:  targetConfidence,
-			MaxIterations:     maxIterations,
-			Accept:            acceptBelowTarget,
-			RepairArtifact:    repairArtifact,
-			RevisionType:      revisionType,
-			RevisionReason:    revisionReason,
-			RevisionEvidence:  revisionEvidence,
-			ResearchDocs:      researchDocs,
-			RequireTerritory:  true,
+			Refresh:             refresh || forceAlias,
+			Synthetic:           synthetic,
+			PlanOnly:            planOnly,
+			Preset:              preset,
+			PresetSet:           cmd.Flags().Changed("preset"),
+			Depth:               depth,
+			DepthSet:            cmd.Flags().Changed("depth"),
+			PlanningDepth:       planningDepth,
+			VerificationDepth:   verificationDepth,
+			WorkerTimeout:       workerTimeout,
+			TargetConfidence:    targetConfidence,
+			TargetConfidenceSet: cmd.Flags().Changed("target"),
+			MaxIterations:       maxIterations,
+			MaxIterationsSet:    cmd.Flags().Changed("max-iterations"),
+			Accept:              acceptBelowTarget,
+			RepairArtifact:      repairArtifact,
+			RevisionType:        revisionType,
+			RevisionReason:      revisionReason,
+			RevisionEvidence:    revisionEvidence,
+			ResearchDocs:        researchDocs,
+			RequireTerritory:    true,
 		})
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -2453,12 +2459,13 @@ func init() {
 	planCmd.Flags().Bool("force", false, "Alias for --refresh")
 	planCmd.Flags().Bool("plan-only", false, "Print the planning dispatch manifest without mutating colony state or spawning workers")
 	planCmd.Flags().Bool("repair-artifact", false, "Repair and validate dependency references in .aether/data/planning/phase-plan.json without rerunning workers")
-	planCmd.Flags().String("depth", "", "Planning depth: fast, balanced, deep, or exhaustive")
+	planCmd.Flags().String("preset", "", "Planning preset: fast, balanced, deep, or exhaustive")
+	planCmd.Flags().String("depth", "", "Legacy alias for --preset: fast, balanced, deep, or exhaustive")
 	planCmd.Flags().String("planning-depth", "", "Task decomposition depth: light, standard, or deep")
 	planCmd.Flags().String("verification-depth", "", "Verification depth: light, standard, or heavy")
-	planCmd.Flags().Int("target", 0, "Planning confidence target 70-99 (default from depth preset)")
-	planCmd.Flags().Int("max-iterations", 0, "Planning iteration budget 2-12 (default from depth preset)")
-	planCmd.Flags().Bool("accept", false, "Accept the current best plan even if confidence is below target")
+	planCmd.Flags().Int("target", 0, "Exact preset confidence target; requires matching --max-iterations")
+	planCmd.Flags().Int("max-iterations", 0, "Exact preset pass cap; requires matching --target")
+	planCmd.Flags().Bool("accept", false, "Deprecated: use --accept-candidate with the exact pending candidate ID")
 	planCmd.Flags().String("revision-type", "", "Why a refreshed plan is needed: manual, user_feedback, research, verification_failure, or scope_change")
 	planCmd.Flags().String("revision-reason", "", "Traceable explanation for refreshing a plan after completed work")
 	planCmd.Flags().StringArray("revision-evidence", nil, "Repository-relative evidence file supporting the revision (repeatable)")

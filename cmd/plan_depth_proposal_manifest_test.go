@@ -84,7 +84,7 @@ func TestPlanManifestCarriesDepthProposal(t *testing.T) {
 			t.Fatalf("first authorized caste = %v, want scout", worker["caste"])
 		}
 		if _, forbidden := manifest["depth_proposal"]; forbidden {
-			t.Fatal("manifest retained obsolete three-knob depth proposal")
+			t.Fatal("manifest retained obsolete depth proposal")
 		}
 	})
 }
