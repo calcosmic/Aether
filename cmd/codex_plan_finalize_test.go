@@ -12,6 +12,49 @@ import (
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
+func TestCodexPlanFinalizeScoutExposesRouteBoundary(t *testing.T) {
+	root, stageManifest, scoutResult := planningScoutStageTestFixture(t)
+	dispatch := codexPlanningDispatch{
+		Stage:         "scouting",
+		Caste:         string(planningStageCasteScout),
+		Name:          "Scout-200",
+		Task:          "Complete one exact Scout stage",
+		Outputs:       []string{"scout-result.json"},
+		StageManifest: &stageManifest,
+	}
+	manifest := codexPlanManifest{
+		Root:              root,
+		GeneratedAt:       time.Now().UTC().Format(time.RFC3339),
+		PlanningRunID:     stageManifest.RunID,
+		Iteration:         stageManifest.Pass,
+		SelectedPreset:    stageManifest.Preset,
+		BaseRevisionID:    stageManifest.BasePlanRevisionID,
+		BasePlanStateHash: stageManifest.BasePlanRevisionHash,
+		ExpectedWorkers:   []codexPlanningDispatch{dispatch},
+		Dispatches:        []codexPlanningDispatch{dispatch},
+		DispatchMode:      "plan-only",
+		RequiresFinalizer: true,
+		StageManifest:     &stageManifest,
+	}
+
+	result, err := runCodexScoutStageFinalize(root, manifest, codexExternalPlanCompletion{
+		PlanManifest: &manifest,
+		ScoutResult:  planningScoutStageTestBytes(t, scoutResult),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result["status"] != string(planningStageRouteRunning) || result["next_boundary"] != string(planningStageRouteRunning) {
+		t.Fatalf("Scout finalizer boundary = %#v, want visible route_running", result)
+	}
+	if result["route_stage_manifest"] == nil || result["stage_receipt"] == nil {
+		t.Fatalf("Scout finalizer omitted exact receipt or Route-Setter manifest: %#v", result)
+	}
+	if result["iteration_card_created"] != false || result["scout_complete"] != true {
+		t.Fatalf("Scout finalizer rendered an early card or hid Scout completion: %#v", result)
+	}
+}
+
 func TestValidateExternalPlanStateSuggestsStaleCleanupForFreshManifest(t *testing.T) {
 	saveGlobals(t)
 
