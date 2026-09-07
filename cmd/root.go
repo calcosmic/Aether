@@ -152,6 +152,7 @@ func init() {
 	// instead of "aether version v<version>"
 	rootCmd.SetVersionTemplate("aether {{ .Version }}\n")
 	rootCmd.Version = "v" + resolveVersion()
+	rootCmd.AddCommand(specCmd)
 	frontDoorDefaultHelpFunc = rootCmd.HelpFunc()
 	rootCmd.SetHelpFunc(renderFrontDoorHelp)
 }
@@ -307,8 +308,9 @@ func configureFrontDoorHelp() {
 			rootCmd.AddGroup(&cobra.Group{ID: group.id, Title: group.title})
 		}
 		membership := map[string]string{
-			"init": frontDoorNormalGroupID, "plan": frontDoorNormalGroupID, "build": frontDoorNormalGroupID,
-			"run": frontDoorNormalGroupID, "status": frontDoorNormalGroupID, "pause": frontDoorNormalGroupID,
+			"init": frontDoorNormalGroupID, "discuss": frontDoorNormalGroupID, "spec": frontDoorNormalGroupID,
+			"plan": frontDoorNormalGroupID, "build": frontDoorNormalGroupID, "run": frontDoorNormalGroupID,
+			"status": frontDoorNormalGroupID, "pause": frontDoorNormalGroupID,
 			"resume-colony": frontDoorNormalGroupID, "seal": frontDoorNormalGroupID, "entomb": frontDoorNormalGroupID,
 			"focus": frontDoorInspectGroupID, "feedback": frontDoorInspectGroupID, "redirect": frontDoorInspectGroupID,
 			"watch": frontDoorInspectGroupID, "phase": frontDoorInspectGroupID, "history": frontDoorInspectGroupID,
@@ -323,25 +325,65 @@ func configureFrontDoorHelp() {
 	})
 }
 
+// frontDoorRenderedHelpGroups extends the Phase 199 canonical help catalogue
+// with the restored intent-to-specification journey without mutating that
+// catalogue in place. Wrapper source parity remains the responsibility of the
+// later parity plan; the runtime can still tell each platform the command it
+// actually supports today.
+func frontDoorRenderedHelpGroups(platform string) []frontDoorHelpGroup {
+	groups := make([]frontDoorHelpGroup, 0, len(frontDoorHelpGroups))
+	for _, group := range frontDoorHelpGroups {
+		rendered := frontDoorHelpGroup{id: group.id, title: group.title}
+		for _, entry := range group.entries {
+			if group.id == frontDoorNormalGroupID && entry.command == "/ant-plan" {
+				rendered.entries = append(rendered.entries,
+					frontDoorHelpEntry{frontDoorCommandForPlatform("/ant-discuss", platform), "Clarify material intent before drafting the specification."},
+					frontDoorHelpEntry{frontDoorCommandForPlatform("/ant-spec", platform), "Draft, review, revise, and explicitly approve the owner-readable specification."},
+				)
+				entry.description = "Generate an evidence-driven candidate plan from the approved specification."
+			}
+			entry.command = frontDoorCommandForPlatform(entry.command, platform)
+			rendered.entries = append(rendered.entries, entry)
+		}
+		groups = append(groups, rendered)
+	}
+	return groups
+}
+
+func frontDoorCommandForPlatform(command, platform string) string {
+	if platform != "codex" || !strings.HasPrefix(command, "/ant-") {
+		return command
+	}
+	parts := strings.SplitN(strings.TrimPrefix(command, "/ant-"), " ", 2)
+	rendered := platformCommandName(parts[0], platform)
+	if len(parts) == 2 {
+		rendered += " " + parts[1]
+	}
+	return rendered
+}
+
 func renderFrontDoorHelp(cmd *cobra.Command, args []string) {
 	if cmd != rootCmd {
 		frontDoorDefaultHelpFunc(cmd, args)
 		return
 	}
 	configureFrontDoorHelp()
+	platform := detectPlatform()
 	width := lifecycleStatusOutputWidth()
-	projection := frontDoorLifecycleProjection(resolveAetherRootPath())
+	projection := frontDoorLifecycleProjection(resolveAetherRootPath(), platform)
+	initCommand := frontDoorCommandForPlatform(`/ant-init "goal"`, platform)
+	helpCommand := frontDoorCommandForPlatform("/ant-help", platform)
 	var lines []string
 	if projection.Identity.Source.Provenance == LifecycleFactMissing || strings.TrimSpace(projection.Goal.Value) == "" {
 		lines = append(lines,
 			"No colony is active",
-			`Start a guided colony for one goal with /ant-init "goal".`,
+			fmt.Sprintf("Start a guided colony for one goal with %s.", initCommand),
 		)
 	} else {
 		lines = append(lines, renderFrontDoorStanding(projection))
 	}
-	lines = append(lines, "", "Usage: /ant-help [command]")
-	for _, group := range frontDoorHelpGroups {
+	lines = append(lines, "", fmt.Sprintf("Usage: %s [command]", helpCommand))
+	for _, group := range frontDoorRenderedHelpGroups(platform) {
 		lines = append(lines, "", group.title)
 		for _, entry := range group.entries {
 			if width < 64 {
@@ -355,7 +397,7 @@ func renderFrontDoorHelp(cmd *cobra.Command, args []string) {
 			lines = append(lines, lifecycleStatusWrapLine(row, width)...)
 		}
 	}
-	lines = append(lines, "", "Use /ant-help <command> for expert detail outside this journey map.")
+	lines = append(lines, "", fmt.Sprintf("Use %s <command> for expert detail outside this journey map.", helpCommand))
 	var rendered []string
 	for _, line := range lines {
 		rendered = append(rendered, lifecycleStatusWrapLine(line, width)...)
@@ -366,7 +408,11 @@ func renderFrontDoorHelp(cmd *cobra.Command, args []string) {
 // frontDoorLifecycleProjection reads only the facts needed by the compact
 // standing line. It intentionally avoids storage.NewStore: merely asking for
 // help must not create a data or lock directory.
-func frontDoorLifecycleProjection(root string) LifecycleProjection {
+func frontDoorLifecycleProjection(root string, platforms ...string) LifecycleProjection {
+	platform := detectPlatform()
+	if len(platforms) > 0 && strings.TrimSpace(platforms[0]) != "" {
+		platform = platforms[0]
+	}
 	root = filepath.Clean(root)
 	dataDir := filepath.Join(root, ".aether", "data")
 	state, stateSource := readLifecycleState(filepath.Join(dataDir, "COLONY_STATE.json"))
@@ -381,7 +427,7 @@ func frontDoorLifecycleProjection(root string) LifecycleProjection {
 		Decisions []colony.FlagEntry `json:"decisions"`
 	}]("blockers", filepath.Join(dataDir, "pending-decisions.json"))
 	facts.Blockers = LifecycleFact[[]colony.FlagEntry]{Value: flags.Decisions, Source: blockerSource}
-	return projectLifecycle(facts, LifecycleViewCompact, "claude")
+	return projectLifecycle(facts, LifecycleViewCompact, platform)
 }
 
 func renderFrontDoorStanding(projection LifecycleProjection) string {
