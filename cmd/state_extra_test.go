@@ -1382,16 +1382,16 @@ func insertPhaseAcceptedPlanFixture(t *testing.T) (string, colony.ColonyState, s
 		t.Fatalf("open insert-phase fixture store: %v", err)
 	}
 	store = s
+	t.Setenv("AETHER_ROOT", root)
 	state := mustReadSpecificationTestState(t, root)
 	revision, ok := currentSpecificationRevision(*state.Specification)
 	if !ok {
 		t.Fatal("accepted insert-phase fixture has no current specification")
 	}
-	ids := planImpactSpecificationIDs(revision)
-	if len(ids) == 0 {
+	if len(revision.Requirements) == 0 {
 		t.Fatal("accepted insert-phase fixture has no specification item IDs")
 	}
-	return root, state, ids[0]
+	return root, state, revision.Requirements[0].ID
 }
 
 func executeInsertPhaseForCurrentPlan(t *testing.T, args ...string) (map[string]interface{}, error) {
@@ -1427,7 +1427,7 @@ func TestInsertPhaseCandidatePreservesActiveRevisionAndAcceptsExactly(t *testing
 		"--base-plan-revision", predecessor.ID,
 	)
 	if err != nil {
-		t.Fatalf("insert phase candidate: %v", err)
+		t.Fatalf("insert phase candidate: envelope=%#v err=%v", envelope, err)
 	}
 	if envelope["ok"] != true {
 		t.Fatalf("insert phase envelope = %#v, want success", envelope)
@@ -1482,6 +1482,15 @@ func TestInsertPhaseImmutableStableIDsAndCompletedStatus(t *testing.T) {
 	before.Plan.Phases[0].Status = colony.PhaseCompleted
 	for index := range before.Plan.Phases[0].Tasks {
 		before.Plan.Phases[0].Tasks[index].Status = colony.TaskCompleted
+	}
+	for revisionIndex := range before.Plan.Revisions {
+		if before.Plan.Revisions[revisionIndex].ID != before.Plan.ActiveRevisionID {
+			continue
+		}
+		before.Plan.Revisions[revisionIndex].Phases[0].Status = colony.PhaseCompleted
+		for taskIndex := range before.Plan.Revisions[revisionIndex].Phases[0].Tasks {
+			before.Plan.Revisions[revisionIndex].Phases[0].Tasks[taskIndex].Status = colony.TaskCompleted
+		}
 	}
 	if err := store.SaveJSON("COLONY_STATE.json", before); err != nil {
 		t.Fatal(err)

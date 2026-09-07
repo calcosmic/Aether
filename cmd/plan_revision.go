@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -39,8 +40,747 @@ type planCandidateAcceptanceResult struct {
 	Replayed  bool                         `json:"replayed"`
 }
 
+type phaseInsertCandidateRequest struct {
+	After                             int
+	Name                              string
+	Description                       string
+	Constraints                       string
+	SpecificationItemID               string
+	SpecificationRevisionPrerequisite string
+	ExpectedBasePlanRevisionID        string
+	CreatedAt                         time.Time
+}
+
+type phaseInsertCandidateResult struct {
+	Candidate     colony.PlanCandidate
+	InsertedPhase colony.Phase
+	ReviewCommand string
+	AcceptCommand string
+}
+
+type phaseInsertProofLinks struct {
+	Requirements []string
+	Acceptance   []string
+	Negative     []string
+	Recovery     []string
+	PublicPaths  []string
+}
+
 func planningRouteAcceptanceRepositoryPath(runID string) string {
 	return filepath.ToSlash(filepath.Join(".aether", "data", "planning", strings.TrimSpace(runID), "acceptance.json"))
+}
+
+// createPhaseInsertCandidate converts an owner-requested corrective phase into
+// the same immutable, reviewable candidate consumed by acceptPlanCandidate.
+// It deliberately leaves COLONY_STATE.json untouched: only exact later owner
+// acceptance may replace the active revision.
+func createPhaseInsertCandidate(root string, request phaseInsertCandidateRequest) (phaseInsertCandidateResult, error) {
+	empty := phaseInsertCandidateResult{}
+	root, err := canonicalPlanningTimelineRoot(root)
+	if err != nil {
+		return empty, err
+	}
+	statePath := filepath.Join(root, ".aether", "data", "COLONY_STATE.json")
+	stateBytes, err := os.ReadFile(statePath)
+	if err != nil {
+		return empty, fmt.Errorf("read current plan before phase insertion: %w", err)
+	}
+	state, err := loadSpecificationColonyState(root)
+	if err != nil {
+		return empty, err
+	}
+	if err := validatePlanningState(state); err != nil {
+		return empty, fmt.Errorf("validate current planning state: %w", err)
+	}
+	if state.Plan.AcceptancePolicy != colony.PlanAcceptanceExplicitOwner {
+		return empty, fmt.Errorf("immutable phase insertion requires an explicitly accepted current plan")
+	}
+	active, ok := activePlanRevision(state.Plan)
+	if !ok {
+		return empty, fmt.Errorf("base plan revision is unavailable")
+	}
+	if expected := strings.TrimSpace(request.ExpectedBasePlanRevisionID); expected != "" && expected != active.ID {
+		return empty, fmt.Errorf("base plan revision is stale: current is %q, request binds %q", active.ID, expected)
+	}
+	if state.State == colony.StateEXECUTING {
+		return empty, fmt.Errorf("cannot insert a phase while an active execution attempt may be mutating the plan")
+	}
+	if _, attempt, found := loadRelevantBuildAttempt(state); found && buildAttemptStatusActive(attempt.Status) {
+		return empty, fmt.Errorf("cannot insert a phase while build attempt %s is active for phase %d", attempt.ID, attempt.Phase)
+	}
+	if strings.TrimSpace(state.Plan.PendingCandidateID) != "" {
+		return empty, fmt.Errorf("cannot insert a phase while candidate %s is already pending review", state.Plan.PendingCandidateID)
+	}
+	if artifact, loadErr := loadPlanCandidateArtifact(root, ""); loadErr == nil {
+		return empty, fmt.Errorf("cannot insert a phase while candidate %s is already pending review", artifact.Candidate.ID)
+	} else if !strings.Contains(loadErr.Error(), "no reviewable plan candidate found") {
+		return empty, fmt.Errorf("inspect pending plan candidates: %w", loadErr)
+	}
+	if request.After < 0 || request.After > len(state.Plan.Phases) {
+		return empty, fmt.Errorf("invalid after index %d (plan has %d phases)", request.After, len(state.Plan.Phases))
+	}
+
+	approved, err := phaseInsertApprovedSpecification(state)
+	if err != nil {
+		return empty, err
+	}
+	coverageIDs, impact, err := phaseInsertSpecificationCoverage(state, approved.Revision, request)
+	if err != nil {
+		return empty, err
+	}
+	proofs, err := phaseInsertProofCoverage(approved.Revision, strings.TrimSpace(request.SpecificationItemID))
+	if err != nil {
+		return empty, err
+	}
+
+	createdAt := request.CreatedAt.UTC()
+	if createdAt.IsZero() {
+		createdAt = time.Now().UTC()
+	}
+	phaseSeed, err := jsonSHA256(struct {
+		Name        string   `json:"name"`
+		Description string   `json:"description"`
+		Constraints string   `json:"constraints,omitempty"`
+		Coverage    []string `json:"coverage"`
+	}{canonicalPlanningText(request.Name), canonicalPlanningText(request.Description), canonicalPlanningText(request.Constraints), coverageIDs})
+	if err != nil {
+		return empty, fmt.Errorf("hash inserted phase identity: %w", err)
+	}
+	insertedSemanticID := "phase-insert-" + phaseSeed[:16]
+	for _, phase := range state.Plan.Phases {
+		if strings.TrimSpace(phase.SemanticID) == insertedSemanticID {
+			return empty, fmt.Errorf("phase insertion %q already exists in the active plan", insertedSemanticID)
+		}
+	}
+	newPhase := colony.Phase{
+		SemanticID:            insertedSemanticID,
+		Name:                  strings.TrimSpace(request.Name),
+		Description:           strings.TrimSpace(request.Description),
+		Status:                colony.PhasePending,
+		Tasks:                 []colony.Task{},
+		RequirementProofLinks: proofs.Requirements,
+		AcceptanceProofLinks:  proofs.Acceptance,
+		NegativeProofLinks:    proofs.Negative,
+		RecoveryProofLinks:    proofs.Recovery,
+		PublicPathProofLinks:  proofs.PublicPaths,
+		AffectedSemanticIDs:   append([]string(nil), coverageIDs...),
+	}
+	proposalInput := clonePhases(state.Plan.Phases)
+	proposalInput = append(proposalInput[:request.After], append([]colony.Phase{newPhase}, proposalInput[request.After:]...)...)
+	proposalInput = renumberRevisionPhases(proposalInput, 0)
+
+	proposalSkeleton := active
+	proposalSkeleton.Phases = clonePhases(proposalInput)
+	beforeSnapshot, err := buildPlanningSemanticSnapshot(planningSemanticSnapshotSource{
+		CurrentSchema: true, Plan: state.Plan, Revision: &active, Specification: state.Specification,
+	})
+	if err != nil {
+		return empty, fmt.Errorf("snapshot active plan before insertion: %w", err)
+	}
+	afterSnapshot, err := buildPlanningSemanticSnapshot(planningSemanticSnapshotSource{
+		CurrentSchema: true, Plan: state.Plan, Revision: &proposalSkeleton, Specification: state.Specification,
+	})
+	if err != nil {
+		return empty, fmt.Errorf("snapshot phase insertion proposal: %w", err)
+	}
+	delta, err := comparePlanningSemanticSnapshots(beforeSnapshot, afterSnapshot)
+	if err != nil {
+		return empty, err
+	}
+	evidenceHash, err := jsonSHA256(struct {
+		BaseRevisionID  string   `json:"base_revision_id"`
+		PhaseSemanticID string   `json:"phase_semantic_id"`
+		Coverage        []string `json:"coverage"`
+		RequestedAt     string   `json:"requested_at"`
+	}{active.ID, insertedSemanticID, coverageIDs, createdAt.Format(time.RFC3339Nano)})
+	if err != nil {
+		return empty, fmt.Errorf("hash phase insertion evidence: %w", err)
+	}
+	evidenceID := "phase-insert-evidence-" + evidenceHash[:12]
+	phaseInsertApplyDeltaEvidence(&delta, evidenceID)
+	if len(impact.AffectedSemanticIDs) > 0 {
+		if err := phaseInsertAppendImpactAuthority(&delta, approved.Revision.ID, impact.AffectedSemanticIDs); err != nil {
+			return empty, err
+		}
+	}
+	if err := addressPhaseInsertDelta(&delta); err != nil {
+		return empty, err
+	}
+
+	score := phaseInsertConfidenceScore(state.Plan.Confidence)
+	assessments, gaps, err := phaseInsertAssessments(score, evidenceID)
+	if err != nil {
+		return empty, err
+	}
+	decision, err := phaseInsertStopDecision(gaps, evidenceID)
+	if err != nil {
+		return empty, err
+	}
+	baseStateHash, err := planStateHash(state.Plan)
+	if err != nil {
+		return empty, fmt.Errorf("hash current plan state: %w", err)
+	}
+	base, _, err := candidateAcceptanceBase(state.Plan, createdAt)
+	if err != nil {
+		return empty, err
+	}
+	runSeed, err := jsonSHA256(struct {
+		BaseID        string `json:"base_id"`
+		BaseStateHash string `json:"base_state_hash"`
+		PhaseID       string `json:"phase_id"`
+		CreatedAt     string `json:"created_at"`
+	}{active.ID, baseStateHash, insertedSemanticID, createdAt.Format(time.RFC3339Nano)})
+	if err != nil {
+		return empty, err
+	}
+	runID := "phase-insert-" + runSeed[:20]
+	card := colony.PlanningIterationCard{
+		SchemaVersion: colony.PlanningIterationSchemaVersion,
+		RunID:         runID, Iteration: 1,
+		ScoutReceiptID: "phase-insert-request-" + evidenceHash[:12], ScoutReceiptHash: evidenceHash,
+		RouteSetterReceiptID: "phase-insert-proposal-" + delta.ContentHash[:12], RouteSetterReceiptHash: delta.ContentHash,
+		EvidenceIDs: []string{evidenceID}, DimensionAssessments: assessments,
+		WeakestGap: gaps[0], SemanticDelta: delta, Decision: decision,
+		EvidenceThatWouldChange: decision.EvidenceThatWouldChange, CreatedAt: createdAt,
+	}
+	card, _, err = canonicalPlanningTimelineCard(card)
+	if err != nil {
+		return empty, err
+	}
+	timeline, err := phaseInsertTimelinePreview(card)
+	if err != nil {
+		return empty, err
+	}
+
+	candidateHash, err := jsonSHA256(struct {
+		RunID                     string   `json:"run_id"`
+		ProposalSemanticHash      string   `json:"proposal_semantic_hash"`
+		BasePlanRevisionID        string   `json:"base_plan_revision_id"`
+		BasePlanRevisionHash      string   `json:"base_plan_revision_hash"`
+		SpecificationRevisionID   string   `json:"specification_revision_id"`
+		SpecificationRevisionHash string   `json:"specification_revision_hash"`
+		TimelineDigest            string   `json:"timeline_digest"`
+		Coverage                  []string `json:"coverage"`
+	}{runID, afterSnapshot.ContentHash, base.ID, base.Hash, approved.Revision.ID, approved.Revision.ContentHash, timeline.TimelineDigest, coverageIDs})
+	if err != nil {
+		return empty, err
+	}
+	candidateID := "plan-candidate-" + candidateHash[:12]
+	affected, preserved := planningRouteDeltaSemanticIDs(delta)
+	affected = canonicalPlanImpactIDs(append(affected, impact.AffectedSemanticIDs...))
+	preserved = planImpactDifference(preserved, affected)
+	boundPhases := phaseInsertCandidatePhases(proposalInput, candidateID, candidateHash, approved.Binding, timeline, affected, preserved, coverageIDs)
+	proposalHash, err := planDefinitionHash(boundPhases)
+	if err != nil {
+		return empty, err
+	}
+	requirements, acceptance, negative, recovery, publicPaths := planningRouteProposalProofLinks(boundPhases)
+	preservedPhaseIDs, supersededPhaseIDs := phaseInsertRevisionPhaseSets(state.Plan.Phases, impact)
+	proposal := colony.PlanRevision{
+		SchemaVersion: planRevisionSchemaVersion, Number: base.Number + 1,
+		ID: fmt.Sprintf("plan-r%d-%s", base.Number+1, proposalHash[:12]), ParentID: base.ID,
+		CreatedAt: createdAt.Format(time.RFC3339Nano), ReasonType: colony.PlanRevisionScopeChange,
+		Reason:       "Owner-requested corrective phase insertion: " + strings.TrimSpace(request.Name),
+		EvidenceHash: evidenceHash, PlanningRunID: runID, PlanHash: proposalHash,
+		PreservedPhaseIDs: preservedPhaseIDs, SupersededPhaseIDs: supersededPhaseIDs,
+		ReplacementPhaseIDs: []int{boundPhases[request.After].ID}, SemanticID: active.SemanticID,
+		RequirementProofLinks: requirements, AcceptanceProofLinks: acceptance,
+		NegativeProofLinks: negative, RecoveryProofLinks: recovery, PublicPathProofLinks: publicPaths,
+		SpecificationRevisionID: approved.Revision.ID, SpecificationRevisionHash: approved.Revision.ContentHash,
+		CandidateID: candidateID, CandidateContentHash: candidateHash,
+		PlanningTimelineID: timeline.ID, PlanningTimelineDigest: timeline.TimelineDigest,
+		AffectedSemanticIDs: affected, PreservedSemanticIDs: preserved, Phases: boundPhases,
+	}
+	if err := validateStandalonePlanRevision(proposal); err != nil {
+		return empty, fmt.Errorf("inserted phase proposal: %w", err)
+	}
+	recommendation, err := phaseInsertRecommendation(candidateID, evidenceID, createdAt)
+	if err != nil {
+		return empty, err
+	}
+	candidate := colony.PlanCandidate{
+		SchemaVersion: colony.PlanCandidateSchemaVersion, ID: candidateID, ContentHash: candidateHash,
+		Status: colony.PlanCandidatePendingReview, CreatedAt: createdAt, ExpiresAt: createdAt.Add(7 * 24 * time.Hour),
+		Proposal: proposal, ProposalHash: proposalHash, BasePlanRevisionID: base.ID, BasePlanRevisionHash: base.Hash,
+		SpecificationRevisionID: approved.Revision.ID, SpecificationRevisionHash: approved.Revision.ContentHash,
+		Timeline: timeline, StopDecision: decision, DimensionAssessments: assessments, SemanticDelta: delta,
+		ResidualGaps: gaps, EvidenceThatWouldChange: decision.EvidenceThatWouldChange, Recommendation: recommendation,
+	}
+	if err := validatePlanCandidateImpactCoverage(candidate, impact); err != nil {
+		return empty, fmt.Errorf("affected_scope: %w", err)
+	}
+	if _, _, err := preserveCompletedCandidateWorkForImpact(state.Plan.Phases, candidate.Proposal.Phases, impact); err != nil {
+		return empty, err
+	}
+	if err := validatePlanningRecordHashes(candidate); err != nil {
+		return empty, err
+	}
+	if err := candidate.Validate(); err != nil {
+		return empty, err
+	}
+
+	manifest, header, stage, err := phaseInsertPlanningBoundary(state, approved, active.ID, baseStateHash, runID, evidenceID, evidenceHash, gaps[0], card, score, createdAt)
+	if err != nil {
+		return empty, err
+	}
+	currentStateBytes, err := os.ReadFile(statePath)
+	if err != nil {
+		return empty, fmt.Errorf("re-read current plan before candidate persistence: %w", err)
+	}
+	if !bytes.Equal(currentStateBytes, stateBytes) {
+		return empty, fmt.Errorf("base plan revision became stale while preparing the insertion; state is unchanged")
+	}
+	appendReceipt, err := appendPlanningIterationCard(root, card, planningTimelineAppendOptions{ReceiptID: card.RouteSetterReceiptID})
+	if err != nil {
+		return empty, err
+	}
+	if appendReceipt.TimelineDigest != timeline.TimelineDigest {
+		return empty, fmt.Errorf("phase insertion timeline diverged while persisting its candidate")
+	}
+	files := make(map[string][]byte, 4)
+	for path, value := range map[string]interface{}{
+		planningRouteCandidateRepositoryPath(runID):                                              candidate,
+		planningStageManifestRepositoryPath(runID, manifest.ID):                                  manifest,
+		planningStageStateRepositoryPath(runID):                                                  stage,
+		filepath.ToSlash(filepath.Join(".aether", "data", "planning", runID, "run-header.json")): header,
+	} {
+		content, marshalErr := marshalPlanningStageJSON(value)
+		if marshalErr != nil {
+			return empty, marshalErr
+		}
+		files[path] = content
+	}
+	if err := persistPlanningScoutFiles(root, "phase-insert-candidate-"+candidateHash[:24], "phase-insert-candidate", candidate.ID, files, nil); err != nil {
+		return empty, err
+	}
+	acceptRequest := planCandidateAcceptanceRequest{
+		CandidateID: candidate.ID, SpecificationRevisionID: candidate.SpecificationRevisionID,
+		SpecificationRevisionHash: candidate.SpecificationRevisionHash, BasePlanRevisionID: candidate.BasePlanRevisionID,
+		TimelineDigest: candidate.Timeline.TimelineDigest, ProposalHash: candidate.ProposalHash,
+		AcceptanceToken: planCandidateAcceptanceToken(candidate),
+	}
+	return phaseInsertCandidateResult{
+		Candidate: candidate, InsertedPhase: boundPhases[request.After], ReviewCommand: "aether plan --candidate",
+		AcceptCommand: planCandidateAcceptanceCommand(acceptRequest),
+	}, nil
+}
+
+func phaseInsertApprovedSpecification(state colony.ColonyState) (approvedPlanningSpecification, error) {
+	if state.Specification == nil {
+		return approvedPlanningSpecification{}, fmt.Errorf("specification coverage requires a current approved specification")
+	}
+	if err := validateSpecificationState(*state.Specification); err != nil {
+		return approvedPlanningSpecification{}, fmt.Errorf("specification coverage state is invalid: %w", err)
+	}
+	revision, ok := currentSpecificationRevision(*state.Specification)
+	if !ok || revision.Status != colony.SpecStatusApproved || revision.Approval == nil {
+		return approvedPlanningSpecification{}, fmt.Errorf("specification coverage requires a current approved specification revision")
+	}
+	if revision.Approval.RevisionID != revision.ID || revision.Approval.RevisionContentHash != revision.ContentHash {
+		return approvedPlanningSpecification{}, fmt.Errorf("specification coverage approval does not bind the current revision")
+	}
+	if state.SessionID != nil && strings.TrimSpace(*state.SessionID) != "" && strings.TrimSpace(revision.Scope.SessionID) != strings.TrimSpace(*state.SessionID) {
+		return approvedPlanningSpecification{}, fmt.Errorf("specification coverage belongs to a different colony session")
+	}
+	approvalHash, err := jsonSHA256(*revision.Approval)
+	if err != nil {
+		return approvedPlanningSpecification{}, err
+	}
+	return approvedPlanningSpecification{
+		Specification: *state.Specification, Revision: revision,
+		Binding: planningStageSpecificationBinding{
+			RevisionID: revision.ID, ContentHash: revision.ContentHash,
+			PredecessorRevisionID: revision.PredecessorID, Status: revision.Status,
+			ApprovalReceiptID: revision.Approval.ID, ApprovalReceiptHash: approvalHash,
+		},
+		GoalID: state.Specification.GoalID, SessionID: revision.Scope.SessionID,
+	}, nil
+}
+
+func phaseInsertSpecificationCoverage(state colony.ColonyState, revision colony.SpecRevision, request phaseInsertCandidateRequest) ([]string, planImpactClosure, error) {
+	itemID := strings.TrimSpace(request.SpecificationItemID)
+	prerequisite := strings.TrimSpace(request.SpecificationRevisionPrerequisite)
+	if itemID == "" && prerequisite == "" {
+		return nil, planImpactClosure{}, fmt.Errorf("specification coverage is required: pass --spec-item <approved-id> or --spec-revision <approved-successor-id>")
+	}
+	known := planImpactIDSet(planImpactSpecificationIDs(revision))
+	if itemID != "" {
+		if _, ok := known[itemID]; !ok {
+			return nil, planImpactClosure{}, fmt.Errorf("specification coverage item %q is absent from approved revision %s", itemID, revision.ID)
+		}
+	}
+	impact, unresolved, err := unresolvedPlanImpact(state)
+	if err != nil {
+		return nil, planImpactClosure{}, fmt.Errorf("specification coverage impact: %w", err)
+	}
+	if prerequisite != "" {
+		if prerequisite != revision.ID {
+			return nil, planImpactClosure{}, fmt.Errorf("specification revision prerequisite is stale: current approved revision is %q", revision.ID)
+		}
+		if !unresolved {
+			return nil, planImpactClosure{}, fmt.Errorf("specification revision prerequisite %q has no unreconciled affected scope; pass --spec-item for existing approved scope", prerequisite)
+		}
+	}
+	coverage := []string{}
+	if itemID != "" {
+		coverage = append(coverage, itemID)
+	}
+	if prerequisite != "" {
+		coverage = append(coverage, impact.ChangedSpecItemIDs...)
+	}
+	return canonicalPlanImpactIDs(coverage), impact, nil
+}
+
+func phaseInsertProofCoverage(revision colony.SpecRevision, itemID string) (phaseInsertProofLinks, error) {
+	links := phaseInsertProofLinks{}
+	if len(revision.Requirements) == 0 || len(revision.AcceptanceChecks) == 0 || len(revision.NegativeExpectations) == 0 || len(revision.RecoveryExpectations) == 0 || len(revision.AffectedPublicPaths) == 0 {
+		return links, fmt.Errorf("approved specification cannot cover a current phase because one or more proof categories are empty")
+	}
+	links.Requirements = []string{revision.Requirements[0].ID}
+	links.Acceptance = []string{revision.AcceptanceChecks[0].ID}
+	links.Negative = []string{revision.NegativeExpectations[0].ID}
+	links.Recovery = []string{revision.RecoveryExpectations[0].ID}
+	links.PublicPaths = []string{revision.AffectedPublicPaths[0].ID}
+	appendIfCategory := func(destination *[]string, ids []string) {
+		for _, id := range ids {
+			if id == itemID {
+				*destination = canonicalPlanImpactIDs(append(*destination, itemID))
+				return
+			}
+		}
+	}
+	appendIfCategory(&links.Requirements, specRequirementIDList(revision.Requirements))
+	appendIfCategory(&links.Acceptance, specAcceptanceCheckIDList(revision.AcceptanceChecks))
+	appendIfCategory(&links.Negative, specNegativeExpectationIDList(revision.NegativeExpectations))
+	appendIfCategory(&links.Recovery, specRecoveryExpectationIDList(revision.RecoveryExpectations))
+	appendIfCategory(&links.PublicPaths, specPublicPathIDList(revision.AffectedPublicPaths))
+	return links, nil
+}
+
+func specRequirementIDList(values []colony.SpecRequirement) []string {
+	result := make([]string, len(values))
+	for i := range values {
+		result[i] = values[i].ID
+	}
+	return result
+}
+
+func specAcceptanceCheckIDList(values []colony.SpecAcceptanceCheck) []string {
+	result := make([]string, len(values))
+	for i := range values {
+		result[i] = values[i].ID
+	}
+	return result
+}
+
+func specNegativeExpectationIDList(values []colony.SpecNegativeExpectation) []string {
+	result := make([]string, len(values))
+	for i := range values {
+		result[i] = values[i].ID
+	}
+	return result
+}
+
+func specRecoveryExpectationIDList(values []colony.SpecRecoveryExpectation) []string {
+	result := make([]string, len(values))
+	for i := range values {
+		result[i] = values[i].ID
+	}
+	return result
+}
+
+func specPublicPathIDList(values []colony.SpecPublicPath) []string {
+	result := make([]string, len(values))
+	for i := range values {
+		result[i] = values[i].ID
+	}
+	return result
+}
+
+func phaseInsertApplyDeltaEvidence(delta *colony.PlanningSemanticDelta, evidenceID string) {
+	if delta == nil {
+		return
+	}
+	for _, section := range []*[]colony.PlanningSemanticChange{
+		&delta.Phases, &delta.Tasks, &delta.Dependencies, &delta.RequirementLinks,
+		&delta.AcceptanceChecks, &delta.NegativeExpectations, &delta.RecoveryExpectations, &delta.PublicPaths,
+	} {
+		for index := range *section {
+			if (*section)[index].Kind != colony.PlanningSemanticChangePreserved {
+				(*section)[index].EvidenceIDs = []string{evidenceID}
+			}
+		}
+	}
+}
+
+func phaseInsertAppendImpactAuthority(delta *colony.PlanningSemanticDelta, specificationID string, affected []string) error {
+	if delta == nil || len(affected) == 0 {
+		return nil
+	}
+	rationale := "The approved specification successor requires this exact affected closure to be reconciled by the insertion candidate"
+	hash, err := jsonSHA256(struct {
+		Kind      colony.PlanningAuthorityImpactKind `json:"kind"`
+		SourceID  string                             `json:"source_id"`
+		Affected  []string                           `json:"affected_semantic_ids"`
+		Rationale string                             `json:"rationale"`
+	}{colony.PlanningAuthoritySpecSupersession, specificationID, canonicalPlanImpactIDs(affected), rationale})
+	if err != nil {
+		return err
+	}
+	delta.AuthorityImpacts = append(delta.AuthorityImpacts, colony.PlanningAuthorityImpact{
+		ID: "authority-impact-" + hash[:12], ContentHash: hash,
+		Kind: colony.PlanningAuthoritySpecSupersession, SourceID: specificationID,
+		AffectedSemanticIDs: canonicalPlanImpactIDs(affected), Rationale: rationale,
+	})
+	return nil
+}
+
+func addressPhaseInsertDelta(delta *colony.PlanningSemanticDelta) error {
+	if delta == nil {
+		return fmt.Errorf("phase insertion semantic delta is required")
+	}
+	delta.SchemaVersion = colony.PlanningSchemaVersion
+	payload := *delta
+	payload.ID = ""
+	payload.ContentHash = ""
+	hash, err := jsonSHA256(payload)
+	if err != nil {
+		return fmt.Errorf("hash phase insertion semantic delta: %w", err)
+	}
+	delta.ContentHash = hash
+	delta.ID = "planning-delta-" + hash[:12]
+	return delta.Validate()
+}
+
+func phaseInsertConfidenceScore(confidence *float64) int {
+	if confidence == nil {
+		return 50
+	}
+	score := int(*confidence * 100)
+	if *confidence > 1 {
+		score = int(*confidence)
+	}
+	if score < 1 {
+		return 1
+	}
+	if score > 100 {
+		return 100
+	}
+	return score
+}
+
+func phaseInsertAssessments(score int, evidenceID string) ([]colony.PlanningDimensionAssessment, []colony.PlanningGap, error) {
+	assessments := make([]colony.PlanningDimensionAssessment, 0, len(colony.PlanningDimensions()))
+	gaps := make([]colony.PlanningGap, 0, len(colony.PlanningDimensions()))
+	for _, dimension := range colony.PlanningDimensions() {
+		gap := colony.PlanningGap{
+			SchemaVersion: colony.PlanningSchemaVersion, Dimension: dimension,
+			Materiality: colony.PlanningGapNonMaterial, Severity: 0,
+			Description:             "Manual insertion makes no new " + string(dimension) + " readiness claim beyond the accepted base plan.",
+			EvidenceIDs:             []string{evidenceID},
+			EvidenceThatWouldChange: "Owner rejection, a newer approved specification, or a changed base plan requires a new insertion candidate.",
+		}
+		gapPayload := gap
+		gapPayload.ID, gapPayload.ContentHash = "", ""
+		gapHash, err := jsonSHA256(gapPayload)
+		if err != nil {
+			return nil, nil, err
+		}
+		gap.ContentHash = gapHash
+		gap.ID = "planning-gap-" + gapHash[:12]
+		assessment := colony.PlanningDimensionAssessment{
+			SchemaVersion: colony.PlanningSchemaVersion, Dimension: dimension,
+			Before: score, After: score, FreshEvidenceIDs: []string{evidenceID}, RemainingGap: gap,
+			Rationale:         "The owner-requested insertion is isolated as a proposal; readiness remains unchanged until exact acceptance.",
+			ProducerReceiptID: "phase-insert-proposal-" + gapHash[:12],
+		}
+		assessmentPayload := assessment
+		assessmentPayload.ID, assessmentPayload.ContentHash = "", ""
+		assessmentHash, err := jsonSHA256(assessmentPayload)
+		if err != nil {
+			return nil, nil, err
+		}
+		assessment.ContentHash = assessmentHash
+		assessment.ID = "planning-assessment-" + assessmentHash[:12]
+		if err := assessment.Validate(); err != nil {
+			return nil, nil, err
+		}
+		assessments = append(assessments, assessment)
+		gaps = append(gaps, gap)
+	}
+	return assessments, gaps, nil
+}
+
+func phaseInsertStopDecision(gaps []colony.PlanningGap, evidenceID string) (colony.PlanningStopDecision, error) {
+	if len(gaps) == 0 {
+		return colony.PlanningStopDecision{}, fmt.Errorf("phase insertion requires residual review gaps")
+	}
+	gapIDs := make([]string, len(gaps))
+	for index := range gaps {
+		gapIDs[index] = gaps[index].ID
+	}
+	decision := colony.PlanningStopDecision{
+		SchemaVersion: colony.PlanningSchemaVersion, Reason: colony.PlanningStopTargetMet,
+		SelectedGapID: gaps[0].ID, ResidualGapIDs: gapIDs, EvidenceIDs: []string{evidenceID},
+		Rationale:               "The bounded manual insertion proposal is complete and now requires exact owner acceptance rather than automatic activation.",
+		EvidenceThatWouldChange: gaps[0].EvidenceThatWouldChange,
+	}
+	payload := decision
+	payload.ID, payload.ContentHash = "", ""
+	hash, err := jsonSHA256(payload)
+	if err != nil {
+		return colony.PlanningStopDecision{}, err
+	}
+	decision.ContentHash = hash
+	decision.ID = "planning-stop-" + hash[:12]
+	return decision, decision.Validate()
+}
+
+func phaseInsertTimelinePreview(card colony.PlanningIterationCard) (colony.PlanningTimelineBinding, error) {
+	receiptID := card.RouteSetterReceiptID
+	requestDigest, err := planningTimelineAppendRequestDigest(receiptID, card, "")
+	if err != nil {
+		return colony.PlanningTimelineBinding{}, err
+	}
+	transactionID, err := planningTimelineTransactionID(card.RunID, receiptID)
+	if err != nil {
+		return colony.PlanningTimelineBinding{}, err
+	}
+	index := planningTimelineIndex{
+		SchemaVersion: planningTimelineIndexSchemaVersion, RunID: card.RunID,
+		Entries: []planningTimelineIndexEntry{{
+			Iteration: card.Iteration, CardID: card.ID, CardHash: card.ContentHash,
+			CardPath:        planningTimelineCardRepositoryPath(card.RunID, card.Iteration, card.ID),
+			AppendReceiptID: receiptID, AppendRequestDigest: requestDigest, TransactionID: transactionID,
+		}},
+	}
+	if err := addressPlanningTimelineIndex(&index, []colony.PlanningIterationCard{card}); err != nil {
+		return colony.PlanningTimelineBinding{}, err
+	}
+	return planningTimelineBindingFor(index, []colony.PlanningIterationCard{card})
+}
+
+func phaseInsertCandidatePhases(phases []colony.Phase, candidateID, candidateHash string, specification planningStageSpecificationBinding, timeline colony.PlanningTimelineBinding, affected, preserved, coverage []string) []colony.Phase {
+	result := clonePhases(phases)
+	affectedSet := planImpactIDSet(affected)
+	preservedSet := planImpactIDSet(preserved)
+	for phaseIndex := range result {
+		phase := &result[phaseIndex]
+		phase.SpecificationRevisionID, phase.SpecificationRevisionHash = specification.RevisionID, specification.ContentHash
+		phase.CandidateID, phase.CandidateContentHash = candidateID, candidateHash
+		phase.PlanningTimelineID, phase.PlanningTimelineDigest = timeline.ID, timeline.TimelineDigest
+		phase.AffectedSemanticIDs = nil
+		phase.PreservedSemanticIDs = nil
+		if _, ok := affectedSet[phase.SemanticID]; ok {
+			phase.AffectedSemanticIDs = append([]string{phase.SemanticID}, coverage...)
+		}
+		if _, ok := preservedSet[phase.SemanticID]; ok {
+			phase.PreservedSemanticIDs = []string{phase.SemanticID}
+		}
+		for taskIndex := range phase.Tasks {
+			task := &phase.Tasks[taskIndex]
+			task.SpecificationRevisionID, task.SpecificationRevisionHash = specification.RevisionID, specification.ContentHash
+			task.CandidateID, task.CandidateContentHash = candidateID, candidateHash
+			task.PlanningTimelineID, task.PlanningTimelineDigest = timeline.ID, timeline.TimelineDigest
+			task.AffectedSemanticIDs = nil
+			task.PreservedSemanticIDs = nil
+			if _, ok := affectedSet[task.SemanticID]; ok {
+				task.AffectedSemanticIDs = []string{task.SemanticID}
+			}
+			if _, ok := preservedSet[task.SemanticID]; ok {
+				task.PreservedSemanticIDs = []string{task.SemanticID}
+			}
+		}
+	}
+	return result
+}
+
+func phaseInsertRevisionPhaseSets(phases []colony.Phase, impact planImpactClosure) ([]int, []int) {
+	affected := planImpactIDSet(impact.AffectedSemanticIDs)
+	var preserved, superseded []int
+	for _, phase := range phases {
+		if _, ok := affected[planImpactPhaseID(phase)]; ok {
+			superseded = append(superseded, phase.ID)
+		} else {
+			preserved = append(preserved, phase.ID)
+		}
+	}
+	return preserved, superseded
+}
+
+func phaseInsertRecommendation(candidateID, evidenceID string, createdAt time.Time) (colony.QueenPlanRecommendation, error) {
+	recommendation := colony.QueenPlanRecommendation{
+		SchemaVersion: colony.PlanningSchemaVersion, CandidateID: candidateID,
+		Disposition: colony.PlanRecommendationAccept, EvidenceIDs: []string{evidenceID},
+		Rationale: "The requested phase is specification-covered, isolated from the active revision, and safe to review for exact acceptance.",
+		Producer:  colony.PlanRecommendationProducerQueen, ProducerID: "go-queen/phase-insert/v1", CreatedAt: createdAt,
+	}
+	payload := recommendation
+	payload.ID, payload.ContentHash = "", ""
+	hash, err := jsonSHA256(payload)
+	if err != nil {
+		return colony.QueenPlanRecommendation{}, err
+	}
+	recommendation.ContentHash = hash
+	recommendation.ID = "queen-recommendation-" + hash[:12]
+	return recommendation, recommendation.Validate()
+}
+
+func phaseInsertPlanningBoundary(state colony.ColonyState, approved approvedPlanningSpecification, baseRevisionID, baseStateHash, runID, evidenceID, evidenceHash string, gap colony.PlanningGap, card colony.PlanningIterationCard, score int, createdAt time.Time) (planningStageManifest, planningRunHeader, planningStageState, error) {
+	var emptyManifest planningStageManifest
+	var emptyHeader planningRunHeader
+	var emptyStage planningStageState
+	priorHash := planningEvidenceSHA256([]byte("phase-insert-origin\n" + baseRevisionID))
+	manifest := planningStageManifest{
+		AuthorizationID: "phase-insert-authorization-" + evidenceHash[:12], RunID: runID, Pass: 1,
+		Preset: planningStagePresetFast, Specification: approved.Binding,
+		BasePlanRevisionID: baseRevisionID, BasePlanRevisionHash: baseStateHash,
+		PriorCardHash: priorHash, InputFrontierHash: evidenceHash,
+		ExpectedCaste: planningStageCasteScout, ExpectedResultType: planningStageResultScout,
+		EvidenceFrontier: []planningStageEvidenceBinding{{ID: evidenceID, ContentHash: evidenceHash}}, WeakestGap: &gap,
+	}
+	if err := addressPlanningStageManifest(&manifest); err != nil {
+		return emptyManifest, emptyHeader, emptyStage, err
+	}
+	goal := "active colony"
+	if state.Goal != nil && strings.TrimSpace(*state.Goal) != "" {
+		goal = strings.TrimSpace(*state.Goal)
+	}
+	header := planningRunHeader{
+		SchemaVersion: planningRunHeaderSchemaVersion, RunID: runID, Goal: goal,
+		GoalID: approved.GoalID, SessionID: approved.SessionID, Specification: approved.Binding,
+		BasePlanRevisionID: baseRevisionID, BasePlanRevisionHash: baseStateHash,
+		Preset: planningStagePresetFast, TargetConfidence: score, PassCap: 1,
+		EvidenceFrontier:  []planningStageEvidenceBinding{{ID: evidenceID, ContentHash: evidenceHash}},
+		InputFrontierHash: evidenceHash, WeakestGap: gap,
+		ResearchPolicy: phaseResearchAutomaticPolicy{
+			SchemaVersion: phaseResearchAutomaticPolicySchemaVersion, Preset: planningStagePresetFast,
+			WeakestGapID: gap.ID, RequiresOwnerPrompt: false, OwnerDecisionBoundary: "after_scout_pass",
+			EvidenceContract: automaticPhaseResearchEvidenceContract(),
+		},
+		StageManifestID: manifest.ID, StageManifestHash: manifest.ContentHash, CreatedAt: createdAt,
+	}
+	headerPayload := header
+	headerPayload.ID, headerPayload.ContentHash = "", ""
+	headerHash, err := jsonSHA256(headerPayload)
+	if err != nil {
+		return emptyManifest, emptyHeader, emptyStage, err
+	}
+	header.ContentHash = headerHash
+	header.ID = "planning-run-header-" + headerHash[:16]
+	stage := planningStageState{
+		Stage: planningStageCandidateReady, RunID: runID, Pass: 1, Preset: planningStagePresetFast,
+		Specification: approved.Binding, BasePlanRevisionID: baseRevisionID, BasePlanRevisionHash: baseStateHash,
+		PriorCardHash: card.ContentHash, InputFrontierHash: evidenceHash, WeakestGap: &gap,
+		UsedAuthorizationIDs: []string{manifest.AuthorizationID},
+	}
+	if err := validatePlanningStageManifest(manifest); err != nil {
+		return emptyManifest, emptyHeader, emptyStage, err
+	}
+	if err := validatePlanningStageAuthority(stage); err != nil {
+		return emptyManifest, emptyHeader, emptyStage, err
+	}
+	return manifest, header, stage, nil
 }
 
 // acceptPlanCandidate is the sole pending_review -> accepted authority. Every

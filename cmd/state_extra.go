@@ -169,15 +169,18 @@ var phaseInsertPromptSessionFactory = func(cmd *cobra.Command) phaseInsertPrompt
 var persistCorrectiveSwarmRecovery = saveSwarmResultRecord
 
 type phaseInsertResolveInput struct {
-	PositionalIssue     string
-	PromptIssue         string
-	PromptOutcome       string
-	PromptConstraints   string
-	ExplicitName        string
-	ExplicitDescription string
-	ExplicitConstraints string
-	ExplicitAfter       int
-	AfterWasExplicit    bool
+	PositionalIssue                   string
+	PromptIssue                       string
+	PromptOutcome                     string
+	PromptConstraints                 string
+	ExplicitName                      string
+	ExplicitDescription               string
+	ExplicitConstraints               string
+	ExplicitAfter                     int
+	AfterWasExplicit                  bool
+	SpecificationItemID               string
+	SpecificationRevisionPrerequisite string
+	ExpectedBasePlanRevisionID        string
 }
 
 type resolvedPhaseInsertRequest struct {
@@ -298,7 +301,7 @@ func phaseInsertHasAnyInput(cmd *cobra.Command, args []string) bool {
 	if len(args) > 0 && strings.TrimSpace(args[0]) != "" {
 		return true
 	}
-	for _, flag := range []string{"after", "name", "description", "constraints"} {
+	for _, flag := range []string{"after", "name", "description", "constraints", "spec-item", "spec-revision", "base-plan-revision"} {
 		if cmd.Flags().Changed(flag) {
 			return true
 		}
@@ -343,6 +346,15 @@ func outputPhaseInsertInputRequired() {
 
 func renderPhaseInsertVisual(result map[string]interface{}) string {
 	var b strings.Builder
+	if candidateCreated, _ := result["candidate_created"].(bool); candidateCreated {
+		b.WriteString(renderBanner(commandEmoji("insert-phase"), "Corrective Phase Candidate"))
+		b.WriteString(visualDividerStr())
+		fmt.Fprintf(&b, "Proposed Phase %d — %s\n", intValue(result["phase_id"]), stringValue(result["name"]))
+		fmt.Fprintf(&b, "   └── active plan unchanged; candidate %s awaits owner review\n", stringValue(result["candidate_id"]))
+		fmt.Fprintf(&b, "\nReview: %s\n", stringValue(result["review_command"]))
+		fmt.Fprintf(&b, "Accept exactly: %s\n", stringValue(result["acceptance_command"]))
+		return b.String()
+	}
 	b.WriteString(renderBanner(commandEmoji("insert-phase"), "Corrective Phase Inserted"))
 	b.WriteString(visualDividerStr())
 	fmt.Fprintf(&b, "Inserted Phase %d — %s\n", intValue(result["phase_id"]), stringValue(result["name"]))
@@ -365,12 +377,15 @@ var phaseInsertCmd = &cobra.Command{
 		}
 
 		input := phaseInsertResolveInput{
-			PositionalIssue:     optionalArg(args, 0),
-			ExplicitName:        mustGetStringCompatOptional(cmd, "name"),
-			ExplicitDescription: mustGetStringCompatOptional(cmd, "description"),
-			ExplicitConstraints: mustGetStringCompatOptional(cmd, "constraints"),
-			ExplicitAfter:       mustGetInt(cmd, "after"),
-			AfterWasExplicit:    cmd.Flags().Changed("after"),
+			PositionalIssue:                   optionalArg(args, 0),
+			ExplicitName:                      mustGetStringCompatOptional(cmd, "name"),
+			ExplicitDescription:               mustGetStringCompatOptional(cmd, "description"),
+			ExplicitConstraints:               mustGetStringCompatOptional(cmd, "constraints"),
+			ExplicitAfter:                     mustGetInt(cmd, "after"),
+			AfterWasExplicit:                  cmd.Flags().Changed("after"),
+			SpecificationItemID:               mustGetStringCompatOptional(cmd, "spec-item"),
+			SpecificationRevisionPrerequisite: mustGetStringCompatOptional(cmd, "spec-revision"),
+			ExpectedBasePlanRevisionID:        mustGetStringCompatOptional(cmd, "base-plan-revision"),
 		}
 
 		if !phaseInsertHasAnyInput(cmd, args) {
@@ -382,6 +397,45 @@ var phaseInsertCmd = &cobra.Command{
 			input.PromptIssue = promptInput.PromptIssue
 			input.PromptOutcome = promptInput.PromptOutcome
 			input.PromptConstraints = promptInput.PromptConstraints
+		}
+
+		// Current-schema plans are immutable. A manual insertion becomes a
+		// reviewable candidate; the legacy direct mutation below remains only
+		// for explicitly legacy/unbound colonies that have no accepted revision.
+		var initialState colony.ColonyState
+		if err := store.LoadJSON("COLONY_STATE.json", &initialState); err != nil {
+			outputError(1, "COLONY_STATE.json not found", nil)
+			return renderedErrorExit(1)
+		}
+		if initialState.Plan.AcceptancePolicy == colony.PlanAcceptanceExplicitOwner || planHasCurrentAuthority(initialState.Plan) {
+			request, err := resolvePhaseInsertRequest(input, initialState.CurrentPhase)
+			if err != nil {
+				outputError(1, err.Error(), nil)
+				return renderedErrorExit(1)
+			}
+			candidate, err := createPhaseInsertCandidate(resolveAetherRootPath(), phaseInsertCandidateRequest{
+				After: request.After, Name: request.Name, Description: request.Description, Constraints: request.Constraints,
+				SpecificationItemID:               input.SpecificationItemID,
+				SpecificationRevisionPrerequisite: input.SpecificationRevisionPrerequisite,
+				ExpectedBasePlanRevisionID:        input.ExpectedBasePlanRevisionID,
+			})
+			if err != nil {
+				outputError(1, err.Error(), nil)
+				return renderedErrorExit(1)
+			}
+			result := map[string]interface{}{
+				"inserted": false, "candidate_created": true,
+				"candidate_id": candidate.Candidate.ID, "candidate_status": candidate.Candidate.Status,
+				"phase_id": candidate.InsertedPhase.ID, "phase_semantic_id": candidate.InsertedPhase.SemanticID,
+				"after": request.After, "name": request.Name, "description": request.Description, "constraints": request.Constraints,
+				"base_plan_revision_id":     candidate.Candidate.BasePlanRevisionID,
+				"specification_revision_id": candidate.Candidate.SpecificationRevisionID,
+				"affected_semantic_ids":     append([]string(nil), candidate.Candidate.Proposal.AffectedSemanticIDs...),
+				"preserved_semantic_ids":    append([]string(nil), candidate.Candidate.Proposal.PreservedSemanticIDs...),
+				"review_command":            candidate.ReviewCommand, "acceptance_command": candidate.AcceptCommand,
+			}
+			outputWorkflow(result, renderPhaseInsertVisual(result))
+			return nil
 		}
 
 		var (
@@ -592,6 +646,9 @@ func init() {
 	phaseInsertCmd.Flags().String("name", "", "Phase name (derived from the issue when omitted)")
 	phaseInsertCmd.Flags().String("description", "", "Phase description (defaults to the issue)")
 	phaseInsertCmd.Flags().String("constraints", "", "Hard constraints retained in the phase description")
+	phaseInsertCmd.Flags().String("spec-item", "", "Approved specification item that covers the inserted phase")
+	phaseInsertCmd.Flags().String("spec-revision", "", "Approved successor specification revision prerequisite for the inserted phase")
+	phaseInsertCmd.Flags().String("base-plan-revision", "", "Expected active plan revision; stale values are refused")
 
 	rootCmd.AddCommand(stateCheckpointCmd)
 	rootCmd.AddCommand(stateWriteCmd)
