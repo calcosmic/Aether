@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"errors"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
@@ -25,6 +26,17 @@ func TestPlanAcceptanceGate200BuildAndAutopilotParity(t *testing.T) {
 	}{
 		{name: "current accepted", eligible: true, fixture: func(t *testing.T) fixture {
 			facts, bindings := planAuthorityCurrentFixture(t)
+			return fixture{facts: facts, bindings: bindings}
+		}},
+		{name: "current accepted with newer pending candidate", eligible: true, fixture: func(t *testing.T) fixture {
+			facts, bindings := planAuthorityCurrentFixture(t)
+			pending := facts.State.Value.Plan.Candidates[0]
+			pending.ID = "plan-candidate-pending"
+			pending.Status = colony.PlanCandidatePendingReview
+			pending.Acceptance = nil
+			facts.State.Value.Plan.Candidates = append(facts.State.Value.Plan.Candidates, pending)
+			facts.State.Value.Plan.PendingCandidateID = pending.ID
+			facts.Planning.Value.PendingCandidateID = pending.ID
 			return fixture{facts: facts, bindings: bindings}
 		}},
 		{name: "candidate ready", code: planAuthorityRefusalCandidateNotAccepted, recovery: "aether plan --candidate", fixture: func(t *testing.T) fixture {
@@ -74,7 +86,7 @@ func TestPlanAcceptanceGate200BuildAndAutopilotParity(t *testing.T) {
 			fx := tc.fixture(t)
 			buildDecision, buildErr := preflightCodexBuildPlanAuthority(fx.facts, fx.bindings)
 			autopilot := buildAutopilotPreflightWithAuthority(fx.facts, fx.bindings)
-			if buildDecision != autopilot.PlanAuthority {
+			if !reflect.DeepEqual(buildDecision, autopilot.PlanAuthority) {
 				t.Fatalf("build authority = %+v, autopilot authority = %+v", buildDecision, autopilot.PlanAuthority)
 			}
 			if buildDecision.Eligible != tc.eligible || buildDecision.RefusalCode != tc.code || buildDecision.RecoveryCommand != tc.recovery {
@@ -85,7 +97,7 @@ func TestPlanAcceptanceGate200BuildAndAutopilotParity(t *testing.T) {
 			}
 			if !tc.eligible {
 				var refusal *codexBuildPlanAuthorityError
-				if !errors.As(buildErr, &refusal) || refusal.Decision != buildDecision {
+				if !errors.As(buildErr, &refusal) || !reflect.DeepEqual(refusal.Decision, buildDecision) {
 					t.Fatalf("build error = %#v, want structured authority refusal %+v", buildErr, buildDecision)
 				}
 				if autopilot.Valid || autopilot.StateEffect != colony.LifecycleStateEffectNone {
@@ -128,6 +140,86 @@ func TestCodexBuildAuthorityRefusalPrecedesPreparationMutation(t *testing.T) {
 	}
 	if diskAfter := hashDirContents(t, root); diskAfter != diskBefore {
 		t.Fatalf("authority refusal wrote build artifacts: before=%s after=%s", diskBefore, diskAfter)
+	}
+}
+
+func TestPlanAcceptanceGate200CandidateReadyDiskRefusalIsReadOnly(t *testing.T) {
+	saveGlobals(t)
+	root, candidate := planCandidateTestPending(t)
+	var err error
+	store, err = storage.NewStore(filepath.Join(root, ".aether", "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := mustReadSpecificationTestState(t, root)
+	goal := "Execute the exactly accepted plan"
+	state.Goal = &goal
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatal(err)
+	}
+	before := hashDirContents(t, root)
+
+	_, buildDecision, buildErr := resolveCodexBuildPlanAuthority(root, state)
+	if buildErr == nil || buildDecision.RefusalCode != planAuthorityRefusalCandidateNotAccepted || buildDecision.Candidate.ID != candidate.ID {
+		t.Fatalf("build decision = %+v error=%v, want exact pending candidate refusal", buildDecision, buildErr)
+	}
+	facts, err := loadLifecycleFacts(root, store, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	autopilot := buildAutopilotPreflight(facts)
+	if autopilot.Valid || autopilot.PlanAuthority.RefusalCode != buildDecision.RefusalCode || autopilot.PlanAuthority.RecoveryCommand != buildDecision.RecoveryCommand {
+		t.Fatalf("autopilot authority = %+v, build authority = %+v", autopilot.PlanAuthority, buildDecision)
+	}
+	if buildDecision.RecoveryCommand != "aether plan --candidate" {
+		t.Fatalf("recovery command = %q, want exact candidate review", buildDecision.RecoveryCommand)
+	}
+	if after := hashDirContents(t, root); after != before {
+		t.Fatalf("candidate-ready preflights mutated disk: before=%s after=%s", before, after)
+	}
+}
+
+func TestPlanAcceptanceGate200CurrentAcceptedDiskAuthorityMatches(t *testing.T) {
+	saveGlobals(t)
+	root, candidate := planCandidateTestPending(t)
+	accepted, err := acceptPlanCandidate(root, planCandidateTestAcceptanceRequest(candidate), planCandidateAcceptanceOptions{
+		AcceptedBy: "owner",
+		AcceptedAt: time.Date(2026, time.September, 8, 1, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err = storage.NewStore(filepath.Join(root, ".aether", "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := mustReadSpecificationTestState(t, root)
+	goal := "Execute the exactly accepted plan"
+	state.Goal = &goal
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatal(err)
+	}
+	before := hashDirContents(t, root)
+
+	_, buildDecision, buildErr := resolveCodexBuildPlanAuthority(root, state)
+	if buildErr != nil || !buildDecision.Eligible {
+		t.Fatalf("build authority = %+v error=%v, want eligible current acceptance", buildDecision, buildErr)
+	}
+	facts, err := loadLifecycleFacts(root, store, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	autopilot := buildAutopilotPreflight(facts)
+	if !autopilot.Valid || !reflect.DeepEqual(autopilot.PlanAuthority, buildDecision) {
+		t.Fatalf("autopilot preflight = %+v, build authority = %+v", autopilot, buildDecision)
+	}
+	if buildDecision.ActiveRevision.ID != accepted.Revision.ID || buildDecision.Candidate.ID != candidate.ID ||
+		buildDecision.Specification.ID != candidate.SpecificationRevisionID || buildDecision.Timeline.ID != candidate.Timeline.ID ||
+		buildDecision.Acceptance.ID != accepted.Receipt.ID {
+		t.Fatalf("accepted attribution is incomplete: %+v", buildDecision)
+	}
+	if after := hashDirContents(t, root); after != before {
+		t.Fatalf("accepted preflights mutated disk: before=%s after=%s", before, after)
 	}
 }
 

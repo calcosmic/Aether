@@ -148,6 +148,7 @@ type codexBuildManifest struct {
 	ExecutionOwner      string                    `json:"execution_owner,omitempty"`
 	WorkerDispatchOptIn bool                      `json:"worker_dispatch_opt_in,omitempty"`
 	GeneratedAt         string                    `json:"generated_at"`
+	PlanAuthority       planAuthorityDecision     `json:"plan_authority"`
 	PlanRevisionID      string                    `json:"plan_revision_id,omitempty"`
 	PlanStateHash       string                    `json:"plan_state_hash,omitempty"`
 	AttemptID           string                    `json:"attempt_id,omitempty"`
@@ -346,6 +347,7 @@ type codexBuildOptions struct {
 type directCodexBuildPreparation struct {
 	State         colony.ColonyState
 	Phase         colony.Phase
+	PlanAuthority planAuthorityDecision
 	Policy        codexQueenExecutionPolicy
 	ReviewDepth   colony.VerificationDepth
 	Dispatches    []codexBuildDispatch
@@ -353,7 +355,54 @@ type directCodexBuildPreparation struct {
 	CasteDecision map[string]interface{}
 }
 
+// codexBuildPlanAuthorityError preserves the typed refusal through build's
+// existing error channel. Its text is for people; Decision is for callers.
+type codexBuildPlanAuthorityError struct {
+	Decision planAuthorityDecision
+}
+
+func (e *codexBuildPlanAuthorityError) Error() string {
+	if e == nil {
+		return "build refused because accepted plan authority is unavailable"
+	}
+	detail := emptyFallback(strings.TrimSpace(e.Decision.Diagnostic), "accepted plan authority is unavailable")
+	return fmt.Sprintf("build refused (%s): %s; recover with `%s`", e.Decision.RefusalCode, detail, e.Decision.RecoveryCommand)
+}
+
+// preflightCodexBuildPlanAuthority is deliberately pure so build and run can
+// be parity-tested against the same facts without creating attempts, briefs,
+// checkpoints, or dispatch records.
+func preflightCodexBuildPlanAuthority(facts LifecycleFacts, bindings planAuthorityVerifiedBindings) (planAuthorityDecision, error) {
+	decision := validateAcceptedPlanAuthority(facts, bindings)
+	if decision.Eligible {
+		return decision, nil
+	}
+	return decision, &codexBuildPlanAuthorityError{Decision: decision}
+}
+
+// resolveCodexBuildPlanAuthority performs compatibility classification and
+// read-only artifact loading before the pure gate. The returned state is the
+// locally classified copy; callers decide whether a later successful build
+// persists it through their ordinary lifecycle transaction.
+func resolveCodexBuildPlanAuthority(root string, state colony.ColonyState) (colony.ColonyState, planAuthorityDecision, error) {
+	migration, err := migratePlanningState(root, state)
+	if err != nil {
+		decision := refusePlanAuthority(planAuthorityDecision{}, planAuthorityRefusalLegacyInvalid, "aether plan", err.Error())
+		return state, decision, &codexBuildPlanAuthorityError{Decision: decision}
+	}
+	state = migration.State
+	facts := lifecycleFactsFromStateSnapshot(state, false, time.Now().UTC())
+	facts.Root = root
+	bindings := loadPlanAuthorityVerifiedBindings(root, facts)
+	decision, err := preflightCodexBuildPlanAuthority(facts, bindings)
+	return state, decision, err
+}
+
 func prepareDirectCodexBuild(root string, state colony.ColonyState, phaseNum int, selectedTaskIDs []string, options codexBuildOptions) (directCodexBuildPreparation, error) {
+	state, authority, err := resolveCodexBuildPlanAuthority(root, state)
+	if err != nil {
+		return directCodexBuildPreparation{}, err
+	}
 	if len(state.Plan.Phases) == 0 {
 		return directCodexBuildPreparation{}, fmt.Errorf("No project plan. Run `aether plan` first.")
 	}
@@ -403,6 +452,7 @@ func prepareDirectCodexBuild(root string, state colony.ColonyState, phaseNum int
 	return directCodexBuildPreparation{
 		State:         state,
 		Phase:         phase,
+		PlanAuthority: authority,
 		Policy:        policy,
 		ReviewDepth:   reviewDepth,
 		Dispatches:    dispatches,
@@ -452,6 +502,10 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	state, err := loadActiveColonyState()
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("%s", colonyStateLoadMessage(err))
+	}
+	state, authority, err := resolveCodexBuildPlanAuthority(root, state)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
 	if len(state.Plan.Phases) == 0 {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("No project plan. Run `aether plan` first.")
@@ -571,6 +625,7 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	manifestRel := filepath.ToSlash(filepath.Join(buildDirRel, "manifest.json"))
 	claimsRel := "last-build-claims.json"
 	manifest := buildCodexBuildManifest(root, state, phase, "", "", dispatches, generatedAt, "plan-only", selectedTaskIDs, briefPaths, true, reviewDepth)
+	manifest.PlanAuthority = authority
 	manifest.Phase = phaseNum
 	manifest.JobDecisions = append([]coherentJobDecision{}, jobDecisions...)
 	manifest.DispatchContract = dispatchContract
@@ -625,6 +680,7 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 		"profile_contract":         profileContract,
 		"queen_recommendation":     queenRecommendation,
 		"queen_execution_policy":   policy,
+		"plan_authority":           authority,
 		"selected_tasks":           selectedTaskIDs,
 		"wrapper_contract": map[string]interface{}{
 			"source_command":          "aether build <phase> --plan-only",
@@ -747,6 +803,10 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	if err != nil {
 		return nil, fmt.Errorf("%s", colonyStateLoadMessage(err))
 	}
+	state, _, err = resolveCodexBuildPlanAuthority(root, state)
+	if err != nil {
+		return nil, err
+	}
 	if _, err := applyPriorCompletedPhaseTaskRepairs(root, &state, phaseNum); err != nil {
 		return nil, err
 	}
@@ -791,6 +851,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	dispatches := prepared.Dispatches
 	jobDecisions := prepared.JobDecisions
 	casteDecision := prepared.CasteDecision
+	authority := prepared.PlanAuthority
 
 	originalState, err := cloneColonyState(state)
 	if err != nil {
@@ -1168,6 +1229,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		"dispatch_mode":            mode,
 		"dispatch_contract":        dispatchContract,
 		"queen_execution_policy":   policy,
+		"plan_authority":           authority,
 		"force":                    options.Force,
 		"selected_tasks":           selectedTaskIDs,
 		"checkpoint":               displayDataPath(checkpointRel),
@@ -2498,6 +2560,7 @@ func buildCodexBuildManifest(root string, state colony.ColonyState, phase colony
 		ExecutionOwner:          buildExecutionOwner(dispatchMode, planOnly),
 		WorkerDispatchOptIn:     buildWorkerDispatchOptIn(dispatchMode),
 		GeneratedAt:             startedAt.Format(time.RFC3339),
+		PlanAuthority:           codexBuildPlanAuthorityAttribution(state),
 		PlanRevisionID:          activePlanRevisionID(state.Plan),
 		PlanStateHash:           planHash,
 		State:                   string(state.State),
@@ -2517,6 +2580,37 @@ func buildCodexBuildManifest(root string, state colony.ColonyState, phase colony
 		QueenRecommendation:     recommendQueenWorkflowProfile(state, phase, len(state.Plan.Phases)),
 		QueenExecutionPolicy:    policy,
 	}
+}
+
+// codexBuildPlanAuthorityAttribution projects only identifiers already in the
+// accepted state. Eligibility was decided before preparation; this helper
+// keeps that lineage attached after ordinary phase/task status mutations.
+func codexBuildPlanAuthorityAttribution(state colony.ColonyState) planAuthorityDecision {
+	decision := planAuthorityDecision{}
+	switch state.Plan.AcceptancePolicy {
+	case colony.PlanAcceptanceLegacyUnbound:
+		decision.Eligible = true
+		decision.Classification = planAuthorityLegacyUnbound
+		if hash, err := planDefinitionHash(state.Plan.Phases); err == nil {
+			decision.ActiveRevision = planAuthorityBinding{ID: activePlanRevisionID(state.Plan), Hash: hash}
+		}
+		return decision
+	case colony.PlanAcceptanceExplicitOwner:
+		active, ok := activePlanRevision(state.Plan)
+		if !ok {
+			return decision
+		}
+		decision.Eligible = true
+		decision.Classification = planAuthorityCurrentAccepted
+		decision.ActiveRevision = planAuthorityBinding{ID: active.ID, Hash: active.PlanHash}
+		decision.Specification = planAuthorityBinding{ID: active.SpecificationRevisionID, Hash: active.SpecificationRevisionHash}
+		decision.Candidate = planAuthorityBinding{ID: active.CandidateID, Hash: active.CandidateContentHash}
+		decision.Timeline = planAuthorityBinding{ID: active.PlanningTimelineID, Hash: active.PlanningTimelineDigest}
+		if candidate, found := planAuthorityCandidateByID(state.Plan.Candidates, active.CandidateID); found && candidate.Acceptance != nil {
+			decision.Acceptance = planAuthorityBinding{ID: candidate.Acceptance.ID, Hash: candidate.Acceptance.ContentHash}
+		}
+	}
+	return decision
 }
 
 func hasDurableDiscoveryDispatchEvidence(dispatches []codexBuildDispatch) bool {

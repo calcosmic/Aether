@@ -268,14 +268,43 @@ type AutopilotPreflight struct {
 	Next               string                      `json:"next"`
 	OutcomeKind        colony.OutcomeKind          `json:"outcome_kind"`
 	StateEffect        colony.LifecycleStateEffect `json:"state_effect"`
+	PlanAuthority      planAuthorityDecision       `json:"plan_authority"`
 	Projection         LifecycleProjection         `json:"projection"`
 }
 
-// buildAutopilotPreflight performs no I/O. A confirmed, non-empty goal is the
-// initialization proof available in the lifecycle snapshot. A non-empty,
-// strictly ordered phase list is the accepted-plan proof; there is no second
-// inferred acceptance flag in the state schema.
+// buildAutopilotPreflight verifies repository-backed authority read-only before
+// delegating to the pure policy core. A confirmed, non-empty goal is the
+// initialization proof available in the lifecycle snapshot; current plans
+// additionally require exact accepted candidate artifacts.
 func buildAutopilotPreflight(facts LifecycleFacts) AutopilotPreflight {
+	// In-memory callers without a repository root are presentation helpers and
+	// historical pure tests; the real run entry always supplies Root and takes
+	// the artifact-backed path below. This avoids re-reading or inventing the
+	// timeline merely to render an already-started run card.
+	if strings.TrimSpace(facts.Root) == "" {
+		return buildAutopilotPreflightCore(facts, nil)
+	}
+	if migration, err := migratePlanningState(facts.Root, facts.State.Value); err != nil {
+		decision := refusePlanAuthority(planAuthorityDecision{}, planAuthorityRefusalLegacyInvalid, "aether plan", err.Error())
+		return buildAutopilotPreflightCore(facts, &decision)
+	} else if migration.Changed {
+		facts.State.Value = migration.State
+		facts.Planning.Value.AcceptancePolicy = migration.State.Plan.AcceptancePolicy
+		facts.Planning.Value.LegacyUnbound = true
+		facts.Planning.Value.AcceptanceBindingStatus = LifecyclePlanBindingLegacyUnbound
+	}
+	bindings := loadPlanAuthorityVerifiedBindings(facts.Root, facts)
+	return buildAutopilotPreflightWithAuthority(facts, bindings)
+}
+
+// buildAutopilotPreflightWithAuthority is the pure parity seam used by run
+// after read-only artifact verification and by cross-surface policy tests.
+func buildAutopilotPreflightWithAuthority(facts LifecycleFacts, bindings planAuthorityVerifiedBindings) AutopilotPreflight {
+	decision := validateAcceptedPlanAuthority(facts, bindings)
+	return buildAutopilotPreflightCore(facts, &decision)
+}
+
+func buildAutopilotPreflightCore(facts LifecycleFacts, authority *planAuthorityDecision) AutopilotPreflight {
 	projection := projectLifecycle(facts, LifecycleViewFocused, detectPlatform())
 	projection.Command = "run"
 	preflight := AutopilotPreflight{
@@ -285,6 +314,9 @@ func buildAutopilotPreflight(facts LifecycleFacts) AutopilotPreflight {
 		OutcomeKind:        colony.OutcomeKindRefused,
 		StateEffect:        colony.LifecycleStateEffectNone,
 		Projection:         projection,
+	}
+	if authority != nil {
+		preflight.PlanAuthority = *authority
 	}
 
 	goal := strings.TrimSpace(facts.Identity.Value.Goal)
@@ -322,8 +354,20 @@ func buildAutopilotPreflight(facts LifecycleFacts) AutopilotPreflight {
 		return preflight
 	}
 	if len(phases) == 0 {
+		if authority != nil && authority.RefusalCode == planAuthorityRefusalCandidateNotAccepted {
+			preflight.Missing = "accepted plan authority"
+			preflight.Diagnostic = strings.TrimSpace(authority.Diagnostic)
+			preflight.Next = authority.RecoveryCommand
+			return preflight
+		}
 		preflight.Missing = "an accepted plan"
 		preflight.Next = "/ant-plan"
+		return preflight
+	}
+	if authority != nil && !authority.Eligible {
+		preflight.Missing = "accepted plan authority"
+		preflight.Diagnostic = strings.TrimSpace(authority.Diagnostic)
+		preflight.Next = authority.RecoveryCommand
 		return preflight
 	}
 

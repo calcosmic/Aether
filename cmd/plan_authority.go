@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 
@@ -88,6 +90,10 @@ func validateAcceptedPlanAuthority(facts LifecycleFacts, bindings planAuthorityV
 
 	state := facts.State.Value
 	plan := state.Plan
+	if bindings.Candidate != nil && bindings.Candidate.Status != colony.PlanCandidateAccepted {
+		decision.Candidate = planAuthorityBinding{ID: bindings.Candidate.ID, Hash: bindings.Candidate.ContentHash}
+		return refusePlanAuthority(decision, planAuthorityRefusalCandidateNotAccepted, "aether plan --candidate", "a reviewable plan candidate has not been explicitly accepted")
+	}
 	if len(plan.Phases) == 0 {
 		return refusePlanAuthority(decision, planAuthorityRefusalNoActivePlan, "aether plan", "no active plan phases are present")
 	}
@@ -177,13 +183,25 @@ func validateCurrentPlanAuthority(state colony.ColonyState, planning LifecyclePl
 		active.CandidateContentHash != candidate.ContentHash {
 		return refusePlanAuthority(decision, planAuthorityRefusalStaleSpecification, "aether plan", "candidate, active revision, and specification bindings are not exact")
 	}
-	if err := validateStandalonePlanRevision(active); err != nil || !reflect.DeepEqual(active.Phases, state.Plan.Phases) {
+	activeViewHash, hashErr := planDefinitionHash(state.Plan.Phases)
+	if err := validateStandalonePlanRevision(active); err != nil || hashErr != nil || activeViewHash != active.PlanHash {
 		return refusePlanAuthority(decision, planAuthorityRefusalCandidateInvalid, "aether plan", "the active plan does not match the accepted immutable proposal")
 	}
+	if err := validateStandalonePlanRevision(candidate.Proposal); err != nil {
+		return refusePlanAuthority(decision, planAuthorityRefusalCandidateInvalid, "aether plan --candidate", fmt.Sprintf("candidate proposal: %v", err))
+	}
 
-	base, ok := planAuthorityRevisionByID(state.Plan.Revisions, candidate.BasePlanRevisionID)
-	if !ok || base.PlanHash != candidate.BasePlanRevisionHash || active.ParentID != base.ID {
-		return refusePlanAuthority(decision, planAuthorityRefusalStaleBase, "aether plan", "the accepted candidate does not bind the active revision's exact base")
+	base := colony.PlanRevision{ID: candidate.BasePlanRevisionID, PlanHash: candidate.BasePlanRevisionHash}
+	if candidate.BasePlanRevisionID == "plan-unbound" {
+		if active.Number != 1 || active.ParentID != "" {
+			return refusePlanAuthority(decision, planAuthorityRefusalStaleBase, "aether plan", "a genesis candidate cannot activate over an existing revision")
+		}
+	} else {
+		var found bool
+		base, found = planAuthorityRevisionByID(state.Plan.Revisions, candidate.BasePlanRevisionID)
+		if !found || base.PlanHash != candidate.BasePlanRevisionHash || active.ParentID != base.ID {
+			return refusePlanAuthority(decision, planAuthorityRefusalStaleBase, "aether plan", "the accepted candidate does not bind the active revision's exact base")
+		}
 	}
 
 	decision.Timeline = planAuthorityBinding{ID: candidate.Timeline.ID, Hash: candidate.Timeline.TimelineDigest}
@@ -223,8 +241,11 @@ func validateCurrentPlanAuthority(state colony.ColonyState, planning LifecyclePl
 		receipt.ActivatedPlanRevisionID != active.ID || receipt.ActivatedPlanRevisionHash != active.PlanHash {
 		return refusePlanAuthority(decision, planAuthorityRefusalAcceptanceInvalid, "aether plan --candidate", "the acceptance receipt does not bind every exact authority field")
 	}
-	if err := validateCurrentPlanningState(state); err != nil {
-		return refusePlanAuthority(decision, planAuthorityRefusalCandidateInvalid, "aether plan", fmt.Sprintf("current plan authority: %v", err))
+	if _, err := validatePlanRevisionChain(state.Plan.Revisions, true); err != nil {
+		return refusePlanAuthority(decision, planAuthorityRefusalCandidateInvalid, "aether plan", fmt.Sprintf("plan revision chain: %v", err))
+	}
+	if err := validateCurrentPlanNodes(state.Plan.Phases, active, currentSpec); err != nil {
+		return refusePlanAuthority(decision, planAuthorityRefusalCandidateInvalid, "aether plan", fmt.Sprintf("active plan bindings: %v", err))
 	}
 
 	decision.Eligible = true
@@ -236,29 +257,45 @@ func validateCurrentPlanAuthority(state colony.ColonyState, planning LifecyclePl
 // needed before the pure validator is called by an execution entry point.
 func loadPlanAuthorityVerifiedBindings(root string, facts LifecycleFacts) planAuthorityVerifiedBindings {
 	state := facts.State.Value
-	active, ok := activePlanRevision(state.Plan)
-	if !ok || strings.TrimSpace(active.CandidateID) == "" {
-		return planAuthorityVerifiedBindings{}
-	}
-	retained, ok := planAuthorityCandidateByID(state.Plan.Candidates, active.CandidateID)
-	if !ok {
-		return planAuthorityVerifiedBindings{}
-	}
-	if retained.Status != colony.PlanCandidateAccepted || retained.Acceptance == nil {
-		candidate := retained
-		return planAuthorityVerifiedBindings{Candidate: &candidate}
-	}
 	root = strings.TrimSpace(root)
+	active, ok := activePlanRevision(state.Plan)
+	if ok && strings.TrimSpace(active.CandidateID) != "" {
+		if retained, found := planAuthorityCandidateByID(state.Plan.Candidates, active.CandidateID); found {
+			if retained.Status != colony.PlanCandidateAccepted || retained.Acceptance == nil {
+				candidate := retained
+				return planAuthorityVerifiedBindings{Candidate: &candidate}
+			}
+			return loadAcceptedPlanAuthorityBindings(root, retained)
+		}
+	}
+
+	// Candidate readiness is useful refusal context only when no accepted
+	// current lineage is active. A newer pending candidate deliberately does
+	// not revoke an already accepted plan (see lifecycleAcceptedPlanValid).
+	if root != "" {
+		pending, found, pendingErr := loadPendingPlanAuthorityCandidate(root)
+		if pendingErr != nil {
+			return planAuthorityVerifiedBindings{CandidateError: pendingErr.Error()}
+		}
+		if found {
+			candidate := pending
+			return planAuthorityVerifiedBindings{Candidate: &candidate}
+		}
+	}
+	return planAuthorityVerifiedBindings{}
+}
+
+func loadAcceptedPlanAuthorityBindings(root string, retained colony.PlanCandidate) planAuthorityVerifiedBindings {
 	if root == "" {
 		return planAuthorityVerifiedBindings{CandidateError: "repository root is unavailable for accepted candidate verification"}
 	}
 
-	artifact, err := loadPlanCandidateArtifact(root, active.CandidateID)
+	artifact, err := loadAcceptedPlanAuthorityCandidate(root, retained)
 	if err != nil {
 		return planAuthorityVerifiedBindings{CandidateError: err.Error()}
 	}
-	bindings := planAuthorityVerifiedBindings{Candidate: &artifact.Candidate}
-	timeline, err := verifiedPlanCandidateTimeline(root, artifact.Candidate)
+	bindings := planAuthorityVerifiedBindings{Candidate: &artifact}
+	timeline, err := verifiedPlanCandidateTimeline(root, artifact)
 	if err != nil {
 		bindings.TimelineError = err.Error()
 		return bindings
@@ -271,7 +308,7 @@ func loadPlanAuthorityVerifiedBindings(root string, facts LifecycleFacts) planAu
 		bindings.AcceptanceError = err.Error()
 		return bindings
 	}
-	content, exists, err := readOptionalPlanningStageFile(repositoryRoot, planningRouteAcceptanceRepositoryPath(artifact.Candidate.Timeline.RunID))
+	content, exists, err := readOptionalPlanningStageFile(repositoryRoot, planningRouteAcceptanceRepositoryPath(artifact.Timeline.RunID))
 	if err != nil {
 		bindings.AcceptanceError = err.Error()
 		return bindings
@@ -287,6 +324,113 @@ func loadPlanAuthorityVerifiedBindings(root string, facts LifecycleFacts) planAu
 	}
 	bindings.Acceptance = &receipt
 	return bindings
+}
+
+func loadPendingPlanAuthorityCandidate(root string) (colony.PlanCandidate, bool, error) {
+	repositoryRoot, err := canonicalPlanningTimelineRoot(root)
+	if err != nil {
+		return colony.PlanCandidate{}, false, err
+	}
+	planningRoot := filepath.Join(repositoryRoot, ".aether", "data", "planning")
+	entries, err := os.ReadDir(planningRoot)
+	if os.IsNotExist(err) {
+		return colony.PlanCandidate{}, false, nil
+	}
+	if err != nil {
+		return colony.PlanCandidate{}, false, fmt.Errorf("read planning candidates: %w", err)
+	}
+	var found *colony.PlanCandidate
+	for _, entry := range entries {
+		if entry.Type()&os.ModeSymlink != 0 {
+			return colony.PlanCandidate{}, false, fmt.Errorf("planning run %q must not be a symlink", entry.Name())
+		}
+		if !entry.IsDir() {
+			continue
+		}
+		runID := entry.Name()
+		if err := validatePlanningTimelineSegment("run_id", runID); err != nil {
+			return colony.PlanCandidate{}, false, err
+		}
+		content, exists, err := readOptionalPlanningStageFile(repositoryRoot, planningRouteCandidateRepositoryPath(runID))
+		if err != nil {
+			return colony.PlanCandidate{}, false, err
+		}
+		if !exists {
+			continue
+		}
+		var candidate colony.PlanCandidate
+		if err := decodePlanningStageJSON(content, &candidate); err != nil {
+			return colony.PlanCandidate{}, false, fmt.Errorf("decode candidate for run %q: %w", runID, err)
+		}
+		if candidate.Status != colony.PlanCandidatePendingReview {
+			continue
+		}
+		if candidate.Timeline.RunID != runID {
+			return colony.PlanCandidate{}, false, fmt.Errorf("candidate %s path does not match timeline run", candidate.ID)
+		}
+		if err := validatePlanningRecordHashes(candidate); err != nil {
+			return colony.PlanCandidate{}, false, fmt.Errorf("candidate %s: %w", candidate.ID, err)
+		}
+		if err := candidate.Validate(); err != nil {
+			return colony.PlanCandidate{}, false, fmt.Errorf("candidate %s: %w", candidate.ID, err)
+		}
+		stage, err := loadPlanningStageState(repositoryRoot, runID)
+		if err != nil {
+			return colony.PlanCandidate{}, false, err
+		}
+		if stage.Stage != planningStageCandidateReady {
+			return colony.PlanCandidate{}, false, fmt.Errorf("pending candidate %s is at stage %s, not candidate_ready", candidate.ID, stage.Stage)
+		}
+		if found != nil {
+			return colony.PlanCandidate{}, false, fmt.Errorf("multiple pending plan candidates are present (%s, %s)", found.ID, candidate.ID)
+		}
+		copy := candidate
+		found = &copy
+	}
+	if found == nil {
+		return colony.PlanCandidate{}, false, nil
+	}
+	return *found, true, nil
+}
+
+func loadAcceptedPlanAuthorityCandidate(root string, retained colony.PlanCandidate) (colony.PlanCandidate, error) {
+	repositoryRoot, err := canonicalPlanningTimelineRoot(root)
+	if err != nil {
+		return colony.PlanCandidate{}, err
+	}
+	runID := strings.TrimSpace(retained.Timeline.RunID)
+	if err := validatePlanningTimelineSegment("run_id", runID); err != nil {
+		return colony.PlanCandidate{}, err
+	}
+	content, exists, err := readOptionalPlanningStageFile(repositoryRoot, planningRouteCandidateRepositoryPath(runID))
+	if err != nil {
+		return colony.PlanCandidate{}, err
+	}
+	if !exists {
+		return colony.PlanCandidate{}, fmt.Errorf("accepted candidate %q artifact is missing", retained.ID)
+	}
+	var candidate colony.PlanCandidate
+	if err := decodePlanningStageJSON(content, &candidate); err != nil {
+		return colony.PlanCandidate{}, fmt.Errorf("decode accepted candidate: %w", err)
+	}
+	if candidate.ID != retained.ID || candidate.Timeline.RunID != runID {
+		return colony.PlanCandidate{}, fmt.Errorf("accepted candidate artifact does not match retained candidate %q", retained.ID)
+	}
+	if err := validatePlanningRecordHashes(candidate); err != nil {
+		return colony.PlanCandidate{}, fmt.Errorf("accepted candidate %s: %w", candidate.ID, err)
+	}
+	if err := candidate.Validate(); err != nil {
+		return colony.PlanCandidate{}, fmt.Errorf("accepted candidate %s: %w", candidate.ID, err)
+	}
+	stage, err := loadPlanningStageState(repositoryRoot, runID)
+	if err != nil {
+		return colony.PlanCandidate{}, err
+	}
+	if stage.Stage != planningStageAccepted || candidate.Acceptance == nil ||
+		stage.AcceptanceReceiptID != candidate.Acceptance.ID || stage.AcceptanceReceiptHash != candidate.Acceptance.ContentHash {
+		return colony.PlanCandidate{}, fmt.Errorf("accepted candidate %s stage does not bind its exact receipt", candidate.ID)
+	}
+	return candidate, nil
 }
 
 func refusePlanAuthority(decision planAuthorityDecision, code planAuthorityRefusalCode, recovery, diagnostic string) planAuthorityDecision {
