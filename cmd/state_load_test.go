@@ -455,3 +455,156 @@ func TestSealRecoversMissingPlanFromPlanningArtifactWithoutPlanRef(t *testing.T)
 		t.Fatalf("expected typed missing-plan refusal, got %s", out.String())
 	}
 }
+
+func TestStateLoadMigratesPlanningLegacyPlanAndPersistsClassification(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	s, _ := newTestStore(t)
+	store = s
+	goal := "Keep a pre-Phase-200 plan buildable"
+	taskID := "1.1"
+	legacy := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:     1,
+			Name:   "Legacy active phase",
+			Status: colony.PhaseReady,
+			Tasks:  []colony.Task{{ID: &taskID, Goal: "Still build this task", Status: colony.TaskPending}},
+		}}},
+	}
+	if err := store.SaveJSON("COLONY_STATE.json", legacy); err != nil {
+		t.Fatalf("save legacy state: %v", err)
+	}
+
+	loaded, err := loadActiveColonyState()
+	if err != nil {
+		t.Fatalf("loadActiveColonyState returned error: %v", err)
+	}
+	if loaded.Plan.AcceptancePolicy != colony.PlanAcceptanceLegacyUnbound {
+		t.Fatalf("loaded acceptance policy = %q, want %q", loaded.Plan.AcceptancePolicy, colony.PlanAcceptanceLegacyUnbound)
+	}
+	if loaded.CurrentPhase != legacy.CurrentPhase || !reflect.DeepEqual(loaded.Plan.Phases, legacy.Plan.Phases) {
+		t.Fatalf("loaded migration changed buildable plan: before=%+v after=%+v", legacy.Plan.Phases, loaded.Plan.Phases)
+	}
+	if firstBuildablePhase(loaded.Plan.Phases) != 1 {
+		t.Fatalf("first buildable phase = %d, want 1", firstBuildablePhase(loaded.Plan.Phases))
+	}
+	if loaded.Specification != nil || len(loaded.Plan.Candidates) != 0 {
+		t.Fatalf("loaded migration fabricated authority: specification=%+v candidates=%+v", loaded.Specification, loaded.Plan.Candidates)
+	}
+
+	firstRaw, err := store.LoadRawJSON("COLONY_STATE.json")
+	if err != nil {
+		t.Fatalf("read first migrated state: %v", err)
+	}
+	var persisted colony.ColonyState
+	if err := json.Unmarshal(firstRaw, &persisted); err != nil {
+		t.Fatalf("decode persisted migrated state: %v", err)
+	}
+	if persisted.Plan.AcceptancePolicy != colony.PlanAcceptanceLegacyUnbound {
+		t.Fatalf("persisted acceptance policy = %q, want %q", persisted.Plan.AcceptancePolicy, colony.PlanAcceptanceLegacyUnbound)
+	}
+
+	if _, err := loadActiveColonyState(); err != nil {
+		t.Fatalf("second loadActiveColonyState returned error: %v", err)
+	}
+	secondRaw, err := store.LoadRawJSON("COLONY_STATE.json")
+	if err != nil {
+		t.Fatalf("read second migrated state: %v", err)
+	}
+	if string(firstRaw) != string(secondRaw) {
+		t.Fatalf("second state-load migration rewrote state:\nfirst:  %s\nsecond: %s", firstRaw, secondRaw)
+	}
+}
+
+func TestStateLoadReadOnlyMigratesPlanningInMemoryWithoutPersistence(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	s, _ := newTestStore(t)
+	store = s
+	goal := "Inspect a legacy plan without writing"
+	taskID := "1.1"
+	legacy := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID: 1, Name: "Legacy phase", Status: colony.PhaseReady,
+			Tasks: []colony.Task{{ID: &taskID, Goal: "Remain pending", Status: colony.TaskPending}},
+		}}},
+	}
+	if err := store.SaveJSON("COLONY_STATE.json", legacy); err != nil {
+		t.Fatalf("save legacy state: %v", err)
+	}
+	before, err := store.LoadRawJSON("COLONY_STATE.json")
+	if err != nil {
+		t.Fatalf("read legacy state before load: %v", err)
+	}
+
+	loaded, err := loadActiveColonyStateReadOnly()
+	if err != nil {
+		t.Fatalf("loadActiveColonyStateReadOnly returned error: %v", err)
+	}
+	if loaded.Plan.AcceptancePolicy != colony.PlanAcceptanceLegacyUnbound {
+		t.Fatalf("in-memory acceptance policy = %q, want %q", loaded.Plan.AcceptancePolicy, colony.PlanAcceptanceLegacyUnbound)
+	}
+	after, err := store.LoadRawJSON("COLONY_STATE.json")
+	if err != nil {
+		t.Fatalf("read legacy state after load: %v", err)
+	}
+	if string(before) != string(after) {
+		t.Fatalf("read-only planning migration persisted state:\nbefore: %s\nafter:  %s", before, after)
+	}
+}
+
+func TestStateLoadRejectsPlanningArtifactThatEscapesRepository(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	s, root := newTestStore(t)
+	store = s
+	goal := "Reject escaped legacy planning evidence"
+	legacy := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Plan:         colony.Plan{Phases: []colony.Phase{{ID: 1, Name: "Legacy phase", Status: colony.PhaseReady}}},
+	}
+	if err := store.SaveJSON("COLONY_STATE.json", legacy); err != nil {
+		t.Fatalf("save legacy state: %v", err)
+	}
+	external := filepath.Join(filepath.Dir(root), "outside-planning.json")
+	if err := os.WriteFile(external, []byte(`{"authority":"must not be imported"}`), 0o644); err != nil {
+		t.Fatalf("write external fixture: %v", err)
+	}
+	planningDir := filepath.Join(store.BasePath(), "planning")
+	if err := os.MkdirAll(planningDir, 0o755); err != nil {
+		t.Fatalf("create planning directory: %v", err)
+	}
+	if err := os.Symlink(external, filepath.Join(planningDir, "iteration-state.json")); err != nil {
+		t.Fatalf("create escaped artifact symlink: %v", err)
+	}
+
+	before, err := store.LoadRawJSON("COLONY_STATE.json")
+	if err != nil {
+		t.Fatalf("read state before load: %v", err)
+	}
+	_, err = loadActiveColonyState()
+	if err == nil || !strings.Contains(err.Error(), "resolves outside .aether/data/planning") {
+		t.Fatalf("load error = %v, want planning containment refusal", err)
+	}
+	after, readErr := store.LoadRawJSON("COLONY_STATE.json")
+	if readErr != nil {
+		t.Fatalf("read state after refused load: %v", readErr)
+	}
+	if string(before) != string(after) {
+		t.Fatalf("refused planning migration changed state:\nbefore: %s\nafter:  %s", before, after)
+	}
+}
