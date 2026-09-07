@@ -134,6 +134,20 @@ type planningRouteStageValidation struct {
 	EvidenceFrontier planningEvidenceFrontier
 	ScoutResult      planningScoutStageResult
 	ScoutReceipt     planningStageReceiptRef
+	RunHeader        planningRunHeader
+}
+
+type planningRouteStageFinalizeOptions struct {
+	Fault  lifecycleTransactionFaultHook
+	Rename func(oldPath, newPath string) error
+}
+
+type planningRouteStageFinalization struct {
+	Validation planningRouteStageValidation
+	Artifact   planningStageOutputReference
+	Receipt    StageReceipt
+	Card       colony.PlanningIterationCard
+	StopPolicy planningStopPolicyEvaluation
 }
 
 type planningScoutStageFinalization struct {
@@ -2647,9 +2661,6 @@ func validatePlanningRouteStageResult(root string, manifest planningStageManifes
 	if err != nil {
 		return empty, err
 	}
-	if err := validatePlanningStageRunningState(state, manifest); err != nil {
-		return empty, err
-	}
 
 	result, err := decodePlanningRouteStageResult(raw)
 	if err != nil {
@@ -2700,6 +2711,17 @@ func validatePlanningRouteStageResult(root string, manifest planningStageManifes
 	if err != nil {
 		return empty, err
 	}
+	if state.Stage == planningStageRouteRunning {
+		if err := validatePlanningStageRunningState(state, manifest); err != nil {
+			return empty, err
+		}
+	} else if !planningRouteReceiptAlreadyCommitted(chain, manifest) {
+		return empty, fmt.Errorf("Route-Setter manifest is not the active stage or an exactly committed replay")
+	}
+	priorCards, err := planningRouteCardsBeforePass(chain.Cards, manifest.Pass)
+	if err != nil {
+		return empty, err
+	}
 	scoutReceipt, scoutManifest, scoutResult, header, err := loadPlanningRouteScoutBoundary(root, manifest, chain)
 	if err != nil {
 		return empty, err
@@ -2729,7 +2751,7 @@ func validatePlanningRouteStageResult(root string, manifest planningStageManifes
 		return empty, err
 	}
 
-	evidence, frontier, err := planningRouteEvidenceContext(header, chain.Cards, scoutManifest, scoutResult, dispatch.MaterialDecisionCandidates)
+	evidence, frontier, err := planningRouteEvidenceContext(header, priorCards, scoutManifest, scoutResult, dispatch.MaterialDecisionCandidates)
 	if err != nil {
 		return empty, err
 	}
@@ -2738,7 +2760,7 @@ func validatePlanningRouteStageResult(root string, manifest planningStageManifes
 		return empty, err
 	}
 
-	priorScores, err := planningRoutePriorScores(manifest, chain.Cards)
+	priorScores, err := planningRoutePriorScores(manifest, priorCards)
 	if err != nil {
 		return empty, err
 	}
@@ -2775,7 +2797,7 @@ func validatePlanningRouteStageResult(root string, manifest planningStageManifes
 		ProposalSnapshot: proposalSnapshot, ProposalHash: proposalSnapshot.ContentHash,
 		PriorSnapshot: priorSnapshot, SemanticDelta: delta, Confidence: confidence,
 		Evidence: evidence, EvidenceFrontier: frontier,
-		ScoutResult: scoutResult, ScoutReceipt: scoutReceipt.reference(),
+		ScoutResult: scoutResult, ScoutReceipt: scoutReceipt.reference(), RunHeader: header,
 	}, nil
 }
 
@@ -3176,4 +3198,152 @@ func validatePlanningRouteResolvedGaps(assessments []colony.PlanningDimensionAss
 		}
 	}
 	return nil
+}
+
+func planningRouteReceiptAlreadyCommitted(chain planningStageReceiptChain, manifest planningStageManifest) bool {
+	for _, receipt := range chain.Receipts {
+		if receipt.ManifestID == manifest.ID && receipt.ManifestHash == manifest.ContentHash && receipt.Caste == planningStageCasteRouteSetter && receipt.Pass == manifest.Pass {
+			return true
+		}
+	}
+	return false
+}
+
+func planningRouteCardsBeforePass(cards []colony.PlanningIterationCard, pass int) ([]colony.PlanningIterationCard, error) {
+	want := pass - 1
+	if want < 0 || len(cards) < want || len(cards) > pass {
+		return nil, fmt.Errorf("Route-Setter pass %d has an invalid %d-card timeline", pass, len(cards))
+	}
+	for index := 0; index < want; index++ {
+		if cards[index].Iteration != index+1 {
+			return nil, fmt.Errorf("Route-Setter timeline card %d is not contiguous", index)
+		}
+	}
+	return append([]colony.PlanningIterationCard(nil), cards[:want]...), nil
+}
+
+func finalizePlanningRouteStage(root string, manifest planningStageManifest, raw []byte) (planningRouteStageFinalization, error) {
+	return finalizePlanningRouteStageWithOptions(root, manifest, raw, planningRouteStageFinalizeOptions{})
+}
+
+func finalizePlanningRouteStageWithOptions(root string, manifest planningStageManifest, raw []byte, opts planningRouteStageFinalizeOptions) (planningRouteStageFinalization, error) {
+	empty := planningRouteStageFinalization{}
+	validated, err := validatePlanningRouteStageResult(root, manifest, raw)
+	if err != nil {
+		return empty, err
+	}
+	artifact, err := writePlanningStageOutput(root, manifest, validated.Normalized, planningStageWriteOptions{})
+	if err != nil {
+		return empty, err
+	}
+
+	_, cards, _, err := readPlanningTimelineChain(root, manifest.RunID)
+	if err != nil {
+		return empty, err
+	}
+	priorCards, err := planningRouteCardsBeforePass(cards, manifest.Pass)
+	if err != nil {
+		return empty, err
+	}
+	history, err := planningRouteConfidenceHistory(priorCards, validated)
+	if err != nil {
+		return empty, err
+	}
+	stopPolicy, err := evaluatePlanningStopPolicy(planningStopPolicyInput{
+		Target: validated.RunHeader.TargetConfidence, PassCap: validated.RunHeader.PassCap, History: history,
+	})
+	if err != nil {
+		return empty, err
+	}
+	next, decisionResume := planningRouteResultingStage(stopPolicy.Decision.Reason)
+	card := colony.PlanningIterationCard{
+		SchemaVersion: colony.PlanningIterationSchemaVersion,
+		RunID:         manifest.RunID, Iteration: manifest.Pass,
+		EvidenceIDs:          planningRouteCardEvidenceIDs(validated),
+		DimensionAssessments: append([]colony.PlanningDimensionAssessment(nil), validated.Confidence.Assessments...),
+		WeakestGap:           clonePlanningConfidenceGap(validated.Confidence.WeakestGap),
+		SemanticDelta:        validated.SemanticDelta, Decision: stopPolicy.Decision,
+		EvidenceThatWouldChange: stopPolicy.Decision.EvidenceThatWouldChange,
+		CreatedAt:               planningRouteCardCreatedAt(validated),
+	}
+	receipt, err := finalizePlanningStage(root, manifest, planningStageFinalizeRequest{
+		To: next, DecisionResumeStage: decisionResume, RouteCard: &card, Fault: opts.Fault, Rename: opts.Rename,
+	})
+	if err != nil {
+		return empty, err
+	}
+	timeline, err := loadPlanningTimeline(root, manifest.RunID)
+	if err != nil {
+		return empty, err
+	}
+	var persisted *colony.PlanningIterationCard
+	for index := range timeline.Cards {
+		if timeline.Cards[index].Iteration == manifest.Pass && timeline.Cards[index].RouteSetterReceiptID == receipt.ID {
+			copy := timeline.Cards[index]
+			persisted = &copy
+			break
+		}
+	}
+	if persisted == nil {
+		return empty, fmt.Errorf("completed Route-Setter receipt has no exact iteration card")
+	}
+	return planningRouteStageFinalization{
+		Validation: validated, Artifact: artifact, Receipt: receipt, Card: *persisted, StopPolicy: stopPolicy,
+	}, nil
+}
+
+func planningRouteConfidenceHistory(cards []colony.PlanningIterationCard, current planningRouteStageValidation) ([]planningConfidencePass, error) {
+	history := make([]planningConfidencePass, 0, len(cards)+1)
+	for index, card := range cards {
+		var scores planningConfidenceScores
+		for _, assessment := range card.DimensionAssessments {
+			scores.Set(assessment.Dimension, assessment.After)
+		}
+		evaluation := planningConfidenceEvaluation{
+			Scores: scores, Assessments: append([]colony.PlanningDimensionAssessment(nil), card.DimensionAssessments...),
+		}
+		evaluation.RankedGaps = rankPlanningConfidenceGaps(evaluation.Assessments, scores)
+		if len(evaluation.RankedGaps) == 0 {
+			return nil, fmt.Errorf("iteration card %d has no ranked planning gap", index+1)
+		}
+		evaluation.WeakestGap = clonePlanningConfidenceGap(evaluation.RankedGaps[0])
+		history = append(history, planningConfidencePass{Iteration: card.Iteration, Evaluation: evaluation, SemanticDelta: card.SemanticDelta})
+	}
+	history = append(history, planningConfidencePass{
+		Iteration: current.Result.Pass, Evaluation: current.Confidence, SemanticDelta: current.SemanticDelta,
+	})
+	return history, nil
+}
+
+func planningRouteResultingStage(reason colony.PlanningStopReason) (planningStage, planningStage) {
+	switch reason {
+	case colony.PlanningStopContinue:
+		return planningStageContinueReady, ""
+	case colony.PlanningStopOwnerDecision:
+		return planningStageOwnerDecision, planningStageScoutReady
+	default:
+		return planningStageCandidateReady, ""
+	}
+}
+
+func planningRouteCardEvidenceIDs(validated planningRouteStageValidation) []string {
+	ids := append([]string(nil), validated.Result.ProposalEvidenceIDs...)
+	for _, assessment := range validated.Confidence.Assessments {
+		ids = append(ids, assessment.FreshEvidenceIDs...)
+		ids = append(ids, assessment.RemainingGap.EvidenceIDs...)
+	}
+	return uniqueSortedStrings(ids)
+}
+
+func planningRouteCardCreatedAt(validated planningRouteStageValidation) time.Time {
+	createdAt := validated.RunHeader.CreatedAt.UTC()
+	for _, reference := range validated.Evidence {
+		if reference.ObservedAt.After(createdAt) {
+			createdAt = reference.ObservedAt.UTC()
+		}
+	}
+	if createdAt.IsZero() {
+		createdAt = time.Unix(int64(validated.Result.Pass), 0).UTC()
+	}
+	return createdAt
 }
