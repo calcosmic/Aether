@@ -145,7 +145,7 @@ func planningVisualIterationFixture(reason colony.PlanningStopReason) colony.Pla
 			NegativeExpectations: []colony.PlanningSemanticChange{{SemanticID: "NEG-01", Kind: colony.PlanningSemanticChangePreserved}},
 			RecoveryExpectations: []colony.PlanningSemanticChange{{SemanticID: "REC-01", Kind: colony.PlanningSemanticChangePreserved}},
 			PublicPaths:          []colony.PlanningSemanticChange{{SemanticID: "PATH-01", Kind: colony.PlanningSemanticChangePreserved}},
-			AuthorityImpacts:     []colony.PlanningAuthorityImpact{{ID: "AUTH-01", Kind: colony.PlanningAuthorityImpactKind("preserved"), Rationale: "Owner authority is unchanged"}},
+			AuthorityImpacts:     []colony.PlanningAuthorityImpact{{ID: "AUTH-01", Kind: colony.PlanningAuthorityOwnerDecision, Rationale: "Owner authority is unchanged"}},
 		},
 		Decision:                colony.PlanningStopDecision{Reason: reason, Rationale: "One more pass can resolve the gap", EvidenceThatWouldChange: "A verified dependency contract"},
 		EvidenceThatWouldChange: "A verified dependency contract",
