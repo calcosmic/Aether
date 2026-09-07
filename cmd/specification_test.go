@@ -443,6 +443,20 @@ func TestSpecificationApproveKeepsStateAndProjectionTogetherOnWriteFailure(t *te
 	if !bytes.Equal(beforeProjection, mustReadSpecificationTestProjectionBytes(t, root)) {
 		t.Fatal("projection write failure changed the readable projection")
 	}
+	retried, err := approveSpecification(root, request, specificationMutationOptions{})
+	if err != nil {
+		t.Fatalf("retry approval after rolled-back write: %v", err)
+	}
+	if retried.Replayed || retried.Revision.Status != colony.SpecStatusApproved {
+		t.Fatalf("retry after rollback did not perform one approval: %#v", retried)
+	}
+	replayed, err := approveSpecification(root, request, specificationMutationOptions{})
+	if err != nil {
+		t.Fatalf("replay approval after successful retry: %v", err)
+	}
+	if !replayed.Replayed || !reflect.DeepEqual(retried.Receipt, replayed.Receipt) {
+		t.Fatalf("successful retry did not become the stable replay receipt\nretry: %#v\nreplay: %#v", retried, replayed)
+	}
 }
 
 func TestSpecificationApproveRecoversInterruptedTwoTargetCommit(t *testing.T) {

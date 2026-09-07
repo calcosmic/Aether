@@ -129,6 +129,14 @@ type specificationRevisionRequest struct {
 	CreatedAt              time.Time
 }
 
+type specificationApprovalRequest struct {
+	RevisionID          string
+	RevisionContentHash string
+	ApprovalToken       string
+	ApprovedBy          string
+	ApprovedAt          time.Time
+}
+
 type specificationMutationOptions struct {
 	Fault  lifecycleTransactionFaultHook
 	Rename func(oldPath, newPath string) error
@@ -264,14 +272,12 @@ func createSpecificationDraft(root string, request specificationDraftRequest, op
 		if current.Status != colony.SpecStatusDraft || current.Approval != nil {
 			return empty, fmt.Errorf("current specification revision %q is %s; create an explicit successor instead of replacing it", current.ID, current.Status)
 		}
-		stateBytes, marshalErr := marshalSpecificationState(state)
-		if marshalErr != nil {
-			return empty, marshalErr
+		targets, targetErr := specificationStateProjectionTargets(state)
+		if targetErr != nil {
+			return empty, targetErr
 		}
 		transactionID := specificationTransactionID("draft", revision.ContentHash)
-		receipt, commitErr := commitSpecificationTargets(repositoryRoot, transactionID, "specification-draft", []specificationTransactionTarget{{
-			Root: lifecycleTransactionRootData, Path: "COLONY_STATE.json", Content: stateBytes,
-		}}, opts)
+		receipt, commitErr := commitSpecificationTargets(repositoryRoot, transactionID, "specification-draft", targets, opts)
 		if commitErr != nil {
 			return empty, fmt.Errorf("replay specification draft: %w", commitErr)
 		}
@@ -291,14 +297,12 @@ func createSpecificationDraft(root string, request specificationDraftRequest, op
 	if err := validatePlanningState(updated); err != nil {
 		return empty, fmt.Errorf("validate state with specification draft: %w", err)
 	}
-	stateBytes, err := marshalSpecificationState(updated)
+	targets, err := specificationStateProjectionTargets(updated)
 	if err != nil {
 		return empty, err
 	}
 	transactionID := specificationTransactionID("draft", revision.ContentHash)
-	receipt, err := commitSpecificationTargets(repositoryRoot, transactionID, "specification-draft", []specificationTransactionTarget{{
-		Root: lifecycleTransactionRootData, Path: "COLONY_STATE.json", Content: stateBytes,
-	}}, opts)
+	receipt, err := commitSpecificationTargets(repositoryRoot, transactionID, "specification-draft", targets, opts)
 	if err != nil {
 		return empty, fmt.Errorf("commit specification draft: %w", err)
 	}
@@ -448,14 +452,12 @@ func reviseSpecification(root string, request specificationRevisionRequest, opts
 		if current.Status != colony.SpecStatusDraft || current.Approval != nil {
 			return empty, fmt.Errorf("stale predecessor: exact successor %q has since changed authority", current.ID)
 		}
-		stateBytes, marshalErr := marshalSpecificationState(state)
-		if marshalErr != nil {
-			return empty, marshalErr
+		targets, targetErr := specificationStateProjectionTargets(state)
+		if targetErr != nil {
+			return empty, targetErr
 		}
 		transactionID := specificationTransactionID("revise", successor.ContentHash)
-		receipt, commitErr := commitSpecificationTargets(repositoryRoot, transactionID, "specification-revise", []specificationTransactionTarget{{
-			Root: lifecycleTransactionRootData, Path: "COLONY_STATE.json", Content: stateBytes,
-		}}, opts)
+		receipt, commitErr := commitSpecificationTargets(repositoryRoot, transactionID, "specification-revise", targets, opts)
 		if commitErr != nil {
 			return empty, fmt.Errorf("replay specification revision: %w", commitErr)
 		}
@@ -476,18 +478,201 @@ func reviseSpecification(root string, request specificationRevisionRequest, opts
 	if err := validatePlanningState(updated); err != nil {
 		return empty, fmt.Errorf("validate state with specification successor: %w", err)
 	}
-	stateBytes, err := marshalSpecificationState(updated)
+	targets, err := specificationStateProjectionTargets(updated)
 	if err != nil {
 		return empty, err
 	}
 	transactionID := specificationTransactionID("revise", successor.ContentHash)
-	receipt, err := commitSpecificationTargets(repositoryRoot, transactionID, "specification-revise", []specificationTransactionTarget{{
-		Root: lifecycleTransactionRootData, Path: "COLONY_STATE.json", Content: stateBytes,
-	}}, opts)
+	receipt, err := commitSpecificationTargets(repositoryRoot, transactionID, "specification-revise", targets, opts)
 	if err != nil {
 		return empty, fmt.Errorf("commit specification successor: %w", err)
 	}
 	return specificationMutationResult{Specification: built, Revision: successor, AffectedScope: affected, Receipt: receipt}, nil
+}
+
+// approveSpecification grants authority to exactly one current draft. The
+// public token is an action binding, not a secret: its value proves the caller
+// named the reviewed specification, revision, and content hash instead of
+// supplying a generic affirmative answer.
+func approveSpecification(root string, request specificationApprovalRequest, opts specificationMutationOptions) (specificationMutationResult, error) {
+	empty := specificationMutationResult{}
+	repositoryRoot, err := canonicalSpecificationRoot(root)
+	if err != nil {
+		return empty, err
+	}
+	state, err := loadSpecificationColonyState(repositoryRoot)
+	if err != nil {
+		return empty, err
+	}
+	if state.Specification == nil {
+		return empty, fmt.Errorf("no specification exists; create and review a draft before approval")
+	}
+	current, ok := currentSpecificationRevision(*state.Specification)
+	if !ok {
+		return empty, fmt.Errorf("specification has no current revision")
+	}
+	request.RevisionID = strings.TrimSpace(request.RevisionID)
+	request.RevisionContentHash = strings.TrimSpace(request.RevisionContentHash)
+	request.ApprovalToken = strings.TrimSpace(request.ApprovalToken)
+	request.ApprovedBy = strings.TrimSpace(request.ApprovedBy)
+	if request.RevisionID != current.ID || request.RevisionContentHash != current.ContentHash {
+		return empty, fmt.Errorf("approval requires current draft %s (%s); state is unchanged", current.ID, current.ContentHash)
+	}
+	if request.ApprovedBy == "" {
+		return empty, fmt.Errorf("approved_by is required for explicit specification approval")
+	}
+	if request.ApprovedAt.IsZero() {
+		return empty, fmt.Errorf("approved_at is required for explicit specification approval")
+	}
+	if request.ApprovedAt.Before(current.CreatedAt) {
+		return empty, fmt.Errorf("approved_at cannot precede the reviewed specification revision")
+	}
+	expectedToken := specificationApprovalToken(state.Specification.ID, current.ID, current.ContentHash)
+	if request.ApprovalToken != expectedToken {
+		return empty, fmt.Errorf("approval token does not bind current specification revision and hash; state is unchanged")
+	}
+	tokenHash := specificationApprovalTokenHash(request.ApprovalToken)
+	affected := affectedSpecificationScope(current.Delta, state.Plan)
+
+	if current.Status == colony.SpecStatusApproved {
+		if current.Approval == nil {
+			return empty, fmt.Errorf("approved specification revision has no approval receipt")
+		}
+		if current.Approval.SpecificationID != state.Specification.ID || current.Approval.RevisionID != request.RevisionID ||
+			current.Approval.RevisionContentHash != request.RevisionContentHash || current.Approval.ApprovalTokenHash != tokenHash ||
+			current.Approval.ApprovedBy != request.ApprovedBy {
+			return empty, fmt.Errorf("divergent specification approval replay refused; state is unchanged")
+		}
+		targets, targetErr := specificationStateProjectionTargets(state)
+		if targetErr != nil {
+			return empty, targetErr
+		}
+		transactionID, identityErr := specificationApprovalTransactionID(*current.Approval)
+		if identityErr != nil {
+			return empty, identityErr
+		}
+		receipt, commitErr := commitSpecificationTargets(repositoryRoot, transactionID, "specification-approve", targets, opts)
+		if commitErr != nil {
+			return empty, fmt.Errorf("replay specification approval: %w", commitErr)
+		}
+		return specificationMutationResult{
+			Specification: *state.Specification,
+			Revision:      current,
+			AffectedScope: affected,
+			Receipt:       receipt,
+			Replayed:      true,
+		}, nil
+	}
+	if current.Status != colony.SpecStatusDraft || current.Approval != nil {
+		return empty, fmt.Errorf("only the current draft revision can be approved; %s is %s", current.ID, current.Status)
+	}
+
+	approval, err := buildSpecificationApprovalReceipt(state.Specification.ID, current, request, tokenHash)
+	if err != nil {
+		return empty, err
+	}
+	updated, err := cloneColonyState(state)
+	if err != nil {
+		return empty, fmt.Errorf("clone state for specification approval: %w", err)
+	}
+	currentIndex := specificationRevisionIndex(*updated.Specification, current.ID)
+	if currentIndex < 0 || currentIndex != len(updated.Specification.Revisions)-1 {
+		return empty, fmt.Errorf("current specification revision moved during approval")
+	}
+	updated.Specification.Revisions[currentIndex].Status = colony.SpecStatusApproved
+	updated.Specification.Revisions[currentIndex].Approval = &approval
+	approved := updated.Specification.Revisions[currentIndex]
+	if err := validatePlanningState(updated); err != nil {
+		return empty, fmt.Errorf("validate state with specification approval: %w", err)
+	}
+	targets, err := specificationStateProjectionTargets(updated)
+	if err != nil {
+		return empty, err
+	}
+	transactionID, err := specificationApprovalTransactionID(approval)
+	if err != nil {
+		return empty, err
+	}
+	receipt, err := commitSpecificationTargets(repositoryRoot, transactionID, "specification-approve", targets, opts)
+	if err != nil {
+		return empty, fmt.Errorf("commit specification approval: %w", err)
+	}
+	return specificationMutationResult{
+		Specification: *updated.Specification,
+		Revision:      approved,
+		AffectedScope: affected,
+		Receipt:       receipt,
+	}, nil
+}
+
+func specificationApprovalToken(specificationID, revisionID, contentHash string) string {
+	material := strings.Join([]string{
+		"specification-approval/v1",
+		strings.TrimSpace(specificationID),
+		strings.TrimSpace(revisionID),
+		strings.TrimSpace(contentHash),
+	}, "\n")
+	digest := strings.TrimPrefix(lifecycleDigest([]byte(material)), "sha256:")
+	return "approve-spec-" + digest[:24]
+}
+
+func specificationApprovalTokenHash(token string) string {
+	return strings.TrimPrefix(lifecycleDigest([]byte(strings.TrimSpace(token))), "sha256:")
+}
+
+func buildSpecificationApprovalReceipt(specificationID string, revision colony.SpecRevision, request specificationApprovalRequest, tokenHash string) (colony.SpecApprovalReceipt, error) {
+	bindingHash, err := jsonSHA256(struct {
+		SchemaVersion       string `json:"schema_version"`
+		SpecificationID     string `json:"specification_id"`
+		RevisionID          string `json:"revision_id"`
+		RevisionContentHash string `json:"revision_content_hash"`
+		ApprovalTokenHash   string `json:"approval_token_hash"`
+		ApprovedBy          string `json:"approved_by"`
+	}{
+		SchemaVersion:       colony.SpecificationSchemaVersion,
+		SpecificationID:     specificationID,
+		RevisionID:          revision.ID,
+		RevisionContentHash: revision.ContentHash,
+		ApprovalTokenHash:   tokenHash,
+		ApprovedBy:          request.ApprovedBy,
+	})
+	if err != nil {
+		return colony.SpecApprovalReceipt{}, fmt.Errorf("hash specification approval binding: %w", err)
+	}
+	receipt := colony.SpecApprovalReceipt{
+		SchemaVersion:       colony.SpecificationSchemaVersion,
+		ID:                  "spec-approval-" + bindingHash[:12],
+		SpecificationID:     specificationID,
+		RevisionID:          revision.ID,
+		RevisionContentHash: revision.ContentHash,
+		ApprovalTokenHash:   tokenHash,
+		ApprovedBy:          request.ApprovedBy,
+		ApprovedAt:          request.ApprovedAt.UTC(),
+	}
+	if err := receipt.Validate(); err != nil {
+		return colony.SpecApprovalReceipt{}, fmt.Errorf("validate specification approval receipt: %w", err)
+	}
+	return receipt, nil
+}
+
+func specificationApprovalTransactionID(approval colony.SpecApprovalReceipt) (string, error) {
+	hash, err := jsonSHA256(struct {
+		SpecificationID     string `json:"specification_id"`
+		RevisionID          string `json:"revision_id"`
+		RevisionContentHash string `json:"revision_content_hash"`
+		ApprovalTokenHash   string `json:"approval_token_hash"`
+		ApprovedBy          string `json:"approved_by"`
+	}{
+		SpecificationID:     approval.SpecificationID,
+		RevisionID:          approval.RevisionID,
+		RevisionContentHash: approval.RevisionContentHash,
+		ApprovalTokenHash:   approval.ApprovalTokenHash,
+		ApprovedBy:          approval.ApprovedBy,
+	})
+	if err != nil {
+		return "", fmt.Errorf("hash specification approval transaction: %w", err)
+	}
+	return specificationTransactionID("approve", hash), nil
 }
 
 func canonicalSpecificationInputItems(section specificationBodySection, inputs []specificationItemInput) ([]specificationCanonicalItem, error) {
@@ -1276,6 +1461,11 @@ func commitSpecificationTargets(root, transactionID, command string, targets []s
 		Fault:  opts.Fault,
 		Rename: opts.Rename,
 	}
+	selectedID, err := selectSpecificationTransactionAttempt(config, targets)
+	if err != nil {
+		return colony.LifecycleReceipt{}, err
+	}
+	config.TransactionID = selectedID
 	pending, err := specificationTransactionHasIntent(config)
 	if err != nil {
 		return colony.LifecycleReceipt{}, err
@@ -1303,6 +1493,68 @@ func commitSpecificationTargets(root, transactionID, command string, targets []s
 		return colony.LifecycleReceipt{}, err
 	}
 	return tx.Commit()
+}
+
+// selectSpecificationTransactionAttempt preserves a successful or interrupted
+// attempt for exact replay, while allocating a new durable attempt after a
+// proven rollback. Without this distinction a transient two-target write
+// failure could replay a no-change rollback receipt while claiming success.
+func selectSpecificationTransactionAttempt(config lifecycleTransactionConfig, targets []specificationTransactionTarget) (string, error) {
+	baseID := config.TransactionID
+	transactionsRoot := filepath.Join(config.Allowlist.LifecycleDataRoot, "transactions")
+	if info, err := os.Lstat(transactionsRoot); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+			return "", fmt.Errorf("specification transaction journal root is not a real directory")
+		}
+	} else if !os.IsNotExist(err) {
+		return "", fmt.Errorf("inspect specification transaction journal root: %w", err)
+	}
+	for attempt := 0; attempt < 10000; attempt++ {
+		candidateID := baseID
+		if attempt > 0 {
+			candidateID = baseID + "-retry-" + fmt.Sprintf("%04d", attempt)
+		}
+		journalPath := filepath.Join(transactionsRoot, candidateID)
+		info, err := os.Lstat(journalPath)
+		if os.IsNotExist(err) {
+			return candidateID, nil
+		}
+		if err != nil {
+			return "", fmt.Errorf("inspect specification transaction attempt %q: %w", candidateID, err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+			return "", fmt.Errorf("specification transaction attempt %q is not a real directory", candidateID)
+		}
+		candidateConfig := config
+		candidateConfig.TransactionID = candidateID
+		pending, pendingErr := specificationTransactionHasIntent(candidateConfig)
+		if pendingErr != nil {
+			return "", pendingErr
+		}
+		if !pending {
+			continue
+		}
+		tx, beginErr := beginLifecycleTransaction(candidateConfig)
+		if beginErr != nil {
+			return "", beginErr
+		}
+		_, progress, loadErr := tx.loadJournal()
+		if loadErr != nil {
+			return "", loadErr
+		}
+		if progress.Stage == colony.TransactionStageRolledBack {
+			continue
+		}
+		matches, matchErr := specificationPendingIntentMatches(candidateConfig, targets)
+		if matchErr != nil {
+			return "", matchErr
+		}
+		if !matches {
+			return "", fmt.Errorf("specification transaction %q has divergent staged content", candidateID)
+		}
+		return candidateID, nil
+	}
+	return "", fmt.Errorf("specification transaction %q exceeded retry-attempt limit 9999", baseID)
 }
 
 func specificationTransactionHasIntent(config lifecycleTransactionConfig) (bool, error) {
