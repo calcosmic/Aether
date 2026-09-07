@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 17/25 plans executed
+**Plans:** 18/25 plans executed
 
 Plans:
 
@@ -228,7 +228,7 @@ Plans:
 **Wave 8** *(blocked on Wave 7 completion)*
 
 - [x] 200-17-PLAN.md — Reconcile living specification and plan revisions by affected scope.
-- [ ] 200-18-PLAN.md — Gate build and Autopilot on one accepted-plan authority policy.
+- [x] 200-18-PLAN.md — Gate build and Autopilot on one accepted-plan authority policy.
 
 **Wave 9** *(blocked on Wave 8 completion)*
 

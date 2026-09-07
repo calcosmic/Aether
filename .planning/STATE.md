@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 200-17-PLAN.md
-last_updated: "2026-09-07T22:49:27.737Z"
+stopped_at: Completed 200-18-PLAN.md
+last_updated: "2026-09-07T23:26:00.215Z"
 last_activity: 2026-09-07
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 59
-  completed_plans: 51
+  completed_plans: 52
   percent: 14
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 18 of 25
+Plan: 19 of 25
 Status: Ready to execute
 Last activity: 2026-09-07
 
@@ -128,6 +128,7 @@ Last activity: 2026-09-07
 | Phase 200 P15 | 42m | 3 tasks | 3 files |
 | Phase 200 P16 | 35m | 2 tasks | 9 files |
 | Phase 200 P17 | 46m | 3 tasks | 10 files |
+| Phase 200 P18 | 32min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -377,6 +378,9 @@ Last activity: 2026-09-07
 - [Phase 200]: Only exact candidate acceptance against the approved current specification clears live affected scope; recorded historical impact remains immutable evidence.
 - [Phase 200]: Current-schema insert-phase is a proposal operation, while genuinely spec-less legacy plans retain their documented direct compatibility path.
 - [Phase 200]: Seal enforces structural specification/plan truth without becoming Phase 205 product acceptance; forced-incomplete closure remains explicitly non-verified.
+- [Phase 200]: Build and run consume the same structured planAuthorityDecision rather than independently inferring acceptance.
+- [Phase 200]: Current authority requires exact approved SPEC, accepted candidate, immutable proposal, timeline, and receipt bindings; legacy authority requires the explicit legacy_unbound marker.
+- [Phase 200]: A newer pending candidate remains inactive but does not revoke an already accepted plan.
 
 ### Pending Todos
 
@@ -492,8 +496,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-07T22:49:27.728Z
-Stopped at: Completed 200-17-PLAN.md
+Last session: 2026-09-07T23:26:00.205Z
+Stopped at: Completed 200-18-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
