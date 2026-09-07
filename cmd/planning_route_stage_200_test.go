@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"os"
@@ -261,6 +262,194 @@ func TestPlanningRouteStageReplayReturnsExactCardAndReceipt(t *testing.T) {
 	if len(chain.Receipts) != 2 || len(chain.Cards) != 1 {
 		t.Fatalf("exact replay duplicated Route history: receipts=%d cards=%d", len(chain.Receipts), len(chain.Cards))
 	}
+}
+
+func TestPlanningRouteStageContinueDispatchesScoutAtWeakestGap(t *testing.T) {
+	root, manifest, result := planningRouteStageTestFixture(t)
+	coordinated, err := coordinatePlanningRouteStage(root, manifest, planningRouteStageTestBytes(t, result))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if coordinated.ScoutDispatch == nil || coordinated.Candidate != nil || coordinated.DecisionCheckpoint != nil {
+		t.Fatalf("continue coordination = %+v, want exactly one next Scout dispatch", coordinated)
+	}
+	dispatch := coordinated.ScoutDispatch
+	if dispatch.ProposalHash != coordinated.Route.Validation.ProposalHash || dispatch.PriorCardHash != coordinated.Route.Card.ContentHash {
+		t.Fatalf("next Scout bindings = %+v, want proposal %s and card %s", dispatch, coordinated.Route.Validation.ProposalHash, coordinated.Route.Card.ContentHash)
+	}
+	if dispatch.Manifest.ExpectedCaste != planningStageCasteScout || dispatch.Manifest.Pass != manifest.Pass+1 || dispatch.Manifest.WeakestGap == nil ||
+		dispatch.Manifest.WeakestGap.ContentHash != coordinated.Route.Card.WeakestGap.ContentHash ||
+		dispatch.Manifest.WeakestGap.EvidenceThatWouldChange != coordinated.Route.Card.EvidenceThatWouldChange {
+		t.Fatalf("next Scout manifest does not target the exact weakest causal gap: %+v", dispatch.Manifest)
+	}
+	state, err := loadPlanningStageState(root, manifest.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Stage != planningStageScoutRunning || state.ActiveManifestID != dispatch.Manifest.ID {
+		t.Fatalf("continued state = %+v, want one active Scout manifest", state)
+	}
+}
+
+func TestPlanningRouteStageStopPersistsNonActiveCandidate(t *testing.T) {
+	root, manifest, result := planningRouteStageTestFixture(t)
+	planningRouteStageSetPolicy(t, root, manifest.RunID, 70, 6)
+	before := mustReadSpecificationTestState(t, root).Plan
+
+	coordinated, err := coordinatePlanningRouteStage(root, manifest, planningRouteStageTestBytes(t, result))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if coordinated.Candidate == nil || coordinated.ScoutDispatch != nil || coordinated.DecisionCheckpoint != nil {
+		t.Fatalf("stop coordination = %+v, want one non-active candidate", coordinated)
+	}
+	candidate := coordinated.Candidate
+	if candidate.Status != colony.PlanCandidatePendingReview || candidate.StopDecision.Reason != colony.PlanningStopTargetMet {
+		t.Fatalf("candidate status/stop = %s/%s, want pending_review/target_met", candidate.Status, candidate.StopDecision.Reason)
+	}
+	if candidate.Recommendation.Disposition != colony.PlanRecommendationAccept || candidate.Recommendation.Producer != colony.PlanRecommendationProducerQueen ||
+		candidate.Recommendation.ProducerID == "" || candidate.Recommendation.Rationale == "" || len(candidate.Recommendation.EvidenceIDs) == 0 {
+		t.Fatalf("candidate recommendation is not authorized, typed, and evidence-grounded: %+v", candidate.Recommendation)
+	}
+	if candidate.EvidenceThatWouldChange == "" || len(candidate.ResidualGaps) != len(colony.PlanningDimensions()) {
+		t.Fatalf("candidate omitted residual causal evidence: %+v", candidate)
+	}
+	if err := candidate.Validate(); err != nil {
+		t.Fatalf("persisted candidate is invalid: %v", err)
+	}
+	after := mustReadSpecificationTestState(t, root).Plan
+	beforeBytes, _ := json.Marshal(before)
+	afterBytes, _ := json.Marshal(after)
+	if !bytes.Equal(beforeBytes, afterBytes) {
+		t.Fatalf("candidate stop changed active plan bytes:\nbefore=%s\nafter=%s", beforeBytes, afterBytes)
+	}
+	content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(planningRouteCandidateRepositoryPath(manifest.RunID))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(content, []byte(candidate.ID)) {
+		t.Fatalf("candidate artifact does not contain %q: %s", candidate.ID, content)
+	}
+}
+
+func TestPlanningRouteStageStopBelowTargetRecommendsRevise(t *testing.T) {
+	root, manifest, result := planningRouteStageTestFixture(t)
+	planningRouteStageSetPolicy(t, root, manifest.RunID, 90, 1)
+	coordinated, err := coordinatePlanningRouteStage(root, manifest, planningRouteStageTestBytes(t, result))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if coordinated.Candidate == nil || coordinated.Candidate.StopDecision.Reason != colony.PlanningStopPassCap || coordinated.Candidate.Recommendation.Disposition != colony.PlanRecommendationRevise {
+		t.Fatalf("below-target cap stop = %+v, want a revise-only candidate", coordinated.Candidate)
+	}
+}
+
+func TestPlanningRouteStageMaterialDecisionOccursAfterCard(t *testing.T) {
+	root, manifest, result := planningRouteStageMaterialFixture(t)
+	coordinated, err := coordinatePlanningRouteStage(root, manifest, planningRouteStageTestBytes(t, result))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if coordinated.DecisionCheckpoint == nil || coordinated.Candidate != nil || coordinated.ScoutDispatch != nil {
+		t.Fatalf("material coordination = %+v, want one owner checkpoint and no progression", coordinated)
+	}
+	checkpoint := coordinated.DecisionCheckpoint
+	if checkpoint.CompletedCardHash != coordinated.Route.Card.ContentHash || checkpoint.Batch.BoundaryCardHash != coordinated.Route.Card.ContentHash {
+		t.Fatalf("material checkpoint is not bound after the complete card: checkpoint=%+v card=%+v", checkpoint, coordinated.Route.Card)
+	}
+	timeline, err := loadPlanningTimeline(root, manifest.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(timeline.Cards) != 1 || timeline.Cards[0].ContentHash != coordinated.Route.Card.ContentHash {
+		t.Fatalf("material boundary appeared before the card: %+v", timeline.Cards)
+	}
+}
+
+func TestPlanningRouteStageMaterialDirectAnswerResumesScout(t *testing.T) {
+	root, manifest, result := planningRouteStageMaterialFixture(t)
+	coordinated, err := coordinatePlanningRouteStage(root, manifest, planningRouteStageTestBytes(t, result))
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkpoint := coordinated.DecisionCheckpoint
+	card := checkpoint.Cards[0]
+	resume, err := buildPlanningScoutDecisionResumeToken(*checkpoint, []planningScoutDecisionAnswer{{
+		DecisionID: card.DecisionID, ChoiceID: "continue-research", Answer: "Continue research before accepting this risk.",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resumed, err := resumePlanningRouteDecision(root, manifest.RunID, resume, time.Date(2026, time.September, 7, 20, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resumed.ScoutDispatch == nil || resumed.SuccessorSpecification != nil || resumed.ResumeToken == nil {
+		t.Fatalf("equivalent material answer = %+v, want direct next-Scout resume", resumed)
+	}
+}
+
+func TestPlanningRouteStageMaterialContractAnswerCreatesSuccessorDraft(t *testing.T) {
+	root, manifest, result := planningRouteStageMaterialFixture(t)
+	coordinated, err := coordinatePlanningRouteStage(root, manifest, planningRouteStageTestBytes(t, result))
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkpoint := coordinated.DecisionCheckpoint
+	card := checkpoint.Cards[0]
+	resume, err := buildPlanningScoutDecisionResumeToken(*checkpoint, []planningScoutDecisionAnswer{{
+		DecisionID: card.DecisionID, ChoiceID: "proceed-with-risk", Answer: "Proceed despite the documented residual risk.",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resumed, err := resumePlanningRouteDecision(root, manifest.RunID, resume, time.Date(2026, time.September, 7, 20, 5, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resumed.SuccessorSpecification == nil || resumed.SuccessorSpecification.Revision.Status != colony.SpecStatusDraft || resumed.ScoutDispatch != nil || resumed.Candidate != nil {
+		t.Fatalf("contract-changing material answer = %+v, want successor DRAFT and no progression", resumed)
+	}
+	state, err := loadPlanningStageState(root, manifest.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Stage != planningStageSpecApprovalRequired || state.PendingSpecification == nil || state.PendingSpecification.RevisionID != resumed.SuccessorSpecification.Revision.ID {
+		t.Fatalf("successor boundary = %+v, want exact spec approval requirement", state)
+	}
+}
+
+func planningRouteStageMaterialFixture(t *testing.T) (string, planningStageManifest, planningRouteStageResult) {
+	t.Helper()
+	root, manifest, result := planningRouteStageTestFixture(t)
+	planningRouteStageSetPolicy(t, root, manifest.RunID, 90, 1)
+	result.DimensionAssessments[0].RemainingGap.Materiality = colony.PlanningGapMaterial
+	result.DimensionAssessments[0].RemainingGap.Severity = 100
+	return root, manifest, result
+}
+
+func planningRouteStageSetPolicy(t *testing.T, root, runID string, target, passCap int) {
+	t.Helper()
+	headerPath := filepath.Join(root, ".aether", "data", "planning", runID, "run-header.json")
+	content, err := os.ReadFile(headerPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var header planningRunHeader
+	if err := json.Unmarshal(content, &header); err != nil {
+		t.Fatal(err)
+	}
+	header.TargetConfidence = target
+	header.PassCap = passCap
+	header.ID = ""
+	header.ContentHash = ""
+	hash, err := jsonSHA256(header)
+	if err != nil {
+		t.Fatal(err)
+	}
+	header.ContentHash = hash
+	header.ID = "planning-run-header-" + hash[:16]
+	planningStageReceiptTestWriteJSON(t, headerPath, header)
 }
 
 func planningRouteStageTestFixture(t *testing.T) (string, planningStageManifest, planningRouteStageResult) {

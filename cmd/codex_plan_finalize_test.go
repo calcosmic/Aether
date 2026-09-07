@@ -100,6 +100,33 @@ func TestCodexPlanFinalizeScoutDecisionResumeExposesExactRouteBoundary(t *testin
 	}
 }
 
+func TestCodexPlanFinalizeRouteExposesNextScoutBoundary(t *testing.T) {
+	root, stageManifest, routeResult := planningRouteStageTestFixture(t)
+	dispatch := codexPlanningDispatch{
+		Stage: "routing", Caste: string(planningStageCasteRouteSetter), Name: "Route-Setter-200",
+		Task: "Complete one exact Route-Setter stage", Outputs: []string{"route-result.json"}, StageManifest: &stageManifest,
+	}
+	manifest := codexPlanManifest{
+		Root: root, GeneratedAt: time.Now().UTC().Format(time.RFC3339), PlanningRunID: stageManifest.RunID,
+		Iteration: stageManifest.Pass, SelectedPreset: stageManifest.Preset,
+		BaseRevisionID: stageManifest.BasePlanRevisionID, BasePlanStateHash: stageManifest.BasePlanRevisionHash,
+		ExpectedWorkers: []codexPlanningDispatch{dispatch}, Dispatches: []codexPlanningDispatch{dispatch},
+		DispatchMode: "plan-only", RequiresFinalizer: true, StageManifest: &stageManifest,
+	}
+	result, err := runCodexRouteStageFinalize(root, manifest, codexExternalPlanCompletion{
+		PlanManifest: &manifest, RouteResult: planningRouteStageTestBytes(t, routeResult),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result["status"] != string(planningStageScoutRunning) || result["next_boundary"] != string(planningStageScoutRunning) || result["scout_stage_manifest"] == nil {
+		t.Fatalf("Route finalizer boundary = %#v, want visible next Scout dispatch", result)
+	}
+	if result["iteration_card"] == nil || result["route_stage_receipt"] == nil || result["proposal_hash"] == "" {
+		t.Fatalf("Route finalizer omitted its card, receipt, or proposal hash: %#v", result)
+	}
+}
+
 func TestValidateExternalPlanStateSuggestsStaleCleanupForFreshManifest(t *testing.T) {
 	saveGlobals(t)
 
