@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -277,6 +278,209 @@ func TestSpecificationReplayRejectsStaleOrDivergentRequestsWithoutMutation(t *te
 			t.Fatal("missing-category draft changed canonical state")
 		}
 	})
+}
+
+func TestSpecificationApproveRequiresExactAuthorityAndReplaysReceipt(t *testing.T) {
+	root := newSpecificationTestRepository(t, specificationTestPlanState())
+	draft, err := createSpecificationDraft(root, specificationTestDraftRequest(t, colony.SpecScopeWholeGoal), specificationMutationOptions{})
+	if err != nil {
+		t.Fatalf("create draft: %v", err)
+	}
+	planBefore := mustReadSpecificationTestState(t, root).Plan
+	request := specificationApprovalRequest{
+		RevisionID:          draft.Revision.ID,
+		RevisionContentHash: draft.Revision.ContentHash,
+		ApprovalToken:       specificationApprovalToken(draft.Specification.ID, draft.Revision.ID, draft.Revision.ContentHash),
+		ApprovedBy:          "owner:callum",
+		ApprovedAt:          time.Date(2026, time.September, 7, 16, 30, 0, 0, time.UTC),
+	}
+
+	first, err := approveSpecification(root, request, specificationMutationOptions{})
+	if err != nil {
+		t.Fatalf("approve specification: %v", err)
+	}
+	if first.Replayed {
+		t.Fatal("first approval reported replay")
+	}
+	if first.Revision.Status != colony.SpecStatusApproved || first.Revision.Approval == nil {
+		t.Fatalf("approved revision authority = %q/%#v", first.Revision.Status, first.Revision.Approval)
+	}
+	approval := first.Revision.Approval
+	if approval.SpecificationID != draft.Specification.ID || approval.RevisionID != draft.Revision.ID || approval.RevisionContentHash != draft.Revision.ContentHash {
+		t.Fatalf("approval receipt is not bound to the exact revision: %#v", approval)
+	}
+	if approval.ApprovalTokenHash == request.ApprovalToken || strings.TrimSpace(approval.ApprovalTokenHash) == "" {
+		t.Fatalf("approval receipt retained plaintext or empty token: %#v", approval)
+	}
+	if !reflect.DeepEqual(mustReadSpecificationTestState(t, root).Plan, planBefore) {
+		t.Fatal("specification approval mutated or accepted the active plan")
+	}
+	projection := mustReadSpecificationTestProjection(t, root)
+	if !strings.Contains(projection, "Status: `APPROVED`") || !strings.Contains(projection, "`aether plan`") {
+		t.Fatalf("approved projection omitted authority or next command:\n%s", projection)
+	}
+
+	retry := request
+	retry.ApprovedAt = request.ApprovedAt.Add(time.Hour)
+	second, err := approveSpecification(root, retry, specificationMutationOptions{})
+	if err != nil {
+		t.Fatalf("replay exact approval: %v", err)
+	}
+	if !second.Replayed || !reflect.DeepEqual(first.Revision, second.Revision) || !reflect.DeepEqual(first.Receipt, second.Receipt) {
+		t.Fatalf("exact approval retry changed revision or receipt\nfirst:  %#v\nsecond: %#v", first, second)
+	}
+}
+
+func TestSpecificationApproveRejectsWrongOrStaleAuthorityWithoutMutation(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*specificationApprovalRequest)
+		want   string
+	}{
+		{name: "generic yes is not an exact token", mutate: func(request *specificationApprovalRequest) { request.ApprovalToken = "yes" }, want: "approval token"},
+		{name: "wrong content hash", mutate: func(request *specificationApprovalRequest) { request.RevisionContentHash = strings.Repeat("0", 64) }, want: "current draft"},
+		{name: "stale revision id", mutate: func(request *specificationApprovalRequest) { request.RevisionID = "spec-revision-stale" }, want: "current draft"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := newSpecificationTestRepository(t, colony.ColonyState{})
+			draft, err := createSpecificationDraft(root, specificationTestDraftRequest(t, colony.SpecScopeWholeGoal), specificationMutationOptions{})
+			if err != nil {
+				t.Fatalf("create draft: %v", err)
+			}
+			request := specificationApprovalRequest{
+				RevisionID:          draft.Revision.ID,
+				RevisionContentHash: draft.Revision.ContentHash,
+				ApprovalToken:       specificationApprovalToken(draft.Specification.ID, draft.Revision.ID, draft.Revision.ContentHash),
+				ApprovedBy:          "owner:callum",
+				ApprovedAt:          time.Date(2026, time.September, 7, 16, 35, 0, 0, time.UTC),
+			}
+			tt.mutate(&request)
+			beforeState := mustReadSpecificationTestStateBytes(t, root)
+			beforeProjection := mustReadSpecificationTestProjectionBytes(t, root)
+			if _, err := approveSpecification(root, request, specificationMutationOptions{}); err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("approval refusal = %v, want %q", err, tt.want)
+			}
+			if after := mustReadSpecificationTestStateBytes(t, root); !bytes.Equal(beforeState, after) {
+				t.Fatal("refused approval changed canonical state")
+			}
+			if after := mustReadSpecificationTestProjectionBytes(t, root); !bytes.Equal(beforeProjection, after) {
+				t.Fatal("refused approval changed projection")
+			}
+		})
+	}
+
+	t.Run("superseded revision", func(t *testing.T) {
+		root := newSpecificationTestRepository(t, colony.ColonyState{})
+		draftRequest := specificationTestDraftRequest(t, colony.SpecScopeWholeGoal)
+		draft, err := createSpecificationDraft(root, draftRequest, specificationMutationOptions{})
+		if err != nil {
+			t.Fatalf("create draft: %v", err)
+		}
+		_, err = reviseSpecification(root, specificationRevisionRequest{
+			PredecessorRevisionID:  draft.Revision.ID,
+			PredecessorContentHash: draft.Revision.ContentHash,
+			Scope:                  draft.Revision.Scope,
+			Changes: []specificationRevisionChange{{
+				Operation: specificationChangeModify,
+				Section:   specificationSectionOutcomes,
+				TargetID:  draft.Revision.Outcomes[0].ID,
+				Item: specificationItemInput{
+					Description: "The owner understands the causal evidence and resulting plan changes.",
+					EvidenceIDs: []string{"owner-answer:clarified-outcome"},
+				},
+			}},
+			CreatedAt: time.Date(2026, time.September, 7, 16, 40, 0, 0, time.UTC),
+		}, specificationMutationOptions{})
+		if err != nil {
+			t.Fatalf("create successor: %v", err)
+		}
+		beforeState := mustReadSpecificationTestStateBytes(t, root)
+		beforeProjection := mustReadSpecificationTestProjectionBytes(t, root)
+		request := specificationApprovalRequest{
+			RevisionID:          draft.Revision.ID,
+			RevisionContentHash: draft.Revision.ContentHash,
+			ApprovalToken:       specificationApprovalToken(draft.Specification.ID, draft.Revision.ID, draft.Revision.ContentHash),
+			ApprovedBy:          "owner:callum",
+			ApprovedAt:          time.Date(2026, time.September, 7, 16, 45, 0, 0, time.UTC),
+		}
+		if _, err := approveSpecification(root, request, specificationMutationOptions{}); err == nil || !strings.Contains(err.Error(), "current draft") {
+			t.Fatalf("superseded approval error = %v", err)
+		}
+		if !bytes.Equal(beforeState, mustReadSpecificationTestStateBytes(t, root)) || !bytes.Equal(beforeProjection, mustReadSpecificationTestProjectionBytes(t, root)) {
+			t.Fatal("superseded approval changed state or projection")
+		}
+	})
+}
+
+func TestSpecificationApproveKeepsStateAndProjectionTogetherOnWriteFailure(t *testing.T) {
+	root := newSpecificationTestRepository(t, colony.ColonyState{})
+	draft, err := createSpecificationDraft(root, specificationTestDraftRequest(t, colony.SpecScopeWholeGoal), specificationMutationOptions{})
+	if err != nil {
+		t.Fatalf("create draft: %v", err)
+	}
+	request := specificationApprovalRequest{
+		RevisionID:          draft.Revision.ID,
+		RevisionContentHash: draft.Revision.ContentHash,
+		ApprovalToken:       specificationApprovalToken(draft.Specification.ID, draft.Revision.ID, draft.Revision.ContentHash),
+		ApprovedBy:          "owner:callum",
+		ApprovedAt:          time.Date(2026, time.September, 7, 16, 50, 0, 0, time.UTC),
+	}
+	beforeState := mustReadSpecificationTestStateBytes(t, root)
+	beforeProjection := mustReadSpecificationTestProjectionBytes(t, root)
+	failProjectionRename := func(oldPath, newPath string) error {
+		if newPath == filepath.Join(root, specificationProjectionRelativePath) {
+			return errors.New("injected projection replacement failure")
+		}
+		return os.Rename(oldPath, newPath)
+	}
+	if _, err := approveSpecification(root, request, specificationMutationOptions{Rename: failProjectionRename}); err == nil || !strings.Contains(err.Error(), "injected projection") {
+		t.Fatalf("write failure error = %v", err)
+	}
+	if !bytes.Equal(beforeState, mustReadSpecificationTestStateBytes(t, root)) {
+		t.Fatal("projection write failure left approved canonical state behind")
+	}
+	if !bytes.Equal(beforeProjection, mustReadSpecificationTestProjectionBytes(t, root)) {
+		t.Fatal("projection write failure changed the readable projection")
+	}
+}
+
+func TestSpecificationApproveRecoversInterruptedTwoTargetCommit(t *testing.T) {
+	root := newSpecificationTestRepository(t, colony.ColonyState{})
+	draft, err := createSpecificationDraft(root, specificationTestDraftRequest(t, colony.SpecScopeWholeGoal), specificationMutationOptions{})
+	if err != nil {
+		t.Fatalf("create draft: %v", err)
+	}
+	request := specificationApprovalRequest{
+		RevisionID:          draft.Revision.ID,
+		RevisionContentHash: draft.Revision.ContentHash,
+		ApprovalToken:       specificationApprovalToken(draft.Specification.ID, draft.Revision.ID, draft.Revision.ContentHash),
+		ApprovedBy:          "owner:callum",
+		ApprovedAt:          time.Date(2026, time.September, 7, 16, 55, 0, 0, time.UTC),
+	}
+	interrupted := false
+	fault := func(point string) error {
+		if point == "after_target_commit:target-0001" && !interrupted {
+			interrupted = true
+			return errors.New("injected crash")
+		}
+		return nil
+	}
+	if _, err := approveSpecification(root, request, specificationMutationOptions{Fault: fault}); err == nil || !strings.Contains(err.Error(), "injected crash") {
+		t.Fatalf("interrupted approval error = %v", err)
+	}
+	recovered, err := approveSpecification(root, request, specificationMutationOptions{})
+	if err != nil {
+		t.Fatalf("resume interrupted approval: %v", err)
+	}
+	if !recovered.Replayed || recovered.Revision.Status != colony.SpecStatusApproved {
+		t.Fatalf("recovered approval = %#v", recovered)
+	}
+	state := mustReadSpecificationTestState(t, root)
+	projection := mustReadSpecificationTestProjection(t, root)
+	if state.Specification == nil || state.Specification.Revisions[len(state.Specification.Revisions)-1].Status != colony.SpecStatusApproved || !strings.Contains(projection, "Status: `APPROVED`") {
+		t.Fatalf("recovery did not converge state and projection\nstate: %#v\nprojection:\n%s", state.Specification, projection)
+	}
 }
 
 func specificationTestDraftRequest(t *testing.T, kind colony.SpecScopeKind) specificationDraftRequest {
