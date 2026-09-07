@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 200-09-PLAN.md
-last_updated: "2026-09-07T16:59:57.945Z"
+stopped_at: Completed 200-10-PLAN.md
+last_updated: "2026-09-07T17:27:06.257Z"
 last_activity: 2026-09-07
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 59
-  completed_plans: 43
+  completed_plans: 44
   percent: 14
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 10 of 25
+Plan: 11 of 25
 Status: Ready to execute
 Last activity: 2026-09-07
 
@@ -120,6 +120,7 @@ Last activity: 2026-09-07
 | Phase 200 P07 | 27 min | 2 tasks | 2 files |
 | Phase 200 P08 | 49 min | 2 tasks | 5 files |
 | Phase 200 P09 | 46 min | 2 tasks | 4 files |
+| Phase 200 P10 | 16 min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -340,6 +341,9 @@ Last activity: 2026-09-07
 - [Phase 200]: Keep StageReceipt limited to a completed boundary. — Each later worker manifest or plan acceptance requires separate authority.
 - [Phase 200]: Commit Route receipt, resulting state, iteration card, and timeline index through one existing lifecycle transaction. — Route recovery stays atomic without introducing Phase 202 event transport.
 - [Phase 200]: Bind finalization recovery to exact manifest identity. — Divergent staged bytes fail before any frontier mutation.
+- [Phase 200]: Keep all nine specification body categories separately typed in the public command result. — Visual and JSON consumers retain each stable ID's owner-contract meaning instead of receiving generic items.
+- [Phase 200]: Validate command exclusivity and exact revision inputs before state access, and contain file-backed text reads to regular repository files. — Invalid authority attempts and path escapes fail before colony state or arbitrary filesystem bytes are touched.
+- [Phase 200]: Derive the restored journey at root-help render time while preserving the Phase 199 canonical host catalogue until the parity plan. — Codex receives truthful native commands now without partially updating managed Claude and OpenCode wrappers.
 
 ### Pending Todos
 
@@ -455,8 +459,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-07T16:59:57.936Z
-Stopped at: Completed 200-09-PLAN.md
+Last session: 2026-09-07T17:27:06.248Z
+Stopped at: Completed 200-10-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
