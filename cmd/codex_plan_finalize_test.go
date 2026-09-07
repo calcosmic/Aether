@@ -55,6 +55,51 @@ func TestCodexPlanFinalizeScoutExposesRouteBoundary(t *testing.T) {
 	}
 }
 
+func TestCodexPlanFinalizeScoutDecisionResumeExposesExactRouteBoundary(t *testing.T) {
+	root, stageManifest, scoutResult := planningScoutStageTestFixture(t)
+	scoutResult.DecisionCandidates = []planningDecisionCandidate{
+		planningScoutStageMaterialCandidate(scoutResult.NewEvidence[0].Reference, "decision-finalizer-resume"),
+	}
+	dispatch := codexPlanningDispatch{Caste: string(planningStageCasteScout), Name: "Scout-200", Task: "Complete Scout", Outputs: []string{"scout-result.json"}, StageManifest: &stageManifest}
+	manifest := codexPlanManifest{
+		Root:              root,
+		GeneratedAt:       time.Now().UTC().Format(time.RFC3339),
+		PlanningRunID:     stageManifest.RunID,
+		Iteration:         stageManifest.Pass,
+		SelectedPreset:    stageManifest.Preset,
+		BaseRevisionID:    stageManifest.BasePlanRevisionID,
+		BasePlanStateHash: stageManifest.BasePlanRevisionHash,
+		ExpectedWorkers:   []codexPlanningDispatch{dispatch},
+		Dispatches:        []codexPlanningDispatch{dispatch},
+		DispatchMode:      "plan-only",
+		RequiresFinalizer: true,
+		StageManifest:     &stageManifest,
+	}
+	completion := codexExternalPlanCompletion{PlanManifest: &manifest, ScoutResult: planningScoutStageTestBytes(t, scoutResult)}
+	first, err := runCodexScoutStageFinalize(root, manifest, completion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkpoint, ok := first["decision_checkpoint"].(*planningScoutDecisionCheckpoint)
+	if !ok || checkpoint == nil || first["status"] != string(planningStageOwnerDecision) || first["route_stage_manifest"] != nil {
+		t.Fatalf("first-pass decision finalizer = %#v, want one owner checkpoint and no route", first)
+	}
+	card := checkpoint.Cards[0]
+	resume, err := buildPlanningScoutDecisionResumeToken(*checkpoint, []planningScoutDecisionAnswer{{DecisionID: card.DecisionID, ChoiceID: card.Choices[0].ID, Answer: card.Choices[0].Label}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	completion.DecisionResume = &resume
+	completion.DecisionResolvedAt = time.Date(2026, time.September, 7, 19, 15, 0, 0, time.UTC)
+	second, err := runCodexScoutStageFinalize(root, manifest, completion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second["status"] != string(planningStageRouteRunning) || second["route_stage_manifest"] == nil || second["completed_decision_resume_token"] == nil {
+		t.Fatalf("completed decision finalizer = %#v, want exact Route-Setter resume", second)
+	}
+}
+
 func TestValidateExternalPlanStateSuggestsStaleCleanupForFreshManifest(t *testing.T) {
 	saveGlobals(t)
 

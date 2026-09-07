@@ -248,6 +248,16 @@ func TestPlanningScoutStageCompletedDirectAnswersResumeExactRouteSetter(t *testi
 	if state.Stage != planningStageRouteRunning || state.ActiveManifestID != resumed.RouteDispatch.Manifest.ID {
 		t.Fatalf("direct answer state = %+v, want route_running", state)
 	}
+	replayed, err := resumePlanningScoutDecision(root, manifest.RunID, token, time.Date(2026, time.September, 7, 19, 1, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replayed.RouteDispatch == nil || replayed.RouteDispatch.Manifest.ID != resumed.RouteDispatch.Manifest.ID {
+		t.Fatalf("exact direct-answer replay changed Route-Setter manifest: first=%+v replay=%+v", resumed.RouteDispatch, replayed.RouteDispatch)
+	}
+	if replayState := planningStageReceiptTestReadState(t, root, manifest.RunID); len(replayState.UsedAuthorizationIDs) != 2 {
+		t.Fatalf("exact direct-answer replay issued %d authorizations, want Scout plus one Route-Setter", len(replayState.UsedAuthorizationIDs))
+	}
 }
 
 func TestPlanningScoutStageDecisionRejectsPartialAndStaleAnswersWithoutRoute(t *testing.T) {
@@ -294,7 +304,7 @@ func TestPlanningScoutStageDecisionRejectsPartialAndStaleAnswersWithoutRoute(t *
 }
 
 func TestPlanningScoutStageLateMaterialRoutesBeforeOwnerPause(t *testing.T) {
-	root, manifest, result := planningScoutStageTestFixtureAtPass(t, 2, planningStageTestState(planningStageScoutReady).Specification)
+	root, manifest, result := planningScoutStageLateFixture(t)
 	result.DecisionCandidates = []planningDecisionCandidate{
 		planningScoutStageMaterialCandidate(result.NewEvidence[0].Reference, "decision-late-risk"),
 	}
@@ -360,6 +370,16 @@ func TestPlanningScoutStageContractAnswerCreatesSuccessorDraftAndBlocksRoute(t *
 	if _, err := authorizePlanningScoutRoute(root, state, coordinated.DecisionCheckpoint.Batch.Decisions, &token); err == nil || !strings.Contains(err.Error(), "route_ready") {
 		t.Fatalf("Route-Setter dispatch before exact approval and reconciliation error = %v", err)
 	}
+	replayed, err := resumePlanningScoutDecision(root, manifest.RunID, token, time.Date(2026, time.September, 7, 19, 11, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replayed.SuccessorSpecification == nil || replayed.SuccessorSpecification.Revision.ID != successor.ID {
+		t.Fatalf("exact contract-answer replay changed successor: first=%s replay=%+v", successor.ID, replayed.SuccessorSpecification)
+	}
+	if replayState := planningStageReceiptTestReadState(t, root, manifest.RunID); replayState.Stage != planningStageSpecApprovalRequired || replayState.PendingSpecification.RevisionID != successor.ID {
+		t.Fatalf("exact contract-answer replay changed authority: %+v", replayState)
+	}
 }
 
 func planningScoutStageMaterialCandidate(evidence colony.PlanningEvidenceRef, stableID string) planningDecisionCandidate {
@@ -380,12 +400,6 @@ func planningScoutStageMaterialCandidate(evidence colony.PlanningEvidenceRef, st
 		}},
 		ResumeInstruction: "Planning resumes at Route-Setter after every answer is bound.",
 	}
-}
-
-func planningScoutStageTestFixtureAtPass(t *testing.T, pass int, binding planningStageSpecificationBinding) (string, planningStageManifest, planningScoutStageResult) {
-	t.Helper()
-	root := t.TempDir()
-	return planningScoutStageTestFixtureInRoot(t, root, pass, binding)
 }
 
 func planningScoutStageTestFixtureInRoot(t *testing.T, root string, pass int, binding planningStageSpecificationBinding) (string, planningStageManifest, planningScoutStageResult) {
@@ -453,6 +467,100 @@ func planningScoutStageTestFixtureInRoot(t *testing.T, root string, pass int, bi
 		UnresolvedGaps: []colony.PlanningGap{gap},
 	}
 	return root, manifest, result
+}
+
+func planningScoutStageLateFixture(t *testing.T) (string, planningStageManifest, planningScoutStageResult) {
+	t.Helper()
+	root, firstManifest, firstResult := planningScoutStageTestFixture(t)
+	first, err := coordinatePlanningScoutStage(root, firstManifest, planningScoutStageTestBytes(t, firstResult))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.RouteDispatch == nil {
+		t.Fatal("first pass did not reach Route-Setter")
+	}
+	routeManifest := first.RouteDispatch.Manifest
+	if _, err := writePlanningStageOutput(root, routeManifest, []byte(`{"result_type":"planning-route-setter-result/v1"}`), planningStageWriteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	card := validPlanningIterationCardForTest(t, 1, time.Date(2026, time.September, 7, 18, 30, 0, 0, time.UTC))
+	card.RunID = routeManifest.RunID
+	if _, err := finalizePlanningStage(root, routeManifest, planningStageFinalizeRequest{To: planningStageContinueReady, RouteCard: &card}); err != nil {
+		t.Fatal(err)
+	}
+	continued := planningStageReceiptTestReadState(t, root, routeManifest.RunID)
+	passTwoGap := planningStageTestGap("pass-two-gap")
+	ready, nextManifest, err := reducePlanningStage(continued, planningStageTransition{
+		To:                    planningStageScoutReady,
+		NextInputFrontierHash: planningStageTestHash("f"),
+		NextWeakestGap:        passTwoGap,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if nextManifest != nil || ready.Pass != 2 {
+		t.Fatalf("continue boundary = %+v manifest=%+v, want pass-two Scout-ready", ready, nextManifest)
+	}
+	authorization := planningStageAuthorization{
+		ID:                "authorization-scout-stage-2",
+		ExpectedCaste:     planningStageCasteScout,
+		InputFrontierHash: ready.InputFrontierHash,
+		EvidenceFrontier:  []planningStageEvidenceBinding{{ID: "evidence-pass-2", ContentHash: planningStageTestHash("2")}},
+		WeakestGap:        passTwoGap,
+	}
+	running, stageManifest, err := reducePlanningStage(ready, planningStageTransition{To: planningStageScoutRunning, Authorization: &authorization})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stageManifest == nil {
+		t.Fatal("pass-two Scout dispatch did not emit a manifest")
+	}
+	if err := recordPlanningStageDispatch(root, running, *stageManifest, planningStageWriteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	manifest := *stageManifest
+	header, err := loadPlanningScoutRunHeader(root, manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := normalizePlanningEvidence(planningEvidenceSource{
+		Kind:    colony.PlanningEvidenceResearch,
+		Origin:  "scout:pass-2:repository-observation",
+		Content: []byte("The second Scout pass found a material risk that Route-Setter must explain on the full card."),
+		Scope: planningEvidenceScope{
+			GoalID:                  header.GoalID,
+			SessionID:               header.SessionID,
+			SpecificationRevisionID: manifest.Specification.RevisionID,
+			PlanRevisionID:          manifest.BasePlanRevisionID,
+		},
+		SourceRevision:       "scout-result-revision-2",
+		ObservedAt:           time.Date(2026, time.September, 7, 18, 31, 0, 0, time.UTC),
+		ApplicableDimensions: []colony.PlanningDimension{colony.PlanningDimensionRisks},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gap := *planningStageTestGap("scout-unresolved-gap-2")
+	gap.EvidenceIDs = []string{record.Reference.ID}
+	return root, manifest, planningScoutStageResult{
+		ResultType:           planningStageResultScout,
+		ManifestID:           manifest.ID,
+		ManifestHash:         manifest.ContentHash,
+		RunID:                manifest.RunID,
+		Pass:                 manifest.Pass,
+		Caste:                planningStageCasteScout,
+		Specification:        manifest.Specification,
+		BasePlanRevisionID:   manifest.BasePlanRevisionID,
+		BasePlanRevisionHash: manifest.BasePlanRevisionHash,
+		InputFrontierHash:    manifest.InputFrontierHash,
+		Findings: []planningScoutStageFinding{{
+			StableID:    "scout-finding-stage-boundary-2",
+			Summary:     "The late material decision must remain attached to the full pass.",
+			EvidenceIDs: []string{record.Reference.ID},
+		}},
+		NewEvidence:    []planningEvidenceRecord{record},
+		UnresolvedGaps: []colony.PlanningGap{gap},
+	}
 }
 
 func planningScoutStageContractFixture(t *testing.T) (string, planningStageManifest, planningScoutStageResult, string) {

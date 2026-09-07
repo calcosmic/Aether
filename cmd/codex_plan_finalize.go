@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -21,21 +22,23 @@ import (
 )
 
 type codexExternalPlanCompletion struct {
-	PlanManifest     *codexPlanManifest       `json:"plan_manifest,omitempty"`
-	PlanningManifest *codexPlanManifest       `json:"planning_manifest,omitempty"`
-	Manifest         *codexPlanManifest       `json:"manifest,omitempty"`
-	PlanningRunID    string                   `json:"planning_run_id,omitempty"`
-	Iteration        int                      `json:"iteration,omitempty"`
-	EvidenceHash     string                   `json:"evidence_hash,omitempty"`
-	SourceSummary    string                   `json:"source_summary,omitempty"`
-	Synthetic        bool                     `json:"synthetic,omitempty"`
-	Dispatches       []codexPlanningDispatch  `json:"dispatches,omitempty"`
-	Results          []codexPlanningDispatch  `json:"results,omitempty"`
-	Workers          []codexPlanningDispatch  `json:"workers,omitempty"`
-	ScoutReport      *codexScoutReport        `json:"scout_report,omitempty"`
-	PhasePlan        *codexWorkerPlanArtifact `json:"phase_plan,omitempty"`
-	Synthesis        *codexPlanSynthesis      `json:"synthesis,omitempty"`
-	ScoutResult      json.RawMessage          `json:"scout_result,omitempty"`
+	PlanManifest       *codexPlanManifest           `json:"plan_manifest,omitempty"`
+	PlanningManifest   *codexPlanManifest           `json:"planning_manifest,omitempty"`
+	Manifest           *codexPlanManifest           `json:"manifest,omitempty"`
+	PlanningRunID      string                       `json:"planning_run_id,omitempty"`
+	Iteration          int                          `json:"iteration,omitempty"`
+	EvidenceHash       string                       `json:"evidence_hash,omitempty"`
+	SourceSummary      string                       `json:"source_summary,omitempty"`
+	Synthetic          bool                         `json:"synthetic,omitempty"`
+	Dispatches         []codexPlanningDispatch      `json:"dispatches,omitempty"`
+	Results            []codexPlanningDispatch      `json:"results,omitempty"`
+	Workers            []codexPlanningDispatch      `json:"workers,omitempty"`
+	ScoutReport        *codexScoutReport            `json:"scout_report,omitempty"`
+	PhasePlan          *codexWorkerPlanArtifact     `json:"phase_plan,omitempty"`
+	Synthesis          *codexPlanSynthesis          `json:"synthesis,omitempty"`
+	ScoutResult        json.RawMessage              `json:"scout_result,omitempty"`
+	DecisionResume     *planningDecisionResumeToken `json:"decision_resume_token,omitempty"`
+	DecisionResolvedAt time.Time                    `json:"decision_resolved_at,omitempty"`
 }
 
 // planningScoutStageResult is the complete worker-owned payload permitted at
@@ -74,6 +77,61 @@ type planningScoutStageFinalization struct {
 	Result   planningScoutStageResult
 	Artifact planningStageOutputReference
 	Receipt  StageReceipt
+}
+
+// planningScoutDecisionBoundaryToken is the content-addressed authority for
+// submitting answers to one exact decision batch. It intentionally carries no
+// answers: the completed planningDecisionResumeToken is issued only after the
+// owner has answered every card.
+type planningScoutDecisionBoundaryToken struct {
+	ID                  string `json:"id"`
+	ContentHash         string `json:"content_hash"`
+	GoalID              string `json:"goal_id"`
+	SessionID           string `json:"session_id"`
+	BatchID             string `json:"batch_id"`
+	BatchHash           string `json:"batch_hash"`
+	FrontierReceiptHash string `json:"frontier_receipt_hash"`
+	RecoveryCommand     string `json:"recovery_command"`
+}
+
+type planningScoutDecisionCheckpoint struct {
+	ID                    string                             `json:"id"`
+	ContentHash           string                             `json:"content_hash"`
+	RunID                 string                             `json:"run_id"`
+	Pass                  int                                `json:"pass"`
+	FrontierReceiptHash   string                             `json:"frontier_receipt_hash"`
+	CandidateSnapshotHash string                             `json:"candidate_snapshot_hash"`
+	Scope                 planningDecisionEquivalenceScope   `json:"scope"`
+	Batch                 planningDecisionBatch              `json:"batch"`
+	Cards                 []planningDecisionCard             `json:"cards"`
+	ResumeToken           planningScoutDecisionBoundaryToken `json:"resume_token"`
+}
+
+type planningScoutRouteDispatch struct {
+	ID                         string                       `json:"id"`
+	ContentHash                string                       `json:"content_hash"`
+	RunID                      string                       `json:"run_id"`
+	Pass                       int                          `json:"pass"`
+	ScoutReceipt               planningDecisionStageReceipt `json:"scout_receipt"`
+	CandidateSnapshotHash      string                       `json:"candidate_snapshot_hash"`
+	MaterialDecisionCandidates []planningDecisionCandidate  `json:"material_decision_candidates,omitempty"`
+	Authorization              planningStageAuthorization   `json:"authorization"`
+	Manifest                   planningStageManifest        `json:"manifest"`
+	ResumeTokenHash            string                       `json:"resume_token_hash,omitempty"`
+}
+
+type planningScoutStageCoordination struct {
+	Scout                  planningScoutStageFinalization
+	DecisionCheckpoint     *planningScoutDecisionCheckpoint
+	RouteDispatch          *planningScoutRouteDispatch
+	ResumeToken            *planningDecisionResumeToken
+	SuccessorSpecification *specificationMutationResult
+}
+
+type planningScoutDecisionAnswer struct {
+	DecisionID string `json:"decision_id"`
+	ChoiceID   string `json:"choice_id"`
+	Answer     string `json:"answer"`
 }
 
 type codexPlanSynthesis struct {
@@ -656,36 +714,74 @@ func runCodexScoutStageFinalize(root string, manifest codexPlanManifest, complet
 		}
 	}
 
-	completed, err := finalizePlanningScoutStage(root, stageManifest, completion.ScoutResult)
+	coordinated, err := coordinatePlanningScoutStage(root, stageManifest, completion.ScoutResult)
 	if err != nil {
 		return nil, err
 	}
-	evidence := make([]colony.PlanningEvidenceRef, 0, len(completed.Result.NewEvidence))
-	for _, record := range completed.Result.NewEvidence {
+	if completion.DecisionResume != nil {
+		resolvedAt := completion.DecisionResolvedAt
+		if resolvedAt.IsZero() {
+			resolvedAt = time.Now().UTC()
+		}
+		resumed, resumeErr := resumePlanningScoutDecision(root, stageManifest.RunID, *completion.DecisionResume, resolvedAt)
+		if resumeErr != nil {
+			return nil, resumeErr
+		}
+		resumed.Scout = coordinated.Scout
+		coordinated = resumed
+	}
+	evidence := make([]colony.PlanningEvidenceRef, 0, len(coordinated.Scout.Result.NewEvidence))
+	for _, record := range coordinated.Scout.Result.NewEvidence {
 		evidence = append(evidence, record.Reference)
 	}
 	state, err := loadPlanningStageState(root, stageManifest.RunID)
 	if err != nil {
 		return nil, err
 	}
-	return map[string]interface{}{
+	next := "aether plan"
+	if state.Stage == planningStageOwnerDecision {
+		next = "answer the complete owner decision batch, then rerun `aether plan-finalize` with the exact resume token"
+	} else if state.Stage == planningStageRouteRunning {
+		next = "dispatch Route-Setter with route_stage_manifest"
+	} else if state.Stage == planningStageSpecApprovalRequired {
+		next = "review and approve the exact successor specification, then reconcile its affected scope"
+	}
+	result := map[string]interface{}{
 		"planned":                      false,
-		"status":                       "scout_complete",
+		"status":                       string(state.Stage),
 		"scout_complete":               true,
 		"planning_run_id":              stageManifest.RunID,
 		"iteration":                    stageManifest.Pass,
 		"stage":                        string(state.Stage),
 		"next_boundary":                string(state.Stage),
-		"stage_receipt":                completed.Receipt,
-		"scout_artifact":               completed.Artifact,
-		"scout_result":                 completed.Result,
+		"stage_receipt":                coordinated.Scout.Receipt,
+		"scout_artifact":               coordinated.Scout.Artifact,
+		"scout_result":                 coordinated.Scout.Result,
 		"evidence_added":               evidence,
 		"evidence_added_count":         len(evidence),
-		"gaps_found":                   append([]colony.PlanningGap(nil), completed.Result.UnresolvedGaps...),
-		"material_decision_candidates": append([]planningDecisionCandidate(nil), completed.Result.DecisionCandidates...),
+		"gaps_found":                   append([]colony.PlanningGap(nil), coordinated.Scout.Result.UnresolvedGaps...),
+		"material_decision_candidates": append([]planningDecisionCandidate(nil), coordinated.Scout.Result.DecisionCandidates...),
 		"iteration_card_created":       false,
-		"next":                         "aether plan",
-	}, nil
+		"next":                         next,
+	}
+	if coordinated.DecisionCheckpoint != nil {
+		result["decision_checkpoint"] = coordinated.DecisionCheckpoint
+		result["decision_batch"] = coordinated.DecisionCheckpoint.Batch
+		result["decision_cards"] = coordinated.DecisionCheckpoint.Cards
+		result["decision_resume_token"] = coordinated.DecisionCheckpoint.ResumeToken
+	}
+	if coordinated.ResumeToken != nil {
+		result["completed_decision_resume_token"] = coordinated.ResumeToken
+	}
+	if coordinated.RouteDispatch != nil {
+		result["route_authorization"] = coordinated.RouteDispatch
+		result["route_stage_manifest"] = coordinated.RouteDispatch.Manifest
+		result["route_material_decision_candidates"] = coordinated.RouteDispatch.MaterialDecisionCandidates
+	}
+	if coordinated.SuccessorSpecification != nil {
+		result["successor_specification"] = coordinated.SuccessorSpecification
+	}
+	return result, nil
 }
 
 // finalizePlanningScoutStage consumes only the current Scout manifest. The
@@ -709,7 +805,7 @@ func finalizePlanningScoutStage(root string, manifest planningStageManifest, raw
 		next = planningStageOwnerDecision
 		decisionResume = planningStageRouteReady
 	}
-	candidateSnapshotHash, err := planningScoutCandidateSnapshotHash(manifest)
+	candidateSnapshotHash, err := planningScoutCandidateSnapshotHash(manifest, result.DecisionCandidates)
 	if err != nil {
 		return empty, err
 	}
@@ -722,6 +818,720 @@ func finalizePlanningScoutStage(root string, manifest planningStageManifest, raw
 		return empty, err
 	}
 	return planningScoutStageFinalization{Result: result, Artifact: artifact, Receipt: receipt}, nil
+}
+
+// coordinatePlanningScoutStage advances only the boundary made legal by the
+// completed Scout receipt. Pass one either persists the complete owner batch
+// or dispatches Route-Setter; later passes always dispatch Route-Setter and
+// carry their material discoveries with that exact authorization.
+func coordinatePlanningScoutStage(root string, manifest planningStageManifest, raw []byte) (planningScoutStageCoordination, error) {
+	empty := planningScoutStageCoordination{}
+	completed, err := finalizePlanningScoutStage(root, manifest, raw)
+	if err != nil {
+		return empty, err
+	}
+	result := planningScoutStageCoordination{Scout: completed}
+	state, err := loadPlanningStageState(root, manifest.RunID)
+	if err != nil {
+		return empty, err
+	}
+
+	switch state.Stage {
+	case planningStageOwnerDecision:
+		checkpoint, checkpointErr := buildPlanningScoutDecisionCheckpoint(root, manifest, completed)
+		if checkpointErr != nil {
+			return empty, checkpointErr
+		}
+		if checkpoint == nil {
+			return empty, fmt.Errorf("owner_decision has no material Scout decision batch")
+		}
+		if err := persistPlanningScoutDecisionCheckpoint(root, *checkpoint); err != nil {
+			return empty, err
+		}
+		result.DecisionCheckpoint = checkpoint
+		return result, nil
+
+	case planningStageRouteReady:
+		dispatch, dispatchErr := authorizePlanningScoutRoute(root, state, completed.Result.DecisionCandidates, nil)
+		if dispatchErr != nil {
+			return empty, dispatchErr
+		}
+		result.RouteDispatch = &dispatch
+		return result, nil
+
+	case planningStageRouteRunning:
+		dispatch, dispatchErr := loadPlanningScoutRouteDispatch(root, manifest.RunID, manifest.Pass)
+		if dispatchErr != nil {
+			return empty, dispatchErr
+		}
+		result.RouteDispatch = &dispatch
+		return result, nil
+
+	case planningStageSpecApprovalRequired, planningStageReconciliationRequired:
+		checkpoint, checkpointErr := loadPlanningScoutDecisionCheckpoint(root, manifest.RunID)
+		if checkpointErr != nil {
+			return empty, checkpointErr
+		}
+		result.DecisionCheckpoint = &checkpoint
+		return result, nil
+
+	default:
+		return empty, fmt.Errorf("completed Scout reached unexpected planning stage %q", state.Stage)
+	}
+}
+
+func buildPlanningScoutDecisionCheckpoint(root string, manifest planningStageManifest, completed planningScoutStageFinalization) (*planningScoutDecisionCheckpoint, error) {
+	header, err := loadPlanningScoutRunHeader(root, manifest)
+	if err != nil {
+		return nil, err
+	}
+	boundary := planningDecisionBoundary{
+		RunID: manifest.RunID,
+		Pass:  manifest.Pass,
+		ScoutReceipt: planningDecisionStageReceipt{
+			ID:          completed.Receipt.ID,
+			ContentHash: completed.Receipt.ContentHash,
+			RunID:       completed.Receipt.RunID,
+			Pass:        completed.Receipt.Pass,
+		},
+		RecoveryCommand: "aether plan",
+	}
+	batch, err := buildPlanningDecisionBatch(boundary, completed.Result.DecisionCandidates)
+	if err != nil {
+		return nil, fmt.Errorf("build first-pass Scout decision batch: %w", err)
+	}
+	if batch == nil {
+		return nil, nil
+	}
+	scope := planningDecisionEquivalenceScope{
+		GoalID:                          header.GoalID,
+		SessionID:                       header.SessionID,
+		ApprovedSpecificationRevisionID: manifest.Specification.RevisionID,
+		BasePlanRevisionID:              manifest.BasePlanRevisionID,
+	}
+	cards := make([]planningDecisionCard, 0, len(batch.Decisions))
+	for _, candidate := range batch.Decisions {
+		card, cardErr := projectPlanningDecisionCard(planningDecisionCardRequest{Candidate: candidate, Scope: scope})
+		if cardErr != nil {
+			return nil, fmt.Errorf("project Scout decision card %q: %w", candidate.StableID, cardErr)
+		}
+		cards = append(cards, card)
+	}
+	tokenPayload := struct {
+		GoalID              string `json:"goal_id"`
+		SessionID           string `json:"session_id"`
+		BatchID             string `json:"batch_id"`
+		BatchHash           string `json:"batch_hash"`
+		FrontierReceiptHash string `json:"frontier_receipt_hash"`
+		RecoveryCommand     string `json:"recovery_command"`
+	}{scope.GoalID, scope.SessionID, batch.ID, batch.ContentHash, completed.Receipt.ContentHash, batch.RecoveryCommand}
+	tokenHash, err := jsonSHA256(tokenPayload)
+	if err != nil {
+		return nil, fmt.Errorf("hash Scout decision boundary token: %w", err)
+	}
+	boundaryToken := planningScoutDecisionBoundaryToken{
+		ID:                  "planning-decision-boundary-" + tokenHash[:16],
+		ContentHash:         tokenHash,
+		GoalID:              tokenPayload.GoalID,
+		SessionID:           tokenPayload.SessionID,
+		BatchID:             tokenPayload.BatchID,
+		BatchHash:           tokenPayload.BatchHash,
+		FrontierReceiptHash: tokenPayload.FrontierReceiptHash,
+		RecoveryCommand:     tokenPayload.RecoveryCommand,
+	}
+	checkpoint := planningScoutDecisionCheckpoint{
+		RunID:                 manifest.RunID,
+		Pass:                  manifest.Pass,
+		FrontierReceiptHash:   completed.Receipt.ContentHash,
+		CandidateSnapshotHash: completed.Receipt.CandidateSnapshotHash,
+		Scope:                 scope,
+		Batch:                 *batch,
+		Cards:                 cards,
+		ResumeToken:           boundaryToken,
+	}
+	if err := addressPlanningScoutDecisionCheckpoint(&checkpoint); err != nil {
+		return nil, err
+	}
+	return &checkpoint, nil
+}
+
+func addressPlanningScoutDecisionCheckpoint(checkpoint *planningScoutDecisionCheckpoint) error {
+	if checkpoint == nil {
+		return fmt.Errorf("Scout decision checkpoint is required")
+	}
+	payload := *checkpoint
+	payload.ID = ""
+	payload.ContentHash = ""
+	contentHash, err := jsonSHA256(payload)
+	if err != nil {
+		return fmt.Errorf("hash Scout decision checkpoint: %w", err)
+	}
+	checkpoint.ContentHash = contentHash
+	checkpoint.ID = "planning-scout-decision-" + contentHash[:16]
+	return nil
+}
+
+func planningScoutDecisionCheckpointRepositoryPath(runID string) string {
+	return path.Join(".aether", "data", "planning", strings.TrimSpace(runID), "decisions", "first-pass.json")
+}
+
+func persistPlanningScoutDecisionCheckpoint(root string, checkpoint planningScoutDecisionCheckpoint) error {
+	content, err := marshalPlanningStageJSON(checkpoint)
+	if err != nil {
+		return fmt.Errorf("marshal Scout decision checkpoint: %w", err)
+	}
+	repositoryPath := planningScoutDecisionCheckpointRepositoryPath(checkpoint.RunID)
+	return persistPlanningScoutFiles(root, "planning-scout-decision-"+checkpoint.ContentHash[:24], "planning-scout-decision", checkpoint.ID, map[string][]byte{
+		repositoryPath: content,
+	}, nil)
+}
+
+func loadPlanningScoutDecisionCheckpoint(root, runID string) (planningScoutDecisionCheckpoint, error) {
+	var checkpoint planningScoutDecisionCheckpoint
+	repositoryRoot, _, err := planningStageRoots(root)
+	if err != nil {
+		return checkpoint, err
+	}
+	content, exists, err := readOptionalPlanningStageFile(repositoryRoot, planningScoutDecisionCheckpointRepositoryPath(runID))
+	if err != nil {
+		return checkpoint, err
+	}
+	if !exists {
+		return checkpoint, fmt.Errorf("Scout decision checkpoint for %q is missing: %w", runID, os.ErrNotExist)
+	}
+	if err := decodePlanningStageJSON(content, &checkpoint); err != nil {
+		return planningScoutDecisionCheckpoint{}, fmt.Errorf("decode Scout decision checkpoint: %w", err)
+	}
+	originalID, originalHash := checkpoint.ID, checkpoint.ContentHash
+	if err := addressPlanningScoutDecisionCheckpoint(&checkpoint); err != nil {
+		return planningScoutDecisionCheckpoint{}, err
+	}
+	if checkpoint.ID != originalID || checkpoint.ContentHash != originalHash || checkpoint.RunID != strings.TrimSpace(runID) {
+		return planningScoutDecisionCheckpoint{}, fmt.Errorf("Scout decision checkpoint is not a valid content address")
+	}
+	return checkpoint, nil
+}
+
+func authorizePlanningScoutRoute(root string, state planningStageState, candidates []planningDecisionCandidate, token *planningDecisionResumeToken) (planningScoutRouteDispatch, error) {
+	empty := planningScoutRouteDispatch{}
+	if state.Stage == planningStageRouteRunning {
+		return loadPlanningScoutRouteDispatch(root, state.RunID, state.Pass)
+	}
+	if state.Stage != planningStageRouteReady || state.ScoutReceipt == nil {
+		return empty, fmt.Errorf("Route-Setter authorization requires route_ready with the exact Scout receipt")
+	}
+	candidates = canonicalPlanningScoutCandidates(candidates)
+	seed, err := jsonSHA256(struct {
+		RunID                 string                      `json:"run_id"`
+		Pass                  int                         `json:"pass"`
+		InputFrontierHash     string                      `json:"input_frontier_hash"`
+		ScoutReceipt          *planningStageReceiptRef    `json:"scout_receipt"`
+		CandidateSnapshotHash string                      `json:"candidate_snapshot_hash"`
+		Candidates            []planningDecisionCandidate `json:"material_decision_candidates,omitempty"`
+	}{state.RunID, state.Pass, state.InputFrontierHash, state.ScoutReceipt, state.CandidateSnapshotHash, candidates})
+	if err != nil {
+		return empty, fmt.Errorf("hash Route-Setter authorization: %w", err)
+	}
+	authorization := planningStageAuthorization{
+		ID:                    "planning-authorization-" + seed[:16],
+		ExpectedCaste:         planningStageCasteRouteSetter,
+		InputFrontierHash:     state.InputFrontierHash,
+		ScoutReceipt:          clonePlanningStageReceiptRef(state.ScoutReceipt),
+		CandidateSnapshotHash: state.CandidateSnapshotHash,
+	}
+	running, manifest, err := reducePlanningStage(state, planningStageTransition{To: planningStageRouteRunning, Authorization: &authorization})
+	if err != nil {
+		return empty, fmt.Errorf("authorize Route-Setter after Scout: %w", err)
+	}
+	if manifest == nil {
+		return empty, fmt.Errorf("Route-Setter authorization emitted no manifest")
+	}
+	resumeHash := ""
+	if token != nil {
+		resumeHash = token.ContentHash
+	}
+	dispatch := planningScoutRouteDispatch{
+		RunID:                      state.RunID,
+		Pass:                       state.Pass,
+		ScoutReceipt:               planningDecisionStageReceipt{ID: state.ScoutReceipt.ID, ContentHash: state.ScoutReceipt.ContentHash, RunID: state.ScoutReceipt.RunID, Pass: state.ScoutReceipt.Pass},
+		CandidateSnapshotHash:      state.CandidateSnapshotHash,
+		MaterialDecisionCandidates: candidates,
+		Authorization:              authorization,
+		Manifest:                   *manifest,
+		ResumeTokenHash:            resumeHash,
+	}
+	if err := addressPlanningScoutRouteDispatch(&dispatch); err != nil {
+		return empty, err
+	}
+	if err := persistPlanningScoutRouteDispatch(root, running, dispatch, token); err != nil {
+		return empty, err
+	}
+	return dispatch, nil
+}
+
+func canonicalPlanningScoutCandidates(candidates []planningDecisionCandidate) []planningDecisionCandidate {
+	result := make([]planningDecisionCandidate, len(candidates))
+	for index := range candidates {
+		result[index] = canonicalPlanningDecisionCandidate(candidates[index])
+	}
+	sort.Slice(result, func(left, right int) bool { return result[left].StableID < result[right].StableID })
+	return result
+}
+
+func addressPlanningScoutRouteDispatch(dispatch *planningScoutRouteDispatch) error {
+	if dispatch == nil {
+		return fmt.Errorf("Scout Route-Setter dispatch is required")
+	}
+	payload := *dispatch
+	payload.ID = ""
+	payload.ContentHash = ""
+	contentHash, err := jsonSHA256(payload)
+	if err != nil {
+		return fmt.Errorf("hash Scout Route-Setter dispatch: %w", err)
+	}
+	dispatch.ContentHash = contentHash
+	dispatch.ID = "planning-scout-route-" + contentHash[:16]
+	return nil
+}
+
+func planningScoutRouteDispatchRepositoryPath(runID string, pass int) string {
+	return path.Join(".aether", "data", "planning", strings.TrimSpace(runID), "route-authorizations", fmt.Sprintf("pass-%04d.json", pass))
+}
+
+func planningScoutDecisionResumeRepositoryPath(runID string) string {
+	return path.Join(".aether", "data", "planning", strings.TrimSpace(runID), "decisions", "completed-resume-token.json")
+}
+
+func persistPlanningScoutRouteDispatch(root string, running planningStageState, dispatch planningScoutRouteDispatch, token *planningDecisionResumeToken) error {
+	if err := validatePlanningStageManifest(dispatch.Manifest); err != nil {
+		return err
+	}
+	if err := validatePlanningStageRunningState(running, dispatch.Manifest); err != nil {
+		return err
+	}
+	dispatchBytes, err := marshalPlanningStageJSON(dispatch)
+	if err != nil {
+		return err
+	}
+	manifestBytes, err := marshalPlanningStageJSON(dispatch.Manifest)
+	if err != nil {
+		return err
+	}
+	stateBytes, err := marshalPlanningStageJSON(running)
+	if err != nil {
+		return err
+	}
+	files := map[string][]byte{
+		planningScoutRouteDispatchRepositoryPath(dispatch.RunID, dispatch.Pass):   dispatchBytes,
+		planningStageManifestRepositoryPath(dispatch.RunID, dispatch.Manifest.ID): manifestBytes,
+		planningStageStateRepositoryPath(dispatch.RunID):                          stateBytes,
+	}
+	if token != nil {
+		tokenBytes, marshalErr := marshalPlanningStageJSON(token)
+		if marshalErr != nil {
+			return marshalErr
+		}
+		files[planningScoutDecisionResumeRepositoryPath(dispatch.RunID)] = tokenBytes
+	}
+	return persistPlanningScoutFiles(root, "planning-scout-route-"+dispatch.ContentHash[:24], "planning-scout-route", dispatch.ID, files, map[string]bool{
+		planningStageStateRepositoryPath(dispatch.RunID): true,
+	})
+}
+
+func loadPlanningScoutRouteDispatch(root, runID string, pass int) (planningScoutRouteDispatch, error) {
+	var dispatch planningScoutRouteDispatch
+	repositoryRoot, _, err := planningStageRoots(root)
+	if err != nil {
+		return dispatch, err
+	}
+	content, exists, err := readOptionalPlanningStageFile(repositoryRoot, planningScoutRouteDispatchRepositoryPath(runID, pass))
+	if err != nil {
+		return dispatch, err
+	}
+	if !exists {
+		return dispatch, fmt.Errorf("Route-Setter authorization for run %q pass %d is missing: %w", runID, pass, os.ErrNotExist)
+	}
+	if err := decodePlanningStageJSON(content, &dispatch); err != nil {
+		return planningScoutRouteDispatch{}, fmt.Errorf("decode Scout Route-Setter dispatch: %w", err)
+	}
+	originalID, originalHash := dispatch.ID, dispatch.ContentHash
+	if err := addressPlanningScoutRouteDispatch(&dispatch); err != nil {
+		return planningScoutRouteDispatch{}, err
+	}
+	if dispatch.ID != originalID || dispatch.ContentHash != originalHash || dispatch.RunID != strings.TrimSpace(runID) || dispatch.Pass != pass {
+		return planningScoutRouteDispatch{}, fmt.Errorf("Scout Route-Setter dispatch is not a valid content address")
+	}
+	return dispatch, nil
+}
+
+func persistPlanningScoutFiles(root, transactionID, command, identity string, files map[string][]byte, replacePaths map[string]bool) error {
+	repositoryRoot, dataRoot, err := planningStageRoots(root)
+	if err != nil {
+		return err
+	}
+	allPresent := true
+	for repositoryPath, expected := range files {
+		current, exists, readErr := readOptionalPlanningStageFile(repositoryRoot, repositoryPath)
+		if readErr != nil {
+			return readErr
+		}
+		if exists && !bytes.Equal(current, expected) && !replacePaths[repositoryPath] {
+			return &planningStageReceiptConflictError{ManifestID: identity, Detail: "persisted Scout boundary bytes differ"}
+		}
+		allPresent = allPresent && exists && bytes.Equal(current, expected)
+	}
+	if allPresent {
+		return nil
+	}
+	config := planningStageWriteConfig(repositoryRoot, dataRoot, transactionID, command, planningStageWriteOptions{})
+	expected := make(map[string][]byte, len(files))
+	for repositoryPath, content := range files {
+		expected[planningStageDataRelativePath(repositoryPath)] = content
+	}
+	if resumed, resumeErr := resumePlanningStageWrite(config, expected, identity); resumeErr != nil {
+		return resumeErr
+	} else if resumed {
+		return nil
+	}
+	tx, err := beginLifecycleTransaction(config)
+	if err != nil {
+		return err
+	}
+	paths := make([]string, 0, len(files))
+	for repositoryPath := range files {
+		paths = append(paths, repositoryPath)
+	}
+	sort.Strings(paths)
+	for _, repositoryPath := range paths {
+		if err := tx.DeclareWrite(lifecycleTransactionRootData, planningStageDataRelativePath(repositoryPath), files[repositoryPath]); err != nil {
+			return err
+		}
+	}
+	if err := tx.Validate(); err != nil {
+		return err
+	}
+	_, err = tx.Commit()
+	return err
+}
+
+func buildPlanningScoutDecisionResumeToken(checkpoint planningScoutDecisionCheckpoint, answers []planningScoutDecisionAnswer) (planningDecisionResumeToken, error) {
+	if len(answers) != len(checkpoint.Cards) || len(checkpoint.Cards) != len(checkpoint.Batch.Decisions) {
+		return planningDecisionResumeToken{}, fmt.Errorf("completed Scout decision answers must cover every card exactly once")
+	}
+	candidates := make(map[string]planningDecisionCandidate, len(checkpoint.Batch.Decisions))
+	for _, candidate := range checkpoint.Batch.Decisions {
+		candidates[candidate.StableID] = candidate
+	}
+	cards := make(map[string]planningDecisionCard, len(checkpoint.Cards))
+	for _, card := range checkpoint.Cards {
+		cards[card.DecisionID] = card
+	}
+
+	boundAnswers := make([]planningDecisionBoundAnswer, 0, len(answers))
+	affectedIDs := make([]string, 0)
+	revisionEvidence := make([]planningDecisionRevisionEvidence, 0)
+	disposition := planningDecisionDispositionDirectResume
+	seen := make(map[string]struct{}, len(answers))
+	for _, submitted := range answers {
+		decisionID := strings.TrimSpace(submitted.DecisionID)
+		if _, duplicate := seen[decisionID]; duplicate {
+			return planningDecisionResumeToken{}, fmt.Errorf("duplicate completed answer for decision %q", decisionID)
+		}
+		seen[decisionID] = struct{}{}
+		card, ok := cards[decisionID]
+		if !ok {
+			return planningDecisionResumeToken{}, fmt.Errorf("completed answer names unknown decision %q", decisionID)
+		}
+		candidate, ok := candidates[decisionID]
+		if !ok {
+			return planningDecisionResumeToken{}, fmt.Errorf("decision card %q is absent from its exact batch", decisionID)
+		}
+		var selected *planningDecisionChoice
+		for index := range card.Choices {
+			if card.Choices[index].ID == strings.TrimSpace(submitted.ChoiceID) {
+				choice := card.Choices[index]
+				selected = &choice
+				break
+			}
+		}
+		if selected == nil {
+			return planningDecisionResumeToken{}, fmt.Errorf("completed answer for %q names unknown choice %q", decisionID, submitted.ChoiceID)
+		}
+		answer := normalizePlanningDecisionText(submitted.Answer)
+		if answer == "" {
+			return planningDecisionResumeToken{}, fmt.Errorf("completed answer for %q requires answer text", decisionID)
+		}
+		resolution, err := resolvePlanningDecisionAnswer(planningDecisionResolutionRequest{
+			DecisionID:     decisionID,
+			ApprovedImpact: candidate.Impact,
+			SelectedChoice: *selected,
+		})
+		if err != nil {
+			return planningDecisionResumeToken{}, fmt.Errorf("resolve completed answer %q: %w", decisionID, err)
+		}
+		if resolution.Disposition == planningDecisionDispositionSuccessorSpecRequired {
+			disposition = planningDecisionDispositionSuccessorSpecRequired
+			affectedIDs = append(affectedIDs, resolution.AffectedSemanticIDs...)
+			for _, evidence := range resolution.RevisionEvidence {
+				evidence.Dimension = decisionID + ":" + evidence.Dimension
+				revisionEvidence = append(revisionEvidence, evidence)
+			}
+		}
+		boundAnswers = append(boundAnswers, planningDecisionBoundAnswer{
+			DecisionID:     decisionID,
+			ChoiceID:       selected.ID,
+			Answer:         answer,
+			EquivalenceKey: card.EquivalenceKey,
+		})
+	}
+	if len(seen) != len(cards) {
+		return planningDecisionResumeToken{}, fmt.Errorf("completed Scout decision answers are partial")
+	}
+	return issuePlanningDecisionResumeToken(planningDecisionResumeBinding{
+		GoalID:              checkpoint.Scope.GoalID,
+		SessionID:           checkpoint.Scope.SessionID,
+		BatchID:             checkpoint.Batch.ID,
+		BatchHash:           checkpoint.Batch.ContentHash,
+		FrontierReceiptHash: checkpoint.FrontierReceiptHash,
+		Answers:             boundAnswers,
+		Disposition:         disposition,
+		AffectedSemanticIDs: nonEmptyPlanningDecisionIDs(affectedIDs),
+		RevisionEvidence:    revisionEvidence,
+		RecoveryCommand:     checkpoint.Batch.RecoveryCommand,
+	})
+}
+
+func resumePlanningScoutDecision(root, runID string, token planningDecisionResumeToken, resolvedAt time.Time) (planningScoutStageCoordination, error) {
+	empty := planningScoutStageCoordination{}
+	checkpoint, err := loadPlanningScoutDecisionCheckpoint(root, runID)
+	if err != nil {
+		return empty, err
+	}
+	answers := make([]planningScoutDecisionAnswer, 0, len(token.Answers))
+	for _, answer := range token.Answers {
+		answers = append(answers, planningScoutDecisionAnswer{DecisionID: answer.DecisionID, ChoiceID: answer.ChoiceID, Answer: answer.Answer})
+	}
+	expectedToken, err := buildPlanningScoutDecisionResumeToken(checkpoint, answers)
+	if err != nil {
+		return empty, err
+	}
+	validation, err := validatePlanningDecisionResumeToken(token, planningDecisionResumeBindingFromToken(expectedToken))
+	if err != nil {
+		return empty, err
+	}
+	if !validation.Accepted {
+		return empty, fmt.Errorf("Scout decision resume token is %s; recover with %s", validation.Status, validation.RecoveryCommand)
+	}
+	state, err := loadPlanningStageState(root, runID)
+	if err != nil {
+		return empty, err
+	}
+	result := planningScoutStageCoordination{DecisionCheckpoint: &checkpoint, ResumeToken: &expectedToken}
+	if state.Stage == planningStageRouteRunning {
+		dispatch, loadErr := loadPlanningScoutRouteDispatch(root, runID, state.Pass)
+		if loadErr != nil {
+			return empty, loadErr
+		}
+		if dispatch.ResumeTokenHash != expectedToken.ContentHash {
+			return empty, fmt.Errorf("Route-Setter already resumed from a different decision token")
+		}
+		result.RouteDispatch = &dispatch
+		return result, nil
+	}
+	if state.Stage == planningStageSpecApprovalRequired && expectedToken.Disposition == planningDecisionDispositionSuccessorSpecRequired {
+		colonyState, loadErr := loadSpecificationColonyState(root)
+		if loadErr != nil {
+			return empty, loadErr
+		}
+		if state.PendingSpecification == nil || colonyState.Specification == nil {
+			return empty, fmt.Errorf("successor specification checkpoint is incomplete")
+		}
+		current, ok := currentSpecificationRevision(*colonyState.Specification)
+		if !ok || current.ID != state.PendingSpecification.RevisionID || current.ContentHash != state.PendingSpecification.ContentHash || current.Status != colony.SpecStatusDraft {
+			return empty, fmt.Errorf("persisted successor specification does not match the exact planning checkpoint")
+		}
+		result.SuccessorSpecification = &specificationMutationResult{Specification: *colonyState.Specification, Revision: current}
+		return result, nil
+	}
+	if state.Stage != planningStageOwnerDecision || state.ScoutReceipt == nil || state.ScoutReceipt.ContentHash != checkpoint.FrontierReceiptHash {
+		return empty, fmt.Errorf("Scout decision token does not match the current owner_decision frontier")
+	}
+	resolution := planningDecisionResolution{
+		Disposition:         expectedToken.Disposition,
+		AffectedSemanticIDs: append([]string(nil), expectedToken.AffectedSemanticIDs...),
+		RevisionEvidence:    append([]planningDecisionRevisionEvidence(nil), expectedToken.RevisionEvidence...),
+	}
+	if resolution.Disposition == planningDecisionDispositionSuccessorSpecRequired {
+		return resumePlanningScoutContractDecision(root, state, checkpoint, expectedToken, resolution, resolvedAt)
+	}
+	ready, manifest, err := reducePlanningStage(state, planningStageTransition{
+		To:                 planningStageRouteReady,
+		DecisionResolution: &resolution,
+	})
+	if err != nil {
+		return empty, fmt.Errorf("resume planning after direct owner answer: %w", err)
+	}
+	if manifest != nil {
+		return empty, fmt.Errorf("direct owner answer unexpectedly dispatched a worker")
+	}
+	dispatch, err := authorizePlanningScoutRoute(root, ready, checkpoint.Batch.Decisions, &expectedToken)
+	if err != nil {
+		return empty, err
+	}
+	result.RouteDispatch = &dispatch
+	return result, nil
+}
+
+func resumePlanningScoutContractDecision(root string, state planningStageState, checkpoint planningScoutDecisionCheckpoint, token planningDecisionResumeToken, resolution planningDecisionResolution, resolvedAt time.Time) (planningScoutStageCoordination, error) {
+	empty := planningScoutStageCoordination{}
+	if resolvedAt.IsZero() {
+		return empty, fmt.Errorf("contract-affecting Scout answer requires resolved_at")
+	}
+	colonyState, err := loadSpecificationColonyState(root)
+	if err != nil {
+		return empty, err
+	}
+	if colonyState.Specification == nil {
+		return empty, fmt.Errorf("contract-affecting Scout answer requires the approved specification lineage")
+	}
+	predecessorIndex := specificationRevisionIndex(*colonyState.Specification, state.Specification.RevisionID)
+	if predecessorIndex < 0 {
+		return empty, fmt.Errorf("contract-affecting Scout answer predecessor is absent from the specification lineage")
+	}
+	predecessor := colonyState.Specification.Revisions[predecessorIndex]
+	if predecessor.ContentHash != state.Specification.ContentHash || (predecessor.Status != colony.SpecStatusApproved && predecessor.Status != colony.SpecStatusSuperseded) || predecessor.Approval == nil {
+		return empty, fmt.Errorf("contract-affecting Scout answer does not bind the current approved specification")
+	}
+	changes, err := planningScoutSpecificationChanges(predecessor, checkpoint, token)
+	if err != nil {
+		return empty, err
+	}
+	successor, err := reviseSpecification(root, specificationRevisionRequest{
+		PredecessorRevisionID:  predecessor.ID,
+		PredecessorContentHash: predecessor.ContentHash,
+		Scope:                  predecessor.Scope,
+		Changes:                changes,
+		DecisionResolution:     &resolution,
+		CreatedAt:              resolvedAt.UTC(),
+	}, specificationMutationOptions{})
+	if err != nil {
+		return empty, fmt.Errorf("create successor specification for Scout decision: %w", err)
+	}
+	draftBinding := planningStageSpecificationBinding{
+		RevisionID:            successor.Revision.ID,
+		ContentHash:           successor.Revision.ContentHash,
+		PredecessorRevisionID: predecessor.ID,
+		Status:                colony.SpecStatusDraft,
+	}
+	waiting, manifest, err := reducePlanningStage(state, planningStageTransition{
+		To:                     planningStageSpecApprovalRequired,
+		DecisionResolution:     &resolution,
+		SuccessorSpecification: &draftBinding,
+	})
+	if err != nil {
+		return empty, fmt.Errorf("record successor specification boundary: %w", err)
+	}
+	if manifest != nil {
+		return empty, fmt.Errorf("successor specification boundary unexpectedly dispatched a worker")
+	}
+	stateBytes, err := marshalPlanningStageJSON(waiting)
+	if err != nil {
+		return empty, err
+	}
+	tokenBytes, err := marshalPlanningStageJSON(token)
+	if err != nil {
+		return empty, err
+	}
+	if err := persistPlanningScoutFiles(root, "planning-scout-successor-"+successor.Revision.ContentHash[:24], "planning-scout-successor", successor.Revision.ID, map[string][]byte{
+		planningStageStateRepositoryPath(state.RunID):          stateBytes,
+		planningScoutDecisionResumeRepositoryPath(state.RunID): tokenBytes,
+	}, map[string]bool{planningStageStateRepositoryPath(state.RunID): true}); err != nil {
+		return empty, err
+	}
+	return planningScoutStageCoordination{
+		DecisionCheckpoint:     &checkpoint,
+		ResumeToken:            &token,
+		SuccessorSpecification: &successor,
+	}, nil
+}
+
+func planningScoutSpecificationChanges(revision colony.SpecRevision, checkpoint planningScoutDecisionCheckpoint, token planningDecisionResumeToken) ([]specificationRevisionChange, error) {
+	body := specificationBodyFromRevision(revision)
+	candidates := make(map[string]planningDecisionCandidate, len(checkpoint.Batch.Decisions))
+	for _, candidate := range checkpoint.Batch.Decisions {
+		candidates[candidate.StableID] = candidate
+	}
+	type directive struct {
+		Text       string
+		EvidenceID string
+	}
+	directives := make(map[string][]directive)
+	for _, answer := range token.Answers {
+		candidate, ok := candidates[answer.DecisionID]
+		if !ok {
+			return nil, fmt.Errorf("successor answer %q is absent from the decision batch", answer.DecisionID)
+		}
+		var selected *planningDecisionChoice
+		for index := range candidate.Choices {
+			if candidate.Choices[index].ID == answer.ChoiceID {
+				choice := canonicalPlanningDecisionChoice(candidate.Choices[index])
+				selected = &choice
+				break
+			}
+		}
+		if selected == nil {
+			return nil, fmt.Errorf("successor answer %q names an unknown choice", answer.DecisionID)
+		}
+		for _, semanticID := range selected.AffectedSemanticIDs {
+			directives[semanticID] = append(directives[semanticID], directive{
+				Text:       fmt.Sprintf("Owner decision %s: %s Consequence: %s", answer.DecisionID, answer.Answer, selected.Consequence),
+				EvidenceID: "owner-decision:" + answer.DecisionID + ":" + answer.ChoiceID,
+			})
+		}
+	}
+
+	affected := nonEmptyPlanningDecisionIDs(token.AffectedSemanticIDs)
+	changes := make([]specificationRevisionChange, 0, len(affected))
+	for _, semanticID := range affected {
+		section, item, found := planningScoutSpecificationItem(body, semanticID)
+		if !found {
+			return nil, fmt.Errorf("contract-affecting Scout answer targets unknown specification item %q", semanticID)
+		}
+		itemDirectives := directives[semanticID]
+		if len(itemDirectives) == 0 {
+			return nil, fmt.Errorf("contract-affecting Scout answer has no exact choice for specification item %q", semanticID)
+		}
+		sort.Slice(itemDirectives, func(left, right int) bool { return itemDirectives[left].Text < itemDirectives[right].Text })
+		descriptionParts := []string{strings.TrimSpace(item.Description)}
+		evidenceIDs := append([]string(nil), item.EvidenceIDs...)
+		for _, itemDirective := range itemDirectives {
+			descriptionParts = append(descriptionParts, itemDirective.Text)
+			evidenceIDs = append(evidenceIDs, itemDirective.EvidenceID)
+		}
+		changes = append(changes, specificationRevisionChange{
+			Operation: specificationChangeModify,
+			Section:   section,
+			TargetID:  semanticID,
+			Item: specificationItemInput{
+				Description:  strings.Join(descriptionParts, " "),
+				Verification: item.Verification,
+				Path:         item.Path,
+				EvidenceIDs:  nonEmptyPlanningDecisionIDs(evidenceIDs),
+			},
+		})
+	}
+	return changes, nil
+}
+
+func planningScoutSpecificationItem(body specificationBodySnapshot, stableID string) (specificationBodySection, specificationCanonicalItem, bool) {
+	for _, section := range specificationBodyOrder {
+		for _, item := range body[section] {
+			if item.ID == stableID {
+				return section, item, true
+			}
+		}
+	}
+	return "", specificationCanonicalItem{}, false
 }
 
 func validatePlanningScoutStageResult(root string, manifest planningStageManifest, raw []byte) (planningScoutStageResult, []byte, bool, error) {
@@ -1002,15 +1812,16 @@ func samePlanningEvidenceReference(left, right colony.PlanningEvidenceRef) bool 
 	return leftErr == nil && rightErr == nil && bytes.Equal(leftBytes, rightBytes)
 }
 
-func planningScoutCandidateSnapshotHash(manifest planningStageManifest) (string, error) {
+func planningScoutCandidateSnapshotHash(manifest planningStageManifest, candidates []planningDecisionCandidate) (string, error) {
 	return jsonSHA256(struct {
-		RunID                string `json:"run_id"`
-		Pass                 int    `json:"pass"`
-		BasePlanRevisionID   string `json:"base_plan_revision_id"`
-		BasePlanRevisionHash string `json:"base_plan_revision_hash"`
-		PriorCardHash        string `json:"prior_card_hash"`
-		InputFrontierHash    string `json:"input_frontier_hash"`
-	}{manifest.RunID, manifest.Pass, manifest.BasePlanRevisionID, manifest.BasePlanRevisionHash, manifest.PriorCardHash, manifest.InputFrontierHash})
+		RunID                string                      `json:"run_id"`
+		Pass                 int                         `json:"pass"`
+		BasePlanRevisionID   string                      `json:"base_plan_revision_id"`
+		BasePlanRevisionHash string                      `json:"base_plan_revision_hash"`
+		PriorCardHash        string                      `json:"prior_card_hash"`
+		InputFrontierHash    string                      `json:"input_frontier_hash"`
+		Candidates           []planningDecisionCandidate `json:"material_decision_candidates,omitempty"`
+	}{manifest.RunID, manifest.Pass, manifest.BasePlanRevisionID, manifest.BasePlanRevisionHash, manifest.PriorCardHash, manifest.InputFrontierHash, canonicalPlanningScoutCandidates(candidates)})
 }
 
 // attachTerritoryToPlanManifest copies the verified immutable evidence into a
