@@ -437,6 +437,11 @@ func planningOwnerAnswerEquivalenceKey(value planningOwnerAnswerEquivalence) (st
 	value.SessionID = strings.TrimSpace(value.SessionID)
 	value.SpecificationRevisionID = strings.TrimSpace(value.SpecificationRevisionID)
 	value.BasePlanRevisionID = strings.TrimSpace(value.BasePlanRevisionID)
+	value.MeaningHash = strings.TrimSpace(value.MeaningHash)
+	value.BehaviorHash = strings.TrimSpace(value.BehaviorHash)
+	value.ImpactHash = strings.TrimSpace(value.ImpactHash)
+	value.RiskHash = strings.TrimSpace(value.RiskHash)
+	value.AcceptanceHash = strings.TrimSpace(value.AcceptanceHash)
 	for _, required := range []struct {
 		name  string
 		value string
@@ -460,7 +465,7 @@ func planningOwnerAnswerEquivalenceKey(value planningOwnerAnswerEquivalence) (st
 		{name: "risk_hash", value: value.RiskHash},
 		{name: "acceptance_hash", value: value.AcceptanceHash},
 	} {
-		if !planningSHA256Pattern.MatchString(strings.TrimSpace(required.value)) {
+		if !planningSHA256Pattern.MatchString(required.value) {
 			return "", fmt.Errorf("owner-answer equivalence %s must be a lowercase 64-character SHA-256 digest", required.name)
 		}
 	}
@@ -797,6 +802,20 @@ func validateExistingPlanningEvidenceRecord(record planningEvidenceRecord) error
 	}
 	if strings.TrimSpace(record.Summary) == "" || strings.TrimSpace(record.Locator.Origin) == "" {
 		return &planningEvidenceRefusal{Code: planningEvidenceRefusalInvalidMetadata, Origin: record.Reference.Origin, Kind: record.Reference.Kind, Detail: "existing evidence record lacks safe summary or locator"}
+	}
+	if !planningSHA256Pattern.MatchString(record.Reference.ExcerptDigest) || planningEvidenceSHA256([]byte(record.Summary)) != record.Reference.ExcerptDigest {
+		return &planningEvidenceRefusal{Code: planningEvidenceRefusalHashMismatch, Origin: record.Reference.Origin, Kind: record.Reference.Kind, Detail: "existing evidence summary does not match its excerpt digest"}
+	}
+	if record.Locator.Kind != record.Reference.Kind ||
+		record.Locator.Origin != record.Reference.Origin ||
+		record.Locator.RepositoryPath != record.Reference.RepositoryPath ||
+		record.Locator.SourceRevision != record.Reference.SourceRevision {
+		return &planningEvidenceRefusal{Code: planningEvidenceRefusalInvalidMetadata, Origin: record.Reference.Origin, Kind: record.Reference.Kind, Detail: "existing evidence locator does not match its reference"}
+	}
+	scan := privacyScan(record.Summary)
+	sanitized, sanitizeErr := colony.SanitizeSignalContent(record.Summary)
+	if scan.Blocked || scan.Clean != record.Summary || sanitizeErr != nil || sanitized != record.Summary {
+		return &planningEvidenceRefusal{Code: planningEvidenceRefusalInvalidMetadata, Origin: record.Reference.Origin, Kind: record.Reference.Kind, Detail: "existing evidence summary is not a safe redacted projection"}
 	}
 	return nil
 }

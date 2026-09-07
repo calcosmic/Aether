@@ -315,6 +315,52 @@ func TestPlanningEvidenceCollectStoresRedactedSummaryAndLocatorOnly(t *testing.T
 	}
 }
 
+func TestPlanningEvidenceCollectRejectsTamperedExistingProjection(t *testing.T) {
+	t.Parallel()
+
+	record := planningEvidenceRecordFixture(t, colony.PlanningEvidenceResearch, "research:trusted", "trusted finding", []colony.PlanningDimension{
+		colony.PlanningDimensionKnowledge,
+	})
+	tests := []struct {
+		name string
+		edit func(*planningEvidenceRecord)
+		code planningEvidenceRefusalCode
+	}{
+		{
+			name: "summary digest changed",
+			edit: func(value *planningEvidenceRecord) { value.Summary = "tampered finding" },
+			code: planningEvidenceRefusalHashMismatch,
+		},
+		{
+			name: "locator changed",
+			edit: func(value *planningEvidenceRecord) { value.Locator.Origin = "research:other" },
+			code: planningEvidenceRefusalInvalidMetadata,
+		},
+		{
+			name: "unsafe summary with matching digest",
+			edit: func(value *planningEvidenceRecord) {
+				value.Summary = `password = "secret-password"`
+				value.Reference.ExcerptDigest = planningEvidenceSHA256([]byte(value.Summary))
+			},
+			code: planningEvidenceRefusalInvalidMetadata,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tampered := record
+			tt.edit(&tampered)
+			_, err := collectPlanningEvidence(planningEvidenceCollectionRequest{
+				RepositoryRoot: t.TempDir(),
+				Existing:       []planningEvidenceRecord{tampered},
+			})
+			var refusal *planningEvidenceRefusal
+			if !errors.As(err, &refusal) || refusal.Code != tt.code {
+				t.Fatalf("tampered projection error = %v, want %q", err, tt.code)
+			}
+		})
+	}
+}
+
 func TestPlanningEvidenceFreshRejectsRestatementAndSupersededSource(t *testing.T) {
 	t.Parallel()
 
