@@ -665,12 +665,14 @@ func setupPhaseResearchManifestTest(t *testing.T, phases []colony.Phase) (dataDi
 	root = filepath.Dir(filepath.Dir(dataDir))
 	withWorkingDir(t, root)
 	goal := "Wire the exporter to the new billing API"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	state := codexPlanSpecificationFixture(t, colony.ColonyState{
 		Version: "3.0",
 		Goal:    &goal,
 		State:   colony.StateREADY,
 		Plan:    colony.Plan{Phases: phases},
-	})
+	}, colony.SpecStatusApproved)
+	createTestColonyState(t, dataDir, state)
+	writeCodexPlanSpecificationProjection(t, root, state)
 	return dataDir, root
 }
 
