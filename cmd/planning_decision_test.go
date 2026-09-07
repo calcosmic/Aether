@@ -315,10 +315,11 @@ func TestPlanningDecisionReuseRequiresExactEquivalence(t *testing.T) {
 			drifted.AffectedSemanticIDs = append([]string(nil), key.AffectedSemanticIDs...)
 			test.mutate(&drifted)
 			drifted.ContentHash = ""
-			drifted.ContentHash, err = planningDecisionEquivalenceHash(drifted)
-			if err != nil {
-				t.Fatalf("rehash drifted key: %v", err)
+			contentHash, hashErr := planningDecisionEquivalenceHash(drifted)
+			if hashErr != nil {
+				t.Fatalf("rehash drifted key: %v", hashErr)
 			}
+			drifted.ContentHash = contentHash
 			result := assessPlanningDecisionAnswerReuse(drifted, &prior)
 			if result.Reused || !result.RequiresRevalidation || result.PriorAnswerEvidence != prior.Answer {
 				t.Fatalf("%s drift reused prior answer: %+v", test.name, result)
