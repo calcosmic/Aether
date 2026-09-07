@@ -421,12 +421,15 @@ func (s ColonyState) EffectiveColonyMode() ColonyMode {
 
 // Plan holds the generated phase plan.
 type Plan struct {
-	GeneratedAt      *time.Time         `json:"generated_at"`
-	Confidence       *float64           `json:"confidence"`
-	EvidencePolicy   PlanEvidencePolicy `json:"evidence_policy,omitempty"`
-	ActiveRevisionID string             `json:"active_revision_id,omitempty"`
-	Revisions        []PlanRevision     `json:"revisions,omitempty"`
-	Phases           []Phase            `json:"phases"`
+	GeneratedAt        *time.Time           `json:"generated_at"`
+	Confidence         *float64             `json:"confidence"`
+	EvidencePolicy     PlanEvidencePolicy   `json:"evidence_policy,omitempty"`
+	AcceptancePolicy   PlanAcceptancePolicy `json:"acceptance_policy,omitempty"`
+	ActiveRevisionID   string               `json:"active_revision_id,omitempty"`
+	PendingCandidateID string               `json:"pending_candidate_id,omitempty"`
+	Candidates         []PlanCandidate      `json:"candidates,omitempty"`
+	Revisions          []PlanRevision       `json:"revisions,omitempty"`
+	Phases             []Phase              `json:"phases"`
 }
 
 // PlanRevisionReason records why an accepted plan replaced its predecessor.
@@ -460,22 +463,36 @@ func (r PlanRevisionReason) Valid() bool {
 // PlanRevision is an immutable snapshot of one accepted plan. The current
 // execution view remains Plan.Phases; revisions explain how that view changed.
 type PlanRevision struct {
-	SchemaVersion       int                `json:"schema_version"`
-	Number              int                `json:"number"`
-	ID                  string             `json:"id"`
-	ParentID            string             `json:"parent_id,omitempty"`
-	CreatedAt           string             `json:"created_at"`
-	ReasonType          PlanRevisionReason `json:"reason_type"`
-	Reason              string             `json:"reason"`
-	Evidence            []string           `json:"evidence,omitempty"`
-	InputEvidenceHash   string             `json:"input_evidence_hash,omitempty"`
-	EvidenceHash        string             `json:"evidence_hash,omitempty"`
-	PlanningRunID       string             `json:"planning_run_id,omitempty"`
-	PlanHash            string             `json:"plan_hash"`
-	PreservedPhaseIDs   []int              `json:"preserved_phase_ids,omitempty"`
-	SupersededPhaseIDs  []int              `json:"superseded_phase_ids,omitempty"`
-	ReplacementPhaseIDs []int              `json:"replacement_phase_ids,omitempty"`
-	Phases              []Phase            `json:"phases"`
+	SchemaVersion             int                `json:"schema_version"`
+	Number                    int                `json:"number"`
+	ID                        string             `json:"id"`
+	ParentID                  string             `json:"parent_id,omitempty"`
+	CreatedAt                 string             `json:"created_at"`
+	ReasonType                PlanRevisionReason `json:"reason_type"`
+	Reason                    string             `json:"reason"`
+	Evidence                  []string           `json:"evidence,omitempty"`
+	InputEvidenceHash         string             `json:"input_evidence_hash,omitempty"`
+	EvidenceHash              string             `json:"evidence_hash,omitempty"`
+	PlanningRunID             string             `json:"planning_run_id,omitempty"`
+	PlanHash                  string             `json:"plan_hash"`
+	PreservedPhaseIDs         []int              `json:"preserved_phase_ids,omitempty"`
+	SupersededPhaseIDs        []int              `json:"superseded_phase_ids,omitempty"`
+	ReplacementPhaseIDs       []int              `json:"replacement_phase_ids,omitempty"`
+	SemanticID                string             `json:"semantic_id,omitempty"`
+	RequirementProofLinks     []string           `json:"requirement_proof_links,omitempty"`
+	AcceptanceProofLinks      []string           `json:"acceptance_proof_links,omitempty"`
+	NegativeProofLinks        []string           `json:"negative_proof_links,omitempty"`
+	RecoveryProofLinks        []string           `json:"recovery_proof_links,omitempty"`
+	PublicPathProofLinks      []string           `json:"public_path_proof_links,omitempty"`
+	SpecificationRevisionID   string             `json:"specification_revision_id,omitempty"`
+	SpecificationRevisionHash string             `json:"specification_revision_hash,omitempty"`
+	CandidateID               string             `json:"candidate_id,omitempty"`
+	CandidateContentHash      string             `json:"candidate_content_hash,omitempty"`
+	PlanningTimelineID        string             `json:"planning_timeline_id,omitempty"`
+	PlanningTimelineDigest    string             `json:"planning_timeline_digest,omitempty"`
+	AffectedSemanticIDs       []string           `json:"affected_semantic_ids,omitempty"`
+	PreservedSemanticIDs      []string           `json:"preserved_semantic_ids,omitempty"`
+	Phases                    []Phase            `json:"phases"`
 }
 
 // PlanEvidencePolicy identifies whether a plan's acceptance criteria have a
@@ -494,12 +511,15 @@ const (
 // an "overall" field rather than the newer single numeric value.
 func (p *Plan) UnmarshalJSON(data []byte) error {
 	type rawPlan struct {
-		GeneratedAt      *time.Time         `json:"generated_at"`
-		Confidence       json.RawMessage    `json:"confidence"`
-		EvidencePolicy   PlanEvidencePolicy `json:"evidence_policy"`
-		ActiveRevisionID string             `json:"active_revision_id"`
-		Revisions        []PlanRevision     `json:"revisions"`
-		Phases           []Phase            `json:"phases"`
+		GeneratedAt        *time.Time           `json:"generated_at"`
+		Confidence         json.RawMessage      `json:"confidence"`
+		EvidencePolicy     PlanEvidencePolicy   `json:"evidence_policy"`
+		AcceptancePolicy   PlanAcceptancePolicy `json:"acceptance_policy"`
+		ActiveRevisionID   string               `json:"active_revision_id"`
+		PendingCandidateID string               `json:"pending_candidate_id"`
+		Candidates         []PlanCandidate      `json:"candidates"`
+		Revisions          []PlanRevision       `json:"revisions"`
+		Phases             []Phase              `json:"phases"`
 	}
 
 	var raw rawPlan
@@ -509,7 +529,10 @@ func (p *Plan) UnmarshalJSON(data []byte) error {
 
 	p.GeneratedAt = raw.GeneratedAt
 	p.EvidencePolicy = raw.EvidencePolicy
+	p.AcceptancePolicy = raw.AcceptancePolicy
 	p.ActiveRevisionID = raw.ActiveRevisionID
+	p.PendingCandidateID = raw.PendingCandidateID
+	p.Candidates = raw.Candidates
 	p.Revisions = raw.Revisions
 	p.Phases = raw.Phases
 
@@ -661,15 +684,29 @@ func InferPhaseMode(name, description string) PhaseMode {
 
 // Phase represents a single phase in the colony plan.
 type Phase struct {
-	ID                   int                            `json:"id"`
-	Name                 string                         `json:"name"`
-	Description          string                         `json:"description"`
-	Status               string                         `json:"status"`
-	Mode                 PhaseMode                      `json:"mode,omitempty"`
-	Tasks                []Task                         `json:"tasks"`
-	SuccessCriteria      []string                       `json:"success_criteria"`
-	EvidenceRequirements []CriterionEvidenceRequirement `json:"evidence_requirements,omitempty"`
-	WatcherFailureCount  int                            `json:"watcher_failure_count,omitempty"`
+	ID                        int                            `json:"id"`
+	Name                      string                         `json:"name"`
+	Description               string                         `json:"description"`
+	Status                    string                         `json:"status"`
+	Mode                      PhaseMode                      `json:"mode,omitempty"`
+	Tasks                     []Task                         `json:"tasks"`
+	SuccessCriteria           []string                       `json:"success_criteria"`
+	EvidenceRequirements      []CriterionEvidenceRequirement `json:"evidence_requirements,omitempty"`
+	WatcherFailureCount       int                            `json:"watcher_failure_count,omitempty"`
+	SemanticID                string                         `json:"semantic_id,omitempty"`
+	RequirementProofLinks     []string                       `json:"requirement_proof_links,omitempty"`
+	AcceptanceProofLinks      []string                       `json:"acceptance_proof_links,omitempty"`
+	NegativeProofLinks        []string                       `json:"negative_proof_links,omitempty"`
+	RecoveryProofLinks        []string                       `json:"recovery_proof_links,omitempty"`
+	PublicPathProofLinks      []string                       `json:"public_path_proof_links,omitempty"`
+	SpecificationRevisionID   string                         `json:"specification_revision_id,omitempty"`
+	SpecificationRevisionHash string                         `json:"specification_revision_hash,omitempty"`
+	CandidateID               string                         `json:"candidate_id,omitempty"`
+	CandidateContentHash      string                         `json:"candidate_content_hash,omitempty"`
+	PlanningTimelineID        string                         `json:"planning_timeline_id,omitempty"`
+	PlanningTimelineDigest    string                         `json:"planning_timeline_digest,omitempty"`
+	AffectedSemanticIDs       []string                       `json:"affected_semantic_ids,omitempty"`
+	PreservedSemanticIDs      []string                       `json:"preserved_semantic_ids,omitempty"`
 	// ExpectFailingTests marks a deliberately-RED phase: its deliverable is
 	// failing tests that prove a defect exists (classic TDD red-first).
 	// Continue's verification inverts the tests check for such a phase — a
@@ -684,14 +721,28 @@ type Phase struct {
 
 // Task represents a single task within a phase.
 type Task struct {
-	ID                   *string                        `json:"id"`
-	Goal                 string                         `json:"goal"`
-	Status               string                         `json:"status"`
-	Constraints          []string                       `json:"constraints,omitempty"`
-	Hints                []string                       `json:"hints,omitempty"`
-	SuccessCriteria      []string                       `json:"success_criteria,omitempty"`
-	EvidenceRequirements []CriterionEvidenceRequirement `json:"evidence_requirements,omitempty"`
-	DependsOn            []string                       `json:"depends_on,omitempty"`
+	ID                        *string                        `json:"id"`
+	Goal                      string                         `json:"goal"`
+	Status                    string                         `json:"status"`
+	Constraints               []string                       `json:"constraints,omitempty"`
+	Hints                     []string                       `json:"hints,omitempty"`
+	SuccessCriteria           []string                       `json:"success_criteria,omitempty"`
+	EvidenceRequirements      []CriterionEvidenceRequirement `json:"evidence_requirements,omitempty"`
+	DependsOn                 []string                       `json:"depends_on,omitempty"`
+	SemanticID                string                         `json:"semantic_id,omitempty"`
+	RequirementProofLinks     []string                       `json:"requirement_proof_links,omitempty"`
+	AcceptanceProofLinks      []string                       `json:"acceptance_proof_links,omitempty"`
+	NegativeProofLinks        []string                       `json:"negative_proof_links,omitempty"`
+	RecoveryProofLinks        []string                       `json:"recovery_proof_links,omitempty"`
+	PublicPathProofLinks      []string                       `json:"public_path_proof_links,omitempty"`
+	SpecificationRevisionID   string                         `json:"specification_revision_id,omitempty"`
+	SpecificationRevisionHash string                         `json:"specification_revision_hash,omitempty"`
+	CandidateID               string                         `json:"candidate_id,omitempty"`
+	CandidateContentHash      string                         `json:"candidate_content_hash,omitempty"`
+	PlanningTimelineID        string                         `json:"planning_timeline_id,omitempty"`
+	PlanningTimelineDigest    string                         `json:"planning_timeline_digest,omitempty"`
+	AffectedSemanticIDs       []string                       `json:"affected_semantic_ids,omitempty"`
+	PreservedSemanticIDs      []string                       `json:"preserved_semantic_ids,omitempty"`
 }
 
 // CriterionEvidenceRequirement binds one success criterion to exact project
