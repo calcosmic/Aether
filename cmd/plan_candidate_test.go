@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
@@ -119,6 +120,132 @@ func TestPlanCandidateInputsRejectPartialAmbiguousAndDeprecatedBeforeStateAccess
 	}
 	if _, err := resolvePlanCandidateOperation(complete); err != nil {
 		t.Fatalf("complete exact acceptance inputs rejected: %v", err)
+	}
+}
+
+func TestPlanCandidateAcceptActivatesInitialRevisionAtomically(t *testing.T) {
+	root, candidate := planCandidateTestPending(t)
+	beforeTimeline, err := verifiedPlanCandidateTimeline(root, candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	acceptedAt := time.Date(2026, time.September, 7, 20, 0, 0, 0, time.UTC)
+	result, err := acceptPlanCandidate(root, planCandidateTestAcceptanceRequest(candidate), planCandidateAcceptanceOptions{
+		AcceptedBy: "owner",
+		AcceptedAt: acceptedAt,
+	})
+	if err != nil {
+		t.Fatalf("accept exact candidate: %v", err)
+	}
+	if result.Replayed {
+		t.Fatal("first acceptance was reported as a replay")
+	}
+	if result.Receipt.CandidateID != candidate.ID || result.Receipt.CandidateContentHash != candidate.ContentHash ||
+		result.Receipt.SpecificationRevisionID != candidate.SpecificationRevisionID || result.Receipt.SpecificationRevisionHash != candidate.SpecificationRevisionHash ||
+		result.Receipt.BasePlanRevisionID != candidate.BasePlanRevisionID || result.Receipt.BasePlanRevisionHash != candidate.BasePlanRevisionHash ||
+		result.Receipt.TimelineID != candidate.Timeline.ID || result.Receipt.TimelineDigest != candidate.Timeline.TimelineDigest ||
+		result.Receipt.ProposalHash != candidate.ProposalHash || result.Receipt.AcceptedBy != "owner" || !result.Receipt.AcceptedAt.Equal(acceptedAt) {
+		t.Fatalf("acceptance receipt does not bind the exact frontier: %+v", result.Receipt)
+	}
+	if result.Revision.ID != candidate.Proposal.ID || result.Revision.PlanHash != candidate.ProposalHash ||
+		result.Receipt.ActivatedPlanRevisionID != result.Revision.ID || result.Receipt.ActivatedPlanRevisionHash != result.Revision.PlanHash {
+		t.Fatalf("activated revision diverged from candidate proposal: result=%+v", result)
+	}
+
+	state, err := loadSpecificationColonyState(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validatePlanningState(state); err != nil {
+		t.Fatalf("accepted state is invalid: %v", err)
+	}
+	if state.Plan.AcceptancePolicy != colony.PlanAcceptanceExplicitOwner || state.Plan.ActiveRevisionID != result.Revision.ID || state.Plan.PendingCandidateID != "" || len(state.Plan.Revisions) != 1 || len(state.Plan.Candidates) != 1 {
+		t.Fatalf("accepted plan lineage = %+v, want one explicit-owner revision and candidate", state.Plan)
+	}
+	if state.Plan.Candidates[0].Status != colony.PlanCandidateAccepted || !reflect.DeepEqual(state.Plan.Candidates[0].Acceptance, &result.Receipt) || !reflect.DeepEqual(state.Plan.Phases, result.Revision.Phases) {
+		t.Fatalf("accepted state did not atomically activate candidate: %+v", state.Plan)
+	}
+	stage, err := loadPlanningStageState(root, candidate.Timeline.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stage.Stage != planningStageAccepted || stage.AcceptanceReceiptID != result.Receipt.ID || stage.AcceptanceReceiptHash != result.Receipt.ContentHash {
+		t.Fatalf("accepted stage = %+v, want receipt-bound accepted", stage)
+	}
+	receiptBytes, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(planningRouteAcceptanceRepositoryPath(candidate.Timeline.RunID))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var persistedReceipt colony.PlanAcceptanceReceipt
+	if err := json.Unmarshal(receiptBytes, &persistedReceipt); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(persistedReceipt, result.Receipt) {
+		t.Fatalf("persisted acceptance receipt = %+v, want %+v", persistedReceipt, result.Receipt)
+	}
+	afterTimeline, err := verifiedPlanCandidateTimeline(root, state.Plan.Candidates[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(beforeTimeline, afterTimeline) {
+		t.Fatal("acceptance changed the complete verified planning timeline")
+	}
+}
+
+func TestPlanCandidateAcceptRejectsDivergentBindingsWithoutMutation(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*planCandidateAcceptanceRequest)
+		want   string
+	}{
+		{name: "candidate", mutate: func(request *planCandidateAcceptanceRequest) { request.CandidateID += "-stale" }, want: "candidate_id"},
+		{name: "specification revision", mutate: func(request *planCandidateAcceptanceRequest) { request.SpecificationRevisionID += "-stale" }, want: "specification_revision_id"},
+		{name: "specification hash", mutate: func(request *planCandidateAcceptanceRequest) {
+			request.SpecificationRevisionHash = strings.Repeat("1", 64)
+		}, want: "specification_revision_hash"},
+		{name: "base revision", mutate: func(request *planCandidateAcceptanceRequest) { request.BasePlanRevisionID += "-stale" }, want: "base_plan_revision_id"},
+		{name: "timeline", mutate: func(request *planCandidateAcceptanceRequest) { request.TimelineDigest = strings.Repeat("2", 64) }, want: "timeline_digest"},
+		{name: "proposal", mutate: func(request *planCandidateAcceptanceRequest) { request.ProposalHash = strings.Repeat("3", 64) }, want: "proposal_hash"},
+		{name: "token", mutate: func(request *planCandidateAcceptanceRequest) { request.AcceptanceToken += "-stale" }, want: "acceptance_token"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root, candidate := planCandidateTestPending(t)
+			request := planCandidateTestAcceptanceRequest(candidate)
+			test.mutate(&request)
+			before := planCandidateTestSnapshot(t, root)
+			if _, err := acceptPlanCandidate(root, request, planCandidateAcceptanceOptions{AcceptedBy: "owner", AcceptedAt: time.Now().UTC()}); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("acceptance error = %v, want field-specific %q refusal", err, test.want)
+			}
+			planCandidateTestAssertSnapshot(t, root, before)
+		})
+	}
+}
+
+func TestPlanCandidateAcceptRejectsRejectedCandidateWithoutMutation(t *testing.T) {
+	root, candidate := planCandidateTestPending(t)
+	candidate.Status = colony.PlanCandidateRejected
+	content, err := json.MarshalIndent(candidate, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	content = append(content, '\n')
+	if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(planningRouteCandidateRepositoryPath(candidate.Timeline.RunID))), content, 0600); err != nil {
+		t.Fatal(err)
+	}
+	before := planCandidateTestSnapshot(t, root)
+	if _, err := acceptPlanCandidate(root, planCandidateTestAcceptanceRequest(candidate), planCandidateAcceptanceOptions{AcceptedBy: "owner", AcceptedAt: time.Now().UTC()}); err == nil || !strings.Contains(err.Error(), "status") {
+		t.Fatalf("rejected candidate acceptance error = %v, want status refusal", err)
+	}
+	planCandidateTestAssertSnapshot(t, root, before)
+}
+
+func planCandidateTestAcceptanceRequest(candidate colony.PlanCandidate) planCandidateAcceptanceRequest {
+	return planCandidateAcceptanceRequest{
+		CandidateID: candidate.ID, SpecificationRevisionID: candidate.SpecificationRevisionID,
+		SpecificationRevisionHash: candidate.SpecificationRevisionHash, BasePlanRevisionID: candidate.BasePlanRevisionID,
+		TimelineDigest: candidate.Timeline.TimelineDigest, ProposalHash: candidate.ProposalHash,
+		AcceptanceToken: planCandidateAcceptanceToken(candidate),
 	}
 }
 

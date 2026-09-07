@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -187,5 +188,80 @@ func TestValidateBuildManifestRejectsSupersededRevision(t *testing.T) {
 	err := validateBuildManifestPlanRevision(codexBuildManifest{Phase: 1, PlanRevisionID: "plan-r1-old"}, state, false)
 	if err == nil || !strings.Contains(err.Error(), "superseded plan revision") {
 		t.Fatalf("expected superseded build packet rejection, got %v", err)
+	}
+}
+
+func TestPlanRevisionCandidatePreservesCompletedCompatibleWork(t *testing.T) {
+	completedTaskID := "1.1"
+	newTaskID := "2.1"
+	base := []colony.Phase{{
+		ID: 1, SemanticID: "phase-stable", Name: "Stable work", Status: colony.PhaseCompleted, WatcherFailureCount: 2,
+		Tasks: []colony.Task{{ID: &completedTaskID, SemanticID: "task-stable", Goal: "Keep this work", Status: colony.TaskCompleted}},
+	}}
+	proposal := append(clonePhases(base), colony.Phase{
+		ID: 2, SemanticID: "phase-new", Name: "New work", Status: colony.PhasePending,
+		Tasks: []colony.Task{{ID: &newTaskID, SemanticID: "task-new", Goal: "Do the next thing", Status: colony.TaskPending}},
+	})
+	proposal[0].Status = colony.PhasePending
+	proposal[0].WatcherFailureCount = 0
+	proposal[0].Tasks[0].Status = colony.TaskPending
+	wantCompleted, err := json.Marshal(base[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantHash, err := planDefinitionHash(proposal)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	activated, preserved, err := preserveCompletedCandidateWork(base, proposal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotCompleted, err := json.Marshal(activated[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(gotCompleted) != string(wantCompleted) {
+		t.Fatalf("completed compatible work changed\nwant=%s\ngot=%s", wantCompleted, gotCompleted)
+	}
+	if len(preserved) != 1 || preserved[0] != 1 {
+		t.Fatalf("preserved phase ids = %v, want [1]", preserved)
+	}
+	gotHash, err := planDefinitionHash(activated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotHash != wantHash {
+		t.Fatalf("lifecycle restoration changed immutable proposal identity: got %s want %s", gotHash, wantHash)
+	}
+}
+
+func TestPlanRevisionReplayCandidateAcceptanceReturnsOriginalReceipt(t *testing.T) {
+	root, candidate := planCandidateTestPending(t)
+	request := planCandidateTestAcceptanceRequest(candidate)
+	first, err := acceptPlanCandidate(root, request, planCandidateAcceptanceOptions{
+		AcceptedBy: "owner", AcceptedAt: time.Date(2026, time.September, 7, 20, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	afterFirst := planCandidateTestSnapshot(t, root)
+	second, err := acceptPlanCandidate(root, request, planCandidateAcceptanceOptions{
+		AcceptedBy: "different-retry-actor", AcceptedAt: time.Date(2026, time.September, 8, 20, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !second.Replayed || !reflect.DeepEqual(second.Receipt, first.Receipt) || !reflect.DeepEqual(second.Revision, first.Revision) {
+		t.Fatalf("exact replay = %+v, want original %+v", second, first)
+	}
+	planCandidateTestAssertSnapshot(t, root, afterFirst)
+	state, err := loadSpecificationColonyState(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Plan.Revisions) != 1 || len(state.Plan.Candidates) != 1 {
+		t.Fatalf("replay duplicated immutable lineage: revisions=%d candidates=%d", len(state.Plan.Revisions), len(state.Plan.Candidates))
 	}
 }
