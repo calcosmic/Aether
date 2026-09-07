@@ -336,6 +336,182 @@ func TestResolveNextActionCoversEveryLifecycleState(t *testing.T) {
 	}
 }
 
+func TestNextActionSpecCandidateAcceptedAndLegacyPrecedence(t *testing.T) {
+	acceptedState, _ := validCurrentPlanningState(t)
+	acceptedFacts := func() LifecycleFacts {
+		return lifecycleFactsFromStateSnapshot(acceptedState, false, time.Time{})
+	}
+	approvedWithoutPlan := func() LifecycleFacts {
+		state := acceptedState
+		state.Plan = colony.Plan{}
+		state.CurrentPhase = 0
+		return lifecycleFactsFromStateSnapshot(state, false, time.Time{})
+	}
+	legacyFacts := func() LifecycleFacts {
+		taskID := "legacy-task"
+		return lifecycleFactsFromStateSnapshot(colony.ColonyState{
+			Goal: fixtureGoal("Keep the migrated plan buildable"), State: colony.StateREADY, CurrentPhase: 1,
+			Plan: colony.Plan{
+				AcceptancePolicy: colony.PlanAcceptanceLegacyUnbound,
+				Phases:           []colony.Phase{{ID: 1, Name: "Legacy", Status: colony.PhaseReady, Tasks: []colony.Task{{ID: &taskID, Goal: "Build it", Status: colony.TaskPending}}}},
+			},
+		}, false, time.Time{})
+	}
+
+	pendingCandidateID := "candidate-pending-review"
+	tests := []struct {
+		name             string
+		facts            func() LifecycleFacts
+		wantAction       string
+		wantCommand      string
+		wantChoices      []string
+		wantAlternatives []string
+		forbidCommands   []string
+	}{
+		{
+			name: "blocked recovery beats unsettled spec and candidate authority",
+			facts: func() LifecycleFacts {
+				facts := acceptedFacts()
+				facts.Intent.Value.UnresolvedDiscussionCount = 1
+				facts.Specification.Value.Status = colony.SpecStatusDraft
+				facts.Specification.Value.Approved = false
+				facts.Planning.Value.PendingCandidateID = pendingCandidateID
+				facts.Planning.Value.PendingCandidateStatus = colony.PlanCandidatePendingReview
+				facts.Blockers.Value = []colony.FlagEntry{{ID: "recovery-first", Type: "blocker", Description: "recover the saved frontier"}}
+				return facts
+			},
+			wantAction: "resume", wantCommand: "aether resume",
+		},
+		{
+			name: "accepted charter with unsettled material intent returns to discuss",
+			facts: func() LifecycleFacts {
+				facts := acceptedFacts()
+				facts.Intent.Value.CharterAccepted = true
+				facts.Intent.Value.UnresolvedDiscussionCount = 1
+				facts.Planning.Value.PendingCandidateID = pendingCandidateID
+				facts.Planning.Value.PendingCandidateStatus = colony.PlanCandidatePendingReview
+				return facts
+			},
+			wantAction: "discuss", wantCommand: "aether discuss", forbidCommands: []string{"aether plan", "aether build", "aether run"},
+		},
+		{
+			name: "draft specification review beats a stale accepted plan",
+			facts: func() LifecycleFacts {
+				facts := acceptedFacts()
+				facts.Specification.Value.Status = colony.SpecStatusDraft
+				facts.Specification.Value.Approved = false
+				return facts
+			},
+			wantAction: "specification", wantCommand: "aether spec", forbidCommands: []string{"aether plan", "aether build", "aether run"},
+		},
+		{
+			name:       "approved specification without a plan starts planning",
+			facts:      approvedWithoutPlan,
+			wantAction: "plan", wantCommand: "aether plan", forbidCommands: []string{"aether build", "aether run"},
+		},
+		{
+			name: "in flight planning resumes the exact planning command",
+			facts: func() LifecycleFacts {
+				facts := approvedWithoutPlan()
+				facts.Planning.Value.RunID = "planning-run-200"
+				facts.Planning.Value.Stage = string(planningStageScoutReady)
+				facts.Planning.Value.Pass = 2
+				return facts
+			},
+			wantAction: "resume_planning", wantCommand: "aether plan", forbidCommands: []string{"aether build", "aether run"},
+		},
+		{
+			name: "planning owner decision reopens its bound planning frontier",
+			facts: func() LifecycleFacts {
+				facts := approvedWithoutPlan()
+				facts.Planning.Value.RunID = "planning-run-200"
+				facts.Planning.Value.Stage = string(planningStageOwnerDecision)
+				facts.Planning.Value.Pass = 2
+				return facts
+			},
+			wantAction: "planning_owner_decision", wantCommand: "aether plan", forbidCommands: []string{"aether build", "aether run"},
+		},
+		{
+			name: "stopped candidate offers review and exact acceptance only",
+			facts: func() LifecycleFacts {
+				facts := acceptedFacts()
+				facts.Planning.Value.RunID = "planning-run-200"
+				facts.Planning.Value.Stage = string(planningStageCandidateReady)
+				facts.Planning.Value.PendingCandidateID = pendingCandidateID
+				facts.Planning.Value.PendingCandidateHash = strings.Repeat("a", 64)
+				facts.Planning.Value.PendingCandidateStatus = colony.PlanCandidatePendingReview
+				facts.Planning.Value.PendingCandidateStopReason = colony.PlanningStopTargetMet
+				return facts
+			},
+			wantAction: "review_plan_candidate", wantCommand: "aether plan --candidate",
+			wantAlternatives: []string{"aether plan --accept-candidate " + pendingCandidateID},
+			forbidCommands:   []string{"aether build", "aether run"},
+		},
+		{
+			name: "affected accepted revision returns to reconciliation",
+			facts: func() LifecycleFacts {
+				facts := acceptedFacts()
+				facts.Planning.Value.AcceptanceBindingStatus = LifecyclePlanBindingAffected
+				facts.Planning.Value.AffectedUnresolvedSemanticIDs = []string{"task:affected"}
+				return facts
+			},
+			wantAction: "reconcile_plan", wantCommand: "aether plan", forbidCommands: []string{"aether build", "aether run"},
+		},
+		{
+			name:       "accepted plan offers guided build and autopilot equally",
+			facts:      acceptedFacts,
+			wantAction: "choose_execution_mode", wantChoices: []string{"aether build 1", "aether run"},
+		},
+		{
+			name:       "legacy unbound plan retains build readiness",
+			facts:      legacyFacts,
+			wantAction: "choose_execution_mode", wantChoices: []string{"aether build 1", "aether run"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := resolveNextAction(nextActionInput{Facts: tc.facts()})
+			if got.Projection == nil {
+				t.Fatal("next action omitted its lifecycle projection")
+			}
+			if got.Projection.NextAction.ID != tc.wantAction || got.Command != tc.wantCommand {
+				t.Fatalf("next action = %q %q, want %q %q", got.Projection.NextAction.ID, got.Command, tc.wantAction, tc.wantCommand)
+			}
+			var choices []string
+			for _, choice := range got.Projection.NextAction.Choices {
+				choices = append(choices, choice.RuntimeCommand)
+			}
+			if !reflect.DeepEqual(choices, tc.wantChoices) {
+				t.Fatalf("primary choices = %v, want %v", choices, tc.wantChoices)
+			}
+			if len(choices) == 2 {
+				left, right := got.Projection.NextAction.Choices[0], got.Projection.NextAction.Choices[1]
+				if left.Rank != right.Rank || left.Recommended || right.Recommended {
+					t.Fatalf("accepted-plan choices are not equal priority: %+v", got.Projection.NextAction.Choices)
+				}
+			}
+			alternatives := make([]string, 0, len(got.Alternatives))
+			for _, alternative := range got.Alternatives {
+				alternatives = append(alternatives, alternative.Command)
+			}
+			for _, want := range tc.wantAlternatives {
+				if !containsString(alternatives, want) {
+					t.Errorf("alternatives %v do not include %q", alternatives, want)
+				}
+			}
+			allCommands := append(append([]string{got.Command}, choices...), alternatives...)
+			for _, forbidden := range tc.forbidCommands {
+				for _, command := range allCommands {
+					if strings.HasPrefix(command, forbidden) {
+						t.Errorf("authority boundary emitted forbidden command %q", command)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestResolveNextActionUsesTheRecoveryReportCommand(t *testing.T) {
 	newNextActionFixtureStore(t)
 	state := normalizedFixtureState(t, colony.ColonyState{
