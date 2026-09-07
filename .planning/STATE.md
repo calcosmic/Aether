@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 200-06-PLAN.md
-last_updated: "2026-09-07T14:39:40.387Z"
+stopped_at: Completed 200-07-PLAN.md
+last_updated: "2026-09-07T15:10:28.516Z"
 last_activity: 2026-09-07
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 59
-  completed_plans: 40
+  completed_plans: 41
   percent: 14
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 7 of 25
+Plan: 8 of 25
 Status: Ready to execute
 Last activity: 2026-09-07
 
@@ -117,6 +117,7 @@ Last activity: 2026-09-07
 | Phase 200 P04 | 23 min | 2 tasks | 2 files |
 | Phase 200 P05 | 36 min | 2 tasks | 2 files |
 | Phase 200 P06 | 37 min | 2 tasks | 2 files |
+| Phase 200 P07 | 27 min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -325,6 +326,10 @@ Last activity: 2026-09-07
 - [Phase 200]: Historical replay validates the immutable lifecycle journal and returns the digest of that append's original prefix, while full-chain validation permits the shared index to advance through later appends.
 - [Phase 200]: Only an exact PlanRevision timeline ID and digest pair upgrades a candidate-only timeline to accepted, after which both prune and reorder operations fail with typed protection errors.
 - [Phase 200]: Unindexed legacy iteration JSON is readable only as legacy_unbound evidence and never receives a current timeline binding.
+- [Phase 200]: Only evidence-unresolved choices in behavior, authority, risk tolerance, scope, or acceptance meaning may interrupt the owner. — Routine research depth, worker mechanics, scoring, formatting, generic preferences, and evidence-answerable questions remain autonomous.
+- [Phase 200]: Pass one may batch owner decisions after Scout, while later passes require matching Scout and Route-Setter receipts plus the persisted iteration-card hash. — A later discovery cannot truncate the complete planning pass needed to explain its impact.
+- [Phase 200]: Owner answers are reusable only under an exact content-addressed goal, session, specification, plan, meaning, impact, and affected-ID key. — Any drift leaves the prior answer visible as evidence but removes its authority.
+- [Phase 200]: Only contract-equivalent answers return direct_resume; contract changes require successor_spec_required with stable affected IDs and normalized revision evidence. — The specification engine receives an auditable revision request instead of an implicit planning-state rebind.
 
 ### Pending Todos
 
@@ -440,8 +445,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-07T14:39:40.377Z
-Stopped at: Completed 200-06-PLAN.md
+Last session: 2026-09-07T15:10:28.506Z
+Stopped at: Completed 200-07-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
