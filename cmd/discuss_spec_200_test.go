@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -241,6 +243,237 @@ func TestDiscussMaterialImpactDriftForcesRevalidationWithMatchingProse(t *testin
 	if got := stringValue(card["revalidation"]); !strings.Contains(got, "evidence only") {
 		t.Fatalf("revalidation = %q, want changed-impact explanation", got)
 	}
+}
+
+func TestDiscussSettledCreatesDraftSpecification(t *testing.T) {
+	saveGlobals(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	goal, sessionID, initializedAt := seedSettledDiscussState(t, dataDir, "whole-goal")
+
+	result, err := runDiscuss(root, 3, false)
+	if err != nil {
+		t.Fatalf("run settled discuss: %v", err)
+	}
+	closeout := discussResultJSONMap(t, result["draft_spec"])
+	if got := stringValue(closeout["status"]); got != string(colony.SpecStatusDraft) {
+		t.Fatalf("draft status = %q, want draft: %#v", got, closeout)
+	}
+	if got := intValue(closeout["unresolved_count"]); got != 0 {
+		t.Fatalf("unresolved_count = %d, want 0", got)
+	}
+	if got := stringValue(closeout["projection_path"]); got != specificationProjectionRelativePath {
+		t.Fatalf("projection_path = %q, want %q", got, specificationProjectionRelativePath)
+	}
+	if next := stringValue(closeout["exact_next_command"]); next != "aether spec" {
+		t.Fatalf("exact next command = %q, want aether spec", next)
+	}
+	if next := stringValue(result["next"]); !strings.Contains(next, "aether spec") || strings.Contains(next, "aether plan") {
+		t.Fatalf("settled next = %q, want specification review without planning", next)
+	}
+
+	counts := discussResultJSONMap(t, closeout["section_counts"])
+	body := discussResultJSONMap(t, closeout["body"])
+	for _, section := range []string{
+		"outcomes", "included_behaviors", "exclusions", "binding_decisions", "requirements",
+		"acceptance_checks", "negative_expectations", "recovery_expectations", "affected_public_paths",
+	} {
+		if got := intValue(counts[section]); got < 1 {
+			t.Errorf("section count %s = %d, want at least 1", section, got)
+		}
+		entries, ok := body[section].([]interface{})
+		if !ok || len(entries) < 1 {
+			t.Errorf("body section %s = %#v, want typed content", section, body[section])
+			continue
+		}
+		if got := stringValue(entries[0].(map[string]interface{})["id"]); strings.TrimSpace(got) == "" {
+			t.Errorf("body section %s has no stable ID: %#v", section, entries[0])
+		}
+	}
+
+	state := mustReadSpecificationTestState(t, root)
+	if state.Specification == nil || len(state.Specification.Revisions) != 1 {
+		t.Fatalf("settled discuss specification = %#v, want one canonical revision", state.Specification)
+	}
+	revision := state.Specification.Revisions[0]
+	if revision.Scope.Kind != colony.SpecScopeWholeGoal || revision.Scope.GoalID != pendingDecisionGoalHash(goal) || revision.Scope.SessionID != sessionID {
+		t.Fatalf("draft scope = %#v, want current whole-goal identity", revision.Scope)
+	}
+	projection, err := os.ReadFile(filepath.Join(root, specificationProjectionRelativePath))
+	if err != nil {
+		t.Fatalf("read settled projection: %v", err)
+	}
+	for _, want := range []string{revision.ID, revision.ContentHash, "Status: `DRAFT`", "## Owner-Checkable Acceptance"} {
+		if !strings.Contains(string(projection), want) {
+			t.Errorf("projection missing %q:\n%s", want, projection)
+		}
+	}
+	if revision.CreatedAt.Before(initializedAt) {
+		t.Fatalf("draft created_at %s predates colony initialization %s", revision.CreatedAt, initializedAt)
+	}
+}
+
+func TestDiscussDraftSpecExactReplayRetainsRevision(t *testing.T) {
+	saveGlobals(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	seedSettledDiscussState(t, dataDir, "replay")
+
+	first, err := runDiscuss(root, 3, false)
+	if err != nil {
+		t.Fatalf("first settled discuss: %v", err)
+	}
+	firstCloseout := discussResultJSONMap(t, first["draft_spec"])
+	firstState := mustReadSpecificationTestState(t, root)
+	firstProjection := mustReadSpecificationTestProjection(t, root)
+
+	second, err := runDiscuss(root, 3, false)
+	if err != nil {
+		t.Fatalf("replay settled discuss: %v", err)
+	}
+	secondCloseout := discussResultJSONMap(t, second["draft_spec"])
+	secondState := mustReadSpecificationTestState(t, root)
+	secondProjection := mustReadSpecificationTestProjection(t, root)
+	if stringValue(secondCloseout["revision_id"]) != stringValue(firstCloseout["revision_id"]) ||
+		stringValue(secondCloseout["content_hash"]) != stringValue(firstCloseout["content_hash"]) {
+		t.Fatalf("exact replay changed draft identity\nfirst: %#v\nsecond: %#v", firstCloseout, secondCloseout)
+	}
+	if !boolValue(secondCloseout["replayed"]) {
+		t.Fatalf("exact replay not identified: %#v", secondCloseout)
+	}
+	if secondState.Specification == nil || len(secondState.Specification.Revisions) != 1 ||
+		!reflect.DeepEqual(firstState.Specification, secondState.Specification) || firstProjection != secondProjection {
+		t.Fatalf("exact replay appended or rewrote canonical content\nfirst: %#v\nsecond: %#v", firstState.Specification, secondState.Specification)
+	}
+}
+
+func TestDiscussApprovedSpecIsPreserved(t *testing.T) {
+	saveGlobals(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	goal, sessionID, initializedAt := seedSettledDiscussState(t, dataDir, "approved")
+	request := specificationTestDraftRequest(t, colony.SpecScopeWholeGoal)
+	request.Scope.GoalID = pendingDecisionGoalHash(goal)
+	request.Scope.SessionID = sessionID
+	request.CreatedAt = initializedAt.Add(time.Minute)
+	draft, err := createSpecificationDraft(root, request, specificationMutationOptions{})
+	if err != nil {
+		t.Fatalf("create approved fixture draft: %v", err)
+	}
+	approved, err := approveSpecification(root, specificationApprovalRequest{
+		RevisionID:          draft.Revision.ID,
+		RevisionContentHash: draft.Revision.ContentHash,
+		ApprovalToken:       specificationApprovalToken(draft.Specification.ID, draft.Revision.ID, draft.Revision.ContentHash),
+		ApprovedBy:          "owner",
+		ApprovedAt:          request.CreatedAt.Add(time.Minute),
+	}, specificationMutationOptions{})
+	if err != nil {
+		t.Fatalf("approve fixture specification: %v", err)
+	}
+	before := mustReadSpecificationTestStateBytes(t, root)
+
+	result, err := runDiscuss(root, 3, false)
+	if err != nil {
+		t.Fatalf("run discuss with approved specification: %v", err)
+	}
+	after := mustReadSpecificationTestStateBytes(t, root)
+	if !bytes.Equal(before, after) {
+		t.Fatal("settled discuss silently replaced or rewrote an approved specification")
+	}
+	closeout := discussResultJSONMap(t, result["approved_spec"])
+	if !boolValue(closeout["approved_spec_preserved"]) || stringValue(closeout["status"]) != string(colony.SpecStatusApproved) {
+		t.Fatalf("approved closeout = %#v, want explicit preserved status", closeout)
+	}
+	if got := stringValue(closeout["revision_id"]); got != approved.Revision.ID {
+		t.Fatalf("approved revision = %q, want %q", got, approved.Revision.ID)
+	}
+	guidance := stringValue(closeout["revision_guidance"])
+	if !strings.Contains(guidance, approved.Revision.ID) || !strings.Contains(guidance, "explicit") {
+		t.Fatalf("revision guidance = %q, want explicit current-revision instruction", guidance)
+	}
+	if next := stringValue(result["next"]); !strings.Contains(next, "aether spec") || strings.Contains(next, "aether plan") {
+		t.Fatalf("approved next = %q, want explicit spec revision guidance", next)
+	}
+}
+
+func TestDiscussSettledFeatureDraftSpecPreservesCanonicalContent(t *testing.T) {
+	saveGlobals(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	goal, sessionID, initializedAt := seedSettledDiscussState(t, dataDir, "feature")
+	request := specificationTestDraftRequest(t, colony.SpecScopeFeature)
+	request.Scope.GoalID = pendingDecisionGoalHash(goal)
+	request.Scope.SessionID = sessionID
+	request.Scope.FeatureID = "feature-settled-checkout"
+	request.CreatedAt = initializedAt.Add(time.Minute)
+	draft, err := createSpecificationDraft(root, request, specificationMutationOptions{})
+	if err != nil {
+		t.Fatalf("create feature draft fixture: %v", err)
+	}
+	before := mustReadSpecificationTestState(t, root)
+
+	result, err := runDiscuss(root, 3, false)
+	if err != nil {
+		t.Fatalf("run settled feature discuss: %v", err)
+	}
+	closeout := discussResultJSONMap(t, result["draft_spec"])
+	if got := stringValue(discussResultJSONMap(t, closeout["scope"])["kind"]); got != string(colony.SpecScopeFeature) {
+		t.Fatalf("settled feature scope kind = %q, want feature", got)
+	}
+	if got := stringValue(closeout["revision_id"]); got != draft.Revision.ID || !boolValue(closeout["replayed"]) {
+		t.Fatalf("settled feature closeout = %#v, want replay of %s", closeout, draft.Revision.ID)
+	}
+	after := mustReadSpecificationTestState(t, root)
+	if !reflect.DeepEqual(before.Specification, after.Specification) || len(after.Specification.Revisions) != 1 {
+		t.Fatal("settled feature replay changed scoped or unaffected canonical content")
+	}
+	for _, section := range []interface{}{
+		after.Specification.Revisions[0].Outcomes,
+		after.Specification.Revisions[0].IncludedBehaviors,
+		after.Specification.Revisions[0].Exclusions,
+		after.Specification.Revisions[0].BindingDecisions,
+		after.Specification.Revisions[0].Requirements,
+		after.Specification.Revisions[0].AcceptanceChecks,
+		after.Specification.Revisions[0].NegativeExpectations,
+		after.Specification.Revisions[0].RecoveryExpectations,
+		after.Specification.Revisions[0].AffectedPublicPaths,
+	} {
+		value := reflect.ValueOf(section)
+		if value.Len() == 0 {
+			t.Fatalf("feature-scoped draft lost a required body category: %#v", after.Specification.Revisions[0])
+		}
+	}
+}
+
+func seedSettledDiscussState(t *testing.T, dataDir, suffix string) (string, string, time.Time) {
+	t.Helper()
+	goal := "Deliver the settled " + suffix + " contract"
+	sessionID := "session-discuss-settled-" + suffix
+	initializedAt := time.Date(2026, time.September, 7, 16, 0, 0, 0, time.UTC)
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:       "3.0",
+		Goal:          &goal,
+		State:         colony.StateREADY,
+		SessionID:     &sessionID,
+		InitializedAt: &initializedAt,
+		AcceptedCharter: &colony.AcceptedCharter{
+			SchemaVersion: colony.AcceptedCharterSchemaVersion,
+			EpisodeID:     "episode-discuss-settled-" + suffix,
+			Goal:          goal,
+			Provenance:    "owner-approved settled fixture",
+			AcceptedAt:    initializedAt,
+			Charter: &colony.Charter{
+				Intent:      "Ship only the accepted " + suffix + " behavior.",
+				Vision:      "The owner can review a precise contract before planning.",
+				Governance:  "Only the owner may approve the exact specification revision.",
+				Goals:       "Produce a readable and verifiable result.",
+				TechStack:   "Reuse the current repository stack.",
+				KeyRisks:    "Do not infer approval or lose the last valid state.",
+				Constraints: "Do not expand beyond the accepted goal.",
+			},
+		},
+	})
+	return goal, sessionID, initializedAt
 }
 
 func discussResultJSONMap(t *testing.T, value interface{}) map[string]interface{} {
