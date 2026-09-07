@@ -85,7 +85,7 @@ type planCandidateCommandInputs struct {
 
 func resolvePlanCandidateOperation(inputs planCandidateCommandInputs) (planCandidateOperation, error) {
 	if inputs.DeprecatedAccept {
-		return planCandidateOperationNone, fmt.Errorf("--accept no longer accepts or activates a plan; inspect `aether plan --candidate`, then use the exact --accept-candidate command shown there")
+		return planCandidateOperationNone, fmt.Errorf("--accept no longer accepts or activates a plan; inspect `aether plan --candidate`, then run the exact `aether plan --accept-candidate <candidate-id> ...` command shown there")
 	}
 
 	detailRequested := inputs.ShowIterationSet || inputs.ShowIteration != 0 || inputs.Details
