@@ -362,56 +362,54 @@ type codexPlanningLoopSample struct {
 }
 
 type codexPlanManifest struct {
-	Goal                      string                           `json:"goal"`
-	Root                      string                           `json:"root"`
-	GeneratedAt               string                           `json:"generated_at"`
-	BaseRevisionID            string                           `json:"base_revision_id,omitempty"`
-	BasePlanStateHash         string                           `json:"base_plan_state_hash"`
-	ColonyMode                string                           `json:"colony_mode,omitempty"`
-	Synthetic                 bool                             `json:"synthetic,omitempty"`
-	SyntheticWarning          string                           `json:"synthetic_warning,omitempty"`
-	PlanningRunID             string                           `json:"planning_run_id,omitempty"`
-	Iteration                 int                              `json:"iteration,omitempty"`
-	TargetConfidence          int                              `json:"target_confidence,omitempty"`
-	MaxIterations             int                              `json:"max_iterations,omitempty"`
-	SelectedPreset            planningStagePreset              `json:"selected_preset,omitempty"`
-	PresetSelectionSource     string                           `json:"selection_source,omitempty"`
-	PreviousConfidence        int                              `json:"previous_confidence,omitempty"`
-	PreviousEvidenceHash      string                           `json:"previous_evidence_hash,omitempty"`
-	SelectedGaps              []string                         `json:"selected_gaps,omitempty"`
-	PreviousPlanDraft         *codexWorkerPlanArtifact         `json:"previous_plan_draft,omitempty"`
-	ExpectedWorkers           []codexPlanningDispatch          `json:"expected_workers,omitempty"`
-	Refresh                   bool                             `json:"refresh"`
-	Revision                  *codexPlanRevisionContext        `json:"revision,omitempty"`
-	ExistingPlan              bool                             `json:"existing_plan"`
-	ExistingPhaseCount        int                              `json:"existing_phase_count,omitempty"`
-	Depth                     string                           `json:"depth"`
-	Granularity               string                           `json:"granularity"`
-	GranularityMin            int                              `json:"granularity_min"`
-	GranularityMax            int                              `json:"granularity_max"`
-	PlanningDepth             string                           `json:"planning_depth"`
-	VerificationDepth         string                           `json:"verification_depth,omitempty"`
-	PlanningLoop              codexPlanningLoop                `json:"planning_loop,omitempty"`
-	Survey                    codexSurveyContext               `json:"survey"`
-	Territory                 *SurveyFreshnessResult           `json:"territory,omitempty"`
-	TerritoryRequired         bool                             `json:"territory_required,omitempty"`
-	Dispatches                []codexPlanningDispatch          `json:"dispatches"`
-	Snapshots                 map[string]codexArtifactSnapshot `json:"snapshots,omitempty"`
-	DispatchMode              string                           `json:"dispatch_mode"`
-	DispatchContract          map[string]interface{}           `json:"dispatch_contract"`
-	FinalizeSurface           string                           `json:"finalize_surface"`
-	RequiresFinalizer         bool                             `json:"requires_finalizer"`
-	BoundaryQuestions         []discussQuestion                `json:"boundary_questions,omitempty"`
-	BoundaryQuestionCount     int                              `json:"boundary_question_count,omitempty"`
-	BoundaryQuestionsCreated  int                              `json:"boundary_questions_created,omitempty"`
-	BoundaryQuestionsExisting int                              `json:"boundary_questions_existing,omitempty"`
-	OrchestratorGuidance      *orchestratorBoundaryGuidance    `json:"orchestrator_boundary_guidance,omitempty"`
-	ResearchProposal          []phaseResearchRecommendation    `json:"research_proposal,omitempty"`
-	ResearchProposalCard      string                           `json:"research_proposal_card,omitempty"`
-	ResearchAwaitingApproval  bool                             `json:"research_awaiting_approval,omitempty"`
-	ResearchWarning           string                           `json:"research_warning,omitempty"`
-	StageManifest             *planningStageManifest           `json:"stage_manifest,omitempty"`
-	PlanningRunHeader         *planningRunHeader               `json:"planning_run_header,omitempty"`
+	Goal                      string                             `json:"goal"`
+	Root                      string                             `json:"root"`
+	GeneratedAt               string                             `json:"generated_at"`
+	BaseRevisionID            string                             `json:"base_revision_id,omitempty"`
+	BasePlanStateHash         string                             `json:"base_plan_state_hash"`
+	ColonyMode                string                             `json:"colony_mode,omitempty"`
+	Synthetic                 bool                               `json:"synthetic,omitempty"`
+	SyntheticWarning          string                             `json:"synthetic_warning,omitempty"`
+	PlanningRunID             string                             `json:"planning_run_id,omitempty"`
+	Iteration                 int                                `json:"iteration,omitempty"`
+	TargetConfidence          int                                `json:"target_confidence,omitempty"`
+	MaxIterations             int                                `json:"max_iterations,omitempty"`
+	SelectedPreset            planningStagePreset                `json:"selected_preset,omitempty"`
+	PresetSelectionSource     string                             `json:"selection_source,omitempty"`
+	PreviousConfidence        int                                `json:"previous_confidence,omitempty"`
+	PreviousEvidenceHash      string                             `json:"previous_evidence_hash,omitempty"`
+	SelectedGaps              []string                           `json:"selected_gaps,omitempty"`
+	PreviousPlanDraft         *codexWorkerPlanArtifact           `json:"previous_plan_draft,omitempty"`
+	ExpectedWorkers           []codexPlanningDispatch            `json:"expected_workers,omitempty"`
+	Refresh                   bool                               `json:"refresh"`
+	Revision                  *codexPlanRevisionContext          `json:"revision,omitempty"`
+	ExistingPlan              bool                               `json:"existing_plan"`
+	ExistingPhaseCount        int                                `json:"existing_phase_count,omitempty"`
+	Depth                     string                             `json:"depth"`
+	Granularity               string                             `json:"granularity"`
+	GranularityMin            int                                `json:"granularity_min"`
+	GranularityMax            int                                `json:"granularity_max"`
+	PlanningDepth             string                             `json:"planning_depth"`
+	VerificationDepth         string                             `json:"verification_depth,omitempty"`
+	PlanningLoop              codexPlanningLoop                  `json:"planning_loop,omitempty"`
+	Survey                    codexSurveyContext                 `json:"survey"`
+	Territory                 *SurveyFreshnessResult             `json:"territory,omitempty"`
+	TerritoryRequired         bool                               `json:"territory_required,omitempty"`
+	Dispatches                []codexPlanningDispatch            `json:"dispatches"`
+	Snapshots                 map[string]codexArtifactSnapshot   `json:"snapshots,omitempty"`
+	DispatchMode              string                             `json:"dispatch_mode"`
+	DispatchContract          map[string]interface{}             `json:"dispatch_contract"`
+	FinalizeSurface           string                             `json:"finalize_surface"`
+	RequiresFinalizer         bool                               `json:"requires_finalizer"`
+	BoundaryQuestions         []discussQuestion                  `json:"boundary_questions,omitempty"`
+	BoundaryQuestionCount     int                                `json:"boundary_question_count,omitempty"`
+	BoundaryQuestionsCreated  int                                `json:"boundary_questions_created,omitempty"`
+	BoundaryQuestionsExisting int                                `json:"boundary_questions_existing,omitempty"`
+	OrchestratorGuidance      *orchestratorBoundaryGuidance      `json:"orchestrator_boundary_guidance,omitempty"`
+	ResearchPolicy            *phaseResearchAutomaticPolicy      `json:"research_policy,omitempty"`
+	PhaseResearchEvidence     []phaseResearchEvidenceAttribution `json:"phase_research_evidence,omitempty"`
+	StageManifest             *planningStageManifest             `json:"stage_manifest,omitempty"`
+	PlanningRunHeader         *planningRunHeader                 `json:"planning_run_header,omitempty"`
 	// ContextCapsule is the colony-prime grounding payload (state, decisions,
 	// phase learnings, instincts, hive wisdom, prior reviews, blockers, user
 	// preferences) for wrapper-spawned planning workers (the Route-Setter and
@@ -432,27 +430,29 @@ const planningRunHeaderSchemaVersion = "planning-run/v1"
 // planning run. It snapshots only safe evidence catalogue projections; raw
 // source bodies stay with their owning stores and paths.
 type planningRunHeader struct {
-	SchemaVersion        string                            `json:"schema_version"`
-	ID                   string                            `json:"id"`
-	ContentHash          string                            `json:"content_hash"`
-	RunID                string                            `json:"run_id"`
-	Goal                 string                            `json:"goal"`
-	GoalID               string                            `json:"goal_id"`
-	SessionID            string                            `json:"session_id"`
-	Specification        planningStageSpecificationBinding `json:"specification"`
-	BasePlanRevisionID   string                            `json:"base_plan_revision_id"`
-	BasePlanRevisionHash string                            `json:"base_plan_revision_hash"`
-	Preset               planningStagePreset               `json:"preset"`
-	TargetConfidence     int                               `json:"target_confidence"`
-	PassCap              int                               `json:"pass_cap"`
-	EvidenceCatalogue    []planningEvidenceRecord          `json:"evidence_catalogue"`
-	EvidenceFrontier     []planningStageEvidenceBinding    `json:"evidence_frontier"`
-	InputFrontierHash    string                            `json:"input_frontier_hash"`
-	MissingEvidenceKinds []colony.PlanningEvidenceKind     `json:"missing_evidence_kinds,omitempty"`
-	WeakestGap           colony.PlanningGap                `json:"weakest_gap"`
-	StageManifestID      string                            `json:"stage_manifest_id"`
-	StageManifestHash    string                            `json:"stage_manifest_hash"`
-	CreatedAt            time.Time                         `json:"created_at"`
+	SchemaVersion         string                             `json:"schema_version"`
+	ID                    string                             `json:"id"`
+	ContentHash           string                             `json:"content_hash"`
+	RunID                 string                             `json:"run_id"`
+	Goal                  string                             `json:"goal"`
+	GoalID                string                             `json:"goal_id"`
+	SessionID             string                             `json:"session_id"`
+	Specification         planningStageSpecificationBinding  `json:"specification"`
+	BasePlanRevisionID    string                             `json:"base_plan_revision_id"`
+	BasePlanRevisionHash  string                             `json:"base_plan_revision_hash"`
+	Preset                planningStagePreset                `json:"preset"`
+	TargetConfidence      int                                `json:"target_confidence"`
+	PassCap               int                                `json:"pass_cap"`
+	EvidenceCatalogue     []planningEvidenceRecord           `json:"evidence_catalogue"`
+	EvidenceFrontier      []planningStageEvidenceBinding     `json:"evidence_frontier"`
+	InputFrontierHash     string                             `json:"input_frontier_hash"`
+	MissingEvidenceKinds  []colony.PlanningEvidenceKind      `json:"missing_evidence_kinds,omitempty"`
+	ResearchPolicy        phaseResearchAutomaticPolicy       `json:"research_policy"`
+	PhaseResearchEvidence []phaseResearchEvidenceAttribution `json:"phase_research_evidence,omitempty"`
+	WeakestGap            colony.PlanningGap                 `json:"weakest_gap"`
+	StageManifestID       string                             `json:"stage_manifest_id"`
+	StageManifestHash     string                             `json:"stage_manifest_hash"`
+	CreatedAt             time.Time                          `json:"created_at"`
 }
 
 type approvedPlanningSpecification struct {
@@ -464,10 +464,11 @@ type approvedPlanningSpecification struct {
 }
 
 type planningEvidencePrimingResult struct {
-	Records      []planningEvidenceRecord
-	Bindings     []planningStageEvidenceBinding
-	MissingKinds []colony.PlanningEvidenceKind
-	FrontierHash string
+	Records               []planningEvidenceRecord
+	Bindings              []planningStageEvidenceBinding
+	MissingKinds          []colony.PlanningEvidenceKind
+	PhaseResearchEvidence []phaseResearchEvidenceAttribution
+	FrontierHash          string
 }
 
 type codexPlanIterationState struct {
@@ -685,6 +686,9 @@ func primePlanningStartEvidence(root string, state colony.ColonyState, approved 
 		if readErr != nil {
 			return result, fmt.Errorf("read planning research evidence %s: %w", document, readErr)
 		}
+		if scan := privacyScan(string(content)); scan.Blocked {
+			return result, fmt.Errorf("planning research evidence %s refused: source contains secret-bearing material", document)
+		}
 		approvedRoot := filepath.ToSlash(filepath.Dir(filepath.FromSlash(document)))
 		if approvedRoot == "" {
 			approvedRoot = "."
@@ -717,6 +721,19 @@ func primePlanningStartEvidence(root string, state colony.ColonyState, approved 
 	if err != nil {
 		return result, err
 	}
+	phaseResearchDocs, err := discoverScoutPhaseResearchDocs(root)
+	if err != nil {
+		return result, err
+	}
+	phaseResearch, err := collectScoutPhaseResearchEvidence(root, phaseResearchDocs, scope, observedAt)
+	if err != nil {
+		return result, err
+	}
+	if len(phaseResearch.Records) > 0 {
+		present[colony.PlanningEvidenceResearch] = true
+		records = mergePlanningEvidenceRecords(records, phaseResearch.Records)
+		result.PhaseResearchEvidence = append([]phaseResearchEvidenceAttribution(nil), phaseResearch.Attributions...)
+	}
 	result.Records = records
 	result.Bindings = make([]planningStageEvidenceBinding, 0, len(records))
 	for _, record := range records {
@@ -727,7 +744,6 @@ func primePlanningStartEvidence(root string, state colony.ColonyState, approved 
 		colony.PlanningEvidenceSurvey,
 		colony.PlanningEvidenceCharter,
 		colony.PlanningEvidenceDecision,
-		colony.PlanningEvidenceContext,
 		colony.PlanningEvidenceResearch,
 		colony.PlanningEvidenceHive,
 		colony.PlanningEvidenceOutcome,
@@ -793,27 +809,29 @@ func planningStartWeakestGap(seed codexPlanIterationState, evidence planningEvid
 	return gap, nil
 }
 
-func buildPlanningRunHeader(goal string, policy planningPresetPolicy, approved approvedPlanningSpecification, baseRevisionID, baseRevisionHash string, evidence planningEvidencePrimingResult, gap colony.PlanningGap, manifest planningStageManifest, createdAt time.Time) (planningRunHeader, error) {
+func buildPlanningRunHeader(goal string, policy planningPresetPolicy, approved approvedPlanningSpecification, baseRevisionID, baseRevisionHash string, evidence planningEvidencePrimingResult, gap colony.PlanningGap, researchPolicy phaseResearchAutomaticPolicy, manifest planningStageManifest, createdAt time.Time) (planningRunHeader, error) {
 	header := planningRunHeader{
-		SchemaVersion:        planningRunHeaderSchemaVersion,
-		RunID:                manifest.RunID,
-		Goal:                 strings.TrimSpace(goal),
-		GoalID:               approved.GoalID,
-		SessionID:            approved.SessionID,
-		Specification:        approved.Binding,
-		BasePlanRevisionID:   baseRevisionID,
-		BasePlanRevisionHash: baseRevisionHash,
-		Preset:               policy.ID,
-		TargetConfidence:     policy.TargetConfidence,
-		PassCap:              policy.PassCap,
-		EvidenceCatalogue:    append([]planningEvidenceRecord(nil), evidence.Records...),
-		EvidenceFrontier:     append([]planningStageEvidenceBinding(nil), evidence.Bindings...),
-		InputFrontierHash:    evidence.FrontierHash,
-		MissingEvidenceKinds: append([]colony.PlanningEvidenceKind(nil), evidence.MissingKinds...),
-		WeakestGap:           gap,
-		StageManifestID:      manifest.ID,
-		StageManifestHash:    manifest.ContentHash,
-		CreatedAt:            createdAt.UTC(),
+		SchemaVersion:         planningRunHeaderSchemaVersion,
+		RunID:                 manifest.RunID,
+		Goal:                  strings.TrimSpace(goal),
+		GoalID:                approved.GoalID,
+		SessionID:             approved.SessionID,
+		Specification:         approved.Binding,
+		BasePlanRevisionID:    baseRevisionID,
+		BasePlanRevisionHash:  baseRevisionHash,
+		Preset:                policy.ID,
+		TargetConfidence:      policy.TargetConfidence,
+		PassCap:               policy.PassCap,
+		EvidenceCatalogue:     append([]planningEvidenceRecord(nil), evidence.Records...),
+		EvidenceFrontier:      append([]planningStageEvidenceBinding(nil), evidence.Bindings...),
+		InputFrontierHash:     evidence.FrontierHash,
+		MissingEvidenceKinds:  append([]colony.PlanningEvidenceKind(nil), evidence.MissingKinds...),
+		ResearchPolicy:        researchPolicy,
+		PhaseResearchEvidence: append([]phaseResearchEvidenceAttribution(nil), evidence.PhaseResearchEvidence...),
+		WeakestGap:            gap,
+		StageManifestID:       manifest.ID,
+		StageManifestHash:     manifest.ContentHash,
+		CreatedAt:             createdAt.UTC(),
 	}
 	payload := header
 	payload.ID = ""
@@ -827,7 +845,7 @@ func buildPlanningRunHeader(goal string, policy planningPresetPolicy, approved a
 	return header, nil
 }
 
-func preparePlanningScoutStage(root string, state colony.ColonyState, goal string, policy planningPresetPolicy, approved approvedPlanningSpecification, baseRevisionID, baseRevisionHash, contextCapsule string, survey codexSurveyContext, seed codexPlanIterationState, generatedAt time.Time) (planningRunHeader, planningStageState, planningStageManifest, error) {
+func preparePlanningScoutStage(root string, state colony.ColonyState, goal string, policy planningPresetPolicy, approved approvedPlanningSpecification, baseRevisionID, baseRevisionHash, contextCapsule string, survey codexSurveyContext, seed codexPlanIterationState, refresh bool, generatedAt time.Time) (planningRunHeader, planningStageState, planningStageManifest, error) {
 	emptyHeader := planningRunHeader{}
 	emptyState := planningStageState{}
 	emptyManifest := planningStageManifest{}
@@ -850,6 +868,15 @@ func preparePlanningScoutStage(root string, state colony.ColonyState, goal strin
 	if err != nil {
 		return emptyHeader, emptyState, emptyManifest, err
 	}
+	researchPolicy := computeAutomaticPhaseResearchPolicy(
+		policy.ID,
+		&gap,
+		survey,
+		phaseResearchCandidates(state, seed),
+		state.Plan.Phases,
+		evidence.Records,
+		refresh,
+	)
 	priorCardHash := planningEvidenceSHA256([]byte("planning-card-origin"))
 	initial := planningStageState{
 		Stage:                planningStagePresetRequired,
@@ -894,7 +921,7 @@ func preparePlanningScoutStage(root string, state colony.ColonyState, goal strin
 	if stageManifest == nil {
 		return emptyHeader, emptyState, emptyManifest, fmt.Errorf("Scout planning stage did not emit a manifest")
 	}
-	header, err := buildPlanningRunHeader(goal, policy, approved, baseRevisionID, baseRevisionHash, evidence, gap, *stageManifest, generatedAt)
+	header, err := buildPlanningRunHeader(goal, policy, approved, baseRevisionID, baseRevisionHash, evidence, gap, researchPolicy, *stageManifest, generatedAt)
 	if err != nil {
 		return emptyHeader, emptyState, emptyManifest, err
 	}
@@ -1475,101 +1502,6 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	return result, nil
 }
 
-// phaseResearchApprovalWarning is the loud, non-blocking warning D-08 and
-// T-164-15 require when the Queen's research batch has not been answered by
-// anyone yet. Research is enrichment, not a gate (Phase 160 classification):
-// this never becomes an error and never blocks manifest generation.
-const phaseResearchApprovalWarning = "research batch not answered — no phase research will run; answer with `aether plan-research-approve --approve-all`"
-
-// phaseResearchProposalResult carries the research proposal fields the
-// plan-only result map and manifest expose in both the existing-plan and
-// fresh-plan branches (RESEARCH-01, RESEARCH-02), plus the approved-phase map
-// dispatch gating consumes (Plan 05 Task 3).
-type phaseResearchProposalResult struct {
-	Proposal         phaseResearchProposal
-	Card             string
-	AwaitingApproval bool
-	Warning          string
-	Approved         map[int]bool
-}
-
-// resultFields renders r as the four json-tagged keys the plan-only result
-// map and manifest struct share: research_proposal, research_proposal_card,
-// research_awaiting_approval, research_warning.
-func (r phaseResearchProposalResult) resultFields() map[string]interface{} {
-	return map[string]interface{}{
-		"research_proposal":          r.Proposal.Phases,
-		"research_proposal_card":     r.Card,
-		"research_awaiting_approval": r.AwaitingApproval,
-		"research_warning":           r.Warning,
-	}
-}
-
-// computePhaseResearchProposalFields computes the research proposal, its
-// rendered tick-to-approve card, and the approval-state fields. When persist
-// is true, the current run's unresolved research-decisions supersede any
-// previous unresolved decisions for the same phases (D-06 -- a fresh manifest
-// re-proposes); resolved decisions are always left untouched so a second
-// manifest fetched after the batch was answered does not lose the answer.
-// Research is enrichment, never a gate (D-08 / Phase 160 classification): a
-// save failure here is swallowed, never returned as an error.
-func computePhaseResearchProposalFields(planDepth string, replan bool, survey codexSurveyContext, candidates []phaseResearchCandidate, phases []colony.Phase, persist bool) phaseResearchProposalResult {
-	proposal := computePhaseResearchProposal(planDepth, replan, survey, candidates, phases)
-
-	var file PendingDecisionFile
-	if store != nil {
-		if err := store.LoadJSON(pendingDecisionsFile, &file); err != nil {
-			file = PendingDecisionFile{Decisions: []PendingDecision{}}
-		}
-	}
-
-	if persist && store != nil && len(proposal.Phases) > 0 {
-		scope := loadCurrentPendingDecisionScope()
-		kept := make([]PendingDecision, 0, len(file.Decisions))
-		for _, d := range file.Decisions {
-			if d.Type == phaseResearchDecisionType && !d.Resolved && pendingDecisionMatchesScope(d, scope) {
-				continue // superseded by the fresh proposal below (D-06)
-			}
-			kept = append(kept, d)
-		}
-		for _, rec := range proposal.Phases {
-			decision := newPhaseResearchDecision(rec)
-			stampPendingDecisionScope(&decision, scope)
-			kept = append(kept, decision)
-		}
-		file.Decisions = kept
-		_ = store.SaveJSON(pendingDecisionsFile, file)
-	}
-
-	resolved := resolvePhaseResearchDecisions(file)
-	approved := map[int]bool{}
-	anyResolved := false
-	for _, rec := range proposal.Phases {
-		direction, ok := resolved[rec.PhaseID]
-		if !ok {
-			continue
-		}
-		anyResolved = true
-		if direction == "research" {
-			approved[rec.PhaseID] = true
-		}
-	}
-
-	awaitingApproval := len(proposal.Phases) > 0 && !anyResolved
-	warning := ""
-	if awaitingApproval {
-		warning = phaseResearchApprovalWarning
-	}
-
-	return phaseResearchProposalResult{
-		Proposal:         proposal,
-		Card:             renderPhaseResearchProposalBlock(proposal),
-		AwaitingApproval: awaitingApproval,
-		Warning:          warning,
-		Approved:         approved,
-	}
-}
-
 func runCodexPlanAgentDelegate(root string, state colony.ColonyState, granularity colony.PlanGranularity, planDepth string, unresolvedClarifications int, clarificationWarning string, opts codexPlanOptions) (map[string]interface{}, error) {
 	result, err := runCodexPlanPlanOnly(root, state, granularity, planDepth, unresolvedClarifications, clarificationWarning, opts)
 	if err != nil {
@@ -1710,13 +1642,6 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		}
 		addBoundaryQuestionResultFields(result, boundary)
 		addOrchestratorBoundaryGuidance(result, "plan", state, nextCommand, boundary.Questions)
-		if survey, surveyErr := loadCodexSurveyContext(root); surveyErr == nil {
-			researchCandidates := phaseResearchCandidates(state, codexPlanIterationState{})
-			researchResult := computePhaseResearchProposalFields(planDepth, false, survey, researchCandidates, state.Plan.Phases, false)
-			for k, v := range researchResult.resultFields() {
-				result[k] = v
-			}
-		}
 		return result, nil
 	}
 	revisionContext, err := buildPlanRevisionContext(root, state, opts)
@@ -1765,8 +1690,6 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 			dispatches[i].Brief += iterationAppendix
 		}
 	}
-	researchCandidates := phaseResearchCandidates(state, iterationSeed)
-	researchResult := computePhaseResearchProposalFields(planDepth, opts.Refresh, survey, researchCandidates, state.Plan.Phases, true)
 	artifactSnapshots := snapshotRelativeFiles(root,
 		filepath.ToSlash(filepath.Join(".aether", "data", "planning")),
 		filepath.ToSlash(filepath.Join(".aether", "data", "phase-research")),
@@ -1794,10 +1717,14 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		contextCapsule,
 		survey,
 		iterationSeed,
+		opts.Refresh,
 		generatedAt,
 	)
 	if err != nil {
 		return nil, err
+	}
+	for i := range dispatches {
+		dispatches[i].Brief += renderAutomaticPhaseResearchPolicy(header.ResearchPolicy)
 	}
 	if err := persistPlanningScoutStage(root, header, runningStage, stageManifest); err != nil {
 		return nil, err
@@ -1810,50 +1737,48 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 	dispatchContract = planningDispatchContractForDispatches(dispatches, opts.WorkerTimeout)
 
 	manifest := codexPlanManifest{
-		Goal:                     *state.Goal,
-		Root:                     root,
-		GeneratedAt:              generatedAt.Format(time.RFC3339),
-		BaseRevisionID:           baseRevisionID,
-		BasePlanStateHash:        basePlanStateHash,
-		ColonyMode:               string(state.EffectiveColonyMode()),
-		Refresh:                  opts.Refresh,
-		Revision:                 revisionContext,
-		ExistingPlan:             len(state.Plan.Phases) > 0,
-		ExistingPhaseCount:       len(state.Plan.Phases),
-		Synthetic:                opts.Synthetic,
-		SyntheticWarning:         planningSyntheticWarningForMode(opts.Synthetic),
-		PlanningRunID:            stageManifest.RunID,
-		Iteration:                stageManifest.Pass,
-		TargetConfidence:         planningLoop.TargetConfidence,
-		MaxIterations:            planningLoop.MaxIterations,
-		SelectedPreset:           preset.Policy.ID,
-		PresetSelectionSource:    preset.SelectionSource,
-		PreviousConfidence:       iterationSeed.PreviousConfidence,
-		PreviousEvidenceHash:     iterationSeed.PreviousEvidenceHash,
-		SelectedGaps:             append([]string{}, iterationSeed.SelectedGaps...),
-		PreviousPlanDraft:        iterationSeed.PreviousPlanDraft,
-		ExpectedWorkers:          append([]codexPlanningDispatch{}, dispatches...),
-		Depth:                    planDepth,
-		Granularity:              string(granularity),
-		GranularityMin:           granularityMin(granularity),
-		GranularityMax:           granularityMax(granularity),
-		PlanningDepth:            planningDepth,
-		VerificationDepth:        verificationDepth,
-		PlanningLoop:             planningLoop,
-		Survey:                   survey,
-		Dispatches:               dispatches,
-		Snapshots:                artifactSnapshots,
-		DispatchMode:             "plan-only",
-		DispatchContract:         dispatchContract,
-		FinalizeSurface:          "pending",
-		RequiresFinalizer:        true,
-		ResearchProposal:         researchResult.Proposal.Phases,
-		ResearchProposalCard:     researchResult.Card,
-		ResearchAwaitingApproval: researchResult.AwaitingApproval,
-		ResearchWarning:          researchResult.Warning,
-		StageManifest:            &stageManifest,
-		PlanningRunHeader:        &header,
-		ContextCapsule:           contextCapsule,
+		Goal:                  *state.Goal,
+		Root:                  root,
+		GeneratedAt:           generatedAt.Format(time.RFC3339),
+		BaseRevisionID:        baseRevisionID,
+		BasePlanStateHash:     basePlanStateHash,
+		ColonyMode:            string(state.EffectiveColonyMode()),
+		Refresh:               opts.Refresh,
+		Revision:              revisionContext,
+		ExistingPlan:          len(state.Plan.Phases) > 0,
+		ExistingPhaseCount:    len(state.Plan.Phases),
+		Synthetic:             opts.Synthetic,
+		SyntheticWarning:      planningSyntheticWarningForMode(opts.Synthetic),
+		PlanningRunID:         stageManifest.RunID,
+		Iteration:             stageManifest.Pass,
+		TargetConfidence:      planningLoop.TargetConfidence,
+		MaxIterations:         planningLoop.MaxIterations,
+		SelectedPreset:        preset.Policy.ID,
+		PresetSelectionSource: preset.SelectionSource,
+		PreviousConfidence:    iterationSeed.PreviousConfidence,
+		PreviousEvidenceHash:  iterationSeed.PreviousEvidenceHash,
+		SelectedGaps:          append([]string{}, iterationSeed.SelectedGaps...),
+		PreviousPlanDraft:     iterationSeed.PreviousPlanDraft,
+		ExpectedWorkers:       append([]codexPlanningDispatch{}, dispatches...),
+		Depth:                 planDepth,
+		Granularity:           string(granularity),
+		GranularityMin:        granularityMin(granularity),
+		GranularityMax:        granularityMax(granularity),
+		PlanningDepth:         planningDepth,
+		VerificationDepth:     verificationDepth,
+		PlanningLoop:          planningLoop,
+		Survey:                survey,
+		Dispatches:            dispatches,
+		Snapshots:             artifactSnapshots,
+		DispatchMode:          "plan-only",
+		DispatchContract:      dispatchContract,
+		FinalizeSurface:       "pending",
+		RequiresFinalizer:     true,
+		ResearchPolicy:        &header.ResearchPolicy,
+		PhaseResearchEvidence: append([]phaseResearchEvidenceAttribution(nil), header.PhaseResearchEvidence...),
+		StageManifest:         &stageManifest,
+		PlanningRunHeader:     &header,
+		ContextCapsule:        contextCapsule,
 	}
 	if opts.Territory != nil {
 		attachTerritoryToPlanManifest(&manifest, *opts.Territory)
@@ -1897,10 +1822,8 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		"dispatch_contract":          dispatchContract,
 		"unresolved_clarifications":  unresolvedClarifications,
 		"clarification_warning":      clarificationWarning,
-		"research_proposal":          researchResult.Proposal.Phases,
-		"research_proposal_card":     researchResult.Card,
-		"research_awaiting_approval": researchResult.AwaitingApproval,
-		"research_warning":           researchResult.Warning,
+		"research_policy":            header.ResearchPolicy,
+		"phase_research_evidence":    header.PhaseResearchEvidence,
 		"next":                       "spawn wrapper planning agents, then record completion",
 		"wrapper_contract": map[string]interface{}{
 			"source_command":          "AETHER_OUTPUT_MODE=json aether plan --plan-only --preset <fast|balanced|deep|exhaustive>",
