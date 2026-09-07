@@ -63,6 +63,89 @@ type planningEvidenceScope struct {
 	PlanRevisionID          string
 }
 
+// planningEvidenceSourceState carries current trust state separately from
+// content identity. Revoking or quarantining a Hive entry must immediately
+// make the same content address inadmissible without pretending its bytes
+// changed.
+type planningEvidenceSourceState string
+
+const (
+	planningEvidenceSourceCurrent     planningEvidenceSourceState = "current"
+	planningEvidenceSourceSuperseded  planningEvidenceSourceState = "superseded"
+	planningEvidenceSourceRevoked     planningEvidenceSourceState = "revoked"
+	planningEvidenceSourceQuarantined planningEvidenceSourceState = "quarantined"
+	planningEvidenceSourceDormant     planningEvidenceSourceState = "dormant"
+)
+
+func (s planningEvidenceSourceState) valid() bool {
+	switch s {
+	case planningEvidenceSourceCurrent,
+		planningEvidenceSourceSuperseded,
+		planningEvidenceSourceRevoked,
+		planningEvidenceSourceQuarantined,
+		planningEvidenceSourceDormant:
+		return true
+	default:
+		return false
+	}
+}
+
+type planningEvidencePolicyCode string
+
+const (
+	planningEvidencePolicyAllowed               planningEvidencePolicyCode = "allowed"
+	planningEvidencePolicyInvalidReference      planningEvidencePolicyCode = "invalid_reference"
+	planningEvidencePolicyInvalidDimension      planningEvidencePolicyCode = "invalid_dimension"
+	planningEvidencePolicyInadmissible          planningEvidencePolicyCode = "inadmissible"
+	planningEvidencePolicyAlreadyCited          planningEvidencePolicyCode = "already_cited"
+	planningEvidencePolicyNotMarkedFresh        planningEvidencePolicyCode = "not_marked_fresh"
+	planningEvidencePolicyCurrentSourceUnknown  planningEvidencePolicyCode = "current_source_unknown"
+	planningEvidencePolicyGoalMismatch          planningEvidencePolicyCode = "goal_mismatch"
+	planningEvidencePolicySessionMismatch       planningEvidencePolicyCode = "session_mismatch"
+	planningEvidencePolicySpecificationMismatch planningEvidencePolicyCode = "specification_revision_mismatch"
+	planningEvidencePolicyPlanMismatch          planningEvidencePolicyCode = "plan_revision_mismatch"
+	planningEvidencePolicySourceSuperseded      planningEvidencePolicyCode = "source_superseded"
+	planningEvidencePolicySourceRevoked         planningEvidencePolicyCode = "source_revoked"
+	planningEvidencePolicySourceQuarantined     planningEvidencePolicyCode = "source_quarantined"
+	planningEvidencePolicySourceDormant         planningEvidencePolicyCode = "source_dormant"
+	planningEvidencePolicySourceStateUnknown    planningEvidencePolicyCode = "source_state_unknown"
+	planningEvidencePolicyOwnerAnswerChanged    planningEvidencePolicyCode = "owner_answer_changed"
+	planningEvidencePolicyDimensionNotClaimed   planningEvidencePolicyCode = "dimension_not_claimed"
+	planningEvidencePolicyKindNotApplicable     planningEvidencePolicyCode = "kind_not_applicable"
+)
+
+// planningEvidencePolicyResult keeps a refusal reason beside the boolean so a
+// renderer can explain why a score did not move instead of silently dropping
+// the evidence.
+type planningEvidencePolicyResult struct {
+	Allowed bool
+	Code    planningEvidencePolicyCode
+	Reason  string
+}
+
+type planningEvidenceFrontier struct {
+	Scope                     planningEvidenceScope
+	CitedEvidenceIDs          []string
+	CurrentSourceHashes       map[string]string
+	SourceStates              map[string]planningEvidenceSourceState
+	OwnerAnswerEquivalenceKey string
+}
+
+// planningOwnerAnswerEquivalence contains every authority-sensitive input
+// named by D-08. Any change produces a different key and requires the owner to
+// revalidate the prior answer.
+type planningOwnerAnswerEquivalence struct {
+	GoalID                  string
+	SessionID               string
+	SpecificationRevisionID string
+	BasePlanRevisionID      string
+	MeaningHash             string
+	BehaviorHash            string
+	ImpactHash              string
+	RiskHash                string
+	AcceptanceHash          string
+}
+
 // planningEvidenceSource is the transient input to the catalogue. Repository
 // sources use RepositoryPath and are read only after all paths pass preflight;
 // logical sources use Content directly. Raw Content is never retained.
@@ -76,6 +159,7 @@ type planningEvidenceSource struct {
 	SourceRevision       string
 	ObservedAt           time.Time
 	ApplicableDimensions []colony.PlanningDimension
+	State                planningEvidenceSourceState
 }
 
 // planningEvidenceLocator gives callers enough information to reopen the
@@ -107,6 +191,63 @@ type planningEvidenceCollectionRequest struct {
 type preparedPlanningEvidenceSource struct {
 	source   planningEvidenceSource
 	fullPath string
+}
+
+// planningEvidenceApplicabilityMatrix is intentionally conservative. A
+// source kind first has to be capable of supporting a dimension, and the
+// individual reference must then name that dimension explicitly.
+var planningEvidenceApplicabilityMatrix = map[colony.PlanningEvidenceKind]map[colony.PlanningDimension]struct{}{
+	colony.PlanningEvidenceSpecification: planningEvidenceDimensionSet(
+		colony.PlanningDimensionKnowledge,
+		colony.PlanningDimensionRequirements,
+		colony.PlanningDimensionRisks,
+		colony.PlanningDimensionDependencies,
+		colony.PlanningDimensionEffort,
+	),
+	colony.PlanningEvidenceSurvey: planningEvidenceDimensionSet(
+		colony.PlanningDimensionKnowledge,
+		colony.PlanningDimensionRisks,
+		colony.PlanningDimensionDependencies,
+		colony.PlanningDimensionEffort,
+	),
+	colony.PlanningEvidenceCharter: planningEvidenceDimensionSet(
+		colony.PlanningDimensionKnowledge,
+		colony.PlanningDimensionRequirements,
+		colony.PlanningDimensionRisks,
+	),
+	colony.PlanningEvidenceDecision: planningEvidenceDimensionSet(
+		colony.PlanningDimensionKnowledge,
+		colony.PlanningDimensionRequirements,
+		colony.PlanningDimensionRisks,
+		colony.PlanningDimensionDependencies,
+		colony.PlanningDimensionEffort,
+	),
+	colony.PlanningEvidenceContext: planningEvidenceDimensionSet(
+		colony.PlanningDimensionKnowledge,
+		colony.PlanningDimensionRisks,
+		colony.PlanningDimensionDependencies,
+		colony.PlanningDimensionEffort,
+	),
+	colony.PlanningEvidenceResearch: planningEvidenceDimensionSet(
+		colony.PlanningDimensionKnowledge,
+		colony.PlanningDimensionRequirements,
+		colony.PlanningDimensionRisks,
+		colony.PlanningDimensionDependencies,
+		colony.PlanningDimensionEffort,
+	),
+	colony.PlanningEvidenceHive: planningEvidenceDimensionSet(
+		colony.PlanningDimensionKnowledge,
+		colony.PlanningDimensionRisks,
+		colony.PlanningDimensionDependencies,
+		colony.PlanningDimensionEffort,
+	),
+	colony.PlanningEvidenceOutcome: planningEvidenceDimensionSet(
+		colony.PlanningDimensionKnowledge,
+		colony.PlanningDimensionRequirements,
+		colony.PlanningDimensionRisks,
+		colony.PlanningDimensionDependencies,
+		colony.PlanningDimensionEffort,
+	),
 }
 
 // collectPlanningEvidence builds one deterministic catalogue. It validates
@@ -192,6 +333,163 @@ func collectPlanningEvidence(request planningEvidenceCollectionRequest) ([]plann
 	return records, nil
 }
 
+// isFreshPlanningEvidence evaluates one immutable reference against the exact
+// current frontier. Wall-clock rereading is intentionally absent: freshness
+// comes from new content under unchanged authority and from not having cited
+// that exact reference in an earlier card.
+func isFreshPlanningEvidence(ref colony.PlanningEvidenceRef, frontier planningEvidenceFrontier) planningEvidencePolicyResult {
+	if err := ref.Validate(); err != nil || !planningSHA256Pattern.MatchString(ref.ContentHash) || !strings.HasSuffix(ref.ID, "-"+safePlanningEvidenceHashPrefix(ref.ContentHash)) {
+		return planningEvidenceDenied(planningEvidencePolicyInvalidReference, "evidence reference is structurally invalid or not content-addressed")
+	}
+	if !ref.Admissible {
+		reason := strings.TrimSpace(ref.AdmissibilityReason)
+		if reason == "" {
+			reason = "evidence is marked inadmissible"
+		}
+		return planningEvidenceDenied(planningEvidencePolicyInadmissible, reason)
+	}
+
+	sourceKey := planningEvidenceSourceKey(ref)
+	state, hasState := frontier.SourceStates[sourceKey]
+	if ref.Kind == colony.PlanningEvidenceHive && !hasState {
+		return planningEvidenceDenied(planningEvidencePolicySourceStateUnknown, "Hive evidence requires an explicit current, revoked, quarantined, dormant, or superseded state")
+	}
+	if hasState {
+		if !state.valid() {
+			return planningEvidenceDenied(planningEvidencePolicySourceStateUnknown, fmt.Sprintf("source state %q is not recognized", state))
+		}
+		switch state {
+		case planningEvidenceSourceSuperseded:
+			return planningEvidenceDenied(planningEvidencePolicySourceSuperseded, "source is superseded")
+		case planningEvidenceSourceRevoked:
+			return planningEvidenceDenied(planningEvidencePolicySourceRevoked, "source is revoked")
+		case planningEvidenceSourceQuarantined:
+			return planningEvidenceDenied(planningEvidencePolicySourceQuarantined, "source is quarantined")
+		case planningEvidenceSourceDormant:
+			return planningEvidenceDenied(planningEvidencePolicySourceDormant, "source is dormant")
+		}
+	}
+
+	if ref.GoalID != strings.TrimSpace(frontier.Scope.GoalID) {
+		return planningEvidenceDenied(planningEvidencePolicyGoalMismatch, "evidence belongs to a different planning goal")
+	}
+	if ref.SessionID != strings.TrimSpace(frontier.Scope.SessionID) {
+		return planningEvidenceDenied(planningEvidencePolicySessionMismatch, "evidence belongs to a different planning session")
+	}
+	if ref.SpecificationRevisionID != strings.TrimSpace(frontier.Scope.SpecificationRevisionID) {
+		return planningEvidenceDenied(planningEvidencePolicySpecificationMismatch, "evidence belongs to a different approved specification revision")
+	}
+	if ref.PlanRevisionID != strings.TrimSpace(frontier.Scope.PlanRevisionID) {
+		return planningEvidenceDenied(planningEvidencePolicyPlanMismatch, "evidence belongs to a different base plan revision")
+	}
+
+	if ref.Kind == colony.PlanningEvidenceDecision && strings.TrimSpace(frontier.OwnerAnswerEquivalenceKey) != "" && ref.SourceRevision != strings.TrimSpace(frontier.OwnerAnswerEquivalenceKey) {
+		return planningEvidenceDenied(planningEvidencePolicyOwnerAnswerChanged, "the prior owner answer requires revalidation because its equivalence key changed")
+	}
+
+	currentHash, ok := frontier.CurrentSourceHashes[sourceKey]
+	if !ok || strings.TrimSpace(currentHash) == "" {
+		return planningEvidenceDenied(planningEvidencePolicyCurrentSourceUnknown, "current source content hash is required to prove freshness")
+	}
+	if currentHash != ref.ContentHash {
+		return planningEvidenceDenied(planningEvidencePolicySourceSuperseded, "source is superseded by changed content")
+	}
+	for _, citedID := range frontier.CitedEvidenceIDs {
+		if strings.TrimSpace(citedID) == ref.ID {
+			return planningEvidenceDenied(planningEvidencePolicyAlreadyCited, "evidence was already cited at the prior-card frontier")
+		}
+	}
+	if !ref.Fresh {
+		return planningEvidenceDenied(planningEvidencePolicyNotMarkedFresh, "evidence was previously classified as not fresh")
+	}
+	return planningEvidenceAllowed("evidence is current, scope-matched, and new at this planning frontier")
+}
+
+// evidenceAppliesToDimension requires two independent facts: the evidence kind
+// can support the dimension, and this exact reference explicitly claims it.
+func evidenceAppliesToDimension(ref colony.PlanningEvidenceRef, dimension colony.PlanningDimension) planningEvidencePolicyResult {
+	if !dimension.Valid() {
+		return planningEvidenceDenied(planningEvidencePolicyInvalidDimension, fmt.Sprintf("planning dimension %q is not supported", dimension))
+	}
+	if !ref.Kind.Valid() {
+		return planningEvidenceDenied(planningEvidencePolicyInvalidReference, fmt.Sprintf("evidence kind %q is not supported", ref.Kind))
+	}
+	if !ref.Admissible {
+		reason := strings.TrimSpace(ref.AdmissibilityReason)
+		if reason == "" {
+			reason = "evidence is marked inadmissible"
+		}
+		return planningEvidenceDenied(planningEvidencePolicyInadmissible, reason)
+	}
+	if !planningEvidenceKindAllowsDimension(ref.Kind, dimension) {
+		return planningEvidenceDenied(planningEvidencePolicyKindNotApplicable, fmt.Sprintf("%s evidence cannot support the %s dimension", ref.Kind, dimension))
+	}
+	for _, claim := range ref.ApplicableDimensions {
+		if claim == dimension {
+			return planningEvidenceAllowed(fmt.Sprintf("evidence explicitly claims the %s dimension", dimension))
+		}
+	}
+	return planningEvidenceDenied(planningEvidencePolicyDimensionNotClaimed, fmt.Sprintf("evidence does not explicitly claim the %s dimension", dimension))
+}
+
+func planningOwnerAnswerEquivalenceKey(value planningOwnerAnswerEquivalence) (string, error) {
+	value.GoalID = strings.TrimSpace(value.GoalID)
+	value.SessionID = strings.TrimSpace(value.SessionID)
+	value.SpecificationRevisionID = strings.TrimSpace(value.SpecificationRevisionID)
+	value.BasePlanRevisionID = strings.TrimSpace(value.BasePlanRevisionID)
+	for _, required := range []struct {
+		name  string
+		value string
+	}{
+		{name: "goal_id", value: value.GoalID},
+		{name: "session_id", value: value.SessionID},
+		{name: "specification_revision_id", value: value.SpecificationRevisionID},
+		{name: "base_plan_revision_id", value: value.BasePlanRevisionID},
+	} {
+		if required.value == "" {
+			return "", fmt.Errorf("owner-answer equivalence %s is required", required.name)
+		}
+	}
+	for _, required := range []struct {
+		name  string
+		value string
+	}{
+		{name: "meaning_hash", value: value.MeaningHash},
+		{name: "behavior_hash", value: value.BehaviorHash},
+		{name: "impact_hash", value: value.ImpactHash},
+		{name: "risk_hash", value: value.RiskHash},
+		{name: "acceptance_hash", value: value.AcceptanceHash},
+	} {
+		if !planningSHA256Pattern.MatchString(strings.TrimSpace(required.value)) {
+			return "", fmt.Errorf("owner-answer equivalence %s must be a lowercase 64-character SHA-256 digest", required.name)
+		}
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return "", fmt.Errorf("encode owner-answer equivalence: %w", err)
+	}
+	return "decision-equivalence-" + planningEvidenceSHA256(encoded), nil
+}
+
+func planningEvidenceSourceKey(ref colony.PlanningEvidenceRef) string {
+	return string(ref.Kind) + "\x00" + strings.TrimSpace(ref.Origin)
+}
+
+func planningEvidenceAllowed(reason string) planningEvidencePolicyResult {
+	return planningEvidencePolicyResult{Allowed: true, Code: planningEvidencePolicyAllowed, Reason: reason}
+}
+
+func planningEvidenceDenied(code planningEvidencePolicyCode, reason string) planningEvidencePolicyResult {
+	return planningEvidencePolicyResult{Allowed: false, Code: code, Reason: reason}
+}
+
+func safePlanningEvidenceHashPrefix(hash string) string {
+	if len(hash) < 12 {
+		return ""
+	}
+	return hash[:12]
+}
+
 // normalizePlanningEvidence turns an already loaded source into a stable
 // content address. Observation time is metadata, not identity, so rereading
 // unchanged bytes cannot manufacture freshness.
@@ -231,9 +529,16 @@ func normalizePlanningEvidence(source planningEvidenceSource) (planningEvidenceR
 		return planningEvidenceRecord{}, planningEvidenceRefusalFor(source, planningEvidenceRefusalInvalidMetadata, "goal, session, specification revision, and plan revision scope are required")
 	}
 
-	dimensions, err := normalizePlanningEvidenceDimensions(source.ApplicableDimensions)
+	dimensions, err := normalizePlanningEvidenceDimensions(source.Kind, source.ApplicableDimensions)
 	if err != nil {
 		return planningEvidenceRecord{}, planningEvidenceRefusalFor(source, planningEvidenceRefusalInvalidDimension, err.Error())
+	}
+	sourceState := source.State
+	if sourceState == "" {
+		sourceState = planningEvidenceSourceCurrent
+	}
+	if !sourceState.valid() {
+		return planningEvidenceRecord{}, planningEvidenceRefusalFor(source, planningEvidenceRefusalInvalidMetadata, fmt.Sprintf("source state %q is not supported", sourceState))
 	}
 	content, err := normalizePlanningEvidenceContent(source.Content)
 	if err != nil {
@@ -275,6 +580,11 @@ func normalizePlanningEvidence(source planningEvidenceSource) (planningEvidenceR
 	}
 
 	summary := summarizePlanningEvidence(source.Kind, origin, content, contentHash)
+	admissible := sourceState == planningEvidenceSourceCurrent
+	admissibilityReason := "current scoped source collected"
+	if !admissible {
+		admissibilityReason = fmt.Sprintf("source is %s", sourceState)
+	}
 	reference := colony.PlanningEvidenceRef{
 		SchemaVersion:           colony.PlanningEvidenceSchemaVersion,
 		ID:                      fmt.Sprintf("evidence-%s-%s", source.Kind, contentHash[:12]),
@@ -290,9 +600,9 @@ func normalizePlanningEvidence(source planningEvidenceSource) (planningEvidenceR
 		ObservedAt:              source.ObservedAt.UTC(),
 		ExcerptDigest:           planningEvidenceSHA256([]byte(summary)),
 		ApplicableDimensions:    dimensions,
-		Fresh:                   true,
-		Admissible:              true,
-		AdmissibilityReason:     "current scoped source collected",
+		Fresh:                   admissible,
+		Admissible:              admissible,
+		AdmissibilityReason:     admissibilityReason,
 	}
 	if err := reference.Validate(); err != nil {
 		return planningEvidenceRecord{}, planningEvidenceRefusalFor(source, planningEvidenceRefusalInvalidMetadata, err.Error())
@@ -419,7 +729,24 @@ func normalizePlanningEvidenceContent(raw []byte) (string, error) {
 	return content, nil
 }
 
-func normalizePlanningEvidenceDimensions(values []colony.PlanningDimension) ([]colony.PlanningDimension, error) {
+func planningEvidenceDimensionSet(values ...colony.PlanningDimension) map[colony.PlanningDimension]struct{} {
+	result := make(map[colony.PlanningDimension]struct{}, len(values))
+	for _, value := range values {
+		result[value] = struct{}{}
+	}
+	return result
+}
+
+func planningEvidenceKindAllowsDimension(kind colony.PlanningEvidenceKind, dimension colony.PlanningDimension) bool {
+	dimensions, ok := planningEvidenceApplicabilityMatrix[kind]
+	if !ok {
+		return false
+	}
+	_, ok = dimensions[dimension]
+	return ok
+}
+
+func normalizePlanningEvidenceDimensions(kind colony.PlanningEvidenceKind, values []colony.PlanningDimension) ([]colony.PlanningDimension, error) {
 	if len(values) == 0 {
 		return nil, fmt.Errorf("at least one applicable dimension claim is required")
 	}
@@ -427,6 +754,9 @@ func normalizePlanningEvidenceDimensions(values []colony.PlanningDimension) ([]c
 	for _, value := range values {
 		if !value.Valid() {
 			return nil, fmt.Errorf("invalid planning dimension %q", value)
+		}
+		if !planningEvidenceKindAllowsDimension(kind, value) {
+			return nil, fmt.Errorf("evidence kind %q cannot claim planning dimension %q", kind, value)
 		}
 		claimed[value] = struct{}{}
 	}
