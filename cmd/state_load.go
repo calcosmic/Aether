@@ -37,7 +37,11 @@ func loadActiveColonyStateReadOnly() (colony.ColonyState, error) {
 	if err != nil {
 		return colony.ColonyState{}, err
 	}
-	return staged, nil
+	migrated, err := migrateLoadedPlanningState(staged, false)
+	if err != nil {
+		return colony.ColonyState{}, err
+	}
+	return migrated, nil
 }
 
 func loadActiveColonyState() (colony.ColonyState, error) {
@@ -60,7 +64,53 @@ func loadActiveColonyState() (colony.ColonyState, error) {
 	if err != nil {
 		return colony.ColonyState{}, err
 	}
-	return repaired, nil
+	migrated, err := migrateLoadedPlanningState(repaired, true)
+	if err != nil {
+		return colony.ColonyState{}, err
+	}
+	return migrated, nil
+}
+
+// migrateLoadedPlanningState applies the same pure classifier to read-only and
+// mutating loads. Mutating callers persist through Store's locked atomic update
+// so concurrent state changes cannot be overwritten by a stale migration.
+func migrateLoadedPlanningState(state colony.ColonyState, persist bool) (colony.ColonyState, error) {
+	if store == nil {
+		return colony.ColonyState{}, fmt.Errorf("no store initialized")
+	}
+	root, err := planningRepositoryRoot(store.BasePath())
+	if err != nil {
+		return colony.ColonyState{}, err
+	}
+	migration, err := migratePlanningState(root, state)
+	if err != nil {
+		return colony.ColonyState{}, fmt.Errorf("failed to migrate planning state: %w", err)
+	}
+	if !persist || !migration.Changed {
+		return migration.State, nil
+	}
+
+	committed := state
+	if err := store.UpdateJSONAtomically("COLONY_STATE.json", &committed, func() error {
+		committed = normalizeLegacyColonyState(committed)
+		latest, err := migratePlanningState(root, committed)
+		if err != nil {
+			return err
+		}
+		committed = latest.State
+		return nil
+	}); err != nil {
+		return colony.ColonyState{}, fmt.Errorf("failed to persist planning migration: %w", err)
+	}
+	return committed, nil
+}
+
+func planningRepositoryRoot(dataRoot string) (string, error) {
+	dataRoot = filepath.Clean(strings.TrimSpace(dataRoot))
+	if dataRoot == "." || filepath.Base(dataRoot) != "data" || filepath.Base(filepath.Dir(dataRoot)) != ".aether" {
+		return "", fmt.Errorf("failed to migrate planning state: colony data root is not repository-relative .aether/data: %s", dataRoot)
+	}
+	return filepath.Dir(filepath.Dir(dataRoot)), nil
 }
 
 func loadColonyStateWithCompatibilityRepair() (colony.ColonyState, error) {
