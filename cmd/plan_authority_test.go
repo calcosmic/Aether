@@ -77,7 +77,9 @@ func TestPlanAuthorityRefusesStaleSpecification(t *testing.T) {
 
 func TestPlanAuthorityRefusesStaleBaseRevision(t *testing.T) {
 	facts, bindings := planAuthorityCurrentFixture(t)
-	bindings.Candidate.BasePlanRevisionHash = planningStateTestDigest("stale-base")
+	staleHash := planningStateTestDigest("stale-base")
+	bindings.Candidate.BasePlanRevisionHash = staleHash
+	facts.State.Value.Plan.Candidates[0].BasePlanRevisionHash = staleHash
 
 	assertPlanAuthorityRefusal(t, validateAcceptedPlanAuthority(facts, bindings), planAuthorityRefusalStaleBase, "aether plan")
 }
@@ -138,7 +140,7 @@ func planAuthorityCurrentFixture(t *testing.T) (LifecycleFacts, planAuthorityVer
 		t.Fatal("fixture has no active revision")
 	}
 	candidate := state.Plan.Candidates[0]
-	receipt, err := newPlanCandidateAcceptanceReceipt(candidate, "fixture-owner-token", active, "owner", candidate.Acceptance.AcceptedAt)
+	receipt, err := newPlanCandidateAcceptanceReceipt(candidate, planCandidateAcceptanceToken(candidate), active, "owner", candidate.Acceptance.AcceptedAt)
 	if err != nil {
 		t.Fatalf("create exact acceptance receipt: %v", err)
 	}
