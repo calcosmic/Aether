@@ -71,10 +71,41 @@ var planCmd = &cobra.Command{
 		targetConfidence, _ := cmd.Flags().GetInt("target")
 		maxIterations, _ := cmd.Flags().GetInt("max-iterations")
 		acceptBelowTarget, _ := cmd.Flags().GetBool("accept")
+		candidate, _ := cmd.Flags().GetBool("candidate")
+		showIteration, _ := cmd.Flags().GetInt("show-iteration")
+		details, _ := cmd.Flags().GetBool("details")
+		acceptCandidate, _ := cmd.Flags().GetString("accept-candidate")
+		specificationRevisionID, _ := cmd.Flags().GetString("spec-revision")
+		specificationRevisionHash, _ := cmd.Flags().GetString("spec-hash")
+		basePlanRevisionID, _ := cmd.Flags().GetString("base-plan-revision")
+		timelineDigest, _ := cmd.Flags().GetString("timeline-digest")
+		proposalHash, _ := cmd.Flags().GetString("proposal-hash")
+		acceptanceToken, _ := cmd.Flags().GetString("acceptance-token")
 		revisionType, _ := cmd.Flags().GetString("revision-type")
 		revisionReason, _ := cmd.Flags().GetString("revision-reason")
 		revisionEvidence, _ := cmd.Flags().GetStringArray("revision-evidence")
 		researchDocs, _ := cmd.Flags().GetStringArray("research")
+		candidateInputs := planCandidateCommandInputs{
+			DeprecatedAccept: acceptBelowTarget, Candidate: candidate,
+			ShowIteration: showIteration, ShowIterationSet: cmd.Flags().Changed("show-iteration"), Details: details,
+			AcceptCandidate: acceptCandidate, SpecificationRevisionID: specificationRevisionID,
+			SpecificationRevisionHash: specificationRevisionHash, BasePlanRevisionID: basePlanRevisionID,
+			TimelineDigest: timelineDigest, ProposalHash: proposalHash, AcceptanceToken: acceptanceToken,
+		}
+		for _, name := range []string{"refresh", "force", "synthetic", "plan-only", "repair-artifact", "preset", "depth", "planning-depth", "verification-depth", "target", "max-iterations", "revision-type", "revision-reason", "revision-evidence", "research", "print-brief", "full"} {
+			if cmd.Flags().Changed(name) {
+				candidateInputs.ConflictingPlanFlags = append(candidateInputs.ConflictingPlanFlags, "--"+name)
+			}
+		}
+		if candidateResult, handled, candidateErr := runPlanCandidateCommand(skillWorkspaceRoot(), candidateInputs); handled {
+			if candidateErr != nil {
+				outputError(1, candidateErr.Error(), nil)
+				return nil
+			}
+			closeLifecycleCommand(candidateResult, "plan", "", "")
+			outputWorkflow(candidateResult, renderPlanVisual(candidateResult))
+			return nil
+		}
 
 		if printBrief, _ := cmd.Flags().GetBool("print-brief"); printBrief {
 			fullFlag, _ := cmd.Flags().GetBool("full")
@@ -2466,6 +2497,16 @@ func init() {
 	planCmd.Flags().Int("target", 0, "Exact preset confidence target; requires matching --max-iterations")
 	planCmd.Flags().Int("max-iterations", 0, "Exact preset pass cap; requires matching --target")
 	planCmd.Flags().Bool("accept", false, "Deprecated: use --accept-candidate with the exact pending candidate ID")
+	planCmd.Flags().Bool("candidate", false, "Review the exact stopped plan candidate without changing state")
+	planCmd.Flags().Int("show-iteration", 0, "Show one immutable candidate timeline pass by ordinal; requires --details")
+	planCmd.Flags().Bool("details", false, "Return the complete immutable card selected by --show-iteration")
+	planCmd.Flags().String("accept-candidate", "", "Accept the exact candidate ID shown by --candidate")
+	planCmd.Flags().String("spec-revision", "", "Approved specification revision bound to candidate acceptance")
+	planCmd.Flags().String("spec-hash", "", "Approved specification content hash bound to candidate acceptance")
+	planCmd.Flags().String("base-plan-revision", "", "Active base plan revision bound to candidate acceptance")
+	planCmd.Flags().String("timeline-digest", "", "Complete immutable timeline digest bound to candidate acceptance")
+	planCmd.Flags().String("proposal-hash", "", "Exact proposal hash bound to candidate acceptance")
+	planCmd.Flags().String("acceptance-token", "", "Explicit action token shown by the exact candidate review")
 	planCmd.Flags().String("revision-type", "", "Why a refreshed plan is needed: manual, user_feedback, research, verification_failure, or scope_change")
 	planCmd.Flags().String("revision-reason", "", "Traceable explanation for refreshing a plan after completed work")
 	planCmd.Flags().StringArray("revision-evidence", nil, "Repository-relative evidence file supporting the revision (repeatable)")

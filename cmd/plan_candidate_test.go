@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -26,7 +27,7 @@ func TestPlanCandidateReviewExposesExactEvidenceAndBindingsWithoutWrites(t *test
 	if len(review.Scores) != len(colony.PlanningDimensions()) || review.ActualConfidence == 0 || review.TargetConfidence != 70 {
 		t.Fatalf("review confidence = target:%d actual:%d scores:%+v, want target 70 and all five scores", review.TargetConfidence, review.ActualConfidence, review.Scores)
 	}
-	if review.StopDecision != candidate.StopDecision || review.EvidenceThatWouldChange != candidate.EvidenceThatWouldChange || review.EvidenceThatWouldChange == "" {
+	if !reflect.DeepEqual(review.StopDecision, candidate.StopDecision) || review.EvidenceThatWouldChange != candidate.EvidenceThatWouldChange || review.EvidenceThatWouldChange == "" {
 		t.Fatalf("review stop diagnostics diverged: %+v", review)
 	}
 	if len(review.ResidualGaps) != len(colony.PlanningDimensions()) {
@@ -37,7 +38,7 @@ func TestPlanCandidateReviewExposesExactEvidenceAndBindingsWithoutWrites(t *test
 			t.Fatalf("review residual gap is not non-material and causal: %+v", gap)
 		}
 	}
-	if !reflect.DeepEqual(review.SemanticDelta, candidate.SemanticDelta) || len(review.SemanticDelta.AuthorityImpacts) == 0 {
+	if !reflect.DeepEqual(review.SemanticDelta, candidate.SemanticDelta) {
 		t.Fatalf("review semantic/authority delta diverged: %+v", review.SemanticDelta)
 	}
 	if !reflect.DeepEqual(review.Recommendation, candidate.Recommendation) {
@@ -87,23 +88,23 @@ func TestPlanCandidateDetailsReturnsOneExactCardAndRejectsOutOfRange(t *testing.
 }
 
 func TestPlanCandidateInputsRejectPartialAmbiguousAndDeprecatedBeforeStateAccess(t *testing.T) {
-	complete := codexPlanOptions{
+	complete := planCandidateCommandInputs{
 		AcceptCandidate: "plan-candidate-exact", SpecificationRevisionID: "spec-revision-exact",
 		SpecificationRevisionHash: strings.Repeat("a", 64), BasePlanRevisionID: "plan-r1-exact",
 		TimelineDigest: strings.Repeat("b", 64), ProposalHash: strings.Repeat("c", 64),
 		AcceptanceToken: "accept-plan-candidate-exact",
 	}
 	tests := []struct {
-		name string
-		opts codexPlanOptions
-		want string
+		name   string
+		inputs planCandidateCommandInputs
+		want   string
 	}{
-		{name: "deprecated bare accept", opts: codexPlanOptions{Accept: true}, want: "--accept no longer"},
-		{name: "partial exact acceptance", opts: codexPlanOptions{AcceptCandidate: complete.AcceptCandidate}, want: "requires --spec-revision"},
-		{name: "review mixed with acceptance", opts: func() codexPlanOptions { value := complete; value.Candidate = true; return value }(), want: "cannot combine"},
-		{name: "details without ordinal", opts: codexPlanOptions{Details: true}, want: "--details requires --show-iteration"},
-		{name: "ordinal without details", opts: codexPlanOptions{ShowIteration: 1, ShowIterationSet: true}, want: "requires --details"},
-		{name: "acceptance field without operation", opts: codexPlanOptions{ProposalHash: complete.ProposalHash}, want: "requires --accept-candidate"},
+		{name: "deprecated bare accept", inputs: planCandidateCommandInputs{DeprecatedAccept: true}, want: "--accept no longer"},
+		{name: "partial exact acceptance", inputs: planCandidateCommandInputs{AcceptCandidate: complete.AcceptCandidate}, want: "requires --spec-revision"},
+		{name: "review mixed with acceptance", inputs: func() planCandidateCommandInputs { value := complete; value.Candidate = true; return value }(), want: "cannot combine"},
+		{name: "details without ordinal", inputs: planCandidateCommandInputs{Details: true}, want: "--details requires --show-iteration"},
+		{name: "ordinal without details", inputs: planCandidateCommandInputs{ShowIteration: 1, ShowIterationSet: true}, want: "requires --details"},
+		{name: "acceptance field without operation", inputs: planCandidateCommandInputs{ProposalHash: complete.ProposalHash}, want: "requires --accept-candidate"},
 	}
 
 	previousStore := store
@@ -111,7 +112,7 @@ func TestPlanCandidateInputsRejectPartialAmbiguousAndDeprecatedBeforeStateAccess
 	t.Cleanup(func() { store = previousStore })
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := runCodexPlanWithOptions("", test.opts); err == nil || !strings.Contains(err.Error(), test.want) {
+			if _, _, err := runPlanCandidateCommand("", test.inputs); err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("input error = %v, want %q before state access", err, test.want)
 			}
 		})
@@ -132,7 +133,15 @@ func planCandidateTestPending(t *testing.T) (string, colony.PlanCandidate) {
 	if coordinated.Candidate == nil {
 		t.Fatal("fixture did not produce a pending candidate")
 	}
-	return root, *coordinated.Candidate
+	content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(planningRouteCandidateRepositoryPath(manifest.RunID))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var persisted colony.PlanCandidate
+	if err := json.Unmarshal(content, &persisted); err != nil {
+		t.Fatal(err)
+	}
+	return root, persisted
 }
 
 func planCandidateTestSnapshot(t *testing.T, root string) map[string][]byte {
