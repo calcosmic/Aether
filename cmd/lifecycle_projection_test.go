@@ -71,6 +71,32 @@ func TestLifecycleProjectionIsDeterministicAcrossViews(t *testing.T) {
 	}
 }
 
+func TestLifecycleProjectionSpecAndPlanFactsMatchSnapshot(t *testing.T) {
+	state, _ := validCurrentPlanningState(t)
+	state.Plan.Revisions = append([]colony.PlanRevision(nil), state.Plan.Revisions...)
+	state.Plan.Revisions[len(state.Plan.Revisions)-1].AffectedSemanticIDs = []string{"task:reconcile"}
+	facts := lifecycleFactsFromStateSnapshot(state, false, time.Date(2026, 9, 7, 12, 0, 0, 0, time.UTC))
+
+	terminal := projectLifecycle(facts, LifecycleViewVisual, "codex")
+	machine := projectLifecycle(facts, LifecycleViewJSON, "codex")
+	if !reflect.DeepEqual(terminal.Intent, facts.Intent) || !reflect.DeepEqual(machine.Intent, facts.Intent) {
+		t.Fatalf("intent projection was recomputed instead of copied from the snapshot")
+	}
+	if !reflect.DeepEqual(terminal.Specification, facts.Specification) || !reflect.DeepEqual(machine.Specification, facts.Specification) {
+		t.Fatalf("specification projection was recomputed instead of copied from the snapshot")
+	}
+	if !reflect.DeepEqual(terminal.Planning, facts.Planning) || !reflect.DeepEqual(machine.Planning, facts.Planning) {
+		t.Fatalf("planning projection was recomputed instead of copied from the snapshot")
+	}
+	if terminal.Specification.Value.Approved == terminal.Planning.Value.AcceptedPlan {
+		// The fixture intentionally carries an affected accepted plan: approval
+		// remains true while build readiness is independently blocked by impact.
+		if terminal.Planning.Value.AcceptanceBindingStatus != LifecyclePlanBindingAffected {
+			t.Fatalf("approved specification and affected accepted plan were conflated: %+v", terminal.Planning.Value)
+		}
+	}
+}
+
 func TestLifecycleProjectionAcceptedPlanChoicesAreCoequal(t *testing.T) {
 	facts := projectionFacts(projectionState(colony.StateREADY, true, false))
 	for _, platform := range []struct {

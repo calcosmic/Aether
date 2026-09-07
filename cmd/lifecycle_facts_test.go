@@ -3,6 +3,7 @@ package cmd
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
 )
 
@@ -146,6 +148,161 @@ func TestLifecycleFactsMissingAndMalformed(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestLifecycleFactsSpecAndPlanAuthorityStates(t *testing.T) {
+	accepted, _ := validCurrentPlanningState(t)
+
+	draft := accepted
+	draft.Plan = colony.Plan{}
+	draft.CurrentPhase = 0
+	draft.Specification = cloneLifecycleTestSpecification(accepted.Specification)
+	draft.Specification.Revisions[0].Status = colony.SpecStatusDraft
+	draft.Specification.Revisions[0].Approval = nil
+
+	approved := draft
+	approved.Specification = cloneLifecycleTestSpecification(accepted.Specification)
+
+	candidateReady := accepted
+	pending := candidateReady.Plan.Candidates[0]
+	pendingHash := planningStateTestDigest("lifecycle-pending-candidate")
+	pending.ID = planningStateTestAddress("plan-candidate", pendingHash)
+	pending.ContentHash = pendingHash
+	pending.Status = colony.PlanCandidatePendingReview
+	pending.Acceptance = nil
+	pending.Recommendation.CandidateID = pending.ID
+	candidateReady.Plan.Candidates = append(append([]colony.PlanCandidate(nil), candidateReady.Plan.Candidates...), pending)
+	candidateReady.Plan.PendingCandidateID = pending.ID
+
+	affected := accepted
+	affected.Plan.Revisions = append([]colony.PlanRevision(nil), accepted.Plan.Revisions...)
+	affected.Plan.Revisions[len(affected.Plan.Revisions)-1].AffectedSemanticIDs = []string{"task:affected"}
+
+	legacyTaskID := "legacy-task"
+	legacy := colony.ColonyState{
+		Goal: fixtureGoal("Keep the old plan buildable"), State: colony.StateREADY, CurrentPhase: 1,
+		Plan: colony.Plan{
+			AcceptancePolicy: colony.PlanAcceptanceLegacyUnbound,
+			Phases:           []colony.Phase{{ID: 1, Name: "Legacy", Status: colony.PhaseReady, Tasks: []colony.Task{{ID: &legacyTaskID, Goal: "Build it", Status: colony.TaskPending}}}},
+		},
+	}
+
+	tests := []struct {
+		name          string
+		state         colony.ColonyState
+		wantSpec      colony.SpecRevisionStatus
+		wantApproved  bool
+		wantCandidate colony.PlanCandidateStatus
+		wantStop      colony.PlanningStopReason
+		wantBinding   LifecyclePlanAcceptanceBindingStatus
+		wantAccepted  bool
+		wantLegacy    bool
+		wantAffected  []string
+	}{
+		{name: "draft", state: draft, wantSpec: colony.SpecStatusDraft, wantBinding: LifecyclePlanBindingAbsent},
+		{name: "approved", state: approved, wantSpec: colony.SpecStatusApproved, wantApproved: true, wantBinding: LifecyclePlanBindingAbsent},
+		{name: "candidate ready", state: candidateReady, wantSpec: colony.SpecStatusApproved, wantApproved: true, wantCandidate: colony.PlanCandidatePendingReview, wantStop: pending.StopDecision.Reason, wantBinding: LifecyclePlanBindingAccepted, wantAccepted: true},
+		{name: "accepted", state: accepted, wantSpec: colony.SpecStatusApproved, wantApproved: true, wantBinding: LifecyclePlanBindingAccepted, wantAccepted: true},
+		{name: "affected revision", state: affected, wantSpec: colony.SpecStatusApproved, wantApproved: true, wantBinding: LifecyclePlanBindingAffected, wantAccepted: true, wantAffected: []string{"task:affected"}},
+		{name: "legacy", state: legacy, wantBinding: LifecyclePlanBindingLegacyUnbound, wantLegacy: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			facts := lifecycleFactsFromStateSnapshot(tc.state, false, time.Time{})
+			specification := facts.Specification.Value
+			planning := facts.Planning.Value
+			if specification.Status != tc.wantSpec || specification.Approved != tc.wantApproved {
+				t.Fatalf("specification facts = %+v, want status=%q approved=%t", specification, tc.wantSpec, tc.wantApproved)
+			}
+			if planning.PendingCandidateStatus != tc.wantCandidate || planning.PendingCandidateStopReason != tc.wantStop {
+				t.Fatalf("candidate facts = %+v, want status=%q stop=%q", planning, tc.wantCandidate, tc.wantStop)
+			}
+			if planning.AcceptanceBindingStatus != tc.wantBinding || planning.AcceptedPlan != tc.wantAccepted || planning.LegacyUnbound != tc.wantLegacy {
+				t.Fatalf("acceptance facts = %+v, want binding=%q accepted=%t legacy=%t", planning, tc.wantBinding, tc.wantAccepted, tc.wantLegacy)
+			}
+			if !reflect.DeepEqual(planning.AffectedUnresolvedSemanticIDs, tc.wantAffected) {
+				t.Fatalf("affected IDs = %v, want %v", planning.AffectedUnresolvedSemanticIDs, tc.wantAffected)
+			}
+		})
+	}
+}
+
+func TestLifecycleFactsSpecAndPlanUseOneStateSnapshot(t *testing.T) {
+	root, factStore, _ := seedLifecycleFactsFixture(t, "valid")
+	state, _ := validCurrentPlanningState(t)
+	state.Plan.Revisions[len(state.Plan.Revisions)-1].PlanningRunID = "planning-run-200"
+	stateBytes, err := json.Marshal(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeLifecycleFixtureFile(t, filepath.Join(factStore.BasePath(), "COLONY_STATE.json"), string(stateBytes))
+
+	pending := PendingDecisionFile{Decisions: []PendingDecision{{
+		ID: "decision-1", Type: clarificationDecisionType, Description: "Choose behavior", Source: "discuss:behavior:test",
+		SessionID: "session-200", GoalHash: pendingDecisionGoalHash(lifecycleString(state.Goal)), CreatedAt: lifecycleFactsNow,
+	}}}
+	pendingBytes, err := json.Marshal(pending)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeLifecycleFixtureFile(t, filepath.Join(factStore.BasePath(), pendingDecisionsFile), string(pendingBytes))
+
+	stage := planningStageTestState(planningStageOwnerDecision)
+	stage.RunID = "planning-run-200"
+	stage.Pass = 2
+	stage.Preset = planningStagePresetDeep
+	currentSpec, _ := currentSpecificationRevision(*state.Specification)
+	stage.Specification = planningStageSpecificationBinding{
+		RevisionID: currentSpec.ID, ContentHash: currentSpec.ContentHash, Status: currentSpec.Status,
+		ApprovalReceiptID: currentSpec.Approval.ID, ApprovalReceiptHash: planningStateTestDigest("approval-receipt"),
+	}
+	active := state.Plan.Revisions[len(state.Plan.Revisions)-1]
+	stage.BasePlanRevisionID = active.ID
+	stage.BasePlanRevisionHash = active.PlanHash
+	stage.PendingAffectedSemanticIDs = []string{"requirement:owner-choice"}
+	stageBytes, err := json.Marshal(stage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeLifecycleFixtureFile(t, filepath.Join(root, filepath.FromSlash(planningStageStateRepositoryPath(stage.RunID))), string(stageBytes))
+
+	loads := 0
+	now, _ := time.Parse(time.RFC3339, lifecycleFactsNow)
+	facts, err := loadLifecycleFactsWithStateReader(root, factStore, now, func(path string) (colony.ColonyState, LifecycleFactSource) {
+		loads++
+		return readLifecycleState(path)
+	})
+	if err != nil {
+		t.Fatalf("load authority-aware facts: %v", err)
+	}
+	if loads != 1 {
+		t.Fatalf("state loads = %d, want exactly 1", loads)
+	}
+	if facts.Intent.Value.UnresolvedDiscussionCount != 1 {
+		t.Fatalf("unresolved discussion count = %d, want 1", facts.Intent.Value.UnresolvedDiscussionCount)
+	}
+	if facts.Planning.Value.RunID != stage.RunID || facts.Planning.Value.Stage != string(stage.Stage) || facts.Planning.Value.Preset != string(stage.Preset) || facts.Planning.Value.Pass != stage.Pass {
+		t.Fatalf("planning stage facts = %+v, want run/stage/preset/pass from validated stage state", facts.Planning.Value)
+	}
+
+	terminal := projectLifecycle(facts, LifecycleViewVisual, "codex")
+	machine := projectLifecycle(facts, LifecycleViewJSON, "codex")
+	if loads != 1 {
+		t.Fatalf("projection performed another state load: %d total", loads)
+	}
+	if !reflect.DeepEqual(terminal.Intent, machine.Intent) || !reflect.DeepEqual(terminal.Specification, machine.Specification) || !reflect.DeepEqual(terminal.Planning, machine.Planning) {
+		t.Fatalf("terminal and JSON projections diverged\nterminal=%+v\nmachine=%+v", terminal, machine)
+	}
+}
+
+func cloneLifecycleTestSpecification(specification *colony.Specification) *colony.Specification {
+	if specification == nil {
+		return nil
+	}
+	clone := *specification
+	clone.Revisions = append([]colony.SpecRevision(nil), specification.Revisions...)
+	return &clone
 }
 
 type lifecycleSurfaceFingerprint struct {
