@@ -37,7 +37,7 @@ func loadActiveColonyStateReadOnly() (colony.ColonyState, error) {
 	if err != nil {
 		return colony.ColonyState{}, err
 	}
-	migrated, err := migrateLoadedPlanningState(staged, false)
+	migrated, err := migrateLoadedPlanningState(staged)
 	if err != nil {
 		return colony.ColonyState{}, err
 	}
@@ -64,17 +64,18 @@ func loadActiveColonyState() (colony.ColonyState, error) {
 	if err != nil {
 		return colony.ColonyState{}, err
 	}
-	migrated, err := migrateLoadedPlanningState(repaired, true)
+	migrated, err := migrateLoadedPlanningState(repaired)
 	if err != nil {
 		return colony.ColonyState{}, err
 	}
 	return migrated, nil
 }
 
-// migrateLoadedPlanningState applies the same pure classifier to read-only and
-// mutating loads. Mutating callers persist through Store's locked atomic update
-// so concurrent state changes cannot be overwritten by a stale migration.
-func migrateLoadedPlanningState(state colony.ColonyState, persist bool) (colony.ColonyState, error) {
+// migrateLoadedPlanningState is deliberately an in-memory boundary. Commands
+// that only inspect or preview state must remain byte-for-byte read-only; a
+// later state-changing transaction persists the returned classification through
+// its existing safe writer along with the command's actual lifecycle change.
+func migrateLoadedPlanningState(state colony.ColonyState) (colony.ColonyState, error) {
 	if store == nil {
 		return colony.ColonyState{}, fmt.Errorf("no store initialized")
 	}
@@ -86,23 +87,7 @@ func migrateLoadedPlanningState(state colony.ColonyState, persist bool) (colony.
 	if err != nil {
 		return colony.ColonyState{}, fmt.Errorf("failed to migrate planning state: %w", err)
 	}
-	if !persist || !migration.Changed {
-		return migration.State, nil
-	}
-
-	committed := state
-	if err := store.UpdateJSONAtomically("COLONY_STATE.json", &committed, func() error {
-		committed = normalizeLegacyColonyState(committed)
-		latest, err := migratePlanningState(root, committed)
-		if err != nil {
-			return err
-		}
-		committed = latest.State
-		return nil
-	}); err != nil {
-		return colony.ColonyState{}, fmt.Errorf("failed to persist planning migration: %w", err)
-	}
-	return committed, nil
+	return migration.State, nil
 }
 
 func planningRepositoryRoot(dataRoot string) (string, error) {

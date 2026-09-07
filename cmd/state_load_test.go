@@ -456,7 +456,7 @@ func TestSealRecoversMissingPlanFromPlanningArtifactWithoutPlanRef(t *testing.T)
 	}
 }
 
-func TestStateLoadMigratesPlanningLegacyPlanAndPersistsClassification(t *testing.T) {
+func TestStateLoadMigratesPlanningLegacyPlanAndPersistsWithNextSafeWrite(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -497,16 +497,34 @@ func TestStateLoadMigratesPlanningLegacyPlanAndPersistsClassification(t *testing
 		t.Fatalf("loaded migration fabricated authority: specification=%+v candidates=%+v", loaded.Specification, loaded.Plan.Candidates)
 	}
 
+	beforeWrite, err := store.LoadRawJSON("COLONY_STATE.json")
+	if err != nil {
+		t.Fatalf("read state after in-memory migration: %v", err)
+	}
+	var notYetPersisted colony.ColonyState
+	if err := json.Unmarshal(beforeWrite, &notYetPersisted); err != nil {
+		t.Fatalf("decode state after in-memory migration: %v", err)
+	}
+	if notYetPersisted.Plan.AcceptancePolicy != "" {
+		t.Fatalf("state load implicitly persisted acceptance policy %q", notYetPersisted.Plan.AcceptancePolicy)
+	}
+
+	// A real state-changing command saves the already-migrated value through
+	// Store's existing safe writer; no migration-specific sidecar or direct
+	// filesystem write is needed.
+	if err := store.SaveJSON("COLONY_STATE.json", loaded); err != nil {
+		t.Fatalf("persist migrated state through safe writer: %v", err)
+	}
 	firstRaw, err := store.LoadRawJSON("COLONY_STATE.json")
 	if err != nil {
-		t.Fatalf("read first migrated state: %v", err)
+		t.Fatalf("read safely persisted migration: %v", err)
 	}
 	var persisted colony.ColonyState
 	if err := json.Unmarshal(firstRaw, &persisted); err != nil {
-		t.Fatalf("decode persisted migrated state: %v", err)
+		t.Fatalf("decode safely persisted migration: %v", err)
 	}
 	if persisted.Plan.AcceptancePolicy != colony.PlanAcceptanceLegacyUnbound {
-		t.Fatalf("persisted acceptance policy = %q, want %q", persisted.Plan.AcceptancePolicy, colony.PlanAcceptanceLegacyUnbound)
+		t.Fatalf("safely persisted acceptance policy = %q, want %q", persisted.Plan.AcceptancePolicy, colony.PlanAcceptanceLegacyUnbound)
 	}
 
 	if _, err := loadActiveColonyState(); err != nil {
