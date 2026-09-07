@@ -1529,6 +1529,13 @@ func runCodexPlanAgentDelegate(root string, state colony.ColonyState, granularit
 	return result, nil
 }
 
+func planningScoutStageDispatchContract(dispatches []codexPlanningDispatch, workerTimeout time.Duration) map[string]interface{} {
+	contract := planningDispatchContractForDispatches(dispatches, workerTimeout)
+	contract["execution_model"] = "1 staged planning worker: scout only"
+	contract["dependency_behavior"] = "This manifest authorizes only the Scout. Route-Setter requires a later receipt-bound manifest after Scout completion."
+	return contract
+}
+
 // routeSetterResearchBudgetChars bounds the total phase-research content
 // appended to the Route-Setter's brief across every candidate phase in one
 // planning run. Each phase's individual excerpt is already bounded by
@@ -1694,7 +1701,7 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		filepath.ToSlash(filepath.Join(".aether", "data", "planning")),
 		filepath.ToSlash(filepath.Join(".aether", "data", "phase-research")),
 	)
-	dispatchContract := planningDispatchContractForDispatches(dispatches, opts.WorkerTimeout)
+	dispatchContract := planningScoutStageDispatchContract(dispatches, opts.WorkerTimeout)
 
 	// Compute the colony-prime capsule once, for this plan-only wrapper
 	// manifest only — this function (runCodexPlanPlanOnly) is reached
@@ -1734,7 +1741,7 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		dispatches[i].TaskID = stageManifest.AuthorizationID
 		dispatches[i].StageManifest = &stageManifest
 	}
-	dispatchContract = planningDispatchContractForDispatches(dispatches, opts.WorkerTimeout)
+	dispatchContract = planningScoutStageDispatchContract(dispatches, opts.WorkerTimeout)
 
 	manifest := codexPlanManifest{
 		Goal:                  *state.Goal,

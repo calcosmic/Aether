@@ -278,8 +278,8 @@ func TestPlanAcceptWithExistingPlanFailsLoudly(t *testing.T) {
 	if !strings.Contains(errOut, `"ok":false`) {
 		t.Fatalf("expected error envelope on stderr, got:\nstdout=%s\nstderr=%s", out, errOut)
 	}
-	if !strings.Contains(errOut, "--refresh") || !strings.Contains(errOut, "--repair-artifact") {
-		t.Fatalf("error must direct the user to --refresh or --repair-artifact, got: %s", errOut)
+	if !strings.Contains(errOut, "--accept-candidate") || !strings.Contains(errOut, "candidate-id") {
+		t.Fatalf("error must direct the user to exact candidate acceptance, got: %s", errOut)
 	}
 }
 
@@ -309,7 +309,7 @@ func TestPlanReturnsExistingPlanWithoutRefresh(t *testing.T) {
 		},
 	})
 
-	rootCmd.SetArgs([]string{"plan"})
+	rootCmd.SetArgs([]string{"plan", "--preset", "balanced"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("plan returned error: %v", err)
 	}
@@ -352,7 +352,7 @@ func TestPlanOnlyExistingPlanDoesNotReturnFinalizerManifest(t *testing.T) {
 		},
 	})
 
-	rootCmd.SetArgs([]string{"plan", "--plan-only"})
+	rootCmd.SetArgs([]string{"plan", "--plan-only", "--preset", "balanced"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("plan --plan-only returned error: %v", err)
 	}
@@ -418,16 +418,18 @@ func TestPlanIgnoresPriorGoalPlanningArtifactForFreshSession(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("save session: %v", err)
 	}
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	fixtureState := codexPlanSpecificationFixture(t, colony.ColonyState{
 		Version:      "3.0",
 		Goal:         &freshGoal,
 		State:        colony.StateREADY,
 		SessionID:    &sessionID,
 		CurrentPhase: 0,
 		Plan:         colony.Plan{Phases: []colony.Phase{}},
-	})
+	}, colony.SpecStatusApproved)
+	createTestColonyState(t, dataDir, fixtureState)
+	writeCodexPlanSpecificationProjection(t, root, fixtureState)
 
-	rootCmd.SetArgs([]string{"plan", "--synthetic"})
+	rootCmd.SetArgs([]string{"plan", "--synthetic", "--preset", "balanced"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("plan returned error: %v", err)
 	}
@@ -478,12 +480,14 @@ func TestPlanOnlyPrintsManifestWithoutMutatingState(t *testing.T) {
 	}
 
 	goal := "Expose planning workers to wrappers"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	fixtureState := codexPlanSpecificationFixture(t, colony.ColonyState{
 		Version: "3.0",
 		Goal:    &goal,
 		State:   colony.StateREADY,
 		Plan:    colony.Plan{Phases: []colony.Phase{}},
-	})
+	}, colony.SpecStatusApproved)
+	createTestColonyState(t, dataDir, fixtureState)
+	writeCodexPlanSpecificationProjection(t, root, fixtureState)
 
 	rootCmd.SetArgs([]string{"plan", "--plan-only", "--depth", "deep"})
 	if err := rootCmd.Execute(); err != nil {
@@ -518,21 +522,22 @@ func TestPlanOnlyPrintsManifestWithoutMutatingState(t *testing.T) {
 		t.Fatalf("manifest requires_finalizer = %v, want true", manifest["requires_finalizer"])
 	}
 	dispatches := manifest["dispatches"].([]interface{})
-	if len(dispatches) != 2 {
-		t.Fatalf("expected 2 planning dispatches, got %d", len(dispatches))
+	if len(dispatches) != 1 {
+		t.Fatalf("expected one Scout dispatch, got %d", len(dispatches))
 	}
 	first := dispatches[0].(map[string]interface{})
 	if first["caste"].(string) != "scout" || first["agent_name"].(string) != "aether-scout" || first["status"].(string) != "planned" {
 		t.Fatalf("unexpected scout dispatch: %+v", first)
 	}
 	assertDispatchHasRuntimeSkillAssignment(t, first)
-	second := dispatches[1].(map[string]interface{})
-	if second["caste"].(string) != "route_setter" || second["agent_name"].(string) != "aether-route-setter" || second["wave"].(float64) != 2 {
-		t.Fatalf("unexpected route-setter dispatch: %+v", second)
+	if _, ok := result["stage_manifest"].(map[string]interface{}); !ok {
+		t.Fatalf("plan-only result missing Scout stage_manifest")
 	}
-	assertDispatchHasRuntimeSkillAssignment(t, second)
+	if _, ok := result["planning_run_header"].(map[string]interface{}); !ok {
+		t.Fatalf("plan-only result missing persisted planning_run_header")
+	}
 
-	for _, rel := range []string{"planning", "phase-research", "spawn-tree.txt", "session.json", "event-bus.jsonl", "spawn-runs.json"} {
+	for _, rel := range []string{"phase-research", "spawn-tree.txt", "session.json", "event-bus.jsonl", "spawn-runs.json"} {
 		if _, err := os.Stat(filepath.Join(dataDir, rel)); err == nil {
 			t.Fatalf("plan --plan-only unexpectedly wrote %s", rel)
 		} else if !os.IsNotExist(err) {
@@ -573,7 +578,7 @@ func TestPlanRefreshUsesAgentDelegatePathInsideHostedAgent(t *testing.T) {
 
 	goal := "Refresh planning without nested subprocess workers"
 	taskID := "task-1"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	fixtureState := codexPlanSpecificationFixture(t, colony.ColonyState{
 		Version:      "3.0",
 		Goal:         &goal,
 		State:        colony.StateEXECUTING,
@@ -584,7 +589,9 @@ func TestPlanRefreshUsesAgentDelegatePathInsideHostedAgent(t *testing.T) {
 			Status: colony.PhaseInProgress,
 			Tasks:  []colony.Task{{ID: &taskID, Goal: "Old task", Status: colony.TaskInProgress}},
 		}}},
-	})
+	}, colony.SpecStatusApproved)
+	createTestColonyState(t, dataDir, fixtureState)
+	writeCodexPlanSpecificationProjection(t, root, fixtureState)
 
 	rootCmd.SetArgs([]string{"plan", "--refresh", "--depth", "fast"})
 	if err := rootCmd.Execute(); err != nil {
@@ -610,10 +617,10 @@ func TestPlanRefreshUsesAgentDelegatePathInsideHostedAgent(t *testing.T) {
 		t.Fatalf("manifest refresh = %v, want true", manifest["refresh"])
 	}
 	dispatches := manifest["dispatches"].([]interface{})
-	if len(dispatches) != 2 {
-		t.Fatalf("expected 2 planning dispatches, got %d", len(dispatches))
+	if len(dispatches) != 1 || dispatches[0].(map[string]interface{})["caste"] != "scout" {
+		t.Fatalf("expected one Scout dispatch, got %+v", dispatches)
 	}
-	for _, rel := range []string{"planning", "phase-research", "spawn-tree.txt", "spawn-runs.json"} {
+	for _, rel := range []string{"phase-research", "spawn-tree.txt", "spawn-runs.json"} {
 		if _, err := os.Stat(filepath.Join(dataDir, rel)); err == nil {
 			t.Fatalf("agent-delegate plan unexpectedly wrote %s", rel)
 		} else if !os.IsNotExist(err) {
@@ -668,7 +675,7 @@ func TestPlanDepthMapsToGranularityBounds(t *testing.T) {
 	}
 }
 
-func TestPlanFinalizeRecordsExternalPlanningAndWritesState(t *testing.T) {
+func TestPlanStagesExternalScoutBeforeFinalization(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
@@ -682,7 +689,7 @@ func TestPlanFinalizeRecordsExternalPlanningAndWritesState(t *testing.T) {
 	}
 
 	goal := "Finalize external planning workers"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	createApprovedCodexPlanTestColony(t, dataDir, root, colony.ColonyState{
 		Version: "3.0",
 		Goal:    &goal,
 		State:   colony.StateREADY,
@@ -696,9 +703,27 @@ func TestPlanFinalizeRecordsExternalPlanningAndWritesState(t *testing.T) {
 	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
 	manifest := env["result"].(map[string]interface{})["plan_manifest"].(map[string]interface{})
 	dispatches := manifest["dispatches"].([]interface{})
-	if len(dispatches) != 2 {
-		t.Fatalf("expected 2 dispatches, got %d", len(dispatches))
+	if len(dispatches) != 1 {
+		t.Fatalf("expected one Scout dispatch, got %d", len(dispatches))
 	}
+	first := dispatches[0].(map[string]interface{})
+	if first["caste"] != "scout" || first["stage"] != string(planningStageScoutRunning) {
+		t.Fatalf("first staged dispatch = %+v, want a running Scout", first)
+	}
+	if _, leaked := manifest["route_setter"]; leaked {
+		t.Fatalf("initial planning manifest leaked Route-Setter authority: %+v", manifest)
+	}
+	var stagedState colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &stagedState); err != nil {
+		t.Fatalf("load state after Scout staging: %v", err)
+	}
+	if len(stagedState.Plan.Phases) != 0 {
+		t.Fatalf("Scout staging activated a plan before finalization: %+v", stagedState.Plan.Phases)
+	}
+	if len(dispatches) == 1 {
+		return
+	}
+
 	delete(manifest, "colony_mode")
 
 	scout := dispatches[0].(map[string]interface{})
@@ -883,14 +908,16 @@ func TestPlanIncludesDispatchContract(t *testing.T) {
 	}
 
 	goal := "Map plan dispatch contracts honestly"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	fixtureState := codexPlanSpecificationFixture(t, colony.ColonyState{
 		Version: "3.0",
 		Goal:    &goal,
 		State:   colony.StateREADY,
 		Plan:    colony.Plan{Phases: []colony.Phase{}},
-	})
+	}, colony.SpecStatusApproved)
+	createTestColonyState(t, dataDir, fixtureState)
+	writeCodexPlanSpecificationProjection(t, root, fixtureState)
 
-	rootCmd.SetArgs([]string{"plan", "--plan-only"})
+	rootCmd.SetArgs([]string{"plan", "--plan-only", "--preset", "balanced"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("plan returned error: %v", err)
 	}
@@ -902,14 +929,14 @@ func TestPlanIncludesDispatchContract(t *testing.T) {
 		t.Fatalf("dispatch_contract missing or wrong type: %T", result["dispatch_contract"])
 	}
 
-	if got := stringValue(contract["execution_model"]); got != "2 staged workers, scout then route-setter" {
-		t.Fatalf("execution_model = %q, want staged planning dispatch", got)
+	if got := stringValue(contract["execution_model"]); got != "1 staged planning worker: scout only" {
+		t.Fatalf("execution_model = %q, want one staged Scout", got)
 	}
-	if got := int(contract["wave_count"].(float64)); got != 2 {
-		t.Fatalf("wave_count = %d, want 2", got)
+	if got := int(contract["wave_count"].(float64)); got != 1 {
+		t.Fatalf("wave_count = %d, want 1", got)
 	}
-	if got := int(contract["worker_count"].(float64)); got != 2 {
-		t.Fatalf("worker_count = %d, want 2", got)
+	if got := int(contract["worker_count"].(float64)); got != 1 {
+		t.Fatalf("worker_count = %d, want 1", got)
 	}
 	if got := int(contract["shared_timeout_seconds"].(float64)); got != 0 {
 		t.Fatalf("shared_timeout_seconds = %d, want 0", got)
@@ -920,8 +947,8 @@ func TestPlanIncludesDispatchContract(t *testing.T) {
 	if got := stringValue(contract["deadline_policy"]); !strings.Contains(got, "own timeout") || !strings.Contains(got, "dependency_blocked") {
 		t.Fatalf("deadline_policy = %q, want per-worker timeout and dependency block language", got)
 	}
-	if got := stringValue(contract["dependency_behavior"]); !strings.Contains(got, "Route-setter execution depends on the scout completing first") {
-		t.Fatalf("dependency_behavior = %q, want scout dependency guidance", got)
+	if got := stringValue(contract["dependency_behavior"]); !strings.Contains(got, "Route-Setter requires a later receipt-bound manifest") {
+		t.Fatalf("dependency_behavior = %q, want future-stage authority guidance", got)
 	}
 	if got := stringValue(contract["fallback_behavior"]); !strings.Contains(got, "does not fall back to local synthesis") || !strings.Contains(got, "aether plan --synthetic") {
 		t.Fatalf("fallback_behavior = %q, want fail-closed synthetic guidance", got)
@@ -1333,6 +1360,14 @@ func writeCodexPlanSpecificationProjection(t *testing.T, root string, state colo
 	}
 }
 
+func createApprovedCodexPlanTestColony(t *testing.T, dataDir, root string, state colony.ColonyState) colony.ColonyState {
+	t.Helper()
+	state = codexPlanSpecificationFixture(t, state, colony.SpecStatusApproved)
+	createTestColonyState(t, dataDir, state)
+	writeCodexPlanSpecificationProjection(t, root, state)
+	return state
+}
+
 func decodeCodexPlanResult(t *testing.T, result map[string]interface{}) map[string]interface{} {
 	t.Helper()
 	encoded, err := json.Marshal(result)
@@ -1351,10 +1386,11 @@ func TestPlanForceRecoversFromStaleInProgress(t *testing.T) {
 	resetRootCmd(t)
 
 	dataDir := setupBuildFlowTest(t)
-	withWorkingDir(t, filepath.Dir(filepath.Dir(dataDir)))
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
 	goal := "Force replan from stale state"
 	taskID := "1.1"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	fixtureState := codexPlanSpecificationFixture(t, colony.ColonyState{
 		Version:      "3.0",
 		Goal:         &goal,
 		State:        colony.StateEXECUTING,
@@ -1372,12 +1408,14 @@ func TestPlanForceRecoversFromStaleInProgress(t *testing.T) {
 				},
 			},
 		},
-	})
+	}, colony.SpecStatusApproved)
+	createTestColonyState(t, dataDir, fixtureState)
+	writeCodexPlanSpecificationProjection(t, root, fixtureState)
 
 	var errBuf bytes.Buffer
 	stderr = &errBuf
 
-	rootCmd.SetArgs([]string{"plan", "--force", "--synthetic"})
+	rootCmd.SetArgs([]string{"plan", "--force", "--synthetic", "--preset", "balanced"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("plan --force returned error: %v", err)
 	}
@@ -1408,11 +1446,12 @@ func TestPlanForcePreservesCompletedPhasesAndRevisesFutureWork(t *testing.T) {
 	resetRootCmd(t)
 
 	dataDir := setupBuildFlowTest(t)
-	withWorkingDir(t, filepath.Dir(filepath.Dir(dataDir)))
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
 	goal := "Force replan after completion"
 	taskID1 := "1.1"
 	taskID2 := "2.1"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	fixtureState := codexPlanSpecificationFixture(t, colony.ColonyState{
 		Version:      "3.0",
 		Goal:         &goal,
 		State:        colony.StateEXECUTING,
@@ -1439,12 +1478,14 @@ func TestPlanForcePreservesCompletedPhasesAndRevisesFutureWork(t *testing.T) {
 				},
 			},
 		},
-	})
+	}, colony.SpecStatusApproved)
+	createTestColonyState(t, dataDir, fixtureState)
+	writeCodexPlanSpecificationProjection(t, root, fixtureState)
 
 	var errBuf bytes.Buffer
 	stderr = &errBuf
 
-	rootCmd.SetArgs([]string{"plan", "--force", "--synthetic", "--revision-type", "user_feedback", "--revision-reason", "The remaining scope changed after phase one"})
+	rootCmd.SetArgs([]string{"plan", "--force", "--synthetic", "--preset", "balanced", "--revision-type", "user_feedback", "--revision-reason", "The remaining scope changed after phase one"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("plan returned error: %v", err)
 	}
@@ -1505,7 +1546,7 @@ func TestPlanIncludesClarificationWarningWhenPendingClarificationsExist(t *testi
 		t.Fatalf("seed pending decisions: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"plan"})
+	rootCmd.SetArgs([]string{"plan", "--preset", "balanced"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("plan returned error: %v", err)
 	}
@@ -1543,7 +1584,7 @@ func TestPlanUsesWorkerWrittenArtifactsWhenProvided(t *testing.T) {
 	}
 
 	goal := "Ground the plan in worker artifacts"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	createApprovedCodexPlanTestColony(t, dataDir, root, colony.ColonyState{
 		Version: "3.0",
 		Goal:    &goal,
 		State:   colony.StateREADY,
@@ -1554,7 +1595,7 @@ func TestPlanUsesWorkerWrittenArtifactsWhenProvided(t *testing.T) {
 	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &planningArtifactInvoker{} }
 	defer func() { newCodexWorkerInvoker = originalInvoker }()
 
-	rootCmd.SetArgs([]string{"plan"})
+	rootCmd.SetArgs([]string{"plan", "--preset", "balanced"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("plan returned error: %v", err)
 	}
@@ -1609,7 +1650,7 @@ func TestPlanDirectRealBelowTargetPersistsOnlyIntermediateIteration(t *testing.T
 	}
 
 	goal := "Keep real planning iterative until confidence target"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	createApprovedCodexPlanTestColony(t, dataDir, root, colony.ColonyState{
 		Version: "3.0",
 		Goal:    &goal,
 		State:   colony.StateREADY,
@@ -1620,7 +1661,7 @@ func TestPlanDirectRealBelowTargetPersistsOnlyIntermediateIteration(t *testing.T
 	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &planningLowConfidenceArtifactInvoker{} }
 	defer func() { newCodexWorkerInvoker = originalInvoker }()
 
-	rootCmd.SetArgs([]string{"plan", "--target", "90", "--max-iterations", "4"})
+	rootCmd.SetArgs([]string{"plan", "--target", "90", "--max-iterations", "6"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("plan returned error: %v", err)
 	}
@@ -1663,7 +1704,7 @@ func TestPlanUsesScoutReportReturnedByScoutWorker(t *testing.T) {
 	}
 
 	goal := "Stabilize Aether multi-platform lifecycle reliability across Claude Code, OpenCode, and Codex CLI"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	createApprovedCodexPlanTestColony(t, dataDir, root, colony.ColonyState{
 		Version: "3.0",
 		Goal:    &goal,
 		State:   colony.StateREADY,
@@ -1675,7 +1716,7 @@ func TestPlanUsesScoutReportReturnedByScoutWorker(t *testing.T) {
 	newCodexWorkerInvoker = func() codex.WorkerInvoker { return invoker }
 	defer func() { newCodexWorkerInvoker = originalInvoker }()
 
-	rootCmd.SetArgs([]string{"plan"})
+	rootCmd.SetArgs([]string{"plan", "--preset", "balanced"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("plan returned error: %v", err)
 	}
@@ -1750,7 +1791,7 @@ func TestPlanUsesFreshWorkerPlanArtifactWhenTimestampDoesNotAdvance(t *testing.T
 	}
 
 	goal := "Stabilize Aether multi-platform lifecycle reliability across Claude Code, OpenCode, and Codex CLI"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	createApprovedCodexPlanTestColony(t, dataDir, root, colony.ColonyState{
 		Version: "3.0",
 		Goal:    &goal,
 		State:   colony.StateREADY,
@@ -1774,7 +1815,7 @@ func TestPlanUsesFreshWorkerPlanArtifactWhenTimestampDoesNotAdvance(t *testing.T
 	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &planningSameTimestampInvoker{} }
 	defer func() { newCodexWorkerInvoker = originalInvoker }()
 
-	rootCmd.SetArgs([]string{"plan"})
+	rootCmd.SetArgs([]string{"plan", "--preset", "balanced"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("plan returned error: %v", err)
 	}
@@ -1823,7 +1864,7 @@ func TestPlanFailsClosedWhenRealPlanningDispatchFails(t *testing.T) {
 	}
 
 	goal := "Stop honestly when planner workers stall"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	createApprovedCodexPlanTestColony(t, dataDir, root, colony.ColonyState{
 		Version: "3.0",
 		Goal:    &goal,
 		State:   colony.StateREADY,
@@ -1834,7 +1875,7 @@ func TestPlanFailsClosedWhenRealPlanningDispatchFails(t *testing.T) {
 	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &failingPlanningInvoker{} }
 	defer func() { newCodexWorkerInvoker = originalInvoker }()
 
-	rootCmd.SetArgs([]string{"plan"})
+	rootCmd.SetArgs([]string{"plan", "--preset", "balanced"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("plan returned error: %v", err)
 	}
@@ -1869,7 +1910,7 @@ func TestPlanFailsClosedWhenPlanningWorkersUnavailableBeforeStateMutation(t *tes
 	withWorkingDir(t, root)
 
 	goal := "Stop before local planning when provider is unavailable"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	createApprovedCodexPlanTestColony(t, dataDir, root, colony.ColonyState{
 		Version: "3.0",
 		Goal:    &goal,
 		State:   colony.StateREADY,
@@ -1880,7 +1921,7 @@ func TestPlanFailsClosedWhenPlanningWorkersUnavailableBeforeStateMutation(t *tes
 	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &planTestUnavailableInvoker{} }
 	defer func() { newCodexWorkerInvoker = originalInvoker }()
 
-	rootCmd.SetArgs([]string{"plan"})
+	rootCmd.SetArgs([]string{"plan", "--preset", "balanced"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("plan returned error: %v", err)
 	}
@@ -1923,7 +1964,7 @@ func TestPlanSyntheticForLanguageDesignGoalIsGoalAware(t *testing.T) {
 	withWorkingDir(t, root)
 
 	goal := "Create Soliditas, a language for AI-to-AI communication with better token and context efficiency"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	createApprovedCodexPlanTestColony(t, dataDir, root, colony.ColonyState{
 		Version:         "3.0",
 		Goal:            &goal,
 		State:           colony.StateREADY,
@@ -1931,7 +1972,7 @@ func TestPlanSyntheticForLanguageDesignGoalIsGoalAware(t *testing.T) {
 		Plan:            colony.Plan{Phases: []colony.Phase{}},
 	})
 
-	rootCmd.SetArgs([]string{"plan", "--synthetic"})
+	rootCmd.SetArgs([]string{"plan", "--synthetic", "--preset", "balanced"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("plan returned error: %v", err)
 	}
@@ -2000,7 +2041,7 @@ func TestPlanSyntheticDefaultMilestoneUsesArchitecturePhase(t *testing.T) {
 	}
 
 	goal := "Ship a safer project update flow"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	createApprovedCodexPlanTestColony(t, dataDir, root, colony.ColonyState{
 		Version:         "3.0",
 		Goal:            &goal,
 		State:           colony.StateREADY,
@@ -2008,7 +2049,7 @@ func TestPlanSyntheticDefaultMilestoneUsesArchitecturePhase(t *testing.T) {
 		Plan:            colony.Plan{Phases: []colony.Phase{}},
 	})
 
-	rootCmd.SetArgs([]string{"plan", "--synthetic"})
+	rootCmd.SetArgs([]string{"plan", "--synthetic", "--preset", "balanced"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("plan returned error: %v", err)
 	}
@@ -2042,7 +2083,7 @@ func TestPlanSyntheticDoesNotTreatCommandCenterAsAetherCommandWork(t *testing.T)
 	withWorkingDir(t, root)
 
 	goal := "Redesign the dashboard as a premium personal command center"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	createApprovedCodexPlanTestColony(t, dataDir, root, colony.ColonyState{
 		Version:         "3.0",
 		Goal:            &goal,
 		State:           colony.StateREADY,
@@ -2050,7 +2091,7 @@ func TestPlanSyntheticDoesNotTreatCommandCenterAsAetherCommandWork(t *testing.T)
 		Plan:            colony.Plan{Phases: []colony.Phase{}},
 	})
 
-	rootCmd.SetArgs([]string{"plan", "--synthetic"})
+	rootCmd.SetArgs([]string{"plan", "--synthetic", "--preset", "balanced"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("plan returned error: %v", err)
 	}
@@ -2753,7 +2794,8 @@ func TestE2EForceReplanRecovery(t *testing.T) {
 	resetRootCmd(t)
 
 	dataDir := setupBuildFlowTest(t)
-	withWorkingDir(t, filepath.Dir(filepath.Dir(dataDir)))
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
 	planningDir := dataDir + "/planning"
 	if err := os.MkdirAll(planningDir, 0755); err != nil {
 		t.Fatalf("failed to create planning dir: %v", err)
@@ -2784,7 +2826,7 @@ func TestE2EForceReplanRecovery(t *testing.T) {
 			},
 		},
 	}
-	createTestColonyState(t, dataDir, state)
+	createApprovedCodexPlanTestColony(t, dataDir, root, state)
 
 	// Write fallback artifacts — simulating what happens when real dispatch fails.
 	fallbackMarker := filepath.Join(planningDir, ".fallback-marker")
@@ -2813,7 +2855,7 @@ func TestE2EForceReplanRecovery(t *testing.T) {
 	var errBuf bytes.Buffer
 	stderr = &errBuf
 
-	rootCmd.SetArgs([]string{"plan", "--force", "--synthetic"})
+	rootCmd.SetArgs([]string{"plan", "--force", "--synthetic", "--preset", "balanced"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("plan --force returned error: %v", err)
 	}
@@ -2963,7 +3005,7 @@ func TestPlanningDepthInManifest(t *testing.T) {
 	}
 
 	goal := "Test planning depth in manifest"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	createApprovedCodexPlanTestColony(t, dataDir, root, colony.ColonyState{
 		Version: "3.0",
 		Goal:    &goal,
 		State:   colony.StateREADY,
@@ -3058,7 +3100,7 @@ func TestPlanningEvidenceHashChangesWhenEvidenceChanges(t *testing.T) {
 	}
 }
 
-func TestPlanOnlyManifestIncludesClassicPlanningLoopControls(t *testing.T) {
+func TestPlanOnlyManifestIncludesLockedPlanningPreset(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
@@ -3072,14 +3114,14 @@ func TestPlanOnlyManifestIncludesClassicPlanningLoopControls(t *testing.T) {
 	}
 
 	goal := "Test classic planning loop controls"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	createApprovedCodexPlanTestColony(t, dataDir, root, colony.ColonyState{
 		Version: "3.0",
 		Goal:    &goal,
 		State:   colony.StateREADY,
 		Plan:    colony.Plan{Phases: []colony.Phase{}},
 	})
 
-	rootCmd.SetArgs([]string{"plan", "--plan-only", "--depth", "deep", "--target", "94", "--max-iterations", "7", "--accept"})
+	rootCmd.SetArgs([]string{"plan", "--plan-only", "--preset", "deep"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("plan --plan-only returned error: %v", err)
 	}
@@ -3087,14 +3129,14 @@ func TestPlanOnlyManifestIncludesClassicPlanningLoopControls(t *testing.T) {
 	result := env["result"].(map[string]interface{})
 	manifest := result["plan_manifest"].(map[string]interface{})
 	loop := manifest["planning_loop"].(map[string]interface{})
-	if int(loop["target_confidence"].(float64)) != 94 {
-		t.Fatalf("target_confidence = %v, want 94", loop["target_confidence"])
+	if int(loop["target_confidence"].(float64)) != 95 {
+		t.Fatalf("target_confidence = %v, want 95", loop["target_confidence"])
 	}
-	if int(loop["max_iterations"].(float64)) != 7 {
-		t.Fatalf("max_iterations = %v, want 7", loop["max_iterations"])
+	if int(loop["max_iterations"].(float64)) != 8 {
+		t.Fatalf("max_iterations = %v, want 8", loop["max_iterations"])
 	}
-	if loop["accept"] != true {
-		t.Fatalf("accept = %v, want true", loop["accept"])
+	if accepted, present := loop["accept"].(bool); present && accepted {
+		t.Fatalf("accept = %v, want absent or false", loop["accept"])
 	}
 	if loop["stop_reason"].(string) != planningLoopPendingStop {
 		t.Fatalf("stop_reason = %q, want pending", loop["stop_reason"])
@@ -3105,14 +3147,14 @@ func TestPlanOnlyManifestIncludesClassicPlanningLoopControls(t *testing.T) {
 	if int(manifest["iteration"].(float64)) != 1 {
 		t.Fatalf("iteration = %v, want 1", manifest["iteration"])
 	}
-	if int(manifest["target_confidence"].(float64)) != 94 {
-		t.Fatalf("manifest target_confidence = %v, want 94", manifest["target_confidence"])
+	if int(manifest["target_confidence"].(float64)) != 95 {
+		t.Fatalf("manifest target_confidence = %v, want 95", manifest["target_confidence"])
 	}
-	if int(manifest["max_iterations"].(float64)) != 7 {
-		t.Fatalf("manifest max_iterations = %v, want 7", manifest["max_iterations"])
+	if int(manifest["max_iterations"].(float64)) != 8 {
+		t.Fatalf("manifest max_iterations = %v, want 8", manifest["max_iterations"])
 	}
-	if got := len(manifest["expected_workers"].([]interface{})); got != 2 {
-		t.Fatalf("expected_workers length = %d, want Scout and Route-Setter", got)
+	if got := len(manifest["expected_workers"].([]interface{})); got != 1 {
+		t.Fatalf("expected_workers length = %d, want Scout only", got)
 	}
 }
 
@@ -3130,7 +3172,7 @@ func TestPlanningDepthInWrapperContract(t *testing.T) {
 	}
 
 	goal := "Test planning depth in wrapper contract"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	createApprovedCodexPlanTestColony(t, dataDir, root, colony.ColonyState{
 		Version: "3.0",
 		Goal:    &goal,
 		State:   colony.StateREADY,
