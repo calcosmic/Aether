@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -160,6 +162,104 @@ func TestPlanningRouteStageNormalizeFormattingKeepsProposalHash(t *testing.T) {
 	}
 	if first.ProposalHash != second.ProposalHash {
 		t.Fatalf("formatting-only proposal changed canonical hash: %s != %s", first.ProposalHash, second.ProposalHash)
+	}
+}
+
+func TestPlanningRouteStageCardDerivesConfidenceAndSemanticDelta(t *testing.T) {
+	root, manifest, result := planningRouteStageTestFixture(t)
+	completed, err := finalizePlanningRouteStage(root, manifest, planningRouteStageTestBytes(t, result))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if completed.Receipt.ResultingState != planningStageContinueReady || completed.Card.Decision.Reason != colony.PlanningStopContinue {
+		t.Fatalf("Route completion = receipt:%+v decision:%+v, want a Go-derived continue boundary", completed.Receipt, completed.Card.Decision)
+	}
+	if completed.Card.RouteSetterReceiptID != completed.Receipt.ID || completed.Card.RouteSetterReceiptHash != completed.Receipt.ContentHash {
+		t.Fatalf("card does not bind exact Route receipt: card=%+v receipt=%+v", completed.Card, completed.Receipt)
+	}
+	if completed.Card.ScoutReceiptID != manifest.ScoutReceipt.ID || completed.Card.ScoutReceiptHash != manifest.ScoutReceipt.ContentHash {
+		t.Fatalf("card does not bind exact Scout receipt: %+v", completed.Card)
+	}
+	if completed.StopPolicy.Decision.ContentHash != completed.Card.Decision.ContentHash || completed.Card.SemanticDelta.ContentHash != completed.Validation.SemanticDelta.ContentHash {
+		t.Fatalf("card did not preserve Go-derived stop/delta truth: %+v", completed.Card)
+	}
+	scores := planningConfidenceScores{}
+	for _, assessment := range completed.Card.DimensionAssessments {
+		scores.Set(assessment.Dimension, assessment.After)
+	}
+	if scores.Overall != completed.StopPolicy.Diagnostics[0].Overall {
+		t.Fatalf("derived overall = %d diagnostic=%d", scores.Overall, completed.StopPolicy.Diagnostics[0].Overall)
+	}
+	timeline, err := loadPlanningTimeline(root, manifest.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(timeline.Cards) != 1 || timeline.Cards[0].ContentHash != completed.Card.ContentHash {
+		t.Fatalf("timeline cards = %+v, want the exact completed card", timeline.Cards)
+	}
+}
+
+func TestPlanningRouteStageAtomicCardReceiptAndTimeline(t *testing.T) {
+	root, manifest, result := planningRouteStageTestFixture(t)
+	crash := errors.New("simulated Route card commit interruption")
+	_, err := finalizePlanningRouteStageWithOptions(root, manifest, planningRouteStageTestBytes(t, result), planningRouteStageFinalizeOptions{
+		Fault: func(point string) error {
+			if point == "after_intent" {
+				return crash
+			}
+			return nil
+		},
+	})
+	if !errors.Is(err, crash) {
+		t.Fatalf("interrupted Route finalizer error = %v, want injected crash", err)
+	}
+	if _, statErr := os.Lstat(filepath.Join(root, filepath.FromSlash(planningTimelineIndexRepositoryPath(manifest.RunID)))); !os.IsNotExist(statErr) {
+		t.Fatalf("timeline index exists before atomic Route commit: %v", statErr)
+	}
+	chain, err := readPlanningStageReceiptChain(root, manifest.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(chain.Receipts) != 1 || chain.Receipts[0].Caste != planningStageCasteScout {
+		t.Fatalf("partial Route receipt escaped atomic boundary: %+v", chain.Receipts)
+	}
+	state, err := loadPlanningStageState(root, manifest.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Stage != planningStageRouteRunning || state.ActiveManifestID != manifest.ID {
+		t.Fatalf("interrupted Route finalizer advanced state: %+v", state)
+	}
+
+	completed, err := finalizePlanningRouteStage(root, manifest, planningRouteStageTestBytes(t, result))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if completed.Card.ID == "" || completed.Receipt.ID == "" {
+		t.Fatalf("recovered Route finalization is incomplete: %+v", completed)
+	}
+}
+
+func TestPlanningRouteStageReplayReturnsExactCardAndReceipt(t *testing.T) {
+	root, manifest, result := planningRouteStageTestFixture(t)
+	raw := planningRouteStageTestBytes(t, result)
+	first, err := finalizePlanningRouteStage(root, manifest, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := finalizePlanningRouteStage(root, manifest, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Receipt.ID != second.Receipt.ID || first.Receipt.ContentHash != second.Receipt.ContentHash || first.Card.ID != second.Card.ID || first.Card.ContentHash != second.Card.ContentHash {
+		t.Fatalf("exact replay diverged: first=%+v second=%+v", first, second)
+	}
+	chain, err := readPlanningStageReceiptChain(root, manifest.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(chain.Receipts) != 2 || len(chain.Cards) != 1 {
+		t.Fatalf("exact replay duplicated Route history: receipts=%d cards=%d", len(chain.Receipts), len(chain.Cards))
 	}
 }
 
