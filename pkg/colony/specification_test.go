@@ -61,9 +61,9 @@ func TestSpecWholeGoalRevisionRoundTripPreservesTypedBody(t *testing.T) {
 	revision.Approval = validSpecApproval(revision)
 
 	specification := Specification{
-		SchemaVersion:    SpecificationSchemaVersion,
-		ID:               "spec-goal-200",
-		GoalID:           "goal-200",
+		SchemaVersion:     SpecificationSchemaVersion,
+		ID:                "spec-goal-200",
+		GoalID:            "goal-200",
 		CurrentRevisionID: revision.ID,
 		Revisions:         []SpecRevision{revision},
 	}
@@ -137,9 +137,9 @@ func TestSpecFeatureSuccessorRoundTripClassifiesEveryBodySection(t *testing.T) {
 	successor.Delta = fullSpecRevisionDelta(predecessor.ID)
 
 	specification := Specification{
-		SchemaVersion:    SpecificationSchemaVersion,
-		ID:               "spec-goal-200",
-		GoalID:           "goal-200",
+		SchemaVersion:     SpecificationSchemaVersion,
+		ID:                "spec-goal-200",
+		GoalID:            "goal-200",
 		CurrentRevisionID: successor.ID,
 		Revisions:         []SpecRevision{predecessor, successor},
 	}
@@ -171,7 +171,7 @@ func TestSpecFeatureSuccessorRoundTripClassifiesEveryBodySection(t *testing.T) {
 		successor.Delta.AffectedPublicPaths,
 	}
 	for i, delta := range deltas {
-		if len(delta.AddedIDs) != 1 || len(delta.ModifiedIDs) != 1 || len(delta.RemovedIDs) != 1 || len(delta.PreservedIDs) != 1 {
+		if len(delta.AddedIDs) != 1 || len(delta.ModifiedIDs) != 1 || len(delta.RemovedIDs) != 1 || len(delta.UnchangedIDs) != 1 {
 			t.Errorf("delta section %d did not preserve explicit add/modify/remove/preserve classifications: %#v", i, delta)
 		}
 	}
@@ -310,14 +310,14 @@ func validSpecRevision(scope SpecScope) SpecRevision {
 
 func validSpecApproval(revision SpecRevision) *SpecApprovalReceipt {
 	return &SpecApprovalReceipt{
-		SchemaVersion:      SpecificationSchemaVersion,
-		ID:                 "spec-approval-1",
-		SpecificationID:    revision.SpecificationID,
-		RevisionID:         revision.ID,
+		SchemaVersion:       SpecificationSchemaVersion,
+		ID:                  "spec-approval-1",
+		SpecificationID:     revision.SpecificationID,
+		RevisionID:          revision.ID,
 		RevisionContentHash: revision.ContentHash,
-		ApprovalTokenHash:  "approval-token-hash",
-		ApprovedBy:         "owner-callum",
-		ApprovedAt:         revision.CreatedAt.Add(30 * time.Second),
+		ApprovalTokenHash:   "approval-token-hash",
+		ApprovedBy:          "owner-callum",
+		ApprovedAt:          revision.CreatedAt.Add(30 * time.Second),
 	}
 }
 
@@ -326,7 +326,7 @@ func fullSpecRevisionDelta(predecessorID string) SpecRevisionDelta {
 		AddedIDs:     []string{"added-id"},
 		ModifiedIDs:  []string{"modified-id"},
 		RemovedIDs:   []string{"removed-id"},
-		PreservedIDs: []string{"preserved-id"},
+		UnchangedIDs: []string{"unchanged-id"},
 	}
 	return SpecRevisionDelta{
 		PredecessorRevisionID: predecessorID,

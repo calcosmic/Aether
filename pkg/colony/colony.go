@@ -385,6 +385,7 @@ type ColonyState struct {
 	GateResults               []GateResultEntry    `json:"gate_results,omitempty"`
 	Charter                   *Charter             `json:"charter,omitempty"`
 	AcceptedCharter           *AcceptedCharter     `json:"accepted_charter,omitempty"`
+	Specification             *Specification       `json:"specification,omitempty"`
 	PendingSuggestions        *[]PendingSuggestion `json:"pending_suggestions,omitempty"`
 	LastAnalyzeCommit         *string              `json:"last_analyze_commit,omitempty"`
 	// Lifecycle evidence is additive and pointer-backed so state written
