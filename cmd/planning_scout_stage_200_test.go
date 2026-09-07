@@ -157,6 +157,118 @@ func TestPlanningScoutStageReplayReturnsOriginalReceiptAndRejectsDivergence(t *t
 	}
 }
 
+func TestPlanningScoutStageFirstPassMaterialQuestionsPersistOneDecisionBatchBeforeRoute(t *testing.T) {
+	root, manifest, result := planningScoutStageTestFixture(t)
+	result.DecisionCandidates = []planningDecisionCandidate{
+		planningScoutStageMaterialCandidate(result.NewEvidence[0].Reference, "decision-owner-authority"),
+		planningScoutStageMaterialCandidate(result.NewEvidence[0].Reference, "decision-visible-behavior"),
+	}
+
+	coordinated, err := coordinatePlanningScoutStage(root, manifest, planningScoutStageTestBytes(t, result))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if coordinated.DecisionCheckpoint == nil || coordinated.RouteDispatch != nil {
+		t.Fatalf("first-pass material boundary = %+v, want one decision checkpoint and no Route-Setter dispatch", coordinated)
+	}
+	checkpoint := coordinated.DecisionCheckpoint
+	if len(checkpoint.Batch.Decisions) != 2 || len(checkpoint.Cards) != 2 {
+		t.Fatalf("decision checkpoint = %+v, want one two-question batch with two cards", checkpoint)
+	}
+	if checkpoint.Batch.ScoutReceiptHash != coordinated.Scout.Receipt.ContentHash || checkpoint.FrontierReceiptHash != coordinated.Scout.Receipt.ContentHash {
+		t.Fatalf("decision checkpoint does not bind the completed Scout receipt: %+v", checkpoint)
+	}
+	if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(planningScoutDecisionCheckpointRepositoryPath(manifest.RunID)))); err != nil {
+		t.Fatalf("decision checkpoint was not persisted: %v", err)
+	}
+	state := planningStageReceiptTestReadState(t, root, manifest.RunID)
+	if state.Stage != planningStageOwnerDecision || state.ActiveManifestID != "" || len(state.UsedAuthorizationIDs) != 1 {
+		t.Fatalf("first-pass decision state = %+v, want owner_decision with no Route-Setter authorization", state)
+	}
+}
+
+func TestPlanningScoutStageNoMaterialQuestionAuthorizesExactlyOneRouteSetter(t *testing.T) {
+	root, manifest, result := planningScoutStageTestFixture(t)
+
+	coordinated, err := coordinatePlanningScoutStage(root, manifest, planningScoutStageTestBytes(t, result))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if coordinated.DecisionCheckpoint != nil || coordinated.RouteDispatch == nil {
+		t.Fatalf("no-material boundary = %+v, want one Route-Setter dispatch and no decision checkpoint", coordinated)
+	}
+	route := coordinated.RouteDispatch
+	if route.ScoutReceipt.ID != coordinated.Scout.Receipt.ID || route.ScoutReceipt.ContentHash != coordinated.Scout.Receipt.ContentHash {
+		t.Fatalf("Route-Setter authorization does not bind exact Scout receipt: %+v", route)
+	}
+	if route.Manifest.ExpectedCaste != planningStageCasteRouteSetter || route.Manifest.AuthorizationID != route.Authorization.ID {
+		t.Fatalf("Route-Setter dispatch is not the exact authorized manifest: %+v", route)
+	}
+	state := planningStageReceiptTestReadState(t, root, manifest.RunID)
+	if state.Stage != planningStageRouteRunning || state.ActiveManifestID != route.Manifest.ID || len(state.UsedAuthorizationIDs) != 2 {
+		t.Fatalf("Route-Setter state = %+v, want one new authorization after Scout", state)
+	}
+}
+
+func TestPlanningScoutStageCompletedDirectAnswersResumeExactRouteSetter(t *testing.T) {
+	root, manifest, result := planningScoutStageTestFixture(t)
+	result.DecisionCandidates = []planningDecisionCandidate{
+		planningScoutStageMaterialCandidate(result.NewEvidence[0].Reference, "decision-owner-authority"),
+		planningScoutStageMaterialCandidate(result.NewEvidence[0].Reference, "decision-visible-behavior"),
+	}
+	coordinated, err := coordinatePlanningScoutStage(root, manifest, planningScoutStageTestBytes(t, result))
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkpoint := coordinated.DecisionCheckpoint
+	answers := make([]planningScoutDecisionAnswer, 0, len(checkpoint.Cards))
+	for _, card := range checkpoint.Cards {
+		answers = append(answers, planningScoutDecisionAnswer{
+			DecisionID: card.DecisionID,
+			ChoiceID:   card.Choices[0].ID,
+			Answer:     card.Choices[0].Label,
+		})
+	}
+	token, err := buildPlanningScoutDecisionResumeToken(*checkpoint, answers)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resumed, err := resumePlanningScoutDecision(root, manifest.RunID, token, time.Date(2026, time.September, 7, 19, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resumed.RouteDispatch == nil || resumed.SuccessorSpecification != nil {
+		t.Fatalf("direct answer resume = %+v, want Route-Setter and no successor specification", resumed)
+	}
+	if resumed.ResumeToken == nil || resumed.ResumeToken.ContentHash != token.ContentHash {
+		t.Fatalf("resume did not preserve exact answer token: %+v", resumed.ResumeToken)
+	}
+	state := planningStageReceiptTestReadState(t, root, manifest.RunID)
+	if state.Stage != planningStageRouteRunning || state.ActiveManifestID != resumed.RouteDispatch.Manifest.ID {
+		t.Fatalf("direct answer state = %+v, want route_running", state)
+	}
+}
+
+func planningScoutStageMaterialCandidate(evidence colony.PlanningEvidenceRef, stableID string) planningDecisionCandidate {
+	impact := planningDecisionContractImpact{Behavior: "Preserve the approved behavior contract."}
+	return planningDecisionCandidate{
+		StableID:            stableID,
+		Domain:              planningDecisionDomainBehavior,
+		Decision:            "Should the approved behavior remain unchanged?",
+		WhyNow:              "Scout evidence exposes a choice that changes owner-visible behavior.",
+		Evidence:            []colony.PlanningEvidenceRef{evidence},
+		QueenRecommendation: "Keep the approved behavior unchanged.",
+		Impact:              impact,
+		Choices: []planningDecisionChoice{{
+			ID:          "keep-approved",
+			Label:       "Keep approved behavior",
+			Consequence: "Planning resumes without changing the approved contract.",
+			Impact:      impact,
+		}},
+		ResumeInstruction: "Planning resumes at Route-Setter after every answer is bound.",
+	}
+}
+
 func planningScoutStageTestFixture(t *testing.T) (string, planningStageManifest, planningScoutStageResult) {
 	t.Helper()
 	root := t.TempDir()
