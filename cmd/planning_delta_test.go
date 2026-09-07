@@ -214,6 +214,200 @@ func TestPlanningDeltaAuthorityCandidateAcceptanceStaysSeparate(t *testing.T) {
 	}
 }
 
+func TestPlanningDeltaProposalCompleteProducesStableHash(t *testing.T) {
+	proposal := planningDeltaCompleteProposal()
+	snapshot, err := validatePlanProposalContract(proposal, nil)
+	if err != nil {
+		t.Fatalf("validate complete proposal: %v", err)
+	}
+	if len(snapshot.ContentHash) != 64 {
+		t.Fatalf("snapshot hash = %q, want a SHA-256 digest", snapshot.ContentHash)
+	}
+
+	reordered := planningDeltaCompleteProposal()
+	reordered.TaskDeclarations[0].Files = []string{" cmd/planning_delta_test.go ", "cmd/planning_delta.go"}
+	reordered.TaskDeclarations[0], reordered.TaskDeclarations[1] = reordered.TaskDeclarations[1], reordered.TaskDeclarations[0]
+	reordered.Revision.Phases[0].SuccessCriteria[0] = "  Semantic   changes are stable "
+	reordered.Revision.Phases[0].EvidenceRequirements[0].Criterion = "Semantic changes are   stable"
+	reordered.Plan.Phases = append([]colony.Phase(nil), reordered.Revision.Phases...)
+	reorderedSnapshot, err := validatePlanProposalContract(reordered, nil)
+	if err != nil {
+		t.Fatalf("validate reordered proposal: %v", err)
+	}
+	if snapshot.ContentHash != reorderedSnapshot.ContentHash {
+		t.Fatalf("normalized proposal hash changed: %s != %s", snapshot.ContentHash, reorderedSnapshot.ContentHash)
+	}
+}
+
+func TestPlanningDeltaProposalRejectsIncompleteFieldsAtExactPaths(t *testing.T) {
+	tests := []struct {
+		name    string
+		mutate  func(*planProposalContract)
+		wantErr string
+	}{
+		{
+			name: "task objective",
+			mutate: func(proposal *planProposalContract) {
+				proposal.Revision.Phases[0].Tasks[0].Goal = "  "
+			},
+			wantErr: "phases[0].tasks[0].goal",
+		},
+		{
+			name: "requirements",
+			mutate: func(proposal *planProposalContract) {
+				proposal.Revision.Phases[0].Tasks[0].RequirementProofLinks = nil
+			},
+			wantErr: "phases[0].tasks[0].requirement_proof_links",
+		},
+		{
+			name: "automated acceptance",
+			mutate: func(proposal *planProposalContract) {
+				proposal.Revision.Phases[0].Tasks[0].EvidenceRequirements[0].Checks = nil
+			},
+			wantErr: "phases[0].tasks[0].evidence_requirements[0].checks",
+		},
+		{
+			name: "negative check",
+			mutate: func(proposal *planProposalContract) {
+				proposal.Revision.Phases[0].Tasks[0].NegativeProofLinks = nil
+			},
+			wantErr: "phases[0].tasks[0].negative_proof_links",
+		},
+		{
+			name: "recovery",
+			mutate: func(proposal *planProposalContract) {
+				proposal.Revision.Phases[0].Tasks[0].RecoveryProofLinks = nil
+			},
+			wantErr: "phases[0].tasks[0].recovery_proof_links",
+		},
+		{
+			name: "dependency target",
+			mutate: func(proposal *planProposalContract) {
+				proposal.Revision.Phases[1].Tasks[0].DependsOn = []string{"9.9"}
+			},
+			wantErr: "phases[1].tasks[0].depends_on[0]",
+		},
+		{
+			name: "files or reason",
+			mutate: func(proposal *planProposalContract) {
+				proposal.TaskDeclarations[0].Files = nil
+				proposal.TaskDeclarations[0].NoFileReason = ""
+			},
+			wantErr: "phases[0].tasks[0].files",
+		},
+		{
+			name: "public path",
+			mutate: func(proposal *planProposalContract) {
+				proposal.Revision.Phases[1].Tasks[0].PublicPathProofLinks = nil
+			},
+			wantErr: "phases[1].tasks[0].public_path_proof_links",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			proposal := planningDeltaCompleteProposal()
+			tt.mutate(&proposal)
+			_, err := validatePlanProposalContract(proposal, nil)
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("validation error = %v, want field path %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestPlanningDeltaProposalRejectsInexactFileDeclarations(t *testing.T) {
+	for _, file := range []string{"/tmp/absolute.go", "cmd/*.go", "../outside.go", "cmd/"} {
+		t.Run(file, func(t *testing.T) {
+			proposal := planningDeltaCompleteProposal()
+			proposal.TaskDeclarations[0].Files = []string{file}
+			_, err := validatePlanProposalContract(proposal, nil)
+			if err == nil || !strings.Contains(err.Error(), "phases[0].tasks[0].files[0]") {
+				t.Fatalf("validation error = %v, want exact files[0] path", err)
+			}
+		})
+	}
+}
+
+func TestPlanningDeltaRemovalRequiresExplicitDeclaration(t *testing.T) {
+	predecessorProposal := planningDeltaCompleteProposal()
+	predecessor, err := validatePlanProposalContract(predecessorProposal, nil)
+	if err != nil {
+		t.Fatalf("validate predecessor: %v", err)
+	}
+
+	proposal := planningDeltaCompleteProposal()
+	proposal.Revision.Phases = proposal.Revision.Phases[:1]
+	proposal.Plan.Phases = append([]colony.Phase(nil), proposal.Revision.Phases...)
+	proposal.TaskDeclarations = proposal.TaskDeclarations[:1]
+	proposal.UserFacingSemanticIDs = nil
+	_, err = validatePlanProposalContract(proposal, &predecessor)
+	if err == nil || !strings.Contains(err.Error(), "removals") || !strings.Contains(err.Error(), "phase-ui") {
+		t.Fatalf("silent removal error = %v, want removals field and missing stable ID", err)
+	}
+
+	proposal.Removals = []planProposalRemoval{
+		{SemanticID: "phase-ui", Classification: colony.PlanningSemanticChangeRemoved, Rationale: "The presentation work moved to the existing route"},
+		{SemanticID: "task-present", Classification: colony.PlanningSemanticChangeRemoved, Rationale: "The existing route now owns presentation"},
+	}
+	if _, err := validatePlanProposalContract(proposal, &predecessor); err != nil {
+		t.Fatalf("validate explicit removal proposal: %v", err)
+	}
+}
+
+func TestPlanningDeltaCycleRejectsProposalBeforePersistence(t *testing.T) {
+	proposal := planningDeltaCompleteProposal()
+	proposal.Revision.Phases[0].Tasks[0].DependsOn = []string{"2.1"}
+	_, err := validatePlanProposalContract(proposal, nil)
+	if err == nil || !strings.Contains(err.Error(), "dependency cycle") {
+		t.Fatalf("cycle validation error = %v, want dependency cycle", err)
+	}
+}
+
+func TestPlanningDeltaProposalLegacyLoadingRemainsOutsideBoundary(t *testing.T) {
+	legacyTaskID := "1.1"
+	legacy := planningSemanticSnapshotSource{
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID: 1, Name: "Legacy phase", Tasks: []colony.Task{{ID: &legacyTaskID, Goal: "Legacy task"}},
+		}}},
+	}
+	if _, err := buildPlanningSemanticSnapshot(legacy); err != nil {
+		t.Fatalf("legacy snapshot should remain readable without current proposal validation: %v", err)
+	}
+}
+
+func planningDeltaCompleteProposal() planProposalContract {
+	source := planningDeltaTestSource()
+	for phaseIndex := range source.Revision.Phases {
+		phase := &source.Revision.Phases[phaseIndex]
+		phase.RequirementProofLinks = append([]string(nil), phase.Tasks[0].RequirementProofLinks...)
+		phase.AcceptanceProofLinks = append([]string(nil), phase.Tasks[0].AcceptanceProofLinks...)
+		phase.NegativeProofLinks = append([]string(nil), phase.Tasks[0].NegativeProofLinks...)
+		phase.RecoveryProofLinks = append([]string(nil), phase.Tasks[0].RecoveryProofLinks...)
+		phase.PublicPathProofLinks = append([]string(nil), phase.Tasks[0].PublicPathProofLinks...)
+		criterion := "Semantic changes are stable"
+		if phaseIndex == 1 {
+			criterion = "The delta card remains visible"
+		}
+		phase.SuccessCriteria = []string{criterion}
+		phase.EvidenceRequirements = []colony.CriterionEvidenceRequirement{{Criterion: criterion, Checks: []string{"tests"}}}
+		task := &phase.Tasks[0]
+		task.SuccessCriteria = []string{criterion}
+		task.EvidenceRequirements = []colony.CriterionEvidenceRequirement{{Criterion: criterion, Checks: []string{"tests"}}}
+	}
+	source.Plan.Phases = append([]colony.Phase(nil), source.Revision.Phases...)
+	return planProposalContract{
+		Plan:          source.Plan,
+		Revision:      source.Revision,
+		Specification: source.Specification,
+		TaskDeclarations: []planProposalTaskDeclaration{
+			{TaskSemanticID: "task-compare", Files: []string{"cmd/planning_delta.go", "cmd/planning_delta_test.go"}},
+			{TaskSemanticID: "task-present", Files: []string{"cmd/codex_visuals.go"}, UserFacing: true},
+		},
+		UserFacingSemanticIDs: []string{"phase-ui"},
+	}
+}
+
 func planningDeltaTestSource() planningSemanticSnapshotSource {
 	coreTaskID := "1.1"
 	uiTaskID := "2.1"
