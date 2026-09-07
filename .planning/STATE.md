@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 200-18-PLAN.md
-last_updated: "2026-09-07T23:26:00.215Z"
+stopped_at: Completed 200-19-PLAN.md
+last_updated: "2026-09-07T23:58:14.575Z"
 last_activity: 2026-09-07
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 59
-  completed_plans: 52
+  completed_plans: 53
   percent: 14
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 19 of 25
+Plan: 20 of 25
 Status: Ready to execute
 Last activity: 2026-09-07
 
@@ -129,6 +129,7 @@ Last activity: 2026-09-07
 | Phase 200 P16 | 35m | 2 tasks | 9 files |
 | Phase 200 P17 | 46m | 3 tasks | 10 files |
 | Phase 200 P18 | 32min | 2 tasks | 6 files |
+| Phase 200 P19 | 22min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -381,6 +382,10 @@ Last activity: 2026-09-07
 - [Phase 200]: Build and run consume the same structured planAuthorityDecision rather than independently inferring acceptance.
 - [Phase 200]: Current authority requires exact approved SPEC, accepted candidate, immutable proposal, timeline, and receipt bindings; legacy authority requires the explicit legacy_unbound marker.
 - [Phase 200]: A newer pending candidate remains inactive but does not revoke an already accepted plan.
+- [Phase 200]: Terminal width changes layout only; typed planning facts and authority remain unchanged.
+- [Phase 200]: JSON retains machine stop enums and adds explicit public-label siblings.
+- [Phase 200]: Build and run appear coequally only after receipt-backed plan acceptance.
+- [Phase 200]: Canonical Phase 200 planning results route before the legacy whole-plan renderer.
 
 ### Pending Todos
 
@@ -496,8 +501,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-07T23:26:00.205Z
-Stopped at: Completed 200-18-PLAN.md
+Last session: 2026-09-07T23:58:14.566Z
+Stopped at: Completed 200-19-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
