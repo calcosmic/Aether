@@ -67,6 +67,65 @@ type LifecycleProgressFacts struct {
 	Phases       []colony.Phase `json:"phases,omitempty"`
 }
 
+// LifecycleIntentFacts keeps accepted charter authority separate from the
+// clarification queue. A goal can be accepted while owner intent is still
+// unsettled, so neither boolean is derived from the other.
+type LifecycleIntentFacts struct {
+	CharterPresent            bool   `json:"charter_present"`
+	CharterAccepted           bool   `json:"charter_accepted"`
+	EpisodeID                 string `json:"episode_id,omitempty"`
+	DiscussionObserved        bool   `json:"discussion_observed"`
+	UnresolvedDiscussionCount int    `json:"unresolved_discussion_count"`
+}
+
+// LifecycleSpecificationFacts describes only specification authority. In
+// particular, Approved says nothing about whether a plan candidate has been
+// accepted for execution.
+type LifecycleSpecificationFacts struct {
+	Present           bool                      `json:"present"`
+	SpecificationID   string                    `json:"specification_id,omitempty"`
+	CurrentRevisionID string                    `json:"current_revision_id,omitempty"`
+	RevisionNumber    int                       `json:"revision_number,omitempty"`
+	ContentHash       string                    `json:"content_hash,omitempty"`
+	Status            colony.SpecRevisionStatus `json:"status,omitempty"`
+	Approved          bool                      `json:"approved"`
+	ApprovalReceiptID string                    `json:"approval_receipt_id,omitempty"`
+}
+
+// LifecyclePlanAcceptanceBindingStatus is the closed execution-authority
+// vocabulary used by lifecycle guidance. Candidate readiness deliberately is
+// not an accepted-plan state.
+type LifecyclePlanAcceptanceBindingStatus string
+
+const (
+	LifecyclePlanBindingAbsent        LifecyclePlanAcceptanceBindingStatus = "absent"
+	LifecyclePlanBindingAccepted      LifecyclePlanAcceptanceBindingStatus = "accepted"
+	LifecyclePlanBindingAffected      LifecyclePlanAcceptanceBindingStatus = "affected"
+	LifecyclePlanBindingLegacyUnbound LifecyclePlanAcceptanceBindingStatus = "legacy_unbound"
+	LifecyclePlanBindingInvalid       LifecyclePlanAcceptanceBindingStatus = "invalid"
+)
+
+// LifecyclePlanningFacts combines the current planning-stage cursor with the
+// durable candidate and accepted-revision bindings from the same state
+// snapshot. It is a read model only; loading it never repairs either source.
+type LifecyclePlanningFacts struct {
+	RunID                         string                               `json:"run_id,omitempty"`
+	Stage                         string                               `json:"stage,omitempty"`
+	Pass                          int                                  `json:"pass,omitempty"`
+	Preset                        string                               `json:"preset,omitempty"`
+	PendingCandidateID            string                               `json:"pending_candidate_id,omitempty"`
+	PendingCandidateHash          string                               `json:"pending_candidate_hash,omitempty"`
+	PendingCandidateStatus        colony.PlanCandidateStatus           `json:"pending_candidate_status,omitempty"`
+	PendingCandidateStopReason    colony.PlanningStopReason            `json:"pending_candidate_stop_reason,omitempty"`
+	ActivePlanRevisionID          string                               `json:"active_plan_revision_id,omitempty"`
+	ActivePlanRevisionHash        string                               `json:"active_plan_revision_hash,omitempty"`
+	AcceptancePolicy              colony.PlanAcceptancePolicy          `json:"acceptance_policy,omitempty"`
+	AcceptanceBindingStatus       LifecyclePlanAcceptanceBindingStatus `json:"acceptance_binding_status"`
+	AcceptedPlan                  bool                                 `json:"accepted_plan"`
+	LegacyUnbound                 bool                                 `json:"legacy_unbound"`
+	AffectedUnresolvedSemanticIDs []string                             `json:"affected_unresolved_semantic_ids,omitempty"`
+}
+
 type LifecycleActorFact struct {
 	Timestamp string `json:"timestamp,omitempty"`
 	Parent    string `json:"parent,omitempty"`
@@ -123,22 +182,25 @@ type LifecycleEvidenceFacts struct {
 // the pure lifecycle projection. Consumers receive it by value and do not get
 // access to the store or any loader callbacks.
 type LifecycleFacts struct {
-	Root         string                                    `json:"root"`
-	CapturedAt   time.Time                                 `json:"captured_at"`
-	State        LifecycleFact[colony.ColonyState]         `json:"state"`
-	Identity     LifecycleFact[LifecycleIdentityFacts]     `json:"identity"`
-	Progress     LifecycleFact[LifecycleProgressFacts]     `json:"progress"`
-	Actors       LifecycleFact[[]LifecycleActorFact]       `json:"actors"`
-	Signals      LifecycleFact[[]colony.PheromoneSignal]   `json:"signals"`
-	Research     LifecycleFact[LifecycleResearchFacts]     `json:"research"`
-	Memory       LifecycleFact[LifecycleMemoryFacts]       `json:"memory"`
-	Verification LifecycleFact[LifecycleVerificationFacts] `json:"verification"`
-	Timing       LifecycleFact[LifecycleTimingFacts]       `json:"timing"`
-	ReportedCost LifecycleFact[LifecycleReportedCostFacts] `json:"reported_cost"`
-	History      LifecycleFact[[]string]                   `json:"history"`
-	Blockers     LifecycleFact[[]colony.FlagEntry]         `json:"blockers"`
-	Evidence     LifecycleFact[LifecycleEvidenceFacts]     `json:"evidence"`
-	Session      LifecycleFact[colony.SessionFile]         `json:"session"`
+	Root          string                                     `json:"root"`
+	CapturedAt    time.Time                                  `json:"captured_at"`
+	State         LifecycleFact[colony.ColonyState]          `json:"state"`
+	Identity      LifecycleFact[LifecycleIdentityFacts]      `json:"identity"`
+	Progress      LifecycleFact[LifecycleProgressFacts]      `json:"progress"`
+	Intent        LifecycleFact[LifecycleIntentFacts]        `json:"intent"`
+	Specification LifecycleFact[LifecycleSpecificationFacts] `json:"specification"`
+	Planning      LifecycleFact[LifecyclePlanningFacts]      `json:"planning"`
+	Actors        LifecycleFact[[]LifecycleActorFact]        `json:"actors"`
+	Signals       LifecycleFact[[]colony.PheromoneSignal]    `json:"signals"`
+	Research      LifecycleFact[LifecycleResearchFacts]      `json:"research"`
+	Memory        LifecycleFact[LifecycleMemoryFacts]        `json:"memory"`
+	Verification  LifecycleFact[LifecycleVerificationFacts]  `json:"verification"`
+	Timing        LifecycleFact[LifecycleTimingFacts]        `json:"timing"`
+	ReportedCost  LifecycleFact[LifecycleReportedCostFacts]  `json:"reported_cost"`
+	History       LifecycleFact[[]string]                    `json:"history"`
+	Blockers      LifecycleFact[[]colony.FlagEntry]          `json:"blockers"`
+	Evidence      LifecycleFact[LifecycleEvidenceFacts]      `json:"evidence"`
+	Session       LifecycleFact[colony.SessionFile]          `json:"session"`
 }
 
 // Sources returns one provenance record for every fact domain in stable order.
@@ -147,6 +209,9 @@ func (f LifecycleFacts) Sources() []LifecycleFactSource {
 		f.State.Source,
 		f.Identity.Source,
 		f.Progress.Source,
+		f.Intent.Source,
+		f.Specification.Source,
+		f.Planning.Source,
 		f.Actors.Source,
 		f.Signals.Source,
 		f.Research.Source,
@@ -467,6 +532,255 @@ func lifecycleEvidence(state colony.ColonyState, stateSource LifecycleFactSource
 	return LifecycleFact[LifecycleEvidenceFacts]{Value: value, Source: lifecycleCombinedSource("evidence", lifecycleDerivedSource("state evidence", stateSource), lifecycleDerivedSource("session evidence", sessionSource))}
 }
 
+func readLifecyclePendingDecisions(path string) (PendingDecisionFile, colony.FlagsFile, LifecycleFactSource) {
+	var decisions PendingDecisionFile
+	var flags colony.FlagsFile
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return decisions, flags, lifecycleSource("pending decisions", path, LifecycleFactMissing, "source does not exist")
+		}
+		return decisions, flags, lifecycleUnavailableSource("pending decisions", path, err.Error())
+	}
+	if err := json.Unmarshal(data, &decisions); err != nil {
+		return decisions, flags, lifecycleSource("pending decisions", path, LifecycleFactMalformed, err.Error())
+	}
+	if err := json.Unmarshal(data, &flags); err != nil {
+		return decisions, flags, lifecycleSource("pending decisions", path, LifecycleFactMalformed, err.Error())
+	}
+	return decisions, flags, lifecycleSource("pending decisions", path, LifecycleFactConfirmed, "")
+}
+
+func lifecycleIntentFromSnapshot(state colony.ColonyState, stateSource LifecycleFactSource, pending PendingDecisionFile, pendingSource LifecycleFactSource) LifecycleFact[LifecycleIntentFacts] {
+	active, _ := filterPendingDecisionFileForScope(pending, pendingDecisionScopeFromState(state))
+	value := LifecycleIntentFacts{
+		CharterPresent:            state.Charter != nil || (state.AcceptedCharter != nil && state.AcceptedCharter.Charter != nil),
+		CharterAccepted:           state.AcceptedCharter != nil,
+		EpisodeID:                 lifecycleAcceptedEpisode(state),
+		DiscussionObserved:        pendingSource.Provenance == LifecycleFactConfirmed,
+		UnresolvedDiscussionCount: countPendingClarifications(active),
+	}
+	return LifecycleFact[LifecycleIntentFacts]{
+		Value: value,
+		Source: lifecycleCombinedSource(
+			"intent",
+			lifecycleDerivedSource("charter", stateSource),
+			lifecycleDerivedSource("discussion", pendingSource),
+		),
+	}
+}
+
+func lifecycleSpecificationFromSnapshot(state colony.ColonyState, stateSource LifecycleFactSource) LifecycleFact[LifecycleSpecificationFacts] {
+	source := lifecycleDerivedSource("specification", stateSource)
+	if state.Specification == nil {
+		return LifecycleFact[LifecycleSpecificationFacts]{Source: source}
+	}
+
+	value := LifecycleSpecificationFacts{
+		Present:           true,
+		SpecificationID:   strings.TrimSpace(state.Specification.ID),
+		CurrentRevisionID: strings.TrimSpace(state.Specification.CurrentRevisionID),
+	}
+	current, ok := currentSpecificationRevision(*state.Specification)
+	if ok {
+		value.ContentHash = strings.TrimSpace(current.ContentHash)
+		value.Status = current.Status
+		for i := range state.Specification.Revisions {
+			if state.Specification.Revisions[i].ID == current.ID {
+				value.RevisionNumber = i + 1
+				break
+			}
+		}
+		if current.Approval != nil {
+			value.ApprovalReceiptID = strings.TrimSpace(current.Approval.ID)
+		}
+	}
+	if err := validateSpecificationState(*state.Specification); err != nil {
+		source = lifecycleSource("specification", stateSource.Path, LifecycleFactMalformed, err.Error())
+		return LifecycleFact[LifecycleSpecificationFacts]{Value: value, Source: source}
+	}
+	value.Approved = ok && current.Status == colony.SpecStatusApproved && current.Approval != nil
+	return LifecycleFact[LifecycleSpecificationFacts]{Value: value, Source: source}
+}
+
+func lifecyclePlanRevisionByID(plan colony.Plan, id string) (colony.PlanRevision, bool) {
+	for i := range plan.Revisions {
+		if plan.Revisions[i].ID == id {
+			return plan.Revisions[i], true
+		}
+	}
+	return colony.PlanRevision{}, false
+}
+
+func lifecyclePlanCandidateByID(plan colony.Plan, id string) (colony.PlanCandidate, bool) {
+	for i := range plan.Candidates {
+		if plan.Candidates[i].ID == id {
+			return plan.Candidates[i], true
+		}
+	}
+	return colony.PlanCandidate{}, false
+}
+
+func lifecycleAcceptedPlanValid(state colony.ColonyState) bool {
+	if state.Plan.AcceptancePolicy != colony.PlanAcceptanceExplicitOwner || strings.TrimSpace(state.Plan.ActiveRevisionID) == "" {
+		return false
+	}
+	active, ok := lifecyclePlanRevisionByID(state.Plan, state.Plan.ActiveRevisionID)
+	if !ok {
+		return false
+	}
+	accepted, ok := lifecyclePlanCandidateByID(state.Plan, active.CandidateID)
+	if !ok || accepted.Status != colony.PlanCandidateAccepted || accepted.Acceptance == nil {
+		return false
+	}
+
+	// A new pending candidate does not revoke the previously accepted plan.
+	// Validate that accepted binding on its own so a malformed proposal cannot
+	// accidentally turn a historical acceptance into build authority either.
+	acceptedState := state
+	acceptedState.Plan.Candidates = []colony.PlanCandidate{accepted}
+	acceptedState.Plan.PendingCandidateID = ""
+	return validateCurrentPlanningState(acceptedState) == nil
+}
+
+func lifecyclePlanningRunID(state colony.ColonyState) string {
+	if pending, ok := lifecyclePlanCandidateByID(state.Plan, state.Plan.PendingCandidateID); ok {
+		if runID := strings.TrimSpace(pending.Timeline.RunID); runID != "" {
+			return runID
+		}
+	}
+	if active, ok := lifecyclePlanRevisionByID(state.Plan, state.Plan.ActiveRevisionID); ok {
+		if runID := strings.TrimSpace(active.PlanningRunID); runID != "" {
+			return runID
+		}
+		if candidate, found := lifecyclePlanCandidateByID(state.Plan, active.CandidateID); found {
+			return strings.TrimSpace(candidate.Timeline.RunID)
+		}
+	}
+	return ""
+}
+
+func readLifecyclePlanningStage(root, dataDir string, state colony.ColonyState) (*planningStageState, string, LifecycleFactSource) {
+	runID := lifecyclePlanningRunID(state)
+	iterationSource := LifecycleFactSource{}
+	if runID == "" {
+		iteration, source := readLifecycleJSON[codexPlanIterationState]("planning iteration", filepath.Join(dataDir, planningIterationStateRel))
+		iterationSource = source
+		if source.Provenance == LifecycleFactConfirmed {
+			runID = strings.TrimSpace(iteration.PlanningRunID)
+		}
+	}
+	if runID == "" {
+		return nil, "", iterationSource
+	}
+
+	path := filepath.Join(root, filepath.FromSlash(planningStageStateRepositoryPath(runID)))
+	stage, err := loadPlanningStageState(root, runID)
+	if err != nil {
+		provenance := LifecycleFactUnavailable
+		if os.IsNotExist(err) {
+			provenance = LifecycleFactMissing
+		} else if strings.Contains(err.Error(), "decode") || strings.Contains(err.Error(), "invalid") || strings.Contains(err.Error(), "requires") || strings.Contains(err.Error(), "must") {
+			provenance = LifecycleFactMalformed
+		}
+		source := lifecycleSource("planning stage", path, provenance, err.Error())
+		if iterationSource.Path != "" {
+			source = lifecycleCombinedSource("planning stage", iterationSource, source)
+		}
+		return nil, runID, source
+	}
+	source := lifecycleSource("planning stage", path, LifecycleFactConfirmed, "")
+	if iterationSource.Path != "" {
+		source = lifecycleCombinedSource("planning stage", iterationSource, source)
+	}
+	return &stage, runID, source
+}
+
+func lifecycleAffectedSemanticIDs(state colony.ColonyState, stage *planningStageState) []string {
+	seen := make(map[string]struct{})
+	add := func(values []string) {
+		for _, value := range values {
+			value = strings.TrimSpace(value)
+			if value != "" {
+				seen[value] = struct{}{}
+			}
+		}
+	}
+	if active, ok := lifecyclePlanRevisionByID(state.Plan, state.Plan.ActiveRevisionID); ok {
+		add(active.AffectedSemanticIDs)
+	}
+	for i := range state.Plan.Phases {
+		add(state.Plan.Phases[i].AffectedSemanticIDs)
+		for j := range state.Plan.Phases[i].Tasks {
+			add(state.Plan.Phases[i].Tasks[j].AffectedSemanticIDs)
+		}
+	}
+	if stage != nil {
+		add(stage.PendingAffectedSemanticIDs)
+	}
+	if len(seen) == 0 {
+		return nil
+	}
+	result := make([]string, 0, len(seen))
+	for value := range seen {
+		result = append(result, value)
+	}
+	sort.Strings(result)
+	return result
+}
+
+func lifecyclePlanningFromSnapshot(state colony.ColonyState, stateSource LifecycleFactSource, stage *planningStageState, runID string, stageSource LifecycleFactSource) LifecycleFact[LifecyclePlanningFacts] {
+	value := LifecyclePlanningFacts{
+		RunID:                   strings.TrimSpace(runID),
+		AcceptancePolicy:        state.Plan.AcceptancePolicy,
+		AcceptanceBindingStatus: LifecyclePlanBindingAbsent,
+		ActivePlanRevisionID:    strings.TrimSpace(state.Plan.ActiveRevisionID),
+		PendingCandidateID:      strings.TrimSpace(state.Plan.PendingCandidateID),
+	}
+	if stage != nil {
+		value.RunID = strings.TrimSpace(stage.RunID)
+		value.Stage = string(stage.Stage)
+		value.Pass = stage.Pass
+		value.Preset = string(stage.Preset)
+	}
+	if pending, ok := lifecyclePlanCandidateByID(state.Plan, value.PendingCandidateID); ok {
+		value.PendingCandidateHash = strings.TrimSpace(pending.ContentHash)
+		value.PendingCandidateStatus = pending.Status
+		value.PendingCandidateStopReason = pending.StopDecision.Reason
+		if value.RunID == "" {
+			value.RunID = strings.TrimSpace(pending.Timeline.RunID)
+		}
+	}
+	if active, ok := lifecyclePlanRevisionByID(state.Plan, value.ActivePlanRevisionID); ok {
+		value.ActivePlanRevisionHash = strings.TrimSpace(active.PlanHash)
+		if value.RunID == "" {
+			value.RunID = strings.TrimSpace(active.PlanningRunID)
+		}
+	}
+	value.AffectedUnresolvedSemanticIDs = lifecycleAffectedSemanticIDs(state, stage)
+
+	value.LegacyUnbound = state.Plan.AcceptancePolicy == colony.PlanAcceptanceLegacyUnbound ||
+		(state.Plan.AcceptancePolicy == "" && len(state.Plan.Phases) > 0 && !planHasCurrentAuthority(state.Plan))
+	switch {
+	case value.LegacyUnbound:
+		value.AcceptanceBindingStatus = LifecyclePlanBindingLegacyUnbound
+	case lifecycleAcceptedPlanValid(state):
+		value.AcceptedPlan = true
+		value.AcceptanceBindingStatus = LifecyclePlanBindingAccepted
+		if len(value.AffectedUnresolvedSemanticIDs) > 0 {
+			value.AcceptanceBindingStatus = LifecyclePlanBindingAffected
+		}
+	case strings.TrimSpace(state.Plan.ActiveRevisionID) != "":
+		value.AcceptanceBindingStatus = LifecyclePlanBindingInvalid
+	}
+
+	source := lifecycleDerivedSource("planning", stateSource)
+	if stageSource.Path != "" {
+		source = lifecycleCombinedSource("planning", source, stageSource)
+	}
+	return LifecycleFact[LifecyclePlanningFacts]{Value: value, Source: source}
+}
+
 func unavailableLifecycleFacts(root string, now time.Time, diagnostic string) LifecycleFacts {
 	unavailable := func(domain, path string) LifecycleFactSource {
 		return lifecycleUnavailableSource(domain, path, diagnostic)
@@ -474,20 +788,23 @@ func unavailableLifecycleFacts(root string, now time.Time, diagnostic string) Li
 	base := filepath.Join(root, ".aether", "data")
 	return LifecycleFacts{
 		Root: root, CapturedAt: now,
-		State:        LifecycleFact[colony.ColonyState]{Source: unavailable("state", filepath.Join(base, "COLONY_STATE.json"))},
-		Identity:     LifecycleFact[LifecycleIdentityFacts]{Source: unavailable("identity", filepath.Join(base, "COLONY_STATE.json"))},
-		Progress:     LifecycleFact[LifecycleProgressFacts]{Source: unavailable("progress", filepath.Join(base, "COLONY_STATE.json"))},
-		Actors:       LifecycleFact[[]LifecycleActorFact]{Source: unavailable("actors", filepath.Join(base, "spawn-tree.txt"))},
-		Signals:      LifecycleFact[[]colony.PheromoneSignal]{Source: unavailable("signals", filepath.Join(base, "pheromones.json"))},
-		Research:     LifecycleFact[LifecycleResearchFacts]{Source: unavailable("research", filepath.Join(root, ".aether", "research"))},
-		Memory:       LifecycleFact[LifecycleMemoryFacts]{Source: unavailable("memory", filepath.Join(base, "instincts.json"))},
-		Verification: LifecycleFact[LifecycleVerificationFacts]{Source: unavailable("verification", filepath.Join(base, "build"))},
-		Timing:       LifecycleFact[LifecycleTimingFacts]{Value: LifecycleTimingFacts{CapturedAt: now}, Source: unavailable("timing", filepath.Join(base, "COLONY_STATE.json"))},
-		ReportedCost: LifecycleFact[LifecycleReportedCostFacts]{Source: unavailable("reported cost", filepath.Join(base, "spend"))},
-		History:      LifecycleFact[[]string]{Source: unavailable("history", filepath.Join(base, "COLONY_STATE.json"))},
-		Blockers:     LifecycleFact[[]colony.FlagEntry]{Source: unavailable("blockers", filepath.Join(base, "pending-decisions.json"))},
-		Evidence:     LifecycleFact[LifecycleEvidenceFacts]{Source: unavailable("evidence", filepath.Join(base, "COLONY_STATE.json"))},
-		Session:      LifecycleFact[colony.SessionFile]{Source: unavailable("session", filepath.Join(base, "session.json"))},
+		State:         LifecycleFact[colony.ColonyState]{Source: unavailable("state", filepath.Join(base, "COLONY_STATE.json"))},
+		Identity:      LifecycleFact[LifecycleIdentityFacts]{Source: unavailable("identity", filepath.Join(base, "COLONY_STATE.json"))},
+		Progress:      LifecycleFact[LifecycleProgressFacts]{Source: unavailable("progress", filepath.Join(base, "COLONY_STATE.json"))},
+		Intent:        LifecycleFact[LifecycleIntentFacts]{Source: unavailable("intent", filepath.Join(base, pendingDecisionsFile))},
+		Specification: LifecycleFact[LifecycleSpecificationFacts]{Source: unavailable("specification", filepath.Join(base, "COLONY_STATE.json"))},
+		Planning:      LifecycleFact[LifecyclePlanningFacts]{Source: unavailable("planning", filepath.Join(base, "planning"))},
+		Actors:        LifecycleFact[[]LifecycleActorFact]{Source: unavailable("actors", filepath.Join(base, "spawn-tree.txt"))},
+		Signals:       LifecycleFact[[]colony.PheromoneSignal]{Source: unavailable("signals", filepath.Join(base, "pheromones.json"))},
+		Research:      LifecycleFact[LifecycleResearchFacts]{Source: unavailable("research", filepath.Join(root, ".aether", "research"))},
+		Memory:        LifecycleFact[LifecycleMemoryFacts]{Source: unavailable("memory", filepath.Join(base, "instincts.json"))},
+		Verification:  LifecycleFact[LifecycleVerificationFacts]{Source: unavailable("verification", filepath.Join(base, "build"))},
+		Timing:        LifecycleFact[LifecycleTimingFacts]{Value: LifecycleTimingFacts{CapturedAt: now}, Source: unavailable("timing", filepath.Join(base, "COLONY_STATE.json"))},
+		ReportedCost:  LifecycleFact[LifecycleReportedCostFacts]{Source: unavailable("reported cost", filepath.Join(base, "spend"))},
+		History:       LifecycleFact[[]string]{Source: unavailable("history", filepath.Join(base, "COLONY_STATE.json"))},
+		Blockers:      LifecycleFact[[]colony.FlagEntry]{Source: unavailable("blockers", filepath.Join(base, "pending-decisions.json"))},
+		Evidence:      LifecycleFact[LifecycleEvidenceFacts]{Source: unavailable("evidence", filepath.Join(base, "COLONY_STATE.json"))},
+		Session:       LifecycleFact[colony.SessionFile]{Source: unavailable("session", filepath.Join(base, "session.json"))},
 	}
 }
 
@@ -552,13 +869,16 @@ func lifecycleFactsFromStateSnapshot(state colony.ColonyState, noColony bool, no
 		return lifecycleUnavailableSource(domain, "(not observed by in-memory state caller)", "the caller supplied state but did not load this fact domain")
 	}
 	facts := LifecycleFacts{
-		CapturedAt: now,
-		State:      LifecycleFact[colony.ColonyState]{Value: state, Source: stateSource},
-		Identity:   LifecycleFact[LifecycleIdentityFacts]{Value: identity, Source: lifecycleDerivedSource("identity", stateSource)},
-		Progress:   LifecycleFact[LifecycleProgressFacts]{Value: LifecycleProgressFacts{CurrentPhase: state.CurrentPhase, Phases: state.Plan.Phases}, Source: lifecycleDerivedSource("progress", stateSource)},
-		Actors:     LifecycleFact[[]LifecycleActorFact]{Source: unobserved("actors")},
-		Signals:    LifecycleFact[[]colony.PheromoneSignal]{Source: unobserved("signals")},
-		Research:   LifecycleFact[LifecycleResearchFacts]{Source: unobserved("research")},
+		CapturedAt:    now,
+		State:         LifecycleFact[colony.ColonyState]{Value: state, Source: stateSource},
+		Identity:      LifecycleFact[LifecycleIdentityFacts]{Value: identity, Source: lifecycleDerivedSource("identity", stateSource)},
+		Progress:      LifecycleFact[LifecycleProgressFacts]{Value: LifecycleProgressFacts{CurrentPhase: state.CurrentPhase, Phases: state.Plan.Phases}, Source: lifecycleDerivedSource("progress", stateSource)},
+		Intent:        lifecycleIntentFromSnapshot(state, stateSource, PendingDecisionFile{}, unobserved("discussion")),
+		Specification: lifecycleSpecificationFromSnapshot(state, stateSource),
+		Planning:      lifecyclePlanningFromSnapshot(state, stateSource, nil, lifecyclePlanningRunID(state), LifecycleFactSource{}),
+		Actors:        LifecycleFact[[]LifecycleActorFact]{Source: unobserved("actors")},
+		Signals:       LifecycleFact[[]colony.PheromoneSignal]{Source: unobserved("signals")},
+		Research:      LifecycleFact[LifecycleResearchFacts]{Source: unobserved("research")},
 		Memory: LifecycleFact[LifecycleMemoryFacts]{
 			Value: LifecycleMemoryFacts{State: state.Memory}, Source: lifecycleDerivedSource("memory", stateSource),
 		},
@@ -583,12 +903,19 @@ func lifecycleFactsFromStateSnapshot(state colony.ColonyState, noColony bool, no
 // read through os.ReadFile/os.ReadDir, avoiding lock creation and every repair,
 // registry, session-mirror, timestamp, or Git mutation path.
 func loadLifecycleFacts(root string, factStore *storage.Store, now time.Time) (LifecycleFacts, error) {
+	return loadLifecycleFactsWithStateReader(root, factStore, now, readLifecycleState)
+}
+
+func loadLifecycleFactsWithStateReader(root string, factStore *storage.Store, now time.Time, stateReader func(string) (colony.ColonyState, LifecycleFactSource)) (LifecycleFacts, error) {
 	root = filepath.Clean(root)
 	if factStore == nil {
 		return unavailableLifecycleFacts(root, now, "store is not initialized"), nil
 	}
+	if stateReader == nil {
+		return unavailableLifecycleFacts(root, now, "state reader is not initialized"), nil
+	}
 	dataDir := factStore.BasePath()
-	state, stateSource := readLifecycleState(filepath.Join(dataDir, "COLONY_STATE.json"))
+	state, stateSource := stateReader(filepath.Join(dataDir, "COLONY_STATE.json"))
 	session, sessionSource := readLifecycleJSON[colony.SessionFile]("session", filepath.Join(dataDir, "session.json"))
 	actors, actorSource := readLifecycleActors(filepath.Join(dataDir, "spawn-tree.txt"))
 	pheromones, signalSource := readLifecycleJSON[colony.PheromoneFile]("signals", filepath.Join(dataDir, "pheromones.json"))
@@ -596,7 +923,8 @@ func loadLifecycleFacts(root string, factStore *storage.Store, now time.Time) (L
 	memory, memorySource := readLifecycleMemory(dataDir, state, stateSource)
 	verification, verificationSource := readLifecycleVerification(dataDir, state, stateSource)
 	cost, costSource := readLifecycleCost(dataDir)
-	flags, blockerSource := readLifecycleJSON[colony.FlagsFile]("blockers", filepath.Join(dataDir, "pending-decisions.json"))
+	pending, flags, pendingSource := readLifecyclePendingDecisions(filepath.Join(dataDir, pendingDecisionsFile))
+	stage, planningRunID, planningStageSource := readLifecyclePlanningStage(root, dataDir, state)
 
 	identity := LifecycleIdentityFacts{
 		Goal: strings.TrimSpace(lifecycleString(state.Goal)), Standing: string(state.State),
@@ -606,19 +934,22 @@ func loadLifecycleFacts(root string, factStore *storage.Store, now time.Time) (L
 	}
 	facts := LifecycleFacts{
 		Root: root, CapturedAt: now,
-		State:        LifecycleFact[colony.ColonyState]{Value: state, Source: stateSource},
-		Identity:     LifecycleFact[LifecycleIdentityFacts]{Value: identity, Source: lifecycleDerivedSource("identity", stateSource)},
-		Progress:     LifecycleFact[LifecycleProgressFacts]{Value: LifecycleProgressFacts{CurrentPhase: state.CurrentPhase, Phases: state.Plan.Phases}, Source: lifecycleDerivedSource("progress", stateSource)},
-		Actors:       LifecycleFact[[]LifecycleActorFact]{Value: actors, Source: actorSource},
-		Signals:      LifecycleFact[[]colony.PheromoneSignal]{Value: pheromones.Signals, Source: signalSource},
-		Research:     LifecycleFact[LifecycleResearchFacts]{Value: research, Source: researchSource},
-		Memory:       LifecycleFact[LifecycleMemoryFacts]{Value: memory, Source: memorySource},
-		Verification: LifecycleFact[LifecycleVerificationFacts]{Value: verification, Source: verificationSource},
-		Timing:       lifecycleTiming(state, stateSource, now),
-		ReportedCost: LifecycleFact[LifecycleReportedCostFacts]{Value: cost, Source: costSource},
-		History:      LifecycleFact[[]string]{Value: append([]string(nil), state.Events...), Source: lifecycleDerivedSource("history", stateSource)},
-		Blockers:     LifecycleFact[[]colony.FlagEntry]{Value: flags.Decisions, Source: blockerSource},
-		Session:      LifecycleFact[colony.SessionFile]{Value: session, Source: sessionSource},
+		State:         LifecycleFact[colony.ColonyState]{Value: state, Source: stateSource},
+		Identity:      LifecycleFact[LifecycleIdentityFacts]{Value: identity, Source: lifecycleDerivedSource("identity", stateSource)},
+		Progress:      LifecycleFact[LifecycleProgressFacts]{Value: LifecycleProgressFacts{CurrentPhase: state.CurrentPhase, Phases: state.Plan.Phases}, Source: lifecycleDerivedSource("progress", stateSource)},
+		Intent:        lifecycleIntentFromSnapshot(state, stateSource, pending, pendingSource),
+		Specification: lifecycleSpecificationFromSnapshot(state, stateSource),
+		Planning:      lifecyclePlanningFromSnapshot(state, stateSource, stage, planningRunID, planningStageSource),
+		Actors:        LifecycleFact[[]LifecycleActorFact]{Value: actors, Source: actorSource},
+		Signals:       LifecycleFact[[]colony.PheromoneSignal]{Value: pheromones.Signals, Source: signalSource},
+		Research:      LifecycleFact[LifecycleResearchFacts]{Value: research, Source: researchSource},
+		Memory:        LifecycleFact[LifecycleMemoryFacts]{Value: memory, Source: memorySource},
+		Verification:  LifecycleFact[LifecycleVerificationFacts]{Value: verification, Source: verificationSource},
+		Timing:        lifecycleTiming(state, stateSource, now),
+		ReportedCost:  LifecycleFact[LifecycleReportedCostFacts]{Value: cost, Source: costSource},
+		History:       LifecycleFact[[]string]{Value: append([]string(nil), state.Events...), Source: lifecycleDerivedSource("history", stateSource)},
+		Blockers:      LifecycleFact[[]colony.FlagEntry]{Value: flags.Decisions, Source: lifecycleDerivedSource("blockers", pendingSource)},
+		Session:       LifecycleFact[colony.SessionFile]{Value: session, Source: sessionSource},
 	}
 	facts.Evidence = lifecycleEvidence(state, stateSource, session, sessionSource)
 	return facts, nil

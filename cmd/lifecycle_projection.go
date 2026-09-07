@@ -87,17 +87,20 @@ type LifecycleProjection struct {
 	View               LifecycleView      `json:"view"`
 	Platform           string             `json:"platform"`
 
-	Identity LifecycleFact[LifecycleIdentityFacts]     `json:"identity"`
-	Goal     LifecycleFact[string]                     `json:"goal"`
-	Standing LifecycleFact[string]                     `json:"standing"`
-	Phase    LifecycleFact[LifecyclePhaseProjection]   `json:"phase"`
-	Tasks    LifecycleFact[[]colony.Task]              `json:"tasks"`
-	Actors   LifecycleFact[[]LifecycleActorFact]       `json:"actors"`
-	Lineage  LifecycleFact[[]LifecycleLineage]         `json:"lineage"`
-	Signals  LifecycleFact[[]colony.PheromoneSignal]   `json:"signals"`
-	Research LifecycleFact[LifecycleResearchFacts]     `json:"research"`
-	Memory   LifecycleFact[LifecycleMemoryFacts]       `json:"memory"`
-	Findings LifecycleFact[[]colony.ReviewLedgerEntry] `json:"findings"`
+	Identity      LifecycleFact[LifecycleIdentityFacts]      `json:"identity"`
+	Intent        LifecycleFact[LifecycleIntentFacts]        `json:"intent"`
+	Specification LifecycleFact[LifecycleSpecificationFacts] `json:"specification"`
+	Planning      LifecycleFact[LifecyclePlanningFacts]      `json:"planning"`
+	Goal          LifecycleFact[string]                      `json:"goal"`
+	Standing      LifecycleFact[string]                      `json:"standing"`
+	Phase         LifecycleFact[LifecyclePhaseProjection]    `json:"phase"`
+	Tasks         LifecycleFact[[]colony.Task]               `json:"tasks"`
+	Actors        LifecycleFact[[]LifecycleActorFact]        `json:"actors"`
+	Lineage       LifecycleFact[[]LifecycleLineage]          `json:"lineage"`
+	Signals       LifecycleFact[[]colony.PheromoneSignal]    `json:"signals"`
+	Research      LifecycleFact[LifecycleResearchFacts]      `json:"research"`
+	Memory        LifecycleFact[LifecycleMemoryFacts]        `json:"memory"`
+	Findings      LifecycleFact[[]colony.ReviewLedgerEntry]  `json:"findings"`
 
 	Changes        []colony.LifecycleChange       `json:"changes,omitempty"`
 	Evidence       []colony.LifecycleEvidence     `json:"evidence,omitempty"`
@@ -124,8 +127,8 @@ type LifecycleProjection struct {
 
 func lifecycleProjectionSections(view LifecycleView) []LifecycleProjectionSection {
 	full := []LifecycleProjectionSection{
-		{ID: "identity", Domains: []string{"identity", "goal", "standing"}},
-		{ID: "progress", Domains: []string{"phase", "tasks"}},
+		{ID: "identity", Domains: []string{"identity", "intent", "goal", "standing"}},
+		{ID: "progress", Domains: []string{"specification", "planning", "phase", "tasks"}},
 		{ID: "actors", Domains: []string{"actors", "lineage"}},
 		{ID: "signals", Domains: []string{"signals"}},
 		{ID: "research", Domains: []string{"research", "dreams", "territory"}},
@@ -450,6 +453,9 @@ func projectLifecycle(facts LifecycleFacts, view LifecycleView, platform string)
 		View:               view,
 		Platform:           platform,
 		Identity:           facts.Identity,
+		Intent:             facts.Intent,
+		Specification:      facts.Specification,
+		Planning:           facts.Planning,
 		Goal:               LifecycleFact[string]{Value: facts.Identity.Value.Goal, Source: goalSource},
 		Standing:           LifecycleFact[string]{Value: standing, Source: standingSource},
 		Phase:              LifecycleFact[LifecyclePhaseProjection]{Value: phase, Source: phaseSource},
