@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -103,6 +104,92 @@ func TestPlanningVisualsJSONStopLabelsAndEvidence(t *testing.T) {
 	}
 }
 
+func TestPlanningVisualsWidthBandsBoundMajorCards(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	decision := planningDecisionCard{
+		DecisionID: "DECISION-01", Decision: "Choose the durable ownership boundary without weakening recovery behavior",
+		WhyNow:              "Fresh dependency evidence changes the scope and acceptance consequences",
+		QueenRecommendation: "Keep authority local because the approved recovery contract requires offline operation",
+		Evidence:            []colony.PlanningEvidenceRef{{ID: "EVIDENCE-01"}},
+		Choices:             []planningDecisionChoice{{ID: "CHOICE-01", Label: "Local durable state", Consequence: "Planning remains available without a network dependency"}},
+		AffectedSemanticIDs: []string{"REQ-01", "REC-01"}, PlanningResumes: "Scout pass 2 targets dependency ownership",
+	}
+	review := planningVisualCandidateFixture()
+	acceptanceCandidate := review.Candidate
+	acceptanceCandidate.Status = colony.PlanCandidateAccepted
+	acceptanceCandidate.Timeline.CardIDs = []string{"ITERATION-01"}
+	receipt := colony.PlanAcceptanceReceipt{CandidateID: acceptanceCandidate.ID, CandidateContentHash: strings.Repeat("a", 64), SpecificationRevisionID: "SPEC-REV-01", TimelineID: "TIMELINE-01", TimelineDigest: strings.Repeat("b", 64)}
+
+	for _, width := range []int{47, 48, 63, 64, 95, 96} {
+		t.Run(fmt.Sprintf("width_%d", width), func(t *testing.T) {
+			options := planningVisualOptions{Width: width}
+			cards := map[string]string{
+				"specification": renderPlanningSpecificationVisual(planningVisualSpecificationFixture(), options),
+				"iteration":     renderPlanningIterationVisual(planningVisualIterationFixture(colony.PlanningStopContinue), options),
+				"decision":      renderPlanningDecisionVisual(decision, options),
+				"candidate":     renderPlanningCandidateVisual(review, options),
+				"acceptance":    renderPlanningAcceptanceVisual(acceptanceCandidate, acceptanceCandidate.Proposal, receipt, false, options),
+				"refusal":       renderPlanningRefusalVisual("Planning did not advance", "the exact stage receipt did not match the active pass", "prior pass retained", "aether plan --candidate", options),
+			}
+			for name, output := range cards {
+				assertPlanningVisualWidth(t, name, output, width)
+			}
+
+			iteration := cards["iteration"]
+			switch {
+			case width < 48:
+				if !strings.Contains(iteration, "Before:") || !strings.Contains(iteration, "After:") {
+					t.Fatalf("stacked band missing stacked score fields:\n%s", iteration)
+				}
+			case width < 64:
+				if strings.Contains(iteration, " | ") || !strings.Contains(iteration, "Knowledge") {
+					t.Fatalf("compact band did not use compact rows:\n%s", iteration)
+				}
+			case width < 96:
+				if !strings.Contains(iteration, " | Before ") {
+					t.Fatalf("table band missing table row:\n%s", iteration)
+				}
+			default:
+				if !strings.Contains(iteration, "(+20)") {
+					t.Fatalf("wide band missing inline delta:\n%s", iteration)
+				}
+			}
+		})
+	}
+}
+
+func TestPlanningVisualsWidthSafeIdentifierException(t *testing.T) {
+	identifier := "sha256:" + strings.Repeat("a", 64)
+	line := planningVisualSafeIdentifier("Identifier", identifier)
+	if planningVisibleWidth(line) <= 47 {
+		t.Fatalf("fixture no longer exercises the documented indivisible-identifier exception: %q", line)
+	}
+	if !planningVisualLineMayOverflow(line) {
+		t.Fatalf("safe identifier line was not recognized: %q", line)
+	}
+}
+
+func TestPlanningVisualsNoColorAndAppendOnly(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	t.Setenv("NO_COLOR", "1")
+	t.Setenv("AETHER_FORCE_COLOR", "")
+	output := renderPlanningCandidateVisual(planningVisualCandidateFixture(), planningVisualOptions{Width: 64})
+	encoded, err := json.Marshal(projectPlanningCandidate(planningVisualCandidateFixture()))
+	if err != nil {
+		t.Fatalf("marshal candidate projection: %v", err)
+	}
+	for name, body := range map[string]string{"terminal": output, "json": string(encoded)} {
+		if strings.Contains(body, "\x1b[") || strings.Contains(body, "\r") {
+			t.Fatalf("%s output contains ANSI/cursor rewrite controls: %q", name, body)
+		}
+	}
+	for _, want := range []string{"Plan Candidate", "CANDIDATE — NOT ACTIVE", "target sufficiency", "Evidence that would change it"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("no-color output lost %q:\n%s", want, output)
+		}
+	}
+}
+
 func planningVisualSpecificationFixture() specCommandResult {
 	return specCommandResult{
 		Command: "spec", Operation: specCommandOperationInspect, SpecificationID: "SPEC-01", RevisionNumber: 1,
@@ -185,5 +272,14 @@ func assertPlanningVisualOrder(t *testing.T, output string, values []string) {
 			t.Fatalf("output missing %q after byte %d:\n%s", value, position, output)
 		}
 		position += next + 1
+	}
+}
+
+func assertPlanningVisualWidth(t *testing.T, name, output string, width int) {
+	t.Helper()
+	for number, line := range strings.Split(strings.TrimSuffix(output, "\n"), "\n") {
+		if got := planningVisibleWidth(line); got > width && !planningVisualLineMayOverflow(line) {
+			t.Errorf("%s line %d width = %d, want <= %d: %q", name, number+1, got, width, line)
+		}
 	}
 }

@@ -3258,3 +3258,48 @@ func TestVisualsConfigOriginalFileValuesMatchCompiledDefaults(t *testing.T) {
 		}
 	}
 }
+
+func TestCodexVisualsPlanningRoutesCanonicalCandidate(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	result := planCandidateReviewResult(planningVisualCandidateFixture())
+	output := renderPlanVisual(result)
+
+	for _, want := range []string{"Plan Candidate", "CANDIDATE — NOT ACTIVE", "Queen recommendation", "Accept this candidate?"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("canonical candidate route missing %q:\n%s", want, output)
+		}
+	}
+	for _, forbidden := range []string{"Plan size: 0 phases", "Scout and Route-Setter mapped", "aether build", "aether run"} {
+		if strings.Contains(output, forbidden) {
+			t.Fatalf("canonical candidate route leaked legacy/unauthorized text %q:\n%s", forbidden, output)
+		}
+	}
+}
+
+func TestCodexVisualsPlanningRoutesCanonicalIteration(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	result := map[string]interface{}{
+		"planned": false, "status": string(planningStageContinueReady),
+		"iteration_card": planningVisualIterationFixture(colony.PlanningStopContinue),
+	}
+	output := renderPlanVisual(result)
+	for _, want := range []string{"Planning Iteration", "Scout", "Route-Setter", "Fresh evidence", "CONTINUE"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("canonical iteration route missing %q:\n%s", want, output)
+		}
+	}
+}
+
+func TestCodexVisualsSpecIdentityContract(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	if got := commandEmoji("spec"); got != "📜" {
+		t.Fatalf("commandEmoji(spec) = %q, want 📜", got)
+	}
+	output := renderSpecCommandVisual(planningVisualSpecificationFixture())
+	if !strings.Contains(output, "📜 Specification") {
+		t.Fatalf("specification visual missing full command identity:\n%s", output)
+	}
+	if strings.Contains(output, "Command: Spec\n") || strings.Contains(output, "Identity: Spec\n") {
+		t.Fatalf("specification visual used forbidden full-label abbreviation:\n%s", output)
+	}
+}
