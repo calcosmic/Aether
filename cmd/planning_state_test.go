@@ -61,7 +61,7 @@ func TestPlanningStateRejectsDistinctCorruption(t *testing.T) {
 
 	t.Run("duplicate stable semantic ID", func(t *testing.T) {
 		state, _ := validCurrentPlanningState(t)
-		state.Plan.Phases[0].Tasks[0].SemanticID = state.Plan.Phases[0].SemanticID
+		state.Plan.Revisions[1].SemanticID = state.Plan.Phases[0].SemanticID
 		assertPlanningStateError(t, validatePlanningState(state), "duplicate stable ID")
 	})
 
@@ -98,6 +98,7 @@ func TestPlanningStateTimelineRejectsDuplicateDimensionAndWrongDigest(t *testing
 
 	duplicate := clonePlanningCards(t, cards)
 	duplicate[0].DimensionAssessments[1].Dimension = duplicate[0].DimensionAssessments[0].Dimension
+	duplicate[0].DimensionAssessments[1].RemainingGap.Dimension = duplicate[0].DimensionAssessments[0].Dimension
 	assertPlanningStateError(t, validatePlanningTimelineBinding(binding, duplicate), "duplicate")
 
 	wrongDigest := binding
@@ -278,6 +279,9 @@ func validCurrentPlanningState(t *testing.T) (colony.ColonyState, []colony.Plann
 	assessments := validPlanningAssessmentsForTest()
 	delta := validPlanningSemanticDeltaForTest()
 	stop := validPlanningStopForTest()
+	residualGap := assessments[2].RemainingGap
+	stop.SelectedGapID = residualGap.ID
+	stop.ResidualGapIDs = []string{residualGap.ID}
 	recommendationHash := planningStateTestDigest("queen-recommendation")
 	recommendation := colony.QueenPlanRecommendation{
 		SchemaVersion: colony.PlanningSchemaVersion, ID: planningStateTestAddress("queen-recommendation", recommendationHash), ContentHash: recommendationHash,
@@ -300,7 +304,7 @@ func validCurrentPlanningState(t *testing.T) (colony.ColonyState, []colony.Plann
 		BasePlanRevisionID: baseRevision.ID, BasePlanRevisionHash: baseHash,
 		SpecificationRevisionID: specRevisionID, SpecificationRevisionHash: specHash,
 		Timeline: timeline, StopDecision: stop, DimensionAssessments: assessments, SemanticDelta: delta,
-		ResidualGaps:            []colony.PlanningGap{validPlanningGapForTest(colony.PlanningDimensionRisks, "residual-risk")},
+		ResidualGaps:            []colony.PlanningGap{residualGap},
 		EvidenceThatWouldChange: "A new material risk would reopen planning", Recommendation: recommendation, Acceptance: acceptance,
 	}
 
@@ -318,15 +322,20 @@ func validCurrentPlanningState(t *testing.T) (colony.ColonyState, []colony.Plann
 func validPlanningIterationCardForTest(t *testing.T, iteration int, createdAt time.Time) colony.PlanningIterationCard {
 	t.Helper()
 	cardHash := planningStateTestDigest("iteration-card-" + string(rune('0'+iteration)))
+	assessments := validPlanningAssessmentsForTest()
+	weakestGap := assessments[2].RemainingGap
+	decision := validPlanningStopForTest()
+	decision.SelectedGapID = weakestGap.ID
+	decision.ResidualGapIDs = []string{weakestGap.ID}
 	return colony.PlanningIterationCard{
 		SchemaVersion: colony.PlanningIterationSchemaVersion,
 		ID:            planningStateTestAddress("planning-iteration", cardHash), ContentHash: cardHash,
 		RunID: "planning-run-200", Iteration: iteration,
 		ScoutReceiptID: "scout-receipt-1", ScoutReceiptHash: planningStateTestDigest("scout-receipt-1"),
 		RouteSetterReceiptID: "route-receipt-1", RouteSetterReceiptHash: planningStateTestDigest("route-receipt-1"),
-		EvidenceIDs: []string{"evidence-1"}, DimensionAssessments: validPlanningAssessmentsForTest(),
-		WeakestGap:    validPlanningGapForTest(colony.PlanningDimensionRisks, "weakest-risk"),
-		SemanticDelta: validPlanningSemanticDeltaForTest(), Decision: validPlanningStopForTest(),
+		EvidenceIDs: []string{"evidence-1"}, DimensionAssessments: assessments,
+		WeakestGap:    weakestGap,
+		SemanticDelta: validPlanningSemanticDeltaForTest(), Decision: decision,
 		EvidenceThatWouldChange: "A new material risk would reopen planning", CreatedAt: createdAt,
 	}
 }
