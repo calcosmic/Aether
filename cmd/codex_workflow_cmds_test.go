@@ -99,6 +99,21 @@ func TestSeal_ArchivesReviews(t *testing.T) {
 	}
 }
 
+func TestPlanCommandCandidateFlagsExposeReviewAndExactAcceptance(t *testing.T) {
+	want := []string{
+		"candidate", "show-iteration", "details", "accept-candidate", "spec-revision",
+		"spec-hash", "base-plan-revision", "timeline-digest", "proposal-hash", "acceptance-token",
+	}
+	for _, name := range want {
+		if flag := planCmd.Flags().Lookup(name); flag == nil {
+			t.Errorf("plan command is missing --%s", name)
+		}
+	}
+	if flag := planCmd.Flags().Lookup("accept"); flag == nil || !strings.Contains(strings.ToLower(flag.Usage), "deprecated") {
+		t.Fatalf("bare --accept must remain an explicit migration-only flag: %+v", flag)
+	}
+}
+
 func TestSeal_HighSeverityWarning(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
