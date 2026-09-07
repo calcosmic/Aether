@@ -380,6 +380,19 @@ func TestPlanningConfidenceStopPassCapUsesConfiguredPresetExactly(t *testing.T) 
 	}
 }
 
+func TestPlanningConfidenceStopPassCapPrecedesBelowTargetConvergence(t *testing.T) {
+	t.Parallel()
+
+	history := planningConfidenceStopHistoryFixture([]int{60, 60, 60, 60}, []string{"same-gap", "same-gap", "same-gap", "same-gap"})
+	result, err := evaluatePlanningStopPolicy(planningStopPolicyInput{Target: 90, PassCap: 4, History: history})
+	if err != nil {
+		t.Fatalf("evaluatePlanningStopPolicy returned error: %v", err)
+	}
+	if result.Decision.Reason != colony.PlanningStopPassCap || result.Trigger != colony.PlanningStopPassCap {
+		t.Fatalf("reason/trigger = %q/%q, want pass_cap", result.Decision.Reason, result.Trigger)
+	}
+}
+
 func TestPlanningConfidenceDiminishingRequiresTwoGroundedSubTwoMovements(t *testing.T) {
 	t.Parallel()
 
@@ -395,6 +408,11 @@ func TestPlanningConfidenceDiminishingRequiresTwoGroundedSubTwoMovements(t *test
 			want:     colony.PlanningStopDiminishingReturns,
 		},
 		{
+			name:     "two negative one-point grounded movements use absolute delta",
+			overalls: []int{72, 71, 70},
+			want:     colony.PlanningStopDiminishingReturns,
+		},
+		{
 			name:     "two-point movement is not below two",
 			overalls: []int{70, 72, 73},
 			want:     colony.PlanningStopContinue,
@@ -406,7 +424,7 @@ func TestPlanningConfidenceDiminishingRequiresTwoGroundedSubTwoMovements(t *test
 		},
 		{
 			name:     "latest pass is not grounded",
-			overalls: []int{70, 71, 72},
+			overalls: []int{70, 71, 71},
 			edit: func(history []planningConfidencePass) {
 				planningConfidenceSetPassGrounded(&history[2], false)
 			},
