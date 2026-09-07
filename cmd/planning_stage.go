@@ -219,6 +219,8 @@ type planningStageState struct {
 	Stage                      planningStage                      `json:"stage"`
 	RunID                      string                             `json:"run_id"`
 	Pass                       int                                `json:"pass"`
+	ActiveManifestID           string                             `json:"active_manifest_id,omitempty"`
+	ActiveManifestHash         string                             `json:"active_manifest_hash,omitempty"`
 	Preset                     planningStagePreset                `json:"preset"`
 	Specification              planningStageSpecificationBinding  `json:"specification"`
 	BasePlanRevisionID         string                             `json:"base_plan_revision_id"`
@@ -313,6 +315,8 @@ func reducePlanningStage(state planningStageState, transition planningStageTrans
 	next := clonePlanningStageState(state)
 	next.Stage = transition.To
 	if transition.To == planningStageFailed {
+		next.ActiveManifestID = ""
+		next.ActiveManifestHash = ""
 		next.FailureReason = strings.TrimSpace(transition.FailureReason)
 		if next.FailureReason == "" {
 			next.FailureReason = "planning stage failed"
@@ -340,11 +344,15 @@ func reducePlanningStage(state planningStageState, transition planningStageTrans
 			return planningStageState{}, nil, err
 		}
 		next.UsedAuthorizationIDs = append(next.UsedAuthorizationIDs, manifest.AuthorizationID)
+		next.ActiveManifestID = manifest.ID
+		next.ActiveManifestHash = manifest.ContentHash
 		next.InputFrontierHash = manifest.InputFrontierHash
 		next.CandidateSnapshotHash = manifest.CandidateSnapshotHash
 		return next, &manifest, nil
 
 	case planningStageScoutRunning:
+		next.ActiveManifestID = ""
+		next.ActiveManifestHash = ""
 		if transition.To == planningStageRouteReady || transition.To == planningStageOwnerDecision {
 			if transition.ScoutReceipt == nil {
 				return planningStageState{}, nil, fmt.Errorf("completed Scout transition requires the exact Scout receipt")
@@ -385,6 +393,8 @@ func reducePlanningStage(state planningStageState, transition planningStageTrans
 		}
 
 	case planningStageRouteRunning:
+		next.ActiveManifestID = ""
+		next.ActiveManifestHash = ""
 		if transition.To == planningStageContinueReady || transition.To == planningStageCandidateReady || transition.To == planningStageOwnerDecision {
 			if !planningSHA256Pattern.MatchString(strings.TrimSpace(transition.ResultingCardHash)) {
 				return planningStageState{}, nil, fmt.Errorf("completed Route-Setter transition requires the resulting iteration card hash")

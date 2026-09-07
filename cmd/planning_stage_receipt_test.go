@@ -9,8 +9,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/calcosmic/Aether/pkg/colony"
 )
 
 func TestPlanningStageReceiptBindsManifestOutputAndResultingState(t *testing.T) {
@@ -248,22 +246,24 @@ func TestPlanningStageResumeRejectsTamperWithoutRewritingState(t *testing.T) {
 			name: "prior hash",
 			tamper: func(t *testing.T, root string, receipt StageReceipt) {
 				t.Helper()
+				originalID := receipt.ID
 				receipt.PriorReceiptHash = planningStageTestHash("0")
 				if err := addressStageReceipt(&receipt); err != nil {
 					t.Fatal(err)
 				}
-				planningStageReceiptTestWriteJSON(t, filepath.Join(root, filepath.FromSlash(planningStageReceiptRepositoryPath(receipt.RunID, receipt.ID))), receipt)
+				planningStageReceiptTestWriteJSON(t, filepath.Join(root, filepath.FromSlash(planningStageReceiptRepositoryPath(receipt.RunID, originalID))), receipt)
 			},
 		},
 		{
 			name: "caste",
 			tamper: func(t *testing.T, root string, receipt StageReceipt) {
 				t.Helper()
+				originalID := receipt.ID
 				receipt.Caste = planningStageCasteScout
 				if err := addressStageReceipt(&receipt); err != nil {
 					t.Fatal(err)
 				}
-				planningStageReceiptTestWriteJSON(t, filepath.Join(root, filepath.FromSlash(planningStageReceiptRepositoryPath(receipt.RunID, receipt.ID))), receipt)
+				planningStageReceiptTestWriteJSON(t, filepath.Join(root, filepath.FromSlash(planningStageReceiptRepositoryPath(receipt.RunID, originalID))), receipt)
 			},
 		},
 	}
@@ -403,8 +403,4 @@ func planningStageReceiptTestWriteJSON(t *testing.T, path string, value any) {
 	if err := os.WriteFile(path, content, 0o644); err != nil {
 		t.Fatal(err)
 	}
-}
-
-func planningStageReceiptTestUnusedColonyReference() colony.PlanningIterationCard {
-	return colony.PlanningIterationCard{}
 }
