@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
@@ -217,6 +218,57 @@ func TestPlanImpactLifecycleClearsOnlyAfterExactSpecificationBinding(t *testing.
 	state.Plan.Revisions[0].AffectedSemanticIDs = append([]string(nil), got...)
 	if got := lifecycleAffectedSemanticIDs(state, nil); len(got) != 0 {
 		t.Fatalf("historical impact stayed live after exact reconciliation: %v", got)
+	}
+}
+
+func TestPlanImpactPlanningStateAdmitsApprovedSuccessorWithoutMutatingAcceptedPredecessor(t *testing.T) {
+	state, _ := validCurrentPlanningState(t)
+	activeIndex := len(state.Plan.Revisions) - 1
+	before, err := json.Marshal(state.Plan.Revisions[activeIndex])
+	if err != nil {
+		t.Fatal(err)
+	}
+	predecessor, ok := currentSpecificationRevision(*state.Specification)
+	if !ok {
+		t.Fatal("missing current specification")
+	}
+	now := predecessor.CreatedAt.Add(10 * time.Minute)
+	specification, successor, _, err := buildSpecificationSuccessor(*state.Specification, state.Plan, specificationRevisionRequest{
+		PredecessorRevisionID: predecessor.ID, PredecessorContentHash: predecessor.ContentHash,
+		Scope: predecessor.Scope, CreatedAt: now,
+		Changes: []specificationRevisionChange{{
+			Operation: specificationChangeModify, Section: specificationSectionRequirements,
+			TargetID: predecessor.Requirements[0].ID,
+			Item:     specificationItemInput{Description: "The plan is grounded in revised intent", EvidenceIDs: []string{"evidence-2"}},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	token := specificationApprovalToken(specification.ID, successor.ID, successor.ContentHash)
+	approval, err := buildSpecificationApprovalReceipt(specification.ID, successor, specificationApprovalRequest{
+		RevisionID: successor.ID, RevisionContentHash: successor.ContentHash, ApprovalToken: token,
+		ApprovedBy: "owner", ApprovedAt: now.Add(time.Minute),
+	}, specificationApprovalTokenHash(token))
+	if err != nil {
+		t.Fatal(err)
+	}
+	specification.Revisions[len(specification.Revisions)-1].Status = colony.SpecStatusApproved
+	specification.Revisions[len(specification.Revisions)-1].Approval = &approval
+	state.Specification = &specification
+
+	if err := validatePlanningState(state); err != nil {
+		t.Fatalf("approved successor should coexist with the immutable accepted predecessor while reconciliation is pending: %v", err)
+	}
+	after, err := json.Marshal(state.Plan.Revisions[activeIndex])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Fatalf("accepted predecessor mutated while admitting successor\nbefore=%s\nafter=%s", before, after)
+	}
+	if affected := lifecycleAffectedSemanticIDs(state, nil); !containsPlanImpactID(affected, predecessor.Requirements[0].ID) {
+		t.Fatalf("approved successor did not become an affected lifecycle boundary: %v", affected)
 	}
 }
 
