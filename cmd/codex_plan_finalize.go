@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -34,6 +35,45 @@ type codexExternalPlanCompletion struct {
 	ScoutReport      *codexScoutReport        `json:"scout_report,omitempty"`
 	PhasePlan        *codexWorkerPlanArtifact `json:"phase_plan,omitempty"`
 	Synthesis        *codexPlanSynthesis      `json:"synthesis,omitempty"`
+	ScoutResult      json.RawMessage          `json:"scout_result,omitempty"`
+}
+
+// planningScoutStageResult is the complete worker-owned payload permitted at
+// the Scout boundary. Deliberately absent are confidence, semantic plan,
+// stop, candidate, acceptance, activation, and state-patch fields. Strict
+// decoding below makes those omissions enforceable rather than documentary.
+type planningScoutStageResult struct {
+	ResultType           planningStageResultType           `json:"result_type"`
+	ManifestID           string                            `json:"manifest_id"`
+	ManifestHash         string                            `json:"manifest_hash"`
+	RunID                string                            `json:"run_id"`
+	Pass                 int                               `json:"pass"`
+	Caste                planningStageWorkerCaste          `json:"caste"`
+	Specification        planningStageSpecificationBinding `json:"specification"`
+	BasePlanRevisionID   string                            `json:"base_plan_revision_id"`
+	BasePlanRevisionHash string                            `json:"base_plan_revision_hash"`
+	InputFrontierHash    string                            `json:"input_frontier_hash"`
+	Findings             []planningScoutStageFinding       `json:"findings"`
+	NewEvidence          []planningEvidenceRecord          `json:"new_evidence"`
+	UnresolvedGaps       []colony.PlanningGap              `json:"unresolved_gaps"`
+	DecisionCandidates   []planningDecisionCandidate       `json:"material_decision_candidates"`
+}
+
+// planningScoutStageFinding is intentionally smaller than a plan proposal.
+// Every claim must cite an authorized/new evidence address or say explicitly
+// that the Scout could not establish the fact.
+type planningScoutStageFinding struct {
+	StableID      string   `json:"stable_id"`
+	Summary       string   `json:"summary"`
+	EvidenceIDs   []string `json:"evidence_ids,omitempty"`
+	Unknown       bool     `json:"unknown,omitempty"`
+	UnknownReason string   `json:"unknown_reason,omitempty"`
+}
+
+type planningScoutStageFinalization struct {
+	Result   planningScoutStageResult
+	Artifact planningStageOutputReference
+	Receipt  StageReceipt
 }
 
 type codexPlanSynthesis struct {
@@ -304,6 +344,9 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 	if manifest == nil {
 		return nil, fmt.Errorf("completion file must include plan_manifest")
 	}
+	if manifest.StageManifest != nil || len(bytes.TrimSpace(completion.ScoutResult)) > 0 {
+		return runCodexScoutStageFinalize(root, *manifest, completion)
+	}
 	if (manifest.DispatchMode != "plan-only" && manifest.DispatchMode != "agent-delegate") || !manifest.RequiresFinalizer {
 		return nil, fmt.Errorf("plan_manifest must come from `aether plan --plan-only` or an agent-delegate planning response")
 	}
@@ -562,6 +605,412 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 	// on the mid-loop branch above.
 	closeLifecycleRun(result, updatedState, "plan")
 	return result, nil
+}
+
+func runCodexScoutStageFinalize(root string, manifest codexPlanManifest, completion codexExternalPlanCompletion) (map[string]interface{}, error) {
+	if manifest.StageManifest == nil {
+		return nil, fmt.Errorf("Scout completion requires the exact stage_manifest")
+	}
+	if len(bytes.TrimSpace(completion.ScoutResult)) == 0 {
+		return nil, fmt.Errorf("Scout completion requires scout_result")
+	}
+	if len(completion.workerResults()) != 0 || completion.ScoutReport != nil || completion.PhasePlan != nil || completion.Synthesis != nil {
+		return nil, fmt.Errorf("Scout completion cannot include legacy whole-chain worker, Scout report, phase plan, or synthesis fields")
+	}
+	if (manifest.DispatchMode != "plan-only" && manifest.DispatchMode != "agent-delegate") || !manifest.RequiresFinalizer {
+		return nil, fmt.Errorf("plan_manifest must come from `aether plan --plan-only` or an agent-delegate planning response")
+	}
+	if err := validateFinalizerManifestRoot("plan_manifest", manifest.Root, root); err != nil {
+		return nil, err
+	}
+	if err := validateCodexPlanManifestFreshness(manifest, time.Now().UTC()); err != nil {
+		return nil, err
+	}
+	stageManifest := *manifest.StageManifest
+	if err := validatePlanningStageManifest(stageManifest); err != nil {
+		return nil, fmt.Errorf("stage_manifest: %w", err)
+	}
+	if stageManifest.ExpectedCaste != planningStageCasteScout {
+		return nil, fmt.Errorf("stage_manifest caste %q is not Scout", stageManifest.ExpectedCaste)
+	}
+	if manifest.PlanningRunID != stageManifest.RunID || manifest.Iteration != stageManifest.Pass || manifest.SelectedPreset != stageManifest.Preset ||
+		manifest.BaseRevisionID != stageManifest.BasePlanRevisionID || manifest.BasePlanStateHash != stageManifest.BasePlanRevisionHash {
+		return nil, fmt.Errorf("plan_manifest does not match the exact Scout stage run, pass, preset, or base plan revision")
+	}
+	if len(manifest.Dispatches) != 1 || len(manifest.ExpectedWorkers) != 1 {
+		return nil, fmt.Errorf("Scout plan_manifest must contain exactly one Scout dispatch")
+	}
+	for _, dispatch := range []codexPlanningDispatch{manifest.Dispatches[0], manifest.ExpectedWorkers[0]} {
+		if !strings.EqualFold(dispatch.Caste, string(planningStageCasteScout)) || dispatch.StageManifest == nil ||
+			dispatch.StageManifest.ID != stageManifest.ID || dispatch.StageManifest.ContentHash != stageManifest.ContentHash {
+			return nil, fmt.Errorf("Scout dispatch does not bind the exact stage_manifest")
+		}
+	}
+	if manifest.PlanningRunHeader != nil {
+		header := manifest.PlanningRunHeader
+		if header.RunID != stageManifest.RunID || header.StageManifestID != stageManifest.ID || header.StageManifestHash != stageManifest.ContentHash ||
+			header.Specification.RevisionID != stageManifest.Specification.RevisionID || header.Specification.ContentHash != stageManifest.Specification.ContentHash ||
+			header.BasePlanRevisionID != stageManifest.BasePlanRevisionID || header.BasePlanRevisionHash != stageManifest.BasePlanRevisionHash ||
+			header.InputFrontierHash != stageManifest.InputFrontierHash {
+			return nil, fmt.Errorf("planning run header does not match the exact Scout stage authority")
+		}
+	}
+
+	completed, err := finalizePlanningScoutStage(root, stageManifest, completion.ScoutResult)
+	if err != nil {
+		return nil, err
+	}
+	evidence := make([]colony.PlanningEvidenceRef, 0, len(completed.Result.NewEvidence))
+	for _, record := range completed.Result.NewEvidence {
+		evidence = append(evidence, record.Reference)
+	}
+	state, err := loadPlanningStageState(root, stageManifest.RunID)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{
+		"planned":                      false,
+		"status":                       "scout_complete",
+		"scout_complete":               true,
+		"planning_run_id":              stageManifest.RunID,
+		"iteration":                    stageManifest.Pass,
+		"stage":                        string(state.Stage),
+		"next_boundary":                string(state.Stage),
+		"stage_receipt":                completed.Receipt,
+		"scout_artifact":               completed.Artifact,
+		"scout_result":                 completed.Result,
+		"evidence_added":               evidence,
+		"evidence_added_count":         len(evidence),
+		"gaps_found":                   append([]colony.PlanningGap(nil), completed.Result.UnresolvedGaps...),
+		"material_decision_candidates": append([]planningDecisionCandidate(nil), completed.Result.DecisionCandidates...),
+		"iteration_card_created":       false,
+		"next":                         "aether plan",
+	}, nil
+}
+
+// finalizePlanningScoutStage consumes only the current Scout manifest. The
+// normalized artifact is persisted first as the durable worker-output
+// boundary; finalizePlanningStage then atomically commits its receipt and the
+// resulting lifecycle state. Exact retries resolve to the same artifact and
+// receipt, while changed bytes conflict before the frontier can move.
+func finalizePlanningScoutStage(root string, manifest planningStageManifest, raw []byte) (planningScoutStageFinalization, error) {
+	empty := planningScoutStageFinalization{}
+	result, normalized, material, err := validatePlanningScoutStageResult(root, manifest, raw)
+	if err != nil {
+		return empty, err
+	}
+	artifact, err := writePlanningStageOutput(root, manifest, normalized, planningStageWriteOptions{})
+	if err != nil {
+		return empty, err
+	}
+	next := planningStageRouteReady
+	decisionResume := planningStage("")
+	if manifest.Pass == 1 && material {
+		next = planningStageOwnerDecision
+		decisionResume = planningStageRouteReady
+	}
+	candidateSnapshotHash, err := planningScoutCandidateSnapshotHash(manifest)
+	if err != nil {
+		return empty, err
+	}
+	receipt, err := finalizePlanningStage(root, manifest, planningStageFinalizeRequest{
+		To:                    next,
+		CandidateSnapshotHash: candidateSnapshotHash,
+		DecisionResumeStage:   decisionResume,
+	})
+	if err != nil {
+		return empty, err
+	}
+	return planningScoutStageFinalization{Result: result, Artifact: artifact, Receipt: receipt}, nil
+}
+
+func validatePlanningScoutStageResult(root string, manifest planningStageManifest, raw []byte) (planningScoutStageResult, []byte, bool, error) {
+	empty := planningScoutStageResult{}
+	if err := validatePlanningStageManifest(manifest); err != nil {
+		return empty, nil, false, err
+	}
+	if manifest.ExpectedCaste != planningStageCasteScout || manifest.ExpectedResultType != planningStageResultScout {
+		return empty, nil, false, fmt.Errorf("active planning stage manifest is not a Scout contract")
+	}
+	result, err := decodePlanningScoutStageResult(raw)
+	if err != nil {
+		return empty, nil, false, err
+	}
+	if result.ResultType != planningStageResultScout {
+		return empty, nil, false, fmt.Errorf("Scout result_type must be %q", planningStageResultScout)
+	}
+	if result.ManifestID != manifest.ID || result.ManifestHash != manifest.ContentHash {
+		return empty, nil, false, fmt.Errorf("Scout result manifest ID or hash does not match the active manifest")
+	}
+	if result.RunID != manifest.RunID {
+		return empty, nil, false, fmt.Errorf("Scout result run does not match the active manifest")
+	}
+	if result.Pass != manifest.Pass {
+		return empty, nil, false, fmt.Errorf("Scout result pass does not match the active manifest")
+	}
+	if result.Caste != planningStageCasteScout || result.Caste != manifest.ExpectedCaste {
+		return empty, nil, false, fmt.Errorf("Scout result caste does not match the active Scout manifest")
+	}
+	if !samePlanningScoutSpecification(result.Specification, manifest.Specification) {
+		return empty, nil, false, fmt.Errorf("Scout result specification does not match the exact approved specification binding")
+	}
+	if result.BasePlanRevisionID != manifest.BasePlanRevisionID || result.BasePlanRevisionHash != manifest.BasePlanRevisionHash {
+		return empty, nil, false, fmt.Errorf("Scout result base plan revision does not match the active manifest")
+	}
+	if result.InputFrontierHash != manifest.InputFrontierHash {
+		return empty, nil, false, fmt.Errorf("Scout result frontier does not match the active manifest")
+	}
+
+	header, err := loadPlanningScoutRunHeader(root, manifest)
+	if err != nil {
+		return empty, nil, false, err
+	}
+	result, material, err := normalizePlanningScoutStageContent(root, header, manifest, result)
+	if err != nil {
+		return empty, nil, false, err
+	}
+	normalized, err := marshalPlanningStageJSON(result)
+	if err != nil {
+		return empty, nil, false, fmt.Errorf("marshal normalized Scout result: %w", err)
+	}
+	return result, normalized, material, nil
+}
+
+func decodePlanningScoutStageResult(raw []byte) (planningScoutStageResult, error) {
+	var result planningScoutStageResult
+	if len(bytes.TrimSpace(raw)) == 0 {
+		return result, fmt.Errorf("Scout result is empty")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&result); err != nil {
+		return planningScoutStageResult{}, fmt.Errorf("decode Scout stage result: %w", err)
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return planningScoutStageResult{}, fmt.Errorf("Scout result must contain exactly one JSON value")
+		}
+		return planningScoutStageResult{}, fmt.Errorf("decode trailing Scout result data: %w", err)
+	}
+	return result, nil
+}
+
+func loadPlanningScoutRunHeader(root string, manifest planningStageManifest) (planningRunHeader, error) {
+	var header planningRunHeader
+	repositoryRoot, err := canonicalPlanningTimelineRoot(root)
+	if err != nil {
+		return header, err
+	}
+	headerPath := filepath.ToSlash(filepath.Join(".aether", "data", "planning", manifest.RunID, "run-header.json"))
+	content, exists, err := readOptionalPlanningStageFile(repositoryRoot, headerPath)
+	if err != nil {
+		return header, err
+	}
+	if !exists {
+		return header, fmt.Errorf("planning run header for %q is missing", manifest.RunID)
+	}
+	if err := decodePlanningStageJSON(content, &header); err != nil {
+		return planningRunHeader{}, fmt.Errorf("decode planning run header: %w", err)
+	}
+	payload := header
+	payload.ID = ""
+	payload.ContentHash = ""
+	wantHash, err := jsonSHA256(payload)
+	if err != nil {
+		return planningRunHeader{}, fmt.Errorf("hash planning run header: %w", err)
+	}
+	if header.SchemaVersion != planningRunHeaderSchemaVersion || header.ContentHash != wantHash || header.ID != "planning-run-header-"+wantHash[:16] {
+		return planningRunHeader{}, fmt.Errorf("planning run header is not a valid immutable content address")
+	}
+	if header.RunID != manifest.RunID || header.Preset != manifest.Preset ||
+		!samePlanningScoutSpecification(header.Specification, manifest.Specification) ||
+		header.BasePlanRevisionID != manifest.BasePlanRevisionID || header.BasePlanRevisionHash != manifest.BasePlanRevisionHash {
+		return planningRunHeader{}, fmt.Errorf("planning run header does not match the active Scout manifest authority")
+	}
+	if strings.TrimSpace(header.GoalID) == "" || strings.TrimSpace(header.SessionID) == "" {
+		return planningRunHeader{}, fmt.Errorf("planning run header requires goal and session scope")
+	}
+	if manifest.Pass == 1 && (header.StageManifestID != manifest.ID || header.StageManifestHash != manifest.ContentHash || header.InputFrontierHash != manifest.InputFrontierHash) {
+		return planningRunHeader{}, fmt.Errorf("planning run header does not bind the first Scout manifest and frontier")
+	}
+	return header, nil
+}
+
+func normalizePlanningScoutStageContent(root string, header planningRunHeader, manifest planningStageManifest, result planningScoutStageResult) (planningScoutStageResult, bool, error) {
+	result.ManifestID = strings.TrimSpace(result.ManifestID)
+	result.ManifestHash = strings.TrimSpace(result.ManifestHash)
+	result.RunID = strings.TrimSpace(result.RunID)
+	result.BasePlanRevisionID = strings.TrimSpace(result.BasePlanRevisionID)
+	result.BasePlanRevisionHash = strings.TrimSpace(result.BasePlanRevisionHash)
+	result.InputFrontierHash = strings.TrimSpace(result.InputFrontierHash)
+
+	allowedBindings := make(map[string]string, len(manifest.EvidenceFrontier)+len(result.NewEvidence))
+	allowedReferences := make(map[string]colony.PlanningEvidenceRef, len(header.EvidenceCatalogue)+len(result.NewEvidence))
+	for _, binding := range manifest.EvidenceFrontier {
+		if err := binding.validate(); err != nil {
+			return planningScoutStageResult{}, false, fmt.Errorf("Scout evidence frontier: %w", err)
+		}
+		if _, duplicate := allowedBindings[binding.ID]; duplicate {
+			return planningScoutStageResult{}, false, fmt.Errorf("Scout evidence frontier repeats %q", binding.ID)
+		}
+		allowedBindings[binding.ID] = binding.ContentHash
+	}
+	for _, record := range header.EvidenceCatalogue {
+		if hash, ok := allowedBindings[record.Reference.ID]; ok && hash == record.Reference.ContentHash {
+			allowedReferences[record.Reference.ID] = record.Reference
+		}
+	}
+
+	seenNew := make(map[string]struct{}, len(result.NewEvidence))
+	for _, record := range result.NewEvidence {
+		if _, duplicate := seenNew[record.Reference.ID]; duplicate {
+			return planningScoutStageResult{}, false, fmt.Errorf("Scout new evidence repeats %q", record.Reference.ID)
+		}
+		seenNew[record.Reference.ID] = struct{}{}
+		if _, restated := allowedBindings[record.Reference.ID]; restated {
+			return planningScoutStageResult{}, false, fmt.Errorf("Scout new evidence %q restates the prior frontier", record.Reference.ID)
+		}
+	}
+	newCatalogue, err := collectPlanningEvidence(planningEvidenceCollectionRequest{RepositoryRoot: root, Existing: result.NewEvidence})
+	if err != nil {
+		return planningScoutStageResult{}, false, fmt.Errorf("validate Scout new evidence: %w", err)
+	}
+	if len(newCatalogue) != len(result.NewEvidence) {
+		return planningScoutStageResult{}, false, fmt.Errorf("Scout new evidence contains duplicate content addresses")
+	}
+	for _, record := range newCatalogue {
+		ref := record.Reference
+		if ref.GoalID != header.GoalID || ref.SessionID != header.SessionID || ref.SpecificationRevisionID != manifest.Specification.RevisionID || ref.PlanRevisionID != manifest.BasePlanRevisionID {
+			return planningScoutStageResult{}, false, fmt.Errorf("Scout new evidence %q does not match the current goal, session, specification, and base plan scope", ref.ID)
+		}
+		if !ref.Fresh || !ref.Admissible {
+			return planningScoutStageResult{}, false, fmt.Errorf("Scout new evidence %q is not fresh and admissible", ref.ID)
+		}
+		allowedBindings[ref.ID] = ref.ContentHash
+		allowedReferences[ref.ID] = ref
+	}
+	result.NewEvidence = newCatalogue
+
+	findings := append([]planningScoutStageFinding(nil), result.Findings...)
+	seenFindings := make(map[string]struct{}, len(findings))
+	for index := range findings {
+		finding := &findings[index]
+		finding.StableID = strings.TrimSpace(finding.StableID)
+		finding.Summary = normalizePlanningDecisionText(finding.Summary)
+		finding.EvidenceIDs = nonEmptyPlanningDecisionIDs(finding.EvidenceIDs)
+		finding.UnknownReason = normalizePlanningDecisionText(finding.UnknownReason)
+		if finding.StableID == "" || finding.Summary == "" {
+			return planningScoutStageResult{}, false, fmt.Errorf("Scout finding %d requires stable_id and summary", index)
+		}
+		if _, duplicate := seenFindings[finding.StableID]; duplicate {
+			return planningScoutStageResult{}, false, fmt.Errorf("Scout finding ID %q is duplicated", finding.StableID)
+		}
+		seenFindings[finding.StableID] = struct{}{}
+		if len(finding.EvidenceIDs) == 0 && (!finding.Unknown || finding.UnknownReason == "") {
+			return planningScoutStageResult{}, false, fmt.Errorf("Scout finding %q requires evidence or an explicit unknown reason", finding.StableID)
+		}
+		if finding.Unknown && finding.UnknownReason == "" {
+			return planningScoutStageResult{}, false, fmt.Errorf("Scout finding %q marks unknown without an unknown reason", finding.StableID)
+		}
+		if err := validatePlanningScoutCitationIDs("finding "+finding.StableID, finding.EvidenceIDs, allowedBindings); err != nil {
+			return planningScoutStageResult{}, false, err
+		}
+	}
+	sort.Slice(findings, func(left, right int) bool { return findings[left].StableID < findings[right].StableID })
+	result.Findings = findings
+
+	gaps := append([]colony.PlanningGap(nil), result.UnresolvedGaps...)
+	seenGaps := make(map[string]struct{}, len(gaps))
+	for index := range gaps {
+		gaps[index].EvidenceIDs = nonEmptyPlanningDecisionIDs(gaps[index].EvidenceIDs)
+		if err := gaps[index].Validate(); err != nil {
+			return planningScoutStageResult{}, false, fmt.Errorf("Scout unresolved_gaps[%d]: %w", index, err)
+		}
+		if _, duplicate := seenGaps[gaps[index].ID]; duplicate {
+			return planningScoutStageResult{}, false, fmt.Errorf("Scout unresolved gap ID %q is duplicated", gaps[index].ID)
+		}
+		seenGaps[gaps[index].ID] = struct{}{}
+		if len(gaps[index].EvidenceIDs) == 0 && strings.TrimSpace(gaps[index].EvidenceThatWouldChange) == "" {
+			return planningScoutStageResult{}, false, fmt.Errorf("Scout unresolved gap %q requires evidence or an explicit unknown", gaps[index].ID)
+		}
+		if err := validatePlanningScoutCitationIDs("gap "+gaps[index].ID, gaps[index].EvidenceIDs, allowedBindings); err != nil {
+			return planningScoutStageResult{}, false, err
+		}
+	}
+	sort.Slice(gaps, func(left, right int) bool { return gaps[left].ID < gaps[right].ID })
+	result.UnresolvedGaps = gaps
+
+	candidates := append([]planningDecisionCandidate(nil), result.DecisionCandidates...)
+	seenCandidates := make(map[string]struct{}, len(candidates))
+	material := false
+	for index := range candidates {
+		candidate := canonicalPlanningDecisionCandidate(candidates[index])
+		if _, duplicate := seenCandidates[candidate.StableID]; duplicate {
+			return planningScoutStageResult{}, false, fmt.Errorf("Scout material decision ID %q is duplicated", candidate.StableID)
+		}
+		seenCandidates[candidate.StableID] = struct{}{}
+		for evidenceIndex, ref := range candidate.Evidence {
+			if err := ref.Validate(); err != nil {
+				return planningScoutStageResult{}, false, fmt.Errorf("Scout decision %q evidence[%d]: %w", candidate.StableID, evidenceIndex, err)
+			}
+			wantHash, ok := allowedBindings[ref.ID]
+			if !ok || wantHash != ref.ContentHash {
+				return planningScoutStageResult{}, false, fmt.Errorf("Scout decision %q cites evidence %q outside the current frontier", candidate.StableID, ref.ID)
+			}
+			if known, ok := allowedReferences[ref.ID]; ok && !samePlanningEvidenceReference(known, ref) {
+				return planningScoutStageResult{}, false, fmt.Errorf("Scout decision %q changes evidence reference %q", candidate.StableID, ref.ID)
+			}
+			if ref.GoalID != header.GoalID || ref.SessionID != header.SessionID || ref.SpecificationRevisionID != manifest.Specification.RevisionID || ref.PlanRevisionID != manifest.BasePlanRevisionID {
+				return planningScoutStageResult{}, false, fmt.Errorf("Scout decision %q cites stale evidence %q", candidate.StableID, ref.ID)
+			}
+		}
+		classification, err := classifyPlanningDecision(candidate)
+		if err != nil {
+			return planningScoutStageResult{}, false, fmt.Errorf("Scout decision candidate %d: %w", index, err)
+		}
+		for choiceIndex := range candidate.Choices {
+			if err := validatePlanningDecisionChoice(candidate.Choices[choiceIndex]); err != nil {
+				return planningScoutStageResult{}, false, fmt.Errorf("Scout decision %q choice[%d]: %w", candidate.StableID, choiceIndex, err)
+			}
+		}
+		material = material || classification.RequiresOwner
+		candidates[index] = candidate
+	}
+	sort.Slice(candidates, func(left, right int) bool { return candidates[left].StableID < candidates[right].StableID })
+	result.DecisionCandidates = candidates
+	return result, material, nil
+}
+
+func validatePlanningScoutCitationIDs(label string, ids []string, allowed map[string]string) error {
+	for _, id := range ids {
+		if _, ok := allowed[id]; !ok {
+			return fmt.Errorf("Scout %s cites evidence %q outside the current or newly validated frontier", label, id)
+		}
+	}
+	return nil
+}
+
+func samePlanningScoutSpecification(left, right planningStageSpecificationBinding) bool {
+	return left.RevisionID == right.RevisionID && left.ContentHash == right.ContentHash &&
+		left.PredecessorRevisionID == right.PredecessorRevisionID && left.Status == right.Status &&
+		left.ApprovalReceiptID == right.ApprovalReceiptID && left.ApprovalReceiptHash == right.ApprovalReceiptHash
+}
+
+func samePlanningEvidenceReference(left, right colony.PlanningEvidenceRef) bool {
+	leftBytes, leftErr := json.Marshal(left)
+	rightBytes, rightErr := json.Marshal(right)
+	return leftErr == nil && rightErr == nil && bytes.Equal(leftBytes, rightBytes)
+}
+
+func planningScoutCandidateSnapshotHash(manifest planningStageManifest) (string, error) {
+	return jsonSHA256(struct {
+		RunID                string `json:"run_id"`
+		Pass                 int    `json:"pass"`
+		BasePlanRevisionID   string `json:"base_plan_revision_id"`
+		BasePlanRevisionHash string `json:"base_plan_revision_hash"`
+		PriorCardHash        string `json:"prior_card_hash"`
+		InputFrontierHash    string `json:"input_frontier_hash"`
+	}{manifest.RunID, manifest.Pass, manifest.BasePlanRevisionID, manifest.BasePlanRevisionHash, manifest.PriorCardHash, manifest.InputFrontierHash})
 }
 
 // attachTerritoryToPlanManifest copies the verified immutable evidence into a

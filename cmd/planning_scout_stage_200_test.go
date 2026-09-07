@@ -220,10 +220,16 @@ func planningScoutStageTestHeader(t *testing.T, manifest planningStageManifest) 
 		PassCap:              6,
 		EvidenceFrontier:     append([]planningStageEvidenceBinding(nil), manifest.EvidenceFrontier...),
 		InputFrontierHash:    manifest.InputFrontierHash,
-		WeakestGap:           *manifest.WeakestGap,
-		StageManifestID:      manifest.ID,
-		StageManifestHash:    manifest.ContentHash,
-		CreatedAt:            time.Date(2026, time.September, 7, 17, 0, 0, 0, time.UTC),
+		ResearchPolicy: phaseResearchAutomaticPolicy{
+			SchemaVersion:         phaseResearchAutomaticPolicySchemaVersion,
+			Preset:                manifest.Preset,
+			OwnerDecisionBoundary: "after_scout",
+			EvidenceContract:      automaticPhaseResearchEvidenceContract(),
+		},
+		WeakestGap:        *manifest.WeakestGap,
+		StageManifestID:   manifest.ID,
+		StageManifestHash: manifest.ContentHash,
+		CreatedAt:         time.Date(2026, time.September, 7, 17, 0, 0, 0, time.UTC),
 	}
 	payload := header
 	payload.ID = ""
