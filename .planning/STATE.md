@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 200-05-PLAN.md
-last_updated: "2026-09-07T13:58:33.604Z"
+stopped_at: Completed 200-06-PLAN.md
+last_updated: "2026-09-07T14:39:40.387Z"
 last_activity: 2026-09-07
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 59
-  completed_plans: 39
+  completed_plans: 40
   percent: 14
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 6 of 25
+Plan: 7 of 25
 Status: Ready to execute
 Last activity: 2026-09-07
 
@@ -116,6 +116,7 @@ Last activity: 2026-09-07
 | Phase 200 P03 | 24 min | 2 tasks | 2 files |
 | Phase 200 P04 | 23 min | 2 tasks | 2 files |
 | Phase 200 P05 | 36 min | 2 tasks | 2 files |
+| Phase 200 P06 | 37 min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -320,6 +321,10 @@ Last activity: 2026-09-07
 - [Phase 200]: Proposal acceptance evidence requires at least one deterministic build, types, lint, or tests check; claims and watcher alone are not automated checks.
 - [Phase 200]: Any predecessor phase or task omitted from a proposal needs a typed removed entry with a nonempty rationale.
 - [Phase 200]: Current proposal validation keeps exact files, no-file reasons, and user-facing applicability in a boundary envelope so legacy Plan loading stays unchanged.
+- [Phase 200]: An append identity binds receipt ID, run ID, ordinal, card ID/hash, and the exact predecessor hash; reusing the receipt for any other payload is a typed conflict.
+- [Phase 200]: Historical replay validates the immutable lifecycle journal and returns the digest of that append's original prefix, while full-chain validation permits the shared index to advance through later appends.
+- [Phase 200]: Only an exact PlanRevision timeline ID and digest pair upgrades a candidate-only timeline to accepted, after which both prune and reorder operations fail with typed protection errors.
+- [Phase 200]: Unindexed legacy iteration JSON is readable only as legacy_unbound evidence and never receives a current timeline binding.
 
 ### Pending Todos
 
@@ -435,8 +440,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-07T13:58:33.595Z
-Stopped at: Completed 200-05-PLAN.md
+Last session: 2026-09-07T14:39:40.377Z
+Stopped at: Completed 200-06-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

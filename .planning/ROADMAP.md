@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 5/25 plans executed
+**Plans:** 6/25 plans executed
 
 Plans:
 
@@ -198,7 +198,7 @@ Plans:
 - [x] 200-03-PLAN.md — Build the shared planning-evidence catalogue.
 - [x] 200-04-PLAN.md — Validate five confidence dimensions and deterministic stop policy.
 - [x] 200-05-PLAN.md — Compute semantic before-to-after plan deltas.
-- [ ] 200-06-PLAN.md — Persist the append-only iteration-card timeline.
+- [x] 200-06-PLAN.md — Persist the append-only iteration-card timeline.
 - [ ] 200-07-PLAN.md — Enforce shared material-decision boundaries.
 
 **Wave 3** *(blocked on Wave 2 completion)*
