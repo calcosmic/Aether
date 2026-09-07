@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 7/25 plans executed
+**Plans:** 8/25 plans executed
 
 Plans:
 
@@ -203,7 +203,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 200-08-PLAN.md — Implement immutable specification lineage and projection.
+- [x] 200-08-PLAN.md — Implement immutable specification lineage and projection.
 - [ ] 200-09-PLAN.md — Implement staged Scout and Route-Setter transition receipts.
 
 **Wave 4** *(blocked on Wave 3 completion)*

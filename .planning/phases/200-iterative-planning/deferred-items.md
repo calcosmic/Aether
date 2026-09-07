@@ -15,3 +15,11 @@
 - **Observed mismatch:** The checked-in Phase 199 receipt now reports stale or invalid execution timestamps for its `go test ./...` gate.
 - **Why deferred:** The receipt is Phase 199 historical verification metadata; refreshing or redesigning its time window is unrelated to Phase 200 planning-state validation and migration.
 - **Suggested follow-up:** Re-run the Phase 199 gate-receipt workflow with current evidence, then verify `go test ./cmd -run 'TestPhase199GateReceiptSchema|TestPhase199GateReceipt' -count=1`.
+
+## 2026-09-07 — Specification command registration follows projection engine
+
+- **Discovered during:** Phase 200 Plan 08 repository-wide verification (`go test ./... -count=1`)
+- **Failing test:** `TestGoSourceHintsMatchCobraContracts`
+- **Observed mismatch:** The new canonical `SPEC.md` projection must show the exact draft-approval command, but `aether spec` and its `--approve`, `--revision-id`, `--revision-hash`, and `--approval-token` flags are not registered until the already-planned Phase 200 Plan 10 command-surface work.
+- **Why deferred:** Registering Cobra commands changes `cmd/spec_cmd.go` and `cmd/root.go`, which are explicitly owned by Plan 200-10 and outside Plan 200-08's engine/projection file boundary. Hiding or weakening the required next command merely to evade the audit would make the projection dishonest.
+- **Suggested follow-up:** Complete Plan 200-10, then rerun `go test ./cmd -run TestGoSourceHintsMatchCobraContracts -count=1` and the repository-wide suite.

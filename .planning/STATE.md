@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 200-07-PLAN.md
-last_updated: "2026-09-07T15:10:28.516Z"
+stopped_at: Completed 200-08-PLAN.md
+last_updated: "2026-09-07T16:11:59.787Z"
 last_activity: 2026-09-07
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 59
-  completed_plans: 41
+  completed_plans: 42
   percent: 14
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 8 of 25
+Plan: 9 of 25
 Status: Ready to execute
 Last activity: 2026-09-07
 
@@ -118,6 +118,7 @@ Last activity: 2026-09-07
 | Phase 200 P05 | 36 min | 2 tasks | 2 files |
 | Phase 200 P06 | 37 min | 2 tasks | 2 files |
 | Phase 200 P07 | 27 min | 2 tasks | 2 files |
+| Phase 200 P08 | 49 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -330,6 +331,10 @@ Last activity: 2026-09-07
 - [Phase 200]: Pass one may batch owner decisions after Scout, while later passes require matching Scout and Route-Setter receipts plus the persisted iteration-card hash. — A later discovery cannot truncate the complete planning pass needed to explain its impact.
 - [Phase 200]: Owner answers are reusable only under an exact content-addressed goal, session, specification, plan, meaning, impact, and affected-ID key. — Any drift leaves the prior answer visible as evidence but removes its authority.
 - [Phase 200]: Only contract-equivalent answers return direct_resume; contract changes require successor_spec_required with stable affected IDs and normalized revision evidence. — The specification engine receives an auditable revision request instead of an implicit planning-state rebind.
+- [Phase 200]: Derive each specification body ID from typed section plus normalized semantic lineage, while material revision hashes exclude observation time and authority state. — Reordering cannot rename contract items, and approval cannot masquerade as a product edit.
+- [Phase 200]: Bind specification approval to the exact specification ID, current revision ID, content hash, action token, and owner identity. — Specification approval remains independently auditable and never accepts a plan.
+- [Phase 200]: Treat ColonyState as canonical and .aether/SPEC.md as a deterministic one-way projection that is never parsed into authority. — Manual Markdown edits can be detected and repaired without changing revision or approval records.
+- [Phase 200]: Commit specification state and projection in one recoverable lifecycle transaction, allocating a fresh attempt only after a proven rollback. — Interrupted writes resume exactly, while a rolled-back failure can be retried without returning a false no-change success.
 
 ### Pending Todos
 
@@ -445,8 +450,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-07T15:10:28.506Z
-Stopped at: Completed 200-07-PLAN.md
+Last session: 2026-09-07T16:11:59.778Z
+Stopped at: Completed 200-08-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
