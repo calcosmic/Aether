@@ -417,3 +417,20 @@ func TestAutopilotTriggerCatalogueRendersBothModeDispositions(t *testing.T) {
 		}
 	}
 }
+
+func TestAutopilotPolicyPlanAuthorityRefusalIsZeroEffect(t *testing.T) {
+	facts, bindings := planAuthorityCurrentFixture(t)
+	facts.Planning.Value.AcceptanceBindingStatus = LifecyclePlanBindingAffected
+	facts.Planning.Value.AffectedUnresolvedSemanticIDs = []string{"task:affected"}
+
+	preflight := buildAutopilotPreflightWithAuthority(facts, bindings)
+	if preflight.Valid || preflight.PlanAuthority.Eligible {
+		t.Fatalf("preflight = %+v, want plan-authority refusal", preflight)
+	}
+	if preflight.PlanAuthority.RefusalCode != planAuthorityRefusalAffectedScope || preflight.PlanAuthority.RecoveryCommand != "aether plan" {
+		t.Fatalf("authority = %+v, want affected-scope recovery", preflight.PlanAuthority)
+	}
+	if preflight.StateEffect != colony.LifecycleStateEffectNone {
+		t.Fatalf("state effect = %q, want none", preflight.StateEffect)
+	}
+}
