@@ -1065,6 +1065,285 @@ func TestPlanCommandLegacyAcceptCannotMutate(t *testing.T) {
 	}
 }
 
+func TestCodexPlanApprovedSpecRequiredBeforeDispatch(t *testing.T) {
+	tests := []struct {
+		name   string
+		status colony.SpecRevisionStatus
+	}{
+		{name: "missing"},
+		{name: "draft", status: colony.SpecStatusDraft},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			saveGlobals(t)
+			dataDir := setupBuildFlowTest(t)
+			root := filepath.Dir(filepath.Dir(dataDir))
+			goal := "Plan from an exact approved specification"
+			state := colony.ColonyState{Version: "3.0", Goal: &goal, State: colony.StateREADY, Plan: colony.Plan{Phases: []colony.Phase{}}}
+			if tc.status != "" {
+				state = codexPlanSpecificationFixture(t, state, tc.status)
+			}
+			createTestColonyState(t, dataDir, state)
+			if state.Specification != nil {
+				writeCodexPlanSpecificationProjection(t, root, state)
+			}
+
+			_, err := runCodexPlanWithOptions(root, codexPlanOptions{
+				PlanOnly: true, Preset: "balanced", PresetSet: true,
+			})
+			if err == nil || !strings.Contains(err.Error(), "aether spec") {
+				t.Fatalf("plan error = %v, want exact aether spec recovery", err)
+			}
+			if _, statErr := os.Stat(filepath.Join(dataDir, "planning")); !os.IsNotExist(statErr) {
+				t.Fatalf("planning directory exists before approved SPEC: %v", statErr)
+			}
+		})
+	}
+}
+
+func TestCodexPlanApprovedSpecRejectsHashOrProjectionMismatch(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(t *testing.T, root string, state *colony.ColonyState)
+	}{
+		{
+			name: "approval_hash",
+			mutate: func(t *testing.T, _ string, state *colony.ColonyState) {
+				t.Helper()
+				current, ok := currentSpecificationRevision(*state.Specification)
+				if !ok {
+					t.Fatal("fixture has no current specification revision")
+				}
+				current.Approval.RevisionContentHash = strings.Repeat("f", 64)
+				state.Specification.Revisions[len(state.Specification.Revisions)-1] = current
+			},
+		},
+		{
+			name: "projection_drift",
+			mutate: func(t *testing.T, root string, state *colony.ColonyState) {
+				t.Helper()
+				writeCodexPlanSpecificationProjection(t, root, *state)
+				if err := os.WriteFile(filepath.Join(root, specificationProjectionRelativePath), []byte("tampered projection\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			saveGlobals(t)
+			dataDir := setupBuildFlowTest(t)
+			root := filepath.Dir(filepath.Dir(dataDir))
+			goal := "Reject stale specification bindings"
+			state := codexPlanSpecificationFixture(t, colony.ColonyState{
+				Version: "3.0", Goal: &goal, State: colony.StateREADY, Plan: colony.Plan{Phases: []colony.Phase{}},
+			}, colony.SpecStatusApproved)
+			if tc.name != "projection_drift" {
+				writeCodexPlanSpecificationProjection(t, root, state)
+			}
+			tc.mutate(t, root, &state)
+			createTestColonyState(t, dataDir, state)
+
+			_, err := runCodexPlanWithOptions(root, codexPlanOptions{
+				PlanOnly: true, Preset: "balanced", PresetSet: true,
+			})
+			if err == nil || !strings.Contains(err.Error(), "aether spec") {
+				t.Fatalf("plan error = %v, want exact aether spec recovery", err)
+			}
+		})
+	}
+}
+
+func TestCodexPlanEvidencePrimesApprovedInputs(t *testing.T) {
+	saveGlobals(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	hub := t.TempDir()
+	t.Setenv("AETHER_HUB_DIR", hub)
+	goal := "Prime every attributable planning input"
+	state := codexPlanSpecificationFixture(t, colony.ColonyState{
+		Version: "3.0", Goal: &goal, State: colony.StateREADY, Plan: colony.Plan{Phases: []colony.Phase{}},
+	}, colony.SpecStatusApproved)
+	state.AcceptedCharter = &colony.AcceptedCharter{
+		SchemaVersion: colony.AcceptedCharterSchemaVersion,
+		EpisodeID:     "episode-plan-evidence",
+		Goal:          goal,
+		Provenance:    "owner",
+		AcceptedAt:    time.Date(2026, time.September, 7, 17, 0, 0, 0, time.UTC),
+		Charter:       &colony.Charter{Intent: goal, Constraints: "Keep authority in Go"},
+	}
+	state.Events = []string{"2026-09-07T16:00:00Z|phase_completed|continue|Prior verification passed"}
+	researchPath := filepath.ToSlash(filepath.Join(".aether", "research", "planning-evidence.md"))
+	if err := os.MkdirAll(filepath.Join(root, ".aether", "research"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(researchPath)), []byte("# Evidence\n\nThe staged loop must preserve exact authority.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	state.ResearchDocs = []string{researchPath}
+	createTestColonyState(t, dataDir, state)
+	writeCodexPlanSpecificationProjection(t, root, state)
+	if err := os.MkdirAll(filepath.Join(dataDir, "survey"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dataDir, "survey", "BLUEPRINT.md"), []byte("# Blueprint\n\ncmd/codex_plan.go owns planning.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveJSON(pendingDecisionsFile, PendingDecisionFile{Decisions: []PendingDecision{{
+		ID: "decision-plan-evidence", Type: "clarification", Description: "Keep stage authority in Go", Resolution: "confirmed", Resolved: true,
+		SessionID: *state.SessionID, GoalHash: pendingDecisionGoalHash(goal), CreatedAt: "2026-09-07T16:10:00Z", ResolvedAt: "2026-09-07T16:11:00Z",
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(hub, "hive"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	hiveBytes, err := json.Marshal(hiveWisdomData{Version: hiveWisdomSchemaVersion, Entries: []hiveWisdomEntry{{
+		ID: "wisdom-plan-evidence", Text: "Bind every worker to one manifest.", Domain: "go", SourceRepo: "fixture", Confidence: 0.9,
+		CreatedAt: "2026-09-07T15:00:00Z", AccessedAt: "2026-09-07T15:00:00Z", LastConfirmedAt: "2026-09-07T15:00:00Z",
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(hub, "hive", "wisdom.json"), hiveBytes, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := runCodexPlanWithOptions(root, codexPlanOptions{PlanOnly: true, Refresh: true, Preset: "deep", PresetSet: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded := decodeCodexPlanResult(t, result)
+	header, ok := decoded["planning_run_header"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("planning_run_header missing: %+v", decoded)
+	}
+	records, ok := header["evidence_catalogue"].([]interface{})
+	if !ok {
+		t.Fatalf("evidence_catalogue missing: %+v", header)
+	}
+	seen := map[string]bool{}
+	for _, raw := range records {
+		record := raw.(map[string]interface{})
+		ref := record["reference"].(map[string]interface{})
+		seen[ref["kind"].(string)] = true
+	}
+	for _, kind := range []colony.PlanningEvidenceKind{
+		colony.PlanningEvidenceSpecification, colony.PlanningEvidenceSurvey, colony.PlanningEvidenceCharter,
+		colony.PlanningEvidenceDecision, colony.PlanningEvidenceContext, colony.PlanningEvidenceResearch,
+		colony.PlanningEvidenceHive, colony.PlanningEvidenceOutcome,
+	} {
+		if !seen[string(kind)] {
+			t.Errorf("planning evidence catalogue missing %q: %v", kind, seen)
+		}
+	}
+}
+
+func TestCodexPlanScoutManifestAuthorizesOneStage(t *testing.T) {
+	saveGlobals(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	goal := "Authorize exactly one evidence-grounded Scout"
+	state := codexPlanSpecificationFixture(t, colony.ColonyState{
+		Version: "3.0", Goal: &goal, State: colony.StateREADY, Plan: colony.Plan{Phases: []colony.Phase{}},
+	}, colony.SpecStatusApproved)
+	createTestColonyState(t, dataDir, state)
+	writeCodexPlanSpecificationProjection(t, root, state)
+
+	result, err := runCodexPlanWithOptions(root, codexPlanOptions{PlanOnly: true, Preset: "fast", PresetSet: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded := decodeCodexPlanResult(t, result)
+	manifest := decoded["plan_manifest"].(map[string]interface{})
+	stage, ok := manifest["stage_manifest"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("stage_manifest missing: %+v", manifest)
+	}
+	if stage["run_id"] != decoded["planning_run_id"] || int(stage["pass"].(float64)) != 1 {
+		t.Fatalf("stage run/pass = %v/%v, want result run and pass 1", stage["run_id"], stage["pass"])
+	}
+	if stage["expected_caste"] != "scout" || stage["expected_result_type"] != string(planningStageResultScout) {
+		t.Fatalf("stage worker contract = %v/%v", stage["expected_caste"], stage["expected_result_type"])
+	}
+	if stage["preset"] != "fast" || stage["base_plan_revision_id"] == "" || stage["base_plan_revision_hash"] == "" {
+		t.Fatalf("stage preset/base binding incomplete: %+v", stage)
+	}
+	spec := stage["specification"].(map[string]interface{})
+	current, _ := currentSpecificationRevision(*state.Specification)
+	if spec["revision_id"] != current.ID || spec["content_hash"] != current.ContentHash || spec["status"] != "approved" {
+		t.Fatalf("stage specification binding = %+v, want %s/%s", spec, current.ID, current.ContentHash)
+	}
+	if _, ok := stage["scout_receipt"]; ok {
+		t.Fatal("Scout manifest leaked a Route-Setter receipt slot")
+	}
+	for _, forbidden := range []string{"candidate_snapshot_hash", "acceptance", "activation", "route_setter"} {
+		if _, ok := stage[forbidden]; ok {
+			t.Errorf("Scout manifest contains forbidden future authority %q", forbidden)
+		}
+	}
+	dispatches := manifest["dispatches"].([]interface{})
+	if len(dispatches) != 1 || dispatches[0].(map[string]interface{})["caste"] != "scout" {
+		t.Fatalf("dispatch envelope = %+v, want one Scout", dispatches)
+	}
+	headerPath := filepath.Join(dataDir, "planning", decoded["planning_run_id"].(string), "run-header.json")
+	if _, err := os.Stat(headerPath); err != nil {
+		t.Fatalf("persisted run header missing: %v", err)
+	}
+}
+
+func codexPlanSpecificationFixture(t *testing.T, state colony.ColonyState, status colony.SpecRevisionStatus) colony.ColonyState {
+	t.Helper()
+	currentState, _ := validCurrentPlanningState(t)
+	specification := *currentState.Specification
+	revision, ok := currentSpecificationRevision(specification)
+	if !ok {
+		t.Fatal("valid planning-state fixture has no current specification")
+	}
+	revision.Status = status
+	if status == colony.SpecStatusApproved {
+		if revision.Approval == nil {
+			t.Fatal("approved fixture has no approval receipt")
+		}
+	} else {
+		revision.Approval = nil
+	}
+	specification.Revisions[len(specification.Revisions)-1] = revision
+	state.Specification = &specification
+	sessionID := revision.Scope.SessionID
+	state.SessionID = &sessionID
+	return state
+}
+
+func writeCodexPlanSpecificationProjection(t *testing.T, root string, state colony.ColonyState) {
+	t.Helper()
+	projection, err := renderSpecificationProjection(*state.Specification, state.Plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, ".aether"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, specificationProjectionRelativePath), projection, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func decodeCodexPlanResult(t *testing.T, result map[string]interface{}) map[string]interface{} {
+	t.Helper()
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded map[string]interface{}
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	return decoded
+}
+
 func TestPlanForceRecoversFromStaleInProgress(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
