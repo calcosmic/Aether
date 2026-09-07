@@ -1,285 +1,204 @@
 package cmd
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
-func TestResearchProposalBatchRendersTickToApprove(t *testing.T) {
-	proposal := phaseResearchProposal{
-		Depth:  "balanced",
-		Replan: false,
-		Phases: []phaseResearchRecommendation{
-			{PhaseID: 1, PhaseName: "Alpha", Recommend: "research", Reason: "new external tech (api) is absent from the territory survey"},
-			{PhaseID: 2, PhaseName: "Beta", Recommend: "skip", Reason: "pure refactor -- the domain is already mapped by the territory survey"},
-			{PhaseID: 3, PhaseName: "Gamma", Recommend: "skip", Reason: "no external technology signals found in the phase description -- the domain looks internal"},
+func phaseResearchAutomaticTestGap(t *testing.T, materiality colony.PlanningGapMateriality, severity int) colony.PlanningGap {
+	t.Helper()
+	gap := colony.PlanningGap{
+		SchemaVersion:           colony.PlanningSchemaVersion,
+		Dimension:               colony.PlanningDimensionKnowledge,
+		Materiality:             materiality,
+		Severity:                severity,
+		Description:             "The billing provider contract is not yet grounded.",
+		EvidenceThatWouldChange: "Current authoritative billing API documentation.",
+	}
+	payload := gap
+	hash, err := jsonSHA256(payload)
+	if err != nil {
+		t.Fatalf("hash gap: %v", err)
+	}
+	gap.ContentHash = hash
+	gap.ID = "planning-gap-" + hash[:16]
+	if err := gap.Validate(); err != nil {
+		t.Fatalf("validate gap: %v", err)
+	}
+	return gap
+}
+
+func phaseResearchAutomaticTestEvidence(t *testing.T, fresh bool) planningEvidenceRecord {
+	t.Helper()
+	record, err := normalizePlanningEvidence(planningEvidenceSource{
+		Kind:           colony.PlanningEvidenceResearch,
+		Origin:         "https://example.test/billing-api/v2",
+		Content:        []byte("Billing API v2 uses signed webhooks and idempotency keys."),
+		SourceRevision: "billing-api-v2",
+		Scope: planningEvidenceScope{
+			GoalID:                  "goal-1",
+			SessionID:               "session-1",
+			SpecificationRevisionID: "spec-1",
+			PlanRevisionID:          "plan-1",
 		},
+		ObservedAt:           time.Date(2026, time.September, 7, 12, 0, 0, 0, time.UTC),
+		ApplicableDimensions: []colony.PlanningDimension{colony.PlanningDimensionKnowledge},
+		State:                planningEvidenceSourceCurrent,
+	})
+	if err != nil {
+		t.Fatalf("normalize research evidence: %v", err)
 	}
+	record.Reference.Fresh = fresh
+	return record
+}
 
-	block := renderPhaseResearchProposalBlock(proposal)
+func TestPhaseResearchAutomaticPolicyUsesPresetGapAndFreshness(t *testing.T) {
+	candidates := []phaseResearchCandidate{{
+		ID:          1,
+		Name:        "Wire billing provider",
+		Description: "Integrate the external billing API and webhook protocol",
+	}}
+	survey := codexSurveyContext{Languages: []string{"go"}}
 
-	approveAllCount := strings.Count(block, "--approve-all")
-	if approveAllCount != 1 {
-		t.Fatalf("expected exactly one --approve-all occurrence, got %d in:\n%s", approveAllCount, block)
-	}
-	flipCount := strings.Count(block, "--flip")
-	if flipCount != 3 {
-		t.Fatalf("expected exactly 3 --flip occurrences, got %d in:\n%s", flipCount, block)
-	}
-	for _, want := range []string{"Phase 1: Alpha", "Phase 2: Beta", "Phase 3: Gamma", "Reason:"} {
-		if !strings.Contains(block, want) {
-			t.Fatalf("expected block to contain %q, got:\n%s", want, block)
+	t.Run("balanced researches an uncovered gap without asking the owner", func(t *testing.T) {
+		gap := phaseResearchAutomaticTestGap(t, colony.PlanningGapNonMaterial, 75)
+		policy := computeAutomaticPhaseResearchPolicy(planningStagePresetBalanced, &gap, survey, candidates, nil, nil, false)
+
+		if !policy.ResearchRequired {
+			t.Fatalf("ResearchRequired = false, want true: %+v", policy)
 		}
-	}
+		if policy.RequiresOwnerPrompt {
+			t.Fatal("routine research requested an owner prompt")
+		}
+		if len(policy.Phases) != 1 || !policy.Phases[0].ResearchNeeded {
+			t.Fatalf("phase policy = %+v, want phase 1 automatically selected", policy.Phases)
+		}
+	})
 
-	t.Run("empty proposal renders empty string", func(t *testing.T) {
-		empty := renderPhaseResearchProposalBlock(phaseResearchProposal{})
-		if empty != "" {
-			t.Fatalf("expected empty string for zero-phase proposal, got %q", empty)
+	t.Run("fast skips a nonmaterial gap but researches a material one", func(t *testing.T) {
+		nonMaterial := phaseResearchAutomaticTestGap(t, colony.PlanningGapNonMaterial, 75)
+		policy := computeAutomaticPhaseResearchPolicy(planningStagePresetFast, &nonMaterial, survey, candidates, nil, nil, false)
+		if policy.ResearchRequired {
+			t.Fatalf("fast nonmaterial policy unexpectedly requires research: %+v", policy)
+		}
+
+		material := phaseResearchAutomaticTestGap(t, colony.PlanningGapMaterial, 75)
+		policy = computeAutomaticPhaseResearchPolicy(planningStagePresetFast, &material, survey, candidates, nil, nil, false)
+		if !policy.ResearchRequired {
+			t.Fatalf("fast material policy skipped evidence needed for a material gap: %+v", policy)
+		}
+		if policy.RequiresOwnerPrompt {
+			t.Fatal("material research need itself must not prompt; Scout reports product decisions after the pass")
+		}
+	})
+
+	t.Run("fresh applicable evidence suppresses routine research", func(t *testing.T) {
+		gap := phaseResearchAutomaticTestGap(t, colony.PlanningGapNonMaterial, 75)
+		fresh := phaseResearchAutomaticTestEvidence(t, true)
+		policy := computeAutomaticPhaseResearchPolicy(planningStagePresetDeep, &gap, survey, candidates, nil, []planningEvidenceRecord{fresh}, false)
+		if policy.ResearchRequired {
+			t.Fatalf("fresh evidence should suppress duplicate research: %+v", policy)
+		}
+		if len(policy.FreshEvidenceIDs) != 1 || policy.FreshEvidenceIDs[0] != fresh.Reference.ID {
+			t.Fatalf("FreshEvidenceIDs = %v, want [%s]", policy.FreshEvidenceIDs, fresh.Reference.ID)
+		}
+	})
+
+	t.Run("stale evidence or explicit refresh runs research again", func(t *testing.T) {
+		gap := phaseResearchAutomaticTestGap(t, colony.PlanningGapNonMaterial, 75)
+		stale := phaseResearchAutomaticTestEvidence(t, false)
+		policy := computeAutomaticPhaseResearchPolicy(planningStagePresetDeep, &gap, survey, candidates, nil, []planningEvidenceRecord{stale}, false)
+		if !policy.ResearchRequired {
+			t.Fatalf("stale evidence incorrectly suppressed research: %+v", policy)
+		}
+
+		fresh := phaseResearchAutomaticTestEvidence(t, true)
+		policy = computeAutomaticPhaseResearchPolicy(planningStagePresetDeep, &gap, survey, candidates, nil, []planningEvidenceRecord{fresh}, true)
+		if !policy.ResearchRequired || !policy.Refresh {
+			t.Fatalf("explicit refresh did not force attributable research: %+v", policy)
 		}
 	})
 }
 
-func TestResearchDecisionRecordsUseExistingStore(t *testing.T) {
-	rec := phaseResearchRecommendation{
-		PhaseID:   4,
-		PhaseName: "Delta",
-		Recommend: "research",
-		Reason:    "new external tech (api) is absent from the territory survey",
+func TestPhaseResearchAutomaticEvidenceContractIsScoutAttributed(t *testing.T) {
+	policy := computeAutomaticPhaseResearchPolicy(planningStagePresetExhaustive, nil, codexSurveyContext{}, nil, nil, nil, false)
+	contract := policy.EvidenceContract
+
+	if contract.ProducerCaste != planningStageCasteScout {
+		t.Fatalf("ProducerCaste = %q, want %q", contract.ProducerCaste, planningStageCasteScout)
 	}
+	if contract.SourceKind != colony.PlanningEvidenceResearch {
+		t.Fatalf("SourceKind = %q, want %q", contract.SourceKind, colony.PlanningEvidenceResearch)
+	}
+	for _, field := range []string{"origin", "source_revision", "observed_at", "applicable_dimensions", "content_hash"} {
+		if !phaseResearchStringSliceContains(contract.RequiredFields, field) {
+			t.Errorf("RequiredFields = %v, want %q", contract.RequiredFields, field)
+		}
+	}
+	if contract.MayApproveSpecification || contract.MayAcceptCandidate || contract.MayActivatePlan {
+		t.Fatalf("research contract grants forbidden authority: %+v", contract)
+	}
+	if policy.RequiresOwnerPrompt {
+		t.Fatal("automatic evidence contract requires an owner prompt")
+	}
+}
 
-	t.Run("newPhaseResearchDecision returns existing PendingDecision type", func(t *testing.T) {
-		decision := newPhaseResearchDecision(rec)
-		if decision.Type != phaseResearchDecisionType {
-			t.Fatalf("expected Type=%q, got %q", phaseResearchDecisionType, decision.Type)
+func TestPhaseResearchAutomaticSourcesFailClosed(t *testing.T) {
+	root := t.TempDir()
+	inside := filepath.Join(root, ".aether", "data", "phase-research")
+	if err := os.MkdirAll(inside, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	scope := planningEvidenceScope{
+		GoalID: "goal-1", SessionID: "session-1", SpecificationRevisionID: "spec-1", PlanRevisionID: "plan-1",
+	}
+	observedAt := time.Date(2026, time.September, 7, 12, 0, 0, 0, time.UTC)
+
+	t.Run("out of scope", func(t *testing.T) {
+		outside := filepath.Join(filepath.Dir(root), "outside-research.md")
+		if err := os.WriteFile(outside, []byte("public finding"), 0o600); err != nil {
+			t.Fatal(err)
 		}
-		if decision.Phase == nil || *decision.Phase != rec.PhaseID {
-			t.Fatalf("expected Phase to point at %d, got %v", rec.PhaseID, decision.Phase)
-		}
-		if decision.Resolved {
-			t.Fatalf("expected Resolved=false for a freshly created decision")
-		}
-		if decision.ID == "" || decision.CreatedAt == "" {
-			t.Fatalf("expected non-empty ID and CreatedAt, got ID=%q CreatedAt=%q", decision.ID, decision.CreatedAt)
+		t.Cleanup(func() { _ = os.Remove(outside) })
+		_, err := collectScoutPhaseResearchEvidence(root, []string{"../outside-research.md"}, scope, observedAt)
+		if err == nil || !strings.Contains(err.Error(), "outside") {
+			t.Fatalf("out-of-scope source error = %v, want safe rejection", err)
 		}
 	})
 
-	t.Run("resolvePhaseResearchDecisions returns research for a research resolution", func(t *testing.T) {
-		phaseID := 4
-		file := PendingDecisionFile{
-			Decisions: []PendingDecision{
-				{Type: phaseResearchDecisionType, Phase: &phaseID, Resolved: true, Resolution: "approved: research phase 4"},
-			},
-		}
-		result := resolvePhaseResearchDecisions(file)
-		if result[4] != "research" {
-			t.Fatalf("expected phase 4 resolved to research, got %q", result[4])
+	t.Run("unavailable", func(t *testing.T) {
+		_, err := collectScoutPhaseResearchEvidence(root, []string{".aether/data/phase-research/missing.md"}, scope, observedAt)
+		if err == nil || !strings.Contains(strings.ToLower(err.Error()), "read") {
+			t.Fatalf("unavailable source error = %v, want safe read failure", err)
 		}
 	})
 
-	t.Run("resolvePhaseResearchDecisions returns skip for a skip resolution", func(t *testing.T) {
-		phaseID := 5
-		file := PendingDecisionFile{
-			Decisions: []PendingDecision{
-				{Type: phaseResearchDecisionType, Phase: &phaseID, Resolved: true, Resolution: "approved: skip phase 5"},
-			},
+	t.Run("secret-bearing", func(t *testing.T) {
+		path := filepath.Join(inside, "phase-1-research.md")
+		secret := "sk-abcdefghijklmnopqrstuvwxyz123456"
+		if err := os.WriteFile(path, []byte("credential "+secret), 0o600); err != nil {
+			t.Fatal(err)
 		}
-		result := resolvePhaseResearchDecisions(file)
-		if result[5] != "skip" {
-			t.Fatalf("expected phase 5 resolved to skip, got %q", result[5])
+		_, err := collectScoutPhaseResearchEvidence(root, []string{".aether/data/phase-research/phase-1-research.md"}, scope, observedAt)
+		if err == nil || !strings.Contains(strings.ToLower(err.Error()), "secret") {
+			t.Fatalf("secret-bearing source error = %v, want safe rejection", err)
 		}
-	})
-
-	t.Run("resolvePhaseResearchDecisions ignores unresolved decisions", func(t *testing.T) {
-		phaseID := 6
-		file := PendingDecisionFile{
-			Decisions: []PendingDecision{
-				{Type: phaseResearchDecisionType, Phase: &phaseID, Resolved: false, Resolution: ""},
-			},
-		}
-		result := resolvePhaseResearchDecisions(file)
-		if _, ok := result[6]; ok {
-			t.Fatalf("expected unresolved decision to be ignored, got %q", result[6])
-		}
-	})
-
-	t.Run("resolvePhaseResearchDecisions ignores decisions with a different Type", func(t *testing.T) {
-		phaseID := 7
-		file := PendingDecisionFile{
-			Decisions: []PendingDecision{
-				{Type: "some-other-decision", Phase: &phaseID, Resolved: true, Resolution: "approved: research phase 7"},
-			},
-		}
-		result := resolvePhaseResearchDecisions(file)
-		if _, ok := result[7]; ok {
-			t.Fatalf("expected non-research decision type to be ignored, got %q", result[7])
-		}
-	})
-
-	t.Run("flipped decision resolution names user override and direction", func(t *testing.T) {
-		resolution := phaseResearchDecisionResolution(rec, true, false)
-		if !strings.Contains(resolution, "user overrode") {
-			t.Fatalf("expected resolution to contain 'user overrode', got %q", resolution)
-		}
-		if !strings.Contains(resolution, "skip") {
-			t.Fatalf("expected flipped resolution (from research) to name skip, got %q", resolution)
-		}
-		if !strings.Contains(resolution, "4") {
-			t.Fatalf("expected resolution to name phase 4, got %q", resolution)
-		}
-	})
-
-	t.Run("auto-accepted resolution is prefixed", func(t *testing.T) {
-		resolution := phaseResearchDecisionResolution(rec, false, true)
-		if !strings.HasPrefix(resolution, "auto-accepted (autopilot)") {
-			t.Fatalf("expected auto-accepted prefix, got %q", resolution)
+		if strings.Contains(err.Error(), secret) {
+			t.Fatal("secret-bearing rejection echoed credential material")
 		}
 	})
 }
 
-func TestQueenResearchDecision(t *testing.T) {
-	t.Run("external token absent from survey recommends research and names the token", func(t *testing.T) {
-		candidates := []phaseResearchCandidate{
-			{ID: 1, Name: "Integrate billing provider", Description: "Wire up the new OAuth2 API for the third-party payment provider"},
+func phaseResearchStringSliceContains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
 		}
-		survey := codexSurveyContext{
-			Languages: []string{"go"},
-		}
-
-		proposal := computePhaseResearchProposal("balanced", false, survey, candidates, nil)
-
-		if len(proposal.Phases) != 1 {
-			t.Fatalf("expected 1 recommendation, got %d", len(proposal.Phases))
-		}
-		rec := proposal.Phases[0]
-		if rec.Recommend != "research" {
-			t.Fatalf("expected recommend=research, got %q", rec.Recommend)
-		}
-		if len(rec.Hints.DomainGaps) == 0 {
-			t.Fatalf("expected at least one domain gap")
-		}
-		if !strings.Contains(rec.Reason, rec.Hints.DomainGaps[0]) {
-			t.Fatalf("expected reason %q to name the domain gap token %q", rec.Reason, rec.Hints.DomainGaps[0])
-		}
-	})
-
-	t.Run("technology already in survey recommends skip and reason says domain is mapped", func(t *testing.T) {
-		candidates := []phaseResearchCandidate{
-			{ID: 2, Name: "Refactor HTTP handlers", Description: "Clean up the existing http handler layer, no new endpoints"},
-		}
-		survey := codexSurveyContext{
-			Languages:  []string{"go"},
-			Frameworks: []string{"net/http"},
-		}
-
-		proposal := computePhaseResearchProposal("balanced", false, survey, candidates, nil)
-
-		if len(proposal.Phases) != 1 {
-			t.Fatalf("expected 1 recommendation, got %d", len(proposal.Phases))
-		}
-		rec := proposal.Phases[0]
-		if rec.Recommend != "skip" {
-			t.Fatalf("expected recommend=skip, got %q", rec.Recommend)
-		}
-		if !strings.Contains(rec.Reason, "already mapped") {
-			t.Fatalf("expected reason to say the domain is already mapped, got %q", rec.Reason)
-		}
-	})
-
-	t.Run("fast preset recommends skip for every phase but lists every phase with a flip reason", func(t *testing.T) {
-		candidates := []phaseResearchCandidate{
-			{ID: 1, Name: "Integrate billing provider", Description: "New external OAuth2 API"},
-			{ID: 2, Name: "Refactor internals", Description: "Pure refactor"},
-		}
-		survey := codexSurveyContext{}
-
-		proposal := computePhaseResearchProposal("fast", false, survey, candidates, nil)
-
-		if len(proposal.Phases) != len(candidates) {
-			t.Fatalf("expected %d recommendations, got %d", len(candidates), len(proposal.Phases))
-		}
-		for _, rec := range proposal.Phases {
-			if rec.Recommend != "skip" {
-				t.Fatalf("expected recommend=skip for phase %d on fast preset, got %q", rec.PhaseID, rec.Recommend)
-			}
-			if !strings.Contains(rec.Reason, "80%") || !strings.Contains(rec.Reason, "4") {
-				t.Fatalf("expected fast-preset reason to mention flipping on at 80%%/4 iterations, got %q", rec.Reason)
-			}
-		}
-	})
-
-	t.Run("researchPhaseKeywords-named phase with no external tokens and full survey coverage is still skip", func(t *testing.T) {
-		candidates := []phaseResearchCandidate{
-			{ID: 3, Name: "research architecture design planning discovery", Description: "Internal planning work only"},
-		}
-		survey := codexSurveyContext{
-			Languages:  []string{"go"},
-			Frameworks: []string{"cobra"},
-		}
-
-		proposal := computePhaseResearchProposal("balanced", false, survey, candidates, nil)
-
-		if len(proposal.Phases) != 1 {
-			t.Fatalf("expected 1 recommendation, got %d", len(proposal.Phases))
-		}
-		rec := proposal.Phases[0]
-		if rec.Recommend != "skip" {
-			t.Fatalf("expected recommend=skip (keywords must not drive this), got %q", rec.Recommend)
-		}
-		if len(rec.Hints.ExternalTech) != 0 {
-			t.Fatalf("expected no external tech signals, got %v", rec.Hints.ExternalTech)
-		}
-	})
-
-	t.Run("every candidate gets a non-empty recommend and reason, count matches candidates", func(t *testing.T) {
-		candidates := []phaseResearchCandidate{
-			{ID: 1, Name: "Alpha", Description: "External GraphQL API integration"},
-			{ID: 2, Name: "Beta", Description: "Internal cleanup"},
-			{ID: 3, Name: "Gamma", Description: "Migrate to a new vendor SDK"},
-		}
-		survey := codexSurveyContext{Languages: []string{"go"}}
-
-		proposal := computePhaseResearchProposal("balanced", false, survey, candidates, nil)
-
-		if len(proposal.Phases) != len(candidates) {
-			t.Fatalf("expected %d recommendations, got %d", len(candidates), len(proposal.Phases))
-		}
-		for _, rec := range proposal.Phases {
-			if rec.Recommend == "" {
-				t.Fatalf("phase %d has empty Recommend", rec.PhaseID)
-			}
-			if rec.Reason == "" {
-				t.Fatalf("phase %d has empty Reason", rec.PhaseID)
-			}
-		}
-	})
-
-	t.Run("empty phase mode produces empty PhaseMode hint without panicking", func(t *testing.T) {
-		candidates := []phaseResearchCandidate{
-			{ID: 5, Name: "Some phase", Description: "No external tech here"},
-		}
-		phases := []colony.Phase{
-			{ID: 5, Name: "Some phase", Mode: ""},
-		}
-		survey := codexSurveyContext{Languages: []string{"go"}}
-
-		var proposal phaseResearchProposal
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					t.Fatalf("computePhaseResearchProposal panicked: %v", r)
-				}
-			}()
-			proposal = computePhaseResearchProposal("balanced", false, survey, candidates, phases)
-		}()
-
-		if len(proposal.Phases) != 1 {
-			t.Fatalf("expected 1 recommendation, got %d", len(proposal.Phases))
-		}
-		if proposal.Phases[0].Hints.PhaseMode != "" {
-			t.Fatalf("expected empty PhaseMode hint for invalid mode, got %q", proposal.Phases[0].Hints.PhaseMode)
-		}
-	})
+	}
+	return false
 }
