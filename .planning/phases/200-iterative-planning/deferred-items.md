@@ -39,3 +39,11 @@
 - **Observed mismatch:** The repository-wide command suite still expects the pre-Phase-200 whole-chain planning surface in 29 tests. None of the failures names or exercises the new `TestPlanningScoutStage*` or `TestCodexPlanFinalize*Scout` boundary; all 29 focused Plan 14 tests pass normally and under the race detector.
 - **Why deferred:** Fixing these assertions would require future-owned lifecycle resolver, visual, wrapper, schema, inventory, and end-to-end files outside Plan 200-14's Scout-finalizer boundary. Those migrations are assigned to later Phase 200 plans, and changing them here would violate the sequential file-ownership contract.
 - **Suggested follow-up:** Complete the remaining Phase 200 command/renderer/parity plans, then rerun `go test ./cmd -count=1` and `go test ./... -count=1`. Keep `go test ./cmd -run 'TestPlanningScoutStage|TestCodexPlanFinalize.*Scout' -count=1` as the Plan 14 regression gate.
+
+## 2026-09-08 — Legacy Plan-only fixtures stop at the approved-SPEC boundary
+
+- **Discovered during:** Phase 200 Plan 17 command-package verification (`go test ./cmd -count=1`).
+- **Failing tests:** `TestPlanEmitsLifecycleCeremonyEvents`, `TestPlanFinalizeAddsOrchestratorBoundaryGuidance`, `TestOrchestratorBoundaryQuestionsCreatedForPlanOnlyWorkflows/plan`, `TestDefaultColonyModeDoesNotCreateBoundaryQuestions/plan`, and `TestResolvedBoundaryQuestionFlowsThroughClarifiedIntent`.
+- **Observed mismatch:** These older Plan-only fixtures do not create an approved specification. Current planning correctly returns `planning did not start: an approved specification is missing. State is unchanged. Run aether spec` before emitting the legacy event or boundary-question payload; the final test then panics while type-asserting the absent payload.
+- **Why deferred:** The failures precede and do not exercise Plan 200-17's impact closure, immutable insert candidate, or Seal authority gate. Updating the Plan/orchestrator compatibility fixtures belongs to the later Phase 200 public-path and end-to-end plans, while weakening the approved-SPEC gate would violate D-10 and D-12.
+- **Suggested follow-up:** Update the legacy fixtures to complete the approved specification handoff before invoking Plan, then rerun the five named tests and `go test ./cmd -count=1`.

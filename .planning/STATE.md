@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 200-16-PLAN.md
-last_updated: "2026-09-07T21:45:28.061Z"
+stopped_at: Completed 200-17-PLAN.md
+last_updated: "2026-09-07T22:49:27.737Z"
 last_activity: 2026-09-07
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 59
-  completed_plans: 50
+  completed_plans: 51
   percent: 14
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 17 of 25
+Plan: 18 of 25
 Status: Ready to execute
 Last activity: 2026-09-07
 
@@ -127,6 +127,7 @@ Last activity: 2026-09-07
 | Phase 200 P14 | 34m | 2 tasks | 3 files |
 | Phase 200 P15 | 42m | 3 tasks | 3 files |
 | Phase 200 P16 | 35m | 2 tasks | 9 files |
+| Phase 200 P17 | 46m | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -372,6 +373,10 @@ Last activity: 2026-09-07
 - [Phase 200]: Exact acceptance validates candidate, approved specification, immutable base, complete timeline, proposal, and deterministic owner token before one transaction.
 - [Phase 200]: Completed lifecycle state is restored onto the newly bound candidate definition without mutating predecessor revisions.
 - [Phase 200]: Run headers retain mutable state hashes for stale-work detection while candidates bind immutable revision hashes; plan-unbound is genesis-only.
+- [Phase 200]: Specification impact is a deterministic transitive closure over stable semantic IDs; ordinal phase/task numbers remain display and execution metadata only.
+- [Phase 200]: Only exact candidate acceptance against the approved current specification clears live affected scope; recorded historical impact remains immutable evidence.
+- [Phase 200]: Current-schema insert-phase is a proposal operation, while genuinely spec-less legacy plans retain their documented direct compatibility path.
+- [Phase 200]: Seal enforces structural specification/plan truth without becoming Phase 205 product acceptance; forced-incomplete closure remains explicitly non-verified.
 
 ### Pending Todos
 
@@ -487,8 +492,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-07T21:45:28.052Z
-Stopped at: Completed 200-16-PLAN.md
+Last session: 2026-09-07T22:49:27.728Z
+Stopped at: Completed 200-17-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
