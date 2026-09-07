@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 200-03-PLAN.md
-last_updated: "2026-09-07T12:51:51.285Z"
+stopped_at: Completed 200-04-PLAN.md
+last_updated: "2026-09-07T13:19:19.740Z"
 last_activity: 2026-09-07
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 59
-  completed_plans: 37
+  completed_plans: 38
   percent: 14
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 4 of 25
+Plan: 5 of 25
 Status: Ready to execute
 Last activity: 2026-09-07
 
@@ -114,6 +114,7 @@ Last activity: 2026-09-07
 | Phase 200 P01 | 25 min | 2 tasks | 5 files |
 | Phase 200 P02 | 40 min | 2 tasks | 7 files |
 | Phase 200 P03 | 24 min | 2 tasks | 2 files |
+| Phase 200 P04 | 23 min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -310,6 +311,10 @@ Last activity: 2026-09-07
 - [Phase 200]: Evidence identity excludes observation time, so exact rediscovery cannot manufacture freshness.
 - [Phase 200]: Planning evidence is fresh only under the exact active scope, source hash, frontier, and source-state policy.
 - [Phase 200]: Owner-answer reuse requires exact goal, session, specification, base-plan, meaning, behavior, impact, risk, and acceptance equivalence.
+- [Phase 200]: Route-Setter owns proposed dimension values, while Go alone validates their evidence and computes the weighted overall with integer half-up rounding.
+- [Phase 200]: Stop precedence is target met, configured pass cap, specific stalled gap, general diminishing returns, then continue; a material residual gap converts any below-target automatic stop to owner_decision.
+- [Phase 200]: The grounded_two_pass_lt2 policy requires two latest grounded sub-two-point absolute movements and no material semantic change after at least three completed passes.
+- [Phase 200]: Authority impacts remain separate from executable semantic movement and therefore do not masquerade as plan improvement in convergence diagnostics.
 
 ### Pending Todos
 
@@ -425,8 +430,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-07T12:51:51.275Z
-Stopped at: Completed 200-03-PLAN.md
+Last session: 2026-09-07T13:19:19.731Z
+Stopped at: Completed 200-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
