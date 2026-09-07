@@ -151,3 +151,28 @@ func TestPlanningMigrationRejectsMalformedJSONArtifact(t *testing.T) {
 		t.Fatalf("malformed artifact error = %v, want malformed JSON refusal", err)
 	}
 }
+
+func TestPlanningMigrationLegacyClassificationPreservesPlanStateHash(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".aether", "data", "planning"), 0o755); err != nil {
+		t.Fatalf("create planning fixture directory: %v", err)
+	}
+	state := colony.ColonyState{Plan: colony.Plan{Phases: []colony.Phase{{
+		ID: 1, Name: "Unchanged executable plan", Status: colony.PhaseReady,
+	}}}}
+	before, err := planStateHash(state.Plan)
+	if err != nil {
+		t.Fatalf("hash legacy plan before migration: %v", err)
+	}
+	migrated, err := migratePlanningState(root, state)
+	if err != nil {
+		t.Fatalf("migratePlanningState returned error: %v", err)
+	}
+	after, err := planStateHash(migrated.State.Plan)
+	if err != nil {
+		t.Fatalf("hash legacy plan after migration: %v", err)
+	}
+	if before != after {
+		t.Fatalf("legacy classification invalidated unchanged plan hash: before=%s after=%s", before, after)
+	}
+}

@@ -26,7 +26,15 @@ type codexPlanRevisionContext struct {
 }
 
 func planStateHash(plan colony.Plan) (string, error) {
-	return jsonSHA256(plan)
+	// Missing and explicit legacy_unbound acceptance policies describe the
+	// same executable pre-Phase-200 plan. Canonicalize the additive migration
+	// marker out of stale-packet hashes so an upgrade cannot invalidate an
+	// otherwise unchanged planning packet.
+	canonical := plan
+	if canonical.AcceptancePolicy == colony.PlanAcceptanceLegacyUnbound {
+		canonical.AcceptancePolicy = ""
+	}
+	return jsonSHA256(canonical)
 }
 
 func activePlanRevisionID(plan colony.Plan) string {
