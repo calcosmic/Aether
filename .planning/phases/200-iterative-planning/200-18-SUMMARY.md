@@ -63,6 +63,7 @@ Each task was committed atomically using TDD:
 2. **Task 1 GREEN: Enforce exact current and legacy authority** - `6fbc0f26` (feat)
 3. **Task 2 RED: Pin build/autopilot parity and zero-effect refusal** - `5b12b3de` (test)
 4. **Task 2 GREEN: Gate both execution surfaces and carry attribution** - `7851e690` (feat)
+5. **Task 2 regression: Prove the real plan-only command creates no effects on refusal** - `5f4df0f2` (test)
 
 ## Files Created/Modified
 
@@ -122,8 +123,8 @@ Each task was committed atomically using TDD:
 
 ## Verification
 
-- `go test ./cmd -run 'TestPlanAuthority|TestPlanAcceptanceGate200|TestAutopilotPolicy.*Authority|TestCodexBuild.*Authority' -count=1` — 22 passed.
-- `go test ./cmd -race -run 'TestPlanAuthority|TestPlanAcceptanceGate200|TestAutopilotPolicy.*Authority|TestCodexBuild.*Authority' -count=1` — 22 passed.
+- `go test ./cmd -run 'TestPlanAuthority|TestPlanAcceptanceGate200|TestAutopilotPolicy.*Authority|TestCodexBuild.*Authority' -count=1` — 23 passed.
+- `go test ./cmd -race -run 'TestPlanAuthority|TestPlanAcceptanceGate200|TestAutopilotPolicy.*Authority|TestCodexBuild.*Authority' -count=1` — 23 passed.
 - Broader build/run/planning regression selection — 86 passed.
 - `go test ./... -count=1` — 5,823 passed, 27 pre-existing/future-owned failures, 6 skipped; deferred as out of scope.
 
@@ -149,7 +150,7 @@ None - no external service configuration required.
 ## Self-Check: PASSED
 
 - All six implementation/test files and this summary exist.
-- All four task commit hashes are present in repository history.
+- All five task commit hashes are present in repository history.
 
 ---
 *Phase: 200-iterative-planning*
