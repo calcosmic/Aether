@@ -56,7 +56,7 @@ func TestPlanningStageManifestAuthorizesExactlyOneScoutAction(t *testing.T) {
 	authorization := planningStageAuthorization{
 		ID:                "authorization-scout-1",
 		ExpectedCaste:     planningStageCasteScout,
-		InputFrontierHash: planningStageTestHash("1"),
+		InputFrontierHash: state.InputFrontierHash,
 		EvidenceFrontier: []planningStageEvidenceBinding{
 			{ID: "evidence-survey", ContentHash: planningStageTestHash("2")},
 			{ID: "evidence-spec", ContentHash: planningStageTestHash("3")},
@@ -116,12 +116,13 @@ func TestPlanningStageManifestAuthorizesExactlyOneRouteSetterAction(t *testing.T
 		Caste:        planningStageCasteScout,
 		ManifestHash: planningStageTestHash("5"),
 	}
+	state.CandidateSnapshotHash = planningStageTestHash("7")
 	authorization := planningStageAuthorization{
 		ID:                    "authorization-route-1",
 		ExpectedCaste:         planningStageCasteRouteSetter,
-		InputFrontierHash:     planningStageTestHash("6"),
+		InputFrontierHash:     state.InputFrontierHash,
 		ScoutReceipt:          state.ScoutReceipt,
-		CandidateSnapshotHash: planningStageTestHash("7"),
+		CandidateSnapshotHash: state.CandidateSnapshotHash,
 	}
 
 	next, manifest, err := reducePlanningStage(state, planningStageTransition{
@@ -361,7 +362,7 @@ func planningStageTestManifest(caste planningStageWorkerCaste) planningStageMani
 	authorization := planningStageAuthorization{
 		ID:                "authorization-manifest",
 		ExpectedCaste:     caste,
-		InputFrontierHash: planningStageTestHash("f"),
+		InputFrontierHash: state.InputFrontierHash,
 	}
 	if caste == planningStageCasteScout {
 		authorization.EvidenceFrontier = []planningStageEvidenceBinding{{ID: "evidence", ContentHash: planningStageTestHash("1")}}
@@ -372,8 +373,9 @@ func planningStageTestManifest(caste planningStageWorkerCaste) planningStageMani
 			ID: "scout-receipt", ContentHash: planningStageTestHash("2"), RunID: state.RunID,
 			Pass: state.Pass, Caste: planningStageCasteScout, ManifestHash: planningStageTestHash("3"),
 		}
+		state.CandidateSnapshotHash = planningStageTestHash("4")
 		authorization.ScoutReceipt = state.ScoutReceipt
-		authorization.CandidateSnapshotHash = planningStageTestHash("4")
+		authorization.CandidateSnapshotHash = state.CandidateSnapshotHash
 	}
 	manifest, err := buildPlanningStageManifest(state, authorization)
 	if err != nil {
