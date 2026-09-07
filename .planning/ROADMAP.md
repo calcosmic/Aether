@@ -184,13 +184,13 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 25 plans
+**Plans:** 1/25 plans executed
 
 Plans:
 
 **Wave 1**
 
-- [ ] 200-01-PLAN.md — Define durable specification and iterative-planning authority contracts.
+- [x] 200-01-PLAN.md — Define durable specification and iterative-planning authority contracts.
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

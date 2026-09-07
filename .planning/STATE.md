@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Phase 200 UI-SPEC approved
-last_updated: "2026-09-07T10:53:56.154Z"
-last_activity: 2026-09-07 -- Phase 200 planning complete
+stopped_at: Completed 200-01-PLAN.md
+last_updated: "2026-09-07T11:31:36.980Z"
+last_activity: 2026-09-07
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 59
-  completed_plans: 34
+  completed_plans: 35
   percent: 14
 ---
 
@@ -21,17 +21,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-07)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 200 — iterative planning
+**Current focus:** Phase 200 — Iterative Planning
 **Previous milestone:** v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02 (48/48 requirements; audit `tech_debt`, no blockers)
 **Product version:** v1.0.66 (installed and source binaries agree in the 2026-09-02 local check)
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
 
 ## Current Position
 
-Phase: 200
-Plan: Not started
+Phase: 200 (Iterative Planning) — EXECUTING
+Plan: 2 of 25
 Status: Ready to execute
-Last activity: 2026-09-07 -- Phase 200 planning complete
+Last activity: 2026-09-07
 
 ## Performance Metrics
 
@@ -111,6 +111,7 @@ Last activity: 2026-09-07 -- Phase 200 planning complete
 | Phase 199 P31 | 35min | 2 tasks | 8 files |
 | Phase 199 P33 | 31min | 2 tasks | 9 files |
 | Phase 199 P28 | 1d 1h | 2 tasks | 10 files |
+| Phase 200 P01 | 25 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -297,6 +298,9 @@ Last activity: 2026-09-07 -- Phase 200 planning complete
 - [Phase 199 transition]: Verified seal and owner-forced incomplete seal remain distinct; sealed state stays reviewable, while optional entomb verifies archive content before clearing it.
 - [Phase 199 transition]: Expert maintenance separates zero-write inspection from exact previewed, rollback-capable mutation and preserves unmanaged/custom files.
 - [Phase 199 transition]: Claude/OpenCode `/ant-*` journeys and runtime-native Codex guidance share Go-owned truth, proven by the executable Classic corpus and final normal/race receipts.
+- [Phase 200]: Keep canonical specification snapshots in optional ColonyState.Specification while treating .aether/SPEC.md as a projection. — Atomic state commits preserve exact immutable approval lineage; the readable file remains derivable.
+- [Phase 200]: Represent specification approval, candidate stopping, and active-plan acceptance with separate exact records and status transitions. — Each authority boundary must be independently auditable and impossible to grant through Queen advice or a stop decision.
+- [Phase 200]: Retain ordinal IDs for build and display compatibility while adding optional immutable semantic IDs and proof bindings. — Existing consumers keep working while revisions gain durable trace and impact identity.
 
 ### Pending Todos
 
@@ -412,9 +416,9 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-07T09:27:52.746Z
-Stopped at: Phase 200 UI-SPEC approved
-Resume file: .planning/phases/200-iterative-planning/200-UI-SPEC.md
+Last session: 2026-09-07T11:31:36.971Z
+Stopped at: Completed 200-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
