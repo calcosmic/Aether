@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
@@ -388,15 +389,24 @@ func validatePlanCandidateState(candidate colony.PlanCandidate, revisions map[st
 		return err
 	}
 
-	base, ok := revisions[candidate.BasePlanRevisionID]
-	if !ok {
-		return fmt.Errorf("base_plan_revision_id %q does not name a retained revision", candidate.BasePlanRevisionID)
-	}
-	if base.PlanHash != candidate.BasePlanRevisionHash {
-		return fmt.Errorf("base_plan_revision_hash does not match retained revision")
-	}
-	if candidate.Proposal.ParentID != base.ID || candidate.Proposal.Number != base.Number+1 {
-		return fmt.Errorf("proposal does not extend the exact base plan revision")
+	if candidate.BasePlanRevisionID == "plan-unbound" {
+		if candidate.Proposal.ParentID != "" || candidate.Proposal.Number != 1 {
+			return fmt.Errorf("initial unbound proposal must be revision one without a parent")
+		}
+		if retained, ok := revisions[candidate.Proposal.ID]; !ok || retained.PlanHash != candidate.ProposalHash {
+			return fmt.Errorf("initial unbound proposal does not name its retained first revision")
+		}
+	} else {
+		base, ok := revisions[candidate.BasePlanRevisionID]
+		if !ok {
+			return fmt.Errorf("base_plan_revision_id %q does not name a retained revision", candidate.BasePlanRevisionID)
+		}
+		if base.PlanHash != candidate.BasePlanRevisionHash {
+			return fmt.Errorf("base_plan_revision_hash does not match retained revision")
+		}
+		if candidate.Proposal.ParentID != base.ID || candidate.Proposal.Number != base.Number+1 {
+			return fmt.Errorf("proposal does not extend the exact base plan revision")
+		}
 	}
 	specRevision, ok := specificationRevisionByID(specification, candidate.SpecificationRevisionID)
 	if !ok {
@@ -424,6 +434,39 @@ func validatePlanCandidateState(candidate colony.PlanCandidate, revisions map[st
 		return fmt.Errorf("acceptance receipt does not exactly bind candidate authorities")
 	}
 	return nil
+}
+
+type planCandidateBase struct {
+	ID     string
+	Hash   string
+	Number int
+}
+
+// candidateAcceptanceBase translates a mutable planning-stage base snapshot
+// into the immutable revision identity a stopped candidate must name. Legacy
+// plans receive a deterministic retained baseline only when the candidate is
+// accepted; fresh plans use the explicit plan-unbound genesis marker.
+func candidateAcceptanceBase(plan colony.Plan, createdAt time.Time) (planCandidateBase, *colony.PlanRevision, error) {
+	if len(plan.Phases) == 0 {
+		hash, err := planStateHash(plan)
+		if err != nil {
+			return planCandidateBase{}, nil, err
+		}
+		return planCandidateBase{ID: "plan-unbound", Hash: hash}, nil, nil
+	}
+	if revision, ok := activePlanRevision(plan); ok {
+		return planCandidateBase{ID: revision.ID, Hash: revision.PlanHash, Number: revision.Number}, nil, nil
+	}
+	if len(plan.Revisions) != 0 || strings.TrimSpace(plan.ActiveRevisionID) != "" {
+		return planCandidateBase{}, nil, fmt.Errorf("base_plan_revision_id: active plan revision is not retained")
+	}
+	baselinePlan := plan
+	baselinePlan.Phases = clonePhases(plan.Phases)
+	baseline, err := newPlanRevision(baselinePlan, 1, "", colony.PlanRevisionLegacyImport, "Existing plan imported when explicit candidate acceptance was enabled", nil, "", "", "", nil, nil, phaseIDs(plan.Phases), createdAt)
+	if err != nil {
+		return planCandidateBase{}, nil, err
+	}
+	return planCandidateBase{ID: baseline.ID, Hash: baseline.PlanHash, Number: baseline.Number}, &baseline, nil
 }
 
 func validateStandalonePlanRevision(revision colony.PlanRevision) error {

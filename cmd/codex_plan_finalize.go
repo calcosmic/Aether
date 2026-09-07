@@ -4060,6 +4060,14 @@ func buildPlanningRouteCandidate(root string, completed planningRouteStageFinali
 	if timeline.Binding == nil || timeline.Index == nil || timeline.Binding.LastCardHash != completed.Card.ContentHash {
 		return empty, fmt.Errorf("candidate requires the complete verified planning timeline")
 	}
+	state, err := loadSpecificationColonyState(root)
+	if err != nil {
+		return empty, err
+	}
+	base, _, err := candidateAcceptanceBase(state.Plan, completed.Card.CreatedAt)
+	if err != nil {
+		return empty, err
+	}
 	residual := make([]colony.PlanningGap, 0, len(completed.Validation.Confidence.RankedGaps))
 	causal := make([]string, 0, len(completed.Validation.Confidence.RankedGaps))
 	for _, gap := range completed.Validation.Confidence.RankedGaps {
@@ -4082,29 +4090,26 @@ func buildPlanningRouteCandidate(root string, completed planningRouteStageFinali
 		SpecificationRevisionHash string                      `json:"specification_revision_hash"`
 		TimelineDigest            string                      `json:"timeline_digest"`
 		StopDecision              colony.PlanningStopDecision `json:"stop_decision"`
-	}{completed.Receipt.RunID, completed.Validation.ProposalHash, completed.Validation.Result.BasePlanRevisionID, completed.Validation.Result.BasePlanRevisionHash,
+	}{completed.Receipt.RunID, completed.Validation.ProposalHash, base.ID, base.Hash,
 		completed.Validation.Result.Specification.RevisionID, completed.Validation.Result.Specification.ContentHash, timeline.Binding.TimelineDigest, completed.Card.Decision})
 	if err != nil {
 		return empty, err
 	}
 	candidateID := "plan-candidate-" + candidateHash[:12]
-	phases := planningRouteCandidatePhases(completed.Validation.Result.Proposal.Phases, candidateID, candidateHash, completed.Validation.Result.Specification, *timeline.Binding, completed.Validation.SemanticDelta)
+	proposalInput, preservedPrefix, err := planningRouteCandidateProposalInput(state.Plan, completed.Validation.Result.Proposal.Phases)
+	if err != nil {
+		return empty, err
+	}
+	phases := planningRouteCandidatePhases(proposalInput, candidateID, candidateHash, completed.Validation.Result.Specification, *timeline.Binding, completed.Validation.SemanticDelta)
 	proposalHash, err := planDefinitionHash(phases)
 	if err != nil {
 		return empty, err
 	}
-	state, err := loadSpecificationColonyState(root)
-	if err != nil {
-		return empty, err
-	}
-	number := 1
-	parentID := ""
-	for _, revision := range state.Plan.Revisions {
-		if revision.ID == completed.Validation.Result.BasePlanRevisionID {
-			number = revision.Number + 1
-			parentID = revision.ID
-			break
-		}
+	number := base.Number + 1
+	parentID := base.ID
+	if base.ID == "plan-unbound" {
+		number = 1
+		parentID = ""
 	}
 	affected, preserved := planningRouteDeltaSemanticIDs(completed.Validation.SemanticDelta)
 	requirements, acceptance, negative, recovery, publicPaths := planningRouteProposalProofLinks(phases)
@@ -4116,7 +4121,8 @@ func buildPlanningRouteCandidate(root string, completed planningRouteStageFinali
 		SchemaVersion: planRevisionSchemaVersion, Number: number, ID: fmt.Sprintf("plan-r%d-%s", number, proposalHash[:12]), ParentID: parentID,
 		CreatedAt: completed.Card.CreatedAt.UTC().Format(time.RFC3339Nano), ReasonType: colony.PlanRevisionResearch,
 		Reason: "Evidence-backed iterative planning candidate", EvidenceHash: evidenceHash,
-		PlanningRunID: completed.Receipt.RunID, PlanHash: proposalHash, ReplacementPhaseIDs: phaseIDs(phases),
+		PlanningRunID: completed.Receipt.RunID, PlanHash: proposalHash,
+		PreservedPhaseIDs: phaseIDs(state.Plan.Phases[:preservedPrefix]), SupersededPhaseIDs: phaseIDs(state.Plan.Phases[preservedPrefix:]), ReplacementPhaseIDs: phaseIDs(phases[preservedPrefix:]),
 		SemanticID:            completed.Validation.Result.Proposal.SemanticID,
 		RequirementProofLinks: requirements, AcceptanceProofLinks: acceptance, NegativeProofLinks: negative, RecoveryProofLinks: recovery, PublicPathProofLinks: publicPaths,
 		SpecificationRevisionID: completed.Validation.Result.Specification.RevisionID, SpecificationRevisionHash: completed.Validation.Result.Specification.ContentHash,
@@ -4150,7 +4156,7 @@ func buildPlanningRouteCandidate(root string, completed planningRouteStageFinali
 		SchemaVersion: colony.PlanCandidateSchemaVersion, ID: candidateID, ContentHash: candidateHash,
 		Status: colony.PlanCandidatePendingReview, CreatedAt: completed.Card.CreatedAt.UTC(), ExpiresAt: completed.Card.CreatedAt.UTC().Add(7 * 24 * time.Hour),
 		Proposal: proposal, ProposalHash: proposal.PlanHash,
-		BasePlanRevisionID: completed.Validation.Result.BasePlanRevisionID, BasePlanRevisionHash: completed.Validation.Result.BasePlanRevisionHash,
+		BasePlanRevisionID: base.ID, BasePlanRevisionHash: base.Hash,
 		SpecificationRevisionID: completed.Validation.Result.Specification.RevisionID, SpecificationRevisionHash: completed.Validation.Result.Specification.ContentHash,
 		Timeline: *timeline.Binding, StopDecision: completed.Card.Decision,
 		DimensionAssessments: append([]colony.PlanningDimensionAssessment(nil), completed.Card.DimensionAssessments...),
@@ -4164,6 +4170,36 @@ func buildPlanningRouteCandidate(root string, completed planningRouteStageFinali
 		return empty, err
 	}
 	return candidate, nil
+}
+
+// planningRouteCandidateProposalInput retains the immutable completed prefix
+// even when Route-Setter returns only replacement work. If Route-Setter echoes
+// that prefix, the authoritative completed copies win and acceptance later
+// restores their lifecycle statuses without changing proposal identity.
+func planningRouteCandidateProposalInput(plan colony.Plan, input []colony.Phase) ([]colony.Phase, int, error) {
+	prefix, err := completedPlanPrefix(plan.Phases)
+	if err != nil {
+		return nil, 0, err
+	}
+	if prefix == 0 {
+		return clonePhases(input), 0, nil
+	}
+	suffix := input
+	if len(input) >= prefix {
+		echoesPrefix := true
+		for index := 0; index < prefix; index++ {
+			if strings.TrimSpace(input[index].SemanticID) == "" || input[index].SemanticID != plan.Phases[index].SemanticID {
+				echoesPrefix = false
+				break
+			}
+		}
+		if echoesPrefix {
+			suffix = input[prefix:]
+		}
+	}
+	result := clonePhases(plan.Phases[:prefix])
+	result = append(result, clonePhases(suffix)...)
+	return result, prefix, nil
 }
 
 func planningRouteCandidatePhases(input []colony.Phase, candidateID, candidateHash string, specification planningStageSpecificationBinding, timeline colony.PlanningTimelineBinding, delta colony.PlanningSemanticDelta) []colony.Phase {

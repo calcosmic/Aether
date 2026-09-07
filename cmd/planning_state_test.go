@@ -444,3 +444,57 @@ func assertPlanningStateError(t *testing.T, err error, fragment string) {
 		t.Fatalf("planning-state error %q does not contain %q", err, fragment)
 	}
 }
+
+func TestCandidateAcceptanceBaseBindsFirstCurrentAndLegacyPlans(t *testing.T) {
+	now := time.Date(2026, time.September, 7, 19, 0, 0, 0, time.UTC)
+
+	fresh := colony.Plan{}
+	freshHash, err := planStateHash(fresh)
+	if err != nil {
+		t.Fatal(err)
+	}
+	freshBase, freshBaseline, err := candidateAcceptanceBase(fresh, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if freshBase.ID != "plan-unbound" || freshBase.Hash != freshHash || freshBase.Number != 0 || freshBaseline != nil {
+		t.Fatalf("fresh candidate base = %+v baseline=%+v", freshBase, freshBaseline)
+	}
+
+	taskID := "1.1"
+	phases := []colony.Phase{{ID: 1, Name: "Current", Status: colony.PhaseReady, Tasks: []colony.Task{{ID: &taskID, Goal: "Current", Status: colony.TaskPending}}}}
+	planHash, err := planDefinitionHash(phases)
+	if err != nil {
+		t.Fatal(err)
+	}
+	revision := colony.PlanRevision{
+		SchemaVersion: planRevisionSchemaVersion, Number: 1, ID: "plan-r1-" + planHash[:12], CreatedAt: now.Format(time.RFC3339Nano),
+		ReasonType: colony.PlanRevisionInitial, Reason: "Initial", PlanHash: planHash, Phases: clonePhases(phases),
+	}
+	current := colony.Plan{ActiveRevisionID: revision.ID, Revisions: []colony.PlanRevision{revision}, Phases: clonePhases(phases)}
+	current.Phases[0].Status = colony.PhaseInProgress
+	current.Phases[0].Tasks[0].Status = colony.TaskCompleted
+	stateHash, err := planStateHash(current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stateHash == planHash {
+		t.Fatal("fixture did not distinguish mutable plan state from immutable revision hash")
+	}
+	currentBase, currentBaseline, err := candidateAcceptanceBase(current, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if currentBase.ID != revision.ID || currentBase.Hash != planHash || currentBase.Number != 1 || currentBaseline != nil {
+		t.Fatalf("current candidate base = %+v baseline=%+v, want active immutable revision", currentBase, currentBaseline)
+	}
+
+	legacy := colony.Plan{Phases: clonePhases(phases)}
+	legacyBase, legacyBaseline, err := candidateAcceptanceBase(legacy, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if legacyBaseline == nil || legacyBase.ID != legacyBaseline.ID || legacyBase.Hash != legacyBaseline.PlanHash || legacyBase.Number != 1 || legacyBaseline.ReasonType != colony.PlanRevisionLegacyImport {
+		t.Fatalf("legacy candidate base = %+v baseline=%+v", legacyBase, legacyBaseline)
+	}
+}
