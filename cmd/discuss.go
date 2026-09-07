@@ -56,6 +56,44 @@ type discussMaterialBatch struct {
 	Cards       []discussQuestion `json:"cards"`
 }
 
+// discussSpecificationBody keeps the nine owner-readable specification
+// categories separate in the discuss closeout. The specification engine owns
+// their canonical forms; this is only the structured presentation of the
+// exact revision it committed or retained.
+type discussSpecificationBody struct {
+	Outcomes             []colony.SpecOutcome             `json:"outcomes"`
+	IncludedBehaviors    []colony.SpecIncludedBehavior    `json:"included_behaviors"`
+	Exclusions           []colony.SpecExclusion           `json:"exclusions"`
+	BindingDecisions     []colony.SpecBindingDecision     `json:"binding_decisions"`
+	Requirements         []colony.SpecRequirement         `json:"requirements"`
+	AcceptanceChecks     []colony.SpecAcceptanceCheck     `json:"acceptance_checks"`
+	NegativeExpectations []colony.SpecNegativeExpectation `json:"negative_expectations"`
+	RecoveryExpectations []colony.SpecRecoveryExpectation `json:"recovery_expectations"`
+	AffectedPublicPaths  []colony.SpecPublicPath          `json:"affected_public_paths"`
+}
+
+type discussSpecificationCloseout struct {
+	SpecificationID       string                    `json:"specification_id"`
+	RevisionID            string                    `json:"revision_id"`
+	RevisionNumber        int                       `json:"revision_number"`
+	ContentHash           string                    `json:"content_hash"`
+	Status                colony.SpecRevisionStatus `json:"status"`
+	Scope                 colony.SpecScope          `json:"scope"`
+	SectionCounts         map[string]int            `json:"section_counts"`
+	Body                  discussSpecificationBody  `json:"body"`
+	UnresolvedCount       int                       `json:"unresolved_count"`
+	ProjectionPath        string                    `json:"projection_path"`
+	ProjectionDigest      string                    `json:"projection_digest"`
+	ProjectionRepaired    bool                      `json:"projection_repaired"`
+	ExactNextCommand      string                    `json:"exact_next_command"`
+	ApprovalCommand       string                    `json:"approval_command,omitempty"`
+	RevisionGuidance      string                    `json:"revision_guidance,omitempty"`
+	Replayed              bool                      `json:"replayed"`
+	WouldCreate           bool                      `json:"would_create,omitempty"`
+	ApprovedSpecPreserved bool                      `json:"approved_spec_preserved,omitempty"`
+	Receipt               *colony.LifecycleReceipt  `json:"receipt,omitempty"`
+}
+
 // discussEvidenceItem retains source text only while deciding whether current
 // evidence already answers a question. Only the safe record projection leaves
 // this file in a command result.
@@ -147,7 +185,7 @@ var discussCmd = &cobra.Command{
 }
 
 func init() {
-	discussCmd.Flags().Int("max-questions", 3, "Maximum number of clarification questions to surface")
+	discussCmd.Flags().Int("max-questions", 3, "Legacy compatibility flag; every material clarification is returned in one batch")
 	discussCmd.Flags().Bool("dry-run", false, "Analyze and preview questions without writing pending decisions")
 	discussCmd.Flags().String("resolve", "", "Clarification decision ID to resolve")
 	discussCmd.Flags().String("answer", "", "Resolution text for --resolve")
@@ -161,8 +199,7 @@ func init() {
 }
 
 // composedQuestionCategories is the closed category vocabulary for
-// wrapper-composed questions — the same four the canned generator uses plus
-// "analysis". Closed on purpose: a typed category is what downstream
+// wrapper-composed questions. Closed on purpose: a typed category is what downstream
 // suppression (clarificationSuppressedBySignals) and rendering key on.
 var composedQuestionCategories = map[string]bool{
 	"behavior": true, "authority": true, "risk_tolerance": true, "scope": true, "acceptance_meaning": true,
@@ -174,10 +211,8 @@ var composedQuestionCategories = map[string]bool{
 // addComposedDiscussQuestion materializes ONE wrapper-composed question into
 // pending-decisions.json — the typed intake behind the Queen-composed
 // discuss flow. Grounding is refused when empty: a composed question must
-// cite the scan fact or state datum it derives from, or it is the
-// same-three-canned-questions problem wearing a new coat. Dedup is by
-// source slug, exactly as canned questions dedup, so re-running the
-// composition never doubles questions.
+// cite the scan fact or state datum it derives from. Dedup is by source
+// slug, so re-running the composition never doubles questions.
 func addComposedDiscussQuestion(question, optionsRaw, category, grounding, source string, hard bool) (map[string]interface{}, error) {
 	state, err := loadActiveColonyState()
 	if err != nil {
@@ -403,6 +438,22 @@ func runDiscuss(root string, maxQuestions int, dryRun bool) (map[string]interfac
 		evidenceRecords = append(evidenceRecords, item.Record)
 	}
 
+	var specificationCloseout *discussSpecificationCloseout
+	if len(questions) == 0 {
+		closeout, settleErr := settleDiscussSpecification(root, state, survey, analyze, activePending, frontier, activeSignals, dryRun)
+		if settleErr != nil {
+			return nil, settleErr
+		}
+		specificationCloseout = &closeout
+		if closeout.WouldCreate {
+			next = "Rerun `aether discuss` without --dry-run to create this exact draft, then run `aether spec` to review it."
+		} else if closeout.ApprovedSpecPreserved {
+			next = closeout.RevisionGuidance
+		} else {
+			next = "Run `aether spec` to review, revise, or explicitly approve this exact draft."
+		}
+	}
+
 	result := map[string]interface{}{
 		"goal":                      goal,
 		"question_count":            len(questions),
@@ -427,8 +478,388 @@ func runDiscuss(root string, maxQuestions int, dryRun bool) (map[string]interfac
 		"next":                      next,
 		"discussion_status":         discussionStatus(len(questions), 0, len(questions)),
 	}
-	closeLifecycleCommand(result, "discuss", "", "")
+	closeOverride := ""
+	closeWhy := ""
+	if specificationCloseout != nil {
+		result["specification"] = *specificationCloseout
+		result["specification_status"] = specificationCloseout.Status
+		result["unresolved_count"] = specificationCloseout.UnresolvedCount
+		result["projection_path"] = specificationCloseout.ProjectionPath
+		result["exact_next_command"] = specificationCloseout.ExactNextCommand
+		if specificationCloseout.ApprovedSpecPreserved {
+			result["approved_spec"] = *specificationCloseout
+		} else {
+			result["draft_spec"] = *specificationCloseout
+		}
+		if specificationCloseout.WouldCreate {
+			closeOverride = "aether discuss"
+			closeWhy = "This was a dry run. Create the reviewed draft before opening the specification lifecycle."
+		} else {
+			closeOverride = specificationCloseout.ExactNextCommand
+			closeWhy = "Settled intent now belongs to the specification lifecycle; planning remains unauthorized until the exact contract is approved."
+		}
+	}
+	closeLifecycleCommand(result, "discuss", closeOverride, closeWhy)
 	return result, nil
+}
+
+func settleDiscussSpecification(
+	root string,
+	state colony.ColonyState,
+	survey codexSurveyContext,
+	analyze analyzeScanData,
+	pending PendingDecisionFile,
+	frontier discussEvidenceFrontier,
+	activeSignals []string,
+	dryRun bool,
+) (discussSpecificationCloseout, error) {
+	repositoryRoot, err := canonicalSpecificationRoot(root)
+	if err != nil {
+		return discussSpecificationCloseout{}, fmt.Errorf("settle discuss specification: %w", err)
+	}
+
+	if state.Specification != nil {
+		current, ok := currentSpecificationRevision(*state.Specification)
+		if !ok {
+			return discussSpecificationCloseout{}, fmt.Errorf("settle discuss specification: existing specification has no current revision")
+		}
+		inspection, inspectErr := inspectSpecificationProjection(repositoryRoot)
+		if inspectErr != nil {
+			return discussSpecificationCloseout{}, fmt.Errorf("inspect settled specification projection: %w", inspectErr)
+		}
+		projectionRepaired := false
+		if current.Status == colony.SpecStatusDraft && inspection.Drifted && !dryRun {
+			repair, repairErr := repairSpecificationProjection(repositoryRoot, specificationMutationOptions{})
+			if repairErr != nil {
+				return discussSpecificationCloseout{}, fmt.Errorf("render settled specification projection: %w", repairErr)
+			}
+			inspection = repair.Inspection
+			projectionRepaired = repair.Repaired
+		}
+		approvedPreserved := current.Status == colony.SpecStatusApproved
+		return newDiscussSpecificationCloseout(
+			*state.Specification,
+			current,
+			nil,
+			current.Status == colony.SpecStatusDraft,
+			approvedPreserved,
+			false,
+			inspection,
+			projectionRepaired,
+		), nil
+	}
+
+	request, err := buildSettledDiscussDraftRequest(state, survey, analyze, pending, frontier, activeSignals, time.Now().UTC())
+	if err != nil {
+		return discussSpecificationCloseout{}, err
+	}
+	if dryRun {
+		specification, revision, buildErr := buildSpecificationDraft(request)
+		if buildErr != nil {
+			return discussSpecificationCloseout{}, fmt.Errorf("preview settled specification draft: %w", buildErr)
+		}
+		projection, renderErr := renderSpecificationProjection(specification, state.Plan)
+		if renderErr != nil {
+			return discussSpecificationCloseout{}, fmt.Errorf("preview settled specification projection: %w", renderErr)
+		}
+		inspection := specificationProjectionInspection{
+			Path:           filepath.Join(repositoryRoot, specificationProjectionRelativePath),
+			RevisionID:     revision.ID,
+			ExpectedDigest: lifecycleDigest(projection),
+			Missing:        true,
+			Drifted:        true,
+		}
+		return newDiscussSpecificationCloseout(specification, revision, nil, false, false, true, inspection, false), nil
+	}
+
+	mutation, err := createSpecificationDraft(repositoryRoot, request, specificationMutationOptions{})
+	if err != nil {
+		return discussSpecificationCloseout{}, fmt.Errorf("create settled specification draft: %w", err)
+	}
+	inspection, err := inspectSpecificationProjection(repositoryRoot)
+	if err != nil {
+		return discussSpecificationCloseout{}, fmt.Errorf("inspect created specification projection: %w", err)
+	}
+	receipt := mutation.Receipt
+	return newDiscussSpecificationCloseout(
+		mutation.Specification,
+		mutation.Revision,
+		&receipt,
+		mutation.Replayed,
+		false,
+		false,
+		inspection,
+		false,
+	), nil
+}
+
+func buildSettledDiscussDraftRequest(
+	state colony.ColonyState,
+	survey codexSurveyContext,
+	analyze analyzeScanData,
+	pending PendingDecisionFile,
+	frontier discussEvidenceFrontier,
+	activeSignals []string,
+	createdAt time.Time,
+) (specificationDraftRequest, error) {
+	goal := strings.TrimSpace(derefGoal(state.Goal))
+	if state.AcceptedCharter != nil && strings.TrimSpace(state.AcceptedCharter.Goal) != "" {
+		goal = strings.TrimSpace(state.AcceptedCharter.Goal)
+	}
+	if goal == "" {
+		return specificationDraftRequest{}, fmt.Errorf("settled discussion cannot create a specification without an accepted goal")
+	}
+	allEvidence := discussSpecificationEvidenceIDs(frontier, "", "")
+	if len(allEvidence) == 0 {
+		return specificationDraftRequest{}, fmt.Errorf("settled discussion cannot create a specification without admissible evidence")
+	}
+	charterEvidence := discussSpecificationEvidenceIDs(frontier, "", "state:")
+	if len(charterEvidence) == 0 {
+		charterEvidence = discussSpecificationEvidenceIDs(frontier, string(colony.PlanningEvidenceCharter), "")
+	}
+	charterEvidence = discussSpecificationEvidenceFallback(charterEvidence, allEvidence)
+	contextEvidence := discussSpecificationEvidenceFallback(
+		discussSpecificationEvidenceIDs(frontier, string(colony.PlanningEvidenceContext), ""),
+		allEvidence,
+	)
+	surveyEvidence := discussSpecificationEvidenceFallback(
+		discussSpecificationEvidenceIDs(frontier, string(colony.PlanningEvidenceSurvey), ""),
+		contextEvidence,
+	)
+
+	request := specificationDraftRequest{
+		Scope: colony.SpecScope{
+			Kind:      colony.SpecScopeWholeGoal,
+			GoalID:    frontier.Scope.GoalID,
+			SessionID: frontier.Scope.SessionID,
+		},
+		CreatedAt: createdAt,
+	}
+	if strings.TrimSpace(request.Scope.GoalID) == "" || strings.TrimSpace(request.Scope.SessionID) == "" {
+		return specificationDraftRequest{}, fmt.Errorf("settled discussion lacks current goal/session identity")
+	}
+
+	charter := state.Charter
+	if state.AcceptedCharter != nil && state.AcceptedCharter.Charter != nil {
+		charter = state.AcceptedCharter.Charter
+	}
+	add := func(destination *[]specificationItemInput, lineage, description, verification, publicPath string, evidence []string) {
+		description = specificationProjectionText(description)
+		if description == "" {
+			return
+		}
+		for _, existing := range *destination {
+			if specificationProjectionText(existing.Description) == description {
+				return
+			}
+		}
+		*destination = append(*destination, specificationItemInput{
+			Lineage:      lineage,
+			Description:  description,
+			Verification: specificationProjectionText(verification),
+			Path:         filepath.ToSlash(strings.TrimSpace(publicPath)),
+			EvidenceIDs:  append([]string(nil), evidence...),
+		})
+	}
+
+	add(&request.Outcomes, "accepted-goal", "Deliver the accepted goal: "+goal, "", "", charterEvidence)
+	if charter != nil {
+		add(&request.Outcomes, "charter-vision", charter.Vision, "", "", charterEvidence)
+		included := charter.Intent
+		if strings.TrimSpace(included) == "" {
+			included = charter.Goals
+		}
+		add(&request.IncludedBehaviors, "charter-included-behavior", included, "", "", charterEvidence)
+		add(&request.IncludedBehaviors, "charter-goals", charter.Goals, "", "", charterEvidence)
+		if strings.TrimSpace(charter.TechStack) != "" {
+			add(&request.BindingDecisions, "charter-technology-context", "Use the accepted implementation context: "+charter.TechStack, "", "", charterEvidence)
+		}
+		add(&request.BindingDecisions, "charter-governance", charter.Governance, "", "", charterEvidence)
+		if strings.TrimSpace(charter.Constraints) != "" {
+			add(&request.Exclusions, "charter-explicit-boundary", "Work outside these accepted constraints is excluded: "+charter.Constraints, "", "", charterEvidence)
+			add(&request.NegativeExpectations, "charter-constraint-negative", "The result must not violate these accepted constraints: "+charter.Constraints, "", "", charterEvidence)
+		}
+		if strings.TrimSpace(charter.KeyRisks) != "" {
+			add(&request.NegativeExpectations, "charter-known-risk", "The result must not silently realize this known risk: "+charter.KeyRisks, "", "", charterEvidence)
+			add(&request.RecoveryExpectations, "charter-risk-recovery", "If the known risk occurs, preserve the last valid state and report it before continuing: "+charter.KeyRisks, "", "", charterEvidence)
+		}
+	}
+	if len(request.IncludedBehaviors) == 0 {
+		add(&request.IncludedBehaviors, "accepted-goal-behavior", "Implement only behavior needed to satisfy the accepted goal: "+goal, "", "", charterEvidence)
+	}
+	if len(request.Exclusions) == 0 {
+		add(&request.Exclusions, "outside-accepted-goal", "Behavior outside the accepted goal is excluded unless the owner revises this specification.", "", "", charterEvidence)
+	}
+
+	resolved := append([]PendingDecision(nil), pending.Decisions...)
+	sort.SliceStable(resolved, func(left, right int) bool { return resolved[left].ID < resolved[right].ID })
+	for _, decision := range resolved {
+		if decision.Type != clarificationDecisionType || !decision.Resolved || strings.TrimSpace(decision.Resolution) == "" {
+			continue
+		}
+		question, _ := parseClarificationDescription(decision.Description)
+		answer := specificationProjectionText(decision.Resolution)
+		decisionText := specificationProjectionText(question + " — Owner decision: " + answer)
+		lineage := "owner-decision-" + emptyFallback(strings.TrimSpace(decision.ID), logicalDiscussSource(decision.Source))
+		decisionEvidence := discussSpecificationEvidenceFallback(
+			discussSpecificationEvidenceIDs(frontier, string(colony.PlanningEvidenceDecision), "decision:"+decision.ID),
+			allEvidence,
+		)
+		add(&request.BindingDecisions, lineage, decisionText, "", "", decisionEvidence)
+		switch planningDecisionDomainForClarification(decision) {
+		case planningDecisionDomainBehavior:
+			add(&request.IncludedBehaviors, lineage, "Settled behavior: "+decisionText, "", "", decisionEvidence)
+		case planningDecisionDomainScope:
+			add(&request.Exclusions, lineage, "Settled scope boundary: "+decisionText, "", "", decisionEvidence)
+		case planningDecisionDomainAcceptanceMeaning:
+			add(&request.AcceptanceChecks, lineage, "Owner-checkable acceptance: "+decisionText, "Review the delivered behavior and its evidence against this exact accepted answer.", "", decisionEvidence)
+		case planningDecisionDomainRiskTolerance:
+			add(&request.NegativeExpectations, lineage, "Settled risk boundary: "+decisionText, "", "", decisionEvidence)
+			add(&request.RecoveryExpectations, lineage, "If the settled risk boundary is crossed, preserve the last valid state and return to the owner: "+answer, "", "", decisionEvidence)
+		}
+		if clarificationIsHardConstraint(decision) {
+			add(&request.NegativeExpectations, lineage+"-hard", "The result must not violate this explicit owner constraint: "+decisionText, "", "", decisionEvidence)
+		}
+	}
+
+	for index, signal := range uniqueSortedStrings(activeSignals) {
+		if index >= 8 {
+			break
+		}
+		add(&request.BindingDecisions, fmt.Sprintf("active-owner-constraint-%02d", index+1), "Active owner constraint: "+signal, "", "", contextEvidence)
+		add(&request.NegativeExpectations, fmt.Sprintf("active-owner-constraint-%02d", index+1), "The result must not violate this active owner constraint: "+signal, "", "", contextEvidence)
+	}
+
+	requirementText := goal
+	if charter != nil && strings.TrimSpace(charter.Goals) != "" {
+		requirementText = charter.Goals
+	}
+	add(&request.Requirements, "accepted-goal-requirement", "Required result: "+requirementText, "", "", charterEvidence)
+	if len(request.BindingDecisions) == 0 {
+		add(&request.BindingDecisions, "explicit-specification-authority", "The accepted goal and current evidence define this draft; only the owner may approve or revise it.", "", "", allEvidence)
+	}
+	if len(request.AcceptanceChecks) == 0 {
+		add(&request.AcceptanceChecks, "owner-verifies-accepted-goal", "The owner can verify that the delivered behavior satisfies the accepted goal: "+goal, "Review the delivered behavior and its verification evidence against the accepted goal.", "", charterEvidence)
+	}
+	if len(request.NegativeExpectations) == 0 {
+		add(&request.NegativeExpectations, "no-unapproved-scope", "The result must not add behavior outside the owner-approved specification.", "", "", allEvidence)
+	}
+	if len(request.RecoveryExpectations) == 0 {
+		add(&request.RecoveryExpectations, "preserve-last-valid-state", "If the accepted result cannot be delivered safely, preserve the last valid state and report the blocker before continuing.", "", "", allEvidence)
+	}
+
+	paths := uniqueSortedStrings(survey.EntryPoints)
+	if len(paths) == 0 {
+		paths = []string{specificationProjectionRelativePath}
+	}
+	for index, path := range paths {
+		if index >= 12 {
+			break
+		}
+		evidence := surveyEvidence
+		if path == specificationProjectionRelativePath {
+			evidence = contextEvidence
+		}
+		add(&request.AffectedPublicPaths, "known-public-path-"+path, "Known owner-visible or public path affected by this contract: "+path, "", path, evidence)
+	}
+	if len(request.AffectedPublicPaths) == 0 {
+		add(&request.AffectedPublicPaths, "specification-projection", "The owner-readable specification projection created by settled discussion.", "", specificationProjectionRelativePath, contextEvidence)
+	}
+
+	_ = analyze // The inventory is already bound into current-context evidence.
+	return request, nil
+}
+
+func discussSpecificationEvidenceIDs(frontier discussEvidenceFrontier, kind, originPrefix string) []string {
+	ids := []string{}
+	for _, item := range frontier.Items {
+		reference := item.Record.Reference
+		if kind != "" && string(reference.Kind) != kind {
+			continue
+		}
+		if originPrefix != "" && !strings.HasPrefix(reference.Origin, originPrefix) {
+			continue
+		}
+		if strings.TrimSpace(reference.ID) != "" {
+			ids = append(ids, reference.ID)
+		}
+	}
+	return uniqueSortedStrings(ids)
+}
+
+func discussSpecificationEvidenceFallback(preferred, fallback []string) []string {
+	if len(preferred) > 0 {
+		return append([]string(nil), preferred...)
+	}
+	return append([]string(nil), fallback...)
+}
+
+func newDiscussSpecificationCloseout(
+	specification colony.Specification,
+	revision colony.SpecRevision,
+	receipt *colony.LifecycleReceipt,
+	replayed bool,
+	approvedPreserved bool,
+	wouldCreate bool,
+	projection specificationProjectionInspection,
+	projectionRepaired bool,
+) discussSpecificationCloseout {
+	body := discussSpecificationBody{
+		Outcomes:             revision.Outcomes,
+		IncludedBehaviors:    revision.IncludedBehaviors,
+		Exclusions:           revision.Exclusions,
+		BindingDecisions:     revision.BindingDecisions,
+		Requirements:         revision.Requirements,
+		AcceptanceChecks:     revision.AcceptanceChecks,
+		NegativeExpectations: revision.NegativeExpectations,
+		RecoveryExpectations: revision.RecoveryExpectations,
+		AffectedPublicPaths:  revision.AffectedPublicPaths,
+	}
+	closeout := discussSpecificationCloseout{
+		SpecificationID: specification.ID,
+		RevisionID:      revision.ID,
+		RevisionNumber:  specificationRevisionIndex(specification, revision.ID) + 1,
+		ContentHash:     revision.ContentHash,
+		Status:          revision.Status,
+		Scope:           revision.Scope,
+		SectionCounts: map[string]int{
+			"outcomes":              len(revision.Outcomes),
+			"included_behaviors":    len(revision.IncludedBehaviors),
+			"exclusions":            len(revision.Exclusions),
+			"binding_decisions":     len(revision.BindingDecisions),
+			"requirements":          len(revision.Requirements),
+			"acceptance_checks":     len(revision.AcceptanceChecks),
+			"negative_expectations": len(revision.NegativeExpectations),
+			"recovery_expectations": len(revision.RecoveryExpectations),
+			"affected_public_paths": len(revision.AffectedPublicPaths),
+		},
+		Body:                  body,
+		UnresolvedCount:       0,
+		ProjectionPath:        specificationProjectionRelativePath,
+		ProjectionDigest:      projection.ExpectedDigest,
+		ProjectionRepaired:    projectionRepaired,
+		ExactNextCommand:      "aether spec",
+		Replayed:              replayed,
+		WouldCreate:           wouldCreate,
+		ApprovedSpecPreserved: approvedPreserved,
+		Receipt:               receipt,
+	}
+	if revision.Status == colony.SpecStatusDraft {
+		closeout.ApprovalCommand = fmt.Sprintf(
+			"aether spec --approve --revision-id %s --revision-hash %s --approval-token '%s'",
+			revision.ID,
+			revision.ContentHash,
+			specificationApprovalToken(specification.ID, revision.ID, revision.ContentHash),
+		)
+	}
+	if approvedPreserved {
+		closeout.RevisionGuidance = fmt.Sprintf(
+			"Run `aether spec` to inspect approved revision %s (%s). Any material change requires an explicit scoped successor through `aether spec --add`, `aether spec --modify`, or `aether spec --remove`; `aether discuss` will not replace it.",
+			revision.ID,
+			revision.ContentHash,
+		)
+	}
+	return closeout
 }
 
 func resolveDiscussQuestion(id, answer string) (map[string]interface{}, error) {
@@ -497,14 +928,28 @@ func resolveDiscussQuestion(id, answer string) (map[string]interface{}, error) {
 
 	activeFile, _ := filterPendingDecisionFileForScope(file, scope)
 	remaining := countPendingClarifications(activeFile)
-	next := "Run `aether discuss` to review remaining questions before planning."
-	// override is what THIS answer unblocked -- the run whose manifest was
-	// waiting on it. Only the caller knows that, so it is fed to the one
-	// decision as an input rather than written over its answer afterwards.
+	next := "Run `aether discuss` to review the remaining material questions."
 	override := ""
+	var settled map[string]interface{}
 	if remaining == 0 {
-		next = nextAfterClarificationResolution(file.Decisions[found])
-		override = orchestratorBoundaryAfterDiscussCommand(file.Decisions[found].Source)
+		if _, stateErr := loadActiveColonyState(); stateErr != nil {
+			// Legacy pending-decision files can outlive the colony state that
+			// created them. Preserve their exact resolution behavior, but do not
+			// pretend a specification can be created without a current goal.
+			next = "Run `aether init \"goal\"` before creating a draft specification for this resolved answer."
+		} else {
+			root := repoRootFromStore(store)
+			settledResult, settleErr := runDiscuss(root, 3, false)
+			if settleErr != nil {
+				return nil, fmt.Errorf("clarification resolved, but draft specification handoff failed: %w", settleErr)
+			}
+			settled = settledResult
+			next = stringValue(settled["next"])
+			override = stringValue(settled["exact_next_command"])
+			if override == "" {
+				override = "aether spec"
+			}
+		}
 	}
 
 	result := map[string]interface{}{
@@ -516,8 +961,18 @@ func resolveDiscussQuestion(id, answer string) (map[string]interface{}, error) {
 		"remaining":        remaining,
 		"next":             next,
 	}
+	if settled != nil {
+		for _, key := range []string{
+			"discussion_status", "specification", "specification_status", "draft_spec", "approved_spec",
+			"unresolved_count", "projection_path", "exact_next_command",
+		} {
+			if value, ok := settled[key]; ok {
+				result[key] = value
+			}
+		}
+	}
 	closeLifecycleCommand(result, "discuss", override,
-		"Your answer was the last thing this run was waiting on, so this picks it straight back up with what you decided.")
+		"The last material answer is now captured in a draft specification. Review that exact contract before planning can begin.")
 	return result, nil
 }
 
@@ -1053,6 +1508,9 @@ func renderDiscussVisual(result map[string]interface{}) string {
 			b.WriteString(stringValue(result["redirect_text"]))
 			b.WriteString("\n")
 		}
+		if closeout, ok := discussSpecificationCloseoutFromResult(result); ok {
+			b.WriteString(renderDiscussSpecificationCloseout(closeout))
+		}
 		b.WriteString(renderLifecycleClosing(result, "discuss"))
 		return b.String()
 	}
@@ -1097,10 +1555,77 @@ func renderDiscussVisual(result map[string]interface{}) string {
 		}
 	} else {
 		b.WriteString("No unresolved material owner questions remain; evidence answered the rest.\n\n")
+		if closeout, ok := discussSpecificationCloseoutFromResult(result); ok {
+			b.WriteString(renderDiscussSpecificationCloseout(closeout))
+		}
 	}
 
 	b.WriteString(renderLifecycleClosing(result, "discuss"))
 	return b.String()
+}
+
+func discussSpecificationCloseoutFromResult(result map[string]interface{}) (discussSpecificationCloseout, bool) {
+	for _, key := range []string{"draft_spec", "approved_spec", "specification"} {
+		switch value := result[key].(type) {
+		case discussSpecificationCloseout:
+			return value, true
+		case *discussSpecificationCloseout:
+			if value != nil {
+				return *value, true
+			}
+		}
+	}
+	return discussSpecificationCloseout{}, false
+}
+
+func renderDiscussSpecificationCloseout(closeout discussSpecificationCloseout) string {
+	var builder strings.Builder
+	builder.WriteString("✓ Intent resolved\n")
+	if closeout.Status == colony.SpecStatusDraft {
+		builder.WriteString(renderStageMarker("Draft Specification"))
+	} else {
+		builder.WriteString(renderStageMarker("Existing Specification"))
+	}
+	fmt.Fprintf(&builder, "Draft SPEC: %s revision %d [%s]\n", closeout.SpecificationID, closeout.RevisionNumber, strings.ToUpper(string(closeout.Status)))
+	fmt.Fprintf(&builder, "Revision ID: %s\n", closeout.RevisionID)
+	fmt.Fprintf(&builder, "Content hash: %s\n", closeout.ContentHash)
+	fmt.Fprintf(&builder, "Scope: %s\n", strings.ReplaceAll(string(closeout.Scope.Kind), "_", " "))
+	if closeout.Scope.Kind == colony.SpecScopeFeature {
+		fmt.Fprintf(&builder, "Feature: %s\n", closeout.Scope.FeatureID)
+		fmt.Fprintf(&builder, "Requirement IDs: %s\n", specCommandIDSummary(closeout.Scope.RequirementIDs))
+		fmt.Fprintf(&builder, "Acceptance IDs: %s\n", specCommandIDSummary(closeout.Scope.AcceptanceCheckIDs))
+	}
+	if closeout.Replayed && closeout.Status == colony.SpecStatusDraft {
+		builder.WriteString("Draft already exists; the same revision was retained.\n")
+	}
+	if closeout.ProjectionRepaired {
+		builder.WriteString("The readable projection was restored from canonical state.\n")
+	}
+
+	renderSpecCommandVisualSection(&builder, "Outcome", specCommandOutcomeVisualItems(closeout.Body.Outcomes))
+	renderSpecCommandVisualSection(&builder, "Included behavior", specCommandIncludedVisualItems(closeout.Body.IncludedBehaviors))
+	renderSpecCommandVisualSection(&builder, "Explicit exclusions", specCommandExclusionVisualItems(closeout.Body.Exclusions))
+	renderSpecCommandVisualSection(&builder, "Binding decisions", specCommandDecisionVisualItems(closeout.Body.BindingDecisions))
+	renderSpecCommandVisualSection(&builder, "Requirements", specCommandRequirementVisualItems(closeout.Body.Requirements))
+	renderSpecCommandVisualSection(&builder, "Owner-checkable acceptance", specCommandAcceptanceVisualItems(closeout.Body.AcceptanceChecks))
+	renderSpecCommandVisualSection(&builder, "Negative expectations", specCommandNegativeVisualItems(closeout.Body.NegativeExpectations))
+	renderSpecCommandVisualSection(&builder, "Recovery expectations", specCommandRecoveryVisualItems(closeout.Body.RecoveryExpectations))
+	renderSpecCommandVisualSection(&builder, "Affected public paths", specCommandPublicPathVisualItems(closeout.Body.AffectedPublicPaths))
+
+	if closeout.WouldCreate {
+		builder.WriteString("Dry run only: this exact draft has not been committed.\n")
+	} else if closeout.ApprovedSpecPreserved {
+		builder.WriteString("The approved specification was left unchanged.\n")
+		builder.WriteString(closeout.RevisionGuidance + "\n")
+	} else {
+		builder.WriteString("This draft does not authorize planning until the owner approves this exact revision.\n")
+		fmt.Fprintf(&builder, "Review: `%s`\n", closeout.ExactNextCommand)
+		if closeout.ApprovalCommand != "" {
+			fmt.Fprintf(&builder, "Approve this exact revision after review: `%s`\n", closeout.ApprovalCommand)
+		}
+	}
+	builder.WriteByte('\n')
+	return builder.String()
 }
 
 func renderDiscussEvidenceRefs(evidence []colony.PlanningEvidenceRef) string {
@@ -1507,38 +2032,6 @@ func buildClarificationRedirect(decision PendingDecision, answer string) string 
 		return answer
 	}
 	return fmt.Sprintf("%s: %s", question, answer)
-}
-
-func nextAfterClarificationResolution(decision PendingDecision) string {
-	if command := orchestratorBoundaryAfterDiscussCommand(decision.Source); command != "" {
-		return fmt.Sprintf("Run `%s` to request a fresh manifest with the clarified boundary.", command)
-	}
-	return "Run `aether plan` to generate phases with the clarified intent."
-}
-
-func orchestratorBoundaryAfterDiscussCommand(source string) string {
-	parts := strings.Split(strings.TrimSpace(source), ":")
-	if len(parts) < 2 || parts[0] != orchestratorBoundarySourcePrefix {
-		return ""
-	}
-	workflow := normalizeOrchestratorBoundarySourcePart(parts[1], "")
-	switch workflow {
-	case "plan":
-		return "aether plan"
-	case "build":
-		if len(parts) >= 4 && parts[2] == "phase" {
-			if phase := strings.TrimSpace(parts[3]); phase != "" && phase != "0" {
-				return "aether build " + phase
-			}
-		}
-		return "aether build"
-	case "continue":
-		return "aether continue"
-	case "seal":
-		return "aether seal"
-	default:
-		return ""
-	}
 }
 
 func discussSource(category string, hard bool) string {

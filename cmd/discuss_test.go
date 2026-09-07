@@ -307,7 +307,7 @@ func TestDiscussResolveHardConstraintEmitsRedirect(t *testing.T) {
 	}
 }
 
-func TestDiscussResolveBoundaryRoutesToFreshWorkflowManifest(t *testing.T) {
+func TestDiscussResolveBoundaryRoutesToDraftSpecification(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -358,8 +358,11 @@ func TestDiscussResolveBoundaryRoutesToFreshWorkflowManifest(t *testing.T) {
 	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
 	result := env["result"].(map[string]interface{})
 	next := stringValue(result["next"])
-	if !strings.Contains(next, "aether build 2") || !strings.Contains(next, "fresh manifest") {
-		t.Fatalf("next = %q, want fresh build manifest guidance", next)
+	if !strings.Contains(next, "aether spec") || strings.Contains(next, "aether build") || strings.Contains(next, "aether plan") {
+		t.Fatalf("next = %q, want draft specification review before workflow redispatch", next)
+	}
+	if got := stringValue(result["specification_status"]); got != string(colony.SpecStatusDraft) {
+		t.Fatalf("specification_status = %q, want draft", got)
 	}
 }
 
