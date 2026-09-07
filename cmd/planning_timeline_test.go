@@ -251,6 +251,35 @@ func TestPlanningTimelineReplayExactIsNoOpAndDivergenceConflicts(t *testing.T) {
 	}
 }
 
+func TestPlanningTimelineReplayEarlierReceiptAfterLaterAppendIsNoOp(t *testing.T) {
+	root := t.TempDir()
+	first, second := appendTwoPlanningTimelineTestCards(t, root)
+	firstCard := readPlanningTimelineTestCard(t, root, first.CardPath)
+	indexPath := filepath.Join(root, filepath.FromSlash(second.IndexPath))
+	indexBefore, err := os.ReadFile(indexPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	replayed, err := appendPlanningIterationCard(root, firstCard, planningTimelineAppendOptions{ReceiptID: first.ReceiptID})
+	if err != nil {
+		t.Fatalf("replay earlier append: %v", err)
+	}
+	if replayed.CardID != first.CardID || replayed.CardHash != first.CardHash || replayed.TimelineDigest != first.TimelineDigest {
+		t.Fatalf("earlier replay did not return its original binding\nwant: %#v\n got: %#v", first, replayed)
+	}
+	if !reflect.DeepEqual(replayed.WriteReceipt, first.WriteReceipt) {
+		t.Fatal("earlier replay did not return its original lifecycle receipt")
+	}
+	indexAfter, err := os.ReadFile(indexPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(indexBefore, indexAfter) {
+		t.Fatal("earlier replay rewrote the advanced timeline index")
+	}
+}
+
 func TestPlanningTimelineReplayResumesMatchingStagedIntent(t *testing.T) {
 	root := t.TempDir()
 	card := validPlanningIterationCardForTest(t, 1, time.Date(2026, time.September, 7, 14, 10, 0, 0, time.UTC))

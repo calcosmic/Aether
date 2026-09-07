@@ -163,11 +163,15 @@ func appendPlanningIterationCard(root string, card colony.PlanningIterationCard,
 			if entry.AppendRequestDigest != requestDigest || entry.CardID != canonicalCard.ID || entry.CardHash != canonicalCard.ContentHash || entry.PreviousCardHash != opts.PreviousCardHash {
 				return empty, &planningTimelineConflictError{ReceiptID: opts.ReceiptID, Detail: "the replay payload differs from the completed append"}
 			}
+			replayTimelineDigest, err := planningTimelineDigest(cards[:entryIndex+1])
+			if err != nil {
+				return empty, fmt.Errorf("hash replayed planning timeline prefix: %w", err)
+			}
 			writeReceipt, err := loadPlanningTimelineWriteReceipt(repositoryRoot, entry.TransactionID)
 			if err != nil {
 				return empty, err
 			}
-			return planningTimelineAppendReceiptFor(index, index.Entries[entryIndex], writeReceipt), nil
+			return planningTimelineAppendReceiptFor(index, index.Entries[entryIndex], replayTimelineDigest, writeReceipt), nil
 		}
 		if entry.CardID == canonicalCard.ID || entry.Iteration == canonicalCard.Iteration {
 			return empty, &planningTimelineConflictError{ReceiptID: opts.ReceiptID, Detail: fmt.Sprintf("iteration %d or card %q is already bound to another receipt", canonicalCard.Iteration, canonicalCard.ID)}
@@ -249,7 +253,7 @@ func appendPlanningIterationCard(root string, card colony.PlanningIterationCard,
 		if err != nil {
 			return empty, err
 		}
-		return planningTimelineAppendReceiptFor(index, index.Entries[len(index.Entries)-1], writeReceipt), nil
+		return planningTimelineAppendReceiptFor(index, index.Entries[len(index.Entries)-1], index.TimelineDigest, writeReceipt), nil
 	}
 	if len(legacyArtifacts) > 0 {
 		return empty, fmt.Errorf("planning timeline has legacy_unbound iteration evidence and cannot append a current chain")
@@ -276,10 +280,10 @@ func appendPlanningIterationCard(root string, card colony.PlanningIterationCard,
 	if err != nil {
 		return empty, err
 	}
-	return planningTimelineAppendReceiptFor(index, index.Entries[len(index.Entries)-1], writeReceipt), nil
+	return planningTimelineAppendReceiptFor(index, index.Entries[len(index.Entries)-1], index.TimelineDigest, writeReceipt), nil
 }
 
-func planningTimelineAppendReceiptFor(index planningTimelineIndex, entry planningTimelineIndexEntry, writeReceipt colony.LifecycleReceipt) planningTimelineAppendReceipt {
+func planningTimelineAppendReceiptFor(index planningTimelineIndex, entry planningTimelineIndexEntry, timelineDigest string, writeReceipt colony.LifecycleReceipt) planningTimelineAppendReceipt {
 	return planningTimelineAppendReceipt{
 		SchemaVersion:  planningTimelineAppendSchemaVersion,
 		ReceiptID:      entry.AppendReceiptID,
@@ -290,7 +294,7 @@ func planningTimelineAppendReceiptFor(index planningTimelineIndex, entry plannin
 		CardHash:       entry.CardHash,
 		CardPath:       entry.CardPath,
 		IndexPath:      planningTimelineIndexRepositoryPath(index.RunID),
-		TimelineDigest: index.TimelineDigest,
+		TimelineDigest: timelineDigest,
 		WriteReceipt:   writeReceipt,
 	}
 }
@@ -301,9 +305,12 @@ func loadPlanningTimelineWriteReceipt(root, transactionID string) (colony.Lifecy
 	if err != nil {
 		return colony.LifecycleReceipt{}, err
 	}
-	if receipt, ok, err := tx.loadCommittedReceipt(); ok || err != nil {
-		if err != nil {
-			return colony.LifecycleReceipt{}, err
+	lifecycleTransactionProcessMu.Lock()
+	receipt, ok, receiptErr := loadPlanningTimelineHistoricalReceipt(tx)
+	lifecycleTransactionProcessMu.Unlock()
+	if ok || receiptErr != nil {
+		if receiptErr != nil {
+			return colony.LifecycleReceipt{}, receiptErr
 		}
 		return receipt, nil
 	}
@@ -314,7 +321,7 @@ func loadPlanningTimelineWriteReceipt(root, transactionID string) (colony.Lifecy
 	if !pending {
 		return colony.LifecycleReceipt{}, fmt.Errorf("planning timeline transaction %q has no durable receipt or intent", transactionID)
 	}
-	receipt, err := resumeLifecycleTransaction(config)
+	receipt, err = resumeLifecycleTransaction(config)
 	if err != nil {
 		return colony.LifecycleReceipt{}, err
 	}
@@ -322,6 +329,56 @@ func loadPlanningTimelineWriteReceipt(root, transactionID string) (colony.Lifecy
 		return colony.LifecycleReceipt{}, fmt.Errorf("planning timeline transaction %q did not commit", transactionID)
 	}
 	return receipt, nil
+}
+
+// loadPlanningTimelineHistoricalReceipt validates immutable journal evidence
+// without requiring the live index to equal this append's former index bytes.
+// Later appends legitimately advance that one shared target; load of the full
+// current chain separately proves that the historical prefix still exists.
+func loadPlanningTimelineHistoricalReceipt(tx *lifecycleTransaction) (colony.LifecycleReceipt, bool, error) {
+	receiptPath := filepath.Join(tx.journalPath(), "receipt.json")
+	receiptBytes, err := readLifecycleEvidenceFile(receiptPath)
+	if os.IsNotExist(err) {
+		return colony.LifecycleReceipt{}, false, nil
+	}
+	if err != nil {
+		return colony.LifecycleReceipt{}, false, fmt.Errorf("planning timeline: read historical receipt: %w", err)
+	}
+	digestBytes, err := readLifecycleEvidenceFile(filepath.Join(tx.journalPath(), "receipt.sha256"))
+	if err != nil {
+		return colony.LifecycleReceipt{}, false, fmt.Errorf("planning timeline: historical receipt evidence is incomplete: %w", err)
+	}
+	if strings.TrimSpace(string(digestBytes)) != lifecycleDigest(receiptBytes) {
+		return colony.LifecycleReceipt{}, false, fmt.Errorf("planning timeline: historical receipt digest conflicts with receipt bytes")
+	}
+	var receipt colony.LifecycleReceipt
+	if err := decodeLifecycleJSON(receiptBytes, &receipt); err != nil {
+		return colony.LifecycleReceipt{}, false, fmt.Errorf("planning timeline: decode historical receipt: %w", err)
+	}
+	if err := receipt.Validate(); err != nil {
+		return colony.LifecycleReceipt{}, false, fmt.Errorf("planning timeline: invalid historical receipt: %w", err)
+	}
+	if receipt.Transaction.ID != tx.config.TransactionID || receipt.Command != tx.config.Command || receipt.StateEffect != colony.LifecycleStateEffectCommitted {
+		return colony.LifecycleReceipt{}, false, fmt.Errorf("planning timeline: historical receipt identity or state conflicts with its transaction")
+	}
+	intent, progress, err := tx.loadJournal()
+	if err != nil {
+		return colony.LifecycleReceipt{}, false, fmt.Errorf("planning timeline: historical receipt journal evidence is invalid: %w", err)
+	}
+	tx.intent, tx.progress = intent, progress
+	if _, err := tx.validateRecoveryEvidence(); err != nil {
+		return colony.LifecycleReceipt{}, false, fmt.Errorf("planning timeline: historical receipt root evidence is invalid: %w", err)
+	}
+	if progress.Stage != colony.TransactionStageVerified || progress.StateEffect != colony.LifecycleStateEffectCommitted {
+		return colony.LifecycleReceipt{}, false, fmt.Errorf("planning timeline: historical receipt conflicts with coordinator stage %q", progress.Stage)
+	}
+	if progress.Receipt != nil && (progress.Receipt.ID != receipt.ReceiptID || progress.Receipt.Digest != lifecycleDigest(receiptBytes)) {
+		return colony.LifecycleReceipt{}, false, fmt.Errorf("planning timeline: historical receipt reference conflicts with receipt bytes")
+	}
+	if receipt.Command != intent.Record.Command || !equalLifecycleChanges(receipt.Changes, intent.Record.Changes) {
+		return colony.LifecycleReceipt{}, false, fmt.Errorf("planning timeline: historical receipt claims conflict with coordinator intent")
+	}
+	return receipt, true, nil
 }
 
 func planningTimelineLifecycleConfig(root, transactionID string) lifecycleTransactionConfig {
