@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 200-01-PLAN.md
-last_updated: "2026-09-07T11:31:36.980Z"
+stopped_at: Completed 200-02-PLAN.md
+last_updated: "2026-09-07T12:24:06.422Z"
 last_activity: 2026-09-07
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 59
-  completed_plans: 35
+  completed_plans: 36
   percent: 14
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 2 of 25
+Plan: 3 of 25
 Status: Ready to execute
 Last activity: 2026-09-07
 
@@ -112,6 +112,7 @@ Last activity: 2026-09-07
 | Phase 199 P33 | 31min | 2 tasks | 9 files |
 | Phase 199 P28 | 1d 1h | 2 tasks | 10 files |
 | Phase 200 P01 | 25 min | 2 tasks | 5 files |
+| Phase 200 P02 | 40 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -301,6 +302,10 @@ Last activity: 2026-09-07
 - [Phase 200]: Keep canonical specification snapshots in optional ColonyState.Specification while treating .aether/SPEC.md as a projection. — Atomic state commits preserve exact immutable approval lineage; the readable file remains derivable.
 - [Phase 200]: Represent specification approval, candidate stopping, and active-plan acceptance with separate exact records and status transitions. — Each authority boundary must be independently auditable and impossible to grant through Queen advice or a stop decision.
 - [Phase 200]: Retain ordinal IDs for build and display compatibility while adding optional immutable semantic IDs and proof bindings. — Existing consumers keep working while revisions gain durable trace and impact identity.
+- [Phase 200]: Classify only executable pre-Phase-200 plans as legacy_unbound; never synthesize current authority. — Older colonies stay buildable without fabricated specification approval, candidates, semantic IDs, freshness, or acceptance receipts.
+- [Phase 200]: Re-index legacy planning files deterministically only after every path passes containment validation. — Old planning bytes remain readable as authority-neutral evidence or timeline material without allowing traversal, symlink escape, or malformed JSON.
+- [Phase 200]: Keep state loads observational and persist legacy classification with the next ordinary safe state transaction. — Preview, report-only, and read-only commands must not mutate COLONY_STATE.json.
+- [Phase 200]: Canonicalize the additive legacy_unbound marker out of stale-packet plan hashes. — Classification metadata does not change executable phases and must not invalidate an otherwise unchanged pre-upgrade planning packet.
 
 ### Pending Todos
 
@@ -416,8 +421,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-07T11:31:36.971Z
-Stopped at: Completed 200-01-PLAN.md
+Last session: 2026-09-07T12:24:06.412Z
+Stopped at: Completed 200-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
