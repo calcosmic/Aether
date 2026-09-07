@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/calcosmic/Aether/pkg/colony"
@@ -68,6 +69,61 @@ type planningTimelineAppendReceipt struct {
 	WriteReceipt   colony.LifecycleReceipt `json:"write_receipt"`
 }
 
+type planningTimelineClassification string
+
+const (
+	planningTimelineCandidateOnly planningTimelineClassification = "candidate_only"
+	planningTimelineAccepted      planningTimelineClassification = "accepted"
+	planningTimelineLegacyUnbound planningTimelineClassification = "legacy_unbound"
+)
+
+type planningTimeline struct {
+	Classification  planningTimelineClassification  `json:"classification"`
+	RunID           string                          `json:"run_id"`
+	Index           *planningTimelineIndex          `json:"index,omitempty"`
+	Cards           []colony.PlanningIterationCard  `json:"cards,omitempty"`
+	Binding         *colony.PlanningTimelineBinding `json:"binding,omitempty"`
+	LegacyArtifacts []string                        `json:"legacy_artifacts,omitempty"`
+}
+
+type planningTimelineProtection struct {
+	Classification  planningTimelineClassification `json:"classification"`
+	BoundRevisionID string                         `json:"bound_revision_id,omitempty"`
+	Prunable        bool                           `json:"prunable"`
+	Reorderable     bool                           `json:"reorderable"`
+}
+
+type planningTimelineMutation string
+
+const (
+	planningTimelineMutationPrune   planningTimelineMutation = "prune"
+	planningTimelineMutationReorder planningTimelineMutation = "reorder"
+)
+
+// planningTimelineConflictError distinguishes replay/binding conflicts from
+// validation errors so callers can fail closed without guessing from prose.
+type planningTimelineConflictError struct {
+	ReceiptID string
+	Detail    string
+}
+
+func (err *planningTimelineConflictError) Error() string {
+	if strings.TrimSpace(err.ReceiptID) == "" {
+		return "planning timeline conflict: " + err.Detail
+	}
+	return fmt.Sprintf("planning timeline receipt %q conflicts: %s", err.ReceiptID, err.Detail)
+}
+
+type planningTimelineProtectedError struct {
+	TimelineID string
+	RevisionID string
+	Mutation   planningTimelineMutation
+}
+
+func (err *planningTimelineProtectedError) Error() string {
+	return fmt.Sprintf("planning timeline %q is bound to accepted plan revision %q and cannot apply %q", err.TimelineID, err.RevisionID, err.Mutation)
+}
+
 // appendPlanningIterationCard validates a complete Route-Setter pass, freezes
 // its canonical bytes, and commits the card plus its ordered index through one
 // lifecycle transaction. It never writes renderer text into planning history.
@@ -92,6 +148,31 @@ func appendPlanningIterationCard(root string, card colony.PlanningIterationCard,
 	if err != nil {
 		return empty, err
 	}
+	cardPath := planningTimelineCardRepositoryPath(canonicalCard.RunID, canonicalCard.Iteration, canonicalCard.ID)
+	indexPath := planningTimelineIndexRepositoryPath(canonicalCard.RunID)
+	requestDigest, err := planningTimelineAppendRequestDigest(opts.ReceiptID, canonicalCard, opts.PreviousCardHash)
+	if err != nil {
+		return empty, err
+	}
+	transactionID, err := planningTimelineTransactionID(canonicalCard.RunID, opts.ReceiptID)
+	if err != nil {
+		return empty, err
+	}
+	for entryIndex, entry := range index.Entries {
+		if entry.AppendReceiptID == opts.ReceiptID {
+			if entry.AppendRequestDigest != requestDigest || entry.CardID != canonicalCard.ID || entry.CardHash != canonicalCard.ContentHash || entry.PreviousCardHash != opts.PreviousCardHash {
+				return empty, &planningTimelineConflictError{ReceiptID: opts.ReceiptID, Detail: "the replay payload differs from the completed append"}
+			}
+			writeReceipt, err := loadPlanningTimelineWriteReceipt(repositoryRoot, entry.TransactionID)
+			if err != nil {
+				return empty, err
+			}
+			return planningTimelineAppendReceiptFor(index, index.Entries[entryIndex], writeReceipt), nil
+		}
+		if entry.CardID == canonicalCard.ID || entry.Iteration == canonicalCard.Iteration {
+			return empty, &planningTimelineConflictError{ReceiptID: opts.ReceiptID, Detail: fmt.Sprintf("iteration %d or card %q is already bound to another receipt", canonicalCard.Iteration, canonicalCard.ID)}
+		}
+	}
 	expectedIteration := len(cards) + 1
 	if canonicalCard.Iteration != expectedIteration {
 		return empty, fmt.Errorf("planning timeline iteration %d must be the next ordinal %d", canonicalCard.Iteration, expectedIteration)
@@ -103,32 +184,13 @@ func appendPlanningIterationCard(root string, card colony.PlanningIterationCard,
 	if opts.PreviousCardHash != expectedPreviousHash {
 		return empty, fmt.Errorf("planning timeline previous_card_hash %q must match %q", opts.PreviousCardHash, expectedPreviousHash)
 	}
+	var legacyArtifacts []string
 	if !exists {
+		legacyArtifacts, err = planningTimelineLegacyArtifacts(repositoryRoot, canonicalCard.RunID)
+		if err != nil {
+			return empty, err
+		}
 		index = planningTimelineIndex{SchemaVersion: planningTimelineIndexSchemaVersion, RunID: canonicalCard.RunID}
-	}
-
-	cardPath := planningTimelineCardRepositoryPath(canonicalCard.RunID, canonicalCard.Iteration, canonicalCard.ID)
-	indexPath := planningTimelineIndexRepositoryPath(canonicalCard.RunID)
-	requestDigest, err := planningTimelineAppendRequestDigest(opts.ReceiptID, canonicalCard, opts.PreviousCardHash)
-	if err != nil {
-		return empty, err
-	}
-	transactionID, err := planningTimelineTransactionID(canonicalCard.RunID, opts.ReceiptID)
-	if err != nil {
-		return empty, err
-	}
-	for _, entry := range index.Entries {
-		if entry.AppendReceiptID == opts.ReceiptID {
-			return empty, fmt.Errorf("planning timeline append receipt %q already exists", opts.ReceiptID)
-		}
-		if entry.CardID == canonicalCard.ID || entry.Iteration == canonicalCard.Iteration {
-			return empty, fmt.Errorf("planning timeline iteration %d or card %q already exists", canonicalCard.Iteration, canonicalCard.ID)
-		}
-	}
-	if _, statErr := os.Lstat(filepath.Join(repositoryRoot, filepath.FromSlash(cardPath))); statErr == nil {
-		return empty, fmt.Errorf("planning timeline card path %q already exists outside the index", cardPath)
-	} else if !os.IsNotExist(statErr) {
-		return empty, fmt.Errorf("inspect planning timeline card path %q: %w", cardPath, statErr)
 	}
 
 	index.Entries = append(index.Entries, planningTimelineIndexEntry{
@@ -170,6 +232,33 @@ func appendPlanningIterationCard(root string, card colony.PlanningIterationCard,
 		Fault:  opts.Fault,
 		Rename: opts.Rename,
 	}
+	if pending, err := planningTimelineTransactionHasIntent(config); err != nil {
+		return empty, err
+	} else if pending {
+		matches, err := planningTimelinePendingIntentMatches(config, map[string][]byte{
+			planningTimelineDataRelativePath(cardPath):  cardBytes,
+			planningTimelineDataRelativePath(indexPath): indexBytes,
+		})
+		if err != nil {
+			return empty, err
+		}
+		if !matches {
+			return empty, &planningTimelineConflictError{ReceiptID: opts.ReceiptID, Detail: "the durable staged append has different card or index content"}
+		}
+		writeReceipt, err := resumeLifecycleTransaction(config)
+		if err != nil {
+			return empty, err
+		}
+		return planningTimelineAppendReceiptFor(index, index.Entries[len(index.Entries)-1], writeReceipt), nil
+	}
+	if len(legacyArtifacts) > 0 {
+		return empty, fmt.Errorf("planning timeline has legacy_unbound iteration evidence and cannot append a current chain")
+	}
+	if _, statErr := os.Lstat(filepath.Join(repositoryRoot, filepath.FromSlash(cardPath))); statErr == nil {
+		return empty, &planningTimelineConflictError{ReceiptID: opts.ReceiptID, Detail: fmt.Sprintf("card path %q exists outside the timeline index", cardPath)}
+	} else if !os.IsNotExist(statErr) {
+		return empty, fmt.Errorf("inspect planning timeline card path %q: %w", cardPath, statErr)
+	}
 	tx, err := beginLifecycleTransaction(config)
 	if err != nil {
 		return empty, err
@@ -187,19 +276,117 @@ func appendPlanningIterationCard(root string, card colony.PlanningIterationCard,
 	if err != nil {
 		return empty, err
 	}
+	return planningTimelineAppendReceiptFor(index, index.Entries[len(index.Entries)-1], writeReceipt), nil
+}
+
+func planningTimelineAppendReceiptFor(index planningTimelineIndex, entry planningTimelineIndexEntry, writeReceipt colony.LifecycleReceipt) planningTimelineAppendReceipt {
 	return planningTimelineAppendReceipt{
 		SchemaVersion:  planningTimelineAppendSchemaVersion,
-		ReceiptID:      opts.ReceiptID,
-		RequestDigest:  requestDigest,
-		RunID:          canonicalCard.RunID,
-		Iteration:      canonicalCard.Iteration,
-		CardID:         canonicalCard.ID,
-		CardHash:       canonicalCard.ContentHash,
-		CardPath:       cardPath,
-		IndexPath:      indexPath,
+		ReceiptID:      entry.AppendReceiptID,
+		RequestDigest:  entry.AppendRequestDigest,
+		RunID:          index.RunID,
+		Iteration:      entry.Iteration,
+		CardID:         entry.CardID,
+		CardHash:       entry.CardHash,
+		CardPath:       entry.CardPath,
+		IndexPath:      planningTimelineIndexRepositoryPath(index.RunID),
 		TimelineDigest: index.TimelineDigest,
 		WriteReceipt:   writeReceipt,
-	}, nil
+	}
+}
+
+func loadPlanningTimelineWriteReceipt(root, transactionID string) (colony.LifecycleReceipt, error) {
+	config := planningTimelineLifecycleConfig(root, transactionID)
+	tx, err := beginLifecycleTransaction(config)
+	if err != nil {
+		return colony.LifecycleReceipt{}, err
+	}
+	if receipt, ok, err := tx.loadCommittedReceipt(); ok || err != nil {
+		if err != nil {
+			return colony.LifecycleReceipt{}, err
+		}
+		return receipt, nil
+	}
+	pending, err := planningTimelineTransactionHasIntent(config)
+	if err != nil {
+		return colony.LifecycleReceipt{}, err
+	}
+	if !pending {
+		return colony.LifecycleReceipt{}, fmt.Errorf("planning timeline transaction %q has no durable receipt or intent", transactionID)
+	}
+	receipt, err := resumeLifecycleTransaction(config)
+	if err != nil {
+		return colony.LifecycleReceipt{}, err
+	}
+	if receipt.StateEffect != colony.LifecycleStateEffectCommitted {
+		return colony.LifecycleReceipt{}, fmt.Errorf("planning timeline transaction %q did not commit", transactionID)
+	}
+	return receipt, nil
+}
+
+func planningTimelineLifecycleConfig(root, transactionID string) lifecycleTransactionConfig {
+	return lifecycleTransactionConfig{
+		TransactionID: transactionID,
+		Command:       "planning-timeline-append",
+		Allowlist: lifecycleTransactionAllowlist{
+			RepositoryRoot:    root,
+			LifecycleDataRoot: filepath.Join(root, ".aether", "data"),
+		},
+	}
+}
+
+func planningTimelineTransactionHasIntent(config lifecycleTransactionConfig) (bool, error) {
+	tx, err := beginLifecycleTransaction(config)
+	if err != nil {
+		return false, err
+	}
+	_, err = os.Lstat(filepath.Join(tx.journalPath(), "intent.json"))
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("inspect planning timeline transaction intent: %w", err)
+	}
+	return true, nil
+}
+
+// planningTimelinePendingIntentMatches proves that an interrupted transaction
+// was staged for these exact bytes before allowing the lifecycle reducer to
+// resume it. A shared receipt ID can therefore never authorize new content.
+func planningTimelinePendingIntentMatches(config lifecycleTransactionConfig, expected map[string][]byte) (bool, error) {
+	tx, err := beginLifecycleTransaction(config)
+	if err != nil {
+		return false, err
+	}
+	intent, progress, err := tx.loadJournal()
+	if err != nil {
+		return false, err
+	}
+	tx.intent, tx.progress = intent, progress
+	manifests, err := tx.validateRecoveryEvidence()
+	if err != nil {
+		return false, err
+	}
+	targets := flattenLifecycleManifestTargets(intent, manifests)
+	if len(targets) != len(expected) {
+		return false, nil
+	}
+	seen := make(map[string]struct{}, len(targets))
+	for _, target := range targets {
+		content, ok := expected[filepath.ToSlash(target.RelativeTarget)]
+		if !ok || target.Action != lifecycleTransactionWrite {
+			return false, nil
+		}
+		wantTarget := filepath.Join(config.Allowlist.LifecycleDataRoot, filepath.FromSlash(target.RelativeTarget))
+		if target.TargetPath != wantTarget || target.AfterDigest != lifecycleDigest(content) {
+			return false, nil
+		}
+		if _, duplicate := seen[target.RelativeTarget]; duplicate {
+			return false, nil
+		}
+		seen[target.RelativeTarget] = struct{}{}
+	}
+	return len(seen) == len(expected), nil
 }
 
 func canonicalPlanningTimelineRoot(root string) (string, error) {
@@ -294,17 +481,17 @@ func planningTimelineDataRelativePath(repositoryPath string) string {
 
 func readPlanningTimelineChain(root, runID string) (planningTimelineIndex, []colony.PlanningIterationCard, bool, error) {
 	indexPath := filepath.Join(root, filepath.FromSlash(planningTimelineIndexRepositoryPath(runID)))
-	content, err := os.ReadFile(indexPath)
+	info, err := os.Lstat(indexPath)
 	if os.IsNotExist(err) {
-		legacyMatches, globErr := filepath.Glob(filepath.Join(filepath.Dir(indexPath), "iterations", "*.json"))
-		if globErr != nil {
-			return planningTimelineIndex{}, nil, false, globErr
-		}
-		if len(legacyMatches) > 0 {
-			return planningTimelineIndex{}, nil, false, fmt.Errorf("planning timeline has unindexed iteration artifacts")
-		}
 		return planningTimelineIndex{}, nil, false, nil
 	}
+	if err != nil {
+		return planningTimelineIndex{}, nil, false, fmt.Errorf("inspect planning timeline index: %w", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return planningTimelineIndex{}, nil, false, fmt.Errorf("planning timeline index must be a regular non-symlink file")
+	}
+	content, err := os.ReadFile(indexPath)
 	if err != nil {
 		return planningTimelineIndex{}, nil, false, fmt.Errorf("read planning timeline index: %w", err)
 	}
@@ -312,9 +499,26 @@ func readPlanningTimelineChain(root, runID string) (planningTimelineIndex, []col
 	if err := decodePlanningTimelineJSON(content, &index); err != nil {
 		return planningTimelineIndex{}, nil, false, fmt.Errorf("decode planning timeline index: %w", err)
 	}
+	if index.RunID != runID {
+		return planningTimelineIndex{}, nil, false, fmt.Errorf("planning timeline index run_id %q does not match requested run %q", index.RunID, runID)
+	}
 	cards := make([]colony.PlanningIterationCard, len(index.Entries))
 	for i, entry := range index.Entries {
+		if err := validatePlanningArtifactPath(entry.CardPath); err != nil {
+			return planningTimelineIndex{}, nil, false, fmt.Errorf("planning timeline entries[%d].card_path: %w", i, err)
+		}
+		wantPath := planningTimelineCardRepositoryPath(runID, entry.Iteration, entry.CardID)
+		if entry.CardPath != wantPath {
+			return planningTimelineIndex{}, nil, false, fmt.Errorf("planning timeline entries[%d].card_path is not the canonical card locator", i)
+		}
 		cardPath := filepath.Join(root, filepath.FromSlash(entry.CardPath))
+		cardInfo, statErr := os.Lstat(cardPath)
+		if statErr != nil {
+			return planningTimelineIndex{}, nil, false, fmt.Errorf("inspect planning timeline card %d: %w", i+1, statErr)
+		}
+		if cardInfo.Mode()&os.ModeSymlink != 0 || !cardInfo.Mode().IsRegular() {
+			return planningTimelineIndex{}, nil, false, fmt.Errorf("planning timeline card %d must be a regular non-symlink file", i+1)
+		}
 		cardBytes, readErr := os.ReadFile(cardPath)
 		if readErr != nil {
 			return planningTimelineIndex{}, nil, false, fmt.Errorf("read planning timeline card %d: %w", i+1, readErr)
@@ -327,6 +531,213 @@ func readPlanningTimelineChain(root, runID string) (planningTimelineIndex, []col
 		return planningTimelineIndex{}, nil, false, err
 	}
 	return index, cards, true, nil
+}
+
+func planningTimelineLegacyArtifacts(root, runID string) ([]string, error) {
+	directory := filepath.Join(root, ".aether", "data", "planning", runID, "iterations")
+	info, err := os.Lstat(directory)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("inspect legacy planning iteration directory: %w", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return nil, fmt.Errorf("legacy planning iteration directory must be a real directory")
+	}
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		return nil, fmt.Errorf("read legacy planning iteration directory: %w", err)
+	}
+	artifacts := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		entryInfo, err := os.Lstat(filepath.Join(directory, entry.Name()))
+		if err != nil {
+			return nil, fmt.Errorf("inspect legacy planning artifact %q: %w", entry.Name(), err)
+		}
+		if entryInfo.Mode()&os.ModeSymlink != 0 || !entryInfo.Mode().IsRegular() {
+			return nil, fmt.Errorf("legacy planning artifact %q must be a regular non-symlink file", entry.Name())
+		}
+		artifacts = append(artifacts, path.Join(".aether", "data", "planning", runID, "iterations", entry.Name()))
+	}
+	sort.Strings(artifacts)
+	return artifacts, nil
+}
+
+// loadPlanningTimeline returns a binding only after every indexed card, content
+// address, predecessor, locator, and whole-chain digest has been revalidated.
+// Older unindexed JSON remains inspectable but can never become accepted state.
+func loadPlanningTimeline(root, runID string) (planningTimeline, error) {
+	empty := planningTimeline{}
+	repositoryRoot, err := canonicalPlanningTimelineRoot(root)
+	if err != nil {
+		return empty, err
+	}
+	if err := validatePlanningTimelineSegment("run_id", runID); err != nil {
+		return empty, err
+	}
+	index, cards, exists, err := readPlanningTimelineChain(repositoryRoot, runID)
+	if err != nil {
+		return empty, err
+	}
+	if !exists {
+		artifacts, err := planningTimelineLegacyArtifacts(repositoryRoot, runID)
+		if err != nil {
+			return empty, err
+		}
+		if len(artifacts) == 0 {
+			return empty, fmt.Errorf("planning timeline %q: %w", runID, os.ErrNotExist)
+		}
+		return planningTimeline{
+			Classification:  planningTimelineLegacyUnbound,
+			RunID:           runID,
+			LegacyArtifacts: artifacts,
+		}, nil
+	}
+	binding, err := planningTimelineBindingFor(index, cards)
+	if err != nil {
+		return empty, err
+	}
+	indexCopy := index
+	return planningTimeline{
+		Classification: planningTimelineCandidateOnly,
+		RunID:          runID,
+		Index:          &indexCopy,
+		Cards:          cards,
+		Binding:        &binding,
+	}, nil
+}
+
+func planningTimelineBindingFor(index planningTimelineIndex, cards []colony.PlanningIterationCard) (colony.PlanningTimelineBinding, error) {
+	cardIDs := make([]string, len(cards))
+	for i := range cards {
+		cardIDs[i] = cards[i].ID
+	}
+	binding := colony.PlanningTimelineBinding{
+		SchemaVersion:  colony.PlanningTimelineSchemaVersion,
+		RunID:          index.RunID,
+		CardIDs:        cardIDs,
+		FirstCardHash:  index.FirstCardHash,
+		LastCardHash:   index.LastCardHash,
+		TimelineDigest: index.TimelineDigest,
+		Path:           planningTimelineIndexRepositoryPath(index.RunID),
+	}
+	digest, err := planningTimelineBindingContentHash(binding)
+	if err != nil {
+		return colony.PlanningTimelineBinding{}, fmt.Errorf("hash planning timeline binding: %w", err)
+	}
+	binding.ContentHash = digest
+	binding.ID = "planning-timeline-" + digest[:12]
+	if err := validatePlanningTimelineBindingContent(binding, cards); err != nil {
+		return colony.PlanningTimelineBinding{}, err
+	}
+	return binding, nil
+}
+
+func planningTimelineBindingContentHash(binding colony.PlanningTimelineBinding) (string, error) {
+	binding.ID = ""
+	binding.ContentHash = ""
+	return jsonSHA256(binding)
+}
+
+func validatePlanningTimelineBindingContent(binding colony.PlanningTimelineBinding, cards []colony.PlanningIterationCard) error {
+	if err := validatePlanningTimelineBinding(binding, cards); err != nil {
+		return err
+	}
+	digest, err := planningTimelineBindingContentHash(binding)
+	if err != nil {
+		return err
+	}
+	if binding.ContentHash != digest || binding.ID != "planning-timeline-"+digest[:12] {
+		return fmt.Errorf("planning timeline binding content address does not match its canonical payload")
+	}
+	return nil
+}
+
+func planningTimelineProtectionFor(timeline planningTimeline, revisions []colony.PlanRevision) (planningTimelineProtection, error) {
+	if timeline.Classification == planningTimelineLegacyUnbound {
+		if timeline.Binding != nil || timeline.Index != nil || len(timeline.Cards) != 0 || len(timeline.LegacyArtifacts) == 0 {
+			return planningTimelineProtection{}, fmt.Errorf("legacy_unbound planning timeline has inconsistent evidence")
+		}
+		return planningTimelineProtection{
+			Classification: planningTimelineLegacyUnbound,
+			Prunable:       true,
+			Reorderable:    false,
+		}, nil
+	}
+	if timeline.Classification != planningTimelineCandidateOnly && timeline.Classification != planningTimelineAccepted {
+		return planningTimelineProtection{}, fmt.Errorf("planning timeline classification %q is invalid", timeline.Classification)
+	}
+	if timeline.Index == nil || timeline.Binding == nil || len(timeline.Cards) == 0 {
+		return planningTimelineProtection{}, fmt.Errorf("current planning timeline is incomplete")
+	}
+	if timeline.RunID != timeline.Binding.RunID || timeline.Index.RunID != timeline.RunID {
+		return planningTimelineProtection{}, fmt.Errorf("planning timeline run binding is inconsistent")
+	}
+	if err := validatePlanningTimelineIndex(*timeline.Index, timeline.Cards); err != nil {
+		return planningTimelineProtection{}, err
+	}
+	if err := validatePlanningTimelineBindingContent(*timeline.Binding, timeline.Cards); err != nil {
+		return planningTimelineProtection{}, err
+	}
+	boundRevisionID := ""
+	for _, revision := range revisions {
+		if revision.PlanningTimelineID != timeline.Binding.ID {
+			continue
+		}
+		if revision.PlanningTimelineDigest != timeline.Binding.TimelineDigest {
+			return planningTimelineProtection{}, &planningTimelineConflictError{
+				Detail: fmt.Sprintf("accepted plan revision %q binds timeline ID %q with a different digest", revision.ID, revision.PlanningTimelineID),
+			}
+		}
+		if strings.TrimSpace(revision.ID) == "" {
+			return planningTimelineProtection{}, &planningTimelineConflictError{Detail: "accepted timeline binding names a revision without an ID"}
+		}
+		if boundRevisionID == "" {
+			boundRevisionID = revision.ID
+		}
+	}
+	if boundRevisionID != "" {
+		return planningTimelineProtection{
+			Classification:  planningTimelineAccepted,
+			BoundRevisionID: boundRevisionID,
+			Prunable:        false,
+			Reorderable:     false,
+		}, nil
+	}
+	return planningTimelineProtection{
+		Classification: planningTimelineCandidateOnly,
+		Prunable:       true,
+		Reorderable:    false,
+	}, nil
+}
+
+func authorizePlanningTimelineMutation(timeline planningTimeline, revisions []colony.PlanRevision, mutation planningTimelineMutation) error {
+	protection, err := planningTimelineProtectionFor(timeline, revisions)
+	if err != nil {
+		return err
+	}
+	if protection.Classification == planningTimelineAccepted {
+		return &planningTimelineProtectedError{
+			TimelineID: timeline.Binding.ID,
+			RevisionID: protection.BoundRevisionID,
+			Mutation:   mutation,
+		}
+	}
+	switch mutation {
+	case planningTimelineMutationPrune:
+		if !protection.Prunable {
+			return &planningTimelineProtectedError{Mutation: mutation}
+		}
+		return nil
+	case planningTimelineMutationReorder:
+		return &planningTimelineConflictError{Detail: "planning timelines are append-only and cannot be reordered"}
+	default:
+		return fmt.Errorf("planning timeline mutation %q is invalid", mutation)
+	}
 }
 
 func addressPlanningTimelineIndex(index *planningTimelineIndex, cards []colony.PlanningIterationCard) error {
@@ -406,6 +817,20 @@ func validatePlanningTimelineIndex(index planningTimelineIndex, cards []colony.P
 		card := cards[i]
 		if card.RunID != index.RunID || card.Iteration != entry.Iteration || card.ID != entry.CardID || card.ContentHash != entry.CardHash {
 			return fmt.Errorf("planning timeline entries[%d] does not match its card", i)
+		}
+		wantRequestDigest, err := planningTimelineAppendRequestDigest(entry.AppendReceiptID, card, entry.PreviousCardHash)
+		if err != nil {
+			return fmt.Errorf("planning timeline entries[%d] request digest: %w", i, err)
+		}
+		if entry.AppendRequestDigest != wantRequestDigest {
+			return fmt.Errorf("planning timeline entries[%d].append_request_digest does not match its card and receipt", i)
+		}
+		wantTransactionID, err := planningTimelineTransactionID(index.RunID, entry.AppendReceiptID)
+		if err != nil {
+			return fmt.Errorf("planning timeline entries[%d] transaction identity: %w", i, err)
+		}
+		if entry.TransactionID != wantTransactionID {
+			return fmt.Errorf("planning timeline entries[%d].transaction_id does not match its run and receipt", i)
 		}
 		wantPath := planningTimelineCardRepositoryPath(index.RunID, entry.Iteration, entry.CardID)
 		if entry.CardPath != wantPath {
