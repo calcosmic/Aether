@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 15/25 plans executed
+**Plans:** 16/25 plans executed
 
 Plans:
 
@@ -223,7 +223,7 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 200-16-PLAN.md — Review and exactly accept a non-active plan candidate.
+- [x] 200-16-PLAN.md — Review and exactly accept a non-active plan candidate.
 
 **Wave 8** *(blocked on Wave 7 completion)*
 

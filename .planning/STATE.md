@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 200-15-PLAN.md
-last_updated: "2026-09-07T21:03:02.868Z"
+stopped_at: Completed 200-16-PLAN.md
+last_updated: "2026-09-07T21:45:28.061Z"
 last_activity: 2026-09-07
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 59
-  completed_plans: 49
+  completed_plans: 50
   percent: 14
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 16 of 25
+Plan: 17 of 25
 Status: Ready to execute
 Last activity: 2026-09-07
 
@@ -126,6 +126,7 @@ Last activity: 2026-09-07
 | Phase 200 P13 | 55 min | 3 tasks | 7 files |
 | Phase 200 P14 | 34m | 2 tasks | 3 files |
 | Phase 200 P15 | 42m | 3 tasks | 3 files |
+| Phase 200 P16 | 35m | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -367,6 +368,10 @@ Last activity: 2026-09-07
 - [Phase 200]: Route-Setter supplies only an evidence-linked semantic proposal and five dimension proposals; Go owns accepted scores, weighted overall, weakest gap, stop reason, and every authority transition.
 - [Phase 200]: Bind later material choices to the completed Route card before owner review; equivalent answers resume the next Scout, while contract changes require a successor specification.
 - [Phase 200]: Persist stopped candidates as write-once pending_review run artifacts and leave active plan state unchanged until the explicit review and acceptance contract lands.
+- [Phase 200]: Candidate review returns persisted evidence and Queen recommendation unchanged; renderer logic cannot invent authority.
+- [Phase 200]: Exact acceptance validates candidate, approved specification, immutable base, complete timeline, proposal, and deterministic owner token before one transaction.
+- [Phase 200]: Completed lifecycle state is restored onto the newly bound candidate definition without mutating predecessor revisions.
+- [Phase 200]: Run headers retain mutable state hashes for stale-work detection while candidates bind immutable revision hashes; plan-unbound is genesis-only.
 
 ### Pending Todos
 
@@ -482,8 +487,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-07T21:03:02.858Z
-Stopped at: Completed 200-15-PLAN.md
+Last session: 2026-09-07T21:45:28.052Z
+Stopped at: Completed 200-16-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
