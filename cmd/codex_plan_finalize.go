@@ -37,6 +37,7 @@ type codexExternalPlanCompletion struct {
 	PhasePlan          *codexWorkerPlanArtifact     `json:"phase_plan,omitempty"`
 	Synthesis          *codexPlanSynthesis          `json:"synthesis,omitempty"`
 	ScoutResult        json.RawMessage              `json:"scout_result,omitempty"`
+	RouteResult        json.RawMessage              `json:"route_result,omitempty"`
 	DecisionResume     *planningDecisionResumeToken `json:"decision_resume_token,omitempty"`
 	DecisionResolvedAt time.Time                    `json:"decision_resolved_at,omitempty"`
 }
@@ -71,6 +72,68 @@ type planningScoutStageFinding struct {
 	EvidenceIDs   []string `json:"evidence_ids,omitempty"`
 	Unknown       bool     `json:"unknown,omitempty"`
 	UnknownReason string   `json:"unknown_reason,omitempty"`
+}
+
+// planningRoutePlanProposal is the only plan-shaped payload Route-Setter may
+// author. Authority-bearing Plan and PlanRevision fields are absent by shape;
+// Go supplies those later from the current colony state.
+type planningRoutePlanProposal struct {
+	SemanticID            string                         `json:"semantic_id"`
+	Phases                []colony.Phase                 `json:"phases"`
+	TaskDeclarations      []planningRouteTaskDeclaration `json:"task_declarations"`
+	UserFacingSemanticIDs []string                       `json:"user_facing_semantic_ids"`
+	Removals              []planningRouteRemoval         `json:"removals,omitempty"`
+}
+
+type planningRouteTaskDeclaration struct {
+	TaskSemanticID string   `json:"task_semantic_id"`
+	Files          []string `json:"files,omitempty"`
+	NoFileReason   string   `json:"no_file_reason,omitempty"`
+	UserFacing     bool     `json:"user_facing,omitempty"`
+}
+
+type planningRouteRemoval struct {
+	SemanticID     string                            `json:"semantic_id"`
+	Classification colony.PlanningSemanticChangeKind `json:"classification"`
+	Rationale      string                            `json:"rationale"`
+}
+
+// planningRouteStageResult deliberately omits stop, candidate, acceptance,
+// activation, state-patch, and next-stage fields. Strict JSON decoding makes
+// the Route-Setter a proposal producer, never an authority source.
+type planningRouteStageResult struct {
+	ResultType                 planningStageResultType              `json:"result_type"`
+	ManifestID                 string                               `json:"manifest_id"`
+	ManifestHash               string                               `json:"manifest_hash"`
+	RunID                      string                               `json:"run_id"`
+	Pass                       int                                  `json:"pass"`
+	Caste                      planningStageWorkerCaste             `json:"caste"`
+	Specification              planningStageSpecificationBinding    `json:"specification"`
+	BasePlanRevisionID         string                               `json:"base_plan_revision_id"`
+	BasePlanRevisionHash       string                               `json:"base_plan_revision_hash"`
+	PriorCardHash              string                               `json:"prior_card_hash"`
+	InputFrontierHash          string                               `json:"input_frontier_hash"`
+	ScoutReceipt               planningStageReceiptRef              `json:"scout_receipt"`
+	CandidateSnapshotHash      string                               `json:"candidate_snapshot_hash"`
+	Proposal                   planningRoutePlanProposal            `json:"proposal"`
+	ProposalEvidenceIDs        []string                             `json:"proposal_evidence_ids"`
+	DimensionAssessments       []colony.PlanningDimensionAssessment `json:"dimension_assessments"`
+	MaterialDecisionCandidates []planningDecisionCandidate          `json:"material_decision_candidates,omitempty"`
+	SuppliedOverall            *int                                 `json:"supplied_overall,omitempty"`
+}
+
+type planningRouteStageValidation struct {
+	Result           planningRouteStageResult
+	Normalized       []byte
+	ProposalSnapshot planningSemanticSnapshot
+	ProposalHash     string
+	PriorSnapshot    planningSemanticSnapshot
+	SemanticDelta    colony.PlanningSemanticDelta
+	Confidence       planningConfidenceEvaluation
+	Evidence         []colony.PlanningEvidenceRef
+	EvidenceFrontier planningEvidenceFrontier
+	ScoutResult      planningScoutStageResult
+	ScoutReceipt     planningStageReceiptRef
 }
 
 type planningScoutStageFinalization struct {
@@ -2560,6 +2623,556 @@ func recordExternalPlanSpawnTree(dispatches []codexPlanningDispatch) error {
 		}
 		if err := spawnTree.UpdateStatus(dispatch.Name, dispatch.Status, dispatch.Summary); err != nil {
 			return fmt.Errorf("failed to complete external planning dispatch %s: %w", dispatch.Name, err)
+		}
+	}
+	return nil
+}
+
+// validatePlanningRouteStageResult consumes no worker-authored authority. It
+// reconstructs the current Scout evidence and colony bindings, validates the
+// proposal with the shared plan-contract kernel, and derives both confidence
+// and semantic delta from canonical inputs.
+func validatePlanningRouteStageResult(root string, manifest planningStageManifest, raw []byte) (planningRouteStageValidation, error) {
+	empty := planningRouteStageValidation{}
+	if err := validatePlanningStageManifest(manifest); err != nil {
+		return empty, err
+	}
+	if manifest.ExpectedCaste != planningStageCasteRouteSetter || manifest.ExpectedResultType != planningStageResultRouteSetter {
+		return empty, fmt.Errorf("active planning stage manifest is not a Route-Setter contract")
+	}
+	if err := validatePersistedPlanningStageManifest(root, manifest); err != nil {
+		return empty, err
+	}
+	state, err := loadPlanningStageState(root, manifest.RunID)
+	if err != nil {
+		return empty, err
+	}
+	if err := validatePlanningStageRunningState(state, manifest); err != nil {
+		return empty, err
+	}
+
+	result, err := decodePlanningRouteStageResult(raw)
+	if err != nil {
+		return empty, err
+	}
+	if result.ResultType != planningStageResultRouteSetter {
+		return empty, fmt.Errorf("Route-Setter result_type must be %q", planningStageResultRouteSetter)
+	}
+	if result.ManifestID != manifest.ID || result.ManifestHash != manifest.ContentHash {
+		return empty, fmt.Errorf("Route-Setter result manifest ID or hash does not match the active manifest")
+	}
+	if result.RunID != manifest.RunID || result.Pass != manifest.Pass {
+		return empty, fmt.Errorf("Route-Setter result run or pass does not match the active manifest")
+	}
+	if result.Caste != planningStageCasteRouteSetter || result.Caste != manifest.ExpectedCaste {
+		return empty, fmt.Errorf("Route-Setter result caste does not match the active manifest")
+	}
+	if !samePlanningScoutSpecification(result.Specification, manifest.Specification) {
+		return empty, fmt.Errorf("Route-Setter result specification does not match the exact approved specification binding")
+	}
+	if result.BasePlanRevisionID != manifest.BasePlanRevisionID || result.BasePlanRevisionHash != manifest.BasePlanRevisionHash {
+		return empty, fmt.Errorf("Route-Setter result base plan revision does not match the active manifest")
+	}
+	if result.PriorCardHash != manifest.PriorCardHash || result.InputFrontierHash != manifest.InputFrontierHash {
+		return empty, fmt.Errorf("Route-Setter result prior card or input frontier does not match the active manifest")
+	}
+	if manifest.ScoutReceipt == nil || !samePlanningStageReceiptReference(result.ScoutReceipt, *manifest.ScoutReceipt) {
+		return empty, fmt.Errorf("Route-Setter result Scout receipt does not match the exact current Scout receipt")
+	}
+	if result.CandidateSnapshotHash != manifest.CandidateSnapshotHash {
+		return empty, fmt.Errorf("Route-Setter result candidate snapshot does not match the active manifest")
+	}
+
+	dispatch, err := loadPlanningScoutRouteDispatch(root, manifest.RunID, manifest.Pass)
+	if err != nil {
+		return empty, err
+	}
+	if dispatch.Manifest.ID != manifest.ID || dispatch.Manifest.ContentHash != manifest.ContentHash ||
+		dispatch.ScoutReceipt.ID != manifest.ScoutReceipt.ID || dispatch.ScoutReceipt.ContentHash != manifest.ScoutReceipt.ContentHash ||
+		dispatch.CandidateSnapshotHash != manifest.CandidateSnapshotHash {
+		return empty, fmt.Errorf("Route-Setter result does not match the exact Scout-issued authorization")
+	}
+	if err := validatePlanningRouteDecisionCandidates(manifest.Pass, result.MaterialDecisionCandidates, dispatch.MaterialDecisionCandidates); err != nil {
+		return empty, err
+	}
+
+	chain, err := readPlanningStageReceiptChain(root, manifest.RunID)
+	if err != nil {
+		return empty, err
+	}
+	scoutReceipt, scoutManifest, scoutResult, header, err := loadPlanningRouteScoutBoundary(root, manifest, chain)
+	if err != nil {
+		return empty, err
+	}
+	colonyState, err := loadSpecificationColonyState(root)
+	if err != nil {
+		return empty, err
+	}
+	if err := validatePlanningRouteAuthority(colonyState, manifest); err != nil {
+		return empty, err
+	}
+	if err := validatePlanningRouteProposalAuthority(result.Proposal); err != nil {
+		return empty, err
+	}
+
+	priorSnapshot, err := planningRoutePriorSnapshot(root, colonyState, manifest, chain)
+	if err != nil {
+		return empty, err
+	}
+	proposalContract := planningRouteProposalContract(colonyState.Plan, colonyState.Specification, result.Proposal)
+	proposalSnapshot, err := validatePlanProposalContract(proposalContract, &priorSnapshot)
+	if err != nil {
+		return empty, fmt.Errorf("Route-Setter proposal contract: %w", err)
+	}
+	delta, err := comparePlanningSemanticSnapshots(priorSnapshot, proposalSnapshot)
+	if err != nil {
+		return empty, err
+	}
+
+	evidence, frontier, err := planningRouteEvidenceContext(header, chain.Cards, scoutManifest, scoutResult, dispatch.MaterialDecisionCandidates)
+	if err != nil {
+		return empty, err
+	}
+	result.ProposalEvidenceIDs = uniqueSortedStrings(result.ProposalEvidenceIDs)
+	if err := applyPlanningRouteEvidence(&delta, result.ProposalEvidenceIDs, evidence, frontier); err != nil {
+		return empty, err
+	}
+
+	priorScores, err := planningRoutePriorScores(manifest, chain.Cards)
+	if err != nil {
+		return empty, err
+	}
+	result.DimensionAssessments, err = normalizePlanningRouteAssessments(manifest, result.DimensionAssessments)
+	if err != nil {
+		return empty, err
+	}
+	confidence, err := evaluatePlanningConfidence(planningConfidenceProposal{
+		PriorScores: priorScores, Assessments: result.DimensionAssessments,
+		EvidenceCatalogue: evidence, EvidenceFrontier: frontier, SuppliedOverall: result.SuppliedOverall,
+	})
+	if err != nil {
+		return empty, err
+	}
+	if err := validatePlanningRouteResolvedGaps(confidence.Assessments, scoutResult.UnresolvedGaps, chain.Cards); err != nil {
+		return empty, err
+	}
+
+	result.MaterialDecisionCandidates = canonicalPlanningScoutCandidates(result.MaterialDecisionCandidates)
+	result.ManifestID = strings.TrimSpace(result.ManifestID)
+	result.ManifestHash = strings.TrimSpace(result.ManifestHash)
+	result.RunID = strings.TrimSpace(result.RunID)
+	result.BasePlanRevisionID = strings.TrimSpace(result.BasePlanRevisionID)
+	result.BasePlanRevisionHash = strings.TrimSpace(result.BasePlanRevisionHash)
+	result.PriorCardHash = strings.TrimSpace(result.PriorCardHash)
+	result.InputFrontierHash = strings.TrimSpace(result.InputFrontierHash)
+	result.CandidateSnapshotHash = strings.TrimSpace(result.CandidateSnapshotHash)
+	normalized, err := marshalPlanningStageJSON(result)
+	if err != nil {
+		return empty, fmt.Errorf("marshal normalized Route-Setter result: %w", err)
+	}
+	return planningRouteStageValidation{
+		Result: result, Normalized: normalized,
+		ProposalSnapshot: proposalSnapshot, ProposalHash: proposalSnapshot.ContentHash,
+		PriorSnapshot: priorSnapshot, SemanticDelta: delta, Confidence: confidence,
+		Evidence: evidence, EvidenceFrontier: frontier,
+		ScoutResult: scoutResult, ScoutReceipt: scoutReceipt.reference(),
+	}, nil
+}
+
+func decodePlanningRouteStageResult(raw []byte) (planningRouteStageResult, error) {
+	var result planningRouteStageResult
+	if len(bytes.TrimSpace(raw)) == 0 {
+		return result, fmt.Errorf("Route-Setter result is empty")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&result); err != nil {
+		return planningRouteStageResult{}, fmt.Errorf("decode Route-Setter stage result: %w", err)
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return planningRouteStageResult{}, fmt.Errorf("Route-Setter result must contain exactly one JSON value")
+		}
+		return planningRouteStageResult{}, fmt.Errorf("decode trailing Route-Setter result data: %w", err)
+	}
+	return result, nil
+}
+
+func samePlanningStageReceiptReference(left, right planningStageReceiptRef) bool {
+	return left.ID == right.ID && left.ContentHash == right.ContentHash && left.RunID == right.RunID &&
+		left.Pass == right.Pass && left.Caste == right.Caste && left.ManifestHash == right.ManifestHash
+}
+
+func validatePlanningRouteDecisionCandidates(pass int, got, want []planningDecisionCandidate) error {
+	got = canonicalPlanningScoutCandidates(got)
+	want = canonicalPlanningScoutCandidates(want)
+	if pass == 1 && len(got) > 0 {
+		return fmt.Errorf("first-pass Route-Setter result cannot repeat Scout owner-decision candidates")
+	}
+	if pass < 2 {
+		return nil
+	}
+	gotHash, err := jsonSHA256(got)
+	if err != nil {
+		return err
+	}
+	wantHash, err := jsonSHA256(want)
+	if err != nil {
+		return err
+	}
+	if gotHash != wantHash {
+		return fmt.Errorf("later Route-Setter result does not carry the exact Scout material decision candidates")
+	}
+	return nil
+}
+
+func loadPlanningRouteScoutBoundary(root string, routeManifest planningStageManifest, chain planningStageReceiptChain) (StageReceipt, planningStageManifest, planningScoutStageResult, planningRunHeader, error) {
+	emptyReceipt := StageReceipt{}
+	emptyManifest := planningStageManifest{}
+	emptyResult := planningScoutStageResult{}
+	emptyHeader := planningRunHeader{}
+	var receipt *StageReceipt
+	for index := range chain.Receipts {
+		candidate := chain.Receipts[index]
+		if routeManifest.ScoutReceipt != nil && candidate.ID == routeManifest.ScoutReceipt.ID {
+			receipt = &candidate
+			break
+		}
+	}
+	if receipt == nil || routeManifest.ScoutReceipt == nil || !samePlanningStageReceiptReference(receipt.reference(), *routeManifest.ScoutReceipt) {
+		return emptyReceipt, emptyManifest, emptyResult, emptyHeader, fmt.Errorf("Route-Setter manifest Scout receipt is absent from the verified receipt chain")
+	}
+	scoutManifest, err := loadPlanningStageManifest(root, routeManifest.RunID, receipt.ManifestID)
+	if err != nil {
+		return emptyReceipt, emptyManifest, emptyResult, emptyHeader, err
+	}
+	_, raw, err := loadPlanningStageOutput(root, scoutManifest)
+	if err != nil {
+		return emptyReceipt, emptyManifest, emptyResult, emptyHeader, err
+	}
+	scoutResult, normalized, _, err := validatePlanningScoutStageResult(root, scoutManifest, raw)
+	if err != nil {
+		return emptyReceipt, emptyManifest, emptyResult, emptyHeader, fmt.Errorf("revalidate Scout receipt output: %w", err)
+	}
+	if !bytes.Equal(raw, normalized) {
+		return emptyReceipt, emptyManifest, emptyResult, emptyHeader, fmt.Errorf("Scout receipt output is not the canonical normalized result")
+	}
+	header, err := loadPlanningScoutRunHeader(root, scoutManifest)
+	if err != nil {
+		return emptyReceipt, emptyManifest, emptyResult, emptyHeader, err
+	}
+	return *receipt, scoutManifest, scoutResult, header, nil
+}
+
+func validatePlanningRouteAuthority(state colony.ColonyState, manifest planningStageManifest) error {
+	if state.Specification == nil {
+		return fmt.Errorf("Route-Setter result requires the current approved specification")
+	}
+	revision, ok := currentSpecificationRevision(*state.Specification)
+	if !ok || revision.ID != manifest.Specification.RevisionID || revision.ContentHash != manifest.Specification.ContentHash || revision.Status != colony.SpecStatusApproved || revision.Approval == nil {
+		return fmt.Errorf("Route-Setter result specification is stale against the current approved specification")
+	}
+	approvalHash, err := jsonSHA256(*revision.Approval)
+	if err != nil {
+		return err
+	}
+	if revision.Approval.ID != manifest.Specification.ApprovalReceiptID || approvalHash != manifest.Specification.ApprovalReceiptHash {
+		return fmt.Errorf("Route-Setter result specification approval receipt is stale")
+	}
+	baseHash, err := planStateHash(state.Plan)
+	if err != nil {
+		return fmt.Errorf("hash current base plan revision: %w", err)
+	}
+	baseID, baseHash := planningBaseRevisionIdentity(state.Plan, baseHash)
+	if baseID != manifest.BasePlanRevisionID || baseHash != manifest.BasePlanRevisionHash {
+		return fmt.Errorf("Route-Setter result base plan revision is stale against current state")
+	}
+	return nil
+}
+
+func validatePlanningRouteProposalAuthority(proposal planningRoutePlanProposal) error {
+	for phaseIndex := range proposal.Phases {
+		phase := proposal.Phases[phaseIndex]
+		phasePath := fmt.Sprintf("proposal.phases[%d]", phaseIndex)
+		if strings.TrimSpace(phase.Status) != "" || phase.WatcherFailureCount != 0 {
+			return fmt.Errorf("%s.status and watcher_failure_count are Go-owned authority fields", phasePath)
+		}
+		if phase.SpecificationRevisionID != "" || phase.SpecificationRevisionHash != "" || phase.CandidateID != "" || phase.CandidateContentHash != "" || phase.PlanningTimelineID != "" || phase.PlanningTimelineDigest != "" || len(phase.AffectedSemanticIDs) != 0 || len(phase.PreservedSemanticIDs) != 0 {
+			return fmt.Errorf("%s contains worker-supplied specification, candidate, timeline, or activation authority", phasePath)
+		}
+		for taskIndex := range phase.Tasks {
+			task := phase.Tasks[taskIndex]
+			taskPath := fmt.Sprintf("%s.tasks[%d]", phasePath, taskIndex)
+			if strings.TrimSpace(task.Status) != "" {
+				return fmt.Errorf("%s.status is a Go-owned authority field", taskPath)
+			}
+			if task.SpecificationRevisionID != "" || task.SpecificationRevisionHash != "" || task.CandidateID != "" || task.CandidateContentHash != "" || task.PlanningTimelineID != "" || task.PlanningTimelineDigest != "" || len(task.AffectedSemanticIDs) != 0 || len(task.PreservedSemanticIDs) != 0 {
+				return fmt.Errorf("%s contains worker-supplied specification, candidate, timeline, or activation authority", taskPath)
+			}
+		}
+	}
+	return nil
+}
+
+func planningRouteProposalContract(current colony.Plan, specification *colony.Specification, proposal planningRoutePlanProposal) planProposalContract {
+	plan := current
+	plan.Phases = clonePhases(proposal.Phases)
+	plan.AcceptancePolicy = colony.PlanAcceptanceExplicitOwner
+	revision := &colony.PlanRevision{
+		SchemaVersion: planRevisionSchemaVersion,
+		SemanticID:    canonicalPlanningText(proposal.SemanticID),
+		Phases:        clonePhases(proposal.Phases),
+	}
+	declarations := make([]planProposalTaskDeclaration, len(proposal.TaskDeclarations))
+	for index, declaration := range proposal.TaskDeclarations {
+		declarations[index] = planProposalTaskDeclaration{
+			TaskSemanticID: declaration.TaskSemanticID,
+			Files:          append([]string(nil), declaration.Files...), NoFileReason: declaration.NoFileReason, UserFacing: declaration.UserFacing,
+		}
+	}
+	removals := make([]planProposalRemoval, len(proposal.Removals))
+	for index, removal := range proposal.Removals {
+		removals[index] = planProposalRemoval{SemanticID: removal.SemanticID, Classification: removal.Classification, Rationale: removal.Rationale}
+	}
+	return planProposalContract{
+		Plan: plan, Revision: revision, Specification: specification,
+		TaskDeclarations: declarations, UserFacingSemanticIDs: append([]string(nil), proposal.UserFacingSemanticIDs...), Removals: removals,
+	}
+}
+
+func planningRoutePriorSnapshot(root string, state colony.ColonyState, manifest planningStageManifest, chain planningStageReceiptChain) (planningSemanticSnapshot, error) {
+	if manifest.Pass > 1 {
+		var previous *StageReceipt
+		for index := range chain.Receipts {
+			receipt := chain.Receipts[index]
+			if receipt.Pass == manifest.Pass-1 && receipt.Caste == planningStageCasteRouteSetter {
+				previous = &receipt
+			}
+		}
+		if previous == nil {
+			return planningSemanticSnapshot{}, fmt.Errorf("Route-Setter pass %d has no prior Route receipt", manifest.Pass)
+		}
+		previousManifest, err := loadPlanningStageManifest(root, manifest.RunID, previous.ManifestID)
+		if err != nil {
+			return planningSemanticSnapshot{}, err
+		}
+		_, raw, err := loadPlanningStageOutput(root, previousManifest)
+		if err != nil {
+			return planningSemanticSnapshot{}, err
+		}
+		previousResult, err := decodePlanningRouteStageResult(raw)
+		if err != nil {
+			return planningSemanticSnapshot{}, err
+		}
+		contract := planningRouteProposalContract(state.Plan, state.Specification, previousResult.Proposal)
+		return validatePlanProposalContract(contract, nil)
+	}
+
+	var revision *colony.PlanRevision
+	activeID := strings.TrimSpace(state.Plan.ActiveRevisionID)
+	if activeID != "" {
+		for index := range state.Plan.Revisions {
+			if state.Plan.Revisions[index].ID == activeID {
+				copy := state.Plan.Revisions[index]
+				revision = &copy
+				break
+			}
+		}
+		if revision == nil {
+			return planningSemanticSnapshot{}, fmt.Errorf("active base plan revision %q is missing", activeID)
+		}
+	}
+	return buildPlanningSemanticSnapshot(planningSemanticSnapshotSource{
+		Plan: state.Plan, Revision: revision, Specification: state.Specification,
+	})
+}
+
+func planningRouteEvidenceContext(header planningRunHeader, cards []colony.PlanningIterationCard, scoutManifest planningStageManifest, scout planningScoutStageResult, candidates []planningDecisionCandidate) ([]colony.PlanningEvidenceRef, planningEvidenceFrontier, error) {
+	byID := make(map[string]colony.PlanningEvidenceRef)
+	ordered := make([]colony.PlanningEvidenceRef, 0, len(header.EvidenceCatalogue)+len(scout.NewEvidence))
+	add := func(reference colony.PlanningEvidenceRef) error {
+		if err := reference.Validate(); err != nil {
+			return err
+		}
+		if prior, exists := byID[reference.ID]; exists {
+			if prior.ContentHash != reference.ContentHash {
+				return fmt.Errorf("planning evidence ID %q has conflicting content hashes", reference.ID)
+			}
+			return nil
+		}
+		byID[reference.ID] = reference
+		ordered = append(ordered, reference)
+		return nil
+	}
+	for _, record := range header.EvidenceCatalogue {
+		if err := add(record.Reference); err != nil {
+			return nil, planningEvidenceFrontier{}, fmt.Errorf("planning run evidence: %w", err)
+		}
+	}
+	for _, record := range scout.NewEvidence {
+		if err := add(record.Reference); err != nil {
+			return nil, planningEvidenceFrontier{}, fmt.Errorf("Scout evidence: %w", err)
+		}
+	}
+	for _, candidate := range candidates {
+		for _, reference := range candidate.Evidence {
+			if err := add(reference); err != nil {
+				return nil, planningEvidenceFrontier{}, fmt.Errorf("owner-decision evidence: %w", err)
+			}
+		}
+	}
+	sort.Slice(ordered, func(left, right int) bool { return ordered[left].ID < ordered[right].ID })
+	frontier := planningEvidenceFrontier{
+		Scope: planningEvidenceScope{
+			GoalID: header.GoalID, SessionID: header.SessionID,
+			SpecificationRevisionID: scoutManifest.Specification.RevisionID,
+			PlanRevisionID:          scoutManifest.BasePlanRevisionID,
+		},
+		CurrentSourceHashes: map[string]string{}, SourceStates: map[string]planningEvidenceSourceState{},
+	}
+	for _, reference := range ordered {
+		key := planningEvidenceSourceKey(reference)
+		frontier.CurrentSourceHashes[key] = reference.ContentHash
+		frontier.SourceStates[key] = planningEvidenceSourceCurrent
+	}
+	for _, card := range cards {
+		frontier.CitedEvidenceIDs = append(frontier.CitedEvidenceIDs, card.EvidenceIDs...)
+	}
+	frontier.CitedEvidenceIDs = uniqueSortedStrings(frontier.CitedEvidenceIDs)
+	return ordered, frontier, nil
+}
+
+func applyPlanningRouteEvidence(delta *colony.PlanningSemanticDelta, evidenceIDs []string, catalogue []colony.PlanningEvidenceRef, frontier planningEvidenceFrontier) error {
+	if delta == nil {
+		return fmt.Errorf("Route-Setter semantic delta is required")
+	}
+	byID := make(map[string]colony.PlanningEvidenceRef, len(catalogue))
+	for _, reference := range catalogue {
+		byID[reference.ID] = reference
+	}
+	for _, evidenceID := range evidenceIDs {
+		reference, ok := byID[evidenceID]
+		if !ok {
+			return fmt.Errorf("Route-Setter proposal evidence %q is not in the current frontier", evidenceID)
+		}
+		if freshness := isFreshPlanningEvidence(reference, frontier); !freshness.Allowed {
+			return fmt.Errorf("Route-Setter proposal evidence %q is not current: %s", evidenceID, freshness.Reason)
+		}
+	}
+	changed := false
+	sections := []*[]colony.PlanningSemanticChange{
+		&delta.Phases, &delta.Tasks, &delta.Dependencies, &delta.RequirementLinks,
+		&delta.AcceptanceChecks, &delta.NegativeExpectations, &delta.RecoveryExpectations, &delta.PublicPaths,
+	}
+	for _, section := range sections {
+		for index := range *section {
+			if (*section)[index].Kind == colony.PlanningSemanticChangePreserved {
+				continue
+			}
+			changed = true
+			if len(evidenceIDs) == 0 {
+				return fmt.Errorf("semantic change %q requires evidence from the current frontier or an explicit decision", (*section)[index].SemanticID)
+			}
+			(*section)[index].EvidenceIDs = append([]string(nil), evidenceIDs...)
+		}
+	}
+	if !changed && len(evidenceIDs) > 0 {
+		// Evidence may still ground confidence movement even when the plan is
+		// semantically unchanged; retaining the IDs on the result is useful.
+	}
+	payload := *delta
+	payload.ID = ""
+	payload.ContentHash = ""
+	hash, err := jsonSHA256(payload)
+	if err != nil {
+		return err
+	}
+	delta.ContentHash = hash
+	delta.ID = "planning-delta-" + hash[:12]
+	return delta.Validate()
+}
+
+func planningRoutePriorScores(manifest planningStageManifest, cards []colony.PlanningIterationCard) (planningConfidenceScores, error) {
+	if manifest.Pass == 1 {
+		if len(cards) != 0 {
+			return planningConfidenceScores{}, fmt.Errorf("Route-Setter pass 1 cannot have a prior iteration card")
+		}
+		return planningConfidenceScores{}, nil
+	}
+	if len(cards) != manifest.Pass-1 {
+		return planningConfidenceScores{}, fmt.Errorf("Route-Setter pass %d requires %d prior iteration cards", manifest.Pass, manifest.Pass-1)
+	}
+	last := cards[len(cards)-1]
+	if last.ContentHash != manifest.PriorCardHash {
+		return planningConfidenceScores{}, fmt.Errorf("Route-Setter prior card hash does not match the verified timeline")
+	}
+	var scores planningConfidenceScores
+	for _, assessment := range last.DimensionAssessments {
+		scores.Set(assessment.Dimension, assessment.After)
+	}
+	return scores, nil
+}
+
+func normalizePlanningRouteAssessments(manifest planningStageManifest, assessments []colony.PlanningDimensionAssessment) ([]colony.PlanningDimensionAssessment, error) {
+	result := make([]colony.PlanningDimensionAssessment, len(assessments))
+	for index := range assessments {
+		assessment := clonePlanningConfidenceAssessment(assessments[index])
+		if strings.TrimSpace(assessment.ProducerReceiptID) != manifest.ID {
+			return nil, fmt.Errorf("dimension_assessments[%d].producer_receipt_id must bind the exact Route-Setter worker manifest", index)
+		}
+		assessment.SchemaVersion = colony.PlanningSchemaVersion
+		assessment.Rationale = normalizePlanningDecisionText(assessment.Rationale)
+		assessment.FreshEvidenceIDs = uniqueSortedStrings(assessment.FreshEvidenceIDs)
+		assessment.ResolvedGapIDs = uniqueSortedStrings(assessment.ResolvedGapIDs)
+		assessment.ProducerReceiptID = strings.TrimSpace(assessment.ProducerReceiptID)
+		gap := assessment.RemainingGap
+		gap.SchemaVersion = colony.PlanningSchemaVersion
+		gap.ID = strings.TrimSpace(gap.ID)
+		gap.Description = normalizePlanningDecisionText(gap.Description)
+		gap.EvidenceThatWouldChange = normalizePlanningDecisionText(gap.EvidenceThatWouldChange)
+		gap.EvidenceIDs = uniqueSortedStrings(gap.EvidenceIDs)
+		gap.ContentHash = ""
+		gapHash, err := jsonSHA256(gap)
+		if err != nil {
+			return nil, err
+		}
+		gap.ContentHash = gapHash
+		gap.ID = "planning-gap-" + gapHash[:12]
+		if err := gap.Validate(); err != nil {
+			return nil, fmt.Errorf("dimension_assessments[%d].remaining_gap: %w", index, err)
+		}
+		assessment.RemainingGap = gap
+		assessment.ID = ""
+		assessment.ContentHash = ""
+		assessmentHash, err := jsonSHA256(assessment)
+		if err != nil {
+			return nil, err
+		}
+		assessment.ContentHash = assessmentHash
+		assessment.ID = "planning-assessment-" + assessmentHash[:12]
+		result[index] = assessment
+	}
+	return result, nil
+}
+
+func validatePlanningRouteResolvedGaps(assessments []colony.PlanningDimensionAssessment, scoutGaps []colony.PlanningGap, cards []colony.PlanningIterationCard) error {
+	known := make(map[string]struct{})
+	for _, gap := range scoutGaps {
+		known[gap.ID] = struct{}{}
+	}
+	for _, card := range cards {
+		for _, assessment := range card.DimensionAssessments {
+			known[assessment.RemainingGap.ID] = struct{}{}
+		}
+	}
+	for index, assessment := range assessments {
+		for _, gapID := range assessment.ResolvedGapIDs {
+			if _, ok := known[gapID]; !ok {
+				return fmt.Errorf("dimension_assessments[%d].resolved_gap_ids names unknown gap %q", index, gapID)
+			}
+			if len(assessment.FreshEvidenceIDs) == 0 {
+				return fmt.Errorf("dimension_assessments[%d] resolves gap %q without fresh evidence", index, gapID)
+			}
 		}
 	}
 	return nil
