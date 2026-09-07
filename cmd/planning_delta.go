@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"path"
 	"sort"
 	"strings"
 
@@ -25,6 +26,49 @@ type planningSemanticSnapshotSource struct {
 	Plan          colony.Plan
 	Revision      *colony.PlanRevision
 	Specification *colony.Specification
+}
+
+// planProposalContract is the validation boundary for a newly generated plan.
+// Files and user-facing applicability live here instead of on the legacy Plan
+// model so loading an old active plan never fabricates current-schema facts.
+type planProposalContract struct {
+	Plan                  colony.Plan
+	Revision              *colony.PlanRevision
+	Specification         *colony.Specification
+	TaskDeclarations      []planProposalTaskDeclaration
+	UserFacingSemanticIDs []string
+	Removals              []planProposalRemoval
+}
+
+type planProposalTaskDeclaration struct {
+	TaskSemanticID string
+	Files          []string
+	NoFileReason   string
+	UserFacing     bool
+}
+
+type planProposalRemoval struct {
+	SemanticID     string
+	Classification colony.PlanningSemanticChangeKind
+	Rationale      string
+}
+
+type validatedPlanProposalTaskDeclaration struct {
+	Files        []string
+	NoFileReason string
+	UserFacing   bool
+}
+
+type planProposalTaskLocation struct {
+	PhaseIndex int
+	TaskIndex  int
+	Path       string
+	SemanticID string
+}
+
+type planProposalDependencyEdge struct {
+	Target string
+	Path   string
 }
 
 type planningSemanticEntry struct {
@@ -271,6 +315,581 @@ func comparePlanningSemanticSnapshots(before, after planningSemanticSnapshot) (c
 		return colony.PlanningSemanticDelta{}, fmt.Errorf("validate planning semantic delta: %w", err)
 	}
 	return delta, nil
+}
+
+// validatePlanProposalContract rejects incomplete generated proposals before
+// they can become iteration cards or candidates. It is deliberately pure: it
+// canonicalizes into a returned snapshot but never repairs or mutates input.
+func validatePlanProposalContract(proposal planProposalContract, predecessor *planningSemanticSnapshot) (planningSemanticSnapshot, error) {
+	empty := emptyPlanningSemanticSnapshot()
+	if proposal.Revision == nil {
+		return empty, fmt.Errorf("revision is required")
+	}
+	if len(proposal.Revision.Phases) == 0 {
+		return empty, fmt.Errorf("revision.phases is required")
+	}
+
+	lookup, err := proposalPlanningSpecLookup(proposal.Specification)
+	if err != nil {
+		return empty, err
+	}
+
+	userFacing, err := proposalUserFacingIDs(proposal.UserFacingSemanticIDs)
+	if err != nil {
+		return empty, err
+	}
+	declarations, _, err := proposalTaskDeclarations(proposal.TaskDeclarations)
+	if err != nil {
+		return empty, err
+	}
+
+	seenSemanticIDs := make(map[string]string)
+	planSemanticID := canonicalPlanningText(proposal.Revision.SemanticID)
+	if err := registerPlanningSemanticID(seenSemanticIDs, planSemanticID, "revision.semantic_id"); err != nil {
+		return empty, err
+	}
+
+	phaseLocations := make(map[string]string)
+	taskLocations := make(map[string]planProposalTaskLocation)
+	taskReferences := make(map[string]planProposalTaskLocation)
+	for phaseIndex := range proposal.Revision.Phases {
+		phase := proposal.Revision.Phases[phaseIndex]
+		phasePath := fmt.Sprintf("phases[%d]", phaseIndex)
+		phaseSemanticID := canonicalPlanningText(phase.SemanticID)
+		if err := registerPlanningSemanticID(seenSemanticIDs, phaseSemanticID, phasePath+".semantic_id"); err != nil {
+			return empty, err
+		}
+		phaseLocations[phaseSemanticID] = phasePath
+		if len(phase.Tasks) == 0 {
+			return empty, fmt.Errorf("%s.tasks is required", phasePath)
+		}
+		for taskIndex := range phase.Tasks {
+			task := phase.Tasks[taskIndex]
+			taskPath := fmt.Sprintf("%s.tasks[%d]", phasePath, taskIndex)
+			taskSemanticID := canonicalPlanningText(task.SemanticID)
+			if err := registerPlanningSemanticID(seenSemanticIDs, taskSemanticID, taskPath+".semantic_id"); err != nil {
+				return empty, err
+			}
+			location := planProposalTaskLocation{
+				PhaseIndex: phaseIndex,
+				TaskIndex:  taskIndex,
+				Path:       taskPath,
+				SemanticID: taskSemanticID,
+			}
+			taskLocations[taskSemanticID] = location
+			if prior, duplicate := taskReferences[taskSemanticID]; duplicate && prior.Path != taskPath {
+				return empty, fmt.Errorf("%s.semantic_id %q conflicts with task reference at %s", taskPath, taskSemanticID, prior.Path)
+			}
+			taskReferences[taskSemanticID] = location
+			if runtimeID := canonicalPlanningText(ptrStr(task.ID)); runtimeID != "" {
+				if prior, duplicate := taskReferences[runtimeID]; duplicate && prior.Path != taskPath {
+					return empty, fmt.Errorf("%s.id %q conflicts with task reference at %s", taskPath, runtimeID, prior.Path)
+				}
+				taskReferences[runtimeID] = location
+			}
+		}
+	}
+
+	knownSemanticIDs := make(map[string]struct{}, len(phaseLocations)+len(taskLocations))
+	for semanticID := range phaseLocations {
+		knownSemanticIDs[semanticID] = struct{}{}
+	}
+	for semanticID := range taskLocations {
+		knownSemanticIDs[semanticID] = struct{}{}
+	}
+	for index, value := range proposal.UserFacingSemanticIDs {
+		semanticID := canonicalPlanningText(value)
+		if _, known := knownSemanticIDs[semanticID]; !known {
+			return empty, fmt.Errorf("user_facing_semantic_ids[%d] %q does not resolve to a phase or task", index, semanticID)
+		}
+	}
+	for index, declaration := range proposal.TaskDeclarations {
+		semanticID := canonicalPlanningText(declaration.TaskSemanticID)
+		if _, known := taskLocations[semanticID]; !known {
+			return empty, fmt.Errorf("task_declarations[%d].task_semantic_id %q does not resolve to a task", index, semanticID)
+		}
+	}
+
+	validatedDeclarations := make(map[string]validatedPlanProposalTaskDeclaration, len(taskLocations))
+	dependencies := make(map[string][]planProposalDependencyEdge, len(taskLocations))
+	for phaseIndex := range proposal.Revision.Phases {
+		phase := proposal.Revision.Phases[phaseIndex]
+		phasePath := fmt.Sprintf("phases[%d]", phaseIndex)
+		phaseSemanticID := canonicalPlanningText(phase.SemanticID)
+		if err := validateProposalNodeContract(
+			phasePath,
+			phase.RequirementProofLinks,
+			phase.AcceptanceProofLinks,
+			phase.NegativeProofLinks,
+			phase.RecoveryProofLinks,
+			phase.PublicPathProofLinks,
+			phase.SuccessCriteria,
+			phase.EvidenceRequirements,
+			proposalSemanticIDIsUserFacing(userFacing, phaseSemanticID),
+			lookup,
+		); err != nil {
+			return empty, err
+		}
+
+		for taskIndex := range phase.Tasks {
+			task := phase.Tasks[taskIndex]
+			taskPath := fmt.Sprintf("%s.tasks[%d]", phasePath, taskIndex)
+			taskSemanticID := canonicalPlanningText(task.SemanticID)
+			if canonicalPlanningText(task.Goal) == "" {
+				return empty, fmt.Errorf("%s.goal is required", taskPath)
+			}
+			declaration, declared := declarations[taskSemanticID]
+			if !declared {
+				return empty, fmt.Errorf("%s.files requires exact repository-relative files or an explicit no_file_reason", taskPath)
+			}
+			validatedDeclaration, err := validateProposalTaskDeclaration(taskPath, declaration)
+			if err != nil {
+				return empty, err
+			}
+			validatedDeclarations[taskSemanticID] = validatedDeclaration
+			userFacingTask := validatedDeclaration.UserFacing || proposalSemanticIDIsUserFacing(userFacing, taskSemanticID)
+			if err := validateProposalNodeContract(
+				taskPath,
+				task.RequirementProofLinks,
+				task.AcceptanceProofLinks,
+				task.NegativeProofLinks,
+				task.RecoveryProofLinks,
+				task.PublicPathProofLinks,
+				task.SuccessCriteria,
+				task.EvidenceRequirements,
+				userFacingTask,
+				lookup,
+			); err != nil {
+				return empty, err
+			}
+
+			seenTargets := make(map[string]struct{}, len(task.DependsOn))
+			for dependencyIndex, dependency := range task.DependsOn {
+				dependencyPath := fmt.Sprintf("%s.depends_on[%d]", taskPath, dependencyIndex)
+				dependency = canonicalPlanningText(dependency)
+				if dependency == "" {
+					return empty, fmt.Errorf("%s is required", dependencyPath)
+				}
+				target, resolved := taskReferences[dependency]
+				if !resolved {
+					return empty, fmt.Errorf("%s %q does not resolve to a task", dependencyPath, dependency)
+				}
+				if _, duplicate := seenTargets[target.SemanticID]; duplicate {
+					return empty, fmt.Errorf("%s duplicates dependency on %q", dependencyPath, target.SemanticID)
+				}
+				seenTargets[target.SemanticID] = struct{}{}
+				dependencies[taskSemanticID] = append(dependencies[taskSemanticID], planProposalDependencyEdge{
+					Target: target.SemanticID,
+					Path:   dependencyPath,
+				})
+			}
+		}
+	}
+	if err := validatePlanProposalDependencyCycles(taskLocations, dependencies); err != nil {
+		return empty, err
+	}
+
+	snapshot, err := buildPlanningSemanticSnapshot(planningSemanticSnapshotSource{
+		CurrentSchema: true,
+		Plan:          proposal.Plan,
+		Revision:      proposal.Revision,
+		Specification: proposal.Specification,
+	})
+	if err != nil {
+		return empty, err
+	}
+	if err := addPlanProposalDeclarationSemantics(&snapshot, validatedDeclarations, userFacing); err != nil {
+		return empty, err
+	}
+	if err := validatePlanProposalRemovals(proposal.Removals, predecessor, snapshot); err != nil {
+		return empty, err
+	}
+	return snapshot, nil
+}
+
+func proposalPlanningSpecLookup(specification *colony.Specification) (planningSpecLookup, error) {
+	if specification == nil {
+		return nil, fmt.Errorf("specification is required")
+	}
+	currentRevisionID := canonicalPlanningText(specification.CurrentRevisionID)
+	if currentRevisionID == "" {
+		return nil, fmt.Errorf("specification.current_revision_id is required")
+	}
+	var current *colony.SpecRevision
+	for index := range specification.Revisions {
+		if canonicalPlanningText(specification.Revisions[index].ID) == currentRevisionID {
+			current = &specification.Revisions[index]
+			break
+		}
+	}
+	if current == nil {
+		return nil, fmt.Errorf("specification.current_revision_id %q does not resolve to a revision", currentRevisionID)
+	}
+	lookup, err := buildPlanningSpecLookup(current)
+	if err != nil {
+		return nil, err
+	}
+	return lookup, nil
+}
+
+func proposalUserFacingIDs(values []string) (map[string]int, error) {
+	result := make(map[string]int, len(values))
+	for index, value := range values {
+		value = canonicalPlanningText(value)
+		if value == "" {
+			return nil, fmt.Errorf("user_facing_semantic_ids[%d] is required", index)
+		}
+		if prior, duplicate := result[value]; duplicate {
+			return nil, fmt.Errorf("user_facing_semantic_ids[%d] %q duplicates user_facing_semantic_ids[%d]", index, value, prior)
+		}
+		result[value] = index
+	}
+	return result, nil
+}
+
+func proposalSemanticIDIsUserFacing(values map[string]int, semanticID string) bool {
+	_, ok := values[canonicalPlanningText(semanticID)]
+	return ok
+}
+
+func proposalTaskDeclarations(values []planProposalTaskDeclaration) (map[string]planProposalTaskDeclaration, map[string]int, error) {
+	declarations := make(map[string]planProposalTaskDeclaration, len(values))
+	indexes := make(map[string]int, len(values))
+	for index, declaration := range values {
+		semanticID := canonicalPlanningText(declaration.TaskSemanticID)
+		if semanticID == "" {
+			return nil, nil, fmt.Errorf("task_declarations[%d].task_semantic_id is required", index)
+		}
+		if prior, duplicate := indexes[semanticID]; duplicate {
+			return nil, nil, fmt.Errorf("task_declarations[%d].task_semantic_id %q duplicates task_declarations[%d]", index, semanticID, prior)
+		}
+		declaration.TaskSemanticID = semanticID
+		declarations[semanticID] = declaration
+		indexes[semanticID] = index
+	}
+	return declarations, indexes, nil
+}
+
+func validateProposalTaskDeclaration(taskPath string, declaration planProposalTaskDeclaration) (validatedPlanProposalTaskDeclaration, error) {
+	result := validatedPlanProposalTaskDeclaration{
+		NoFileReason: canonicalPlanningText(declaration.NoFileReason),
+		UserFacing:   declaration.UserFacing,
+	}
+	if len(declaration.Files) == 0 {
+		if result.NoFileReason == "" {
+			return result, fmt.Errorf("%s.files requires exact repository-relative files or an explicit no_file_reason", taskPath)
+		}
+		return result, nil
+	}
+	if result.NoFileReason != "" {
+		return result, fmt.Errorf("%s.no_file_reason must be empty when files are declared", taskPath)
+	}
+	seen := make(map[string]int, len(declaration.Files))
+	for index, file := range declaration.Files {
+		filePath := fmt.Sprintf("%s.files[%d]", taskPath, index)
+		normalized, err := normalizePlanProposalFile(file)
+		if err != nil {
+			return result, fmt.Errorf("%s: %w", filePath, err)
+		}
+		if prior, duplicate := seen[normalized]; duplicate {
+			return result, fmt.Errorf("%s %q duplicates %s.files[%d]", filePath, normalized, taskPath, prior)
+		}
+		seen[normalized] = index
+		result.Files = append(result.Files, normalized)
+	}
+	sort.Strings(result.Files)
+	return result, nil
+}
+
+func normalizePlanProposalFile(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", fmt.Errorf("file path is required")
+	}
+	if strings.Contains(value, "\\") {
+		return "", fmt.Errorf("file path %q must use repository-relative slash separators", value)
+	}
+	if path.IsAbs(value) || isWindowsAbsolutePlanProposalPath(value) {
+		return "", fmt.Errorf("file path %q must be repository-relative", value)
+	}
+	if strings.ContainsAny(value, "*?[") {
+		return "", fmt.Errorf("file path %q must name one exact file, not a pattern", value)
+	}
+	if strings.HasSuffix(value, "/") {
+		return "", fmt.Errorf("file path %q must name a file, not a directory", value)
+	}
+	segments := strings.Split(value, "/")
+	for _, segment := range segments {
+		if segment == "" || segment == "." || segment == ".." {
+			return "", fmt.Errorf("file path %q is not canonical and repository-relative", value)
+		}
+	}
+	cleaned := path.Clean(value)
+	if cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "../") || cleaned != value {
+		return "", fmt.Errorf("file path %q is not canonical and repository-relative", value)
+	}
+	return cleaned, nil
+}
+
+func isWindowsAbsolutePlanProposalPath(value string) bool {
+	return len(value) >= 2 && value[1] == ':' && ((value[0] >= 'A' && value[0] <= 'Z') || (value[0] >= 'a' && value[0] <= 'z'))
+}
+
+func validateProposalNodeContract(path string, requirements, acceptance, negative, recovery, publicPaths, criteria []string, evidence []colony.CriterionEvidenceRequirement, userFacing bool, lookup planningSpecLookup) error {
+	if err := validateProposalProofLinks(path, planningSemanticRequirement, requirements, true, lookup); err != nil {
+		return err
+	}
+	if err := validateProposalProofLinks(path, planningSemanticAcceptance, acceptance, true, lookup); err != nil {
+		return err
+	}
+	if err := validateProposalProofLinks(path, planningSemanticNegative, negative, true, lookup); err != nil {
+		return err
+	}
+	if err := validateProposalProofLinks(path, planningSemanticRecovery, recovery, true, lookup); err != nil {
+		return err
+	}
+	if err := validateProposalProofLinks(path, planningSemanticPublicPath, publicPaths, userFacing, lookup); err != nil {
+		return err
+	}
+	return validateProposalAcceptanceContract(path, criteria, evidence)
+}
+
+func validateProposalProofLinks(path, kind string, values []string, required bool, lookup planningSpecLookup) error {
+	field := planningProofField(kind)
+	if required && len(values) == 0 {
+		return fmt.Errorf("%s.%s is required", path, field)
+	}
+	seen := make(map[string]int, len(values))
+	for index, value := range values {
+		valuePath := fmt.Sprintf("%s.%s[%d]", path, field, index)
+		value = canonicalPlanningText(value)
+		if value == "" {
+			return fmt.Errorf("%s is required", valuePath)
+		}
+		if prior, duplicate := seen[value]; duplicate {
+			return fmt.Errorf("%s %q duplicates %s.%s[%d]", valuePath, value, path, field, prior)
+		}
+		seen[value] = index
+		if _, resolves := lookup[kind+"\x00"+value]; !resolves {
+			return fmt.Errorf("%s %q does not resolve in the active specification revision", valuePath, value)
+		}
+	}
+	return nil
+}
+
+func validateProposalAcceptanceContract(path string, criteria []string, requirements []colony.CriterionEvidenceRequirement) error {
+	if len(criteria) == 0 {
+		return fmt.Errorf("%s.success_criteria is required", path)
+	}
+	criteriaByText := make(map[string]int, len(criteria))
+	for index, criterion := range criteria {
+		criterionPath := fmt.Sprintf("%s.success_criteria[%d]", path, index)
+		criterion = canonicalPlanningText(criterion)
+		if criterion == "" {
+			return fmt.Errorf("%s is required", criterionPath)
+		}
+		if prior, duplicate := criteriaByText[criterion]; duplicate {
+			return fmt.Errorf("%s %q duplicates %s.success_criteria[%d]", criterionPath, criterion, path, prior)
+		}
+		criteriaByText[criterion] = index
+	}
+	if len(requirements) == 0 {
+		return fmt.Errorf("%s.evidence_requirements is required", path)
+	}
+	seenCriteria := make(map[string]int, len(requirements))
+	for index, requirement := range requirements {
+		requirementPath := fmt.Sprintf("%s.evidence_requirements[%d]", path, index)
+		criterion := canonicalPlanningText(requirement.Criterion)
+		if criterion == "" {
+			return fmt.Errorf("%s.criterion is required", requirementPath)
+		}
+		if _, exists := criteriaByText[criterion]; !exists {
+			return fmt.Errorf("%s.criterion %q does not match a success criterion", requirementPath, criterion)
+		}
+		if prior, duplicate := seenCriteria[criterion]; duplicate {
+			return fmt.Errorf("%s.criterion %q duplicates %s.evidence_requirements[%d]", requirementPath, criterion, path, prior)
+		}
+		seenCriteria[criterion] = index
+		if canonicalPlanningText(requirement.TaskID) != "" {
+			return fmt.Errorf("%s.task_id must be empty at the proposal boundary", requirementPath)
+		}
+		for artifactIndex, artifact := range requirement.Artifacts {
+			if _, err := normalizeCriterionArtifactPath(artifact); err != nil {
+				return fmt.Errorf("%s.artifacts[%d]: %w", requirementPath, artifactIndex, err)
+			}
+		}
+		if len(requirement.Checks) == 0 {
+			return fmt.Errorf("%s.checks requires at least one automated check", requirementPath)
+		}
+		hasAutomatedCheck := false
+		seenChecks := make(map[string]int, len(requirement.Checks))
+		for checkIndex, check := range requirement.Checks {
+			checkPath := fmt.Sprintf("%s.checks[%d]", requirementPath, checkIndex)
+			check = strings.ToLower(canonicalPlanningText(check))
+			if check == "" {
+				return fmt.Errorf("%s is required", checkPath)
+			}
+			if _, supported := supportedCriterionChecks[check]; !supported {
+				return fmt.Errorf("%s %q is not a supported verification check", checkPath, check)
+			}
+			if prior, duplicate := seenChecks[check]; duplicate {
+				return fmt.Errorf("%s %q duplicates %s.checks[%d]", checkPath, check, requirementPath, prior)
+			}
+			seenChecks[check] = checkIndex
+			switch check {
+			case "build", "types", "lint", "tests":
+				hasAutomatedCheck = true
+			}
+		}
+		if !hasAutomatedCheck {
+			return fmt.Errorf("%s.checks requires at least one automated check (build, types, lint, or tests)", requirementPath)
+		}
+	}
+	for criterionIndex, rawCriterion := range criteria {
+		criterion := canonicalPlanningText(rawCriterion)
+		if _, bound := seenCriteria[criterion]; !bound {
+			return fmt.Errorf("%s.success_criteria[%d] %q has no evidence requirement", path, criterionIndex, criterion)
+		}
+	}
+	return nil
+}
+
+func validatePlanProposalDependencyCycles(locations map[string]planProposalTaskLocation, dependencies map[string][]planProposalDependencyEdge) error {
+	const (
+		unvisited = iota
+		visiting
+		visited
+	)
+	state := make(map[string]int, len(locations))
+	orderedIDs := make([]string, 0, len(locations))
+	for semanticID := range locations {
+		orderedIDs = append(orderedIDs, semanticID)
+	}
+	sort.Strings(orderedIDs)
+	var visit func(string) error
+	visit = func(semanticID string) error {
+		state[semanticID] = visiting
+		for _, edge := range dependencies[semanticID] {
+			switch state[edge.Target] {
+			case visiting:
+				return fmt.Errorf("%s creates a dependency cycle involving %q", edge.Path, edge.Target)
+			case unvisited:
+				if err := visit(edge.Target); err != nil {
+					return err
+				}
+			}
+		}
+		state[semanticID] = visited
+		return nil
+	}
+	for _, semanticID := range orderedIDs {
+		if state[semanticID] == unvisited {
+			if err := visit(semanticID); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func addPlanProposalDeclarationSemantics(snapshot *planningSemanticSnapshot, declarations map[string]validatedPlanProposalTaskDeclaration, userFacing map[string]int) error {
+	for index, entry := range snapshot.Phases {
+		replacement, err := newPlanningSemanticEntry(entry.SemanticID, struct {
+			DefinitionHash string `json:"definition_hash"`
+			UserFacing     bool   `json:"user_facing"`
+		}{DefinitionHash: entry.ContentHash, UserFacing: proposalSemanticIDIsUserFacing(userFacing, entry.SemanticID)})
+		if err != nil {
+			return fmt.Errorf("hash phase declaration %q: %w", entry.SemanticID, err)
+		}
+		snapshot.Phases[index] = replacement
+	}
+	for index, entry := range snapshot.Tasks {
+		declaration := declarations[entry.SemanticID]
+		replacement, err := newPlanningSemanticEntry(entry.SemanticID, struct {
+			DefinitionHash string   `json:"definition_hash"`
+			Files          []string `json:"files"`
+			NoFileReason   string   `json:"no_file_reason"`
+			UserFacing     bool     `json:"user_facing"`
+		}{
+			DefinitionHash: entry.ContentHash,
+			Files:          declaration.Files,
+			NoFileReason:   declaration.NoFileReason,
+			UserFacing:     declaration.UserFacing || proposalSemanticIDIsUserFacing(userFacing, entry.SemanticID),
+		})
+		if err != nil {
+			return fmt.Errorf("hash task declaration %q: %w", entry.SemanticID, err)
+		}
+		snapshot.Tasks[index] = replacement
+	}
+	snapshot.normalize()
+	hash, err := planningSemanticSnapshotHash(*snapshot)
+	if err != nil {
+		return fmt.Errorf("hash validated plan proposal: %w", err)
+	}
+	snapshot.ContentHash = hash
+	return nil
+}
+
+func validatePlanProposalRemovals(removals []planProposalRemoval, predecessor *planningSemanticSnapshot, current planningSemanticSnapshot) error {
+	predecessorIDs := make(map[string]struct{})
+	if predecessor != nil {
+		for _, entry := range predecessor.Phases {
+			predecessorIDs[entry.SemanticID] = struct{}{}
+		}
+		for _, entry := range predecessor.Tasks {
+			predecessorIDs[entry.SemanticID] = struct{}{}
+		}
+	}
+	currentIDs := make(map[string]struct{}, len(current.Phases)+len(current.Tasks))
+	for _, entry := range current.Phases {
+		currentIDs[entry.SemanticID] = struct{}{}
+	}
+	for _, entry := range current.Tasks {
+		currentIDs[entry.SemanticID] = struct{}{}
+	}
+
+	declared := make(map[string]int, len(removals))
+	for index, removal := range removals {
+		removalPath := fmt.Sprintf("removals[%d]", index)
+		semanticID := canonicalPlanningText(removal.SemanticID)
+		if semanticID == "" {
+			return fmt.Errorf("%s.semantic_id is required", removalPath)
+		}
+		if prior, duplicate := declared[semanticID]; duplicate {
+			return fmt.Errorf("%s.semantic_id %q duplicates removals[%d]", removalPath, semanticID, prior)
+		}
+		declared[semanticID] = index
+		if removal.Classification != colony.PlanningSemanticChangeRemoved {
+			return fmt.Errorf("%s.classification must be %q", removalPath, colony.PlanningSemanticChangeRemoved)
+		}
+		if canonicalPlanningText(removal.Rationale) == "" {
+			return fmt.Errorf("%s.rationale is required", removalPath)
+		}
+		if predecessor == nil {
+			return fmt.Errorf("%s.semantic_id %q has no predecessor to remove", removalPath, semanticID)
+		}
+		if _, existed := predecessorIDs[semanticID]; !existed {
+			return fmt.Errorf("%s.semantic_id %q does not exist in the predecessor", removalPath, semanticID)
+		}
+		if _, remains := currentIDs[semanticID]; remains {
+			return fmt.Errorf("%s.semantic_id %q is still present in the proposal", removalPath, semanticID)
+		}
+	}
+
+	missing := make([]string, 0)
+	for semanticID := range predecessorIDs {
+		if _, remains := currentIDs[semanticID]; remains {
+			continue
+		}
+		if _, explained := declared[semanticID]; !explained {
+			missing = append(missing, semanticID)
+		}
+	}
+	sort.Strings(missing)
+	if len(missing) > 0 {
+		return fmt.Errorf("removals is missing an explicit removed classification for predecessor semantic ID %q", missing[0])
+	}
+	return nil
 }
 
 func emptyPlanningSemanticSnapshot() planningSemanticSnapshot {
