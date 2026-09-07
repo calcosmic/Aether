@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 200-12-PLAN.md
-last_updated: "2026-09-07T18:31:47.009Z"
+stopped_at: Completed 200-13-PLAN.md
+last_updated: "2026-09-07T19:32:27.807Z"
 last_activity: 2026-09-07
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 59
-  completed_plans: 46
+  completed_plans: 47
   percent: 14
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 13 of 25
+Plan: 14 of 25
 Status: Ready to execute
 Last activity: 2026-09-07
 
@@ -123,6 +123,7 @@ Last activity: 2026-09-07
 | Phase 200 P10 | 16 min | 2 tasks | 4 files |
 | Phase 200 P11 | 35 min | 2 tasks | 3 files |
 | Phase 200 P12 | 25 min | 2 tasks | 6 files |
+| Phase 200 P13 | 55 min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -354,6 +355,10 @@ Last activity: 2026-09-07
 - [Phase 200]: Make a pending candidate the primary owner-facing boundary without revoking the previously accepted revision. — Candidate guidance must not advertise build or Autopilot before review.
 - [Phase 200]: Resume persisted planning stages through aether plan, review through aether plan --candidate, and name exact acceptance with --accept-candidate plus the content-addressed ID. — One enumerable runtime vocabulary now drives all projections.
 - [Phase 200]: Preserve legacy_unbound execution routing while malformed specification or planning authority fails closed through aether resume. — Compatibility cannot fabricate modern authority, and corrupted authority cannot authorize work.
+- [Phase 200]: Planning requires one exact Fast 80/4, Balanced 90/6, Deep 95/8, or Exhaustive 99/12 preset, whether named or supplied as the complete matching pair. — An unflagged call is a read-only selection boundary and cannot dispatch or create a planning run.
+- [Phase 200]: The public planning boundary authorizes only one Scout stage and persists its exact run, specification, base-plan, preset, gap, and evidence bindings before any later worker or owner authority. — Route-Setter, scoring, candidate, acceptance, and activation authority belong to receipt-bound later stages.
+- [Phase 200]: Routine phase research is selected automatically from the preset, weakest gap, and evidence freshness, while material product ambiguity remains an owner decision after Scout evidence exists. — Research depth is a runtime policy; it is not an approval prompt and cannot self-approve a specification or plan.
+- [Phase 200]: Scout and configured repository research become planning evidence only through contained regular-file paths with source revision, freshness, applicability, hash, producer attribution, and privacy rejection. — Typed provenance keeps research useful without expanding filesystem or owner authority.
 
 ### Pending Todos
 
@@ -469,8 +474,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-07T18:31:47.000Z
-Stopped at: Completed 200-12-PLAN.md
+Last session: 2026-09-07T19:32:27.798Z
+Stopped at: Completed 200-13-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
