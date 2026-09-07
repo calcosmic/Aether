@@ -55,29 +55,31 @@ type SealUnresolvedItem struct {
 // It is deliberately richer than a bool: the same enumerated evidence drives
 // confirmation, transaction staging, receipts, and the final truthful screen.
 type SealPreflight struct {
-	Eligible           bool                       `json:"eligible"`
-	Caller             SealCaller                 `json:"caller"`
-	Disposition        colony.SealDisposition     `json:"disposition"`
-	OutcomeKind        colony.OutcomeKind         `json:"outcome_kind"`
-	CompletedPhaseIDs  []int                      `json:"completed_phase_ids,omitempty"`
-	IncompletePhaseIDs []int                      `json:"incomplete_phase_ids,omitempty"`
-	CompletedTaskIDs   []string                   `json:"completed_task_ids,omitempty"`
-	IncompleteTaskIDs  []string                   `json:"incomplete_task_ids,omitempty"`
-	PassedGates        []colony.GateResultEntry   `json:"passed_gates,omitempty"`
-	FailedGates        []colony.GateResultEntry   `json:"failed_gates,omitempty"`
-	SkippedGates       []colony.GateResultEntry   `json:"skipped_gates,omitempty"`
-	Evidence           []colony.LifecycleEvidence `json:"evidence,omitempty"`
-	MissingEvidence    []colony.LifecycleIssue    `json:"missing_evidence,omitempty"`
-	OwnerCheckpoints   []SealOwnerCheckpoint      `json:"owner_checkpoints,omitempty"`
-	ResidualRisks      []colony.LifecycleIssue    `json:"residual_risks,omitempty"`
-	UnresolvedItems    []SealUnresolvedItem       `json:"unresolved_items,omitempty"`
-	PreservedContents  []SealPreservedContent     `json:"preserved_contents"`
-	OwnerReason        string                     `json:"owner_reason,omitempty"`
-	Rollback           *colony.LifecycleRollback  `json:"rollback,omitempty"`
-	PrimaryNext        string                     `json:"primary_next"`
-	OptionalNext       string                     `json:"optional_next,omitempty"`
-	ProjectionRevision string                     `json:"projection_revision,omitempty"`
-	FactsCapturedAt    string                     `json:"facts_captured_at,omitempty"`
+	Eligible            bool                       `json:"eligible"`
+	Caller              SealCaller                 `json:"caller"`
+	Disposition         colony.SealDisposition     `json:"disposition"`
+	OutcomeKind         colony.OutcomeKind         `json:"outcome_kind"`
+	CompletedPhaseIDs   []int                      `json:"completed_phase_ids,omitempty"`
+	IncompletePhaseIDs  []int                      `json:"incomplete_phase_ids,omitempty"`
+	CompletedTaskIDs    []string                   `json:"completed_task_ids,omitempty"`
+	IncompleteTaskIDs   []string                   `json:"incomplete_task_ids,omitempty"`
+	PassedGates         []colony.GateResultEntry   `json:"passed_gates,omitempty"`
+	FailedGates         []colony.GateResultEntry   `json:"failed_gates,omitempty"`
+	SkippedGates        []colony.GateResultEntry   `json:"skipped_gates,omitempty"`
+	Evidence            []colony.LifecycleEvidence `json:"evidence,omitempty"`
+	MissingEvidence     []colony.LifecycleIssue    `json:"missing_evidence,omitempty"`
+	OwnerCheckpoints    []SealOwnerCheckpoint      `json:"owner_checkpoints,omitempty"`
+	ResidualRisks       []colony.LifecycleIssue    `json:"residual_risks,omitempty"`
+	UnresolvedItems     []SealUnresolvedItem       `json:"unresolved_items,omitempty"`
+	AffectedSemanticIDs []string                   `json:"affected_semantic_ids,omitempty"`
+	RecoveryCommands    []string                   `json:"recovery_commands,omitempty"`
+	PreservedContents   []SealPreservedContent     `json:"preserved_contents"`
+	OwnerReason         string                     `json:"owner_reason,omitempty"`
+	Rollback            *colony.LifecycleRollback  `json:"rollback,omitempty"`
+	PrimaryNext         string                     `json:"primary_next"`
+	OptionalNext        string                     `json:"optional_next,omitempty"`
+	ProjectionRevision  string                     `json:"projection_revision,omitempty"`
+	FactsCapturedAt     string                     `json:"facts_captured_at,omitempty"`
 }
 
 // BuildSealPreflight decides completion truth before any durable effect. It
@@ -113,6 +115,7 @@ func BuildSealPreflight(facts LifecycleFacts, request SealPreflightRequest) (Sea
 	preflight.collectEvidence(facts)
 	preflight.collectOwnerCheckpoints(facts.Blockers.Value)
 	preflight.collectConsistency(facts)
+	preflight.collectPlanningAuthority(facts)
 	if len(facts.State.Value.Plan.Phases) == 0 {
 		preflight.addUnresolved("missing_plan", "plan", "no colony plan exists to verify", []string{"fact:state"})
 	}
@@ -166,7 +169,7 @@ func (p SealPreflight) Validate() error {
 		if p.OutcomeKind != colony.OutcomeKindVerifiedCompletion {
 			return fmt.Errorf("verified seal has outcome kind %q", p.OutcomeKind)
 		}
-		if len(p.UnresolvedItems) > 0 || len(p.IncompletePhaseIDs) > 0 || len(p.IncompleteTaskIDs) > 0 || len(p.FailedGates) > 0 || len(p.SkippedGates) > 0 || len(p.MissingEvidence) > 0 {
+		if len(p.UnresolvedItems) > 0 || len(p.IncompletePhaseIDs) > 0 || len(p.IncompleteTaskIDs) > 0 || len(p.FailedGates) > 0 || len(p.SkippedGates) > 0 || len(p.MissingEvidence) > 0 || len(p.AffectedSemanticIDs) > 0 || len(p.RecoveryCommands) > 0 {
 			return fmt.Errorf("verified seal contains unresolved completion evidence")
 		}
 		if p.OwnerReason != "" || p.Rollback != nil {
@@ -304,6 +307,140 @@ func (p *SealPreflight) collectConsistency(facts LifecycleFacts) {
 	p.addUnresolved("conflicting_evidence", issue.ID, issue.Summary, issue.EvidenceIDs)
 }
 
+// collectPlanningAuthority keeps Seal structural: it proves that the work
+// being closed still belongs to the current owner-approved contract, but does
+// not add Phase 205's final product-acceptance ceremony. Legacy plans without
+// specification authority retain their documented compatibility and are never
+// assigned synthetic approval or candidate records here.
+func (p *SealPreflight) collectPlanningAuthority(facts LifecycleFacts) {
+	state := facts.State.Value
+	specification := facts.Specification.Value
+	planning := facts.Planning.Value
+
+	if !specification.Present && state.Specification != nil {
+		specification = lifecycleSpecificationFromSnapshot(state, facts.State.Source).Value
+	}
+	if planning.AcceptanceBindingStatus == "" && (state.Plan.AcceptancePolicy != "" || planHasCurrentAuthority(state.Plan)) {
+		planning = lifecyclePlanningFromSnapshot(state, facts.State.Source, nil, lifecyclePlanningRunID(state), LifecycleFactSource{}).Value
+	}
+
+	legacyUnbound := !specification.Present && state.Specification == nil && (planning.LegacyUnbound ||
+		planning.AcceptanceBindingStatus == LifecyclePlanBindingLegacyUnbound ||
+		state.Plan.AcceptancePolicy == colony.PlanAcceptanceLegacyUnbound ||
+		(state.Plan.AcceptancePolicy == "" && len(state.Plan.Phases) > 0))
+	if legacyUnbound {
+		return
+	}
+
+	currentSchema := specification.Present || state.Specification != nil ||
+		planning.AcceptancePolicy == colony.PlanAcceptanceExplicitOwner ||
+		state.Plan.AcceptancePolicy == colony.PlanAcceptanceExplicitOwner ||
+		planning.AcceptanceBindingStatus == LifecyclePlanBindingAccepted ||
+		planning.AcceptanceBindingStatus == LifecyclePlanBindingAffected ||
+		planning.AcceptanceBindingStatus == LifecyclePlanBindingInvalid
+	if !currentSchema {
+		return
+	}
+
+	currentRevisionID := strings.TrimSpace(specification.CurrentRevisionID)
+	if currentRevisionID == "" {
+		currentRevisionID = "current-specification"
+	}
+	if !specification.Present {
+		p.addRecoveryCommand("aether spec")
+		p.addUnresolved("specification_authority", currentRevisionID, "current-schema plan has no canonical specification; run `aether spec` to inspect or restore the contract", []string{"fact:specification"})
+		return
+	}
+	if !specification.Approved || specification.Status != colony.SpecStatusApproved || strings.TrimSpace(specification.ApprovalReceiptID) == "" {
+		p.addRecoveryCommand("aether spec")
+		p.addUnresolved(
+			"specification_approval",
+			currentRevisionID,
+			fmt.Sprintf("current specification %s is %s or lacks exact owner approval; run `aether spec` to inspect it and use the exact approval command shown there", currentRevisionID, sealSpecificationStatus(specification.Status)),
+			[]string{"fact:specification"},
+		)
+	}
+
+	affected := append([]string(nil), planning.AffectedUnresolvedSemanticIDs...)
+	if impact, unresolved, err := unresolvedPlanImpact(state); err != nil {
+		p.addRecoveryCommand(sealPlanRecoveryCommand(planning))
+		p.addUnresolved("plan_impact", currentRevisionID, fmt.Sprintf("current specification impact cannot be proven: %v; run `%s` to reconcile the plan", err, sealPlanRecoveryCommand(planning)), []string{"fact:planning"})
+	} else if unresolved {
+		affected = append(affected, impact.AffectedSemanticIDs...)
+	}
+	affected = canonicalPlanImpactIDs(affected)
+	p.AffectedSemanticIDs = append(p.AffectedSemanticIDs, affected...)
+
+	exactBinding := planning.AcceptedPlan && planning.AcceptanceBindingStatus == LifecyclePlanBindingAccepted
+	if state.Specification != nil {
+		current, currentOK := currentSpecificationRevision(*state.Specification)
+		active, activeOK := activePlanRevision(state.Plan)
+		exactBinding = exactBinding && currentOK && activeOK &&
+			active.SpecificationRevisionID == current.ID && active.SpecificationRevisionHash == current.ContentHash
+	}
+	if !exactBinding {
+		command := sealPlanRecoveryCommand(planning)
+		p.addRecoveryCommand(command)
+		activeRevisionID := strings.TrimSpace(planning.ActivePlanRevisionID)
+		if activeRevisionID == "" {
+			activeRevisionID = "active-plan"
+		}
+		p.addUnresolved(
+			"plan_binding",
+			activeRevisionID,
+			fmt.Sprintf("accepted plan is not bound to current specification %s; run `%s` to create or inspect the exact reconciliation candidate", currentRevisionID, command),
+			[]string{"fact:specification", "fact:planning"},
+		)
+	}
+
+	if len(affected) > 0 {
+		command := sealPlanRecoveryCommand(planning)
+		p.addRecoveryCommand(command)
+		for _, semanticID := range affected {
+			p.addUnresolved(
+				"affected_scope",
+				semanticID,
+				fmt.Sprintf("affected semantic ID %s has not been reconciled and completed under the current accepted plan; run `%s` to continue exact plan reconciliation", semanticID, command),
+				[]string{"fact:specification", "fact:planning"},
+			)
+		}
+	}
+
+	if specification.Approved && exactBinding && len(affected) == 0 {
+		p.Evidence = append(p.Evidence,
+			colony.LifecycleEvidence{ID: "specification:" + currentRevisionID, Kind: "specification_approval", Source: facts.Specification.Source.Path, Summary: "current specification revision is explicitly approved"},
+			colony.LifecycleEvidence{ID: "plan:" + planning.ActivePlanRevisionID, Kind: "plan_acceptance", Source: facts.Planning.Source.Path, Summary: "accepted plan is exactly bound to the current specification"},
+		)
+	}
+}
+
+func sealSpecificationStatus(status colony.SpecRevisionStatus) string {
+	if strings.TrimSpace(string(status)) == "" {
+		return "unapproved"
+	}
+	return string(status)
+}
+
+func sealPlanRecoveryCommand(planning LifecyclePlanningFacts) string {
+	if strings.TrimSpace(planning.PendingCandidateID) != "" {
+		return "aether plan --candidate"
+	}
+	return "aether plan"
+}
+
+func (p *SealPreflight) addRecoveryCommand(command string) {
+	command = strings.TrimSpace(command)
+	if command == "" {
+		return
+	}
+	for _, existing := range p.RecoveryCommands {
+		if existing == command {
+			return
+		}
+	}
+	p.RecoveryCommands = append(p.RecoveryCommands, command)
+}
+
 func sealPhasesEqual(left, right []colony.Phase) bool {
 	if len(left) != len(right) {
 		return false
@@ -348,6 +485,7 @@ func (p *SealPreflight) sort() {
 	sort.SliceStable(p.MissingEvidence, func(i, j int) bool { return p.MissingEvidence[i].ID < p.MissingEvidence[j].ID })
 	sort.SliceStable(p.OwnerCheckpoints, func(i, j int) bool { return p.OwnerCheckpoints[i].ID < p.OwnerCheckpoints[j].ID })
 	sort.SliceStable(p.ResidualRisks, func(i, j int) bool { return p.ResidualRisks[i].ID < p.ResidualRisks[j].ID })
+	p.AffectedSemanticIDs = canonicalPlanImpactIDs(p.AffectedSemanticIDs)
 	sort.SliceStable(p.UnresolvedItems, func(i, j int) bool {
 		if p.UnresolvedItems[i].Kind == p.UnresolvedItems[j].Kind {
 			return p.UnresolvedItems[i].ID < p.UnresolvedItems[j].ID
