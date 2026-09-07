@@ -143,7 +143,7 @@ func TestSpecificationReviseClassifiesChangesAndPreservesUnaffectedIdentity(t *t
 		t.Fatal("specification revision mutated the active plan")
 	}
 	if !reflect.DeepEqual(first.AffectedScope.RequirementIDs, []string{requirementID}) ||
-		!reflect.DeepEqual(first.AffectedScope.TaskIDs, []string{"task-visible-loop"}) ||
+		!reflect.DeepEqual(first.AffectedScope.TaskIDs, []string{"1.1"}) ||
 		!reflect.DeepEqual(first.AffectedScope.ProofLinkIDs, []string{requirementID}) {
 		t.Fatalf("affected closure = %#v, want only linked requirement/task/proof", first.AffectedScope)
 	}
@@ -154,6 +154,48 @@ func TestSpecificationReviseClassifiesChangesAndPreservesUnaffectedIdentity(t *t
 	}
 	if !replayed.Replayed || !reflect.DeepEqual(replayed.Revision, first.Revision) || !reflect.DeepEqual(replayed.Receipt, first.Receipt) {
 		t.Fatalf("exact revision retry was not idempotent\nfirst:  %#v\nreplay: %#v", first, replayed)
+	}
+}
+
+func TestSpecificationReviseRejectsRequirementOutsideFeatureScope(t *testing.T) {
+	draftRequest := specificationTestDraftRequest(t, colony.SpecScopeWholeGoal)
+	draftRequest.Requirements = append(draftRequest.Requirements, specificationItemInput{
+		Lineage:     "independent-export",
+		Description: "Export an independent planning report.",
+		EvidenceIDs: []string{"charter:export"},
+	})
+	specification, predecessor, err := buildSpecificationDraft(draftRequest)
+	if err != nil {
+		t.Fatalf("build predecessor: %v", err)
+	}
+	outsideID, err := specificationStableID(specificationSectionRequirements, "independent-export")
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := specificationRevisionRequest{
+		PredecessorRevisionID:  predecessor.ID,
+		PredecessorContentHash: predecessor.ContentHash,
+		Scope: colony.SpecScope{
+			Kind:               colony.SpecScopeFeature,
+			GoalID:             predecessor.Scope.GoalID,
+			SessionID:          "session-feature-change",
+			FeatureID:          "feature-visible-planning",
+			RequirementIDs:     []string{predecessor.Requirements[0].ID},
+			AcceptanceCheckIDs: []string{predecessor.AcceptanceChecks[0].ID},
+		},
+		Changes: []specificationRevisionChange{{
+			Operation: specificationChangeModify,
+			Section:   specificationSectionRequirements,
+			TargetID:  outsideID,
+			Item: specificationItemInput{
+				Description: "Export a materially different independent planning report.",
+				EvidenceIDs: []string{"owner-answer:export"},
+			},
+		}},
+		CreatedAt: time.Date(2026, time.September, 7, 16, 5, 0, 0, time.UTC),
+	}
+	if _, _, _, err := buildSpecificationSuccessor(specification, colony.Plan{}, request); err == nil || !strings.Contains(err.Error(), "outside feature scope") {
+		t.Fatalf("out-of-scope revision error = %v", err)
 	}
 }
 
@@ -294,8 +336,8 @@ func specificationTestPlanState() colony.ColonyState {
 	return colony.ColonyState{Plan: colony.Plan{Phases: []colony.Phase{{
 		ID: 1,
 		Tasks: []colony.Task{
-			{ID: &linkedTaskID, SemanticID: "task-visible-loop", RequirementProofLinks: []string{linkedID}},
-			{ID: &otherTaskID, SemanticID: "task-unrelated", RequirementProofLinks: []string{otherID}},
+			{ID: &linkedTaskID, RequirementProofLinks: []string{linkedID}},
+			{ID: &otherTaskID, RequirementProofLinks: []string{otherID}},
 		},
 	}}}}
 }
