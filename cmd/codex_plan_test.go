@@ -44,12 +44,14 @@ func TestPlanUsesSurveyAndRecordsPlanningDispatches(t *testing.T) {
 	}
 
 	goal := "Bring Codex core colony commands to true ant-process parity"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	fixtureState := codexPlanSpecificationFixture(t, colony.ColonyState{
 		Version: "3.0",
 		Goal:    &goal,
 		State:   colony.StateREADY,
 		Plan:    colony.Plan{Phases: []colony.Phase{}},
-	})
+	}, colony.SpecStatusApproved)
+	createTestColonyState(t, dataDir, fixtureState)
+	writeCodexPlanSpecificationProjection(t, root, fixtureState)
 
 	rootCmd.SetArgs([]string{"colonize"})
 	if err := rootCmd.Execute(); err != nil {
@@ -57,7 +59,7 @@ func TestPlanUsesSurveyAndRecordsPlanningDispatches(t *testing.T) {
 	}
 
 	stdout = &bytes.Buffer{}
-	rootCmd.SetArgs([]string{"plan", "--synthetic"})
+	rootCmd.SetArgs([]string{"plan", "--synthetic", "--preset", "balanced"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("plan returned error: %v", err)
 	}
