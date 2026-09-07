@@ -17,7 +17,6 @@ func TestPlanImpactChangedRequirementClosesOverDependenciesAndProofs(t *testing.
 	plan := []colony.Phase{
 		{
 			ID: 1, SemanticID: "phase-account", Status: colony.PhaseCompleted,
-			RequirementProofLinks: []string{"requirement-account"},
 			Tasks: []colony.Task{
 				{
 					ID: &linkedID, SemanticID: "task-account", Status: colony.TaskCompleted,
@@ -190,7 +189,10 @@ func TestPlanImpactLifecycleClearsOnlyAfterExactSpecificationBinding(t *testing.
 		Delta: colony.SpecRevisionDelta{PredecessorRevisionID: "spec-revision-old", Requirements: colony.SpecItemDelta{ModifiedIDs: []string{"requirement-account"}}},
 	}
 	state := colony.ColonyState{
-		Specification: &colony.Specification{CurrentRevisionID: currentSpec.ID, Revisions: []colony.SpecRevision{currentSpec}},
+		Specification: &colony.Specification{CurrentRevisionID: currentSpec.ID, Revisions: []colony.SpecRevision{
+			{ID: "spec-revision-old", ContentHash: strings.Repeat("d", 64)},
+			currentSpec,
+		}},
 		Plan: colony.Plan{
 			ActiveRevisionID: "plan-r1-old",
 			Revisions: []colony.PlanRevision{{

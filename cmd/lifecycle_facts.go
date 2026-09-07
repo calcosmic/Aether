@@ -706,13 +706,19 @@ func lifecycleAffectedSemanticIDs(state colony.ColonyState, stage *planningStage
 			}
 		}
 	}
-	if active, ok := lifecyclePlanRevisionByID(state.Plan, state.Plan.ActiveRevisionID); ok {
-		add(active.AffectedSemanticIDs)
-	}
-	for i := range state.Plan.Phases {
-		add(state.Plan.Phases[i].AffectedSemanticIDs)
-		for j := range state.Plan.Phases[i].Tasks {
-			add(state.Plan.Phases[i].Tasks[j].AffectedSemanticIDs)
+	if impact, unresolved, err := unresolvedPlanImpact(state); err == nil && unresolved {
+		add(impact.AffectedSemanticIDs)
+	} else if err != nil {
+		// Fail closed if a malformed lineage prevents exact impact expansion.
+		// Validation/recovery surfaces the structural error; retaining recorded
+		// markers here prevents next-action guidance from advertising work.
+		if active, ok := lifecyclePlanRevisionByID(state.Plan, state.Plan.ActiveRevisionID); ok {
+			add(active.AffectedSemanticIDs)
+		}
+		if state.Specification != nil {
+			if current, ok := currentSpecificationRevision(*state.Specification); ok {
+				add(specificationDeltaChangedIDs(current.Delta))
+			}
 		}
 	}
 	if stage != nil {

@@ -124,8 +124,8 @@ func validateCurrentPlanningState(state colony.ColonyState) error {
 		return fmt.Errorf("explicit_owner plan requires a specification")
 	}
 	currentSpec, ok := currentSpecificationRevision(*state.Specification)
-	if !ok || currentSpec.Status != colony.SpecStatusApproved || currentSpec.Approval == nil {
-		return fmt.Errorf("explicit_owner plan requires the current approved specification revision")
+	if !ok {
+		return fmt.Errorf("explicit_owner plan requires a current specification revision")
 	}
 	if len(state.Plan.Revisions) == 0 {
 		return fmt.Errorf("explicit_owner plan requires immutable plan revisions")
@@ -145,11 +145,26 @@ func validateCurrentPlanningState(state colony.ColonyState) error {
 	if !reflect.DeepEqual(state.Plan.Phases, active.Phases) {
 		return fmt.Errorf("active plan phases do not match active revision %q", active.ID)
 	}
-	if err := validateCurrentPlanRevisionBindings(active, currentSpec); err != nil {
+	boundSpec, ok := specificationRevisionByID(*state.Specification, active.SpecificationRevisionID)
+	if !ok || boundSpec.ContentHash != active.SpecificationRevisionHash || boundSpec.Approval == nil ||
+		(boundSpec.Status != colony.SpecStatusApproved && boundSpec.Status != colony.SpecStatusSuperseded) {
+		return fmt.Errorf("active revision specification binding is not an exact historically approved revision")
+	}
+	if active.SpecificationRevisionID == currentSpec.ID && (currentSpec.Status != colony.SpecStatusApproved || currentSpec.Approval == nil) {
+		return fmt.Errorf("explicit_owner plan requires the current approved specification revision")
+	}
+	if err := validateCurrentPlanRevisionBindings(active, boundSpec); err != nil {
 		return fmt.Errorf("active revision: %w", err)
 	}
-	if err := validateCurrentPlanNodes(state.Plan.Phases, active, currentSpec); err != nil {
+	if err := validateCurrentPlanNodes(state.Plan.Phases, active, boundSpec); err != nil {
 		return err
+	}
+	if active.SpecificationRevisionID != currentSpec.ID || active.SpecificationRevisionHash != currentSpec.ContentHash {
+		if _, unresolved, err := unresolvedPlanImpact(state); err != nil {
+			return fmt.Errorf("active revision specification successor: %w", err)
+		} else if !unresolved {
+			return fmt.Errorf("active revision specification successor has no affected scope to reconcile")
+		}
 	}
 
 	candidates := make(map[string]colony.PlanCandidate, len(state.Plan.Candidates))
@@ -412,7 +427,10 @@ func validatePlanCandidateState(candidate colony.PlanCandidate, revisions map[st
 	if !ok {
 		return fmt.Errorf("specification_revision_id %q does not name a specification revision", candidate.SpecificationRevisionID)
 	}
-	if specRevision.ContentHash != candidate.SpecificationRevisionHash || specRevision.Status != colony.SpecStatusApproved {
+	approvedBinding := specRevision.ContentHash == candidate.SpecificationRevisionHash && specRevision.Status == colony.SpecStatusApproved && specRevision.Approval != nil
+	historicalAcceptedBinding := specRevision.ContentHash == candidate.SpecificationRevisionHash && candidate.Status == colony.PlanCandidateAccepted &&
+		candidate.Acceptance != nil && specRevision.Status == colony.SpecStatusSuperseded && specRevision.Approval != nil
+	if !approvedBinding && !historicalAcceptedBinding {
 		return fmt.Errorf("specification revision binding is not an exact approved revision")
 	}
 	if candidate.Proposal.ID == "" || candidate.ProposalHash != candidate.Proposal.PlanHash {

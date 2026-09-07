@@ -113,13 +113,26 @@ func acceptPlanCandidate(root string, request planCandidateAcceptanceRequest, op
 		return empty, fmt.Errorf("proposal_hash: candidate proposal no longer matches its exact binding")
 	}
 
-	activatedPhases, preserved, err := preserveCompletedCandidateWork(state.Plan.Phases, candidate.Proposal.Phases)
+	impact, unreconciled, err := unresolvedPlanImpact(state)
+	if err != nil {
+		return empty, fmt.Errorf("affected_scope: %w", err)
+	}
+	if unreconciled {
+		if err := validatePlanCandidateImpactCoverage(candidate, impact); err != nil {
+			return empty, fmt.Errorf("affected_scope: %w", err)
+		}
+	}
+	activatedPhases, preserved, err := preserveCompletedCandidateWorkForImpact(state.Plan.Phases, candidate.Proposal.Phases, impact)
 	if err != nil {
 		return empty, err
 	}
 	revision := candidate.Proposal
 	revision.Phases = activatedPhases
 	revision.PreservedPhaseIDs = preserved
+	if unreconciled {
+		revision.AffectedSemanticIDs = append([]string(nil), impact.AffectedSemanticIDs...)
+		revision.PreservedSemanticIDs = append([]string(nil), impact.PreservedSemanticIDs...)
+	}
 	if computed, hashErr := planDefinitionHash(revision.Phases); hashErr != nil || computed != revision.PlanHash {
 		if hashErr != nil {
 			return empty, fmt.Errorf("proposal_hash: %w", hashErr)
@@ -143,7 +156,6 @@ func acceptPlanCandidate(root string, request planCandidateAcceptanceRequest, op
 		return empty, err
 	}
 	candidate.Status = colony.PlanCandidateAccepted
-	candidate.Proposal = revision
 	candidate.Acceptance = &receipt
 	if err := validatePlanningRecordHashes(candidate); err != nil {
 		return empty, fmt.Errorf("accepted candidate: %w", err)
@@ -873,6 +885,13 @@ func clonePhases(phases []colony.Phase) []colony.Phase {
 		copyPhases[i].Tasks = cloneTasks(phase.Tasks)
 		copyPhases[i].SuccessCriteria = cloneStrings(phase.SuccessCriteria)
 		copyPhases[i].EvidenceRequirements = cloneEvidenceRequirements(phase.EvidenceRequirements)
+		copyPhases[i].RequirementProofLinks = cloneStrings(phase.RequirementProofLinks)
+		copyPhases[i].AcceptanceProofLinks = cloneStrings(phase.AcceptanceProofLinks)
+		copyPhases[i].NegativeProofLinks = cloneStrings(phase.NegativeProofLinks)
+		copyPhases[i].RecoveryProofLinks = cloneStrings(phase.RecoveryProofLinks)
+		copyPhases[i].PublicPathProofLinks = cloneStrings(phase.PublicPathProofLinks)
+		copyPhases[i].AffectedSemanticIDs = cloneStrings(phase.AffectedSemanticIDs)
+		copyPhases[i].PreservedSemanticIDs = cloneStrings(phase.PreservedSemanticIDs)
 		for j := range copyPhases[i].Tasks {
 			task := &copyPhases[i].Tasks[j]
 			if task.ID != nil {
@@ -884,6 +903,13 @@ func clonePhases(phases []colony.Phase) []colony.Phase {
 			task.SuccessCriteria = cloneStrings(task.SuccessCriteria)
 			task.EvidenceRequirements = cloneEvidenceRequirements(task.EvidenceRequirements)
 			task.DependsOn = cloneStrings(task.DependsOn)
+			task.RequirementProofLinks = cloneStrings(task.RequirementProofLinks)
+			task.AcceptanceProofLinks = cloneStrings(task.AcceptanceProofLinks)
+			task.NegativeProofLinks = cloneStrings(task.NegativeProofLinks)
+			task.RecoveryProofLinks = cloneStrings(task.RecoveryProofLinks)
+			task.PublicPathProofLinks = cloneStrings(task.PublicPathProofLinks)
+			task.AffectedSemanticIDs = cloneStrings(task.AffectedSemanticIDs)
+			task.PreservedSemanticIDs = cloneStrings(task.PreservedSemanticIDs)
 		}
 	}
 	return copyPhases
