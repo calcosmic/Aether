@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 200-11-PLAN.md
-last_updated: "2026-09-07T18:05:08.527Z"
+stopped_at: Completed 200-12-PLAN.md
+last_updated: "2026-09-07T18:31:47.009Z"
 last_activity: 2026-09-07
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 59
-  completed_plans: 45
+  completed_plans: 46
   percent: 14
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 12 of 25
+Plan: 13 of 25
 Status: Ready to execute
 Last activity: 2026-09-07
 
@@ -122,6 +122,7 @@ Last activity: 2026-09-07
 | Phase 200 P09 | 46 min | 2 tasks | 4 files |
 | Phase 200 P10 | 16 min | 2 tasks | 4 files |
 | Phase 200 P11 | 35 min | 2 tasks | 3 files |
+| Phase 200 P12 | 25 min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -349,6 +350,10 @@ Last activity: 2026-09-07
 - [Phase 200]: The legacy max-questions flag remains compatible but cannot truncate a material behavior, authority, risk, scope, or acceptance batch. — The owner must see every currently known material consequence in one decision boundary.
 - [Phase 200]: Settled Discuss creates a fresh whole-goal draft, retains any canonical whole-goal or feature draft exactly, and never replaces an approved revision. — Stable specification identity and explicit successor operations preserve authority and unaffected scoped content.
 - [Phase 200]: Settled intent always closes at aether spec review; draft creation never implies specification approval or plan acceptance. — Specification approval and candidate-plan acceptance are separate owner authority transitions.
+- [Phase 200]: Keep specification approval, plan-candidate readiness, and accepted-plan execution authority as independent lifecycle facts. — No authority state may imply another.
+- [Phase 200]: Make a pending candidate the primary owner-facing boundary without revoking the previously accepted revision. — Candidate guidance must not advertise build or Autopilot before review.
+- [Phase 200]: Resume persisted planning stages through aether plan, review through aether plan --candidate, and name exact acceptance with --accept-candidate plus the content-addressed ID. — One enumerable runtime vocabulary now drives all projections.
+- [Phase 200]: Preserve legacy_unbound execution routing while malformed specification or planning authority fails closed through aether resume. — Compatibility cannot fabricate modern authority, and corrupted authority cannot authorize work.
 
 ### Pending Todos
 
@@ -464,8 +469,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-07T18:05:08.518Z
-Stopped at: Completed 200-11-PLAN.md
+Last session: 2026-09-07T18:31:47.000Z
+Stopped at: Completed 200-12-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

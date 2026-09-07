@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 11/25 plans executed
+**Plans:** 12/25 plans executed
 
 Plans:
 
@@ -210,7 +210,7 @@ Plans:
 
 - [x] 200-10-PLAN.md — Expose the public specification lifecycle command.
 - [x] 200-11-PLAN.md — Make discuss evidence-first and hand off to a draft specification.
-- [ ] 200-12-PLAN.md — Extend lifecycle facts and Next Up for planning authority states.
+- [x] 200-12-PLAN.md — Extend lifecycle facts and Next Up for planning authority states.
 - [ ] 200-13-PLAN.md — Start planning from an explicit preset and first Scout stage.
 
 **Wave 5** *(blocked on Wave 4 completion)*
