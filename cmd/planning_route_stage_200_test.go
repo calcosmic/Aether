@@ -419,6 +419,81 @@ func TestPlanningRouteStageMaterialContractAnswerCreatesSuccessorDraft(t *testin
 	}
 }
 
+func TestPlanningRouteStageMaterialLaterPassPausesAfterCompleteCard(t *testing.T) {
+	root, firstManifest, firstResult := planningRouteStageTestFixture(t)
+	first, err := coordinatePlanningRouteStage(root, firstManifest, planningRouteStageTestBytes(t, firstResult))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.ScoutDispatch == nil {
+		t.Fatal("first Route pass did not authorize the next Scout")
+	}
+	scoutManifest := first.ScoutDispatch.Manifest
+	fresh := planningRouteStageEvidence(t, scoutManifest.Specification, scoutManifest.BasePlanRevisionID, "route-late-material", "A later Scout pass found a material behavior decision.", time.Date(2026, time.September, 7, 20, 10, 0, 0, time.UTC))
+	scoutGap := planningRouteStageGap("late-scout-gap", colony.PlanningDimensionRisks, fresh.Reference.ID, colony.PlanningGapNonMaterial, 20)
+	material := planningScoutStageMaterialCandidate(fresh.Reference, "late-route-material-decision")
+	scoutResult := planningScoutStageResult{
+		ResultType: planningStageResultScout, ManifestID: scoutManifest.ID, ManifestHash: scoutManifest.ContentHash,
+		RunID: scoutManifest.RunID, Pass: scoutManifest.Pass, Caste: planningStageCasteScout,
+		Specification: scoutManifest.Specification, BasePlanRevisionID: scoutManifest.BasePlanRevisionID, BasePlanRevisionHash: scoutManifest.BasePlanRevisionHash,
+		InputFrontierHash: scoutManifest.InputFrontierHash,
+		Findings:          []planningScoutStageFinding{{StableID: "late-material-finding", Summary: "The full pass must complete before owner review.", EvidenceIDs: []string{fresh.Reference.ID}}},
+		NewEvidence:       []planningEvidenceRecord{fresh}, UnresolvedGaps: []colony.PlanningGap{scoutGap}, DecisionCandidates: []planningDecisionCandidate{material},
+	}
+	scoutCompleted, err := coordinatePlanningScoutStage(root, scoutManifest, planningScoutStageTestBytes(t, scoutResult))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scoutCompleted.RouteDispatch == nil || len(scoutCompleted.RouteDispatch.MaterialDecisionCandidates) != 1 {
+		t.Fatalf("late Scout did not carry its decision through Route authorization: %+v", scoutCompleted)
+	}
+	routeManifest := scoutCompleted.RouteDispatch.Manifest
+	secondResult := planningRouteStageResult{
+		ResultType: planningStageResultRouteSetter, ManifestID: routeManifest.ID, ManifestHash: routeManifest.ContentHash,
+		RunID: routeManifest.RunID, Pass: routeManifest.Pass, Caste: planningStageCasteRouteSetter,
+		Specification: routeManifest.Specification, BasePlanRevisionID: routeManifest.BasePlanRevisionID, BasePlanRevisionHash: routeManifest.BasePlanRevisionHash,
+		PriorCardHash: routeManifest.PriorCardHash, InputFrontierHash: routeManifest.InputFrontierHash,
+		ScoutReceipt: *routeManifest.ScoutReceipt, CandidateSnapshotHash: routeManifest.CandidateSnapshotHash,
+		Proposal: firstResult.Proposal, ProposalEvidenceIDs: []string{fresh.Reference.ID}, MaterialDecisionCandidates: []planningDecisionCandidate{material},
+	}
+	for index, dimension := range colony.PlanningDimensions() {
+		before := first.Route.Card.DimensionAssessments[index].After
+		secondResult.DimensionAssessments = append(secondResult.DimensionAssessments, colony.PlanningDimensionAssessment{
+			SchemaVersion: colony.PlanningSchemaVersion, ID: "late-route-assessment-" + string(dimension), ContentHash: planningStageTestHash(string(rune('a' + index))),
+			Dimension: dimension, Before: before, After: before, FreshEvidenceIDs: []string{fresh.Reference.ID},
+			RemainingGap: planningRouteStageGap("late-route-gap-"+string(dimension), dimension, fresh.Reference.ID, colony.PlanningGapNonMaterial, 15+index),
+			Rationale:    "The later Scout evidence leaves this dimension unchanged.", ProducerReceiptID: routeManifest.ID,
+		})
+	}
+	second, err := coordinatePlanningRouteStage(root, routeManifest, planningRouteStageTestBytes(t, secondResult))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.Route.Card.Iteration != 2 || second.Route.Card.Decision.Reason != colony.PlanningStopOwnerDecision || second.DecisionCheckpoint == nil || second.ScoutDispatch != nil || second.Candidate != nil {
+		t.Fatalf("late material Route completion = %+v, want pass-two card then owner decision", second)
+	}
+	if second.DecisionCheckpoint.CompletedCardHash != second.Route.Card.ContentHash || len(second.DecisionCheckpoint.Batch.Decisions) != 1 || second.DecisionCheckpoint.Batch.Decisions[0].StableID != material.StableID {
+		t.Fatalf("late material checkpoint lost its exact card or Scout candidate: %+v", second.DecisionCheckpoint)
+	}
+}
+
+func TestPlanningRouteStageCandidateReplayReturnsExactArtifact(t *testing.T) {
+	root, manifest, result := planningRouteStageTestFixture(t)
+	planningRouteStageSetPolicy(t, root, manifest.RunID, 70, 6)
+	raw := planningRouteStageTestBytes(t, result)
+	first, err := coordinatePlanningRouteStage(root, manifest, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := coordinatePlanningRouteStage(root, manifest, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Candidate == nil || second.Candidate == nil || first.Candidate.ID != second.Candidate.ID || first.Candidate.ContentHash != second.Candidate.ContentHash {
+		t.Fatalf("candidate replay diverged: first=%+v second=%+v", first.Candidate, second.Candidate)
+	}
+}
+
 func planningRouteStageMaterialFixture(t *testing.T) (string, planningStageManifest, planningRouteStageResult) {
 	t.Helper()
 	root, manifest, result := planningRouteStageTestFixture(t)
