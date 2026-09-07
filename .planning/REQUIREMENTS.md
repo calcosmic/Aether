@@ -32,7 +32,7 @@ For dummies: keep the reliable modern engine and brakes, then restore the dashbo
 
 - [x] **CEC-01 — Identity:** Every ordinary lifecycle screen identifies the colony, current goal or episode, active phase, and acting castes from authoritative runtime state; wrappers may style that truth but may not invent it.
 - [x] **CEC-02 — Orientation:** At any ordinary entry point, the owner can see where the colony is, what is active or blocked, and one canonical next safe action without interpreting manifests, ledgers, or internal protocol commands.
-- [ ] **CEC-03 — Intention:** Every planning iteration, worker choice, specialist escalation, recovery wave, and stop explains why it happened and what evidence would make the next decision different.
+- [x] **CEC-03 — Intention:** Every planning iteration, worker choice, specialist escalation, recovery wave, and stop explains why it happened and what evidence would make the next decision different.
 - [x] **CEC-04 — Agency:** The owner can steer, pause, resume, stop, answer a material decision, and inspect advanced detail without corrupting active work or being asked again for a decision already valid in the current scope.
 - [ ] **CEC-05 — Liveness:** Planning, building, Swarm, Oracle, recovery, and verification expose typed live events for active workers, waves, questions, confidence, contradictions, signals, findings, and lineage rather than simulated activity.
 - [ ] **CEC-06 — Evidence:** Claims, deterministic checks, independent findings, elapsed time, reported cost, changed files, provenance, and incomplete owner work remain linked to the exact attempt and visible at the decision that consumes them.
@@ -51,7 +51,7 @@ For dummies: keep the reliable modern engine and brakes, then restore the dashbo
 ### Iterative Planning
 
 - [ ] **PLAN-01 — Visible Scout/Route-Setter loop:** Planning visibly alternates grounded Scout research and Route-Setter synthesis until a complete plan or a genuine owner boundary is reached; the loop uses the current Go revision/finalizer as state authority.
-- [ ] **PLAN-02 — Five-dimensional confidence:** Every iteration scores the five historical confidence dimensions from evidence, identifies the weakest material gaps, and directs the next research pass at those gaps rather than repeating broad discovery.
+- [x] **PLAN-02 — Five-dimensional confidence:** Every iteration scores the five historical confidence dimensions from evidence, identifies the weakest material gaps, and directs the next research pass at those gaps rather than repeating broad discovery.
 - [ ] **PLAN-03 — Explain iteration and stopping:** The owner can see what changed since the prior pass, which evidence raised or lowered confidence, and whether planning stopped for sufficiency, diminishing returns, a detected stall, or a material unresolved choice.
 - [ ] **PLAN-04 — Ask only material questions:** Planning batches only choices that change product behavior, authority, risk, or scope; answers are bound to goal/session/revision and can create scoped steering or learning without becoming stale universal permission.
 - [x] **PLAN-05 — Owner-readable specification and accepted plan:** Intent capture produces a plain-language specification for the whole goal or one feature—what it does, what it excludes, binding decisions and owner-checkable acceptance—then the final plan adds grounded tasks, dependencies, negative and recovery cases, verification evidence, affected public entry points, and durably linked research.

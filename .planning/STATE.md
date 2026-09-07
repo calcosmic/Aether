@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 200-02-PLAN.md
-last_updated: "2026-09-07T12:24:06.422Z"
+stopped_at: Completed 200-03-PLAN.md
+last_updated: "2026-09-07T12:51:51.285Z"
 last_activity: 2026-09-07
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 59
-  completed_plans: 36
+  completed_plans: 37
   percent: 14
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 3 of 25
+Plan: 4 of 25
 Status: Ready to execute
 Last activity: 2026-09-07
 
@@ -113,6 +113,7 @@ Last activity: 2026-09-07
 | Phase 199 P28 | 1d 1h | 2 tasks | 10 files |
 | Phase 200 P01 | 25 min | 2 tasks | 5 files |
 | Phase 200 P02 | 40 min | 2 tasks | 7 files |
+| Phase 200 P03 | 24 min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -306,6 +307,9 @@ Last activity: 2026-09-07
 - [Phase 200]: Re-index legacy planning files deterministically only after every path passes containment validation. — Old planning bytes remain readable as authority-neutral evidence or timeline material without allowing traversal, symlink escape, or malformed JSON.
 - [Phase 200]: Keep state loads observational and persist legacy classification with the next ordinary safe state transaction. — Preview, report-only, and read-only commands must not mutate COLONY_STATE.json.
 - [Phase 200]: Canonicalize the additive legacy_unbound marker out of stale-packet plan hashes. — Classification metadata does not change executable phases and must not invalidate an otherwise unchanged pre-upgrade planning packet.
+- [Phase 200]: Evidence identity excludes observation time, so exact rediscovery cannot manufacture freshness.
+- [Phase 200]: Planning evidence is fresh only under the exact active scope, source hash, frontier, and source-state policy.
+- [Phase 200]: Owner-answer reuse requires exact goal, session, specification, base-plan, meaning, behavior, impact, risk, and acceptance equivalence.
 
 ### Pending Todos
 
@@ -421,8 +425,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-07T12:24:06.412Z
-Stopped at: Completed 200-02-PLAN.md
+Last session: 2026-09-07T12:51:51.275Z
+Stopped at: Completed 200-03-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

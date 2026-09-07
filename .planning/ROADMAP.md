@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 2/25 plans executed
+**Plans:** 3/25 plans executed
 
 Plans:
 
@@ -195,7 +195,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [x] 200-02-PLAN.md — Migrate and replay specification and planning records safely.
-- [ ] 200-03-PLAN.md — Build the shared planning-evidence catalogue.
+- [x] 200-03-PLAN.md — Build the shared planning-evidence catalogue.
 - [ ] 200-04-PLAN.md — Validate five confidence dimensions and deterministic stop policy.
 - [ ] 200-05-PLAN.md — Compute semantic before-to-after plan deltas.
 - [ ] 200-06-PLAN.md — Persist the append-only iteration-card timeline.
