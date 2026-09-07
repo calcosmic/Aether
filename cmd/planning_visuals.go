@@ -3,6 +3,8 @@ package cmd
 import (
 	"fmt"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
@@ -14,6 +16,15 @@ type planningVisualOptions struct {
 	Width  int
 	Detail bool
 }
+
+type planningVisualWidthBand string
+
+const (
+	planningVisualBandStacked planningVisualWidthBand = "stacked"
+	planningVisualBandCompact planningVisualWidthBand = "compact"
+	planningVisualBandTable   planningVisualWidthBand = "table"
+	planningVisualBandWide    planningVisualWidthBand = "wide"
+)
 
 type planningVisualIdentityProjection struct {
 	Caste string `json:"caste"`
@@ -288,13 +299,14 @@ func renderPlanningSpecificationVisual(result specCommandResult, options plannin
 	if projection.NextAction != "" {
 		builder.WriteString(renderNextUp(projection.NextAction))
 	}
-	return builder.String()
+	return finalizePlanningVisual(builder.String(), options)
 }
 
 func renderPlanningIterationVisual(card colony.PlanningIterationCard, options planningVisualOptions) string {
 	projection := projectPlanningIteration(card)
 	var builder strings.Builder
 	builder.WriteString(renderBanner(commandEmoji("plan"), "Planning Iteration"))
+	builder.WriteString("Card: Planning Iteration\n")
 	builder.WriteString("Identity: ")
 	builder.WriteString(casteIdentity("scout"))
 	builder.WriteString(" → ")
@@ -304,7 +316,17 @@ func renderPlanningIterationVisual(card colony.PlanningIterationCard, options pl
 	renderPlanningValueList(&builder, "Fresh evidence", projection.EvidenceIDs)
 	builder.WriteString(renderStageMarker("Planning readiness"))
 	for _, score := range projection.Scores {
-		fmt.Fprintf(&builder, "%s: %d%% → %d%%\n", score.Dimension, score.Before, score.After)
+		delta := score.After - score.Before
+		switch planningVisualBandForWidth(options.Width) {
+		case planningVisualBandStacked:
+			fmt.Fprintf(&builder, "%s\n  Before: %d%%\n  After: %d%% (%+d)\n", score.Dimension, score.Before, score.After, delta)
+		case planningVisualBandCompact:
+			fmt.Fprintf(&builder, "%s  %d%% → %d%%\n", score.Dimension, score.Before, score.After)
+		case planningVisualBandTable:
+			fmt.Fprintf(&builder, "%s | Before %d%% | After %d%% | %+d\n", score.Dimension, score.Before, score.After, delta)
+		default:
+			fmt.Fprintf(&builder, "%-12s %d%% → %d%% (%+d)\n", score.Dimension, score.Before, score.After, delta)
+		}
 	}
 	fmt.Fprintf(&builder, "Overall: %d%% → %d%%\n", projection.OverallBefore, projection.OverallAfter)
 	builder.WriteString(renderStageMarker("Weakest gap"))
@@ -326,7 +348,7 @@ func renderPlanningIterationVisual(card colony.PlanningIterationCard, options pl
 		fmt.Fprintf(&builder, "Next research: %s\n", projection.EvidenceThatWouldChange)
 	}
 	fmt.Fprintf(&builder, "Details: %s\n", projection.DetailCommand)
-	return builder.String()
+	return finalizePlanningVisual(builder.String(), options)
 }
 
 func renderPlanningDecisionVisual(card planningDecisionCard, options planningVisualOptions) string {
@@ -352,7 +374,7 @@ func renderPlanningDecisionVisual(card planningDecisionCard, options planningVis
 	fmt.Fprintf(&builder, "Prior answer: %s\n", emptyFallback(projection.PriorAnswer, "none"))
 	fmt.Fprintf(&builder, "Revalidation: %s\n", projection.Revalidation)
 	fmt.Fprintf(&builder, "Planning resumes: %s\n", projection.PlanningResumes)
-	return builder.String()
+	return finalizePlanningVisual(builder.String(), options)
 }
 
 func renderPlanningCandidateVisual(review planCandidateReview, options planningVisualOptions) string {
@@ -403,13 +425,13 @@ func renderPlanningCandidateVisual(review planCandidateReview, options planningV
 	fmt.Fprintf(&builder, "Producer: %s (%s)\n", projection.RecommendationProducer, projection.RecommendationProducerID)
 	if projection.CandidateActive {
 		builder.WriteString("Owner acceptance is recorded; build and run are equal execution choices.\n")
-		builder.WriteString(renderNextUp("aether build  |  aether run"))
+		builder.WriteString(renderNextUp(strings.Join(projection.ExecutionActions, "  |  ")))
 	} else {
 		builder.WriteString("Candidate remains inactive until explicit owner acceptance.\n")
 		builder.WriteString("Accept this candidate?\n")
 		fmt.Fprintf(&builder, "  %s\n", projection.AcceptanceCommand)
 	}
-	return builder.String()
+	return finalizePlanningVisual(builder.String(), options)
 }
 
 func renderPlanningPresetVisual(goal, specificationRevisionID string, selection planningPresetSelection, options planningVisualOptions) string {
@@ -427,14 +449,14 @@ func renderPlanningPresetVisual(goal, specificationRevisionID string, selection 
 		}
 		builder.WriteString("Choose the planning preset: Fast, Balanced, Deep, or Exhaustive.\n")
 		builder.WriteString("Planning did not start. State: unchanged.\n")
-		return builder.String()
+		return finalizePlanningVisual(builder.String(), options)
 	}
 	fmt.Fprintf(&builder, "Preset: %s — target %d, up to %d passes", selection.Policy.Label, selection.Policy.TargetConfidence, selection.Policy.PassCap)
 	if selection.SelectionSource == planningPresetSourceNamed || selection.SelectionSource == planningPresetSourceExplicitPair {
 		builder.WriteString(" — supplied by owner flag")
 	}
 	builder.WriteString(".\n")
-	return builder.String()
+	return finalizePlanningVisual(builder.String(), options)
 }
 
 func renderPlanningStageVisual(manifest planningStageManifest, status string, workerName string, completed bool, freshEvidence, remainingQuestions int, options planningVisualOptions) string {
@@ -473,7 +495,7 @@ func renderPlanningStageVisual(manifest planningStageManifest, status string, wo
 		}
 		renderPlanningValueList(&builder, "Evidence sources", bindings)
 	}
-	return builder.String()
+	return finalizePlanningVisual(builder.String(), options)
 }
 
 func renderPlanningStopVisual(decision colony.PlanningStopDecision, residualGaps []colony.PlanningGap, score, target int, preset string, options planningVisualOptions) string {
@@ -499,7 +521,7 @@ func renderPlanningStopVisual(decision colony.PlanningStopDecision, residualGaps
 		fmt.Fprintf(&builder, "Preset: %s\n", preset)
 	}
 	builder.WriteString("Stopping creates a candidate only; the active plan is unchanged.\n")
-	return builder.String()
+	return finalizePlanningVisual(builder.String(), options)
 }
 
 func projectPlanningAcceptance(candidate colony.PlanCandidate, revision colony.PlanRevision, receipt colony.PlanAcceptanceReceipt, replayed bool) planningAcceptanceProjection {
@@ -533,7 +555,7 @@ func renderPlanningAcceptanceVisual(candidate colony.PlanCandidate, revision col
 	builder.WriteString("Next Up: choose an operating mode\n")
 	builder.WriteString("  aether build\n")
 	builder.WriteString("  aether run\n")
-	return builder.String()
+	return finalizePlanningVisual(builder.String(), options)
 }
 
 func renderPlanningRevisionImpactVisual(reason string, evidence, requirements, tasks, proofs, completed, unaffected []string, historicalRevision, authority string, options planningVisualOptions) string {
@@ -551,7 +573,7 @@ func renderPlanningRevisionImpactVisual(reason string, evidence, requirements, t
 	renderPlanningValueList(&builder, "Preserved unaffected work", unaffected)
 	fmt.Fprintf(&builder, "Historical revision: retained as %s\n", historicalRevision)
 	fmt.Fprintf(&builder, "Authority required: %s\n", emptyFallback(authority, "none"))
-	return builder.String()
+	return finalizePlanningVisual(builder.String(), options)
 }
 
 func projectPlanningRefusal(action, because, state, next string) planningRefusalProjection {
@@ -559,6 +581,239 @@ func projectPlanningRefusal(action, because, state, next string) planningRefusal
 		Screen: "planning_refusal", Identity: planningVisualIdentityProjection{Caste: "queen", Label: "Queen"},
 		Action: action, Because: because, State: state, Next: next,
 	}
+}
+
+// renderCanonicalPlanningResult selects the narrow typed card represented by
+// a plan command result. Returning false preserves the legacy renderer for
+// pre-Phase-200 whole-plan summaries and repair operations.
+func renderCanonicalPlanningResult(result map[string]interface{}, options planningVisualOptions) (string, bool) {
+	switch planCandidateOperation(stringValue(result["operation"])) {
+	case planCandidateOperationReview:
+		if review, ok := planningCandidateReviewFromResult(result); ok {
+			return renderPlanningCandidateVisual(review, options), true
+		}
+	case planCandidateOperationDetail:
+		if card, ok := planningIterationCardValue(result["iteration"]); ok {
+			return renderPlanningIterationVisual(card, planningVisualOptions{Width: options.Width, Detail: true}), true
+		}
+	case planCandidateOperationAccept:
+		candidate, candidateOK := planningCandidateValue(result["candidate"])
+		revision, revisionOK := planningPlanRevisionValue(result["revision"])
+		receipt, receiptOK := planningAcceptanceReceiptValue(result["acceptance_receipt"])
+		if candidateOK && revisionOK && receiptOK {
+			replayed, _ := result["replayed"].(bool)
+			return renderPlanningAcceptanceVisual(candidate, revision, receipt, replayed, options), true
+		}
+	}
+
+	if card, ok := planningIterationCardValue(result["iteration_card"]); ok {
+		return renderPlanningIterationVisual(card, options), true
+	}
+	if cards, ok := result["decision_cards"].([]planningDecisionCard); ok && len(cards) > 0 {
+		return renderPlanningDecisionVisual(cards[0], options), true
+	}
+	if card, ok := result["decision_card"].(planningDecisionCard); ok {
+		return renderPlanningDecisionVisual(card, options), true
+	}
+	if required, _ := result["preset_required"].(bool); required {
+		selection := planningPresetSelection{
+			PresetRequired: true, SelectionSource: stringValue(result["selection_source"]),
+		}
+		switch values := result["preset_options"].(type) {
+		case []planningPresetPolicy:
+			selection.Options = append([]planningPresetPolicy(nil), values...)
+		case []interface{}:
+			for _, value := range values {
+				if option, ok := value.(planningPresetPolicy); ok {
+					selection.Options = append(selection.Options, option)
+				}
+			}
+		}
+		return renderPlanningPresetVisual(stringValue(result["goal"]), planningSpecificationRevisionFromResult(result), selection, options), true
+	}
+	if manifest, ok := planningStageManifestValue(result["stage_manifest"]); ok {
+		return renderPlanningStageVisual(manifest, stringValue(result["status"]), planningWorkerNameFromResult(result, manifest.ExpectedCaste), false, 0, 0, options), true
+	}
+	if manifest, ok := planningStageManifestValue(result["route_stage_manifest"]); ok {
+		return renderPlanningStageVisual(manifest, stringValue(result["status"]), planningWorkerNameFromResult(result, manifest.ExpectedCaste), false, 0, 0, options), true
+	}
+	if manifest, ok := planningStageManifestValue(result["scout_stage_manifest"]); ok {
+		return renderPlanningStageVisual(manifest, stringValue(result["status"]), planningWorkerNameFromResult(result, manifest.ExpectedCaste), false, 0, 0, options), true
+	}
+	return "", false
+}
+
+// projectPlanningWorkflowResult adds presentation siblings to planning JSON
+// without deleting or renaming any canonical field consumed by wrappers.
+func projectPlanningWorkflowResult(result interface{}) interface{} {
+	raw, ok := result.(map[string]interface{})
+	if !ok {
+		return result
+	}
+	projected := make(map[string]interface{}, len(raw)+3)
+	for key, value := range raw {
+		projected[key] = value
+	}
+	recognized := false
+	switch planCandidateOperation(stringValue(raw["operation"])) {
+	case planCandidateOperationReview:
+		if review, ok := planningCandidateReviewFromResult(raw); ok {
+			projection := projectPlanningCandidate(review)
+			projected["planning_projection"] = projection
+			projected["stop_reason_public_label"] = projection.StopReasonPublicLabel
+			projected["evidence_that_would_change"] = projection.EvidenceThatWouldChange
+			recognized = true
+		}
+	case planCandidateOperationDetail:
+		if card, ok := planningIterationCardValue(raw["iteration"]); ok {
+			projection := projectPlanningIteration(card)
+			projected["planning_projection"] = projection
+			projected["stop_reason_public_label"] = projection.StopReasonPublicLabel
+			recognized = true
+		}
+	case planCandidateOperationAccept:
+		candidate, candidateOK := planningCandidateValue(raw["candidate"])
+		revision, revisionOK := planningPlanRevisionValue(raw["revision"])
+		receipt, receiptOK := planningAcceptanceReceiptValue(raw["acceptance_receipt"])
+		if candidateOK && revisionOK && receiptOK {
+			replayed, _ := raw["replayed"].(bool)
+			projected["planning_projection"] = projectPlanningAcceptance(candidate, revision, receipt, replayed)
+			projected["execution_actions"] = []string{"aether build", "aether run"}
+			recognized = true
+		}
+	}
+	if card, ok := planningIterationCardValue(raw["iteration_card"]); ok {
+		projection := projectPlanningIteration(card)
+		projected["planning_projection"] = projection
+		projected["stop_reason_public_label"] = projection.StopReasonPublicLabel
+		recognized = true
+	}
+	if !recognized {
+		return result
+	}
+	return projected
+}
+
+func planningCandidateReviewFromResult(result map[string]interface{}) (planCandidateReview, bool) {
+	candidate, ok := planningCandidateValue(result["candidate"])
+	if !ok {
+		return planCandidateReview{}, false
+	}
+	review := planCandidateReview{
+		Operation: planCandidateOperationReview, Candidate: candidate,
+		TargetConfidence: intValue(result["target_confidence"]), ActualConfidence: intValue(result["actual_confidence"]),
+		EvidenceThatWouldChange: stringValue(result["evidence_that_would_change"]),
+		AcceptanceCommand:       stringValue(result["acceptance_command"]),
+	}
+	if values, ok := result["scores"].([]planCandidateConfidenceScore); ok {
+		review.Scores = append([]planCandidateConfidenceScore(nil), values...)
+	}
+	if value, ok := result["stop_decision"].(colony.PlanningStopDecision); ok {
+		review.StopDecision = value
+	}
+	if values, ok := result["residual_gaps"].([]colony.PlanningGap); ok {
+		review.ResidualGaps = append([]colony.PlanningGap(nil), values...)
+	}
+	if value, ok := result["semantic_delta"].(colony.PlanningSemanticDelta); ok {
+		review.SemanticDelta = value
+	}
+	if value, ok := result["recommendation"].(colony.QueenPlanRecommendation); ok {
+		review.Recommendation = value
+	}
+	if value, ok := result["timeline"].(colony.PlanningTimelineBinding); ok {
+		review.Timeline = value
+	}
+	if values, ok := result["iterations"].([]colony.PlanningIterationCard); ok {
+		review.Iterations = append([]colony.PlanningIterationCard(nil), values...)
+	}
+	if value, ok := result["acceptance"].(planCandidateAcceptanceRequest); ok {
+		review.Acceptance = value
+	}
+	return review, true
+}
+
+func planningCandidateValue(value interface{}) (colony.PlanCandidate, bool) {
+	switch candidate := value.(type) {
+	case colony.PlanCandidate:
+		return candidate, true
+	case *colony.PlanCandidate:
+		if candidate != nil {
+			return *candidate, true
+		}
+	}
+	return colony.PlanCandidate{}, false
+}
+
+func planningIterationCardValue(value interface{}) (colony.PlanningIterationCard, bool) {
+	switch card := value.(type) {
+	case colony.PlanningIterationCard:
+		return card, true
+	case *colony.PlanningIterationCard:
+		if card != nil {
+			return *card, true
+		}
+	}
+	return colony.PlanningIterationCard{}, false
+}
+
+func planningPlanRevisionValue(value interface{}) (colony.PlanRevision, bool) {
+	switch revision := value.(type) {
+	case colony.PlanRevision:
+		return revision, true
+	case *colony.PlanRevision:
+		if revision != nil {
+			return *revision, true
+		}
+	}
+	return colony.PlanRevision{}, false
+}
+
+func planningAcceptanceReceiptValue(value interface{}) (colony.PlanAcceptanceReceipt, bool) {
+	switch receipt := value.(type) {
+	case colony.PlanAcceptanceReceipt:
+		return receipt, true
+	case *colony.PlanAcceptanceReceipt:
+		if receipt != nil {
+			return *receipt, true
+		}
+	}
+	return colony.PlanAcceptanceReceipt{}, false
+}
+
+func planningStageManifestValue(value interface{}) (planningStageManifest, bool) {
+	switch manifest := value.(type) {
+	case planningStageManifest:
+		return manifest, true
+	case *planningStageManifest:
+		if manifest != nil {
+			return *manifest, true
+		}
+	}
+	return planningStageManifest{}, false
+}
+
+func planningSpecificationRevisionFromResult(result map[string]interface{}) string {
+	if value := strings.TrimSpace(stringValue(result["specification_revision_id"])); value != "" {
+		return value
+	}
+	if manifest, ok := planningStageManifestValue(result["stage_manifest"]); ok {
+		return manifest.Specification.RevisionID
+	}
+	return ""
+}
+
+func planningWorkerNameFromResult(result map[string]interface{}, caste planningStageWorkerCaste) string {
+	if value := strings.TrimSpace(stringValue(result["worker_name"])); value != "" {
+		return value
+	}
+	if dispatches, ok := result["dispatches"].([]codexPlanningDispatch); ok {
+		for _, dispatch := range dispatches {
+			if strings.EqualFold(dispatch.Caste, string(caste)) {
+				return dispatch.Name
+			}
+		}
+	}
+	return ""
 }
 
 func renderPlanningRefusalVisual(action, because, state, next string, options planningVisualOptions) string {
@@ -572,7 +827,222 @@ func renderPlanningRefusalVisual(action, because, state, next string, options pl
 	fmt.Fprintf(&builder, "Because: %s\n", projection.Because)
 	fmt.Fprintf(&builder, "State: %s\n", projection.State)
 	fmt.Fprintf(&builder, "Next: %s\n", projection.Next)
+	return finalizePlanningVisual(builder.String(), options)
+}
+
+func planningVisualBandForWidth(width int) planningVisualWidthBand {
+	width = planningVisualResolvedWidth(width)
+	switch {
+	case width < 48:
+		return planningVisualBandStacked
+	case width < 64:
+		return planningVisualBandCompact
+	case width < 96:
+		return planningVisualBandTable
+	default:
+		return planningVisualBandWide
+	}
+}
+
+func planningVisualResolvedWidth(width int) int {
+	if width <= 0 {
+		width = lifecycleStatusOutputWidth()
+	}
+	if width < 24 {
+		return 24
+	}
+	return width
+}
+
+// finalizePlanningVisual applies the terminal-only guarantees after semantic
+// rendering: append-only output, no cursor movement, and bounded lines. SGR
+// colour escapes are retained on short lines but never count as columns.
+func finalizePlanningVisual(output string, options planningVisualOptions) string {
+	width := planningVisualResolvedWidth(options.Width)
+	output = planningSanitizeTerminalControls(output)
+	lines := strings.Split(strings.TrimSuffix(output, "\n"), "\n")
+	rendered := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimRight(line, " \t")
+		if planningVisibleWidth(line) <= width || planningVisualLineMayOverflow(line) {
+			rendered = append(rendered, line)
+			continue
+		}
+		// A wrapped colour span is ambiguous across terminal implementations.
+		// Keep colour on the identity-sized lines and wrap long prose as plain
+		// text so layout remains deterministic everywhere.
+		line = planningStripANSI(line)
+		rendered = append(rendered, planningWrapPlainLine(line, width)...)
+	}
+	return strings.Join(rendered, "\n") + "\n"
+}
+
+func planningSanitizeTerminalControls(value string) string {
+	value = strings.ReplaceAll(value, "\r", "")
+	value = strings.ReplaceAll(value, "\b", "")
+	var builder strings.Builder
+	for index := 0; index < len(value); {
+		if value[index] != 0x1b {
+			builder.WriteByte(value[index])
+			index++
+			continue
+		}
+		if index+1 >= len(value) {
+			break
+		}
+		switch value[index+1] {
+		case '[':
+			end := index + 2
+			for end < len(value) && (value[end] < '@' || value[end] > '~') {
+				end++
+			}
+			if end >= len(value) {
+				index = len(value)
+				continue
+			}
+			// Only Select Graphic Rendition is presentation; every cursor,
+			// erase, or position sequence is deliberately discarded.
+			if value[end] == 'm' && shouldUseANSIColors() {
+				builder.WriteString(value[index : end+1])
+			}
+			index = end + 1
+		case ']':
+			// OSC controls are not needed for planning output. Consume through
+			// BEL or ST so terminal title/link controls cannot leak through.
+			index += 2
+			for index < len(value) {
+				if value[index] == '\a' {
+					index++
+					break
+				}
+				if value[index] == 0x1b && index+1 < len(value) && value[index+1] == '\\' {
+					index += 2
+					break
+				}
+				index++
+			}
+		default:
+			// Drop other two-byte terminal controls.
+			index += 2
+		}
+	}
 	return builder.String()
+}
+
+func planningVisibleWidth(value string) int {
+	return spendDisplayWidth(planningStripANSI(value))
+}
+
+func planningStripANSI(value string) string {
+	var builder strings.Builder
+	for index := 0; index < len(value); {
+		if value[index] != 0x1b || index+1 >= len(value) {
+			builder.WriteByte(value[index])
+			index++
+			continue
+		}
+		if value[index+1] != '[' {
+			index += 2
+			continue
+		}
+		index += 2
+		for index < len(value) {
+			final := value[index] >= '@' && value[index] <= '~'
+			index++
+			if final {
+				break
+			}
+		}
+	}
+	return builder.String()
+}
+
+func planningWrapPlainLine(line string, width int) []string {
+	if line == "" || planningVisibleWidth(line) <= width {
+		return []string{line}
+	}
+	leading := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
+	continuation := leading + "  "
+	if planningVisibleWidth(continuation) >= width {
+		continuation = "  "
+	}
+	words := strings.Fields(line)
+	if len(words) == 0 {
+		return []string{""}
+	}
+	result := make([]string, 0, 2)
+	current := leading
+	for _, word := range words {
+		prefix := current
+		if strings.TrimSpace(prefix) != "" {
+			prefix += " "
+		}
+		if planningVisibleWidth(prefix+word) <= width {
+			current = prefix + word
+			continue
+		}
+		if strings.TrimSpace(current) != "" {
+			result = append(result, strings.TrimRight(current, " "))
+			current = continuation
+		}
+		available := width - planningVisibleWidth(current)
+		chunks := planningSplitVisibleWord(word, available)
+		for chunkIndex, chunk := range chunks {
+			if chunkIndex > 0 {
+				result = append(result, strings.TrimRight(current, " "))
+				current = continuation
+			}
+			current += chunk
+		}
+	}
+	if strings.TrimSpace(current) != "" {
+		result = append(result, strings.TrimRight(current, " "))
+	}
+	return result
+}
+
+func planningSplitVisibleWord(word string, firstWidth int) []string {
+	if firstWidth < 1 {
+		firstWidth = 1
+	}
+	chunks := make([]string, 0, 2)
+	var current strings.Builder
+	currentWidth := 0
+	limit := firstWidth
+	for _, character := range word {
+		characterWidth := planningRuneWidth(character)
+		if currentWidth > 0 && currentWidth+characterWidth > limit {
+			chunks = append(chunks, current.String())
+			current.Reset()
+			currentWidth = 0
+			limit = firstWidth
+		}
+		current.WriteRune(character)
+		currentWidth += characterWidth
+	}
+	if current.Len() > 0 {
+		chunks = append(chunks, current.String())
+	}
+	return chunks
+}
+
+func planningRuneWidth(character rune) int {
+	if character == 0xFE0F || character == 0xFE0E || character == 0x200D || unicode.Is(unicode.Mn, character) {
+		return 0
+	}
+	if character >= 0x1F000 || (character >= 0x2600 && character <= 0x27BF) {
+		return 2
+	}
+	return 1
+}
+
+func planningVisualSafeIdentifier(label, identifier string) string {
+	return label + ": " + identifier
+}
+
+func planningVisualLineMayOverflow(line string) bool {
+	plain := strings.TrimSpace(planningStripANSI(line))
+	return strings.HasPrefix(plain, "Identifier: sha256:") && utf8.ValidString(plain)
 }
 
 func renderPlanningSpecSection(builder *strings.Builder, title string, items []specCommandVisualItem) {

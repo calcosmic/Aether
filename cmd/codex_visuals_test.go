@@ -3296,7 +3296,7 @@ func TestCodexVisualsSpecIdentityContract(t *testing.T) {
 		t.Fatalf("commandEmoji(spec) = %q, want 📜", got)
 	}
 	output := renderSpecCommandVisual(planningVisualSpecificationFixture())
-	if !strings.Contains(output, "📜 Specification") {
+	if !strings.Contains(output, "📜 "+spacedTitle("Specification")) {
 		t.Fatalf("specification visual missing full command identity:\n%s", output)
 	}
 	if strings.Contains(output, "Command: Spec\n") || strings.Contains(output, "Identity: Spec\n") {

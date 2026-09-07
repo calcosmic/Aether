@@ -180,6 +180,7 @@ var commandEmojiMap = map[string]string{
 	"init":                   "🥚",
 	"colonize":               "🗺️",
 	"plan":                   "📋",
+	"spec":                   "📜",
 	"build":                  "🔨",
 	"continue":               "👁️",
 	"continue-blocked":       "⛔",
@@ -368,7 +369,7 @@ func outputWorkflow(result interface{}, visual string) {
 		writeVisualOutput(stdout, visual)
 		return
 	}
-	outputOK(result)
+	outputOK(projectPlanningWorkflowResult(result))
 }
 
 // currentStreamingCommand is the top-level command of this invocation, set by
@@ -1414,6 +1415,9 @@ func dispatchStatusIcon(status string) string {
 }
 
 func renderPlanVisual(result map[string]interface{}) string {
+	if visual, ok := renderCanonicalPlanningResult(result, planningVisualOptions{Width: lifecycleStatusOutputWidth()}); ok {
+		return visual
+	}
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("plan"), "Plan"))
 	b.WriteString(visualDividerStr())
