@@ -179,6 +179,35 @@ func TestPlanAcceptanceGate200CandidateReadyDiskRefusalIsReadOnly(t *testing.T) 
 	}
 }
 
+func TestCodexBuildAuthorityCandidateReadyRefusalCreatesNoAttemptOrMutation(t *testing.T) {
+	saveGlobals(t)
+	root, candidate := planCandidateTestPending(t)
+	var err error
+	store, err = storage.NewStore(filepath.Join(root, ".aether", "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := mustReadSpecificationTestState(t, root)
+	goal := "Refuse the inactive candidate without touching state"
+	state.Goal = &goal
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatal(err)
+	}
+	before := hashDirContents(t, root)
+
+	result, returnedState, phase, dispatches, buildErr := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{})
+	var refusal *codexBuildPlanAuthorityError
+	if !errors.As(buildErr, &refusal) || refusal.Decision.RefusalCode != planAuthorityRefusalCandidateNotAccepted || refusal.Decision.Candidate.ID != candidate.ID {
+		t.Fatalf("build result=%v state=%+v phase=%+v dispatches=%v error=%v, want typed candidate refusal", result, returnedState, phase, dispatches, buildErr)
+	}
+	if result != nil || len(dispatches) != 0 {
+		t.Fatalf("refused build created result or dispatches: result=%v dispatches=%v", result, dispatches)
+	}
+	if after := hashDirContents(t, root); after != before {
+		t.Fatalf("refused build mutated state or created an attempt: before=%s after=%s", before, after)
+	}
+}
+
 func TestPlanAcceptanceGate200CurrentAcceptedDiskAuthorityMatches(t *testing.T) {
 	saveGlobals(t)
 	root, candidate := planCandidateTestPending(t)
