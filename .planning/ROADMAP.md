@@ -60,7 +60,7 @@ The phase names below identify areas to investigate, not predetermined implement
 Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase research artifact using `.planning/research/v1.28-classic-synthesis-template.md`. This is targeted engineering archaeology within the implementation phase, not a standalone pre-restoration phase and not another owner questionnaire. The comprehensive report is the starting map; it does not substitute for examining the relevant old and current implementations.
 
 - [x] **Phase 199 — Front Door and Classic Contract** (completed 2026-09-07)
-- [ ] **Phase 200 — Iterative Planning**
+- [x] **Phase 200 — Iterative Planning** (completed 2026-09-08)
 - [ ] **Phase 201 — Queen-Led Work Cycle**
 - [ ] **Phase 202 — Swarm, Oracle, and Live Colony**
 - [ ] **Phase 203 — Biological Runtime**
@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 24/25 plans executed
+**Plans:** 25/25 plans complete
 
 Plans:
 
@@ -250,7 +250,7 @@ Plans:
 
 **Wave 13** *(blocked on Wave 12 completion)*
 
-- [ ] 200-23-PLAN.md — Prove the Classic synthesis and full public planning journey.
+- [x] 200-23-PLAN.md — Prove the Classic synthesis and full public planning journey.
 
 **Success criteria:**
 

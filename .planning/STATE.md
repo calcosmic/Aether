@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
-status: executing
-stopped_at: Completed 200-22-PLAN.md
-last_updated: "2026-09-08T02:05:36.955Z"
+status: verifying
+stopped_at: Completed 200-23-PLAN.md; inherited Phase 199 vocabulary gate remains
+last_updated: "2026-09-08T03:31:07.894Z"
 last_activity: 2026-09-08
 progress:
   total_phases: 7
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 59
-  completed_plans: 58
-  percent: 14
+  completed_plans: 59
+  percent: 29
 ---
 
 # Project State
@@ -29,8 +29,8 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 23 of 25
-Status: Ready to execute
+Plan: 25 of 25
+Status: Phase complete — ready for verification
 Last activity: 2026-09-08
 
 ## Performance Metrics
@@ -135,6 +135,7 @@ Last activity: 2026-09-08
 | Phase 200 P21 | 15 min | 2 tasks | 7 files |
 | Phase 200 P25 | 8 min | 2 tasks | 7 files |
 | Phase 200 P22 | 24min | 2 tasks | 11 files |
+| Phase 200 P23 | 1h 16m | 3 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -409,6 +410,10 @@ Last activity: 2026-09-08
 - [Phase 200]: Specification approval, planning stop, and exact candidate acceptance remain separate owner boundaries. — Only the final acceptance receipt may expose build or Autopilot.
 - [Phase 200]: Specification is runtime-native in Codex while Claude and OpenCode retain slash-command projections. — All platforms preserve the same Go-owned authority through their supported command spelling.
 - [Phase 200]: The canonical Plan YAML owns the singular wrapper-host contract pointer. — Managed projections remain synchronized without duplicating host-contract authority text.
+- [Phase 200]: Keep Phase 199 corpus compatibility while making Phase 200 proof requirements additive and closed under source, capability, and case references. — The new contract proves causality without weakening or rewriting historical evidence.
+- [Phase 200]: Exercise production planning kernels in real temporary Git repositories without live providers or network access. — This gives deterministic end-to-end authority proof suitable for CI.
+- [Phase 200]: Migrate legacy immediate-dispatch fixtures to explicit Specification and preset authority boundaries. — Current lifecycle safety boundaries remain authoritative.
+- [Phase 200]: Do not claim a green repository gate while the protected Phase 199 vocabulary inventory remains mismatched. — All Phase 200-owned gates pass, but required full and race commands remain nonzero for one inherited root cause.
 
 ### Pending Todos
 
@@ -464,6 +469,7 @@ Last activity: 2026-09-08
 - ~~`pkg/trace/cost.go` holds a stale model-price table~~ — **RESOLVED, found stale 2026-08-27.** The file no longer exists and no price table or token-to-dollar arithmetic remains anywhere in the Go source (`grep -rln 'CalculateCost|pricePerToken|costPerToken|InputPrice' --include='*.go'` returns nothing). The owner ruling this blocker demanded — delete as dead code, or fix its arithmetic — is moot; it was deleted at some point between v1.26 and now. Phase 174's D-02 ("no model-price table is ever built") therefore holds in fact as well as in principle, which is what Phase 196 needs before it puts a cost line on screen.
 
 - `gopkg.in/yaml.v3` is archived and author-declared unmaintained. v1.26 makes YAML the format a non-technical user hand-writes, which changes the risk profile. The migration to `go.yaml.in/yaml/v3` is a mechanical import swap and is deliberately unbundled — it gets its own plan, not a rider on the roster work
+- Phase 200 full and race gates remain nonzero because protected Phase 199 file 199-UAT.md contains legacy_pause and legacy_resume occurrences absent from the Phase 199 exhaustive vocabulary inventory; Phase 200-owned gates pass.
 
 ## Deferred Items
 
@@ -524,8 +530,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-08T02:05:36.946Z
-Stopped at: Completed 200-22-PLAN.md
+Last session: 2026-09-08T03:31:07.885Z
+Stopped at: Completed 200-23-PLAN.md; inherited Phase 199 vocabulary gate remains
 Resume file: None
 
 ## Operator Next Steps
