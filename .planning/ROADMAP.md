@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 40 plans (25 complete; 15 gap-closure plans pending)
+**Plans:** 26/40 plans executed
 
 Plans:
 
@@ -254,7 +254,7 @@ Plans:
 
 **Wave 14** *(gap closure; blocked on Wave 13 completion)*
 
-- [ ] 200-26-PLAN.md — Repair the Phase 199 vocabulary inventory and make its historical gate receipt durable across later GSD bookkeeping.
+- [x] 200-26-PLAN.md — Repair the Phase 199 vocabulary inventory and make its historical gate receipt durable across later GSD bookkeeping.
 
 **Wave 15** *(gap closure; blocked on Wave 14 completion)*
 

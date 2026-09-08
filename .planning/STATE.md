@@ -2,20 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
-current_phase: 200
-current_phase_name: iterative-planning
 status: executing
-stopped_at: Completed 200-23 follow-up; inherited Phase 199 vocabulary gate remains
-last_updated: "2026-09-08T19:04:48.962Z"
+stopped_at: Completed 200-26-PLAN.md
+last_updated: "2026-09-08T20:03:08.272Z"
 last_activity: 2026-09-08
-last_activity_desc: Phase 200 planning complete
-state_head: 4359dc2739b515097524f36e09a7476a8959a222
 progress:
   total_phases: 7
-  completed_phases: 2
+  completed_phases: 1
   total_plans: 74
-  completed_plans: 59
-  percent: 0
+  completed_plans: 60
+  percent: 14
 ---
 
 # Project State
@@ -32,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 
 ## Current Position
 
-Phase: 200 (iterative-planning) — READY TO EXECUTE
-Plan: 25 of 25
+Phase: 200 (Iterative Planning) — EXECUTING
+Plan: 27 of 40
 Status: Ready to execute
-Last activity: 2026-09-08 — Phase 200 planning complete
+Last activity: 2026-09-08
 
 ## Performance Metrics
 
@@ -140,6 +136,7 @@ Last activity: 2026-09-08 — Phase 200 planning complete
 | Phase 200 P25 | 8 min | 2 tasks | 7 files |
 | Phase 200 P22 | 24min | 2 tasks | 11 files |
 | Phase 200 P23 | 1h 44m | 3 tasks | 22 files |
+| Phase 200 P26 | 48 min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -420,6 +417,9 @@ Last activity: 2026-09-08 — Phase 200 planning complete
 - [Phase 200]: Do not claim a green repository gate while the protected Phase 199 vocabulary inventory remains mismatched. — All Phase 200-owned gates pass, but required full and race commands remain nonzero for one inherited root cause.
 - [Phase 200]: Exact Specification approval, repair, and Plan preset advice comes from the shared next-action candidate registry. — Run-specific commands remain live-tree-gated without creating new hand-typed advice sites.
 - [Phase 200]: Fresh staged Plan manifests materialize Orchestrator boundary questions before the one-Scout authorization. — After Discuss, planning re-enters through the owner's exact selected preset instead of bypassing or reusing the stale manifest.
+- [Phase 200]: Historical Phase 199 STATE evidence is verified from the recorded Git blob and never compared with later live STATE bytes. — This keeps the receipt durable after legitimate planning-state advancement while preserving immutable historical evidence.
+- [Phase 200]: Only the exact .gsd/dispatch-isolation-sentinel.json path may change; every other pre-existing .gsd entry is protected by closed membership and lstat identity. — This permits the orchestrator-owned sentinel mutation without weakening scratch-tree tamper detection.
+- [Phase 200]: Config verification accepts exact bytes or the single semantic workflow._auto_chain_active true-to-false reset. — This permits the documented orchestrator cleanup and rejects every unrelated config mutation.
 
 ### Pending Todos
 
@@ -536,8 +536,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-08T03:56:11.211Z
-Stopped at: Completed 200-23 follow-up; inherited Phase 199 vocabulary gate remains
+Last session: 2026-09-08T20:03:08.261Z
+Stopped at: Completed 200-26-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
