@@ -74,6 +74,7 @@ completed: 2026-09-08
 - Kept routine phase research automatic inside the selected preset and removed every old research-approval command/result expectation from canonical and managed planning surfaces.
 - Migrated focused parity and documentation tests so Claude's two projections and OpenCode must carry identical stage order, exact preset facts, structured result fields, candidate inactivity, and acceptance bindings.
 - Tightened init/discuss documentation hygiene to enforce Init → Discuss → draft Specification → explicit Specification approval → Plan, with no settled-Discuss shortcut directly into planning.
+- Restored the repository-wide host-spine, Codex drift-guard, and discuss-boundary compatibility anchors after the Wave 11 full-suite audit, while keeping the retired owner-facing depth controls absent.
 
 ## Task Commits
 
@@ -81,6 +82,7 @@ Each task was committed atomically after its verification gate passed:
 
 1. **Task 1: Replace and synchronize the planning wrapper with staged preset and candidate semantics** — `0d282b40` (feat)
 2. **Task 2: Migrate planning wrapper and documentation parity tests** — `a8b52460` (test)
+3. **Wave 11 compatibility repair** — `835d8808` (fix)
 
 ## Files Created/Modified
 
@@ -105,14 +107,26 @@ Each task was committed atomically after its verification gate passed:
 - `rtk go test ./cmd -run 'TestPlanCommand.*Preset|TestPlanCandidate' -count=1` — 22 tests passed.
 - `rtk go test ./cmd -run 'TestPlanWrapperCardsParity|TestPlanWrapperCeremonyContract|TestPlanWrapperStageSkeleton|TestLifecycleCommandDocsPreferRuntimeCLI' -count=1` — 57 tests passed.
 - `rtk go test ./cmd -run 'Test.*Plan.*Wrapper|TestLifecycleCommandDocsPreferRuntimeCLI|TestPlanCandidate' -count=1` — 82 tests passed.
+- `rtk go test ./cmd -run '^(TestWrapperSourcesUseTypeScriptHostManifestSpine|TestIntelligentWrappersCarryCodexDriftGuard|TestLifecycleWrapperSourcesCarryOrchestratorBoundaryGuidance)$' -count=1` — all 3 repaired cross-cutting compatibility gates passed.
+- `rtk go test ./cmd -run '^(TestDocumentedSubcommandsAreSeverityClassified|TestWrapperSourcesUseTypeScriptHostManifestSpine|TestIntelligentWrappersCarryCodexDriftGuard|TestLifecycleWrapperSourcesCarryOrchestratorBoundaryGuidance)$' -count=1` — the three Plan 21 compatibility gates passed; the severity audit no longer reports `source-check` and now fails only on the Plan 22-owned `spec` registration.
+- Post-repair `rtk go run ./cmd/aether source-check` — passed; 16 canonical surfaces, 5 retired mirrors, and 126 managed wrappers checked.
 
 ## Deviations from Plan
 
-None - plan executed exactly as written.
+### Auto-fixed Issues
+
+**1. [Rule 1 - Bug] Restored cross-cutting planning-wrapper compatibility anchors**
+
+- **Found during:** Wave 11 repository-wide verification after Plan 21 completion.
+- **Issue:** The rewritten plan projections omitted the repository's TypeScript-host compatibility marker, exact Codex command-guide drift check, and full discuss-boundary vocabulary. They also documented `aether source-check` as an executable wrapper command even though D-01 does not classify it.
+- **Fix:** Added an explicitly inert `--planning-depth` compatibility marker without restoring the retired owner control, restored `orchestrator_boundary_guidance` → `aether discuss` → `after_discuss_next` fresh-manifest handling, pointed drift checks at the exact Codex guide, and described source parity without presenting `source-check` as a wrapper command. Focused tests now distinguish the inert marker from the forbidden legacy host invocation.
+- **Files modified:** `.aether/commands/plan.yaml`, both Claude projections, the OpenCode projection, `cmd/plan_wrapper_cards_test.go`, and `cmd/plan_wrapper_ceremony_test.go`.
+- **Commit:** `835d8808`
 
 ## Issues Encountered
 
 - The first migrated test run exposed a case-sensitive expectation mismatch for the displayed `Target sufficiency` label. The assertion was corrected before the task commit; no production contract or runtime behavior changed.
+- The Wave 11 named-gate rerun leaves one unrelated `TestDocumentedSubcommandsAreSeverityClassified` finding: `spec` still needs the Plan 22-owned command-guide/severity registration. The Plan 21-owned `source-check` finding is cleared.
 - `state.update-progress` found no legacy body-level `Progress:` field; `state.advance-plan` still updated the authoritative frontmatter to 56 completed plans, and the roadmap handler recorded Phase 200 at 22/25 summaries.
 - `requirements.mark-complete` does not parse this milestone's bold-ID checkbox format. All seven Plan 21 requirement IDs were already checked complete, so no manual requirement mutation was needed.
 
@@ -125,8 +139,9 @@ None - no external service configuration required.
 - Plan 200-22 can now update the public plan/host contracts, Codex command guide, and build-cycle skill against a stable synchronized primary-platform projection.
 - Plan 200-23 can use the migrated wrappers as the public-path basis for the end-to-end Classic contract corpus and final gate receipt.
 - No Plan 200-21 blocker remains.
+- The remaining `spec` severity finding is deliberately handed back to Plan 200-22; no Plan 22 contract or registration file was changed here.
 
 ## Self-Check: PASSED
 
 - All seven task-owned files and this summary exist.
-- Task commits `0d282b40` and `a8b52460` are present in repository history.
+- Task commits `0d282b40`, `a8b52460`, and post-completion repair `835d8808` are present in repository history.
