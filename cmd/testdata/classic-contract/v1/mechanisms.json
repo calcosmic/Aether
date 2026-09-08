@@ -1,6 +1,10 @@
 {
   "schema_version": "classic-contract/v1",
   "synthesis_source": ".planning/phases/199-front-door-and-classic-contract/199-CLASSIC-SYNTHESIS.md",
+  "synthesis_sources": [
+    ".planning/phases/199-front-door-and-classic-contract/199-CLASSIC-SYNTHESIS.md",
+    ".planning/phases/200-iterative-planning/200-CLASSIC-SYNTHESIS.md"
+  ],
   "mechanisms": [
     {
       "id": "SYN-199-01",
@@ -249,6 +253,429 @@
         "pause-resume",
         "closure",
         "maintenance"
+      ]
+    },
+    {
+      "id": "SYN-200-01",
+      "title": "Keep the Go planning safety kernel",
+      "disposition": "keep-current",
+      "cap_ids": [
+        "CAP-012"
+      ],
+      "public_commands": [
+        "aether plan",
+        "aether plan-finalize"
+      ],
+      "source_citations": [
+        ".planning/phases/200-iterative-planning/200-CLASSIC-SYNTHESIS.md#comparative-synthesis-matrix",
+        "cmd/codex_plan_finalize.go",
+        "cmd/planning_state.go"
+      ],
+      "groups": [
+        "V-200-E2E",
+        "V-200-REPLAY"
+      ],
+      "source_anchors": [
+        "git:3a5b81c2:.claude/commands/ant/plan.md:109-568",
+        "current:cmd/codex_plan_finalize.go:504"
+      ],
+      "modern_invariant": "Only Go-issued, freshness-bound stage manifests and exact receipts may mutate planning authority.",
+      "positive_case_ids": [
+        "phase200.e2e.approved-two-pass-journey",
+        "phase200.replay.exact"
+      ],
+      "negative_case_ids": [
+        "phase200.e2e.draft-planning-refusal",
+        "phase200.replay.divergent-refusal"
+      ]
+    },
+    {
+      "id": "SYN-200-02",
+      "title": "Restore a typed Scout to Route-Setter timeline",
+      "disposition": "restore-modern",
+      "cap_ids": [
+        "CAP-069"
+      ],
+      "public_commands": [
+        "/ant-plan",
+        "aether plan-finalize"
+      ],
+      "source_citations": [
+        ".planning/phases/200-iterative-planning/200-CLASSIC-SYNTHESIS.md#authoritative-flow",
+        "cmd/codex_plan_finalize.go",
+        "cmd/planning_visuals.go"
+      ],
+      "groups": [
+        "V-200-E2E",
+        "V-200-DECISION"
+      ],
+      "source_anchors": [
+        "git:v5.4:.aether/commands/plan.yaml:288-555",
+        "current:cmd/codex_plan_finalize.go:778"
+      ],
+      "modern_invariant": "A complete validated Scout receipt precedes Route-Setter and every completed pair appends one immutable causal card.",
+      "positive_case_ids": [
+        "phase200.e2e.approved-two-pass-journey",
+        "phase200.decision.ordered-material-boundaries"
+      ],
+      "negative_case_ids": [
+        "phase200.decision.unanswered-refusal"
+      ]
+    },
+    {
+      "id": "SYN-200-03",
+      "title": "Validate five-dimensional confidence from fresh evidence",
+      "disposition": "replace-better",
+      "cap_ids": [
+        "CAP-069"
+      ],
+      "public_commands": [
+        "aether plan-finalize"
+      ],
+      "source_citations": [
+        ".planning/phases/200-iterative-planning/200-CLASSIC-SYNTHESIS.md#core-data-contracts",
+        "cmd/planning_confidence.go",
+        "cmd/codex_plan_finalize.go"
+      ],
+      "groups": [
+        "V-200-CONFIDENCE"
+      ],
+      "source_anchors": [
+        "git:3a5b81c2:.claude/commands/ant/plan.md:542-555",
+        "current:cmd/planning_confidence.go"
+      ],
+      "modern_invariant": "Go derives the weighted overall and refuses score movement without fresh applicable evidence or with a supplied overall.",
+      "positive_case_ids": [
+        "phase200.confidence.fresh-evidence"
+      ],
+      "negative_case_ids": [
+        "phase200.confidence.restated-evidence-refusal"
+      ]
+    },
+    {
+      "id": "SYN-200-04",
+      "title": "Ask only evidence-backed material owner decisions",
+      "disposition": "replace-better",
+      "cap_ids": [
+        "CAP-005"
+      ],
+      "public_commands": [
+        "/ant-discuss",
+        "/ant-plan"
+      ],
+      "source_citations": [
+        ".planning/phases/200-iterative-planning/200-CLASSIC-SYNTHESIS.md#responsibilities",
+        "cmd/discuss.go",
+        "cmd/codex_plan_finalize.go"
+      ],
+      "groups": [
+        "V-200-DECISION"
+      ],
+      "source_anchors": [
+        "git:3a5b81c2:.claude/commands/ant/council.md:47-176",
+        "current:cmd/discuss.go:395"
+      ],
+      "modern_invariant": "Every decision carries why-now evidence, consequences, affected IDs, a persisted Queen recommendation, and exact scoped answer authority.",
+      "positive_case_ids": [
+        "phase200.decision.ordered-material-boundaries"
+      ],
+      "negative_case_ids": [
+        "phase200.decision.unanswered-refusal"
+      ]
+    },
+    {
+      "id": "SYN-200-05",
+      "title": "Restore explicit planning presets and autonomous research",
+      "disposition": "restore-modern",
+      "cap_ids": [
+        "CAP-056"
+      ],
+      "public_commands": [
+        "/ant-plan",
+        "aether plan"
+      ],
+      "source_citations": [
+        ".planning/phases/200-iterative-planning/200-CLASSIC-SYNTHESIS.md#research-to-plan-linkage",
+        "cmd/codex_plan.go",
+        ".aether/commands/plan.yaml"
+      ],
+      "groups": [
+        "V-200-E2E",
+        "V-200-PLATFORM"
+      ],
+      "source_anchors": [
+        "git:v5.4:.aether/commands/plan.yaml:65-96",
+        "current:cmd/codex_plan.go:192-298"
+      ],
+      "modern_invariant": "No-flags planning starts no Scout until the owner selects one exact preset; valid explicit presets bypass only that choice.",
+      "positive_case_ids": [
+        "phase200.e2e.approved-two-pass-journey",
+        "phase200.platform.semantic-parity"
+      ],
+      "negative_case_ids": [
+        "phase200.platform.wrapper-authority-refusal"
+      ]
+    },
+    {
+      "id": "SYN-200-06",
+      "title": "Separate reasoned stopping from exact plan acceptance",
+      "disposition": "replace-better",
+      "cap_ids": [
+        "CAP-012"
+      ],
+      "public_commands": [
+        "/ant-plan",
+        "aether plan --candidate"
+      ],
+      "source_citations": [
+        ".planning/phases/200-iterative-planning/200-CLASSIC-SYNTHESIS.md#stop-failure-and-recovery-semantics",
+        "cmd/planning_stop.go",
+        "cmd/plan_candidate.go"
+      ],
+      "groups": [
+        "V-200-STOP",
+        "V-200-ACCEPT"
+      ],
+      "source_anchors": [
+        "git:3a5b81c2:.claude/commands/ant/plan.md:418-535",
+        "current:cmd/plan_candidate.go:218"
+      ],
+      "modern_invariant": "A reasoned stop creates only a non-active candidate; build authority appears only after exact receipt-bound owner acceptance.",
+      "positive_case_ids": [
+        "phase200.stop.reasoned-matrix",
+        "phase200.accept.exact"
+      ],
+      "negative_case_ids": [
+        "phase200.stop.material-refusal",
+        "phase200.accept.stale-refusal"
+      ]
+    },
+    {
+      "id": "SYN-200-07",
+      "title": "Create one readable approved Specification lineage",
+      "disposition": "replace-better",
+      "cap_ids": [
+        "CAP-005"
+      ],
+      "public_commands": [
+        "/ant-discuss",
+        "/ant-spec",
+        "aether spec"
+      ],
+      "source_citations": [
+        ".planning/phases/200-iterative-planning/200-CLASSIC-SYNTHESIS.md#core-data-contracts",
+        "cmd/specification.go",
+        "cmd/spec_cmd.go"
+      ],
+      "groups": [
+        "V-200-E2E",
+        "V-200-REVISION"
+      ],
+      "source_anchors": [
+        "git:v5.4:.aether/commands/plan.yaml:65-96",
+        "current:cmd/specification.go:182"
+      ],
+      "modern_invariant": "All nine typed owner-readable body categories live in an immutable lineage and only exact owner approval authorizes planning.",
+      "positive_case_ids": [
+        "phase200.e2e.approved-two-pass-journey",
+        "phase200.revision.scoped"
+      ],
+      "negative_case_ids": [
+        "phase200.e2e.draft-planning-refusal",
+        "phase200.revision.unscoped-refusal"
+      ]
+    },
+    {
+      "id": "SYN-200-08",
+      "title": "Invalidate only specification-affected plan scope",
+      "disposition": "replace-better",
+      "cap_ids": [
+        "CAP-012"
+      ],
+      "public_commands": [
+        "/ant-spec",
+        "/ant-plan"
+      ],
+      "source_citations": [
+        ".planning/phases/200-iterative-planning/200-CLASSIC-SYNTHESIS.md#compatibility-and-migration",
+        "cmd/plan_impact.go",
+        "cmd/specification.go"
+      ],
+      "groups": [
+        "V-200-REVISION"
+      ],
+      "source_anchors": [
+        "git:v5.4:.aether/commands/plan.yaml:540-583",
+        "current:cmd/plan_impact.go"
+      ],
+      "modern_invariant": "Stable semantic IDs close transitively over only affected tasks and proof while independent completed work stays valid.",
+      "positive_case_ids": [
+        "phase200.revision.scoped"
+      ],
+      "negative_case_ids": [
+        "phase200.revision.unscoped-refusal"
+      ]
+    },
+    {
+      "id": "SYN-200-09",
+      "title": "Route living-plan insertion through immutable revision acceptance",
+      "disposition": "restore-modern",
+      "cap_ids": [
+        "CAP-010",
+        "CAP-011",
+        "CAP-012"
+      ],
+      "public_commands": [
+        "/ant-insert-phase",
+        "/ant-plan"
+      ],
+      "source_citations": [
+        ".planning/phases/200-iterative-planning/200-CLASSIC-SYNTHESIS.md#research-to-plan-linkage",
+        "cmd/plan_revision.go",
+        "cmd/state_extra.go"
+      ],
+      "groups": [
+        "V-200-REVISION",
+        "V-200-ACCEPT"
+      ],
+      "source_anchors": [
+        "git:v5.4:.aether/commands/plan.yaml:540-583",
+        "current:cmd/plan_revision.go:86"
+      ],
+      "modern_invariant": "Insertion never renumbers or mutates an accepted plan in place and remains blocked across active-attempt or stale-base boundaries.",
+      "positive_case_ids": [
+        "phase200.revision.scoped",
+        "phase200.accept.exact"
+      ],
+      "negative_case_ids": [
+        "phase200.revision.unscoped-refusal",
+        "phase200.accept.stale-refusal"
+      ]
+    },
+    {
+      "id": "SYN-200-10",
+      "title": "Prime planning with typed attributable evidence",
+      "disposition": "replace-better",
+      "cap_ids": [
+        "CAP-056",
+        "CAP-061",
+        "CAP-069"
+      ],
+      "public_commands": [
+        "/ant-plan",
+        "aether plan"
+      ],
+      "source_citations": [
+        ".planning/phases/200-iterative-planning/200-CLASSIC-SYNTHESIS.md#core-data-contracts",
+        "cmd/planning_evidence.go",
+        "cmd/codex_plan.go"
+      ],
+      "groups": [
+        "V-200-CONFIDENCE",
+        "V-200-REPLAY"
+      ],
+      "source_anchors": [
+        "git:v5.4:.aether/commands/plan.yaml:131-287",
+        "current:cmd/planning_evidence.go"
+      ],
+      "modern_invariant": "Every admitted input carries type, scope, freshness, applicability, producer, and digest; stale or inadmissible context grants no authority.",
+      "positive_case_ids": [
+        "phase200.confidence.fresh-evidence",
+        "phase200.replay.exact"
+      ],
+      "negative_case_ids": [
+        "phase200.confidence.restated-evidence-refusal",
+        "phase200.replay.divergent-refusal"
+      ]
+    },
+    {
+      "id": "SYN-200-11",
+      "title": "Project one Go-owned planning truth across platforms",
+      "disposition": "restore-modern",
+      "cap_ids": [
+        "CAP-069"
+      ],
+      "public_commands": [
+        "/ant-plan",
+        "/ant-spec",
+        "aether plan",
+        "aether spec"
+      ],
+      "source_citations": [
+        ".planning/phases/200-iterative-planning/200-CLASSIC-SYNTHESIS.md#responsibilities",
+        ".aether/commands/plan.yaml",
+        ".aether/commands/spec.yaml",
+        "cmd/planning_visuals.go"
+      ],
+      "groups": [
+        "V-200-PLATFORM"
+      ],
+      "source_anchors": [
+        "git:v5.4:.aether/commands/plan.yaml",
+        "current:.aether/commands/plan.yaml"
+      ],
+      "modern_invariant": "Claude and OpenCode wrappers only render and dispatch Go-issued facts while Codex uses honest direct aether command spelling.",
+      "positive_case_ids": [
+        "phase200.platform.semantic-parity"
+      ],
+      "negative_case_ids": [
+        "phase200.platform.wrapper-authority-refusal"
+      ]
+    },
+    {
+      "id": "SYN-200-12",
+      "title": "Prove causal behavior rather than nostalgic labels",
+      "disposition": "replace-better",
+      "cap_ids": [
+        "CAP-012"
+      ],
+      "public_commands": [
+        "/ant-discuss",
+        "/ant-spec",
+        "/ant-plan",
+        "aether discuss",
+        "aether spec",
+        "aether plan"
+      ],
+      "source_citations": [
+        ".planning/phases/200-iterative-planning/200-CLASSIC-SYNTHESIS.md#verification-contract",
+        "cmd/testdata/classic-contract/v1/schema.json",
+        "cmd/classic_contract_test.go"
+      ],
+      "groups": [
+        "V-200-E2E",
+        "V-200-CONFIDENCE",
+        "V-200-DECISION",
+        "V-200-STOP",
+        "V-200-ACCEPT",
+        "V-200-REVISION",
+        "V-200-REPLAY",
+        "V-200-PLATFORM"
+      ],
+      "source_anchors": [
+        "git:3a5b81c2:.claude/commands/ant/plan.md",
+        "current:cmd/testdata/classic-contract/v1/schema.json"
+      ],
+      "modern_invariant": "Every case executes a pure kernel or command fixture and asserts state hashes, artifact sets, dispatch counts, receipt chains, and structured results.",
+      "positive_case_ids": [
+        "phase200.e2e.approved-two-pass-journey",
+        "phase200.confidence.fresh-evidence",
+        "phase200.decision.ordered-material-boundaries",
+        "phase200.stop.reasoned-matrix",
+        "phase200.accept.exact",
+        "phase200.revision.scoped",
+        "phase200.replay.exact",
+        "phase200.platform.semantic-parity"
+      ],
+      "negative_case_ids": [
+        "phase200.e2e.draft-planning-refusal",
+        "phase200.confidence.restated-evidence-refusal",
+        "phase200.decision.unanswered-refusal",
+        "phase200.stop.material-refusal",
+        "phase200.accept.stale-refusal",
+        "phase200.revision.unscoped-refusal",
+        "phase200.replay.divergent-refusal",
+        "phase200.platform.wrapper-authority-refusal"
       ]
     }
   ]

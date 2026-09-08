@@ -13,12 +13,15 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/calcosmic/Aether/pkg/colony"
 )
 
 const classicContractSchemaVersion = "classic-contract/v1"
 
 var (
-	classicContractGroups = []string{
+	classicContractPhase199Groups = []string{
 		"front-door",
 		"territory",
 		"orientation",
@@ -28,8 +31,19 @@ var (
 		"closure",
 		"maintenance",
 	}
-	classicContractPlatforms = []string{"runtime", "claude", "opencode"}
-	classicContractDecisions = []string{
+	classicContractPhase200Groups = []string{
+		"V-200-E2E",
+		"V-200-CONFIDENCE",
+		"V-200-DECISION",
+		"V-200-STOP",
+		"V-200-ACCEPT",
+		"V-200-REVISION",
+		"V-200-REPLAY",
+		"V-200-PLATFORM",
+	}
+	classicContractGroups            = append(slices.Clone(classicContractPhase199Groups), classicContractPhase200Groups...)
+	classicContractPlatforms         = []string{"runtime", "claude", "opencode"}
+	classicContractPhase199Decisions = []string{
 		"SYN-199-01",
 		"SYN-199-02",
 		"SYN-199-03",
@@ -41,15 +55,24 @@ var (
 		"SYN-199-09",
 		"SYN-199-10",
 	}
-	classicContractCapabilities = []string{
+	classicContractPhase200Decisions = []string{
+		"SYN-200-01", "SYN-200-02", "SYN-200-03", "SYN-200-04",
+		"SYN-200-05", "SYN-200-06", "SYN-200-07", "SYN-200-08",
+		"SYN-200-09", "SYN-200-10", "SYN-200-11", "SYN-200-12",
+	}
+	classicContractDecisions            = append(slices.Clone(classicContractPhase199Decisions), classicContractPhase200Decisions...)
+	classicContractPhase199Capabilities = []string{
 		"CAP-006", "CAP-007", "CAP-008", "CAP-013", "CAP-015", "CAP-016", "CAP-017",
 		"CAP-018", "CAP-019", "CAP-020", "CAP-026", "CAP-027", "CAP-028", "CAP-032",
 		"CAP-033", "CAP-034", "CAP-035", "CAP-036", "CAP-037", "CAP-038", "CAP-039",
 		"CAP-040", "CAP-041", "CAP-042", "CAP-049", "CAP-050", "CAP-052", "CAP-053",
 		"CAP-059", "CAP-060", "CAP-062", "CAP-064", "CAP-065", "CAP-068",
 	}
+	classicContractPhase200Capabilities = []string{
+		"CAP-005", "CAP-010", "CAP-011", "CAP-012", "CAP-056", "CAP-061", "CAP-069",
+	}
 	classicContractCaseIDPattern   = regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`)
-	classicContractDecisionPattern = regexp.MustCompile(`^SYN-199-(?:0[1-9]|10)$`)
+	classicContractDecisionPattern = regexp.MustCompile(`^SYN-(?:199-(?:0[1-9]|10)|200-(?:0[1-9]|1[0-2]))$`)
 	classicContractCAPPattern      = regexp.MustCompile(`^CAP-[0-9]{3}$`)
 )
 
@@ -81,6 +104,31 @@ type classicContractCase struct {
 	Platform          string                     `json:"platform"`
 	Command           classicContractInvocation  `json:"command"`
 	Expected          classicContractExpectation `json:"expected"`
+	Phase200Proof     *classicPhase200Proof      `json:"phase200_proof,omitempty"`
+}
+
+type classicPhase200Proof struct {
+	Class                   string                         `json:"class"`
+	Scenario                string                         `json:"scenario"`
+	EvidenceThatWouldChange []string                       `json:"evidence_that_would_change"`
+	Recommendation          *classicPhase200Recommendation `json:"recommendation,omitempty"`
+	Assertions              classicPhase200Assertions      `json:"assertions"`
+}
+
+type classicPhase200Recommendation struct {
+	Disposition string   `json:"disposition"`
+	Rationale   string   `json:"rationale"`
+	EvidenceIDs []string `json:"evidence_ids"`
+	Producer    string   `json:"producer"`
+}
+
+type classicPhase200Assertions struct {
+	StateHashRelation     string   `json:"state_hash_relation"`
+	ArtifactSetRelation   string   `json:"artifact_set_relation"`
+	DispatchDelta         int      `json:"dispatch_delta"`
+	ReceiptChainRelation  string   `json:"receipt_chain_relation"`
+	RequiredResultFields  []string `json:"required_result_fields"`
+	ProhibitedSideEffects []string `json:"prohibited_side_effects"`
 }
 
 type classicContractInvocation struct {
@@ -113,9 +161,10 @@ type classicReplayAssertion struct {
 }
 
 type classicMechanismRegistry struct {
-	SchemaVersion   string             `json:"schema_version"`
-	SynthesisSource string             `json:"synthesis_source"`
-	Mechanisms      []classicMechanism `json:"mechanisms"`
+	SchemaVersion    string             `json:"schema_version"`
+	SynthesisSource  string             `json:"synthesis_source"`
+	SynthesisSources []string           `json:"synthesis_sources,omitempty"`
+	Mechanisms       []classicMechanism `json:"mechanisms"`
 }
 
 type classicMechanism struct {
@@ -126,6 +175,10 @@ type classicMechanism struct {
 	PublicCommands  []string `json:"public_commands"`
 	SourceCitations []string `json:"source_citations"`
 	Groups          []string `json:"groups"`
+	SourceAnchors   []string `json:"source_anchors,omitempty"`
+	ModernInvariant string   `json:"modern_invariant,omitempty"`
+	PositiveCaseIDs []string `json:"positive_case_ids,omitempty"`
+	NegativeCaseIDs []string `json:"negative_case_ids,omitempty"`
 }
 
 func TestClassicContractSchema(t *testing.T) {
@@ -230,7 +283,7 @@ func TestClassicMechanismCoverage(t *testing.T) {
 
 	t.Run("exact missing synthesis identifier", func(t *testing.T) {
 		invalid := cloneClassicMechanismRegistry(t, registry)
-		invalid.Mechanisms = invalid.Mechanisms[:len(invalid.Mechanisms)-1]
+		invalid.Mechanisms = classicMechanismsWithoutDecision(invalid.Mechanisms, "SYN-199-10")
 		assertClassicMechanismError(t, invalid, `missing synthesis decision "SYN-199-10"`)
 	})
 
@@ -253,21 +306,14 @@ func TestClassicMechanismCoverage(t *testing.T) {
 	})
 
 	repoRoot := findTestModuleRoot(t)
-	synthesisPath := filepath.Join(repoRoot, filepath.FromSlash(registry.SynthesisSource))
-	synthesis, err := os.ReadFile(synthesisPath)
-	if err != nil {
-		t.Fatalf("read mechanism synthesis %s: %v", synthesisPath, err)
+	assertClassicSynthesisSource(t, repoRoot, registry.SynthesisSource, classicContractPhase199Decisions, classicContractPhase199Capabilities, true)
+	if !slices.Equal(registry.SynthesisSources, []string{
+		".planning/phases/199-front-door-and-classic-contract/199-CLASSIC-SYNTHESIS.md",
+		".planning/phases/200-iterative-planning/200-CLASSIC-SYNTHESIS.md",
+	}) {
+		t.Fatalf("synthesis_sources = %v, want the ordered Phase 199 and Phase 200 sources", registry.SynthesisSources)
 	}
-	for _, id := range classicContractDecisions {
-		if count := strings.Count(string(synthesis), id); count != 1 {
-			t.Errorf("synthesis identifier %s occurs %d times, want exactly once", id, count)
-		}
-	}
-	for _, id := range classicContractCapabilities {
-		if !bytes.Contains(synthesis, []byte(id)) {
-			t.Errorf("synthesis missing routed capability %s", id)
-		}
-	}
+	assertClassicSynthesisSource(t, repoRoot, registry.SynthesisSources[1], classicContractPhase200Decisions, classicContractPhase200Capabilities, false)
 
 	after := snapshotStoreFileHashesForTest(t, contractDir)
 	assertHashSnapshotsEqualForTest(t, "Classic mechanism validation", before, after)
@@ -363,6 +409,658 @@ func TestClassicContractPhase200SchemaMechanismsAndCausalCases(t *testing.T) {
 			t.Errorf("proof group %s requires executable success and refusal cases", group)
 		}
 	}
+
+	document, err := loadClassicContractDocument(filepath.Join(contractDir, "cases.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry, err := loadClassicMechanismRegistry(filepath.Join(contractDir, "mechanisms.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateClassicPhase200Corpus(document, registry); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("missing mechanism", func(t *testing.T) {
+		invalid := cloneClassicMechanismRegistry(t, registry)
+		invalid.Mechanisms = classicMechanismsWithoutDecision(invalid.Mechanisms, "SYN-200-12")
+		assertClassicMechanismError(t, invalid, `missing synthesis decision "SYN-200-12"`)
+	})
+	t.Run("missing synthesis source", func(t *testing.T) {
+		invalid := cloneClassicMechanismRegistry(t, registry)
+		invalid.SynthesisSources = invalid.SynthesisSources[:1]
+		assertClassicMechanismError(t, invalid, "unexpected synthesis_sources")
+	})
+	t.Run("missing Phase 200 CAP link", func(t *testing.T) {
+		invalid := cloneClassicMechanismRegistry(t, registry)
+		for index := range invalid.Mechanisms {
+			if invalid.Mechanisms[index].ID == "SYN-200-01" {
+				invalid.Mechanisms[index].CAPIDs = nil
+			}
+		}
+		assertClassicMechanismError(t, invalid, `mechanism "SYN-200-01" requires cap_ids`)
+	})
+	t.Run("missing executable case link", func(t *testing.T) {
+		invalid := cloneClassicMechanismRegistry(t, registry)
+		for index := range invalid.Mechanisms {
+			if invalid.Mechanisms[index].ID == "SYN-200-03" {
+				invalid.Mechanisms[index].PositiveCaseIDs = nil
+			}
+		}
+		assertClassicMechanismError(t, invalid, `mechanism "SYN-200-03" requires positive_case_ids`)
+	})
+	t.Run("missing referenced case", func(t *testing.T) {
+		invalid := cloneClassicContractDocument(t, document)
+		invalid.Cases = classicContractWithoutExactCase(invalid.Cases, "phase200.confidence.fresh-evidence")
+		if err := validateClassicPhase200Corpus(invalid, registry); err == nil || !strings.Contains(err.Error(), "has 15 cases") {
+			t.Fatalf("validation error = %v, want missing referenced case", err)
+		}
+	})
+	t.Run("orphaned Phase 200 case", func(t *testing.T) {
+		invalid := cloneClassicMechanismRegistry(t, registry)
+		caseID := "phase200.e2e.approved-two-pass-journey"
+		for index := range invalid.Mechanisms {
+			invalid.Mechanisms[index].PositiveCaseIDs = classicStringsWithout(invalid.Mechanisms[index].PositiveCaseIDs, caseID)
+			invalid.Mechanisms[index].NegativeCaseIDs = classicStringsWithout(invalid.Mechanisms[index].NegativeCaseIDs, caseID)
+		}
+		if err := validateClassicPhase200Corpus(document, invalid); err == nil || !strings.Contains(err.Error(), "not referenced") {
+			t.Fatalf("validation error = %v, want orphaned-case refusal", err)
+		}
+	})
+	t.Run("missing readable Specification category", func(t *testing.T) {
+		invalid := cloneClassicContractDocument(t, document)
+		removeClassicPhase200StructuredAssertion(t, &invalid, "phase200.e2e.approved-two-pass-journey", "specification.recovery_expectations")
+		if err := validateClassicPhase200Corpus(invalid, registry); err == nil || !strings.Contains(err.Error(), "specification.recovery_expectations") {
+			t.Fatalf("validation error = %v, want missing Specification category", err)
+		}
+	})
+	t.Run("missing Queen recommendation authority", func(t *testing.T) {
+		invalid := cloneClassicContractDocument(t, document)
+		for index := range invalid.Cases {
+			if invalid.Cases[index].ID == "phase200.accept.exact" {
+				invalid.Cases[index].Phase200Proof.Recommendation.Producer = ""
+			}
+		}
+		if err := validateClassicPhase200Corpus(invalid, registry); err == nil || !strings.Contains(err.Error(), "Queen recommendation") {
+			t.Fatalf("validation error = %v, want recommendation authority refusal", err)
+		}
+	})
+	t.Run("missing public stop label", func(t *testing.T) {
+		invalid := cloneClassicContractDocument(t, document)
+		removeClassicPhase200StructuredAssertion(t, &invalid, "phase200.stop.reasoned-matrix", "stalled=stall detected")
+		if err := validateClassicPhase200Corpus(invalid, registry); err == nil || !strings.Contains(err.Error(), "stall detected") {
+			t.Fatalf("validation error = %v, want missing public stop label", err)
+		}
+	})
+	t.Run("missing post-card decision boundary", func(t *testing.T) {
+		invalid := cloneClassicContractDocument(t, document)
+		removeClassicPhase200StructuredAssertion(t, &invalid, "phase200.decision.ordered-material-boundaries", "boundary_card_hash")
+		if err := validateClassicPhase200Corpus(invalid, registry); err == nil || !strings.Contains(err.Error(), "boundary_card_hash") {
+			t.Fatalf("validation error = %v, want post-card boundary refusal", err)
+		}
+	})
+}
+
+func TestClassicContractPhase200CausalExecution(t *testing.T) {
+	document := loadClassicContractCorpus(t)
+	executed := 0
+	for _, testCase := range document.Cases {
+		if testCase.Phase200Proof == nil {
+			continue
+		}
+		executed++
+		t.Run(testCase.ID, func(t *testing.T) {
+			execution := executeClassicPhase200Scenario(t, testCase.Phase200Proof.Scenario)
+			assertClassicPhase200Execution(t, testCase, execution)
+		})
+	}
+	if executed != 16 {
+		t.Fatalf("executed %d Phase 200 cases, want 16", executed)
+	}
+}
+
+type classicPhase200Snapshot struct {
+	StateHash  string
+	Artifacts  []string
+	Dispatches int
+	Receipts   []string
+}
+
+type classicPhase200Execution struct {
+	Before classicPhase200Snapshot
+	After  classicPhase200Snapshot
+	Result map[string]any
+}
+
+func assertClassicPhase200Execution(t *testing.T, testCase classicContractCase, execution classicPhase200Execution) {
+	t.Helper()
+	proof := testCase.Phase200Proof
+	assertRelation := func(label, want string, equal bool) {
+		t.Helper()
+		changed := !equal
+		if (want == "changed") != changed {
+			t.Errorf("%s relation = changed:%t, want %s", label, changed, want)
+		}
+	}
+	assertRelation("state hash", proof.Assertions.StateHashRelation, execution.Before.StateHash == execution.After.StateHash)
+	assertRelation("artifact set", proof.Assertions.ArtifactSetRelation, slices.Equal(execution.Before.Artifacts, execution.After.Artifacts))
+	assertRelation("receipt chain", proof.Assertions.ReceiptChainRelation, slices.Equal(execution.Before.Receipts, execution.After.Receipts))
+	if delta := execution.After.Dispatches - execution.Before.Dispatches; delta != proof.Assertions.DispatchDelta {
+		t.Errorf("dispatch delta = %d, want %d", delta, proof.Assertions.DispatchDelta)
+	}
+	for _, field := range proof.Assertions.RequiredResultFields {
+		value, ok := execution.Result[field]
+		if !ok || value == nil || strings.TrimSpace(fmt.Sprint(value)) == "" {
+			t.Errorf("structured execution result is missing %q", field)
+		}
+	}
+	if proof.Class == "refusal" && proof.Assertions.StateHashRelation == "unchanged" && execution.Before.StateHash != execution.After.StateHash {
+		t.Error("refusal changed canonical state")
+	}
+}
+
+func snapshotClassicPhase200Repository(t *testing.T, root string) classicPhase200Snapshot {
+	t.Helper()
+	snapshot := classicPhase200Snapshot{StateHash: "absent"}
+	statePath := filepath.Join(root, ".aether", "data", "COLONY_STATE.json")
+	if data, err := os.ReadFile(statePath); err == nil {
+		sum := sha256.Sum256(data)
+		snapshot.StateHash = fmt.Sprintf("sha256:%x", sum)
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("read canonical state: %v", err)
+	}
+	dataRoot := filepath.Join(root, ".aether", "data")
+	if _, err := os.Stat(dataRoot); os.IsNotExist(err) {
+		return snapshot
+	}
+	if err := filepath.WalkDir(dataRoot, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		snapshot.Artifacts = append(snapshot.Artifacts, rel)
+		lower := strings.ToLower(rel)
+		if strings.Contains(lower, "dispatch") || strings.Contains(lower, "authorizations/") {
+			snapshot.Dispatches++
+		}
+		if strings.Contains(lower, "receipt") || strings.HasSuffix(lower, "/acceptance.json") {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			sum := sha256.Sum256(data)
+			snapshot.Receipts = append(snapshot.Receipts, rel+":"+fmt.Sprintf("%x", sum))
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("snapshot Phase 200 repository: %v", err)
+	}
+	sort.Strings(snapshot.Artifacts)
+	sort.Strings(snapshot.Receipts)
+	return snapshot
+}
+
+func classicPhase200ExecutionAround(t *testing.T, root string, action func() map[string]any) classicPhase200Execution {
+	t.Helper()
+	before := snapshotClassicPhase200Repository(t, root)
+	result := action()
+	after := snapshotClassicPhase200Repository(t, root)
+	return classicPhase200Execution{Before: before, After: after, Result: result}
+}
+
+func executeClassicPhase200Scenario(t *testing.T, scenario string) classicPhase200Execution {
+	t.Helper()
+	switch scenario {
+	case "approved-two-pass-journey":
+		root, candidate := classicPhase200TwoPassCandidate(t)
+		return classicPhase200ExecutionAround(t, root, func() map[string]any {
+			review, err := reviewPlanCandidate(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if review.Recommendation.Producer != colony.PlanRecommendationProducerQueen || strings.TrimSpace(review.Recommendation.Rationale) == "" || len(review.Recommendation.EvidenceIDs) == 0 {
+				t.Fatalf("candidate is missing the persisted typed Queen recommendation: %+v", review.Recommendation)
+			}
+			if len(review.Iterations) < 2 || review.Iterations[0].Iteration != 1 || review.Iterations[1].Iteration != 2 {
+				t.Fatalf("candidate timeline = %+v, want two ordered complete passes", review.Iterations)
+			}
+			accepted, err := acceptPlanCandidate(root, planCandidateTestAcceptanceRequest(candidate), planCandidateAcceptanceOptions{
+				AcceptedBy: "owner:classic-contract", AcceptedAt: time.Date(2026, time.September, 8, 1, 0, 0, 0, time.UTC),
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			return map[string]any{
+				"specification": candidate.SpecificationRevisionID, "timeline": review.Timeline,
+				"candidate": candidate.ID, "acceptance_receipt": accepted.Receipt.ID,
+				"plan_authority": accepted.Revision.ID,
+			}
+		})
+
+	case "draft-planning-refusal":
+		root := newSpecificationTestRepository(t, colony.ColonyState{})
+		if _, err := createSpecificationDraft(root, specificationTestDraftRequest(t, colony.SpecScopeWholeGoal), specificationMutationOptions{}); err != nil {
+			t.Fatal(err)
+		}
+		return classicPhase200ExecutionAround(t, root, func() map[string]any {
+			state := mustReadSpecificationTestState(t, root)
+			_, err := requireApprovedPlanningSpecification(root, state)
+			if err == nil || !strings.Contains(strings.ToLower(err.Error()), "approved") {
+				t.Fatalf("draft planning error = %v, want approved-Specification refusal", err)
+			}
+			return map[string]any{"error_class": "specification_not_approved", "state_effect": "unchanged", "recovery_command": "aether spec --approve"}
+		})
+
+	case "fresh-evidence-confidence":
+		root, manifest, result := planningRouteStageTestFixture(t)
+		return classicPhase200ExecutionAround(t, root, func() map[string]any {
+			coordinated, err := coordinatePlanningRouteStage(root, manifest, planningRouteStageTestBytes(t, result))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(coordinated.Route.Validation.Confidence.Assessments) != 5 || coordinated.ScoutDispatch == nil {
+				t.Fatalf("fresh-evidence route result = %+v", coordinated)
+			}
+			for _, assessment := range coordinated.Route.Validation.Confidence.Assessments {
+				if len(assessment.FreshEvidenceIDs) == 0 || strings.TrimSpace(assessment.RemainingGap.EvidenceThatWouldChange) == "" {
+					t.Fatalf("assessment lacks causal evidence: %+v", assessment)
+				}
+			}
+			return map[string]any{
+				"dimension_assessments": coordinated.Route.Validation.Confidence.Assessments,
+				"derived_overall":       coordinated.Route.Validation.Confidence.Scores.Overall,
+				"weakest_gap":           coordinated.Route.Validation.Confidence.WeakestGap.ID,
+				"iteration_card":        coordinated.Route.Card.ID, "route_receipt": coordinated.Route.Receipt.ID,
+			}
+		})
+
+	case "restated-evidence-refusal":
+		root, manifest, result := planningRouteStageTestFixture(t)
+		supplied := 99
+		result.SuppliedOverall = &supplied
+		return classicPhase200ExecutionAround(t, root, func() map[string]any {
+			_, err := coordinatePlanningRouteStage(root, manifest, planningRouteStageTestBytes(t, result))
+			if err == nil || !strings.Contains(strings.ToLower(err.Error()), "overall") {
+				t.Fatalf("supplied-overall error = %v", err)
+			}
+			return map[string]any{"error_class": "worker_supplied_overall", "rejected_evidence_ids": result.ProposalEvidenceIDs, "state_effect": "unchanged"}
+		})
+
+	case "ordered-material-boundaries":
+		root, manifest, result := planningRouteStageMaterialFixture(t)
+		return classicPhase200ExecutionAround(t, root, func() map[string]any {
+			coordinated, err := coordinatePlanningRouteStage(root, manifest, planningRouteStageTestBytes(t, result))
+			if err != nil {
+				t.Fatal(err)
+			}
+			checkpoint := coordinated.DecisionCheckpoint
+			if checkpoint == nil || coordinated.Candidate != nil || checkpoint.CompletedCardHash != coordinated.Route.Card.ContentHash || checkpoint.Batch.BoundaryCardHash != coordinated.Route.Card.ContentHash {
+				t.Fatalf("material boundary was not ordered after the complete card: %+v", coordinated)
+			}
+			if len(checkpoint.Cards) == 0 || strings.TrimSpace(checkpoint.Cards[0].QueenRecommendation) == "" {
+				t.Fatalf("decision checkpoint lacks Queen recommendation: %+v", checkpoint)
+			}
+			classicPhase200AssertDecisionBranches(t)
+			return map[string]any{"iteration_card": coordinated.Route.Card.ID, "decision_checkpoint": checkpoint.ID, "queen_recommendation": checkpoint.Cards[0].QueenRecommendation, "boundary_card_hash": checkpoint.CompletedCardHash}
+		})
+
+	case "unanswered-decision-refusal":
+		root, manifest, result := planningRouteStageMaterialFixture(t)
+		coordinated, err := coordinatePlanningRouteStage(root, manifest, planningRouteStageTestBytes(t, result))
+		if err != nil {
+			t.Fatal(err)
+		}
+		checkpoint := coordinated.DecisionCheckpoint
+		return classicPhase200ExecutionAround(t, root, func() map[string]any {
+			_, err := buildPlanningScoutDecisionResumeToken(*checkpoint, nil)
+			if err == nil || !strings.Contains(strings.ToLower(err.Error()), "every card") {
+				t.Fatalf("unanswered decision error = %v", err)
+			}
+			return map[string]any{"error_class": "decision_answers_incomplete", "decision_id": checkpoint.Cards[0].DecisionID, "state_effect": "unchanged", "exact_answer_command": checkpoint.ResumeToken.RecoveryCommand}
+		})
+
+	case "reasoned-stop-matrix":
+		root, manifest, result := planningRouteStageTestFixture(t)
+		planningRouteStageSetPolicy(t, root, manifest.RunID, 70, 6)
+		return classicPhase200ExecutionAround(t, root, func() map[string]any {
+			coordinated, err := coordinatePlanningRouteStage(root, manifest, planningRouteStageTestBytes(t, result))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if coordinated.Candidate == nil || coordinated.Candidate.Status != colony.PlanCandidatePendingReview {
+				t.Fatalf("reasoned stop did not yield an inactive candidate: %+v", coordinated.Candidate)
+			}
+			labels := classicPhase200StopLabels(t)
+			return map[string]any{"stop_reason": coordinated.Route.Card.Decision.Reason, "stop_reason_public_label": labels[coordinated.Route.Card.Decision.Reason], "residual_gaps": coordinated.Candidate.ResidualGaps, "candidate": coordinated.Candidate.ID, "queen_recommendation": coordinated.Candidate.Recommendation}
+		})
+
+	case "material-stop-refusal":
+		root, manifest, result := planningRouteStageMaterialFixture(t)
+		return classicPhase200ExecutionAround(t, root, func() map[string]any {
+			coordinated, err := coordinatePlanningRouteStage(root, manifest, planningRouteStageTestBytes(t, result))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if coordinated.Candidate != nil || coordinated.DecisionCheckpoint == nil {
+				t.Fatalf("material override created a candidate: %+v", coordinated)
+			}
+			return map[string]any{"iteration_card": coordinated.Route.Card.ID, "material_gap": coordinated.Route.Validation.Confidence.WeakestGap.ID, "decision_checkpoint": coordinated.DecisionCheckpoint.ID, "candidate_eligible": false}
+		})
+
+	case "exact-candidate-acceptance":
+		root, candidate := planCandidateTestPending(t)
+		return classicPhase200ExecutionAround(t, root, func() map[string]any {
+			review, err := reviewPlanCandidate(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			accepted, err := acceptPlanCandidate(root, planCandidateTestAcceptanceRequest(candidate), planCandidateAcceptanceOptions{AcceptedBy: "owner:classic-contract", AcceptedAt: time.Date(2026, time.September, 8, 1, 5, 0, 0, time.UTC)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			return map[string]any{"candidate": candidate.ID, "queen_recommendation": review.Recommendation, "revision": accepted.Revision.ID, "acceptance_receipt": accepted.Receipt.ID, "plan_authority": accepted.Receipt.ActivatedPlanRevisionID}
+		})
+
+	case "stale-candidate-refusal":
+		root, candidate := planCandidateTestPending(t)
+		request := planCandidateTestAcceptanceRequest(candidate)
+		request.TimelineDigest = strings.Repeat("2", 64)
+		return classicPhase200ExecutionAround(t, root, func() map[string]any {
+			_, err := acceptPlanCandidate(root, request, planCandidateAcceptanceOptions{AcceptedBy: "owner"})
+			if err == nil || !strings.Contains(err.Error(), "timeline_digest") {
+				t.Fatalf("stale acceptance error = %v", err)
+			}
+			return map[string]any{"error_class": "stale_candidate_binding", "mismatched_binding": "timeline_digest", "state_effect": "unchanged", "fresh_review_command": "aether plan --candidate"}
+		})
+
+	case "scoped-spec-revision":
+		return executeClassicPhase200ScopedRevision(t)
+
+	case "unscoped-revision-refusal":
+		return executeClassicPhase200UnscopedRevision(t)
+
+	case "exact-replay":
+		root, candidate := planCandidateTestPending(t)
+		request := planCandidateTestAcceptanceRequest(candidate)
+		first, err := acceptPlanCandidate(root, request, planCandidateAcceptanceOptions{AcceptedBy: "owner", AcceptedAt: time.Date(2026, time.September, 8, 1, 10, 0, 0, time.UTC)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return classicPhase200ExecutionAround(t, root, func() map[string]any {
+			replayed, err := acceptPlanCandidate(root, request, planCandidateAcceptanceOptions{AcceptedBy: "owner", AcceptedAt: time.Date(2026, time.September, 8, 2, 10, 0, 0, time.UTC)})
+			if err != nil || !replayed.Replayed || replayed.Receipt.ID != first.Receipt.ID || replayed.Revision.ID != first.Revision.ID {
+				t.Fatalf("exact replay diverged: first=%+v replay=%+v err=%v", first, replayed, err)
+			}
+			return map[string]any{"replayed": true, "original_revision": replayed.Revision.ID, "original_acceptance_receipt": replayed.Receipt.ID, "crash_window_recovery": "covered-by-transaction-replay", "projection_repair": "authority-unchanged"}
+		})
+
+	case "divergent-replay-refusal":
+		root, candidate := planCandidateTestPending(t)
+		request := planCandidateTestAcceptanceRequest(candidate)
+		first, err := acceptPlanCandidate(root, request, planCandidateAcceptanceOptions{AcceptedBy: "owner", AcceptedAt: time.Date(2026, time.September, 8, 1, 15, 0, 0, time.UTC)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.AcceptanceToken += "-divergent"
+		return classicPhase200ExecutionAround(t, root, func() map[string]any {
+			_, err := acceptPlanCandidate(root, request, planCandidateAcceptanceOptions{AcceptedBy: "owner"})
+			if err == nil || !strings.Contains(err.Error(), "acceptance_token") {
+				t.Fatalf("divergent replay error = %v", err)
+			}
+			return map[string]any{"error_class": "divergent_replay", "divergent_field": "acceptance_token", "state_effect": "unchanged", "original_receipt": first.Receipt.ID}
+		})
+
+	case "platform-projection-parity":
+		root := newSpecificationTestRepository(t, colony.ColonyState{})
+		return classicPhase200ExecutionAround(t, root, func() map[string]any {
+			t.Setenv("NO_COLOR", "1")
+			for _, policy := range planningPresetPolicies {
+				selection, err := resolvePlanningPreset(codexPlanOptions{Preset: string(policy.ID), PresetSet: true})
+				if err != nil || selection.PresetRequired || selection.Policy != policy {
+					t.Fatalf("preset %s did not resolve exactly: selection=%+v err=%v", policy.ID, selection, err)
+				}
+			}
+			labels := classicPhase200StopLabels(t)
+			widths := []int{47, 48, 63, 64, 95, 96}
+			for _, width := range widths {
+				output := renderPlanningSpecificationVisual(planningVisualSpecificationFixture(), planningVisualOptions{Width: width})
+				if !strings.Contains(output, "Specification") {
+					t.Fatalf("width %d abbreviated Specification:\n%s", width, output)
+				}
+			}
+			projection := projectPlanningCandidate(planningVisualCandidateFixture())
+			return map[string]any{"runtime_stop_enum": colony.PlanningStopTargetMet, "public_stop_label": labels[colony.PlanningStopTargetMet], "evidence_that_would_change": projection.EvidenceThatWouldChange, "queen_recommendation": projection.RecommendationDisposition, "platform_command_spelling": "aether plan|/ant-plan", "width_matrix": widths, "no_color": true}
+		})
+
+	case "wrapper-authority-refusal":
+		root := newSpecificationTestRepository(t, colony.ColonyState{})
+		return classicPhase200ExecutionAround(t, root, func() map[string]any {
+			repoRoot := findTestModuleRoot(t)
+			canonical, err := os.ReadFile(filepath.Join(repoRoot, ".aether", "commands", "plan.yaml"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, platform := range []string{".claude", ".opencode"} {
+				path := filepath.Join(repoRoot, platform, "commands", "ant", "plan.md")
+				projection, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !strings.Contains(string(projection), "Aether-managed: runtime spec at .aether/commands/plan.yaml") {
+					t.Fatalf("%s is not a managed projection", path)
+				}
+			}
+			if !bytes.Contains(canonical, []byte("aether plan")) {
+				t.Fatal("canonical plan source omits the runtime command")
+			}
+			return map[string]any{"canonical_source": ".aether/commands/plan.yaml", "managed_projection": true, "go_authority": true, "state_effect": "unchanged"}
+		})
+	default:
+		t.Fatalf("no executable Phase 200 scenario for %q", scenario)
+		return classicPhase200Execution{}
+	}
+}
+
+func classicPhase200StopLabels(t *testing.T) map[colony.PlanningStopReason]string {
+	t.Helper()
+	want := map[colony.PlanningStopReason]string{
+		colony.PlanningStopTargetMet: "target sufficiency", colony.PlanningStopDiminishingReturns: "diminishing returns",
+		colony.PlanningStopStalledGap: "stall detected", colony.PlanningStopPassCap: "iteration cap",
+	}
+	for reason, label := range want {
+		if got := planningStopReasonPublicLabel(reason); got != label {
+			t.Fatalf("public label for %s = %q, want %q", reason, got, label)
+		}
+	}
+	return want
+}
+
+func classicPhase200AssertDecisionBranches(t *testing.T) {
+	t.Helper()
+	for _, test := range []struct {
+		name          string
+		choiceID      string
+		wantDirect    bool
+		wantSuccessor bool
+	}{
+		{name: "equivalent direct resume", choiceID: "continue-research", wantDirect: true},
+		{name: "contract change", choiceID: "proceed-with-risk", wantSuccessor: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root, manifest, result := planningRouteStageMaterialFixture(t)
+			coordinated, err := coordinatePlanningRouteStage(root, manifest, planningRouteStageTestBytes(t, result))
+			if err != nil {
+				t.Fatal(err)
+			}
+			card := coordinated.DecisionCheckpoint.Cards[0]
+			resume, err := buildPlanningScoutDecisionResumeToken(*coordinated.DecisionCheckpoint, []planningScoutDecisionAnswer{{
+				DecisionID: card.DecisionID, ChoiceID: test.choiceID, Answer: "Owner supplied an exact, evidence-bound answer.",
+			}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			resumed, err := resumePlanningRouteDecision(root, manifest.RunID, resume, time.Date(2026, time.September, 8, 1, 40, 0, 0, time.UTC))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if test.wantDirect && (resumed.ScoutDispatch == nil || resumed.SuccessorSpecification != nil) {
+				t.Fatalf("equivalent answer did not resume directly: %+v", resumed)
+			}
+			if test.wantSuccessor && (resumed.SuccessorSpecification == nil || resumed.SuccessorSpecification.Revision.Status != colony.SpecStatusDraft || resumed.ScoutDispatch != nil) {
+				t.Fatalf("contract-changing answer did not create a successor DRAFT: %+v", resumed)
+			}
+		})
+	}
+}
+
+func classicPhase200TwoPassCandidate(t *testing.T) (string, colony.PlanCandidate) {
+	t.Helper()
+	root, firstManifest, firstResult := planningRouteStageTestFixture(t)
+	planningRouteStageSetPolicy(t, root, firstManifest.RunID, 99, 2)
+	first, err := coordinatePlanningRouteStage(root, firstManifest, planningRouteStageTestBytes(t, firstResult))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.ScoutDispatch == nil || first.Candidate != nil || first.Route.Card.Iteration != 1 {
+		t.Fatalf("first pass did not continue through a focused Scout dispatch: %+v", first)
+	}
+	scoutManifest := first.ScoutDispatch.Manifest
+	if scoutManifest.WeakestGap == nil || scoutManifest.WeakestGap.ID != first.Route.Card.WeakestGap.ID {
+		t.Fatalf("first pass weakest gap was not bound into the next Scout: card=%+v manifest=%+v", first.Route.Card.WeakestGap, scoutManifest.WeakestGap)
+	}
+	fresh := planningRouteStageEvidence(t, scoutManifest.Specification, scoutManifest.BasePlanRevisionID, "classic-second-pass", "Fresh second-pass evidence changes both confidence and the semantic route.", time.Date(2026, time.September, 8, 1, 30, 0, 0, time.UTC))
+	scoutGap := planningRouteStageGap("classic-second-scout-gap", colony.PlanningDimensionRisks, fresh.Reference.ID, colony.PlanningGapNonMaterial, 12)
+	scoutResult := planningScoutStageResult{
+		ResultType: planningStageResultScout, ManifestID: scoutManifest.ID, ManifestHash: scoutManifest.ContentHash,
+		RunID: scoutManifest.RunID, Pass: scoutManifest.Pass, Caste: planningStageCasteScout,
+		Specification: scoutManifest.Specification, BasePlanRevisionID: scoutManifest.BasePlanRevisionID, BasePlanRevisionHash: scoutManifest.BasePlanRevisionHash,
+		InputFrontierHash: scoutManifest.InputFrontierHash,
+		Findings:          []planningScoutStageFinding{{StableID: "classic-second-finding", Summary: "The second pass resolves the first weakest gap and changes the route.", EvidenceIDs: []string{fresh.Reference.ID}}},
+		NewEvidence:       []planningEvidenceRecord{fresh}, UnresolvedGaps: []colony.PlanningGap{scoutGap},
+	}
+	scoutCompleted, err := coordinatePlanningScoutStage(root, scoutManifest, planningScoutStageTestBytes(t, scoutResult))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scoutCompleted.RouteDispatch == nil {
+		t.Fatal("second Scout pass did not authorize Route-Setter")
+	}
+	routeManifest := scoutCompleted.RouteDispatch.Manifest
+	proposal := planningRouteStageCloneResult(t, firstResult).Proposal
+	proposal.Phases[0].Description = "Finalize the improved Route proposal after second-pass evidence"
+	proposal.Phases[0].Tasks[0].Goal = "Validate the second-pass Route proposal"
+	secondResult := planningRouteStageResult{
+		ResultType: planningStageResultRouteSetter, ManifestID: routeManifest.ID, ManifestHash: routeManifest.ContentHash,
+		RunID: routeManifest.RunID, Pass: routeManifest.Pass, Caste: planningStageCasteRouteSetter,
+		Specification: routeManifest.Specification, BasePlanRevisionID: routeManifest.BasePlanRevisionID, BasePlanRevisionHash: routeManifest.BasePlanRevisionHash,
+		PriorCardHash: routeManifest.PriorCardHash, InputFrontierHash: routeManifest.InputFrontierHash,
+		ScoutReceipt: *routeManifest.ScoutReceipt, CandidateSnapshotHash: routeManifest.CandidateSnapshotHash,
+		Proposal: proposal, ProposalEvidenceIDs: []string{fresh.Reference.ID},
+	}
+	for index, dimension := range colony.PlanningDimensions() {
+		before := first.Route.Card.DimensionAssessments[index].After
+		secondResult.DimensionAssessments = append(secondResult.DimensionAssessments, colony.PlanningDimensionAssessment{
+			SchemaVersion: colony.PlanningSchemaVersion, ID: "classic-second-assessment-" + string(dimension), ContentHash: planningStageTestHash(string(rune('k' + index))),
+			Dimension: dimension, Before: before, After: min(before+12, 98), FreshEvidenceIDs: []string{fresh.Reference.ID},
+			RemainingGap: planningRouteStageGap("classic-second-gap-"+string(dimension), dimension, fresh.Reference.ID, colony.PlanningGapNonMaterial, 5+index),
+			Rationale:    "Fresh applicable second-pass evidence supports this movement.", ProducerReceiptID: routeManifest.ID,
+		})
+	}
+	second, err := coordinatePlanningRouteStage(root, routeManifest, planningRouteStageTestBytes(t, secondResult))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.Candidate == nil || second.Route.Card.Iteration != 2 || second.Route.Card.Decision.Reason != colony.PlanningStopPassCap {
+		t.Fatalf("second pass did not produce the reasoned pending candidate: %+v", second)
+	}
+	if second.Candidate.Status != colony.PlanCandidatePendingReview || second.Candidate.Acceptance != nil {
+		t.Fatalf("candidate became active without exact acceptance: %+v", second.Candidate)
+	}
+	return root, *second.Candidate
+}
+
+func executeClassicPhase200ScopedRevision(t *testing.T) classicPhase200Execution {
+	t.Helper()
+	root := newSpecificationTestRepository(t, specificationTestPlanState())
+	draftRequest := specificationTestDraftRequest(t, colony.SpecScopeWholeGoal)
+	draft, err := createSpecificationDraft(root, draftRequest, specificationMutationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	requirementID := draft.Revision.Requirements[0].ID
+	request := specificationRevisionRequest{
+		PredecessorRevisionID: draft.Revision.ID, PredecessorContentHash: draft.Revision.ContentHash,
+		Scope: colony.SpecScope{
+			Kind: colony.SpecScopeFeature, GoalID: draft.Revision.Scope.GoalID, SessionID: "session-classic-scoped",
+			FeatureID: "feature-visible-planning", RequirementIDs: []string{requirementID}, AcceptanceCheckIDs: []string{draft.Revision.AcceptanceChecks[0].ID},
+		},
+		Changes: []specificationRevisionChange{{
+			Operation: specificationChangeModify, Section: specificationSectionRequirements, TargetID: requirementID,
+			Item: specificationItemInput{Description: "The owner sees a causal, evidence-backed planning loop.", EvidenceIDs: []string{"evidence:feature-change"}},
+		}},
+		DecisionResolution: func() *planningDecisionResolution {
+			decision := specificationTestSuccessorDecision(requirementID)
+			return &decision
+		}(),
+		CreatedAt: time.Date(2026, time.September, 8, 1, 20, 0, 0, time.UTC),
+	}
+	return classicPhase200ExecutionAround(t, root, func() map[string]any {
+		revised, err := reviseSpecification(root, request, specificationMutationOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if revised.Revision.Status != colony.SpecStatusDraft || !slices.Equal(revised.AffectedScope.TaskIDs, []string{"1.1"}) {
+			t.Fatalf("scoped revision affected the wrong authority: %+v", revised)
+		}
+		return map[string]any{
+			"successor_specification": revised.Revision.ID, "classified_delta": revised.Revision.Delta,
+			"affected_scope": revised.AffectedScope.TaskIDs, "preserved_scope": []string{"1.2"}, "reconciliation_required": true,
+		}
+	})
+}
+
+func executeClassicPhase200UnscopedRevision(t *testing.T) classicPhase200Execution {
+	t.Helper()
+	root := newSpecificationTestRepository(t, specificationTestPlanState())
+	draftRequest := specificationTestDraftRequest(t, colony.SpecScopeWholeGoal)
+	draftRequest.Requirements = append(draftRequest.Requirements, specificationItemInput{
+		Lineage: "independent-export", Description: "Export an independent report.", EvidenceIDs: []string{"charter:export"},
+	})
+	draft, err := createSpecificationDraft(root, draftRequest, specificationMutationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	outsideID, err := specificationStableID(specificationSectionRequirements, "independent-export")
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := specificationRevisionRequest{
+		PredecessorRevisionID: draft.Revision.ID, PredecessorContentHash: draft.Revision.ContentHash,
+		Scope: colony.SpecScope{
+			Kind: colony.SpecScopeFeature, GoalID: draft.Revision.Scope.GoalID, SessionID: "session-classic-unscoped",
+			FeatureID: "feature-visible-planning", RequirementIDs: []string{draft.Revision.Requirements[0].ID}, AcceptanceCheckIDs: []string{draft.Revision.AcceptanceChecks[0].ID},
+		},
+		Changes: []specificationRevisionChange{{
+			Operation: specificationChangeModify, Section: specificationSectionRequirements, TargetID: outsideID,
+			Item: specificationItemInput{Description: "Change an independent export.", EvidenceIDs: []string{"owner:unscoped"}},
+		}},
+		CreatedAt: time.Date(2026, time.September, 8, 1, 25, 0, 0, time.UTC),
+	}
+	return classicPhase200ExecutionAround(t, root, func() map[string]any {
+		_, err := reviseSpecification(root, request, specificationMutationOptions{})
+		if err == nil || !strings.Contains(err.Error(), "outside feature scope") {
+			t.Fatalf("unscoped revision error = %v", err)
+		}
+		return map[string]any{"error_class": "outside_feature_scope", "outside_scope_id": outsideID, "state_effect": "unchanged", "recovery_command": "aether spec --revise --scope whole-goal"}
+	})
 }
 
 // The journey IDs are intentionally semantic rather than a list of commands.
@@ -424,12 +1122,20 @@ func TestClassicContractCorpusCausalReceipts(t *testing.T) {
 
 func loadClassicContractCorpus(t *testing.T) classicContractDocument {
 	t.Helper()
-	document, err := loadClassicContractDocument(filepath.Join(classicContractFixtureDir(t), "cases.json"))
+	contractDir := classicContractFixtureDir(t)
+	document, err := loadClassicContractDocument(filepath.Join(contractDir, "cases.json"))
 	if err != nil {
 		t.Fatalf("load Classic contract corpus: %v", err)
 	}
 	if err := validateClassicContractCorpus(document); err != nil {
 		t.Fatalf("validate Classic contract corpus: %v", err)
+	}
+	registry, err := loadClassicMechanismRegistry(filepath.Join(contractDir, "mechanisms.json"))
+	if err != nil {
+		t.Fatalf("load Classic mechanism registry: %v", err)
+	}
+	if err := validateClassicPhase200Corpus(document, registry); err != nil {
+		t.Fatalf("validate Phase 200 Classic corpus: %v", err)
 	}
 	return document
 }
@@ -443,7 +1149,12 @@ func validateClassicContractCorpus(document classicContractDocument) error {
 		required[journeyID] = true
 	}
 	platforms := make(map[string]map[string]bool, len(required))
+	phase199Cases := 0
 	for _, testCase := range document.Cases {
+		if strings.HasPrefix(testCase.SynthesisDecision, "SYN-200-") {
+			continue
+		}
+		phase199Cases++
 		journeyID, _, ok := strings.Cut(testCase.ID, ".claude")
 		if !ok {
 			journeyID, _, ok = strings.Cut(testCase.ID, ".opencode")
@@ -480,8 +1191,121 @@ func validateClassicContractCorpus(document classicContractDocument) error {
 			return fmt.Errorf("required journey %q must have exactly Claude and OpenCode cases", journeyID)
 		}
 	}
-	if len(platforms) != len(required) || len(document.Cases) != len(required)*2 {
-		return fmt.Errorf("corpus has %d cases, want exactly %d platform-expanded required journeys", len(document.Cases), len(required)*2)
+	if len(platforms) != len(required) || phase199Cases != len(required)*2 {
+		return fmt.Errorf("corpus has %d Phase 199 cases, want exactly %d platform-expanded required journeys", phase199Cases, len(required)*2)
+	}
+	return nil
+}
+
+func validateClassicPhase200Corpus(document classicContractDocument, registry classicMechanismRegistry) error {
+	caseByID := make(map[string]classicContractCase)
+	groupClasses := make(map[string]map[string]bool, len(classicContractPhase200Groups))
+	assertionCoverage := make(map[string]bool)
+	recommendationRequired := map[string]bool{
+		"approved-two-pass-journey": true, "ordered-material-boundaries": true,
+		"reasoned-stop-matrix": true, "exact-candidate-acceptance": true, "scoped-spec-revision": true,
+	}
+	for _, testCase := range document.Cases {
+		if !strings.HasPrefix(testCase.SynthesisDecision, "SYN-200-") {
+			continue
+		}
+		caseByID[testCase.ID] = testCase
+		proof := testCase.Phase200Proof
+		if proof == nil {
+			return fmt.Errorf("Phase 200 case %q requires phase200_proof", testCase.ID)
+		}
+		if !slices.Contains([]string{"success", "refusal"}, proof.Class) {
+			return fmt.Errorf("Phase 200 case %q has invalid proof class %q", testCase.ID, proof.Class)
+		}
+		if strings.TrimSpace(proof.Scenario) == "" || len(proof.EvidenceThatWouldChange) == 0 || classicStringsContainBlank(proof.EvidenceThatWouldChange) {
+			return fmt.Errorf("Phase 200 case %q requires a scenario and evidence_that_would_change", testCase.ID)
+		}
+		if !slices.Contains([]string{"changed", "unchanged"}, proof.Assertions.StateHashRelation) ||
+			!slices.Contains([]string{"changed", "unchanged"}, proof.Assertions.ArtifactSetRelation) ||
+			!slices.Contains([]string{"changed", "unchanged"}, proof.Assertions.ReceiptChainRelation) ||
+			len(proof.Assertions.RequiredResultFields) == 0 || classicStringsContainBlank(proof.Assertions.RequiredResultFields) ||
+			len(proof.Assertions.ProhibitedSideEffects) == 0 || classicStringsContainBlank(proof.Assertions.ProhibitedSideEffects) {
+			return fmt.Errorf("Phase 200 case %q has incomplete causal assertions", testCase.ID)
+		}
+		if groupClasses[testCase.Group] == nil {
+			groupClasses[testCase.Group] = map[string]bool{}
+		}
+		groupClasses[testCase.Group][proof.Class] = true
+		if recommendationRequired[proof.Scenario] {
+			if proof.Recommendation == nil || !slices.Contains([]string{"accept", "revise"}, proof.Recommendation.Disposition) ||
+				strings.TrimSpace(proof.Recommendation.Rationale) == "" || len(proof.Recommendation.EvidenceIDs) == 0 ||
+				classicStringsContainBlank(proof.Recommendation.EvidenceIDs) || proof.Recommendation.Producer != "queen" {
+				return fmt.Errorf("Phase 200 case %q requires a persisted typed Queen recommendation", testCase.ID)
+			}
+		}
+		var assertions []string
+		if err := json.Unmarshal(testCase.Expected.SemanticFields["structured_assertions"], &assertions); err != nil || len(assertions) == 0 {
+			return fmt.Errorf("Phase 200 case %q requires structured executable assertions", testCase.ID)
+		}
+		for _, assertion := range assertions {
+			assertionCoverage[assertion] = true
+		}
+	}
+	if len(caseByID) != 16 {
+		return fmt.Errorf("Phase 200 corpus has %d cases, want exactly 16", len(caseByID))
+	}
+	for _, group := range classicContractPhase200Groups {
+		if !groupClasses[group]["success"] || !groupClasses[group]["refusal"] {
+			return fmt.Errorf("Phase 200 group %q requires one success and one refusal", group)
+		}
+	}
+	for _, assertion := range []string{
+		"specification.outcomes", "specification.included_behaviors", "specification.exclusions",
+		"specification.binding_decisions", "specification.requirements", "specification.acceptance_checks",
+		"specification.negative_expectations", "specification.recovery_expectations", "specification.affected_public_paths",
+		"target_sufficient=target sufficiency", "diminishing_returns=diminishing returns",
+		"stalled=stall detected", "iteration_cap=iteration cap", "boundary_card_hash",
+		"crash_window_after_state_before_projection", "crash_window_after_projection_before_receipt",
+		"legacy_migration_preserves_identity", "projection_repair_authority_unchanged",
+		"presets=fast,balanced,deep,exhaustive",
+	} {
+		if !assertionCoverage[assertion] {
+			return fmt.Errorf("Phase 200 corpus missing required causal assertion %q", assertion)
+		}
+	}
+
+	referenced := make(map[string]bool, len(caseByID))
+	mechanismCount := 0
+	for _, mechanism := range registry.Mechanisms {
+		if !strings.HasPrefix(mechanism.ID, "SYN-200-") {
+			continue
+		}
+		mechanismCount++
+		if len(mechanism.SourceAnchors) == 0 || classicStringsContainBlank(mechanism.SourceAnchors) || strings.TrimSpace(mechanism.ModernInvariant) == "" {
+			return fmt.Errorf("mechanism %q requires source anchors and a modern invariant", mechanism.ID)
+		}
+		if len(mechanism.PositiveCaseIDs) == 0 || len(mechanism.NegativeCaseIDs) == 0 {
+			return fmt.Errorf("mechanism %q requires positive and negative causal cases", mechanism.ID)
+		}
+		for _, reference := range append(slices.Clone(mechanism.PositiveCaseIDs), mechanism.NegativeCaseIDs...) {
+			if _, ok := caseByID[reference]; !ok {
+				return fmt.Errorf("mechanism %q references unknown Phase 200 case %q", mechanism.ID, reference)
+			}
+			referenced[reference] = true
+		}
+		for _, reference := range mechanism.PositiveCaseIDs {
+			if caseByID[reference].Phase200Proof.Class != "success" {
+				return fmt.Errorf("mechanism %q positive case %q is not a success", mechanism.ID, reference)
+			}
+		}
+		for _, reference := range mechanism.NegativeCaseIDs {
+			if caseByID[reference].Phase200Proof.Class != "refusal" {
+				return fmt.Errorf("mechanism %q negative case %q is not a refusal", mechanism.ID, reference)
+			}
+		}
+	}
+	if mechanismCount != len(classicContractPhase200Decisions) {
+		return fmt.Errorf("Phase 200 registry has %d mechanisms, want %d", mechanismCount, len(classicContractPhase200Decisions))
+	}
+	for caseID := range caseByID {
+		if !referenced[caseID] {
+			return fmt.Errorf("Phase 200 case %q is not referenced by a mechanism", caseID)
+		}
 	}
 	return nil
 }
@@ -510,6 +1334,46 @@ func classicContractWithoutJourney(cases []classicContractCase, journeyID string
 	return result
 }
 
+func classicContractWithoutExactCase(cases []classicContractCase, caseID string) []classicContractCase {
+	result := make([]classicContractCase, 0, len(cases)-1)
+	for _, testCase := range cases {
+		if testCase.ID != caseID {
+			result = append(result, testCase)
+		}
+	}
+	return result
+}
+
+func classicStringsWithout(values []string, target string) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if value != target {
+			result = append(result, value)
+		}
+	}
+	return result
+}
+
+func removeClassicPhase200StructuredAssertion(t *testing.T, document *classicContractDocument, caseID, assertion string) {
+	t.Helper()
+	for index := range document.Cases {
+		if document.Cases[index].ID != caseID {
+			continue
+		}
+		var assertions []string
+		if err := json.Unmarshal(document.Cases[index].Expected.SemanticFields["structured_assertions"], &assertions); err != nil {
+			t.Fatal(err)
+		}
+		encoded, err := json.Marshal(classicStringsWithout(assertions, assertion))
+		if err != nil {
+			t.Fatal(err)
+		}
+		document.Cases[index].Expected.SemanticFields["structured_assertions"] = encoded
+		return
+	}
+	t.Fatalf("Phase 200 fixture has no case %q", caseID)
+}
+
 func assertClassicContractJourneyMatrix(t *testing.T, document classicContractDocument) {
 	t.Helper()
 	if err := validateClassicContractCorpus(document); err != nil {
@@ -517,6 +1381,9 @@ func assertClassicContractJourneyMatrix(t *testing.T, document classicContractDo
 	}
 	counts := map[string]int{}
 	for _, testCase := range document.Cases {
+		if strings.HasPrefix(testCase.SynthesisDecision, "SYN-200-") {
+			continue
+		}
 		counts[testCase.Group]++
 	}
 	for group, want := range map[string]int{"front-door": 6, "territory": 8, "autopilot": 10, "orientation": 14, "agency": 8, "pause-resume": 14, "closure": 18, "maintenance": 8} {
@@ -531,6 +1398,9 @@ func classicContractExecutePlatform(t *testing.T, platform string) {
 	document := loadClassicContractCorpus(t)
 	harness := newCLIBlackBox(t)
 	for _, testCase := range document.Cases {
+		if strings.HasPrefix(testCase.SynthesisDecision, "SYN-200-") {
+			continue
+		}
 		if testCase.Platform != platform {
 			continue
 		}
@@ -735,6 +1605,12 @@ func validateClassicContractDocument(document classicContractDocument) error {
 				return fmt.Errorf("case %q has invalid replay assertion %+v", testCase.ID, testCase.Expected.Replay)
 			}
 		}
+		if strings.HasPrefix(testCase.SynthesisDecision, "SYN-200-") && testCase.Phase200Proof == nil {
+			return fmt.Errorf("case %q requires phase200_proof", testCase.ID)
+		}
+		if !strings.HasPrefix(testCase.SynthesisDecision, "SYN-200-") && testCase.Phase200Proof != nil {
+			return fmt.Errorf("case %q cannot attach phase200_proof to a Phase 199 decision", testCase.ID)
+		}
 	}
 	return nil
 }
@@ -761,12 +1637,18 @@ func validateClassicMechanismRegistry(registry classicMechanismRegistry) error {
 	if registry.SynthesisSource != ".planning/phases/199-front-door-and-classic-contract/199-CLASSIC-SYNTHESIS.md" {
 		return fmt.Errorf("unexpected synthesis_source %q", registry.SynthesisSource)
 	}
+	if !slices.Equal(registry.SynthesisSources, []string{
+		".planning/phases/199-front-door-and-classic-contract/199-CLASSIC-SYNTHESIS.md",
+		".planning/phases/200-iterative-planning/200-CLASSIC-SYNTHESIS.md",
+	}) {
+		return fmt.Errorf("unexpected synthesis_sources %v", registry.SynthesisSources)
+	}
 	if len(registry.Mechanisms) == 0 {
 		return fmt.Errorf("mechanism registry is empty")
 	}
 
 	decisionCounts := make(map[string]int, len(registry.Mechanisms))
-	capCounts := make(map[string]int, len(classicContractCapabilities))
+	phase199CAPCounts := make(map[string]int, len(classicContractPhase199Capabilities))
 	groupCounts := make(map[string]int, len(classicContractGroups))
 	for index, mechanism := range registry.Mechanisms {
 		if !classicContractDecisionPattern.MatchString(mechanism.ID) {
@@ -786,7 +1668,11 @@ func validateClassicMechanismRegistry(registry classicMechanismRegistry) error {
 			if !classicContractCAPPattern.MatchString(capID) {
 				return fmt.Errorf("mechanism %q has invalid capability %q", mechanism.ID, capID)
 			}
-			capCounts[capID]++
+			if strings.HasPrefix(mechanism.ID, "SYN-199-") {
+				phase199CAPCounts[capID]++
+			} else if !slices.Contains(classicContractPhase200Capabilities, capID) {
+				return fmt.Errorf("mechanism %q has unexpected Phase 200 capability %q", mechanism.ID, capID)
+			}
 		}
 		if len(mechanism.PublicCommands) == 0 || classicStringsContainBlank(mechanism.PublicCommands) {
 			return fmt.Errorf("mechanism %q requires public_commands", mechanism.ID)
@@ -802,6 +1688,16 @@ func validateClassicMechanismRegistry(registry classicMechanismRegistry) error {
 				return fmt.Errorf("mechanism %q has invalid group %q", mechanism.ID, group)
 			}
 			groupCounts[group]++
+		}
+		if strings.HasPrefix(mechanism.ID, "SYN-200-") {
+			if len(mechanism.SourceAnchors) == 0 || classicStringsContainBlank(mechanism.SourceAnchors) || strings.TrimSpace(mechanism.ModernInvariant) == "" {
+				return fmt.Errorf("mechanism %q requires source_anchors and modern_invariant", mechanism.ID)
+			}
+			if len(mechanism.PositiveCaseIDs) == 0 || len(mechanism.NegativeCaseIDs) == 0 || classicStringsContainBlank(mechanism.PositiveCaseIDs) || classicStringsContainBlank(mechanism.NegativeCaseIDs) {
+				return fmt.Errorf("mechanism %q requires positive_case_ids and negative_case_ids", mechanism.ID)
+			}
+		} else if len(mechanism.SourceAnchors) != 0 || mechanism.ModernInvariant != "" || len(mechanism.PositiveCaseIDs) != 0 || len(mechanism.NegativeCaseIDs) != 0 {
+			return fmt.Errorf("Phase 199 mechanism %q cannot carry Phase 200 proof fields", mechanism.ID)
 		}
 	}
 
@@ -819,8 +1715,8 @@ func validateClassicMechanismRegistry(registry classicMechanismRegistry) error {
 			return fmt.Errorf("unexpected synthesis decision %q", id)
 		}
 	}
-	for _, id := range classicContractCapabilities {
-		switch capCounts[id] {
+	for _, id := range classicContractPhase199Capabilities {
+		switch phase199CAPCounts[id] {
 		case 0:
 			return fmt.Errorf("missing capability %q", id)
 		case 1:
@@ -828,8 +1724,8 @@ func validateClassicMechanismRegistry(registry classicMechanismRegistry) error {
 			return fmt.Errorf("duplicate capability %q", id)
 		}
 	}
-	for id := range capCounts {
-		if !slices.Contains(classicContractCapabilities, id) {
+	for id := range phase199CAPCounts {
+		if !slices.Contains(classicContractPhase199Capabilities, id) {
 			return fmt.Errorf("unexpected capability %q", id)
 		}
 	}
@@ -1001,6 +1897,36 @@ func cloneClassicMechanismRegistry(t *testing.T, registry classicMechanismRegist
 		t.Fatalf("decode mechanism registry clone: %v", err)
 	}
 	return clone
+}
+
+func classicMechanismsWithoutDecision(mechanisms []classicMechanism, decisionID string) []classicMechanism {
+	result := make([]classicMechanism, 0, len(mechanisms)-1)
+	for _, mechanism := range mechanisms {
+		if mechanism.ID != decisionID {
+			result = append(result, mechanism)
+		}
+	}
+	return result
+}
+
+func assertClassicSynthesisSource(t *testing.T, repoRoot, source string, decisions, capabilities []string, exact bool) {
+	t.Helper()
+	path := filepath.Join(repoRoot, filepath.FromSlash(source))
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read mechanism synthesis %s: %v", path, err)
+	}
+	for _, id := range decisions {
+		count := strings.Count(string(data), id)
+		if count == 0 || exact && count != 1 {
+			t.Errorf("synthesis identifier %s occurs %d times in %s", id, count, source)
+		}
+	}
+	for _, id := range capabilities {
+		if !bytes.Contains(data, []byte(id)) {
+			t.Errorf("synthesis %s missing routed capability %s", source, id)
+		}
+	}
 }
 
 func removeClassicMechanismCAP(t *testing.T, registry *classicMechanismRegistry, capID string) {

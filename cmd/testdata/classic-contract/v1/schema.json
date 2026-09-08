@@ -51,7 +51,15 @@
             "agency",
             "pause-resume",
             "closure",
-            "maintenance"
+            "maintenance",
+            "V-200-E2E",
+            "V-200-CONFIDENCE",
+            "V-200-DECISION",
+            "V-200-STOP",
+            "V-200-ACCEPT",
+            "V-200-REVISION",
+            "V-200-REPLAY",
+            "V-200-PLATFORM"
           ]
         },
         "kind": {
@@ -68,7 +76,7 @@
         },
         "synthesis_decision": {
           "type": "string",
-          "pattern": "^SYN-199-(?:0[1-9]|10)$"
+          "pattern": "^SYN-(?:199-(?:0[1-9]|10)|200-(?:0[1-9]|1[0-2]))$"
         },
         "cap_ids": {
           "type": "array",
@@ -99,8 +107,283 @@
         },
         "expected": {
           "$ref": "#/$defs/expected"
+        },
+        "phase200_proof": {
+          "$ref": "#/$defs/phase200_proof"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "synthesis_decision": {
+                "pattern": "^SYN-200-"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "phase200_proof"
+            ]
+          }
+        }
+      ]
+    },
+    "phase200_proof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "class",
+        "scenario",
+        "evidence_that_would_change",
+        "assertions"
+      ],
+      "properties": {
+        "class": {
+          "enum": [
+            "success",
+            "refusal"
+          ]
+        },
+        "scenario": {
+          "enum": [
+            "approved-two-pass-journey",
+            "draft-planning-refusal",
+            "fresh-evidence-confidence",
+            "restated-evidence-refusal",
+            "ordered-material-boundaries",
+            "unanswered-decision-refusal",
+            "reasoned-stop-matrix",
+            "material-stop-refusal",
+            "exact-candidate-acceptance",
+            "stale-candidate-refusal",
+            "scoped-spec-revision",
+            "unscoped-revision-refusal",
+            "exact-replay",
+            "divergent-replay-refusal",
+            "platform-projection-parity",
+            "wrapper-authority-refusal"
+          ]
+        },
+        "evidence_that_would_change": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "recommendation": {
+          "$ref": "#/$defs/phase200_recommendation"
+        },
+        "assertions": {
+          "$ref": "#/$defs/phase200_assertions"
         }
       }
+    },
+    "phase200_recommendation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "disposition",
+        "rationale",
+        "evidence_ids",
+        "producer"
+      ],
+      "properties": {
+        "disposition": {
+          "enum": [
+            "accept",
+            "revise"
+          ]
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "producer": {
+          "const": "queen"
+        }
+      }
+    },
+    "phase200_assertions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state_hash_relation",
+        "artifact_set_relation",
+        "dispatch_delta",
+        "receipt_chain_relation",
+        "required_result_fields",
+        "prohibited_side_effects"
+      ],
+      "properties": {
+        "state_hash_relation": {
+          "enum": [
+            "changed",
+            "unchanged"
+          ]
+        },
+        "artifact_set_relation": {
+          "enum": [
+            "changed",
+            "unchanged"
+          ]
+        },
+        "dispatch_delta": {
+          "type": "integer"
+        },
+        "receipt_chain_relation": {
+          "enum": [
+            "changed",
+            "unchanged"
+          ]
+        },
+        "required_result_fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "prohibited_side_effects": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "mechanism": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "disposition",
+        "cap_ids",
+        "public_commands",
+        "source_citations",
+        "groups"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^SYN-(?:199-(?:0[1-9]|10)|200-(?:0[1-9]|1[0-2]))$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "disposition": {
+          "enum": [
+            "keep-current",
+            "restore-modern",
+            "replace-better",
+            "retire-with-proof"
+          ]
+        },
+        "cap_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^CAP-[0-9]{3}$"
+          }
+        },
+        "public_commands": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "source_citations": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "groups": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "source_anchors": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "modern_invariant": {
+          "type": "string",
+          "minLength": 1
+        },
+        "positive_case_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"
+          }
+        },
+        "negative_case_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "id": {
+                "pattern": "^SYN-200-"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "source_anchors",
+              "modern_invariant",
+              "positive_case_ids",
+              "negative_case_ids"
+            ]
+          }
+        }
+      ]
     },
     "invocation": {
       "type": "object",

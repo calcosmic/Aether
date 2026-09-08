@@ -5246,6 +5246,1595 @@
         },
         "fault_point": "before-mutation"
       }
+    },
+    {
+      "id": "phase200.e2e.approved-two-pass-journey",
+      "group": "V-200-E2E",
+      "kind": "behavior",
+      "historical_anchors": [
+        "3a5b81c2:.claude/commands/ant/plan.md:109-568",
+        "v5.4:.aether/commands/plan.yaml:65-690"
+      ],
+      "synthesis_decision": "SYN-200-02",
+      "cap_ids": [
+        "CAP-005",
+        "CAP-056",
+        "CAP-069"
+      ],
+      "source_citations": [
+        "requirement:SYNTH-02",
+        "requirement:CEC-03",
+        "requirement:PLAN-01",
+        "requirement:PLAN-05",
+        ".planning/phases/200-iterative-planning/200-CLASSIC-SYNTHESIS.md"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "plan",
+        "args": [
+          "--candidate"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "codex"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "phase200.e2e.accepted-ready",
+        "semantic_fields": {
+          "fixture": "real-temporary-repository",
+          "requirement_ids": [
+            "SYNTH-02",
+            "CEC-03",
+            "PLAN-01",
+            "PLAN-02",
+            "PLAN-03",
+            "PLAN-04",
+            "PLAN-05",
+            "PLAN-06"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "exact-plan-acceptance-receipt",
+          "structured_assertions": [
+            "specification.outcomes",
+            "specification.included_behaviors",
+            "specification.exclusions",
+            "specification.binding_decisions",
+            "specification.requirements",
+            "specification.acceptance_checks",
+            "specification.negative_expectations",
+            "specification.recovery_expectations",
+            "specification.affected_public_paths",
+            "planning.timeline",
+            "planning.acceptance_receipt",
+            "planning.authority"
+          ]
+        },
+        "required_text_tokens": [
+          "Specification",
+          "Scout",
+          "Route-Setter",
+          "Plan accepted"
+        ],
+        "forbidden_text_tokens": [
+          "auto-accepted"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/planning/unbound-acceptance.json"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "phase200.e2e.accepted-ready"
+        },
+        "fault_point": "exact-owner-acceptance"
+      },
+      "phase200_proof": {
+        "class": "success",
+        "scenario": "approved-two-pass-journey",
+        "evidence_that_would_change": [
+          "A changed approved Specification hash would require a fresh candidate.",
+          "A material residual gap would pause before candidate acceptance."
+        ],
+        "recommendation": {
+          "disposition": "accept",
+          "rationale": "Two grounded passes resolved the weakest material gap and the exact candidate remains bound to the approved Specification.",
+          "evidence_ids": [
+            "evidence:first-pass",
+            "evidence:second-pass"
+          ],
+          "producer": "queen"
+        },
+        "assertions": {
+          "state_hash_relation": "changed",
+          "artifact_set_relation": "changed",
+          "dispatch_delta": 0,
+          "receipt_chain_relation": "changed",
+          "required_result_fields": [
+            "specification",
+            "timeline",
+            "candidate",
+            "acceptance_receipt",
+            "plan_authority"
+          ],
+          "prohibited_side_effects": [
+            "planning-before-spec-approval",
+            "candidate-activation-before-exact-acceptance"
+          ]
+        }
+      }
+    },
+    {
+      "id": "phase200.e2e.draft-planning-refusal",
+      "group": "V-200-E2E",
+      "kind": "behavior",
+      "historical_anchors": [
+        "v5.4:.aether/commands/plan.yaml:540-583"
+      ],
+      "synthesis_decision": "SYN-200-07",
+      "cap_ids": [
+        "CAP-005"
+      ],
+      "source_citations": [
+        "requirement:PLAN-04",
+        "requirement:PLAN-05",
+        "cmd/specification.go",
+        "cmd/codex_plan.go"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "plan",
+        "args": [
+          "--preset",
+          "balanced"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "codex"
+        }
+      },
+      "expected": {
+        "exit_code": 1,
+        "outcome": "phase200.e2e.draft-refused",
+        "semantic_fields": {
+          "fixture": "draft-specification",
+          "requirement_ids": [
+            "PLAN-04",
+            "PLAN-05"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "no-planning-manifest",
+          "structured_assertions": [
+            "error.class",
+            "state_effect",
+            "recovery_command"
+          ]
+        },
+        "required_text_tokens": [
+          "Specification approval required"
+        ],
+        "forbidden_text_tokens": [
+          "Scout dispatched",
+          "Plan accepted"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "unchanged"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/planning/unauthorized-manifest.json"
+        ],
+        "replay": {
+          "mode": "reject-altered",
+          "expected_outcome": "phase200.e2e.draft-refused"
+        },
+        "fault_point": "before-first-dispatch"
+      },
+      "phase200_proof": {
+        "class": "refusal",
+        "scenario": "draft-planning-refusal",
+        "evidence_that_would_change": [
+          "Exact approval of the current draft Specification would authorize preset selection."
+        ],
+        "assertions": {
+          "state_hash_relation": "unchanged",
+          "artifact_set_relation": "unchanged",
+          "dispatch_delta": 0,
+          "receipt_chain_relation": "unchanged",
+          "required_result_fields": [
+            "error_class",
+            "state_effect",
+            "recovery_command"
+          ],
+          "prohibited_side_effects": [
+            "specification-approval",
+            "worker-dispatch",
+            "candidate-creation",
+            "plan-activation"
+          ]
+        }
+      }
+    },
+    {
+      "id": "phase200.confidence.fresh-evidence",
+      "group": "V-200-CONFIDENCE",
+      "kind": "behavior",
+      "historical_anchors": [
+        "3a5b81c2:.claude/commands/ant/plan.md:542-555"
+      ],
+      "synthesis_decision": "SYN-200-03",
+      "cap_ids": [
+        "CAP-056",
+        "CAP-069"
+      ],
+      "source_citations": [
+        "requirement:PLAN-02",
+        "requirement:PLAN-03",
+        "cmd/planning_confidence.go"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "plan-finalize",
+        "args": [
+          "--completion-file",
+          "fixture:route-fresh.json"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "phase200.confidence.validated",
+        "semantic_fields": {
+          "fixture": "route-stage-fresh-evidence",
+          "requirement_ids": [
+            "CEC-03",
+            "PLAN-02",
+            "PLAN-03"
+          ],
+          "pre_post_digest": "artifact-only",
+          "artifact_or_receipt": "route-receipt-and-iteration-card",
+          "structured_assertions": [
+            "dimensions[5]",
+            "fresh_evidence_ids",
+            "remaining_gap.evidence_that_would_change",
+            "derived_overall"
+          ]
+        },
+        "required_text_tokens": [
+          "Knowledge",
+          "Requirements",
+          "Risks",
+          "Dependencies",
+          "Effort"
+        ],
+        "forbidden_text_tokens": [
+          "worker supplied overall"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "unchanged"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/planning/score-only-card.json"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "phase200.confidence.validated"
+        },
+        "fault_point": "route-validation"
+      },
+      "phase200_proof": {
+        "class": "success",
+        "scenario": "fresh-evidence-confidence",
+        "evidence_that_would_change": [
+          "Fresh applicable evidence may move the cited dimension up or down.",
+          "A remaining material gap keeps the next Scout focused on that dimension."
+        ],
+        "assertions": {
+          "state_hash_relation": "unchanged",
+          "artifact_set_relation": "changed",
+          "dispatch_delta": 1,
+          "receipt_chain_relation": "changed",
+          "required_result_fields": [
+            "dimension_assessments",
+            "derived_overall",
+            "weakest_gap",
+            "iteration_card",
+            "route_receipt"
+          ],
+          "prohibited_side_effects": [
+            "supplied-overall-authority",
+            "uncited-score-movement"
+          ]
+        }
+      }
+    },
+    {
+      "id": "phase200.confidence.restated-evidence-refusal",
+      "group": "V-200-CONFIDENCE",
+      "kind": "behavior",
+      "historical_anchors": [
+        "3a5b81c2:.claude/commands/ant/plan.md:297-411"
+      ],
+      "synthesis_decision": "SYN-200-03",
+      "cap_ids": [
+        "CAP-069"
+      ],
+      "source_citations": [
+        "requirement:CEC-03",
+        "requirement:PLAN-02",
+        "cmd/codex_plan_finalize.go"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "plan-finalize",
+        "args": [
+          "--completion-file",
+          "fixture:route-restated.json"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 1,
+        "outcome": "phase200.confidence.restatement-refused",
+        "semantic_fields": {
+          "fixture": "route-stage-restated-evidence",
+          "requirement_ids": [
+            "CEC-03",
+            "PLAN-02"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "no-route-receipt",
+          "structured_assertions": [
+            "error.class",
+            "rejected_evidence_ids",
+            "state_effect"
+          ]
+        },
+        "required_text_tokens": [
+          "fresh applicable evidence required"
+        ],
+        "forbidden_text_tokens": [
+          "readiness increased"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "unchanged"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/planning/restated-route-receipt.json"
+        ],
+        "replay": {
+          "mode": "reject-altered",
+          "expected_outcome": "phase200.confidence.restatement-refused"
+        },
+        "fault_point": "before-route-receipt"
+      },
+      "phase200_proof": {
+        "class": "refusal",
+        "scenario": "restated-evidence-refusal",
+        "evidence_that_would_change": [
+          "A newly observed, applicable, content-distinct evidence record would permit reassessment."
+        ],
+        "assertions": {
+          "state_hash_relation": "unchanged",
+          "artifact_set_relation": "unchanged",
+          "dispatch_delta": 0,
+          "receipt_chain_relation": "unchanged",
+          "required_result_fields": [
+            "error_class",
+            "rejected_evidence_ids",
+            "state_effect"
+          ],
+          "prohibited_side_effects": [
+            "score-movement",
+            "card-append",
+            "worker-dispatch",
+            "candidate-creation"
+          ]
+        }
+      }
+    },
+    {
+      "id": "phase200.decision.ordered-material-boundaries",
+      "group": "V-200-DECISION",
+      "kind": "behavior",
+      "historical_anchors": [
+        "3a5b81c2:.claude/commands/ant/council.md:47-176"
+      ],
+      "synthesis_decision": "SYN-200-04",
+      "cap_ids": [
+        "CAP-005"
+      ],
+      "source_citations": [
+        "requirement:PLAN-04",
+        "cmd/discuss.go",
+        "cmd/codex_plan_finalize.go"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "plan-finalize",
+        "args": [
+          "--completion-file",
+          "fixture:material-boundary.json"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "phase200.decision.card-before-pause",
+        "semantic_fields": {
+          "fixture": "later-pass-material-decision",
+          "requirement_ids": [
+            "CEC-03",
+            "PLAN-04"
+          ],
+          "pre_post_digest": "artifact-only",
+          "artifact_or_receipt": "card-bound-decision-checkpoint",
+          "structured_assertions": [
+            "decision_id",
+            "why_now",
+            "evidence",
+            "queen_recommendation",
+            "choices.consequences",
+            "planning_resumes",
+            "boundary_card_hash"
+          ]
+        },
+        "required_text_tokens": [
+          "Queen recommends",
+          "Evidence that would change"
+        ],
+        "forbidden_text_tokens": [
+          "generic category menu"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/planning",
+            "operator": "changed"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/planning/active-candidate-before-answer.json"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "phase200.decision.card-before-pause"
+        },
+        "fault_point": "after-complete-card-before-owner-answer"
+      },
+      "phase200_proof": {
+        "class": "success",
+        "scenario": "ordered-material-boundaries",
+        "evidence_that_would_change": [
+          "An equivalent answer resumes the next Scout directly.",
+          "A contract-changing answer creates a successor DRAFT and requires exact approval."
+        ],
+        "recommendation": {
+          "disposition": "revise",
+          "rationale": "The later material risk changes promised behavior and must be reconciled through the Specification lineage.",
+          "evidence_ids": [
+            "evidence:late-material-risk"
+          ],
+          "producer": "queen"
+        },
+        "assertions": {
+          "state_hash_relation": "unchanged",
+          "artifact_set_relation": "changed",
+          "dispatch_delta": 0,
+          "receipt_chain_relation": "changed",
+          "required_result_fields": [
+            "iteration_card",
+            "decision_checkpoint",
+            "queen_recommendation",
+            "boundary_card_hash"
+          ],
+          "prohibited_side_effects": [
+            "pause-before-route-card",
+            "candidate-activation",
+            "answer-inference"
+          ]
+        }
+      }
+    },
+    {
+      "id": "phase200.decision.unanswered-refusal",
+      "group": "V-200-DECISION",
+      "kind": "behavior",
+      "historical_anchors": [
+        "3a5b81c2:.claude/commands/ant/council.md:47-176"
+      ],
+      "synthesis_decision": "SYN-200-04",
+      "cap_ids": [
+        "CAP-005"
+      ],
+      "source_citations": [
+        "requirement:PLAN-04",
+        "cmd/planning_decision.go",
+        "cmd/codex_plan_finalize.go"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "plan-finalize",
+        "args": [
+          "--completion-file",
+          "fixture:unanswered-decision.json"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 1,
+        "outcome": "phase200.decision.unanswered-refused",
+        "semantic_fields": {
+          "fixture": "pending-material-decision",
+          "requirement_ids": [
+            "PLAN-04"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "retained-decision-checkpoint",
+          "structured_assertions": [
+            "error.class",
+            "decision_id",
+            "state_effect",
+            "exact_answer_command"
+          ]
+        },
+        "required_text_tokens": [
+          "owner decision required"
+        ],
+        "forbidden_text_tokens": [
+          "Route-Setter authorized",
+          "candidate active"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "unchanged"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/planning/route-without-answer.json"
+        ],
+        "replay": {
+          "mode": "reject-altered",
+          "expected_outcome": "phase200.decision.unanswered-refused"
+        },
+        "fault_point": "owner-decision-boundary"
+      },
+      "phase200_proof": {
+        "class": "refusal",
+        "scenario": "unanswered-decision-refusal",
+        "evidence_that_would_change": [
+          "A complete exact answer set bound to the current decision batch would authorize the declared resume branch."
+        ],
+        "assertions": {
+          "state_hash_relation": "unchanged",
+          "artifact_set_relation": "unchanged",
+          "dispatch_delta": 0,
+          "receipt_chain_relation": "unchanged",
+          "required_result_fields": [
+            "error_class",
+            "decision_id",
+            "state_effect",
+            "exact_answer_command"
+          ],
+          "prohibited_side_effects": [
+            "route-dispatch",
+            "scout-dispatch",
+            "specification-approval",
+            "candidate-activation"
+          ]
+        }
+      }
+    },
+    {
+      "id": "phase200.stop.reasoned-matrix",
+      "group": "V-200-STOP",
+      "kind": "behavior",
+      "historical_anchors": [
+        "3a5b81c2:.claude/commands/ant/plan.md:418-471",
+        "v5.4:.aether/commands/plan.yaml:658-690"
+      ],
+      "synthesis_decision": "SYN-200-06",
+      "cap_ids": [
+        "CAP-012"
+      ],
+      "source_citations": [
+        "requirement:PLAN-03",
+        "cmd/planning_stop.go",
+        "cmd/planning_visuals.go"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "plan-finalize",
+        "args": [
+          "--completion-file",
+          "fixture:reasoned-stop.json"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "phase200.stop.pending-candidate",
+        "semantic_fields": {
+          "fixture": "all-four-stop-reasons",
+          "requirement_ids": [
+            "CEC-03",
+            "PLAN-03",
+            "PLAN-05"
+          ],
+          "pre_post_digest": "artifact-only",
+          "artifact_or_receipt": "pending-plan-candidate",
+          "structured_assertions": [
+            "target_sufficient=target sufficiency",
+            "diminishing_returns=diminishing returns",
+            "stalled=stall detected",
+            "iteration_cap=iteration cap",
+            "residual_gaps.evidence_that_would_change",
+            "candidate.status=pending_review"
+          ]
+        },
+        "required_text_tokens": [
+          "target sufficiency",
+          "diminishing returns",
+          "stall detected",
+          "iteration cap",
+          "NOT ACTIVE"
+        ],
+        "forbidden_text_tokens": [
+          "Plan accepted"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "unchanged"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/planning/automatic-acceptance.json"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "phase200.stop.pending-candidate"
+        },
+        "fault_point": "candidate-persistence-before-acceptance"
+      },
+      "phase200_proof": {
+        "class": "success",
+        "scenario": "reasoned-stop-matrix",
+        "evidence_that_would_change": [
+          "New evidence that changes a material plan decision reopens planning.",
+          "A material residual gap overrides candidate eligibility and pauses for the owner."
+        ],
+        "recommendation": {
+          "disposition": "accept",
+          "rationale": "The stop is reasoned, residual gaps are non-material, and the candidate remains inactive pending exact acceptance.",
+          "evidence_ids": [
+            "evidence:stop-policy"
+          ],
+          "producer": "queen"
+        },
+        "assertions": {
+          "state_hash_relation": "unchanged",
+          "artifact_set_relation": "changed",
+          "dispatch_delta": 0,
+          "receipt_chain_relation": "changed",
+          "required_result_fields": [
+            "stop_reason",
+            "stop_reason_public_label",
+            "residual_gaps",
+            "candidate",
+            "queen_recommendation"
+          ],
+          "prohibited_side_effects": [
+            "automatic-plan-acceptance",
+            "build-eligibility",
+            "residual-gap-erasure"
+          ]
+        }
+      }
+    },
+    {
+      "id": "phase200.stop.material-refusal",
+      "group": "V-200-STOP",
+      "kind": "behavior",
+      "historical_anchors": [
+        "3a5b81c2:.claude/commands/ant/plan.md:418-471"
+      ],
+      "synthesis_decision": "SYN-200-06",
+      "cap_ids": [
+        "CAP-005"
+      ],
+      "source_citations": [
+        "requirement:PLAN-03",
+        "requirement:PLAN-04",
+        "cmd/planning_stop.go"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "plan-finalize",
+        "args": [
+          "--completion-file",
+          "fixture:material-stop.json"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 1,
+        "outcome": "phase200.stop.material-pause",
+        "semantic_fields": {
+          "fixture": "material-gap-stop-override",
+          "requirement_ids": [
+            "PLAN-03",
+            "PLAN-04"
+          ],
+          "pre_post_digest": "state-unchanged-card-appended",
+          "artifact_or_receipt": "owner-decision-checkpoint",
+          "structured_assertions": [
+            "pause_reason",
+            "material_gap",
+            "evidence_that_would_change",
+            "candidate_eligible=false"
+          ]
+        },
+        "required_text_tokens": [
+          "owner decision required",
+          "No plan candidate was activated"
+        ],
+        "forbidden_text_tokens": [
+          "NOT ACTIVE",
+          "Plan accepted"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "unchanged"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/planning/material-gap-candidate.json"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "phase200.stop.material-pause"
+        },
+        "fault_point": "materiality-gate"
+      },
+      "phase200_proof": {
+        "class": "refusal",
+        "scenario": "material-stop-refusal",
+        "evidence_that_would_change": [
+          "An exact owner answer resolving the material gap permits the declared resume or successor-Specification branch."
+        ],
+        "assertions": {
+          "state_hash_relation": "unchanged",
+          "artifact_set_relation": "changed",
+          "dispatch_delta": 0,
+          "receipt_chain_relation": "changed",
+          "required_result_fields": [
+            "iteration_card",
+            "material_gap",
+            "decision_checkpoint",
+            "candidate_eligible"
+          ],
+          "prohibited_side_effects": [
+            "candidate-creation",
+            "plan-activation",
+            "build-eligibility"
+          ]
+        }
+      }
+    },
+    {
+      "id": "phase200.accept.exact",
+      "group": "V-200-ACCEPT",
+      "kind": "behavior",
+      "historical_anchors": [
+        "3a5b81c2:.claude/commands/ant/plan.md:473-535"
+      ],
+      "synthesis_decision": "SYN-200-06",
+      "cap_ids": [
+        "CAP-012"
+      ],
+      "source_citations": [
+        "requirement:PLAN-05",
+        "cmd/plan_candidate.go",
+        "cmd/plan_authority.go"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "plan",
+        "args": [
+          "--accept-candidate",
+          "fixture-exact-candidate"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "phase200.accept.ready",
+        "semantic_fields": {
+          "fixture": "exact-candidate-frontier",
+          "requirement_ids": [
+            "PLAN-05",
+            "PLAN-06"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "plan-acceptance-receipt",
+          "structured_assertions": [
+            "candidate_id",
+            "specification_revision_id",
+            "base_plan_revision_id",
+            "timeline_digest",
+            "proposal_hash",
+            "acceptance_token",
+            "state=READY"
+          ]
+        },
+        "required_text_tokens": [
+          "Plan accepted",
+          "guided build",
+          "Autopilot"
+        ],
+        "forbidden_text_tokens": [
+          "NOT ACTIVE"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/planning/unbound-acceptance.json"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "phase200.accept.ready"
+        },
+        "fault_point": "acceptance-transaction"
+      },
+      "phase200_proof": {
+        "class": "success",
+        "scenario": "exact-candidate-acceptance",
+        "evidence_that_would_change": [
+          "Any changed Specification, base, proposal, timeline, or token requires a fresh candidate review."
+        ],
+        "recommendation": {
+          "disposition": "accept",
+          "rationale": "The persisted Queen recommendation and evidence match the exact reviewed frontier.",
+          "evidence_ids": [
+            "evidence:route-fresh"
+          ],
+          "producer": "queen"
+        },
+        "assertions": {
+          "state_hash_relation": "changed",
+          "artifact_set_relation": "changed",
+          "dispatch_delta": 0,
+          "receipt_chain_relation": "changed",
+          "required_result_fields": [
+            "candidate",
+            "queen_recommendation",
+            "revision",
+            "acceptance_receipt",
+            "plan_authority"
+          ],
+          "prohibited_side_effects": [
+            "acceptance-without-recommendation",
+            "partial-frontier-substitution"
+          ]
+        }
+      }
+    },
+    {
+      "id": "phase200.accept.stale-refusal",
+      "group": "V-200-ACCEPT",
+      "kind": "behavior",
+      "historical_anchors": [
+        "v5.4:.aether/commands/plan.yaml:540-583"
+      ],
+      "synthesis_decision": "SYN-200-06",
+      "cap_ids": [
+        "CAP-012"
+      ],
+      "source_citations": [
+        "requirement:PLAN-05",
+        "cmd/plan_candidate.go"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "plan",
+        "args": [
+          "--accept-candidate",
+          "fixture-stale-candidate"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 1,
+        "outcome": "phase200.accept.stale-refused",
+        "semantic_fields": {
+          "fixture": "stale-candidate-frontier",
+          "requirement_ids": [
+            "PLAN-05"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "no-acceptance-receipt",
+          "structured_assertions": [
+            "error.class",
+            "mismatched_binding",
+            "state_effect",
+            "fresh_review_command"
+          ]
+        },
+        "required_text_tokens": [
+          "candidate binding changed",
+          "State: unchanged"
+        ],
+        "forbidden_text_tokens": [
+          "Plan accepted",
+          "guided build"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "unchanged"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/planning/stale-acceptance-receipt.json"
+        ],
+        "replay": {
+          "mode": "reject-altered",
+          "expected_outcome": "phase200.accept.stale-refused"
+        },
+        "fault_point": "before-acceptance-transaction"
+      },
+      "phase200_proof": {
+        "class": "refusal",
+        "scenario": "stale-candidate-refusal",
+        "evidence_that_would_change": [
+          "Reopening the current candidate yields a fresh exact acceptance command."
+        ],
+        "assertions": {
+          "state_hash_relation": "unchanged",
+          "artifact_set_relation": "unchanged",
+          "dispatch_delta": 0,
+          "receipt_chain_relation": "unchanged",
+          "required_result_fields": [
+            "error_class",
+            "mismatched_binding",
+            "state_effect",
+            "fresh_review_command"
+          ],
+          "prohibited_side_effects": [
+            "acceptance-receipt-write",
+            "candidate-status-change",
+            "plan-activation",
+            "build-eligibility"
+          ]
+        }
+      }
+    },
+    {
+      "id": "phase200.revision.scoped",
+      "group": "V-200-REVISION",
+      "kind": "behavior",
+      "historical_anchors": [
+        "v5.4:.aether/commands/plan.yaml:540-583"
+      ],
+      "synthesis_decision": "SYN-200-08",
+      "cap_ids": [
+        "CAP-010",
+        "CAP-011",
+        "CAP-012"
+      ],
+      "source_citations": [
+        "requirement:PLAN-06",
+        "cmd/specification.go",
+        "cmd/plan_impact.go"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "spec",
+        "args": [
+          "--modify",
+          "--scope",
+          "feature"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "phase200.revision.scoped-draft",
+        "semantic_fields": {
+          "fixture": "two-branch-plan-one-requirement-change",
+          "requirement_ids": [
+            "PLAN-05",
+            "PLAN-06"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "specification-revision-receipt",
+          "structured_assertions": [
+            "successor.status=DRAFT",
+            "classified_delta",
+            "affected_task_ids",
+            "affected_proof_ids",
+            "preserved_completed_ids",
+            "preserved_unaffected_ids"
+          ]
+        },
+        "required_text_tokens": [
+          "Revision Impact",
+          "Unaffected work: retained and still valid"
+        ],
+        "forbidden_text_tokens": [
+          "deleted forever"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/planning/in-place-plan-mutation.json"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "phase200.revision.scoped-draft"
+        },
+        "fault_point": "successor-draft-transaction"
+      },
+      "phase200_proof": {
+        "class": "success",
+        "scenario": "scoped-spec-revision",
+        "evidence_that_would_change": [
+          "Exact approval and an affected-scope candidate acceptance reconcile the changed branch.",
+          "Independent completed work remains valid unless its stable dependency closure changes."
+        ],
+        "recommendation": {
+          "disposition": "revise",
+          "rationale": "The owner-visible contract changed in one stable requirement, so only its transitive unfinished scope must reopen.",
+          "evidence_ids": [
+            "evidence:feature-change"
+          ],
+          "producer": "queen"
+        },
+        "assertions": {
+          "state_hash_relation": "changed",
+          "artifact_set_relation": "changed",
+          "dispatch_delta": 0,
+          "receipt_chain_relation": "changed",
+          "required_result_fields": [
+            "successor_specification",
+            "classified_delta",
+            "affected_scope",
+            "preserved_scope",
+            "reconciliation_required"
+          ],
+          "prohibited_side_effects": [
+            "predecessor-byte-mutation",
+            "independent-completion-invalidation",
+            "unapproved-plan-activation"
+          ]
+        }
+      }
+    },
+    {
+      "id": "phase200.revision.unscoped-refusal",
+      "group": "V-200-REVISION",
+      "kind": "behavior",
+      "historical_anchors": [
+        "v5.4:.aether/commands/plan.yaml:540-583"
+      ],
+      "synthesis_decision": "SYN-200-09",
+      "cap_ids": [
+        "CAP-012"
+      ],
+      "source_citations": [
+        "requirement:PLAN-06",
+        "cmd/specification.go",
+        "cmd/plan_revision.go"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "spec",
+        "args": [
+          "--modify",
+          "--scope",
+          "feature",
+          "--item-id",
+          "outside-scope"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 1,
+        "outcome": "phase200.revision.scope-refused",
+        "semantic_fields": {
+          "fixture": "out-of-scope-specification-change",
+          "requirement_ids": [
+            "PLAN-06"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "no-successor-receipt",
+          "structured_assertions": [
+            "error.class",
+            "outside_scope_id",
+            "state_effect",
+            "recovery_command"
+          ]
+        },
+        "required_text_tokens": [
+          "outside the feature scope",
+          "State: unchanged"
+        ],
+        "forbidden_text_tokens": [
+          "SPEC approved",
+          "Plan accepted"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "unchanged"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/planning/unscoped-successor.json"
+        ],
+        "replay": {
+          "mode": "reject-altered",
+          "expected_outcome": "phase200.revision.scope-refused"
+        },
+        "fault_point": "scope-validation"
+      },
+      "phase200_proof": {
+        "class": "refusal",
+        "scenario": "unscoped-revision-refusal",
+        "evidence_that_would_change": [
+          "A new exact whole-goal revision request or a feature scope that explicitly includes the stable ID would be evaluated afresh."
+        ],
+        "assertions": {
+          "state_hash_relation": "unchanged",
+          "artifact_set_relation": "unchanged",
+          "dispatch_delta": 0,
+          "receipt_chain_relation": "unchanged",
+          "required_result_fields": [
+            "error_class",
+            "outside_scope_id",
+            "state_effect",
+            "recovery_command"
+          ],
+          "prohibited_side_effects": [
+            "successor-spec-write",
+            "plan-mutation",
+            "proof-invalidation",
+            "worker-dispatch"
+          ]
+        }
+      }
+    },
+    {
+      "id": "phase200.replay.exact",
+      "group": "V-200-REPLAY",
+      "kind": "behavior",
+      "historical_anchors": [
+        "v5.4:.aether/commands/plan.yaml:288-555"
+      ],
+      "synthesis_decision": "SYN-200-12",
+      "cap_ids": [
+        "CAP-012"
+      ],
+      "source_citations": [
+        "requirement:PLAN-06",
+        "cmd/plan_candidate.go",
+        "cmd/spec_projection.go"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "plan",
+        "args": [
+          "--accept-candidate",
+          "fixture-replay-candidate"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "phase200.replay.retained",
+        "semantic_fields": {
+          "fixture": "accepted-candidate-exact-retry",
+          "requirement_ids": [
+            "PLAN-05",
+            "PLAN-06"
+          ],
+          "pre_post_digest": "unchanged-on-retry",
+          "artifact_or_receipt": "original-acceptance-receipt",
+          "structured_assertions": [
+            "replayed=true",
+            "receipt_unchanged",
+            "revision_unchanged",
+            "projection_repair_authority_unchanged",
+            "crash_window_after_state_before_projection",
+            "crash_window_after_projection_before_receipt",
+            "legacy_migration_preserves_identity"
+          ]
+        },
+        "required_text_tokens": [
+          "Already accepted"
+        ],
+        "forbidden_text_tokens": [
+          "new acceptance receipt"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "unchanged"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/planning/duplicate-acceptance-receipt.json"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "phase200.replay.retained"
+        },
+        "fault_point": "after-candidate-persist-and-after-acceptance-commit"
+      },
+      "phase200_proof": {
+        "class": "success",
+        "scenario": "exact-replay",
+        "evidence_that_would_change": [
+          "A byte-divergent request is not a replay and must be refused before mutation."
+        ],
+        "assertions": {
+          "state_hash_relation": "unchanged",
+          "artifact_set_relation": "unchanged",
+          "dispatch_delta": 0,
+          "receipt_chain_relation": "unchanged",
+          "required_result_fields": [
+            "replayed",
+            "original_revision",
+            "original_acceptance_receipt",
+            "crash_window_recovery",
+            "projection_repair"
+          ],
+          "prohibited_side_effects": [
+            "duplicate-receipt",
+            "duplicate-revision",
+            "worker-redispatch"
+          ]
+        }
+      }
+    },
+    {
+      "id": "phase200.replay.divergent-refusal",
+      "group": "V-200-REPLAY",
+      "kind": "behavior",
+      "historical_anchors": [
+        "v5.4:.aether/commands/plan.yaml:288-555"
+      ],
+      "synthesis_decision": "SYN-200-12",
+      "cap_ids": [
+        "CAP-012"
+      ],
+      "source_citations": [
+        "requirement:PLAN-06",
+        "cmd/plan_candidate.go",
+        "cmd/codex_plan_finalize.go"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "plan",
+        "args": [
+          "--accept-candidate",
+          "fixture-divergent-candidate"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 1,
+        "outcome": "phase200.replay.divergent-refused",
+        "semantic_fields": {
+          "fixture": "accepted-candidate-altered-retry",
+          "requirement_ids": [
+            "PLAN-06"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "original-receipt-retained",
+          "structured_assertions": [
+            "error.class",
+            "divergent_field",
+            "state_effect",
+            "original_receipt_hash"
+          ]
+        },
+        "required_text_tokens": [
+          "divergent replay",
+          "State: unchanged"
+        ],
+        "forbidden_text_tokens": [
+          "Plan accepted"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "unchanged"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/planning/divergent-receipt.json"
+        ],
+        "replay": {
+          "mode": "reject-altered",
+          "expected_outcome": "phase200.replay.divergent-refused"
+        },
+        "fault_point": "replay-binding-validation"
+      },
+      "phase200_proof": {
+        "class": "refusal",
+        "scenario": "divergent-replay-refusal",
+        "evidence_that_would_change": [
+          "Only an exact byte-equivalent request may reuse the committed receipt."
+        ],
+        "assertions": {
+          "state_hash_relation": "unchanged",
+          "artifact_set_relation": "unchanged",
+          "dispatch_delta": 0,
+          "receipt_chain_relation": "unchanged",
+          "required_result_fields": [
+            "error_class",
+            "divergent_field",
+            "state_effect",
+            "original_receipt"
+          ],
+          "prohibited_side_effects": [
+            "receipt-rewrite",
+            "candidate-rewrite",
+            "plan-revision-rewrite",
+            "worker-redispatch"
+          ]
+        }
+      }
+    },
+    {
+      "id": "phase200.platform.semantic-parity",
+      "group": "V-200-PLATFORM",
+      "kind": "behavior",
+      "historical_anchors": [
+        "v5.4:.aether/commands/plan.yaml"
+      ],
+      "synthesis_decision": "SYN-200-11",
+      "cap_ids": [
+        "CAP-069"
+      ],
+      "source_citations": [
+        "requirement:CEC-03",
+        "requirement:PLAN-03",
+        "requirement:PLAN-05",
+        ".aether/commands/plan.yaml",
+        ".aether/commands/spec.yaml",
+        "cmd/planning_visuals.go"
+      ],
+      "platform": "claude",
+      "command": {
+        "name": "plan",
+        "args": [
+          "--candidate"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "visual",
+          "AETHER_PLATFORM": "claude",
+          "COLUMNS": "48",
+          "NO_COLOR": "1"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "phase200.platform.same-semantics",
+        "semantic_fields": {
+          "fixture": "typed-renderer-width-platform-matrix",
+          "requirement_ids": [
+            "CEC-03",
+            "PLAN-03",
+            "PLAN-05"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "read-only-projection",
+          "structured_assertions": [
+            "widths=47,48,63,64,95,96",
+            "presets=fast,balanced,deep,exhaustive",
+            "no_color",
+            "json_internal_stop_enum",
+            "json_public_stop_label",
+            "full_Specification_wording",
+            "platform_native_commands"
+          ]
+        },
+        "required_text_tokens": [
+          "Specification",
+          "target sufficiency",
+          "diminishing returns",
+          "stall detected",
+          "iteration cap"
+        ],
+        "forbidden_text_tokens": [
+          "SPECIFICATION truncated"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "unchanged"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/planning/renderer-authored-state.json"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "phase200.platform.same-semantics"
+        },
+        "fault_point": "renderer-projection"
+      },
+      "phase200_proof": {
+        "class": "success",
+        "scenario": "platform-projection-parity",
+        "evidence_that_would_change": [
+          "A missing persisted recommendation or causal field must fail every projection rather than be invented by a renderer."
+        ],
+        "assertions": {
+          "state_hash_relation": "unchanged",
+          "artifact_set_relation": "unchanged",
+          "dispatch_delta": 0,
+          "receipt_chain_relation": "unchanged",
+          "required_result_fields": [
+            "runtime_stop_enum",
+            "public_stop_label",
+            "evidence_that_would_change",
+            "queen_recommendation",
+            "platform_command_spelling",
+            "width_matrix",
+            "no_color"
+          ],
+          "prohibited_side_effects": [
+            "renderer-policy",
+            "renderer-state-write",
+            "codex-ant-alias-claim"
+          ]
+        }
+      }
+    },
+    {
+      "id": "phase200.platform.wrapper-authority-refusal",
+      "group": "V-200-PLATFORM",
+      "kind": "behavior",
+      "historical_anchors": [
+        "3a5b81c2:.claude/commands/ant/plan.md:473-535"
+      ],
+      "synthesis_decision": "SYN-200-11",
+      "cap_ids": [
+        "CAP-069"
+      ],
+      "source_citations": [
+        "requirement:PLAN-01",
+        "requirement:PLAN-05",
+        ".aether/docs/wrapper-host-contract.md",
+        ".aether/commands/plan.yaml"
+      ],
+      "platform": "opencode",
+      "command": {
+        "name": "plan",
+        "args": [
+          "--candidate"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json",
+          "AETHER_PLATFORM": "opencode"
+        }
+      },
+      "expected": {
+        "exit_code": 1,
+        "outcome": "phase200.platform.wrapper-authority-refused",
+        "semantic_fields": {
+          "fixture": "managed-wrapper-authority-attempt",
+          "requirement_ids": [
+            "PLAN-01",
+            "PLAN-05"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "no-wrapper-owned-receipt",
+          "structured_assertions": [
+            "canonical_yaml",
+            "managed_projection",
+            "forbidden_state_writes",
+            "runtime_command_spelling"
+          ]
+        },
+        "required_text_tokens": [
+          "Go authority"
+        ],
+        "forbidden_text_tokens": [
+          "write COLONY_STATE.json",
+          "approve automatically"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "unchanged"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/planning/wrapper-receipt.json"
+        ],
+        "replay": {
+          "mode": "reject-altered",
+          "expected_outcome": "phase200.platform.wrapper-authority-refused"
+        },
+        "fault_point": "wrapper-authority-boundary"
+      },
+      "phase200_proof": {
+        "class": "refusal",
+        "scenario": "wrapper-authority-refusal",
+        "evidence_that_would_change": [
+          "Only a validated Go result and exact runtime-issued action may change specification or planning authority."
+        ],
+        "assertions": {
+          "state_hash_relation": "unchanged",
+          "artifact_set_relation": "unchanged",
+          "dispatch_delta": 0,
+          "receipt_chain_relation": "unchanged",
+          "required_result_fields": [
+            "canonical_source",
+            "managed_projection",
+            "go_authority",
+            "state_effect"
+          ],
+          "prohibited_side_effects": [
+            "wrapper-state-write",
+            "wrapper-score-computation",
+            "wrapper-acceptance",
+            "wrapper-specification-approval"
+          ]
+        }
+      }
     }
   ]
 }
