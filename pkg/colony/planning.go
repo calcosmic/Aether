@@ -1,7 +1,9 @@
 package colony
 
 import (
+	"encoding/hex"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -165,6 +167,37 @@ func (v PlanningSemanticChangeKind) Valid() bool {
 		PlanningSemanticChangeModified,
 		PlanningSemanticChangeRemoved,
 		PlanningSemanticChangePreserved:
+		return true
+	default:
+		return false
+	}
+}
+
+// PlanningSemanticSection is part of a semantic change's canonical identity.
+// The same stable node in adjacent sections represents different plan meaning.
+type PlanningSemanticSection string
+
+const (
+	PlanningSemanticSectionPhases               PlanningSemanticSection = "phases"
+	PlanningSemanticSectionTasks                PlanningSemanticSection = "tasks"
+	PlanningSemanticSectionDependencies         PlanningSemanticSection = "dependencies"
+	PlanningSemanticSectionRequirementLinks     PlanningSemanticSection = "requirement_links"
+	PlanningSemanticSectionAcceptanceChecks     PlanningSemanticSection = "acceptance_checks"
+	PlanningSemanticSectionNegativeExpectations PlanningSemanticSection = "negative_expectations"
+	PlanningSemanticSectionRecoveryExpectations PlanningSemanticSection = "recovery_expectations"
+	PlanningSemanticSectionPublicPaths          PlanningSemanticSection = "public_paths"
+)
+
+func (v PlanningSemanticSection) Valid() bool {
+	switch v {
+	case PlanningSemanticSectionPhases,
+		PlanningSemanticSectionTasks,
+		PlanningSemanticSectionDependencies,
+		PlanningSemanticSectionRequirementLinks,
+		PlanningSemanticSectionAcceptanceChecks,
+		PlanningSemanticSectionNegativeExpectations,
+		PlanningSemanticSectionRecoveryExpectations,
+		PlanningSemanticSectionPublicPaths:
 		return true
 	default:
 		return false
@@ -481,6 +514,10 @@ func (g PlanningGap) Validate() error {
 	if err := validatePlanningIdentity(g.SchemaVersion, PlanningSchemaVersion, g.ID, g.ContentHash); err != nil {
 		return err
 	}
+	return validatePlanningGapBody(g)
+}
+
+func validatePlanningGapBody(g PlanningGap) error {
 	if !g.Dimension.Valid() {
 		return fmt.Errorf("dimension: invalid planning dimension %q", g.Dimension)
 	}
@@ -522,6 +559,15 @@ func (a PlanningDimensionAssessment) Validate() error {
 	if err := validatePlanningIdentity(a.SchemaVersion, PlanningSchemaVersion, a.ID, a.ContentHash); err != nil {
 		return err
 	}
+	if err := validatePlanningDimensionAssessmentBody(a); err != nil {
+		return err
+	}
+	return validatePlanningAddress("planning-assessment", a.ID, a.ContentHash, func() (string, error) {
+		return CanonicalPlanningDimensionAssessmentContentHash(a)
+	})
+}
+
+func validatePlanningDimensionAssessmentBody(a PlanningDimensionAssessment) error {
 	if !a.Dimension.Valid() {
 		return fmt.Errorf("dimension: invalid planning dimension %q", a.Dimension)
 	}
@@ -563,17 +609,24 @@ type PlanningSemanticChange struct {
 }
 
 func (c PlanningSemanticChange) Validate() error {
+	return validatePlanningSemanticChangeBody(c)
+}
+
+func validatePlanningSemanticChangeBody(c PlanningSemanticChange) error {
 	if strings.TrimSpace(c.SemanticID) == "" {
 		return fmt.Errorf("semantic_id is required")
 	}
-	if strings.TrimSpace(c.ContentHash) == "" {
-		return fmt.Errorf("content_hash is required")
+	if err := validatePlanningDigest("content_hash", c.ContentHash); err != nil {
+		return err
 	}
 	if !c.Kind.Valid() {
 		return fmt.Errorf("kind: invalid semantic change kind %q", c.Kind)
 	}
 	switch c.Kind {
 	case PlanningSemanticChangeAdded:
+		if strings.TrimSpace(c.BeforeHash) != "" {
+			return fmt.Errorf("before_hash must be empty for added change")
+		}
 		if strings.TrimSpace(c.AfterHash) == "" {
 			return fmt.Errorf("after_hash is required for added change")
 		}
@@ -581,16 +634,33 @@ func (c PlanningSemanticChange) Validate() error {
 		if strings.TrimSpace(c.BeforeHash) == "" || strings.TrimSpace(c.AfterHash) == "" {
 			return fmt.Errorf("before_hash and after_hash are required for modified change")
 		}
+		if c.BeforeHash == c.AfterHash {
+			return fmt.Errorf("modified change requires distinct before_hash and after_hash")
+		}
 	case PlanningSemanticChangeRemoved:
 		if strings.TrimSpace(c.BeforeHash) == "" {
 			return fmt.Errorf("before_hash is required for removed change")
+		}
+		if strings.TrimSpace(c.AfterHash) != "" {
+			return fmt.Errorf("after_hash must be empty for removed change")
 		}
 	case PlanningSemanticChangePreserved:
 		if strings.TrimSpace(c.BeforeHash) == "" || c.BeforeHash != c.AfterHash {
 			return fmt.Errorf("preserved change requires equal before_hash and after_hash")
 		}
 	}
-	return validatePlanningIDList("evidence_ids", c.EvidenceIDs, false)
+	if c.BeforeHash != "" {
+		if err := validatePlanningDigest("before_hash", c.BeforeHash); err != nil {
+			return err
+		}
+	}
+	if c.AfterHash != "" {
+		if err := validatePlanningDigest("after_hash", c.AfterHash); err != nil {
+			return err
+		}
+	}
+	requiredEvidence := c.Kind != PlanningSemanticChangePreserved
+	return validatePlanningIDList("evidence_ids", c.EvidenceIDs, requiredEvidence)
 }
 
 // PlanningAuthorityImpact records an authority transition separately from the
@@ -605,11 +675,20 @@ type PlanningAuthorityImpact struct {
 }
 
 func (i PlanningAuthorityImpact) Validate() error {
-	if strings.TrimSpace(i.ID) == "" {
-		return fmt.Errorf("id is required")
+	if err := validatePlanningIdentity("", "", i.ID, i.ContentHash); err != nil {
+		return err
 	}
-	if strings.TrimSpace(i.ContentHash) == "" {
-		return fmt.Errorf("content_hash is required")
+	if err := validatePlanningAuthorityImpactBody(i); err != nil {
+		return err
+	}
+	return validatePlanningAddress("authority-impact", i.ID, i.ContentHash, func() (string, error) {
+		return CanonicalPlanningAuthorityImpactContentHash(i)
+	})
+}
+
+func validatePlanningAuthorityImpactBody(i PlanningAuthorityImpact) error {
+	if err := validatePlanningDigest("content_hash", i.ContentHash); err != nil {
+		return err
 	}
 	if !i.Kind.Valid() {
 		return fmt.Errorf("kind: invalid authority impact kind %q", i.Kind)
@@ -617,7 +696,7 @@ func (i PlanningAuthorityImpact) Validate() error {
 	if strings.TrimSpace(i.SourceID) == "" {
 		return fmt.Errorf("source_id is required")
 	}
-	if err := validatePlanningIDList("affected_semantic_ids", i.AffectedSemanticIDs, false); err != nil {
+	if err := validatePlanningIDList("affected_semantic_ids", i.AffectedSemanticIDs, true); err != nil {
 		return err
 	}
 	if strings.TrimSpace(i.Rationale) == "" {
@@ -647,30 +726,59 @@ func (d PlanningSemanticDelta) Validate() error {
 	if err := validatePlanningIdentity(d.SchemaVersion, PlanningSchemaVersion, d.ID, d.ContentHash); err != nil {
 		return err
 	}
+	if err := validatePlanningSemanticDeltaBody(d); err != nil {
+		return err
+	}
+	return validatePlanningAddress("planning-delta", d.ID, d.ContentHash, func() (string, error) {
+		return CanonicalPlanningSemanticDeltaContentHash(d)
+	})
+}
+
+func validatePlanningSemanticDeltaBody(d PlanningSemanticDelta) error {
+	if !planningSemanticDeltaHasContent(d) {
+		return fmt.Errorf("semantic delta must contain at least one semantic change or authority impact")
+	}
 	sections := []struct {
-		name    string
+		name    PlanningSemanticSection
 		changes []PlanningSemanticChange
 	}{
-		{name: "phases", changes: d.Phases},
-		{name: "tasks", changes: d.Tasks},
-		{name: "dependencies", changes: d.Dependencies},
-		{name: "requirement_links", changes: d.RequirementLinks},
-		{name: "acceptance_checks", changes: d.AcceptanceChecks},
-		{name: "negative_expectations", changes: d.NegativeExpectations},
-		{name: "recovery_expectations", changes: d.RecoveryExpectations},
-		{name: "public_paths", changes: d.PublicPaths},
+		{name: PlanningSemanticSectionPhases, changes: d.Phases},
+		{name: PlanningSemanticSectionTasks, changes: d.Tasks},
+		{name: PlanningSemanticSectionDependencies, changes: d.Dependencies},
+		{name: PlanningSemanticSectionRequirementLinks, changes: d.RequirementLinks},
+		{name: PlanningSemanticSectionAcceptanceChecks, changes: d.AcceptanceChecks},
+		{name: PlanningSemanticSectionNegativeExpectations, changes: d.NegativeExpectations},
+		{name: PlanningSemanticSectionRecoveryExpectations, changes: d.RecoveryExpectations},
+		{name: PlanningSemanticSectionPublicPaths, changes: d.PublicPaths},
 	}
+	seenChanges := make(map[string]string)
 	for _, section := range sections {
 		for i := range section.changes {
 			if err := section.changes[i].Validate(); err != nil {
 				return fmt.Errorf("%s[%d]: %w", section.name, i, err)
 			}
+			if prior, duplicate := seenChanges[section.changes[i].SemanticID]; duplicate {
+				return fmt.Errorf("%s[%d].semantic_id %q duplicates %s", section.name, i, section.changes[i].SemanticID, prior)
+			}
+			seenChanges[section.changes[i].SemanticID] = fmt.Sprintf("%s[%d]", section.name, i)
+			want, err := CanonicalPlanningSemanticChangeContentHash(section.name, section.changes[i])
+			if err != nil {
+				return fmt.Errorf("%s[%d]: %w", section.name, i, err)
+			}
+			if section.changes[i].ContentHash != want {
+				return fmt.Errorf("%s[%d].content_hash does not match its canonical body", section.name, i)
+			}
 		}
 	}
+	seenImpacts := make(map[string]struct{}, len(d.AuthorityImpacts))
 	for i := range d.AuthorityImpacts {
 		if err := d.AuthorityImpacts[i].Validate(); err != nil {
 			return fmt.Errorf("authority_impacts[%d]: %w", i, err)
 		}
+		if _, duplicate := seenImpacts[d.AuthorityImpacts[i].ID]; duplicate {
+			return fmt.Errorf("authority_impacts[%d].id %q is duplicated", i, d.AuthorityImpacts[i].ID)
+		}
+		seenImpacts[d.AuthorityImpacts[i].ID] = struct{}{}
 	}
 	return nil
 }
@@ -831,7 +939,16 @@ func (r QueenPlanRecommendation) Validate() error {
 	if err := validatePlanningIdentity(r.SchemaVersion, PlanningSchemaVersion, r.ID, r.ContentHash); err != nil {
 		return err
 	}
-	if strings.TrimSpace(r.CandidateID) == "" {
+	if err := validateQueenPlanRecommendationBody(r, true); err != nil {
+		return err
+	}
+	return validatePlanningAddress("queen-recommendation", r.ID, r.ContentHash, func() (string, error) {
+		return CanonicalQueenPlanRecommendationContentHash(r)
+	})
+}
+
+func validateQueenPlanRecommendationBody(r QueenPlanRecommendation, requireCandidate bool) error {
+	if requireCandidate && strings.TrimSpace(r.CandidateID) == "" {
 		return fmt.Errorf("candidate_id is required")
 	}
 	if !r.Disposition.Valid() {
@@ -852,6 +969,232 @@ func (r QueenPlanRecommendation) Validate() error {
 	if r.CreatedAt.IsZero() {
 		return fmt.Errorf("created_at is required")
 	}
+	return nil
+}
+
+// CanonicalPlanningGapContentHash recomputes a gap from its complete review
+// body. IDs and stored hashes are excluded; evidence order is set-like.
+func CanonicalPlanningGapContentHash(gap PlanningGap) (string, error) {
+	if err := validatePlanningGapBody(gap); err != nil {
+		return "", err
+	}
+	payload := gap
+	payload.ID = ""
+	payload.ContentHash = ""
+	payload.EvidenceIDs = canonicalPlanningStringSet(payload.EvidenceIDs)
+	return canonicalSpecSHA256(payload)
+}
+
+// AddressPlanningGap canonicalizes set-like evidence and derives its exact
+// immutable identity from the production preimage.
+func AddressPlanningGap(gap *PlanningGap) error {
+	if gap == nil {
+		return fmt.Errorf("planning gap is required")
+	}
+	gap.SchemaVersion = PlanningSchemaVersion
+	if err := validatePlanningGapBody(*gap); err != nil {
+		return err
+	}
+	gap.EvidenceIDs = canonicalPlanningStringSet(gap.EvidenceIDs)
+	hash, err := CanonicalPlanningGapContentHash(*gap)
+	if err != nil {
+		return err
+	}
+	gap.ContentHash = hash
+	gap.ID = "planning-gap-" + hash[:12]
+	return gap.Validate()
+}
+
+// CanonicalPlanningDimensionAssessmentContentHash binds every whole-number
+// score, evidence set, nested gap and producer attribution.
+func CanonicalPlanningDimensionAssessmentContentHash(assessment PlanningDimensionAssessment) (string, error) {
+	if err := validatePlanningDimensionAssessmentBody(assessment); err != nil {
+		return "", err
+	}
+	payload := assessment
+	payload.ID = ""
+	payload.ContentHash = ""
+	payload.FreshEvidenceIDs = canonicalPlanningStringSet(payload.FreshEvidenceIDs)
+	payload.ResolvedGapIDs = canonicalPlanningStringSet(payload.ResolvedGapIDs)
+	payload.RemainingGap.EvidenceIDs = canonicalPlanningStringSet(payload.RemainingGap.EvidenceIDs)
+	return canonicalSpecSHA256(payload)
+}
+
+// AddressPlanningDimensionAssessment addresses its nested gap first and then
+// the assessment, so no caller can preserve a copied enclosing hash.
+func AddressPlanningDimensionAssessment(assessment *PlanningDimensionAssessment) error {
+	if assessment == nil {
+		return fmt.Errorf("planning dimension assessment is required")
+	}
+	assessment.SchemaVersion = PlanningSchemaVersion
+	if err := AddressPlanningGap(&assessment.RemainingGap); err != nil {
+		return fmt.Errorf("remaining_gap: %w", err)
+	}
+	if err := validatePlanningIDList("fresh_evidence_ids", assessment.FreshEvidenceIDs, false); err != nil {
+		return err
+	}
+	if err := validatePlanningIDList("resolved_gap_ids", assessment.ResolvedGapIDs, false); err != nil {
+		return err
+	}
+	assessment.FreshEvidenceIDs = canonicalPlanningStringSet(assessment.FreshEvidenceIDs)
+	assessment.ResolvedGapIDs = canonicalPlanningStringSet(assessment.ResolvedGapIDs)
+	hash, err := CanonicalPlanningDimensionAssessmentContentHash(*assessment)
+	if err != nil {
+		return err
+	}
+	assessment.ContentHash = hash
+	assessment.ID = "planning-assessment-" + hash[:12]
+	return assessment.Validate()
+}
+
+// CanonicalPlanningSemanticChangeContentHash includes the enclosing section,
+// preventing an otherwise identical record from moving across adjacent plan
+// categories without receiving a new identity.
+func CanonicalPlanningSemanticChangeContentHash(section PlanningSemanticSection, change PlanningSemanticChange) (string, error) {
+	if !section.Valid() {
+		return "", fmt.Errorf("invalid planning semantic section %q", section)
+	}
+	if err := validatePlanningSemanticChangeBody(change); err != nil {
+		return "", err
+	}
+	payload := struct {
+		Section     PlanningSemanticSection    `json:"section"`
+		SemanticID  string                     `json:"semantic_id"`
+		Kind        PlanningSemanticChangeKind `json:"kind"`
+		BeforeHash  string                     `json:"before_hash"`
+		AfterHash   string                     `json:"after_hash"`
+		EvidenceIDs []string                   `json:"evidence_ids"`
+	}{section, change.SemanticID, change.Kind, change.BeforeHash, change.AfterHash, canonicalPlanningStringSet(change.EvidenceIDs)}
+	return canonicalSpecSHA256(payload)
+}
+
+// AddressPlanningSemanticChange canonicalizes evidence and derives the full
+// body hash for one explicit semantic section.
+func AddressPlanningSemanticChange(section PlanningSemanticSection, change *PlanningSemanticChange) error {
+	if change == nil {
+		return fmt.Errorf("planning semantic change is required")
+	}
+	if err := validatePlanningIDList("evidence_ids", change.EvidenceIDs, change.Kind != PlanningSemanticChangePreserved); err != nil {
+		return err
+	}
+	change.EvidenceIDs = canonicalPlanningStringSet(change.EvidenceIDs)
+	change.ContentHash = strings.Repeat("0", 64)
+	hash, err := CanonicalPlanningSemanticChangeContentHash(section, *change)
+	if err != nil {
+		return err
+	}
+	change.ContentHash = hash
+	return change.Validate()
+}
+
+// CanonicalPlanningAuthorityImpactContentHash binds the distinct authority
+// channel without folding it into executable semantic improvement.
+func CanonicalPlanningAuthorityImpactContentHash(impact PlanningAuthorityImpact) (string, error) {
+	if err := validatePlanningAuthorityImpactBody(impact); err != nil {
+		return "", err
+	}
+	payload := impact
+	payload.ID = ""
+	payload.ContentHash = ""
+	payload.AffectedSemanticIDs = canonicalPlanningStringSet(payload.AffectedSemanticIDs)
+	return canonicalSpecSHA256(payload)
+}
+
+func AddressPlanningAuthorityImpact(impact *PlanningAuthorityImpact) error {
+	if impact == nil {
+		return fmt.Errorf("planning authority impact is required")
+	}
+	if err := validatePlanningIDList("affected_semantic_ids", impact.AffectedSemanticIDs, true); err != nil {
+		return err
+	}
+	impact.AffectedSemanticIDs = canonicalPlanningStringSet(impact.AffectedSemanticIDs)
+	impact.ContentHash = strings.Repeat("0", 64)
+	hash, err := CanonicalPlanningAuthorityImpactContentHash(*impact)
+	if err != nil {
+		return err
+	}
+	impact.ContentHash = hash
+	impact.ID = "authority-impact-" + hash[:12]
+	return impact.Validate()
+}
+
+// CanonicalPlanningSemanticDeltaContentHash preserves explicit section and
+// record order while normalizing only nested set-like IDs.
+func CanonicalPlanningSemanticDeltaContentHash(delta PlanningSemanticDelta) (string, error) {
+	if err := validatePlanningSemanticDeltaBody(delta); err != nil {
+		return "", err
+	}
+	payload := delta
+	payload.ID = ""
+	payload.ContentHash = ""
+	normalizeChanges := func(values []PlanningSemanticChange) []PlanningSemanticChange {
+		result := append([]PlanningSemanticChange(nil), values...)
+		for index := range result {
+			result[index].EvidenceIDs = canonicalPlanningStringSet(result[index].EvidenceIDs)
+		}
+		return result
+	}
+	payload.Phases = normalizeChanges(payload.Phases)
+	payload.Tasks = normalizeChanges(payload.Tasks)
+	payload.Dependencies = normalizeChanges(payload.Dependencies)
+	payload.RequirementLinks = normalizeChanges(payload.RequirementLinks)
+	payload.AcceptanceChecks = normalizeChanges(payload.AcceptanceChecks)
+	payload.NegativeExpectations = normalizeChanges(payload.NegativeExpectations)
+	payload.RecoveryExpectations = normalizeChanges(payload.RecoveryExpectations)
+	payload.PublicPaths = normalizeChanges(payload.PublicPaths)
+	payload.AuthorityImpacts = append([]PlanningAuthorityImpact(nil), payload.AuthorityImpacts...)
+	for index := range payload.AuthorityImpacts {
+		payload.AuthorityImpacts[index].AffectedSemanticIDs = canonicalPlanningStringSet(payload.AuthorityImpacts[index].AffectedSemanticIDs)
+	}
+	return canonicalSpecSHA256(payload)
+}
+
+func AddressPlanningSemanticDelta(delta *PlanningSemanticDelta) error {
+	if delta == nil {
+		return fmt.Errorf("planning semantic delta is required")
+	}
+	delta.SchemaVersion = PlanningSchemaVersion
+	if err := validatePlanningSemanticDeltaBody(*delta); err != nil {
+		return err
+	}
+	hash, err := CanonicalPlanningSemanticDeltaContentHash(*delta)
+	if err != nil {
+		return err
+	}
+	delta.ContentHash = hash
+	delta.ID = "planning-delta-" + hash[:12]
+	return delta.Validate()
+}
+
+// CanonicalQueenPlanRecommendationContentHash clears CandidateID because it is
+// a derived back-reference populated only after candidate addressing.
+func CanonicalQueenPlanRecommendationContentHash(recommendation QueenPlanRecommendation) (string, error) {
+	if err := validateQueenPlanRecommendationBody(recommendation, false); err != nil {
+		return "", err
+	}
+	payload := recommendation
+	payload.ID = ""
+	payload.ContentHash = ""
+	payload.CandidateID = ""
+	payload.EvidenceIDs = canonicalPlanningStringSet(payload.EvidenceIDs)
+	return canonicalSpecSHA256(payload)
+}
+
+func AddressQueenPlanRecommendation(recommendation *QueenPlanRecommendation) error {
+	if recommendation == nil {
+		return fmt.Errorf("Queen plan recommendation is required")
+	}
+	recommendation.SchemaVersion = PlanningSchemaVersion
+	if err := validatePlanningIDList("evidence_ids", recommendation.EvidenceIDs, true); err != nil {
+		return err
+	}
+	recommendation.EvidenceIDs = canonicalPlanningStringSet(recommendation.EvidenceIDs)
+	hash, err := CanonicalQueenPlanRecommendationContentHash(*recommendation)
+	if err != nil {
+		return err
+	}
+	recommendation.ContentHash = hash
+	recommendation.ID = "queen-recommendation-" + hash[:12]
 	return nil
 }
 
@@ -1050,6 +1393,51 @@ func validatePlanningAssessments(assessments []PlanningDimensionAssessment) erro
 		if _, ok := seen[dimension]; !ok {
 			return fmt.Errorf("dimension_assessments missing %q", dimension)
 		}
+	}
+	return nil
+}
+
+func planningSemanticDeltaHasContent(delta PlanningSemanticDelta) bool {
+	return len(delta.Phases)+len(delta.Tasks)+len(delta.Dependencies)+
+		len(delta.RequirementLinks)+len(delta.AcceptanceChecks)+
+		len(delta.NegativeExpectations)+len(delta.RecoveryExpectations)+
+		len(delta.PublicPaths)+len(delta.AuthorityImpacts) > 0
+}
+
+func canonicalPlanningStringSet(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	result := append([]string(nil), values...)
+	sort.Strings(result)
+	return result
+}
+
+func validatePlanningDigest(field, value string) error {
+	if len(value) != 64 || strings.ToLower(value) != value {
+		return fmt.Errorf("%s must be a lowercase 64-character SHA-256 digest", field)
+	}
+	decoded, err := hex.DecodeString(value)
+	if err != nil || len(decoded) != 32 {
+		return fmt.Errorf("%s must be a lowercase 64-character SHA-256 digest", field)
+	}
+	return nil
+}
+
+func validatePlanningAddress(prefix, id, hash string, canonical func() (string, error)) error {
+	if err := validatePlanningDigest("content_hash", hash); err != nil {
+		return err
+	}
+	want, err := canonical()
+	if err != nil {
+		return err
+	}
+	if hash != want {
+		return fmt.Errorf("content_hash does not match its canonical body")
+	}
+	wantID := prefix + "-" + hash[:12]
+	if id != wantID {
+		return fmt.Errorf("id %q does not match canonical content address %q", id, wantID)
 	}
 	return nil
 }

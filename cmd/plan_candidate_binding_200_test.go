@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -14,7 +13,7 @@ import (
 )
 
 func TestPlanCandidateSemanticIntegrity200TwoPassCandidateIsCanonical(t *testing.T) {
-	root, candidate := classicPhase200TwoPassCandidate(t)
+	root, candidate := planCandidateSemanticIntegrity200Fixture(t)
 	if len(candidate.Timeline.CardIDs) != 2 || len(candidate.DimensionAssessments) != len(colony.PlanningDimensions()) {
 		t.Fatalf("candidate does not expose the stopped two-pass review: timeline=%+v assessments=%d", candidate.Timeline, len(candidate.DimensionAssessments))
 	}
@@ -46,18 +45,20 @@ func TestPlanCandidateSemanticIntegrity200TwoPassCandidateIsCanonical(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(review.Candidate, candidate) || review.Acceptance.AcceptanceToken != planCandidateAcceptanceToken(candidate) {
+	if review.Candidate.ID != candidate.ID || review.Candidate.ContentHash != candidate.ContentHash ||
+		review.Candidate.ProposalHash != candidate.ProposalHash || review.Candidate.Status != candidate.Status ||
+		review.Candidate.Acceptance != nil || review.Acceptance.AcceptanceToken != planCandidateAcceptanceToken(candidate) {
 		t.Fatalf("review changed the canonical candidate or token: review=%+v", review)
 	}
 
-	_, repeated := classicPhase200TwoPassCandidate(t)
+	_, repeated := planCandidateSemanticIntegrity200Fixture(t)
 	if candidate.ContentHash != repeated.ContentHash || candidate.ID != repeated.ID || planCandidateAcceptanceToken(candidate) != planCandidateAcceptanceToken(repeated) {
 		t.Fatalf("repeated construction diverged: first=%s/%s second=%s/%s", candidate.ID, candidate.ContentHash, repeated.ID, repeated.ContentHash)
 	}
 }
 
 func TestPlanCandidateSemanticIntegrity200CopiedHashesRejectEveryReviewMutation(t *testing.T) {
-	root, candidate := classicPhase200TwoPassCandidate(t)
+	root, candidate := planCandidateSemanticIntegrity200Fixture(t)
 	mutations := []struct {
 		name   string
 		mutate func(*colony.PlanCandidate)
@@ -280,7 +281,7 @@ func TestPlanCandidateSemanticIntegrity200NestedAdjacencyEmptyAndOrdering(t *tes
 		t.Fatal("set-like evidence ordering changed recommendation identity")
 	}
 
-	_, candidate := classicPhase200TwoPassCandidate(t)
+	_, candidate := planCandidateSemanticIntegrity200Fixture(t)
 	ordered := planCandidateSemanticIntegrity200Clone(t, candidate).Proposal
 	ordered.Phases[0].Tasks[0].DependsOn = []string{"1.2", "1.3"}
 	forward, err := canonicalPlanCandidateProposalHash(ordered)
@@ -298,7 +299,7 @@ func TestPlanCandidateSemanticIntegrity200NestedAdjacencyEmptyAndOrdering(t *tes
 }
 
 func TestPlanCandidateSemanticIntegrity200IdentityTokenAndTransition(t *testing.T) {
-	root, candidate := classicPhase200TwoPassCandidate(t)
+	root, candidate := planCandidateSemanticIntegrity200Fixture(t)
 	originalID, originalHash, originalToken := candidate.ID, candidate.ContentHash, planCandidateAcceptanceToken(candidate)
 	changed := planCandidateSemanticIntegrity200Clone(t, candidate)
 	changed.CreatedAt = changed.CreatedAt.Add(time.Nanosecond)
@@ -353,7 +354,7 @@ func TestPlanCandidateSemanticIntegrity200IdentityTokenAndTransition(t *testing.
 }
 
 func TestPlanCandidateSemanticIntegrity200ProposalBackrefsAndVocabulary(t *testing.T) {
-	_, candidate := classicPhase200TwoPassCandidate(t)
+	_, candidate := planCandidateSemanticIntegrity200Fixture(t)
 	mutations := []struct {
 		name   string
 		mutate func(*colony.PlanRevision)
@@ -378,6 +379,37 @@ func TestPlanCandidateSemanticIntegrity200ProposalBackrefsAndVocabulary(t *testi
 	if candidate.Timeline.CardIDs[0] == candidate.Timeline.CardIDs[1] || candidate.StopDecision.Reason != colony.PlanningStopPassCap {
 		t.Fatalf("primary iteration/pass vocabulary lost its exact two-pass meaning: %+v", candidate)
 	}
+}
+
+func planCandidateSemanticIntegrity200Fixture(t *testing.T) (string, colony.PlanCandidate) {
+	t.Helper()
+	root, candidate := classicPhase200TwoPassCandidate(t)
+	impact := colony.PlanningAuthorityImpact{
+		Kind:                colony.PlanningAuthoritySpecApproval,
+		SourceID:            candidate.SpecificationRevisionID,
+		AffectedSemanticIDs: append([]string(nil), candidate.Proposal.AffectedSemanticIDs...),
+		Rationale:           "The owner-approved specification authorizes this exact review payload.",
+	}
+	if err := colony.AddressPlanningAuthorityImpact(&impact); err != nil {
+		t.Fatal(err)
+	}
+	candidate.SemanticDelta.AuthorityImpacts = append(candidate.SemanticDelta.AuthorityImpacts, impact)
+	if err := colony.AddressPlanningSemanticDelta(&candidate.SemanticDelta); err != nil {
+		t.Fatal(err)
+	}
+	if err := addressPlanCandidateReviewPayload(&candidate); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, filepath.FromSlash(planningRouteCandidateRepositoryPath(candidate.Timeline.RunID)))
+	planCandidateSemanticIntegrity200Write(t, path, candidate)
+	persisted, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(persisted, &candidate); err != nil {
+		t.Fatal(err)
+	}
+	return root, candidate
 }
 
 func planCandidateSemanticIntegrity200Clone(t *testing.T, candidate colony.PlanCandidate) colony.PlanCandidate {

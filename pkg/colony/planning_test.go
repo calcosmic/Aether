@@ -392,10 +392,8 @@ func validPlanningEvidence() PlanningEvidenceRef {
 }
 
 func validPlanningGap(dimension PlanningDimension, id string) PlanningGap {
-	return PlanningGap{
+	gap := PlanningGap{
 		SchemaVersion:           PlanningSchemaVersion,
-		ID:                      id,
-		ContentHash:             id + "-hash",
 		Dimension:               dimension,
 		Materiality:             PlanningGapNonMaterial,
 		Severity:                2,
@@ -403,6 +401,10 @@ func validPlanningGap(dimension PlanningDimension, id string) PlanningGap {
 		EvidenceIDs:             []string{"evidence-spec-1"},
 		EvidenceThatWouldChange: "A repository receipt resolving " + string(dimension),
 	}
+	if err := AddressPlanningGap(&gap); err != nil {
+		panic(err)
+	}
+	return gap
 }
 
 func validPlanningAssessments() []PlanningDimensionAssessment {
@@ -410,10 +412,8 @@ func validPlanningAssessments() []PlanningDimensionAssessment {
 	assessments := make([]PlanningDimensionAssessment, 0, len(dimensions))
 	for i, dimension := range dimensions {
 		gap := validPlanningGap(dimension, "gap-"+string(dimension))
-		assessments = append(assessments, PlanningDimensionAssessment{
+		assessment := PlanningDimensionAssessment{
 			SchemaVersion:     PlanningSchemaVersion,
-			ID:                "assessment-" + string(dimension),
-			ContentHash:       "assessment-" + string(dimension) + "-hash",
 			Dimension:         dimension,
 			Before:            60 + i,
 			After:             62 + i,
@@ -422,19 +422,32 @@ func validPlanningAssessments() []PlanningDimensionAssessment {
 			RemainingGap:      gap,
 			Rationale:         "Fresh evidence improved " + string(dimension),
 			ProducerReceiptID: "route-receipt-1",
-		})
+		}
+		if err := AddressPlanningDimensionAssessment(&assessment); err != nil {
+			panic(err)
+		}
+		assessments = append(assessments, assessment)
 	}
 	return assessments
 }
 
 func validPlanningSemanticDelta() PlanningSemanticDelta {
-	return PlanningSemanticDelta{
-		SchemaVersion: PlanningSchemaVersion,
-		ID:            "delta-1",
-		ContentHash:   "delta-1-hash",
-		Phases: []PlanningSemanticChange{{
-			SemanticID: "phase-semantic-1", ContentHash: "phase-change-hash", Kind: PlanningSemanticChangeModified, BeforeHash: "phase-before", AfterHash: "phase-after", EvidenceIDs: []string{"evidence-spec-1"},
-		}},
+	change := PlanningSemanticChange{
+		SemanticID: "phase-semantic-1", Kind: PlanningSemanticChangeModified,
+		BeforeHash: strings.Repeat("a", 64), AfterHash: strings.Repeat("b", 64), EvidenceIDs: []string{"evidence-spec-1"},
+	}
+	if err := AddressPlanningSemanticChange(PlanningSemanticSectionPhases, &change); err != nil {
+		panic(err)
+	}
+	impact := PlanningAuthorityImpact{
+		Kind: PlanningAuthoritySpecApproval, SourceID: "spec-approval-1", AffectedSemanticIDs: []string{"phase-semantic-1"}, Rationale: "The exact specification is approved",
+	}
+	if err := AddressPlanningAuthorityImpact(&impact); err != nil {
+		panic(err)
+	}
+	delta := PlanningSemanticDelta{
+		SchemaVersion:        PlanningSchemaVersion,
+		Phases:               []PlanningSemanticChange{change},
 		Tasks:                []PlanningSemanticChange{},
 		Dependencies:         []PlanningSemanticChange{},
 		RequirementLinks:     []PlanningSemanticChange{},
@@ -442,10 +455,12 @@ func validPlanningSemanticDelta() PlanningSemanticDelta {
 		NegativeExpectations: []PlanningSemanticChange{},
 		RecoveryExpectations: []PlanningSemanticChange{},
 		PublicPaths:          []PlanningSemanticChange{},
-		AuthorityImpacts: []PlanningAuthorityImpact{{
-			ID: "authority-spec-1", ContentHash: "authority-spec-1-hash", Kind: PlanningAuthoritySpecApproval, SourceID: "spec-approval-1", AffectedSemanticIDs: []string{"phase-semantic-1"}, Rationale: "The exact specification is approved",
-		}},
+		AuthorityImpacts:     []PlanningAuthorityImpact{impact},
 	}
+	if err := AddressPlanningSemanticDelta(&delta); err != nil {
+		panic(err)
+	}
+	return delta
 }
 
 func validPlanningStopDecision() PlanningStopDecision {
@@ -498,10 +513,8 @@ func validPlanningTimeline() PlanningTimelineBinding {
 }
 
 func validQueenPlanRecommendation() QueenPlanRecommendation {
-	return QueenPlanRecommendation{
+	recommendation := QueenPlanRecommendation{
 		SchemaVersion: PlanningSchemaVersion,
-		ID:            "queen-recommendation-1",
-		ContentHash:   "queen-recommendation-1-hash",
 		CandidateID:   "candidate-200-1",
 		Disposition:   PlanRecommendationRevise,
 		EvidenceIDs:   []string{"evidence-spec-1"},
@@ -510,6 +523,10 @@ func validQueenPlanRecommendation() QueenPlanRecommendation {
 		ProducerID:    "go-queen-policy/v1",
 		CreatedAt:     time.Date(2026, time.September, 7, 10, 3, 0, 0, time.UTC),
 	}
+	if err := AddressQueenPlanRecommendation(&recommendation); err != nil {
+		panic(err)
+	}
+	return recommendation
 }
 
 func validPlanCandidate() PlanCandidate {

@@ -277,22 +277,23 @@ func comparePlanningSemanticSnapshots(before, after planningSemanticSnapshot) (c
 	var err error
 	delta := colony.PlanningSemanticDelta{SchemaVersion: colony.PlanningSchemaVersion}
 	sections := []struct {
+		name   colony.PlanningSemanticSection
 		before []planningSemanticEntry
 		after  []planningSemanticEntry
 		set    func([]colony.PlanningSemanticChange)
 	}{
-		{before: before.Phases, after: after.Phases, set: func(value []colony.PlanningSemanticChange) { delta.Phases = value }},
-		{before: before.Tasks, after: after.Tasks, set: func(value []colony.PlanningSemanticChange) { delta.Tasks = value }},
-		{before: before.Dependencies, after: after.Dependencies, set: func(value []colony.PlanningSemanticChange) { delta.Dependencies = value }},
-		{before: before.RequirementLinks, after: after.RequirementLinks, set: func(value []colony.PlanningSemanticChange) { delta.RequirementLinks = value }},
-		{before: before.AcceptanceChecks, after: after.AcceptanceChecks, set: func(value []colony.PlanningSemanticChange) { delta.AcceptanceChecks = value }},
-		{before: before.NegativeExpectations, after: after.NegativeExpectations, set: func(value []colony.PlanningSemanticChange) { delta.NegativeExpectations = value }},
-		{before: before.RecoveryExpectations, after: after.RecoveryExpectations, set: func(value []colony.PlanningSemanticChange) { delta.RecoveryExpectations = value }},
-		{before: before.PublicPaths, after: after.PublicPaths, set: func(value []colony.PlanningSemanticChange) { delta.PublicPaths = value }},
+		{name: colony.PlanningSemanticSectionPhases, before: before.Phases, after: after.Phases, set: func(value []colony.PlanningSemanticChange) { delta.Phases = value }},
+		{name: colony.PlanningSemanticSectionTasks, before: before.Tasks, after: after.Tasks, set: func(value []colony.PlanningSemanticChange) { delta.Tasks = value }},
+		{name: colony.PlanningSemanticSectionDependencies, before: before.Dependencies, after: after.Dependencies, set: func(value []colony.PlanningSemanticChange) { delta.Dependencies = value }},
+		{name: colony.PlanningSemanticSectionRequirementLinks, before: before.RequirementLinks, after: after.RequirementLinks, set: func(value []colony.PlanningSemanticChange) { delta.RequirementLinks = value }},
+		{name: colony.PlanningSemanticSectionAcceptanceChecks, before: before.AcceptanceChecks, after: after.AcceptanceChecks, set: func(value []colony.PlanningSemanticChange) { delta.AcceptanceChecks = value }},
+		{name: colony.PlanningSemanticSectionNegativeExpectations, before: before.NegativeExpectations, after: after.NegativeExpectations, set: func(value []colony.PlanningSemanticChange) { delta.NegativeExpectations = value }},
+		{name: colony.PlanningSemanticSectionRecoveryExpectations, before: before.RecoveryExpectations, after: after.RecoveryExpectations, set: func(value []colony.PlanningSemanticChange) { delta.RecoveryExpectations = value }},
+		{name: colony.PlanningSemanticSectionPublicPaths, before: before.PublicPaths, after: after.PublicPaths, set: func(value []colony.PlanningSemanticChange) { delta.PublicPaths = value }},
 	}
 	for _, section := range sections {
 		var changes []colony.PlanningSemanticChange
-		changes, err = comparePlanningSemanticEntries(section.before, section.after)
+		changes, err = comparePlanningSemanticEntries(section.name, section.before, section.after)
 		if err != nil {
 			return colony.PlanningSemanticDelta{}, err
 		}
@@ -303,16 +304,10 @@ func comparePlanningSemanticSnapshots(before, after planningSemanticSnapshot) (c
 		return colony.PlanningSemanticDelta{}, err
 	}
 
-	payload := delta
-	payload.ID = ""
-	payload.ContentHash = ""
-	delta.ContentHash, err = jsonSHA256(payload)
-	if err != nil {
-		return colony.PlanningSemanticDelta{}, fmt.Errorf("hash planning semantic delta: %w", err)
-	}
-	delta.ID = "planning-delta-" + delta.ContentHash[:12]
-	if err := delta.Validate(); err != nil {
-		return colony.PlanningSemanticDelta{}, fmt.Errorf("validate planning semantic delta: %w", err)
+	if planningSemanticDeltaReadyForAddress(delta) {
+		if err := colony.AddressPlanningSemanticDelta(&delta); err != nil {
+			return colony.PlanningSemanticDelta{}, fmt.Errorf("address planning semantic delta: %w", err)
+		}
 	}
 	return delta, nil
 }
@@ -1154,7 +1149,7 @@ func uniqueSortedPlanningSemanticEntries(values []planningSemanticEntry) []plann
 	return result
 }
 
-func comparePlanningSemanticEntries(before, after []planningSemanticEntry) ([]colony.PlanningSemanticChange, error) {
+func comparePlanningSemanticEntries(section colony.PlanningSemanticSection, before, after []planningSemanticEntry) ([]colony.PlanningSemanticChange, error) {
 	beforeByID := make(map[string]planningSemanticEntry, len(before))
 	afterByID := make(map[string]planningSemanticEntry, len(after))
 	ids := make(map[string]struct{}, len(before)+len(after))
@@ -1193,15 +1188,10 @@ func comparePlanningSemanticEntries(before, after []planningSemanticEntry) ([]co
 			change.BeforeHash = beforeEntry.ContentHash
 			change.AfterHash = afterEntry.ContentHash
 		}
-		var err error
-		change.ContentHash, err = jsonSHA256(struct {
-			SemanticID string                            `json:"semantic_id"`
-			Kind       colony.PlanningSemanticChangeKind `json:"kind"`
-			BeforeHash string                            `json:"before_hash"`
-			AfterHash  string                            `json:"after_hash"`
-		}{change.SemanticID, change.Kind, change.BeforeHash, change.AfterHash})
-		if err != nil {
-			return nil, fmt.Errorf("hash semantic change %s: %w", id, err)
+		if change.Kind == colony.PlanningSemanticChangePreserved {
+			if err := colony.AddressPlanningSemanticChange(section, &change); err != nil {
+				return nil, fmt.Errorf("address semantic change %s: %w", id, err)
+			}
 		}
 		changes = append(changes, change)
 	}
@@ -1343,22 +1333,33 @@ func comparePlanningAuthorityStates(before, after []planningAuthorityState) ([]c
 			state = beforeState
 			state.Rationale = "The prior authority record is no longer present"
 		}
-		transitionHash, err := jsonSHA256(struct {
-			Key        string `json:"key"`
-			BeforeHash string `json:"before_hash"`
-			AfterHash  string `json:"after_hash"`
-		}{key, beforeState.ContentHash, afterState.ContentHash})
-		if err != nil {
-			return nil, fmt.Errorf("hash authority impact %s: %w", key, err)
-		}
-		impacts = append(impacts, colony.PlanningAuthorityImpact{
-			ID: "authority-impact-" + transitionHash[:12], ContentHash: transitionHash,
+		impact := colony.PlanningAuthorityImpact{
 			Kind: state.Kind, SourceID: state.SourceID,
 			AffectedSemanticIDs: canonicalPlanningSet(state.AffectedSemanticIDs),
 			Rationale:           state.Rationale,
-		})
+		}
+		if err := colony.AddressPlanningAuthorityImpact(&impact); err != nil {
+			return nil, fmt.Errorf("address authority impact %s: %w", key, err)
+		}
+		impacts = append(impacts, impact)
 	}
 	return impacts, nil
+}
+
+func planningSemanticDeltaReadyForAddress(delta colony.PlanningSemanticDelta) bool {
+	count := len(delta.AuthorityImpacts)
+	for _, section := range [][]colony.PlanningSemanticChange{
+		delta.Phases, delta.Tasks, delta.Dependencies, delta.RequirementLinks,
+		delta.AcceptanceChecks, delta.NegativeExpectations, delta.RecoveryExpectations, delta.PublicPaths,
+	} {
+		count += len(section)
+		for _, change := range section {
+			if strings.TrimSpace(change.ContentHash) == "" {
+				return false
+			}
+		}
+	}
+	return count > 0
 }
 
 func canonicalPlanningText(value string) string {
