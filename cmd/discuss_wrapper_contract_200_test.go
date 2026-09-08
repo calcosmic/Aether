@@ -42,6 +42,7 @@ func TestDiscussWrapperContract200(t *testing.T) {
 		"base plan", "meaning", "behavior", "authority", "scope", "risk",
 		"acceptance", "affected semantic", "draft spec", "/ant spec", "owner reviews and approves",
 		"do not write", "structured runtime result", "never route settled discuss directly to /ant plan",
+		"legacy compatibility", "they are not executable guidance", "must not invoke them",
 	})
 	assertNoDiscussHostAuthority200(t, source, canonical)
 
@@ -70,6 +71,9 @@ func TestDiscussWrapperContract200(t *testing.T) {
 			"base plan", "meaning", "behavior", "authority", "scope", "risk",
 			"acceptance", "affected semantic", "draft spec", "/ant spec", "owner reviews and approves",
 			"structured result", "do not write", "never route settled discuss directly to /ant plan",
+			"compose the questions — retired compatibility marker",
+			"canned fallback (typed condition — retired compatibility only)",
+			"they are not executable guidance", "wrapper never runs a canned generator",
 		})
 		assertNoDiscussHostAuthority200(t, path, lower)
 	}
@@ -157,7 +161,7 @@ func normalizeDiscussContractSemantics200(value string) string {
 func assertNoDiscussHostAuthority200(t *testing.T, path, content string) {
 	t.Helper()
 	for _, forbidden := range []string{
-		"compose 3-5", "formulate codebase-aware questions", "canned fallback",
+		"compose 3-5", "formulate codebase-aware questions", "run the canned fallback",
 		"route settled discuss to /ant-plan", "route back to aether plan", "savejson(", "writefile(",
 		"jq ", "cat >", "> .aether/data", "discuss-analyze --target",
 	} {

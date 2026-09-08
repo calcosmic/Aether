@@ -147,7 +147,7 @@ lifecycle command emitted a worker manifest.
 
 Wrappers never write these files directly.
 
-## State mutations
+## State Mutations
 
 - Pending clarification creation and resolution stay scoped to the current
   goal/session.

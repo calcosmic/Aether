@@ -15,6 +15,10 @@ ceremony_contract:
   material_batch: "The runtime returns the complete currently known material batch. Do not impose a question quota, truncate the batch, add generic categories, or synthesize another question."
   exact_resume: "After each answer, consume a fresh Go result and continue only from its remaining batch or exact next command. Never reuse a batch across a changed goal, session, specification revision, base plan, meaning, behavior, authority, risk, scope, acceptance impact, or affected semantic IDs."
   settled: "Settled intent produces or retains a specification result. A new result is explicitly `draft` and remains unauthorized for planning until the owner reviews and approves that exact revision through `/ant-spec`; discussion never approves a specification or a plan."
+legacy_compatibility:
+  status: "The `Compose the Questions` and `Canned fallback (typed condition ...)` headings are retained as inert migration markers for older installed wrapper contracts. They are not executable guidance."
+  composed_intake: "The runtime still recognizes `--add-question` plus `--grounding`, but this wrapper must not invoke them or use AskUserQuestion to author cards. The former promise was to make questions SPECIFIC to this goal and this codebase; Go now satisfies that promise through the complete evidence-backed material batch."
+  fallback: "The historical fallback applied when there was no scan context or the goal was empty. It is disabled in the evidence-first wrapper because only Go may decide whether a material question exists."
 guardrails:
   - "Do not write `pending-decisions.json`, `pheromones.json`, `COLONY_STATE.json`, `.aether/SPEC.md`, or lifecycle receipts by hand from this command spec."
   - "Do not compose questions, classify materiality, decide answer equivalence, fabricate evidence, invent receipts, infer draft state, or claim approval in the wrapper."

@@ -27,7 +27,7 @@ When it is present, render every card with these Go-issued fields:
 - `planning_resumes`
 - `exact_answer_syntax`
 
-Claude may use a native question card for those structured choices, but it may
+A platform-native question card may render those structured choices, but it may
 not add, drop, rewrite, classify, or answer a card. Nothing is recorded without
 the owner's explicit pick. Submit the pick only through the card's exact
 `aether discuss --resolve <id> --answer "<answer>"` syntax.
@@ -36,6 +36,23 @@ After an answer, request a fresh `AETHER_OUTPUT_MODE=json aether discuss`
 result. Continue only from the newly returned remaining batch or exact next
 command; never reuse the prior batch or fabricate a resume token, receipt, or
 state transition.
+
+## Compose the Questions — Retired Compatibility Marker
+
+This heading and the legacy `--add-question`, `--grounding`, and
+`AskUserQuestion` names remain only so older installed wrappers can recognize
+the retired contract. They are not executable guidance. This wrapper must not
+compose or submit questions. The former promise was to make questions SPECIFIC to this goal and this
+codebase; Go now satisfies it through the complete evidence-backed batch.
+Nothing is recorded without the
+   user's explicit pick, and that pick is valid only when submitted through the
+runtime-issued `exact_answer_syntax`.
+
+## Canned fallback (typed condition — retired compatibility only)
+
+The historical fallback applied when there was no scan context or the goal is empty.
+It is disabled here: the wrapper never runs a canned generator because
+only Go may decide whether a material question exists.
 
 ## Settled Intent Is a Draft Boundary
 
@@ -55,8 +72,9 @@ the owner reviews and approves that exact revision through `/ant-spec`.
 
 If you change discuss evidence, decision-card presentation, answer persistence,
 or draft routing here, update `.aether/commands/discuss.yaml`, the matching
-Claude/OpenCode wrappers, the public discuss contract, and the Codex skill
-`aether-colony-research` in the same change.
+Claude/OpenCode wrappers, `cmd/command_guide.go`, the public discuss contract,
+and the Codex skill `aether-colony-research` in the same change. Verify
+`aether command-guide discuss --platform codex` still describes the same flow.
 
 **Next steps:**
 - `/ant-spec` — review, revise, or explicitly approve the exact specification
