@@ -80,6 +80,28 @@ func validateSpecificationState(specification colony.Specification) error {
 	if err := specification.Validate(); err != nil {
 		return err
 	}
+	// Goal-addressed lineages are the current production format. Recompute
+	// those values here while retaining structural compatibility for old
+	// in-memory fixtures; persisted state is always checked strictly at load.
+	canonicalID, err := colony.CanonicalSpecificationID(specification.GoalID)
+	if err == nil && specification.ID == canonicalID {
+		if err := specification.ValidateCanonical(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateCanonicalSpecificationState treats every persisted identity as an
+// untrusted claim and recomputes it from the typed owner contract. Structural
+// validation remains separate for explicitly legacy in-memory fixtures.
+func validateCanonicalSpecificationState(specification colony.Specification) error {
+	if err := validateSpecificationState(specification); err != nil {
+		return err
+	}
+	if err := specification.ValidateCanonical(); err != nil {
+		return err
+	}
 	return nil
 }
 

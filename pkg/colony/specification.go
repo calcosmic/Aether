@@ -1,15 +1,92 @@
 package colony
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"reflect"
+	"sort"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // SpecificationSchemaVersion is the wire contract shared by the canonical
 // specification aggregate, immutable revisions, and approval receipts.
 const SpecificationSchemaVersion = "specification/v1"
+
+// SpecSection is the closed set of typed owner-readable specification body
+// sections. Writers and validators share it so they cannot silently diverge.
+type SpecSection string
+
+const (
+	SpecSectionOutcomes             SpecSection = "outcomes"
+	SpecSectionIncludedBehaviors    SpecSection = "included_behaviors"
+	SpecSectionExclusions           SpecSection = "exclusions"
+	SpecSectionBindingDecisions     SpecSection = "binding_decisions"
+	SpecSectionRequirements         SpecSection = "requirements"
+	SpecSectionAcceptanceChecks     SpecSection = "acceptance_checks"
+	SpecSectionNegativeExpectations SpecSection = "negative_expectations"
+	SpecSectionRecoveryExpectations SpecSection = "recovery_expectations"
+	SpecSectionAffectedPublicPaths  SpecSection = "affected_public_paths"
+)
+
+var canonicalSpecSections = []SpecSection{
+	SpecSectionOutcomes,
+	SpecSectionIncludedBehaviors,
+	SpecSectionExclusions,
+	SpecSectionBindingDecisions,
+	SpecSectionRequirements,
+	SpecSectionAcceptanceChecks,
+	SpecSectionNegativeExpectations,
+	SpecSectionRecoveryExpectations,
+	SpecSectionAffectedPublicPaths,
+}
+
+func (s SpecSection) valid() bool {
+	for _, section := range canonicalSpecSections {
+		if s == section {
+			return true
+		}
+	}
+	return false
+}
+
+func (s SpecSection) idPrefix() string {
+	switch s {
+	case SpecSectionOutcomes:
+		return "outcome"
+	case SpecSectionIncludedBehaviors:
+		return "behavior"
+	case SpecSectionExclusions:
+		return "exclusion"
+	case SpecSectionBindingDecisions:
+		return "decision"
+	case SpecSectionRequirements:
+		return "requirement"
+	case SpecSectionAcceptanceChecks:
+		return "acceptance"
+	case SpecSectionNegativeExpectations:
+		return "negative"
+	case SpecSectionRecoveryExpectations:
+		return "recovery"
+	case SpecSectionAffectedPublicPaths:
+		return "path"
+	default:
+		return ""
+	}
+}
+
+// SpecCanonicalItemMaterial is the normalized item preimage returned to
+// production callers after the canonical checks have succeeded.
+type SpecCanonicalItemMaterial struct {
+	ID           string
+	Description  string
+	Verification string
+	Path         string
+	ContentHash  string
+	EvidenceIDs  []string
+}
 
 // SpecRevisionStatus is the closed authority state of one immutable
 // specification revision. Plan-candidate acceptance deliberately does not
@@ -469,6 +546,522 @@ func (s Specification) Validate() error {
 		}
 	}
 	return nil
+}
+
+// CanonicalSpecificationID derives the single specification lineage for a
+// goal. A stored aggregate ID is never trusted merely because it is present.
+func CanonicalSpecificationID(goalID string) (string, error) {
+	goalID = strings.TrimSpace(goalID)
+	if goalID == "" {
+		return "", fmt.Errorf("goal_id is required")
+	}
+	hash, err := canonicalSpecSHA256(struct {
+		GoalID string `json:"goal_id"`
+	}{GoalID: goalID})
+	if err != nil {
+		return "", err
+	}
+	return "specification-" + hash[:12], nil
+}
+
+// CanonicalSpecItemID derives a stable item identity from a typed section and
+// semantic lineage. The lineage remains in the ID so validation can reproduce
+// the complete derivation from persisted state.
+func CanonicalSpecItemID(section SpecSection, lineage string) (string, error) {
+	if !section.valid() {
+		return "", fmt.Errorf("invalid specification section %q", section)
+	}
+	lineage = canonicalSpecLineage(lineage)
+	if lineage == "" {
+		return "", fmt.Errorf("semantic lineage is required")
+	}
+	if len(lineage) > 40 {
+		return "", fmt.Errorf("semantic lineage exceeds 40 canonical characters")
+	}
+	hash, err := canonicalSpecSHA256(struct {
+		Section SpecSection `json:"section"`
+		Lineage string      `json:"lineage"`
+	}{Section: section, Lineage: lineage})
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s-%s-%s", section.idPrefix(), lineage, hash[:8]), nil
+}
+
+// CanonicalizeSpecItem normalizes and addresses one typed body item. This is
+// the only item-preimage implementation used by construction and validation.
+func CanonicalizeSpecItem(section SpecSection, id, description, verification, publicPath string, evidenceIDs []string) (SpecCanonicalItemMaterial, error) {
+	empty := SpecCanonicalItemMaterial{}
+	if !section.valid() {
+		return empty, fmt.Errorf("invalid specification section %q", section)
+	}
+	id = strings.TrimSpace(id)
+	if err := validateCanonicalSpecItemID(section, id); err != nil {
+		return empty, err
+	}
+	description = strings.TrimSpace(description)
+	verification = strings.TrimSpace(verification)
+	publicPath = strings.TrimSpace(publicPath)
+	if description == "" {
+		return empty, fmt.Errorf("description is required")
+	}
+	switch section {
+	case SpecSectionAcceptanceChecks:
+		if verification == "" {
+			return empty, fmt.Errorf("verification is required")
+		}
+		if publicPath != "" {
+			return empty, fmt.Errorf("path is only valid for affected_public_paths")
+		}
+	case SpecSectionAffectedPublicPaths:
+		if publicPath == "" {
+			return empty, fmt.Errorf("path is required")
+		}
+		if verification != "" {
+			return empty, fmt.Errorf("verification is only valid for acceptance_checks")
+		}
+	default:
+		if verification != "" || publicPath != "" {
+			return empty, fmt.Errorf("section accepts description and evidence only")
+		}
+	}
+	evidence, err := canonicalSpecIDs("evidence_ids", evidenceIDs, true)
+	if err != nil {
+		return empty, err
+	}
+	hash, err := canonicalSpecSHA256(struct {
+		Section      SpecSection `json:"section"`
+		ID           string      `json:"id"`
+		Description  string      `json:"description"`
+		Verification string      `json:"verification,omitempty"`
+		Path         string      `json:"path,omitempty"`
+		EvidenceIDs  []string    `json:"evidence_ids"`
+	}{section, id, description, verification, publicPath, evidence})
+	if err != nil {
+		return empty, err
+	}
+	return SpecCanonicalItemMaterial{
+		ID: id, Description: description, Verification: verification, Path: publicPath,
+		ContentHash: hash, EvidenceIDs: evidence,
+	}, nil
+}
+
+// CanonicalSpecScope returns the normalized scope used in revision preimages.
+func CanonicalSpecScope(scope SpecScope) (SpecScope, error) {
+	scope.GoalID = strings.TrimSpace(scope.GoalID)
+	scope.SessionID = strings.TrimSpace(scope.SessionID)
+	scope.FeatureID = strings.TrimSpace(scope.FeatureID)
+	var err error
+	scope.RequirementIDs, err = canonicalSpecIDs("requirement_ids", scope.RequirementIDs, false)
+	if err != nil {
+		return SpecScope{}, err
+	}
+	scope.AcceptanceCheckIDs, err = canonicalSpecIDs("acceptance_check_ids", scope.AcceptanceCheckIDs, false)
+	if err != nil {
+		return SpecScope{}, err
+	}
+	if err := scope.Validate(); err != nil {
+		return SpecScope{}, err
+	}
+	return scope, nil
+}
+
+// CanonicalSpecRevisionContentHash binds immutable revision metadata, scope,
+// every typed body value, and its predecessor delta. Status and approval stay
+// outside this body digest because they are separate lifecycle authority.
+func CanonicalSpecRevisionContentHash(revision SpecRevision) (string, error) {
+	revision.ID = ""
+	revision.ContentHash = ""
+	revision.Status = ""
+	revision.Approval = nil
+	revision.CreatedAt = revision.CreatedAt.UTC()
+	return canonicalSpecSHA256(struct {
+		SchemaVersion        string                    `json:"schema_version"`
+		SpecificationID      string                    `json:"specification_id"`
+		PredecessorID        string                    `json:"predecessor_id"`
+		CreatedAt            time.Time                 `json:"created_at"`
+		Scope                SpecScope                 `json:"scope"`
+		Outcomes             []SpecOutcome             `json:"outcomes"`
+		IncludedBehaviors    []SpecIncludedBehavior    `json:"included_behaviors"`
+		Exclusions           []SpecExclusion           `json:"exclusions"`
+		BindingDecisions     []SpecBindingDecision     `json:"binding_decisions"`
+		Requirements         []SpecRequirement         `json:"requirements"`
+		AcceptanceChecks     []SpecAcceptanceCheck     `json:"acceptance_checks"`
+		NegativeExpectations []SpecNegativeExpectation `json:"negative_expectations"`
+		RecoveryExpectations []SpecRecoveryExpectation `json:"recovery_expectations"`
+		AffectedPublicPaths  []SpecPublicPath          `json:"affected_public_paths"`
+		Delta                SpecRevisionDelta         `json:"delta"`
+	}{
+		revision.SchemaVersion, revision.SpecificationID, revision.PredecessorID, revision.CreatedAt,
+		revision.Scope, revision.Outcomes, revision.IncludedBehaviors, revision.Exclusions,
+		revision.BindingDecisions, revision.Requirements, revision.AcceptanceChecks,
+		revision.NegativeExpectations, revision.RecoveryExpectations, revision.AffectedPublicPaths,
+		revision.Delta,
+	})
+}
+
+// AddressSpecRevision writes the canonical full digest and derived revision ID.
+func AddressSpecRevision(revision *SpecRevision) error {
+	if revision == nil {
+		return fmt.Errorf("revision is required")
+	}
+	hash, err := CanonicalSpecRevisionContentHash(*revision)
+	if err != nil {
+		return err
+	}
+	revision.ContentHash = hash
+	revision.ID = "spec-revision-" + hash[:12]
+	return nil
+}
+
+// CanonicalSpecificationApprovalToken is the exact owner capability for one
+// immutable draft revision.
+func CanonicalSpecificationApprovalToken(specificationID, revisionID, contentHash string) string {
+	material := strings.Join([]string{
+		"specification-approval/v1",
+		strings.TrimSpace(specificationID),
+		strings.TrimSpace(revisionID),
+		strings.TrimSpace(contentHash),
+	}, "\n")
+	digest := sha256.Sum256([]byte(material))
+	return fmt.Sprintf("approve-spec-%x", digest[:12])
+}
+
+// CanonicalSpecificationApprovalTokenHash binds the owner token without
+// retaining the raw capability in durable state.
+func CanonicalSpecificationApprovalTokenHash(token string) string {
+	digest := sha256.Sum256([]byte(strings.TrimSpace(token)))
+	return fmt.Sprintf("%x", digest[:])
+}
+
+// CanonicalSpecApprovalReceiptID derives the receipt identity from every owner
+// and revision binding, including the approval timestamp.
+func CanonicalSpecApprovalReceiptID(receipt SpecApprovalReceipt) (string, error) {
+	hash, err := canonicalSpecSHA256(struct {
+		SchemaVersion       string    `json:"schema_version"`
+		SpecificationID     string    `json:"specification_id"`
+		RevisionID          string    `json:"revision_id"`
+		RevisionContentHash string    `json:"revision_content_hash"`
+		ApprovalTokenHash   string    `json:"approval_token_hash"`
+		ApprovedBy          string    `json:"approved_by"`
+		ApprovedAt          time.Time `json:"approved_at"`
+	}{
+		receipt.SchemaVersion,
+		strings.TrimSpace(receipt.SpecificationID),
+		strings.TrimSpace(receipt.RevisionID),
+		strings.TrimSpace(receipt.RevisionContentHash),
+		strings.TrimSpace(receipt.ApprovalTokenHash),
+		strings.TrimSpace(receipt.ApprovedBy),
+		receipt.ApprovedAt.UTC(),
+	})
+	if err != nil {
+		return "", err
+	}
+	return "spec-approval-" + hash[:12], nil
+}
+
+// ValidateCanonical recomputes every persisted specification identity and
+// lineage relationship. It complements the structural Validate methods.
+func (s Specification) ValidateCanonical() error {
+	if err := s.Validate(); err != nil {
+		return err
+	}
+	expectedSpecificationID, err := CanonicalSpecificationID(s.GoalID)
+	if err != nil {
+		return fmt.Errorf("specification.id: %w", err)
+	}
+	if s.ID != expectedSpecificationID {
+		return fmt.Errorf("specification.id does not match canonical goal lineage")
+	}
+	for index := range s.Revisions {
+		revision := s.Revisions[index]
+		prefix := fmt.Sprintf("revisions[%d]", index)
+		if revision.CreatedAt.Location() != time.UTC {
+			return fmt.Errorf("%s.created_at is not canonical UTC", prefix)
+		}
+		canonicalScope, scopeErr := CanonicalSpecScope(revision.Scope)
+		if scopeErr != nil {
+			return fmt.Errorf("%s.scope: %w", prefix, scopeErr)
+		}
+		if !reflect.DeepEqual(revision.Scope, canonicalScope) {
+			return fmt.Errorf("%s.scope is not canonical", prefix)
+		}
+		if err := validateCanonicalSpecRevisionBody(prefix, revision); err != nil {
+			return err
+		}
+		var predecessor *SpecRevision
+		if index > 0 {
+			predecessor = &s.Revisions[index-1]
+			if revision.PredecessorID != predecessor.ID {
+				return fmt.Errorf("%s.predecessor_id does not name the immediately preceding canonical revision", prefix)
+			}
+		}
+		expectedDelta := CanonicalSpecRevisionDelta(predecessor, revision)
+		if !reflect.DeepEqual(revision.Delta, expectedDelta) {
+			return fmt.Errorf("%s.delta does not match canonical predecessor classification", prefix)
+		}
+		expectedHash, hashErr := CanonicalSpecRevisionContentHash(revision)
+		if hashErr != nil {
+			return fmt.Errorf("%s.content_hash: %w", prefix, hashErr)
+		}
+		if revision.ContentHash != expectedHash {
+			return fmt.Errorf("%s.content_hash does not match canonical revision body", prefix)
+		}
+		expectedRevisionID := "spec-revision-" + expectedHash[:12]
+		if revision.ID != expectedRevisionID {
+			return fmt.Errorf("%s.revision.id does not match canonical content hash", prefix)
+		}
+		if revision.Approval != nil {
+			if err := validateCanonicalSpecApproval(prefix+".approval", s.ID, revision); err != nil {
+				return err
+			}
+		}
+	}
+	if s.CurrentRevisionID != s.Revisions[len(s.Revisions)-1].ID {
+		return fmt.Errorf("current_revision_id does not match canonical current revision")
+	}
+	return nil
+}
+
+// CanonicalSpecRevisionDelta derives the exact per-section classifications for
+// an initial revision or immediate successor.
+func CanonicalSpecRevisionDelta(predecessor *SpecRevision, revision SpecRevision) SpecRevisionDelta {
+	predecessorID := ""
+	before := make(map[SpecSection][]specCanonicalBodyItem)
+	if predecessor != nil {
+		predecessorID = predecessor.ID
+		before = canonicalSpecBody(*predecessor)
+	}
+	after := canonicalSpecBody(revision)
+	result := SpecRevisionDelta{PredecessorRevisionID: predecessorID}
+	for _, section := range canonicalSpecSections {
+		delta := canonicalSpecItemDelta(before[section], after[section])
+		switch section {
+		case SpecSectionOutcomes:
+			result.Outcomes = delta
+		case SpecSectionIncludedBehaviors:
+			result.IncludedBehaviors = delta
+		case SpecSectionExclusions:
+			result.Exclusions = delta
+		case SpecSectionBindingDecisions:
+			result.BindingDecisions = delta
+		case SpecSectionRequirements:
+			result.Requirements = delta
+		case SpecSectionAcceptanceChecks:
+			result.AcceptanceChecks = delta
+		case SpecSectionNegativeExpectations:
+			result.NegativeExpectations = delta
+		case SpecSectionRecoveryExpectations:
+			result.RecoveryExpectations = delta
+		case SpecSectionAffectedPublicPaths:
+			result.AffectedPublicPaths = delta
+		}
+	}
+	return result
+}
+
+func validateCanonicalSpecApproval(field, specificationID string, revision SpecRevision) error {
+	receipt := *revision.Approval
+	if receipt.ApprovedAt.Location() != time.UTC {
+		return fmt.Errorf("%s.approved_at is not canonical UTC", field)
+	}
+	if receipt.SpecificationID != specificationID {
+		return fmt.Errorf("%s.specification_id does not match specification", field)
+	}
+	if receipt.RevisionID != revision.ID {
+		return fmt.Errorf("%s.revision_id does not match revision", field)
+	}
+	if receipt.RevisionContentHash != revision.ContentHash {
+		return fmt.Errorf("%s.revision_content_hash does not match revision", field)
+	}
+	token := CanonicalSpecificationApprovalToken(specificationID, revision.ID, revision.ContentHash)
+	expectedTokenHash := CanonicalSpecificationApprovalTokenHash(token)
+	if receipt.ApprovalTokenHash != expectedTokenHash {
+		return fmt.Errorf("%s.approval_token_hash does not match canonical owner token", field)
+	}
+	expectedID, err := CanonicalSpecApprovalReceiptID(receipt)
+	if err != nil {
+		return fmt.Errorf("%s.id: %w", field, err)
+	}
+	if receipt.ID != expectedID {
+		return fmt.Errorf("%s.id does not match canonical approval binding", field)
+	}
+	return nil
+}
+
+func validateCanonicalSpecRevisionBody(prefix string, revision SpecRevision) error {
+	sections := canonicalSpecBody(revision)
+	seen := make(map[string]string)
+	for _, section := range canonicalSpecSections {
+		items := sections[section]
+		for index, item := range items {
+			field := fmt.Sprintf("%s.%s[%d]", prefix, section, index)
+			if prior, duplicate := seen[item.ID]; duplicate {
+				return fmt.Errorf("%s.id duplicates %s", field, prior)
+			}
+			seen[item.ID] = field
+			canonical, err := CanonicalizeSpecItem(section, item.ID, item.Description, item.Verification, item.Path, item.EvidenceIDs)
+			if err != nil {
+				return fmt.Errorf("%s: %w", field, err)
+			}
+			if item.ContentHash != canonical.ContentHash {
+				return fmt.Errorf("%s.content_hash does not match canonical %s content", field, section)
+			}
+			if item.Description != canonical.Description || item.Verification != canonical.Verification || item.Path != canonical.Path || !reflect.DeepEqual(item.EvidenceIDs, canonical.EvidenceIDs) {
+				return fmt.Errorf("%s is not canonically normalized", field)
+			}
+			if index > 0 && items[index-1].ID >= item.ID {
+				return fmt.Errorf("%s.id is not in canonical order", field)
+			}
+		}
+	}
+	return nil
+}
+
+func validateCanonicalSpecItemID(section SpecSection, id string) error {
+	prefix := section.idPrefix() + "-"
+	if !strings.HasPrefix(id, prefix) {
+		return fmt.Errorf("id does not match %s stable identity", section)
+	}
+	remainder := strings.TrimPrefix(id, prefix)
+	separator := strings.LastIndex(remainder, "-")
+	if separator <= 0 || separator == len(remainder)-1 {
+		return fmt.Errorf("id does not match %s stable identity", section)
+	}
+	lineage := remainder[:separator]
+	expected, err := CanonicalSpecItemID(section, lineage)
+	if err != nil || id != expected {
+		return fmt.Errorf("id does not match %s stable identity", section)
+	}
+	return nil
+}
+
+type specCanonicalBodyItem struct {
+	ID           string
+	Description  string
+	Verification string
+	Path         string
+	ContentHash  string
+	EvidenceIDs  []string
+}
+
+func canonicalSpecBody(revision SpecRevision) map[SpecSection][]specCanonicalBodyItem {
+	result := make(map[SpecSection][]specCanonicalBodyItem, len(canonicalSpecSections))
+	appendItem := func(section SpecSection, item specCanonicalBodyItem) {
+		result[section] = append(result[section], item)
+	}
+	for _, item := range revision.Outcomes {
+		appendItem(SpecSectionOutcomes, specCanonicalBodyItem{ID: item.ID, Description: item.Description, ContentHash: item.ContentHash, EvidenceIDs: item.EvidenceIDs})
+	}
+	for _, item := range revision.IncludedBehaviors {
+		appendItem(SpecSectionIncludedBehaviors, specCanonicalBodyItem{ID: item.ID, Description: item.Description, ContentHash: item.ContentHash, EvidenceIDs: item.EvidenceIDs})
+	}
+	for _, item := range revision.Exclusions {
+		appendItem(SpecSectionExclusions, specCanonicalBodyItem{ID: item.ID, Description: item.Description, ContentHash: item.ContentHash, EvidenceIDs: item.EvidenceIDs})
+	}
+	for _, item := range revision.BindingDecisions {
+		appendItem(SpecSectionBindingDecisions, specCanonicalBodyItem{ID: item.ID, Description: item.Description, ContentHash: item.ContentHash, EvidenceIDs: item.EvidenceIDs})
+	}
+	for _, item := range revision.Requirements {
+		appendItem(SpecSectionRequirements, specCanonicalBodyItem{ID: item.ID, Description: item.Description, ContentHash: item.ContentHash, EvidenceIDs: item.EvidenceIDs})
+	}
+	for _, item := range revision.AcceptanceChecks {
+		appendItem(SpecSectionAcceptanceChecks, specCanonicalBodyItem{ID: item.ID, Description: item.Description, Verification: item.Verification, ContentHash: item.ContentHash, EvidenceIDs: item.EvidenceIDs})
+	}
+	for _, item := range revision.NegativeExpectations {
+		appendItem(SpecSectionNegativeExpectations, specCanonicalBodyItem{ID: item.ID, Description: item.Description, ContentHash: item.ContentHash, EvidenceIDs: item.EvidenceIDs})
+	}
+	for _, item := range revision.RecoveryExpectations {
+		appendItem(SpecSectionRecoveryExpectations, specCanonicalBodyItem{ID: item.ID, Description: item.Description, ContentHash: item.ContentHash, EvidenceIDs: item.EvidenceIDs})
+	}
+	for _, item := range revision.AffectedPublicPaths {
+		appendItem(SpecSectionAffectedPublicPaths, specCanonicalBodyItem{ID: item.ID, Description: item.Description, Path: item.Path, ContentHash: item.ContentHash, EvidenceIDs: item.EvidenceIDs})
+	}
+	return result
+}
+
+func canonicalSpecItemDelta(before, after []specCanonicalBodyItem) SpecItemDelta {
+	delta := SpecItemDelta{AddedIDs: []string{}, ModifiedIDs: []string{}, RemovedIDs: []string{}, UnchangedIDs: []string{}}
+	beforeByID := make(map[string]specCanonicalBodyItem, len(before))
+	afterByID := make(map[string]specCanonicalBodyItem, len(after))
+	for _, item := range before {
+		beforeByID[item.ID] = item
+	}
+	for _, item := range after {
+		afterByID[item.ID] = item
+	}
+	for id, item := range beforeByID {
+		next, exists := afterByID[id]
+		switch {
+		case !exists:
+			delta.RemovedIDs = append(delta.RemovedIDs, id)
+		case item.ContentHash != next.ContentHash:
+			delta.ModifiedIDs = append(delta.ModifiedIDs, id)
+		default:
+			delta.UnchangedIDs = append(delta.UnchangedIDs, id)
+		}
+	}
+	for id := range afterByID {
+		if _, exists := beforeByID[id]; !exists {
+			delta.AddedIDs = append(delta.AddedIDs, id)
+		}
+	}
+	sort.Strings(delta.AddedIDs)
+	sort.Strings(delta.ModifiedIDs)
+	sort.Strings(delta.RemovedIDs)
+	sort.Strings(delta.UnchangedIDs)
+	return delta
+}
+
+func canonicalSpecIDs(field string, values []string, requireOne bool) ([]string, error) {
+	if requireOne && len(values) == 0 {
+		return nil, fmt.Errorf("%s requires at least one evidence reference", field)
+	}
+	result := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for index, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return nil, fmt.Errorf("%s[%d] is required", field, index)
+		}
+		if _, duplicate := seen[value]; duplicate {
+			return nil, fmt.Errorf("%s contains duplicate ID", field)
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	sort.Strings(result)
+	if result == nil {
+		result = []string{}
+	}
+	return result, nil
+}
+
+func canonicalSpecLineage(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	var builder strings.Builder
+	separator := false
+	for _, r := range value {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			if separator && builder.Len() > 0 {
+				builder.WriteByte('-')
+			}
+			separator = false
+			builder.WriteRune(r)
+			continue
+		}
+		separator = true
+	}
+	return strings.Trim(builder.String(), "-")
+}
+
+func canonicalSpecSHA256(value any) (string, error) {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return "", fmt.Errorf("marshal canonical specification material: %w", err)
+	}
+	digest := sha256.Sum256(encoded)
+	return fmt.Sprintf("%x", digest[:]), nil
 }
 
 func validateSpecRevisionBody(r SpecRevision) error {

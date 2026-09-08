@@ -8,7 +8,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
@@ -237,7 +236,7 @@ func buildSpecificationDraft(request specificationDraftRequest) (colony.Specific
 		CurrentRevisionID: revision.ID,
 		Revisions:         []colony.SpecRevision{revision},
 	}
-	if err := validateSpecificationState(specification); err != nil {
+	if err := validateCanonicalSpecificationState(specification); err != nil {
 		return colony.Specification{}, colony.SpecRevision{}, fmt.Errorf("validate specification draft: %w", err)
 	}
 	return specification, revision, nil
@@ -314,7 +313,7 @@ func createSpecificationDraft(root string, request specificationDraftRequest, op
 // classified delta plus immediate plan-link impact are derived from snapshots.
 func buildSpecificationSuccessor(specification colony.Specification, plan colony.Plan, request specificationRevisionRequest) (colony.Specification, colony.SpecRevision, specificationAffectedScope, error) {
 	emptyScope := specificationAffectedScope{}
-	if err := validateSpecificationState(specification); err != nil {
+	if err := validateCanonicalSpecificationState(specification); err != nil {
 		return colony.Specification{}, colony.SpecRevision{}, emptyScope, fmt.Errorf("validate predecessor specification: %w", err)
 	}
 	if len(request.Changes) == 0 {
@@ -404,7 +403,7 @@ func buildSpecificationSuccessor(specification colony.Specification, plan colony
 	result.Revisions[len(result.Revisions)-1].Status = colony.SpecStatusSuperseded
 	result.Revisions = append(result.Revisions, successor)
 	result.CurrentRevisionID = successor.ID
-	if err := validateSpecificationState(result); err != nil {
+	if err := validateCanonicalSpecificationState(result); err != nil {
 		return colony.Specification{}, colony.SpecRevision{}, emptyScope, fmt.Errorf("validate specification successor: %w", err)
 	}
 	return result, successor, affected, nil
@@ -446,6 +445,17 @@ func reviseSpecification(root string, request specificationRevisionRequest, opts
 	}
 	current, _ := currentSpecificationRevision(*state.Specification)
 	if current.ID != predecessor.ID {
+		// A CLI retry observes a new wall-clock time. Rebuild with the already
+		// persisted immutable timestamp before deciding whether its semantic
+		// operation is an exact replay or a divergent successor.
+		if predecessorIndex == len(state.Specification.Revisions)-2 {
+			replayRequest := request
+			replayRequest.CreatedAt = current.CreatedAt
+			built, successor, affected, err = buildSpecificationSuccessor(base, state.Plan, replayRequest)
+			if err != nil {
+				return empty, err
+			}
+		}
 		if current.ID != successor.ID || current.ContentHash != successor.ContentHash || predecessorIndex != len(state.Specification.Revisions)-2 {
 			return empty, fmt.Errorf("divergent specification revision replay refused; current revision is %q", current.ID)
 		}
@@ -606,49 +616,28 @@ func approveSpecification(root string, request specificationApprovalRequest, opt
 }
 
 func specificationApprovalToken(specificationID, revisionID, contentHash string) string {
-	material := strings.Join([]string{
-		"specification-approval/v1",
-		strings.TrimSpace(specificationID),
-		strings.TrimSpace(revisionID),
-		strings.TrimSpace(contentHash),
-	}, "\n")
-	digest := strings.TrimPrefix(lifecycleDigest([]byte(material)), "sha256:")
-	return "approve-spec-" + digest[:24]
+	return colony.CanonicalSpecificationApprovalToken(specificationID, revisionID, contentHash)
 }
 
 func specificationApprovalTokenHash(token string) string {
-	return strings.TrimPrefix(lifecycleDigest([]byte(strings.TrimSpace(token))), "sha256:")
+	return colony.CanonicalSpecificationApprovalTokenHash(token)
 }
 
 func buildSpecificationApprovalReceipt(specificationID string, revision colony.SpecRevision, request specificationApprovalRequest, tokenHash string) (colony.SpecApprovalReceipt, error) {
-	bindingHash, err := jsonSHA256(struct {
-		SchemaVersion       string `json:"schema_version"`
-		SpecificationID     string `json:"specification_id"`
-		RevisionID          string `json:"revision_id"`
-		RevisionContentHash string `json:"revision_content_hash"`
-		ApprovalTokenHash   string `json:"approval_token_hash"`
-		ApprovedBy          string `json:"approved_by"`
-	}{
+	receipt := colony.SpecApprovalReceipt{
 		SchemaVersion:       colony.SpecificationSchemaVersion,
 		SpecificationID:     specificationID,
 		RevisionID:          revision.ID,
 		RevisionContentHash: revision.ContentHash,
 		ApprovalTokenHash:   tokenHash,
-		ApprovedBy:          request.ApprovedBy,
-	})
+		ApprovedBy:          strings.TrimSpace(request.ApprovedBy),
+		ApprovedAt:          request.ApprovedAt.UTC(),
+	}
+	receiptID, err := colony.CanonicalSpecApprovalReceiptID(receipt)
 	if err != nil {
 		return colony.SpecApprovalReceipt{}, fmt.Errorf("hash specification approval binding: %w", err)
 	}
-	receipt := colony.SpecApprovalReceipt{
-		SchemaVersion:       colony.SpecificationSchemaVersion,
-		ID:                  "spec-approval-" + bindingHash[:12],
-		SpecificationID:     specificationID,
-		RevisionID:          revision.ID,
-		RevisionContentHash: revision.ContentHash,
-		ApprovalTokenHash:   tokenHash,
-		ApprovedBy:          request.ApprovedBy,
-		ApprovedAt:          request.ApprovedAt.UTC(),
-	}
+	receipt.ID = receiptID
 	if err := receipt.Validate(); err != nil {
 		return colony.SpecApprovalReceipt{}, fmt.Errorf("validate specification approval receipt: %w", err)
 	}
@@ -717,123 +706,28 @@ func canonicalSpecificationItem(section specificationBodySection, id string, inp
 			return specificationCanonicalItem{}, fmt.Errorf("semantic lineage resolves to %q, not target %q", derived, id)
 		}
 	}
-	description := strings.TrimSpace(input.Description)
-	verification := strings.TrimSpace(input.Verification)
-	publicPath := strings.TrimSpace(input.Path)
-	if description == "" {
-		return specificationCanonicalItem{}, fmt.Errorf("description is required")
-	}
-	switch section {
-	case specificationSectionAcceptanceChecks:
-		if verification == "" {
-			return specificationCanonicalItem{}, fmt.Errorf("verification is required for acceptance_checks")
-		}
-		if publicPath != "" {
-			return specificationCanonicalItem{}, fmt.Errorf("path is only valid for affected_public_paths")
-		}
-	case specificationSectionAffectedPublicPaths:
-		if publicPath == "" {
-			return specificationCanonicalItem{}, fmt.Errorf("path is required for affected_public_paths")
-		}
-		if verification != "" {
-			return specificationCanonicalItem{}, fmt.Errorf("verification is only valid for acceptance_checks")
-		}
-	default:
-		if verification != "" || publicPath != "" {
-			return specificationCanonicalItem{}, fmt.Errorf("section %s accepts description and evidence only", section)
-		}
-	}
-	evidence, err := canonicalSpecificationIDs("evidence_ids", input.EvidenceIDs, true)
+	canonical, err := colony.CanonicalizeSpecItem(
+		colony.SpecSection(section), id, input.Description, input.Verification, input.Path, input.EvidenceIDs,
+	)
 	if err != nil {
 		return specificationCanonicalItem{}, err
 	}
-	hash, err := jsonSHA256(struct {
-		Section      specificationBodySection `json:"section"`
-		Description  string                   `json:"description"`
-		Verification string                   `json:"verification,omitempty"`
-		Path         string                   `json:"path,omitempty"`
-		EvidenceIDs  []string                 `json:"evidence_ids"`
-	}{section, description, verification, publicPath, evidence})
-	if err != nil {
-		return specificationCanonicalItem{}, fmt.Errorf("hash specification item %q: %w", id, err)
-	}
 	return specificationCanonicalItem{
-		ID: id, Description: description, Verification: verification, Path: publicPath,
-		ContentHash: hash, EvidenceIDs: evidence,
+		ID: canonical.ID, Description: canonical.Description, Verification: canonical.Verification, Path: canonical.Path,
+		ContentHash: canonical.ContentHash, EvidenceIDs: canonical.EvidenceIDs,
 	}, nil
 }
 
 func specificationStableID(section specificationBodySection, lineage string) (string, error) {
-	if !section.valid() {
-		return "", fmt.Errorf("invalid specification section %q", section)
-	}
-	canonical := canonicalSpecificationLineage(lineage)
-	if canonical == "" {
-		return "", fmt.Errorf("semantic lineage is required")
-	}
-	digest, err := jsonSHA256(struct {
-		Section specificationBodySection `json:"section"`
-		Lineage string                   `json:"lineage"`
-	}{section, canonical})
-	if err != nil {
-		return "", fmt.Errorf("hash semantic lineage: %w", err)
-	}
-	slug := canonical
-	if len(slug) > 40 {
-		slug = strings.Trim(slug[:40], "-")
-	}
-	return fmt.Sprintf("%s-%s-%s", section.idPrefix(), slug, digest[:8]), nil
-}
-
-func canonicalSpecificationLineage(value string) string {
-	value = strings.ToLower(strings.TrimSpace(value))
-	var builder strings.Builder
-	separator := false
-	for _, r := range value {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			if separator && builder.Len() > 0 {
-				builder.WriteByte('-')
-			}
-			separator = false
-			builder.WriteRune(r)
-			continue
-		}
-		separator = true
-	}
-	return strings.Trim(builder.String(), "-")
+	return colony.CanonicalSpecItemID(colony.SpecSection(section), lineage)
 }
 
 func specificationLineageID(goalID string) (string, error) {
-	goalID = strings.TrimSpace(goalID)
-	if goalID == "" {
-		return "", fmt.Errorf("specification goal ID is required")
-	}
-	hash, err := jsonSHA256(struct {
-		GoalID string `json:"goal_id"`
-	}{goalID})
-	if err != nil {
-		return "", err
-	}
-	return "specification-" + hash[:12], nil
+	return colony.CanonicalSpecificationID(goalID)
 }
 
 func canonicalSpecificationScope(scope colony.SpecScope) (colony.SpecScope, error) {
-	scope.GoalID = strings.TrimSpace(scope.GoalID)
-	scope.SessionID = strings.TrimSpace(scope.SessionID)
-	scope.FeatureID = strings.TrimSpace(scope.FeatureID)
-	var err error
-	scope.RequirementIDs, err = canonicalSpecificationIDs("requirement_ids", scope.RequirementIDs, false)
-	if err != nil {
-		return colony.SpecScope{}, err
-	}
-	scope.AcceptanceCheckIDs, err = canonicalSpecificationIDs("acceptance_check_ids", scope.AcceptanceCheckIDs, false)
-	if err != nil {
-		return colony.SpecScope{}, err
-	}
-	if err := scope.Validate(); err != nil {
-		return colony.SpecScope{}, err
-	}
-	return scope, nil
+	return colony.CanonicalSpecScope(scope)
 }
 
 func canonicalSpecificationIDs(field string, values []string, requireOne bool) ([]string, error) {
@@ -927,17 +821,9 @@ func specificationUnionIDs(left, right []specificationCanonicalItem) map[string]
 }
 
 func initialSpecificationDelta(body specificationBodySnapshot) colony.SpecRevisionDelta {
-	delta := emptySpecificationDelta("")
-	delta.Outcomes.AddedIDs = specificationItemIDs(body[specificationSectionOutcomes])
-	delta.IncludedBehaviors.AddedIDs = specificationItemIDs(body[specificationSectionIncludedBehaviors])
-	delta.Exclusions.AddedIDs = specificationItemIDs(body[specificationSectionExclusions])
-	delta.BindingDecisions.AddedIDs = specificationItemIDs(body[specificationSectionBindingDecisions])
-	delta.Requirements.AddedIDs = specificationItemIDs(body[specificationSectionRequirements])
-	delta.AcceptanceChecks.AddedIDs = specificationItemIDs(body[specificationSectionAcceptanceChecks])
-	delta.NegativeExpectations.AddedIDs = specificationItemIDs(body[specificationSectionNegativeExpectations])
-	delta.RecoveryExpectations.AddedIDs = specificationItemIDs(body[specificationSectionRecoveryExpectations])
-	delta.AffectedPublicPaths.AddedIDs = specificationItemIDs(body[specificationSectionAffectedPublicPaths])
-	return delta
+	revision := colony.SpecRevision{}
+	applySpecificationBody(&revision, body)
+	return colony.CanonicalSpecRevisionDelta(nil, revision)
 }
 
 func emptySpecificationDelta(predecessorID string) colony.SpecRevisionDelta {
@@ -1117,31 +1003,11 @@ func specificationBodyContainsID(body specificationBodySnapshot, id string) bool
 }
 
 func compareSpecificationBodies(predecessorID string, before, after specificationBodySnapshot) colony.SpecRevisionDelta {
-	delta := emptySpecificationDelta(predecessorID)
-	for _, section := range specificationBodyOrder {
-		sectionDelta := compareSpecificationItems(before[section], after[section])
-		switch section {
-		case specificationSectionOutcomes:
-			delta.Outcomes = sectionDelta
-		case specificationSectionIncludedBehaviors:
-			delta.IncludedBehaviors = sectionDelta
-		case specificationSectionExclusions:
-			delta.Exclusions = sectionDelta
-		case specificationSectionBindingDecisions:
-			delta.BindingDecisions = sectionDelta
-		case specificationSectionRequirements:
-			delta.Requirements = sectionDelta
-		case specificationSectionAcceptanceChecks:
-			delta.AcceptanceChecks = sectionDelta
-		case specificationSectionNegativeExpectations:
-			delta.NegativeExpectations = sectionDelta
-		case specificationSectionRecoveryExpectations:
-			delta.RecoveryExpectations = sectionDelta
-		case specificationSectionAffectedPublicPaths:
-			delta.AffectedPublicPaths = sectionDelta
-		}
-	}
-	return delta
+	predecessor := colony.SpecRevision{ID: predecessorID}
+	revision := colony.SpecRevision{}
+	applySpecificationBody(&predecessor, before)
+	applySpecificationBody(&revision, after)
+	return colony.CanonicalSpecRevisionDelta(&predecessor, revision)
 }
 
 func compareSpecificationItems(before, after []specificationCanonicalItem) colony.SpecItemDelta {
@@ -1177,42 +1043,14 @@ func compareSpecificationItems(before, after []specificationCanonicalItem) colon
 }
 
 func addressSpecificationRevision(revision *colony.SpecRevision) error {
-	revision.ID = ""
-	revision.ContentHash = ""
-	hash, err := specificationRevisionContentHash(*revision)
-	if err != nil {
-		return err
-	}
-	revision.ContentHash = hash
-	revision.ID = "spec-revision-" + hash[:12]
-	return nil
+	return colony.AddressSpecRevision(revision)
 }
 
 // specificationRevisionContentHash excludes observation time and authority
 // status. Approval and supersession therefore cannot masquerade as a material
 // specification edit, while scope, typed content, evidence, and delta do.
 func specificationRevisionContentHash(revision colony.SpecRevision) (string, error) {
-	return jsonSHA256(struct {
-		SchemaVersion        string                           `json:"schema_version"`
-		SpecificationID      string                           `json:"specification_id"`
-		PredecessorID        string                           `json:"predecessor_id"`
-		Scope                colony.SpecScope                 `json:"scope"`
-		Outcomes             []colony.SpecOutcome             `json:"outcomes"`
-		IncludedBehaviors    []colony.SpecIncludedBehavior    `json:"included_behaviors"`
-		Exclusions           []colony.SpecExclusion           `json:"exclusions"`
-		BindingDecisions     []colony.SpecBindingDecision     `json:"binding_decisions"`
-		Requirements         []colony.SpecRequirement         `json:"requirements"`
-		AcceptanceChecks     []colony.SpecAcceptanceCheck     `json:"acceptance_checks"`
-		NegativeExpectations []colony.SpecNegativeExpectation `json:"negative_expectations"`
-		RecoveryExpectations []colony.SpecRecoveryExpectation `json:"recovery_expectations"`
-		AffectedPublicPaths  []colony.SpecPublicPath          `json:"affected_public_paths"`
-		Delta                colony.SpecRevisionDelta         `json:"delta"`
-	}{
-		revision.SchemaVersion, revision.SpecificationID, revision.PredecessorID, revision.Scope,
-		revision.Outcomes, revision.IncludedBehaviors, revision.Exclusions, revision.BindingDecisions,
-		revision.Requirements, revision.AcceptanceChecks, revision.NegativeExpectations,
-		revision.RecoveryExpectations, revision.AffectedPublicPaths, revision.Delta,
-	})
+	return colony.CanonicalSpecRevisionContentHash(revision)
 }
 
 func affectedSpecificationScope(delta colony.SpecRevisionDelta, plan colony.Plan) specificationAffectedScope {
@@ -1379,7 +1217,7 @@ func specificationAtPredecessor(specification colony.Specification, index int) (
 	} else {
 		result.Revisions[index].Status = colony.SpecStatusDraft
 	}
-	if err := validateSpecificationState(result); err != nil {
+	if err := validateCanonicalSpecificationState(result); err != nil {
 		return colony.Specification{}, fmt.Errorf("reconstruct predecessor specification: %w", err)
 	}
 	return result, nil
@@ -1434,6 +1272,11 @@ func loadSpecificationColonyState(root string) (colony.ColonyState, error) {
 	migration, err := migratePlanningState(root, state)
 	if err != nil {
 		return colony.ColonyState{}, fmt.Errorf("load specification planning state: %w", err)
+	}
+	if migration.State.Specification != nil {
+		if err := validateCanonicalSpecificationState(*migration.State.Specification); err != nil {
+			return colony.ColonyState{}, fmt.Errorf("load specification state: %w", err)
+		}
 	}
 	return migration.State, nil
 }

@@ -72,11 +72,11 @@ func TestSpecificationIntegrity200(t *testing.T) {
 					}
 				}
 			}},
-			{name: "scope", field: "scope", mutate: func(specification *colony.Specification) { specification.Revisions[0].Scope.SessionID += "-forged" }},
-			{name: "created timestamp", field: "created_at", mutate: func(specification *colony.Specification) {
+			{name: "scope", field: "content_hash", mutate: func(specification *colony.Specification) { specification.Revisions[0].Scope.SessionID += "-forged" }},
+			{name: "created timestamp", field: "content_hash", mutate: func(specification *colony.Specification) {
 				specification.Revisions[0].CreatedAt = specification.Revisions[0].CreatedAt.Add(time.Second)
 			}},
-			{name: "revision ID", field: "revision.id", mutate: func(specification *colony.Specification) {
+			{name: "revision ID", field: "id", mutate: func(specification *colony.Specification) {
 				revision := &specification.Revisions[0]
 				revision.ID = "spec-revision-" + strings.Repeat("a", 12)
 				specification.CurrentRevisionID = revision.ID
@@ -91,8 +91,8 @@ func TestSpecificationIntegrity200(t *testing.T) {
 				revision.Approval.RevisionContentHash = revision.ContentHash
 			}},
 			{name: "approval receipt ID", field: "approval.id", mutate: func(specification *colony.Specification) { specification.Revisions[0].Approval.ID += "-forged" }},
-			{name: "approval actor", field: "approval.approved_by", mutate: func(specification *colony.Specification) { specification.Revisions[0].Approval.ApprovedBy += "-forged" }},
-			{name: "approval timestamp", field: "approval.approved_at", mutate: func(specification *colony.Specification) {
+			{name: "approval actor", field: "approval.id", mutate: func(specification *colony.Specification) { specification.Revisions[0].Approval.ApprovedBy += "-forged" }},
+			{name: "approval timestamp", field: "approval.id", mutate: func(specification *colony.Specification) {
 				specification.Revisions[0].Approval.ApprovedAt = specification.Revisions[0].Approval.ApprovedAt.Add(time.Second)
 			}},
 			{name: "approval token", field: "approval.approval_token_hash", mutate: func(specification *colony.Specification) {

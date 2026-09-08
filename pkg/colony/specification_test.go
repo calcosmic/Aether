@@ -62,13 +62,16 @@ func TestSpecWholeGoalRevisionRoundTripPreservesTypedBody(t *testing.T) {
 
 	specification := Specification{
 		SchemaVersion:     SpecificationSchemaVersion,
-		ID:                "spec-goal-200",
+		ID:                revision.SpecificationID,
 		GoalID:            "goal-200",
 		CurrentRevisionID: revision.ID,
 		Revisions:         []SpecRevision{revision},
 	}
 	if err := specification.Validate(); err != nil {
 		t.Fatalf("valid whole-goal specification rejected: %v", err)
+	}
+	if err := specification.ValidateCanonical(); err != nil {
+		t.Fatalf("canonical whole-goal specification rejected: %v", err)
 	}
 
 	encoded, err := json.Marshal(specification)
@@ -127,24 +130,27 @@ func TestSpecFeatureSuccessorRoundTripClassifiesEveryBodySection(t *testing.T) {
 		GoalID:             "goal-200",
 		SessionID:          "session-200",
 		FeatureID:          "feature-safe-revision",
-		RequirementIDs:     []string{"req-safe-revision"},
-		AcceptanceCheckIDs: []string{"check-safe-revision"},
+		RequirementIDs:     []string{predecessor.Requirements[0].ID},
+		AcceptanceCheckIDs: []string{predecessor.AcceptanceChecks[0].ID},
 	})
-	successor.ID = "spec-rev-2"
 	successor.PredecessorID = predecessor.ID
-	successor.ContentHash = "spec-rev-2-content-hash"
 	successor.CreatedAt = predecessor.CreatedAt.Add(time.Minute)
-	successor.Delta = fullSpecRevisionDelta(predecessor.ID)
+	reviseValidSpecRevisionItems(&successor)
+	successor.Delta = CanonicalSpecRevisionDelta(&predecessor, successor)
+	mustAddressSpecRevision(&successor)
 
 	specification := Specification{
 		SchemaVersion:     SpecificationSchemaVersion,
-		ID:                "spec-goal-200",
+		ID:                predecessor.SpecificationID,
 		GoalID:            "goal-200",
 		CurrentRevisionID: successor.ID,
 		Revisions:         []SpecRevision{predecessor, successor},
 	}
 	if err := specification.Validate(); err != nil {
 		t.Fatalf("valid feature-scoped successor rejected: %v", err)
+	}
+	if err := specification.ValidateCanonical(); err != nil {
+		t.Fatalf("canonical feature-scoped successor rejected: %v", err)
 	}
 
 	encoded, err := json.Marshal(specification)
@@ -171,8 +177,8 @@ func TestSpecFeatureSuccessorRoundTripClassifiesEveryBodySection(t *testing.T) {
 		successor.Delta.AffectedPublicPaths,
 	}
 	for i, delta := range deltas {
-		if len(delta.AddedIDs) != 1 || len(delta.ModifiedIDs) != 1 || len(delta.RemovedIDs) != 1 || len(delta.UnchangedIDs) != 1 {
-			t.Errorf("delta section %d did not preserve explicit add/modify/remove/preserve classifications: %#v", i, delta)
+		if len(delta.ModifiedIDs) != 1 || len(delta.AddedIDs) != 0 || len(delta.RemovedIDs) != 0 || len(delta.UnchangedIDs) != 0 {
+			t.Errorf("delta section %d did not classify its canonical modification: %#v", i, delta)
 		}
 	}
 }
@@ -257,89 +263,125 @@ func TestSpecContractsDoNotExposePlanAcceptanceAuthority(t *testing.T) {
 }
 
 func validSpecRevision(scope SpecScope) SpecRevision {
+	specificationID, err := CanonicalSpecificationID(scope.GoalID)
+	if err != nil {
+		panic(err)
+	}
+	outcome := mustCanonicalSpecItem(SpecSectionOutcomes, "owner-understands-plan", "The owner understands why the route changed", "", "", []string{"evidence-context"})
+	behavior := mustCanonicalSpecItem(SpecSectionIncludedBehaviors, "visible-loop", "Show each grounded planning pass", "", "", []string{"evidence-classic"})
+	exclusion := mustCanonicalSpecItem(SpecSectionExclusions, "build-cycle", "Do not change build execution", "", "", []string{"evidence-scope"})
+	decision := mustCanonicalSpecItem(SpecSectionBindingDecisions, "explicit-acceptance", "Plan acceptance remains explicit", "", "", []string{"evidence-decision"})
+	requirement := mustCanonicalSpecItem(SpecSectionRequirements, "safe-revision", "Preserve unaffected work", "", "", []string{"evidence-requirement"})
+	check := mustCanonicalSpecItem(SpecSectionAcceptanceChecks, "safe-revision", "A scoped revision retains unaffected stable IDs", "Run the scoped revision fixture", "", []string{"evidence-acceptance"})
+	negative := mustCanonicalSpecItem(SpecSectionNegativeExpectations, "no-auto-accept", "Specification approval cannot accept a plan candidate", "", "", []string{"evidence-negative"})
+	recovery := mustCanonicalSpecItem(SpecSectionRecoveryExpectations, "exact-replay", "Exact replay returns the same revision", "", "", []string{"evidence-recovery"})
+	publicPath := mustCanonicalSpecItem(SpecSectionAffectedPublicPaths, "ant-spec", "Review and approve the specification", "", "/ant-spec", []string{"evidence-path"})
 	revision := SpecRevision{
 		SchemaVersion:   SpecificationSchemaVersion,
-		ID:              "spec-rev-1",
-		SpecificationID: "spec-goal-200",
+		SpecificationID: specificationID,
 		CreatedAt:       time.Date(2026, time.September, 7, 10, 0, 0, 0, time.UTC),
-		ContentHash:     "spec-rev-1-content-hash",
 		Scope:           scope,
 		Status:          SpecStatusDraft,
 		Outcomes: []SpecOutcome{{
-			ID: "outcome-owner-understands-plan", Description: "The owner understands why the route changed", ContentHash: "hash-outcome", EvidenceIDs: []string{"evidence-context"},
+			ID: outcome.ID, Description: outcome.Description, ContentHash: outcome.ContentHash, EvidenceIDs: outcome.EvidenceIDs,
 		}},
 		IncludedBehaviors: []SpecIncludedBehavior{{
-			ID: "behavior-visible-loop", Description: "Show each grounded planning pass", ContentHash: "hash-behavior", EvidenceIDs: []string{"evidence-classic"},
+			ID: behavior.ID, Description: behavior.Description, ContentHash: behavior.ContentHash, EvidenceIDs: behavior.EvidenceIDs,
 		}},
 		Exclusions: []SpecExclusion{{
-			ID: "exclusion-build-cycle", Description: "Do not change build execution", ContentHash: "hash-exclusion", EvidenceIDs: []string{"evidence-scope"},
+			ID: exclusion.ID, Description: exclusion.Description, ContentHash: exclusion.ContentHash, EvidenceIDs: exclusion.EvidenceIDs,
 		}},
 		BindingDecisions: []SpecBindingDecision{{
-			ID: "decision-explicit-acceptance", Description: "Plan acceptance remains explicit", ContentHash: "hash-decision", EvidenceIDs: []string{"evidence-decision"},
+			ID: decision.ID, Description: decision.Description, ContentHash: decision.ContentHash, EvidenceIDs: decision.EvidenceIDs,
 		}},
 		Requirements: []SpecRequirement{{
-			ID: "req-safe-revision", Description: "Preserve unaffected work", ContentHash: "hash-requirement", EvidenceIDs: []string{"evidence-requirement"},
+			ID: requirement.ID, Description: requirement.Description, ContentHash: requirement.ContentHash, EvidenceIDs: requirement.EvidenceIDs,
 		}},
 		AcceptanceChecks: []SpecAcceptanceCheck{{
-			ID: "check-safe-revision", Description: "A scoped revision retains unaffected stable IDs", Verification: "Run the scoped revision fixture", ContentHash: "hash-check", EvidenceIDs: []string{"evidence-acceptance"},
+			ID: check.ID, Description: check.Description, Verification: check.Verification, ContentHash: check.ContentHash, EvidenceIDs: check.EvidenceIDs,
 		}},
 		NegativeExpectations: []SpecNegativeExpectation{{
-			ID: "negative-no-auto-accept", Description: "Specification approval cannot accept a plan candidate", ContentHash: "hash-negative", EvidenceIDs: []string{"evidence-negative"},
+			ID: negative.ID, Description: negative.Description, ContentHash: negative.ContentHash, EvidenceIDs: negative.EvidenceIDs,
 		}},
 		RecoveryExpectations: []SpecRecoveryExpectation{{
-			ID: "recovery-exact-replay", Description: "Exact replay returns the same revision", ContentHash: "hash-recovery", EvidenceIDs: []string{"evidence-recovery"},
+			ID: recovery.ID, Description: recovery.Description, ContentHash: recovery.ContentHash, EvidenceIDs: recovery.EvidenceIDs,
 		}},
 		AffectedPublicPaths: []SpecPublicPath{{
-			ID: "path-ant-spec", Path: "/ant-spec", Description: "Review and approve the specification", ContentHash: "hash-path", EvidenceIDs: []string{"evidence-path"},
+			ID: publicPath.ID, Path: publicPath.Path, Description: publicPath.Description, ContentHash: publicPath.ContentHash, EvidenceIDs: publicPath.EvidenceIDs,
 		}},
 	}
-	revision.Delta = SpecRevisionDelta{
-		PredecessorRevisionID: revision.PredecessorID,
-		Outcomes:              SpecItemDelta{AddedIDs: []string{revision.Outcomes[0].ID}},
-		IncludedBehaviors:     SpecItemDelta{AddedIDs: []string{revision.IncludedBehaviors[0].ID}},
-		Exclusions:            SpecItemDelta{AddedIDs: []string{revision.Exclusions[0].ID}},
-		BindingDecisions:      SpecItemDelta{AddedIDs: []string{revision.BindingDecisions[0].ID}},
-		Requirements:          SpecItemDelta{AddedIDs: []string{revision.Requirements[0].ID}},
-		AcceptanceChecks:      SpecItemDelta{AddedIDs: []string{revision.AcceptanceChecks[0].ID}},
-		NegativeExpectations:  SpecItemDelta{AddedIDs: []string{revision.NegativeExpectations[0].ID}},
-		RecoveryExpectations:  SpecItemDelta{AddedIDs: []string{revision.RecoveryExpectations[0].ID}},
-		AffectedPublicPaths:   SpecItemDelta{AddedIDs: []string{revision.AffectedPublicPaths[0].ID}},
+	revision.Scope, err = CanonicalSpecScope(revision.Scope)
+	if err != nil {
+		panic(err)
 	}
+	revision.Delta = CanonicalSpecRevisionDelta(nil, revision)
+	mustAddressSpecRevision(&revision)
 	return revision
 }
 
 func validSpecApproval(revision SpecRevision) *SpecApprovalReceipt {
-	return &SpecApprovalReceipt{
+	token := CanonicalSpecificationApprovalToken(revision.SpecificationID, revision.ID, revision.ContentHash)
+	receipt := &SpecApprovalReceipt{
 		SchemaVersion:       SpecificationSchemaVersion,
-		ID:                  "spec-approval-1",
 		SpecificationID:     revision.SpecificationID,
 		RevisionID:          revision.ID,
 		RevisionContentHash: revision.ContentHash,
-		ApprovalTokenHash:   "approval-token-hash",
+		ApprovalTokenHash:   CanonicalSpecificationApprovalTokenHash(token),
 		ApprovedBy:          "owner-callum",
 		ApprovedAt:          revision.CreatedAt.Add(30 * time.Second),
 	}
+	id, err := CanonicalSpecApprovalReceiptID(*receipt)
+	if err != nil {
+		panic(err)
+	}
+	receipt.ID = id
+	return receipt
 }
 
-func fullSpecRevisionDelta(predecessorID string) SpecRevisionDelta {
-	delta := SpecItemDelta{
-		AddedIDs:     []string{"added-id"},
-		ModifiedIDs:  []string{"modified-id"},
-		RemovedIDs:   []string{"removed-id"},
-		UnchangedIDs: []string{"unchanged-id"},
+func mustCanonicalSpecItem(section SpecSection, lineage, description, verification, publicPath string, evidenceIDs []string) SpecCanonicalItemMaterial {
+	id, err := CanonicalSpecItemID(section, lineage)
+	if err != nil {
+		panic(err)
 	}
-	return SpecRevisionDelta{
-		PredecessorRevisionID: predecessorID,
-		Outcomes:              delta,
-		IncludedBehaviors:     delta,
-		Exclusions:            delta,
-		BindingDecisions:      delta,
-		Requirements:          delta,
-		AcceptanceChecks:      delta,
-		NegativeExpectations:  delta,
-		RecoveryExpectations:  delta,
-		AffectedPublicPaths:   delta,
+	item, err := CanonicalizeSpecItem(section, id, description, verification, publicPath, evidenceIDs)
+	if err != nil {
+		panic(err)
 	}
+	return item
+}
+
+func mustAddressSpecRevision(revision *SpecRevision) {
+	if err := AddressSpecRevision(revision); err != nil {
+		panic(err)
+	}
+}
+
+func reviseValidSpecRevisionItems(revision *SpecRevision) {
+	revise := func(section SpecSection, id, description, verification, publicPath string, evidenceIDs []string) SpecCanonicalItemMaterial {
+		item, err := CanonicalizeSpecItem(section, id, description+" revised", verification, publicPath, evidenceIDs)
+		if err != nil {
+			panic(err)
+		}
+		return item
+	}
+	outcome := revise(SpecSectionOutcomes, revision.Outcomes[0].ID, revision.Outcomes[0].Description, "", "", revision.Outcomes[0].EvidenceIDs)
+	revision.Outcomes[0].Description, revision.Outcomes[0].ContentHash = outcome.Description, outcome.ContentHash
+	behavior := revise(SpecSectionIncludedBehaviors, revision.IncludedBehaviors[0].ID, revision.IncludedBehaviors[0].Description, "", "", revision.IncludedBehaviors[0].EvidenceIDs)
+	revision.IncludedBehaviors[0].Description, revision.IncludedBehaviors[0].ContentHash = behavior.Description, behavior.ContentHash
+	exclusion := revise(SpecSectionExclusions, revision.Exclusions[0].ID, revision.Exclusions[0].Description, "", "", revision.Exclusions[0].EvidenceIDs)
+	revision.Exclusions[0].Description, revision.Exclusions[0].ContentHash = exclusion.Description, exclusion.ContentHash
+	decision := revise(SpecSectionBindingDecisions, revision.BindingDecisions[0].ID, revision.BindingDecisions[0].Description, "", "", revision.BindingDecisions[0].EvidenceIDs)
+	revision.BindingDecisions[0].Description, revision.BindingDecisions[0].ContentHash = decision.Description, decision.ContentHash
+	requirement := revise(SpecSectionRequirements, revision.Requirements[0].ID, revision.Requirements[0].Description, "", "", revision.Requirements[0].EvidenceIDs)
+	revision.Requirements[0].Description, revision.Requirements[0].ContentHash = requirement.Description, requirement.ContentHash
+	check := revise(SpecSectionAcceptanceChecks, revision.AcceptanceChecks[0].ID, revision.AcceptanceChecks[0].Description, revision.AcceptanceChecks[0].Verification, "", revision.AcceptanceChecks[0].EvidenceIDs)
+	revision.AcceptanceChecks[0].Description, revision.AcceptanceChecks[0].ContentHash = check.Description, check.ContentHash
+	negative := revise(SpecSectionNegativeExpectations, revision.NegativeExpectations[0].ID, revision.NegativeExpectations[0].Description, "", "", revision.NegativeExpectations[0].EvidenceIDs)
+	revision.NegativeExpectations[0].Description, revision.NegativeExpectations[0].ContentHash = negative.Description, negative.ContentHash
+	recovery := revise(SpecSectionRecoveryExpectations, revision.RecoveryExpectations[0].ID, revision.RecoveryExpectations[0].Description, "", "", revision.RecoveryExpectations[0].EvidenceIDs)
+	revision.RecoveryExpectations[0].Description, revision.RecoveryExpectations[0].ContentHash = recovery.Description, recovery.ContentHash
+	publicPath := revise(SpecSectionAffectedPublicPaths, revision.AffectedPublicPaths[0].ID, revision.AffectedPublicPaths[0].Description, "", revision.AffectedPublicPaths[0].Path, revision.AffectedPublicPaths[0].EvidenceIDs)
+	revision.AffectedPublicPaths[0].Description, revision.AffectedPublicPaths[0].ContentHash = publicPath.Description, publicPath.ContentHash
 }
 
 func assertSpecValidationError(t *testing.T, err error, field string) {
