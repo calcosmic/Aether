@@ -273,6 +273,98 @@ func TestClassicMechanismCoverage(t *testing.T) {
 	assertHashSnapshotsEqualForTest(t, "Classic mechanism validation", before, after)
 }
 
+func TestClassicContractPhase200SchemaMechanismsAndCausalCases(t *testing.T) {
+	contractDir := classicContractFixtureDir(t)
+
+	schema := loadClassicContractJSONSchema(t, filepath.Join(contractDir, "schema.json"))
+	caseDefinition := classicSchemaObject(t, schema.Definitions["case"])
+	caseProperties, ok := caseDefinition["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("Classic case schema has no properties object")
+	}
+	if _, ok := caseProperties["phase200_proof"]; !ok {
+		t.Error("Classic case schema is missing phase200_proof")
+	}
+	mechanismDefinition := classicSchemaObject(t, schema.Definitions["mechanism"])
+	mechanismProperties, ok := mechanismDefinition["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("Classic mechanism schema has no properties object")
+	}
+	for _, field := range []string{"source_anchors", "modern_invariant", "positive_case_ids", "negative_case_ids"} {
+		if _, ok := mechanismProperties[field]; !ok {
+			t.Errorf("Classic mechanism schema is missing %s", field)
+		}
+	}
+
+	registryBytes, err := os.ReadFile(filepath.Join(contractDir, "mechanisms.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var registryRaw struct {
+		Mechanisms []map[string]any `json:"mechanisms"`
+	}
+	if err := json.Unmarshal(registryBytes, &registryRaw); err != nil {
+		t.Fatal(err)
+	}
+	decisionCounts := map[string]int{}
+	for _, mechanism := range registryRaw.Mechanisms {
+		id, _ := mechanism["id"].(string)
+		decisionCounts[id]++
+		if !strings.HasPrefix(id, "SYN-200-") {
+			continue
+		}
+		for _, field := range []string{"source_anchors", "modern_invariant", "positive_case_ids", "negative_case_ids"} {
+			if value, exists := mechanism[field]; !exists || value == nil {
+				t.Errorf("mechanism %s missing %s", id, field)
+			}
+		}
+	}
+	for index := 1; index <= 12; index++ {
+		id := fmt.Sprintf("SYN-200-%02d", index)
+		if decisionCounts[id] != 1 {
+			t.Errorf("mechanism %s count = %d, want exactly 1", id, decisionCounts[id])
+		}
+	}
+
+	caseBytes, err := os.ReadFile(filepath.Join(contractDir, "cases.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var casesRaw struct {
+		Cases []map[string]any `json:"cases"`
+	}
+	if err := json.Unmarshal(caseBytes, &casesRaw); err != nil {
+		t.Fatal(err)
+	}
+	wantGroups := []string{
+		"V-200-E2E", "V-200-CONFIDENCE", "V-200-DECISION", "V-200-STOP",
+		"V-200-ACCEPT", "V-200-REVISION", "V-200-REPLAY", "V-200-PLATFORM",
+	}
+	groupClasses := map[string]map[string]bool{}
+	for _, testCase := range casesRaw.Cases {
+		decision, _ := testCase["synthesis_decision"].(string)
+		if !strings.HasPrefix(decision, "SYN-200-") {
+			continue
+		}
+		group, _ := testCase["group"].(string)
+		proof, ok := testCase["phase200_proof"].(map[string]any)
+		if !ok {
+			t.Errorf("Phase 200 case %v is missing phase200_proof", testCase["id"])
+			continue
+		}
+		class, _ := proof["class"].(string)
+		if groupClasses[group] == nil {
+			groupClasses[group] = map[string]bool{}
+		}
+		groupClasses[group][class] = true
+	}
+	for _, group := range wantGroups {
+		if !groupClasses[group]["success"] || !groupClasses[group]["refusal"] {
+			t.Errorf("proof group %s requires executable success and refusal cases", group)
+		}
+	}
+}
+
 // The journey IDs are intentionally semantic rather than a list of commands.
 // A public journey has one Claude and one OpenCode row; platform expansion is
 // verified below instead of allowing either wrapper to stand in for the other.
