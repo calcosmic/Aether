@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -744,12 +746,22 @@ func phaseInsertPlanningBoundary(state colony.ColonyState, approved approvedPlan
 	return manifest, header, stage, nil
 }
 
-// acceptPlanCandidate is the sole pending_review -> accepted authority. Every
-// refusal happens before the lifecycle transaction is opened, so stale input
-// cannot leave journals or partially mutate the plan frontier.
+// acceptPlanCandidate is the sole pending_review -> accepted authority. The
+// Plan 28 repository session is acquired before any authority read and remains
+// held through derivation, atomic apply, rollback, or exact read-only replay.
 func acceptPlanCandidate(root string, request planCandidateAcceptanceRequest, opts planCandidateAcceptanceOptions) (planCandidateAcceptanceResult, error) {
+	var result planCandidateAcceptanceResult
+	err := withPlanningMutationSession(root, "plan-candidate-accept", func(session *planningMutationSession) error {
+		var err error
+		result, err = acceptPlanCandidateInSession(session, request, opts)
+		return err
+	})
+	return result, err
+}
+
+func acceptPlanCandidateInSession(session *planningMutationSession, request planCandidateAcceptanceRequest, opts planCandidateAcceptanceOptions) (planCandidateAcceptanceResult, error) {
 	empty := planCandidateAcceptanceResult{}
-	artifact, err := loadPlanCandidateArtifact(root, request.CandidateID)
+	artifact, err := loadPlanCandidateArtifactInSession(session, request.CandidateID)
 	if err != nil {
 		return empty, fmt.Errorf("candidate_id: %w", err)
 	}
@@ -757,16 +769,30 @@ func acceptPlanCandidate(root string, request planCandidateAcceptanceRequest, op
 	if err := validatePlanCandidateAcceptanceRequest(candidate, request); err != nil {
 		return empty, err
 	}
-	state, err := loadSpecificationColonyState(root)
+	state, err := loadSpecificationColonyStateInSession(session)
 	if err != nil {
 		return empty, err
 	}
 	if err := validatePlanningState(state); err != nil {
 		return empty, fmt.Errorf("validate current planning state: %w", err)
 	}
+	timeline, err := verifiedPlanCandidateTimelineInSession(session, candidate)
+	if err != nil {
+		return empty, err
+	}
+	persistedReceipt, receiptExists, err := loadPlanCandidateAcceptanceReceiptInSession(session, candidate)
+	if err != nil {
+		return empty, err
+	}
 
 	if candidate.Status == colony.PlanCandidateAccepted {
+		if !receiptExists || candidate.Acceptance == nil || !reflect.DeepEqual(*persistedReceipt, *candidate.Acceptance) {
+			return empty, fmt.Errorf("acceptance receipt: accepted replay does not bind the exact persisted receipt")
+		}
 		return replayAcceptedPlanCandidate(state, candidate)
+	}
+	if receiptExists {
+		return empty, fmt.Errorf("acceptance receipt: pending candidate already has a receipt artifact")
 	}
 	if candidate.Status != colony.PlanCandidatePendingReview {
 		return empty, fmt.Errorf("candidate status %q cannot be accepted; only pending_review is eligible", candidate.Status)
@@ -776,9 +802,6 @@ func acceptPlanCandidate(root string, request planCandidateAcceptanceRequest, op
 	}
 	if pendingID := strings.TrimSpace(state.Plan.PendingCandidateID); pendingID != "" && pendingID != candidate.ID {
 		return empty, fmt.Errorf("candidate_id: current pending candidate is %q, not %q", pendingID, candidate.ID)
-	}
-	if _, err := verifiedPlanCandidateTimeline(root, candidate); err != nil {
-		return empty, err
 	}
 	if state.Specification == nil {
 		return empty, fmt.Errorf("specification_revision_id: candidate acceptance requires the current approved specification")
@@ -813,27 +836,31 @@ func acceptPlanCandidate(root string, request planCandidateAcceptanceRequest, op
 	if computedProposalHash != candidate.ProposalHash || candidate.Proposal.PlanHash != candidate.ProposalHash {
 		return empty, fmt.Errorf("proposal_hash: candidate proposal no longer matches its exact binding")
 	}
-
-	impact, unreconciled, err := unresolvedPlanImpact(state)
+	baseRevision, err := planCandidateDerivationBase(state.Plan, base, baseline)
 	if err != nil {
-		return empty, fmt.Errorf("affected_scope: %w", err)
+		return empty, err
 	}
-	if unreconciled {
-		if err := validatePlanCandidateImpactCoverage(candidate, impact); err != nil {
-			return empty, fmt.Errorf("affected_scope: %w", err)
-		}
+	derived, err := derivePlanCandidateAuthority(baseRevision, *state.Specification, candidate.Proposal)
+	if err != nil {
+		return empty, fmt.Errorf("derived authority: %w", err)
 	}
-	activatedPhases, preserved, err := preserveCompletedCandidateWorkForImpact(state.Plan.Phases, candidate.Proposal.Phases, impact)
+	if len(timeline.Cards) == 0 {
+		return empty, fmt.Errorf("derived authority: candidate timeline has no final iteration")
+	}
+	finalCard := timeline.Cards[len(timeline.Cards)-1]
+	if err := validateDerivedPlanCandidateAuthority(candidate, finalCard, derived); err != nil {
+		return empty, fmt.Errorf("derived authority: %w", err)
+	}
+	derivedAffected, derivedPreserved := derivedPlanCandidateScope(finalCard.SemanticDelta, derived)
+	activatedPhases, preserved, err := preserveCompletedCandidateWorkForImpact(state.Plan.Phases, candidate.Proposal.Phases, derived.Impact)
 	if err != nil {
 		return empty, err
 	}
 	revision := candidate.Proposal
 	revision.Phases = activatedPhases
 	revision.PreservedPhaseIDs = preserved
-	if unreconciled {
-		revision.AffectedSemanticIDs = append([]string(nil), impact.AffectedSemanticIDs...)
-		revision.PreservedSemanticIDs = append([]string(nil), impact.PreservedSemanticIDs...)
-	}
+	revision.AffectedSemanticIDs = append([]string(nil), derivedAffected...)
+	revision.PreservedSemanticIDs = append([]string(nil), derivedPreserved...)
 	if computed, hashErr := canonicalPlanCandidateProposalHash(revision); hashErr != nil || computed != revision.PlanHash {
 		if hashErr != nil {
 			return empty, fmt.Errorf("proposal_hash: %w", hashErr)
@@ -918,17 +945,13 @@ func acceptPlanCandidate(root string, request planCandidateAcceptanceRequest, op
 	if err != nil {
 		return empty, err
 	}
-	repositoryRoot, err := canonicalPlanningTimelineRoot(root)
-	if err != nil {
-		return empty, err
-	}
 	tx, err := beginLifecycleTransaction(lifecycleTransactionConfig{
 		TransactionID: "plan-candidate-accept-" + candidate.ContentHash[:24],
 		Command:       "plan-candidate-accept",
 		Allowlist: lifecycleTransactionAllowlist{
-			RepositoryRoot: repositoryRoot, LifecycleDataRoot: filepath.Join(repositoryRoot, ".aether", "data"),
+			RepositoryRoot: session.RepositoryRoot(), LifecycleDataRoot: session.DataRoot(),
 		},
-		Fault: opts.Fault, Rename: opts.Rename,
+		Session: session, Fault: opts.Fault, Rename: opts.Rename,
 	})
 	if err != nil {
 		return empty, err
@@ -937,10 +960,10 @@ func acceptPlanCandidate(root string, request planCandidateAcceptanceRequest, op
 		path    string
 		content []byte
 	}{
-		{path: "COLONY_STATE.json", content: stateBytes},
 		{path: planningStageDataRelativePath(planningRouteCandidateRepositoryPath(candidate.Timeline.RunID)), content: candidateBytes},
-		{path: planningStageDataRelativePath(planningStageStateRepositoryPath(candidate.Timeline.RunID)), content: stageBytes},
 		{path: planningStageDataRelativePath(planningRouteAcceptanceRepositoryPath(candidate.Timeline.RunID)), content: receiptBytes},
+		{path: planningStageDataRelativePath(planningStageStateRepositoryPath(candidate.Timeline.RunID)), content: stageBytes},
+		{path: "COLONY_STATE.json", content: stateBytes},
 	} {
 		if err := tx.DeclareWrite(lifecycleTransactionRootData, target.path, target.content); err != nil {
 			return empty, err
@@ -950,9 +973,191 @@ func acceptPlanCandidate(root string, request planCandidateAcceptanceRequest, op
 		return empty, err
 	}
 	if _, err := tx.Commit(); err != nil {
+		if rollbackErr := tx.rollbackPreparedTargets(); rollbackErr != nil {
+			return empty, errors.Join(err, fmt.Errorf("rollback candidate acceptance: %w", rollbackErr))
+		}
 		return empty, err
 	}
 	return planCandidateAcceptanceResult{Candidate: candidate, Revision: revision, Receipt: receipt}, nil
+}
+
+func loadPlanCandidateArtifactInSession(session *planningMutationSession, requestedID string) (planCandidateArtifact, error) {
+	if err := session.requireActive(); err != nil {
+		return planCandidateArtifact{}, err
+	}
+	planningRoot := filepath.Join(session.DataRoot(), "planning")
+	entries, err := os.ReadDir(planningRoot)
+	if err != nil {
+		return planCandidateArtifact{}, fmt.Errorf("read planning candidates: %w", err)
+	}
+	wanted := strings.TrimSpace(requestedID)
+	matches := make([]planCandidateArtifact, 0, 1)
+	for _, entry := range entries {
+		if entry.Type()&os.ModeSymlink != 0 {
+			return planCandidateArtifact{}, fmt.Errorf("planning run %q must not be a symlink", entry.Name())
+		}
+		if !entry.IsDir() {
+			continue
+		}
+		runID := entry.Name()
+		if err := validatePlanningTimelineSegment("run_id", runID); err != nil {
+			return planCandidateArtifact{}, err
+		}
+		content, exists, err := readOptionalPlanningStageFileInSession(session, planningRouteCandidateRepositoryPath(runID))
+		if err != nil {
+			return planCandidateArtifact{}, err
+		}
+		if !exists {
+			continue
+		}
+		var candidate colony.PlanCandidate
+		if err := decodePlanningStageJSON(content, &candidate); err != nil {
+			return planCandidateArtifact{}, fmt.Errorf("decode candidate for run %q: %w", runID, err)
+		}
+		if wanted != "" && candidate.ID != wanted {
+			continue
+		}
+		if wanted == "" && candidate.Status != colony.PlanCandidatePendingReview {
+			continue
+		}
+		if candidate.Timeline.RunID != runID {
+			return planCandidateArtifact{}, fmt.Errorf("candidate %s path does not match timeline run", candidate.ID)
+		}
+		if err := validatePlanningRecordHashes(candidate); err != nil {
+			return planCandidateArtifact{}, fmt.Errorf("candidate %s: %w", candidate.ID, err)
+		}
+		if err := candidate.Validate(); err != nil {
+			return planCandidateArtifact{}, fmt.Errorf("candidate %s: %w", candidate.ID, err)
+		}
+		stage, err := loadPlanningStageStateInSession(session, runID)
+		if err != nil {
+			return planCandidateArtifact{}, err
+		}
+		if stage.Stage != planningStageCandidateReady && stage.Stage != planningStageAccepted {
+			return planCandidateArtifact{}, fmt.Errorf("candidate %s is not at a reviewable planning boundary (stage %s)", candidate.ID, stage.Stage)
+		}
+		header, err := loadPlanCandidateRunHeaderInSession(session, candidate)
+		if err != nil {
+			return planCandidateArtifact{}, err
+		}
+		matches = append(matches, planCandidateArtifact{Candidate: candidate, Stage: stage, Header: header})
+	}
+	if len(matches) == 0 {
+		if wanted == "" {
+			return planCandidateArtifact{}, fmt.Errorf("no reviewable plan candidate found; finish iterative planning first")
+		}
+		return planCandidateArtifact{}, fmt.Errorf("plan candidate %q was not found at a reviewable boundary", wanted)
+	}
+	if len(matches) > 1 {
+		sort.Slice(matches, func(i, j int) bool { return matches[i].Candidate.CreatedAt.Before(matches[j].Candidate.CreatedAt) })
+		ids := make([]string, len(matches))
+		for i := range matches {
+			ids[i] = matches[i].Candidate.ID
+		}
+		return planCandidateArtifact{}, fmt.Errorf("multiple reviewable plan candidates are present (%s); refuse ambiguous review until obsolete runs are resolved", strings.Join(ids, ", "))
+	}
+	return matches[0], nil
+}
+
+func loadPlanCandidateRunHeaderInSession(session *planningMutationSession, candidate colony.PlanCandidate) (planningRunHeader, error) {
+	headerPath := filepath.ToSlash(filepath.Join(".aether", "data", "planning", candidate.Timeline.RunID, "run-header.json"))
+	content, exists, err := readOptionalPlanningStageFileInSession(session, headerPath)
+	if err != nil {
+		return planningRunHeader{}, err
+	}
+	if !exists {
+		return planningRunHeader{}, fmt.Errorf("candidate %s planning run header is missing", candidate.ID)
+	}
+	var header planningRunHeader
+	if err := decodePlanningStageJSON(content, &header); err != nil {
+		return planningRunHeader{}, fmt.Errorf("decode candidate planning run header: %w", err)
+	}
+	manifest, err := loadPlanningStageManifestInSession(session, header.RunID, header.StageManifestID)
+	if err != nil {
+		return planningRunHeader{}, err
+	}
+	payload := header
+	payload.ID, payload.ContentHash = "", ""
+	wantHash, err := jsonSHA256(payload)
+	if err != nil {
+		return planningRunHeader{}, fmt.Errorf("hash planning run header: %w", err)
+	}
+	if header.SchemaVersion != planningRunHeaderSchemaVersion || header.ContentHash != wantHash || header.ID != "planning-run-header-"+wantHash[:16] {
+		return planningRunHeader{}, fmt.Errorf("planning run header is not a valid immutable content address")
+	}
+	if header.RunID != manifest.RunID || header.Preset != manifest.Preset ||
+		!samePlanningScoutSpecification(header.Specification, manifest.Specification) ||
+		header.BasePlanRevisionID != manifest.BasePlanRevisionID || header.BasePlanRevisionHash != manifest.BasePlanRevisionHash {
+		return planningRunHeader{}, fmt.Errorf("planning run header does not match the first Scout manifest authority")
+	}
+	if strings.TrimSpace(header.GoalID) == "" || strings.TrimSpace(header.SessionID) == "" {
+		return planningRunHeader{}, fmt.Errorf("planning run header requires goal and session scope")
+	}
+	if manifest.Pass == 1 && (header.StageManifestID != manifest.ID || header.StageManifestHash != manifest.ContentHash || header.InputFrontierHash != manifest.InputFrontierHash) {
+		return planningRunHeader{}, fmt.Errorf("planning run header does not bind the first Scout manifest and frontier")
+	}
+	if header.Specification.RevisionID != candidate.SpecificationRevisionID || header.Specification.ContentHash != candidate.SpecificationRevisionHash {
+		return planningRunHeader{}, fmt.Errorf("candidate %s does not match its immutable planning run header", candidate.ID)
+	}
+	return header, nil
+}
+
+func verifiedPlanCandidateTimelineInSession(session *planningMutationSession, candidate colony.PlanCandidate) (planningTimeline, error) {
+	if err := validatePlanningTimelineSegment("run_id", candidate.Timeline.RunID); err != nil {
+		return planningTimeline{}, err
+	}
+	index, cards, exists, err := readPlanningTimelineChainInSession(session, candidate.Timeline.RunID)
+	if err != nil {
+		return planningTimeline{}, err
+	}
+	if !exists {
+		return planningTimeline{}, fmt.Errorf("candidate %s requires a complete indexed timeline", candidate.ID)
+	}
+	binding, err := planningTimelineBindingFor(index, cards)
+	if err != nil {
+		return planningTimeline{}, err
+	}
+	if !reflect.DeepEqual(binding, candidate.Timeline) {
+		return planningTimeline{}, fmt.Errorf("candidate %s timeline binding is stale or divergent", candidate.ID)
+	}
+	indexCopy := index
+	return planningTimeline{
+		Classification: planningTimelineCandidateOnly, RunID: candidate.Timeline.RunID,
+		Index: &indexCopy, Cards: cards, Binding: &binding,
+	}, nil
+}
+
+func loadPlanCandidateAcceptanceReceiptInSession(session *planningMutationSession, candidate colony.PlanCandidate) (*colony.PlanAcceptanceReceipt, bool, error) {
+	content, exists, err := readOptionalPlanningStageFileInSession(session, planningRouteAcceptanceRepositoryPath(candidate.Timeline.RunID))
+	if err != nil || !exists {
+		return nil, exists, err
+	}
+	var receipt colony.PlanAcceptanceReceipt
+	if err := decodePlanningStageJSON(content, &receipt); err != nil {
+		return nil, false, fmt.Errorf("decode candidate acceptance receipt: %w", err)
+	}
+	if err := receipt.Validate(); err != nil {
+		return nil, false, fmt.Errorf("validate candidate acceptance receipt: %w", err)
+	}
+	if err := validatePlanCandidateAcceptanceReceiptHash(receipt); err != nil {
+		return nil, false, err
+	}
+	return &receipt, true, nil
+}
+
+func planCandidateDerivationBase(plan colony.Plan, base planCandidateBase, baseline *colony.PlanRevision) (colony.PlanRevision, error) {
+	if base.ID == "plan-unbound" {
+		return colony.PlanRevision{ID: base.ID, PlanHash: base.Hash}, nil
+	}
+	if baseline != nil {
+		return *baseline, nil
+	}
+	for _, revision := range plan.Revisions {
+		if revision.ID == base.ID && revision.PlanHash == base.Hash {
+			return revision, nil
+		}
+	}
+	return colony.PlanRevision{}, fmt.Errorf("derived base: retained plan revision %q is unavailable", base.ID)
 }
 
 func validatePlanCandidateAcceptanceRequest(candidate colony.PlanCandidate, request planCandidateAcceptanceRequest) error {

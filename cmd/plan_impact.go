@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -20,6 +21,251 @@ type planImpactClosure struct {
 	AffectedPhaseIDs          []string `json:"affected_phase_ids"`
 	AffectedTaskIDs           []string `json:"affected_task_ids"`
 	AffectedProofIDs          []string `json:"affected_proof_ids"`
+}
+
+// derivedPlanCandidateAuthority is computed from repository facts rather than
+// the candidate's persisted assertions. SemanticDelta is the complete
+// base-to-proposal comparison; SpecificationImpact isolates successor-spec
+// invalidation so a final iteration's affected/preserved partition can be
+// checked without granting authority to candidate-authored scope markers.
+type derivedPlanCandidateAuthority struct {
+	SemanticDelta       colony.PlanningSemanticDelta
+	Impact              planImpactClosure
+	SpecificationImpact planImpactClosure
+	SemanticIDs         []string
+}
+
+// derivePlanCandidateAuthority is the pure acceptance/build/run derivation.
+// Callers must supply values loaded under one repository authority session;
+// this function performs no I/O and never consults candidate.SemanticDelta or
+// candidate proposal impact markers as proof.
+func derivePlanCandidateAuthority(base colony.PlanRevision, specification colony.Specification, proposal colony.PlanRevision) (derivedPlanCandidateAuthority, error) {
+	empty := derivedPlanCandidateAuthority{}
+	if err := validateCanonicalSpecificationState(specification); err != nil {
+		return empty, fmt.Errorf("derived specification: %w", err)
+	}
+	current, ok := currentSpecificationRevision(specification)
+	if !ok || current.Status != colony.SpecStatusApproved || current.Approval == nil {
+		return empty, fmt.Errorf("derived specification: current revision is not approved")
+	}
+	if proposal.SpecificationRevisionID != current.ID || proposal.SpecificationRevisionHash != current.ContentHash {
+		return empty, fmt.Errorf("derived proposal: specification binding is not current")
+	}
+	if err := validateStandalonePlanRevision(proposal); err != nil {
+		return empty, fmt.Errorf("derived proposal: %w", err)
+	}
+
+	beforeSpecification, err := planCandidateBaseSpecification(specification, base)
+	if err != nil {
+		return empty, err
+	}
+	beforeSource := planningSemanticSnapshotSource{Plan: colony.Plan{Phases: clonePhases(base.Phases)}, Specification: beforeSpecification}
+	if strings.TrimSpace(base.ID) != "" && base.ID != "plan-unbound" {
+		beforeCopy := base
+		beforeSource.Revision = &beforeCopy
+		beforeSource.CurrentSchema = strings.TrimSpace(base.SemanticID) != ""
+	}
+	before, err := buildPlanningSemanticSnapshot(beforeSource)
+	if err != nil {
+		return empty, fmt.Errorf("derive base plan semantics: %w", err)
+	}
+	afterSpecification := specification
+	after, err := buildPlanningSemanticSnapshot(planningSemanticSnapshotSource{
+		CurrentSchema: true,
+		Plan:          colony.Plan{AcceptancePolicy: colony.PlanAcceptanceExplicitOwner, Phases: clonePhases(proposal.Phases)},
+		Revision:      &proposal,
+		Specification: &afterSpecification,
+	})
+	if err != nil {
+		return empty, fmt.Errorf("derive proposal semantics: %w", err)
+	}
+	delta, err := comparePlanningSemanticSnapshots(before, after)
+	if err != nil {
+		return empty, fmt.Errorf("derive proposal semantic delta: %w", err)
+	}
+
+	semanticIDs := make([]string, 0)
+	changedSemanticIDs := make([]string, 0)
+	for _, section := range derivedPlanSemanticSections(delta) {
+		for _, change := range section.changes {
+			// PlanRevision aggregates child proof links after Route validation;
+			// those root-level convenience links were never iteration-delta
+			// nodes and therefore do not participate in affected markers.
+			if strings.HasPrefix(change.SemanticID, proposal.SemanticID+"::") {
+				continue
+			}
+			semanticIDs = append(semanticIDs, change.SemanticID)
+			if change.Kind != colony.PlanningSemanticChangePreserved {
+				changedSemanticIDs = append(changedSemanticIDs, change.SemanticID)
+			}
+		}
+	}
+	semanticIDs = canonicalPlanImpactIDs(semanticIDs)
+
+	specificationImpact, err := derivePlanCandidateSpecificationImpact(base, specification, current, proposal.Phases)
+	if err != nil {
+		return empty, err
+	}
+	seeds := canonicalPlanImpactIDs(append(changedSemanticIDs, specificationImpact.ChangedSpecItemIDs...))
+	impact, err := computePlanImpactFromSeeds(current, proposal.Phases, seeds, planImpactSpecificationIDs(current))
+	if err != nil {
+		return empty, fmt.Errorf("derive proposal impact closure: %w", err)
+	}
+	return derivedPlanCandidateAuthority{
+		SemanticDelta: delta, Impact: impact, SpecificationImpact: specificationImpact, SemanticIDs: semanticIDs,
+	}, nil
+}
+
+type derivedPlanSemanticSection struct {
+	name    colony.PlanningSemanticSection
+	changes []colony.PlanningSemanticChange
+}
+
+func derivedPlanSemanticSections(delta colony.PlanningSemanticDelta) []derivedPlanSemanticSection {
+	return []derivedPlanSemanticSection{
+		{name: colony.PlanningSemanticSectionPhases, changes: delta.Phases},
+		{name: colony.PlanningSemanticSectionTasks, changes: delta.Tasks},
+		{name: colony.PlanningSemanticSectionDependencies, changes: delta.Dependencies},
+		{name: colony.PlanningSemanticSectionRequirementLinks, changes: delta.RequirementLinks},
+		{name: colony.PlanningSemanticSectionAcceptanceChecks, changes: delta.AcceptanceChecks},
+		{name: colony.PlanningSemanticSectionNegativeExpectations, changes: delta.NegativeExpectations},
+		{name: colony.PlanningSemanticSectionRecoveryExpectations, changes: delta.RecoveryExpectations},
+		{name: colony.PlanningSemanticSectionPublicPaths, changes: delta.PublicPaths},
+	}
+}
+
+func planCandidateBaseSpecification(specification colony.Specification, base colony.PlanRevision) (*colony.Specification, error) {
+	if strings.TrimSpace(base.SpecificationRevisionID) == "" {
+		copy := specification
+		return &copy, nil
+	}
+	index := specificationRevisionIndex(specification, base.SpecificationRevisionID)
+	if index < 0 {
+		return nil, fmt.Errorf("derived base: specification revision %q is not retained", base.SpecificationRevisionID)
+	}
+	historical := specification
+	historical.Revisions = append([]colony.SpecRevision(nil), specification.Revisions[:index+1]...)
+	historical.CurrentRevisionID = base.SpecificationRevisionID
+	last := &historical.Revisions[len(historical.Revisions)-1]
+	if last.ContentHash != base.SpecificationRevisionHash || last.Approval == nil {
+		return nil, fmt.Errorf("derived base: specification binding is not exact approved history")
+	}
+	last.Status = colony.SpecStatusApproved
+	return &historical, nil
+}
+
+func derivePlanCandidateSpecificationImpact(base colony.PlanRevision, specification colony.Specification, current colony.SpecRevision, phases []colony.Phase) (planImpactClosure, error) {
+	if strings.TrimSpace(base.SpecificationRevisionID) == "" || base.SpecificationRevisionID == current.ID {
+		return planImpactClosure{SpecificationRevisionID: current.ID, SpecificationRevisionHash: current.ContentHash}, nil
+	}
+	from := specificationRevisionIndex(specification, base.SpecificationRevisionID)
+	to := specificationRevisionIndex(specification, current.ID)
+	if from < 0 || to <= from {
+		return planImpactClosure{}, fmt.Errorf("derived specification impact: base revision %q is not an ancestor of %q", base.SpecificationRevisionID, current.ID)
+	}
+	changed := make([]string, 0)
+	for index := from + 1; index <= to; index++ {
+		changed = append(changed, specificationDeltaChangedIDs(specification.Revisions[index].Delta)...)
+	}
+	impact, err := computePlanImpactFromSeeds(current, phases, changed, planImpactSpecificationIDs(current))
+	if err != nil {
+		return planImpactClosure{}, fmt.Errorf("derived specification impact: %w", err)
+	}
+	return impact, nil
+}
+
+// validateDerivedPlanCandidateAuthority checks the complete stopped iteration
+// against independently rebuilt proposal semantics. The immutable final card
+// supplies evidence attribution and iteration-relative classifications; it
+// cannot introduce a semantic ID or after-hash absent from the pure derivation.
+func validateDerivedPlanCandidateAuthority(candidate colony.PlanCandidate, finalCard colony.PlanningIterationCard, derived derivedPlanCandidateAuthority) error {
+	if !reflect.DeepEqual(candidate.SemanticDelta.Phases, finalCard.SemanticDelta.Phases) ||
+		!reflect.DeepEqual(candidate.SemanticDelta.Tasks, finalCard.SemanticDelta.Tasks) ||
+		!reflect.DeepEqual(candidate.SemanticDelta.Dependencies, finalCard.SemanticDelta.Dependencies) ||
+		!reflect.DeepEqual(candidate.SemanticDelta.RequirementLinks, finalCard.SemanticDelta.RequirementLinks) ||
+		!reflect.DeepEqual(candidate.SemanticDelta.AcceptanceChecks, finalCard.SemanticDelta.AcceptanceChecks) ||
+		!reflect.DeepEqual(candidate.SemanticDelta.NegativeExpectations, finalCard.SemanticDelta.NegativeExpectations) ||
+		!reflect.DeepEqual(candidate.SemanticDelta.RecoveryExpectations, finalCard.SemanticDelta.RecoveryExpectations) ||
+		!reflect.DeepEqual(candidate.SemanticDelta.PublicPaths, finalCard.SemanticDelta.PublicPaths) {
+		return fmt.Errorf("derived semantic delta does not match the immutable final iteration")
+	}
+
+	allowedAuthorities := append([]colony.PlanningAuthorityImpact(nil), finalCard.SemanticDelta.AuthorityImpacts...)
+	if len(candidate.SemanticDelta.AuthorityImpacts) == len(allowedAuthorities)+1 {
+		expected, err := derivedPlanCandidateApprovalImpact(candidate)
+		if err != nil {
+			return err
+		}
+		allowedAuthorities = append(allowedAuthorities, expected)
+	}
+	if len(candidate.SemanticDelta.AuthorityImpacts) != len(allowedAuthorities) ||
+		(len(allowedAuthorities) > 0 && !reflect.DeepEqual(candidate.SemanticDelta.AuthorityImpacts, allowedAuthorities)) {
+		return fmt.Errorf("derived authority impacts do not match approved specification authority: candidate=%+v allowed=%+v", candidate.SemanticDelta.AuthorityImpacts, allowedAuthorities)
+	}
+
+	expected := make(map[string]colony.PlanningSemanticChange)
+	for _, section := range derivedPlanSemanticSections(derived.SemanticDelta) {
+		for _, change := range section.changes {
+			expected[string(section.name)+"\x00"+change.SemanticID] = change
+		}
+	}
+	for _, section := range derivedPlanSemanticSections(finalCard.SemanticDelta) {
+		for _, change := range section.changes {
+			truth, ok := expected[string(section.name)+"\x00"+change.SemanticID]
+			if !ok {
+				return fmt.Errorf("derived %s has no semantic node %q", section.name, change.SemanticID)
+			}
+			if change.Kind == colony.PlanningSemanticChangeRemoved {
+				if truth.Kind != colony.PlanningSemanticChangeRemoved || truth.BeforeHash != change.BeforeHash {
+					return fmt.Errorf("derived %s removal %q is false", section.name, change.SemanticID)
+				}
+				continue
+			}
+			// Phase/task Route snapshots additionally bind generation-only task
+			// declarations (files and user-facing classification) that are not
+			// duplicated into PlanRevision. Their stable IDs and complete final
+			// card bytes remain verified here; proof/dependency hashes are fully
+			// reproducible from the accepted tuple and must match exactly.
+			reproducibleHash := section.name != colony.PlanningSemanticSectionPhases && section.name != colony.PlanningSemanticSectionTasks
+			if truth.AfterHash == "" || (reproducibleHash && truth.AfterHash != change.AfterHash) {
+				return fmt.Errorf("derived %s after-hash for %q does not match proposal", section.name, change.SemanticID)
+			}
+			if truth.Kind == colony.PlanningSemanticChangePreserved && change.Kind != colony.PlanningSemanticChangePreserved {
+				return fmt.Errorf("derived %s semantic node %q is preserved, not changed", section.name, change.SemanticID)
+			}
+		}
+	}
+
+	affected, preserved := derivedPlanCandidateScope(finalCard.SemanticDelta, derived)
+	if !reflect.DeepEqual(canonicalPlanImpactIDs(candidate.Proposal.AffectedSemanticIDs), affected) ||
+		!reflect.DeepEqual(canonicalPlanImpactIDs(candidate.Proposal.PreservedSemanticIDs), preserved) {
+		return fmt.Errorf("derived affected/preserved scope does not match proposal markers: candidate=%v/%v derived=%v/%v", candidate.Proposal.AffectedSemanticIDs, candidate.Proposal.PreservedSemanticIDs, affected, preserved)
+	}
+	return nil
+}
+
+func derivedPlanCandidateScope(finalDelta colony.PlanningSemanticDelta, derived derivedPlanCandidateAuthority) ([]string, []string) {
+	affected, _ := planningRouteDeltaSemanticIDs(finalDelta)
+	universe := planImpactIDSet(derived.SemanticIDs)
+	for _, id := range derived.SpecificationImpact.AffectedSemanticIDs {
+		if _, belongs := universe[id]; belongs {
+			affected = append(affected, id)
+		}
+	}
+	affected = canonicalPlanImpactIDs(affected)
+	return affected, planImpactDifference(derived.SemanticIDs, affected)
+}
+
+func derivedPlanCandidateApprovalImpact(candidate colony.PlanCandidate) (colony.PlanningAuthorityImpact, error) {
+	impact := colony.PlanningAuthorityImpact{
+		Kind: colony.PlanningAuthoritySpecApproval, SourceID: candidate.SpecificationRevisionID,
+		AffectedSemanticIDs: canonicalPlanImpactIDs(candidate.Proposal.AffectedSemanticIDs),
+		Rationale:           "The owner-approved specification authorizes this exact review payload.",
+	}
+	if err := colony.AddressPlanningAuthorityImpact(&impact); err != nil {
+		return colony.PlanningAuthorityImpact{}, fmt.Errorf("derive specification approval impact: %w", err)
+	}
+	return impact, nil
 }
 
 type planImpactTask struct {

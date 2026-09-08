@@ -94,6 +94,7 @@ func TestPlanCandidateAcceptanceIntegrity200(t *testing.T) {
 				t.Fatalf("re-address forged candidate: %v", err)
 			}
 			planCandidateSemanticIntegrity200Write(t, filepath.Join(root, filepath.FromSlash(planningRouteCandidateRepositoryPath(candidate.Timeline.RunID))), candidate)
+			planCandidateAcceptance200PrimeSessionLocks(t, root, candidate)
 			before := planCandidateAcceptance200Inventory(t, root)
 			if _, err := acceptPlanCandidate(root, planCandidateTestAcceptanceRequest(candidate), planCandidateAcceptanceOptions{
 				AcceptedBy: "owner:plan-31-integrity", AcceptedAt: time.Date(2026, time.September, 9, 9, 0, 0, 0, time.UTC),
@@ -110,7 +111,7 @@ func TestPlanCandidateAcceptanceIntegrity200(t *testing.T) {
 			"after_stage:target-0003", "after_stage:target-0004", "after_intent",
 			"after_target_commit:target-0001", "after_target_commit:target-0002",
 			"after_target_commit:target-0003", "after_target_commit:target-0004",
-			"after_root_commit:data", "after_global_verification",
+			"after_root_commit:root-01-lifecycle_data", "after_global_verification",
 		} {
 			t.Run(strings.ReplaceAll(point, ":", "_"), func(t *testing.T) {
 				root := planCandidateAcceptance200CloneRepository(t, seedRoot)
@@ -215,6 +216,9 @@ func TestPlanCandidateAcceptanceConcurrentProcesses200(t *testing.T) {
 		if results[index].Error != "" {
 			t.Fatalf("acceptance helper %d refused exact replay: %s", index, results[index].Error)
 		}
+		if results[index].Result == nil {
+			t.Fatalf("acceptance helper %d returned no result", index)
+		}
 	}
 	if results[0].Result.Replayed == results[1].Result.Replayed {
 		t.Fatalf("process replay flags = %t/%t, want one activation and one replay", results[0].Result.Replayed, results[1].Result.Replayed)
@@ -234,8 +238,8 @@ func TestPlanCandidateAcceptanceConcurrentProcesses200(t *testing.T) {
 }
 
 type planCandidateAcceptance200ProcessResult struct {
-	Result planCandidateAcceptanceResult `json:"result"`
-	Error  string                        `json:"error,omitempty"`
+	Result *planCandidateAcceptanceResult `json:"result,omitempty"`
+	Error  string                         `json:"error,omitempty"`
 }
 
 func planCandidateAcceptance200ProcessHelper(t *testing.T) {
@@ -260,9 +264,11 @@ func planCandidateAcceptance200ProcessHelper(t *testing.T) {
 	result, err := acceptPlanCandidate(root, request, planCandidateAcceptanceOptions{
 		AcceptedBy: "owner:plan-31-process", AcceptedAt: time.Date(2026, time.September, 9, 9, 15, 0, 0, time.UTC),
 	})
-	response := planCandidateAcceptance200ProcessResult{Result: result}
+	response := planCandidateAcceptance200ProcessResult{}
 	if err != nil {
 		response.Error = err.Error()
+	} else {
+		response.Result = &result
 	}
 	content, marshalErr := json.Marshal(response)
 	if marshalErr != nil {
@@ -339,7 +345,8 @@ func planCandidateAcceptance200AuthorityInventory(t *testing.T, root string) map
 	t.Helper()
 	result := planCandidateAcceptance200Inventory(t, root)
 	for path := range result {
-		if strings.HasPrefix(path, ".aether/data/.aether-transactions/") ||
+		if strings.HasPrefix(path, ".aether/locks/") || path == ".aether/locks" ||
+			strings.HasPrefix(path, ".aether/data/.aether-transactions/") ||
 			strings.HasPrefix(path, ".aether/data/transactions/") ||
 			path == ".aether/data/.aether-transactions" || path == ".aether/data/transactions" {
 			delete(result, path)
@@ -411,4 +418,23 @@ func planCandidateAcceptance200CloneRepository(t *testing.T, source string) stri
 		t.Fatalf("clone acceptance repository: %v", err)
 	}
 	return destination
+}
+
+func planCandidateAcceptance200PrimeSessionLocks(t *testing.T, root string, candidate colony.PlanCandidate) {
+	t.Helper()
+	if err := withPlanningMutationSession(root, "plan-31-test-prime", func(session *planningMutationSession) error {
+		if _, err := loadPlanCandidateArtifactInSession(session, candidate.ID); err != nil {
+			return err
+		}
+		if _, err := loadSpecificationColonyStateInSession(session); err != nil {
+			return err
+		}
+		if _, err := verifiedPlanCandidateTimelineInSession(session, candidate); err != nil {
+			return err
+		}
+		_, _, err := loadPlanCandidateAcceptanceReceiptInSession(session, candidate)
+		return err
+	}); err != nil {
+		t.Fatalf("prime acceptance session locks: %v", err)
+	}
 }

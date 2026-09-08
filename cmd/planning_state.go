@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -20,6 +22,49 @@ var planningSHA256Pattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 func normalizePlanningState(state colony.ColonyState) (colony.ColonyState, error) {
 	if err := validatePlanningState(state); err != nil {
 		return colony.ColonyState{}, err
+	}
+	return state, nil
+}
+
+// loadSpecificationColonyStateInSession decodes the exact COLONY_STATE.json
+// baseline captured beneath Plan 28's repository lock. It mirrors the normal
+// read-only compatibility normalization without performing any second path
+// read that could mix authority moments.
+func loadSpecificationColonyStateInSession(session *planningMutationSession) (colony.ColonyState, error) {
+	if err := session.requireActive(); err != nil {
+		return colony.ColonyState{}, err
+	}
+	content, exists, err := session.ReadFile(lifecycleTransactionRootData, "COLONY_STATE.json")
+	if err != nil {
+		return colony.ColonyState{}, fmt.Errorf("load specification state: %w", err)
+	}
+	if !exists {
+		return colony.ColonyState{}, fmt.Errorf("load specification state: %w", os.ErrNotExist)
+	}
+	var state colony.ColonyState
+	if err := json.Unmarshal(content, &state); err != nil {
+		repaired, changed, repairErr := repairLegacyNumericStringFields(content)
+		if repairErr != nil || !changed {
+			return colony.ColonyState{}, fmt.Errorf("load specification state: %w", err)
+		}
+		if decodeErr := json.Unmarshal(repaired, &state); decodeErr != nil {
+			return colony.ColonyState{}, fmt.Errorf("load specification state: %w", err)
+		}
+	}
+	state = normalizeLegacyColonyState(state)
+	if state.Plan.AcceptancePolicy == "" && len(state.Plan.Phases) > 0 {
+		if planHasCurrentAuthority(state.Plan) {
+			return colony.ColonyState{}, fmt.Errorf("load specification planning state: current planning authority is partially populated without acceptance_policy")
+		}
+		state.Plan.AcceptancePolicy = colony.PlanAcceptanceLegacyUnbound
+	}
+	if err := validatePlanningState(state); err != nil {
+		return colony.ColonyState{}, fmt.Errorf("load specification planning state: %w", err)
+	}
+	if state.Specification != nil {
+		if err := validateCanonicalSpecificationState(*state.Specification); err != nil {
+			return colony.ColonyState{}, fmt.Errorf("load specification state: %w", err)
+		}
 	}
 	return state, nil
 }
@@ -425,12 +470,10 @@ func validatePlanCandidateState(candidate colony.PlanCandidate, revisions map[st
 	if err := validateContentAddressedID("id", candidate.ID, candidate.ContentHash); err != nil {
 		return err
 	}
-	canonical := validatePlanningRecordHashes(candidate) == nil
-	if canonical {
-		if err := candidate.Validate(); err != nil {
-			return err
-		}
-	} else if err := validateRetainedPlanCandidateShape(candidate); err != nil {
+	if err := validatePlanningRecordHashes(candidate); err != nil {
+		return fmt.Errorf("candidate canonical identity: %w", err)
+	}
+	if err := candidate.Validate(); err != nil {
 		return err
 	}
 
@@ -466,11 +509,7 @@ func validatePlanCandidateState(candidate colony.PlanCandidate, revisions map[st
 	if candidate.Proposal.ID == "" || candidate.ProposalHash != candidate.Proposal.PlanHash {
 		return fmt.Errorf("proposal binding is incomplete")
 	}
-	if canonical {
-		if err := validateStandalonePlanRevision(candidate.Proposal); err != nil {
-			return fmt.Errorf("proposal: %w", err)
-		}
-	} else if err := validateRetainedPlanRevisionShape(candidate.Proposal); err != nil {
+	if err := validateStandalonePlanRevision(candidate.Proposal); err != nil {
 		return fmt.Errorf("proposal: %w", err)
 	}
 	if err := validateCandidateGapReachability(candidate); err != nil {

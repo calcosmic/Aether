@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -61,14 +62,14 @@ func TestPlanningStateRejectsDistinctCorruption(t *testing.T) {
 
 	t.Run("duplicate stable semantic ID", func(t *testing.T) {
 		state, _ := validCurrentPlanningState(t)
-		state.Plan.Revisions[1].SemanticID = state.Plan.Phases[0].SemanticID
+		state.Plan.Revisions[len(state.Plan.Revisions)-1].SemanticID = state.Plan.Phases[0].SemanticID
 		assertPlanningStateError(t, validatePlanningState(state), "duplicate stable ID")
 	})
 
 	t.Run("candidate binding to absent revision", func(t *testing.T) {
 		state, _ := validCurrentPlanningState(t)
 		state.Plan.Candidates[0].SpecificationRevisionID = "missing-spec-revision"
-		assertPlanningStateError(t, validatePlanningState(state), "specification_revision_id")
+		assertPlanningStateError(t, validatePlanningState(state), "candidate content address")
 	})
 
 	t.Run("accepted candidate remains pending", func(t *testing.T) {
@@ -161,162 +162,48 @@ func TestPlanningStateLegacyAggregateRemainsAuthorityFree(t *testing.T) {
 	}
 }
 
+var (
+	currentPlanningStateFixtureOnce sync.Once
+	currentPlanningStateFixtureJSON []byte
+	currentPlanningCardsFixtureJSON []byte
+)
+
 func validCurrentPlanningState(t *testing.T) (colony.ColonyState, []colony.PlanningIterationCard) {
 	t.Helper()
-
-	now := time.Date(2026, time.September, 7, 10, 0, 0, 0, time.UTC)
-	specHash := planningStateTestDigest("spec-revision-current")
-	specRevisionID := planningStateTestAddress("spec-revision", specHash)
-	specificationID := "spec-goal-200"
-	itemHash := func(label string) string { return planningStateTestDigest("spec-item-" + label) }
-	revision := colony.SpecRevision{
-		SchemaVersion:   colony.SpecificationSchemaVersion,
-		ID:              specRevisionID,
-		SpecificationID: specificationID,
-		CreatedAt:       now,
-		ContentHash:     specHash,
-		Scope: colony.SpecScope{
-			Kind: colony.SpecScopeWholeGoal, GoalID: "goal-200", SessionID: "session-200",
-		},
-		Status: colony.SpecStatusApproved,
-		Outcomes: []colony.SpecOutcome{{
-			ID: "outcome-plan-understood", Description: "The owner understands the plan", ContentHash: itemHash("outcome"), EvidenceIDs: []string{"evidence-1"},
-		}},
-		IncludedBehaviors: []colony.SpecIncludedBehavior{{
-			ID: "behavior-visible-loop", Description: "Show grounded iterations", ContentHash: itemHash("behavior"), EvidenceIDs: []string{"evidence-1"},
-		}},
-		Exclusions: []colony.SpecExclusion{{
-			ID: "exclusion-worker-cycle", Description: "Do not change execution", ContentHash: itemHash("exclusion"), EvidenceIDs: []string{"evidence-1"},
-		}},
-		BindingDecisions: []colony.SpecBindingDecision{{
-			ID: "decision-explicit-acceptance", Description: "Acceptance is explicit", ContentHash: itemHash("decision"), EvidenceIDs: []string{"evidence-1"},
-		}},
-		Requirements: []colony.SpecRequirement{{
-			ID: "req-grounded-plan", Description: "The plan is grounded", ContentHash: itemHash("requirement"), EvidenceIDs: []string{"evidence-1"},
-		}},
-		AcceptanceChecks: []colony.SpecAcceptanceCheck{{
-			ID: "check-grounded-plan", Description: "Grounding is proven", Verification: "run focused tests", ContentHash: itemHash("acceptance"), EvidenceIDs: []string{"evidence-1"},
-		}},
-		NegativeExpectations: []colony.SpecNegativeExpectation{{
-			ID: "negative-no-fabrication", Description: "Do not invent approval", ContentHash: itemHash("negative"), EvidenceIDs: []string{"evidence-1"},
-		}},
-		RecoveryExpectations: []colony.SpecRecoveryExpectation{{
-			ID: "recovery-replay", Description: "Replay is exact", ContentHash: itemHash("recovery"), EvidenceIDs: []string{"evidence-1"},
-		}},
-		AffectedPublicPaths: []colony.SpecPublicPath{{
-			ID: "path-ant-plan", Path: "/ant-plan", Description: "Plan visibly", ContentHash: itemHash("path"), EvidenceIDs: []string{"evidence-1"},
-		}},
+	currentPlanningStateFixtureOnce.Do(func() {
+		root, candidate := planCandidateTestPending(t)
+		accepted, err := acceptPlanCandidate(root, planCandidateTestAcceptanceRequest(candidate), planCandidateAcceptanceOptions{
+			AcceptedBy: "owner", AcceptedAt: time.Date(2026, time.September, 7, 20, 0, 0, 0, time.UTC),
+		})
+		if err != nil {
+			t.Fatalf("accept production-addressed planning-state fixture: %v", err)
+		}
+		state, err := loadSpecificationColonyState(root)
+		if err != nil {
+			t.Fatalf("load production-addressed planning-state fixture: %v", err)
+		}
+		timeline, err := loadPlanningTimeline(root, accepted.Candidate.Timeline.RunID)
+		if err != nil {
+			t.Fatalf("load production-addressed planning timeline: %v", err)
+		}
+		currentPlanningStateFixtureJSON, err = json.Marshal(state)
+		if err != nil {
+			t.Fatalf("marshal production-addressed planning-state fixture: %v", err)
+		}
+		currentPlanningCardsFixtureJSON, err = json.Marshal(timeline.Cards)
+		if err != nil {
+			t.Fatalf("marshal production-addressed planning cards: %v", err)
+		}
+	})
+	var state colony.ColonyState
+	if err := json.Unmarshal(currentPlanningStateFixtureJSON, &state); err != nil {
+		t.Fatalf("clone production-addressed planning-state fixture: %v", err)
 	}
-	revision.Delta = colony.SpecRevisionDelta{
-		Outcomes:             colony.SpecItemDelta{AddedIDs: []string{revision.Outcomes[0].ID}},
-		IncludedBehaviors:    colony.SpecItemDelta{AddedIDs: []string{revision.IncludedBehaviors[0].ID}},
-		Exclusions:           colony.SpecItemDelta{AddedIDs: []string{revision.Exclusions[0].ID}},
-		BindingDecisions:     colony.SpecItemDelta{AddedIDs: []string{revision.BindingDecisions[0].ID}},
-		Requirements:         colony.SpecItemDelta{AddedIDs: []string{revision.Requirements[0].ID}},
-		AcceptanceChecks:     colony.SpecItemDelta{AddedIDs: []string{revision.AcceptanceChecks[0].ID}},
-		NegativeExpectations: colony.SpecItemDelta{AddedIDs: []string{revision.NegativeExpectations[0].ID}},
-		RecoveryExpectations: colony.SpecItemDelta{AddedIDs: []string{revision.RecoveryExpectations[0].ID}},
-		AffectedPublicPaths:  colony.SpecItemDelta{AddedIDs: []string{revision.AffectedPublicPaths[0].ID}},
+	var cards []colony.PlanningIterationCard
+	if err := json.Unmarshal(currentPlanningCardsFixtureJSON, &cards); err != nil {
+		t.Fatalf("clone production-addressed planning cards: %v", err)
 	}
-	revision.Approval = &colony.SpecApprovalReceipt{
-		SchemaVersion: colony.SpecificationSchemaVersion, ID: "spec-approval-1", SpecificationID: specificationID,
-		RevisionID: specRevisionID, RevisionContentHash: specHash, ApprovalTokenHash: planningStateTestDigest("spec-approval-token"),
-		ApprovedBy: "owner", ApprovedAt: now.Add(time.Minute),
-	}
-	specification := &colony.Specification{
-		SchemaVersion: colony.SpecificationSchemaVersion, ID: specificationID, GoalID: "goal-200",
-		CurrentRevisionID: specRevisionID, Revisions: []colony.SpecRevision{revision},
-	}
-
-	cards := []colony.PlanningIterationCard{validPlanningIterationCardForTest(t, 1, now.Add(2*time.Minute))}
-	timeline := validPlanningTimelineBindingForTest(t, cards)
-	candidateHash := planningStateTestDigest("candidate-current")
-	candidateID := planningStateTestAddress("plan-candidate", candidateHash)
-
-	baseTaskID := "1.1"
-	basePhases := []colony.Phase{{
-		ID: 1, Name: "Base", Status: colony.PhaseReady,
-		Tasks: []colony.Task{{ID: taskIDPtr(baseTaskID), Goal: "Base task", Status: colony.TaskPending}},
-	}}
-	baseHash, err := planDefinitionHash(basePhases)
-	if err != nil {
-		t.Fatalf("hash base plan: %v", err)
-	}
-	baseRevision := colony.PlanRevision{
-		SchemaVersion: 1, Number: 1, ID: "plan-r1-" + baseHash[:12], CreatedAt: now.Format(time.RFC3339Nano),
-		ReasonType: colony.PlanRevisionLegacyImport, Reason: "Imported base", PlanHash: baseHash, Phases: basePhases,
-	}
-
-	taskID := "1.1"
-	activePhases := []colony.Phase{{
-		ID: 1, Name: "Grounded", Status: colony.PhaseReady, SemanticID: "phase-grounded",
-		RequirementProofLinks: []string{"req-grounded-plan"}, AcceptanceProofLinks: []string{"check-grounded-plan"},
-		NegativeProofLinks: []string{"negative-no-fabrication"}, RecoveryProofLinks: []string{"recovery-replay"}, PublicPathProofLinks: []string{"path-ant-plan"},
-		SpecificationRevisionID: specRevisionID, SpecificationRevisionHash: specHash,
-		CandidateID: candidateID, CandidateContentHash: candidateHash, PlanningTimelineID: timeline.ID, PlanningTimelineDigest: timeline.TimelineDigest,
-		Tasks: []colony.Task{{
-			ID: taskIDPtr(taskID), Goal: "Execute the grounded plan", Status: colony.TaskPending, SemanticID: "task-grounded",
-			RequirementProofLinks: []string{"req-grounded-plan"}, AcceptanceProofLinks: []string{"check-grounded-plan"},
-			NegativeProofLinks: []string{"negative-no-fabrication"}, RecoveryProofLinks: []string{"recovery-replay"}, PublicPathProofLinks: []string{"path-ant-plan"},
-			SpecificationRevisionID: specRevisionID, SpecificationRevisionHash: specHash,
-			CandidateID: candidateID, CandidateContentHash: candidateHash, PlanningTimelineID: timeline.ID, PlanningTimelineDigest: timeline.TimelineDigest,
-		}},
-	}}
-	activeHash, err := planDefinitionHash(activePhases)
-	if err != nil {
-		t.Fatalf("hash active plan: %v", err)
-	}
-	activeRevision := colony.PlanRevision{
-		SchemaVersion: 1, Number: 2, ID: "plan-r2-" + activeHash[:12], ParentID: baseRevision.ID,
-		CreatedAt: now.Add(3 * time.Minute).Format(time.RFC3339Nano), ReasonType: colony.PlanRevisionResearch,
-		Reason: "Grounded iteration", PlanHash: activeHash, Phases: activePhases, SemanticID: "plan-grounded",
-		RequirementProofLinks: []string{"req-grounded-plan"}, AcceptanceProofLinks: []string{"check-grounded-plan"},
-		NegativeProofLinks: []string{"negative-no-fabrication"}, RecoveryProofLinks: []string{"recovery-replay"}, PublicPathProofLinks: []string{"path-ant-plan"},
-		SpecificationRevisionID: specRevisionID, SpecificationRevisionHash: specHash,
-		CandidateID: candidateID, CandidateContentHash: candidateHash, PlanningTimelineID: timeline.ID, PlanningTimelineDigest: timeline.TimelineDigest,
-	}
-
-	assessments := validPlanningAssessmentsForTest()
-	delta := validPlanningSemanticDeltaForTest()
-	stop := validPlanningStopForTest()
-	residualGap := assessments[2].RemainingGap
-	stop.SelectedGapID = residualGap.ID
-	stop.ResidualGapIDs = []string{residualGap.ID}
-	recommendationHash := planningStateTestDigest("queen-recommendation")
-	recommendation := colony.QueenPlanRecommendation{
-		SchemaVersion: colony.PlanningSchemaVersion, ID: planningStateTestAddress("queen-recommendation", recommendationHash), ContentHash: recommendationHash,
-		CandidateID: candidateID, Disposition: colony.PlanRecommendationAccept, EvidenceIDs: []string{"evidence-1"},
-		Rationale: "The grounded route is ready", Producer: colony.PlanRecommendationProducerQueen, ProducerID: "go-queen/v1", CreatedAt: now.Add(4 * time.Minute),
-	}
-	acceptanceHash := planningStateTestDigest("plan-acceptance")
-	acceptance := &colony.PlanAcceptanceReceipt{
-		SchemaVersion: colony.PlanAcceptanceSchemaVersion, ID: planningStateTestAddress("plan-acceptance", acceptanceHash), ContentHash: acceptanceHash,
-		CandidateID: candidateID, CandidateContentHash: candidateHash,
-		SpecificationRevisionID: specRevisionID, SpecificationRevisionHash: specHash,
-		BasePlanRevisionID: baseRevision.ID, BasePlanRevisionHash: baseHash,
-		TimelineID: timeline.ID, TimelineDigest: timeline.TimelineDigest, ProposalHash: activeHash,
-		AcceptanceTokenHash: planningStateTestDigest("plan-acceptance-token"), AcceptedBy: "owner", AcceptedAt: now.Add(5 * time.Minute),
-		ActivatedPlanRevisionID: activeRevision.ID, ActivatedPlanRevisionHash: activeHash,
-	}
-	candidate := colony.PlanCandidate{
-		SchemaVersion: colony.PlanCandidateSchemaVersion, ID: candidateID, ContentHash: candidateHash, Status: colony.PlanCandidateAccepted,
-		CreatedAt: now.Add(4 * time.Minute), ExpiresAt: now.Add(24 * time.Hour), Proposal: activeRevision, ProposalHash: activeHash,
-		BasePlanRevisionID: baseRevision.ID, BasePlanRevisionHash: baseHash,
-		SpecificationRevisionID: specRevisionID, SpecificationRevisionHash: specHash,
-		Timeline: timeline, StopDecision: stop, DimensionAssessments: assessments, SemanticDelta: delta,
-		ResidualGaps:            []colony.PlanningGap{residualGap},
-		EvidenceThatWouldChange: "A new material risk would reopen planning", Recommendation: recommendation, Acceptance: acceptance,
-	}
-
-	goal := "Restore iterative planning"
-	return colony.ColonyState{
-		Goal: &goal, SessionID: planningStateStringPtr("session-200"), CurrentPhase: 1, State: colony.StateREADY,
-		Specification: specification,
-		Plan: colony.Plan{
-			AcceptancePolicy: colony.PlanAcceptanceExplicitOwner, ActiveRevisionID: activeRevision.ID,
-			Candidates: []colony.PlanCandidate{candidate}, Revisions: []colony.PlanRevision{baseRevision, activeRevision}, Phases: activePhases,
-		},
-	}, cards
+	return state, cards
 }
 
 func validPlanningIterationCardForTest(t *testing.T, iteration int, createdAt time.Time) colony.PlanningIterationCard {
@@ -397,16 +284,22 @@ func validPlanningTimelineBindingForTest(t *testing.T, cards []colony.PlanningIt
 	if err != nil {
 		t.Fatalf("hash planning timeline: %v", err)
 	}
-	bindingHash := planningStateTestDigest("timeline-binding-" + digest)
 	cardIDs := make([]string, len(cards))
 	for i := range cards {
 		cardIDs[i] = cards[i].ID
 	}
-	return colony.PlanningTimelineBinding{
-		SchemaVersion: colony.PlanningTimelineSchemaVersion, ID: planningStateTestAddress("planning-timeline", bindingHash), ContentHash: bindingHash,
-		RunID: cards[0].RunID, CardIDs: cardIDs, FirstCardHash: cards[0].ContentHash, LastCardHash: cards[len(cards)-1].ContentHash,
+	binding := colony.PlanningTimelineBinding{
+		SchemaVersion: colony.PlanningTimelineSchemaVersion,
+		RunID:         cards[0].RunID, CardIDs: cardIDs, FirstCardHash: cards[0].ContentHash, LastCardHash: cards[len(cards)-1].ContentHash,
 		TimelineDigest: digest, Path: ".aether/data/planning/planning-run-200/timeline.json",
 	}
+	bindingHash, err := planningTimelineBindingContentHash(binding)
+	if err != nil {
+		t.Fatalf("hash canonical planning timeline binding: %v", err)
+	}
+	binding.ContentHash = bindingHash
+	binding.ID = "planning-timeline-" + bindingHash[:12]
+	return binding
 }
 
 func clonePlanningCards(t *testing.T, cards []colony.PlanningIterationCard) []colony.PlanningIterationCard {
