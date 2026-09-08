@@ -145,10 +145,12 @@ type planningStageReceiptChain struct {
 // separate from output and finalization so resume can distinguish retry from
 // finalize without guessing from worker liveness.
 func recordPlanningStageDispatch(root string, state planningStageState, manifest planningStageManifest, opts planningStageWriteOptions) error {
-	repositoryRoot, dataRoot, err := planningStageRoots(root)
-	if err != nil {
-		return err
-	}
+	return withPlanningMutationSession(root, "planning-stage-dispatch", func(session *planningMutationSession) error {
+		return recordPlanningStageDispatchInSession(session, state, manifest, opts)
+	})
+}
+
+func recordPlanningStageDispatchInSession(session *planningMutationSession, state planningStageState, manifest planningStageManifest, opts planningStageWriteOptions) error {
 	if err := validatePlanningStageManifest(manifest); err != nil {
 		return err
 	}
@@ -166,23 +168,25 @@ func recordPlanningStageDispatch(root string, state planningStageState, manifest
 	manifestPath := planningStageManifestRepositoryPath(manifest.RunID, manifest.ID)
 	statePath := planningStageStateRepositoryPath(manifest.RunID)
 
-	if existing, ok, err := readOptionalPlanningStageFile(repositoryRoot, manifestPath); err != nil {
+	existing, manifestExists, err := readOptionalPlanningStageFileInSession(session, manifestPath)
+	if err != nil {
 		return err
-	} else if ok {
+	}
+	current, stateExists, err := readOptionalPlanningStageFileInSession(session, statePath)
+	if err != nil {
+		return err
+	}
+	if manifestExists {
 		if !bytes.Equal(existing, manifestBytes) {
 			return &planningStageReceiptConflictError{ManifestID: manifest.ID, Detail: "persisted manifest bytes differ from the authorized manifest"}
 		}
-		current, exists, err := readOptionalPlanningStageFile(repositoryRoot, statePath)
-		if err != nil {
-			return err
-		}
-		if exists && bytes.Equal(current, stateBytes) {
+		if stateExists && bytes.Equal(current, stateBytes) {
 			return nil
 		}
 		return &planningStageReceiptConflictError{ManifestID: manifest.ID, Detail: "dispatch replay does not match the current planning state"}
 	}
 
-	config := planningStageWriteConfig(repositoryRoot, dataRoot, "planning-stage-dispatch-"+manifest.ContentHash[:24], "planning-stage-dispatch", opts)
+	config := planningStageWriteConfigInSession(session, "planning-stage-dispatch-"+manifest.ContentHash[:24], "planning-stage-dispatch", opts)
 	expected := map[string][]byte{
 		planningStageDataRelativePath(manifestPath): manifestBytes,
 		planningStageDataRelativePath(statePath):    stateBytes,
@@ -213,25 +217,31 @@ func recordPlanningStageDispatch(root string, state planningStageState, manifest
 // manifest. The path is write-once: an exact retry is a no-op and different
 // bytes are a typed conflict.
 func writePlanningStageOutput(root string, manifest planningStageManifest, output []byte, opts planningStageWriteOptions) (planningStageOutputReference, error) {
+	var reference planningStageOutputReference
+	err := withPlanningMutationSession(root, "planning-stage-output", func(session *planningMutationSession) error {
+		var err error
+		reference, err = writePlanningStageOutputInSession(session, manifest, output, opts)
+		return err
+	})
+	return reference, err
+}
+
+func writePlanningStageOutputInSession(session *planningMutationSession, manifest planningStageManifest, output []byte, opts planningStageWriteOptions) (planningStageOutputReference, error) {
 	empty := planningStageOutputReference{}
-	repositoryRoot, dataRoot, err := planningStageRoots(root)
-	if err != nil {
-		return empty, err
-	}
 	if err := validatePlanningStageManifest(manifest); err != nil {
 		return empty, err
 	}
 	if len(output) == 0 {
 		return empty, fmt.Errorf("planning stage output is empty")
 	}
-	if err := validatePersistedPlanningStageManifest(repositoryRoot, manifest); err != nil {
+	if err := validatePersistedPlanningStageManifestInSession(session, manifest); err != nil {
 		return empty, err
 	}
 	reference := planningStageOutputReference{
 		Path:        planningStageOutputRepositoryPath(manifest),
 		ContentHash: planningStageBytesHash(output),
 	}
-	if existing, ok, err := readOptionalPlanningStageFile(repositoryRoot, reference.Path); err != nil {
+	if existing, ok, err := readOptionalPlanningStageFileInSession(session, reference.Path); err != nil {
 		return empty, err
 	} else if ok {
 		if planningStageBytesHash(existing) != reference.ContentHash || !bytes.Equal(existing, output) {
@@ -239,7 +249,7 @@ func writePlanningStageOutput(root string, manifest planningStageManifest, outpu
 		}
 		return reference, nil
 	}
-	state, err := loadPlanningStageState(repositoryRoot, manifest.RunID)
+	state, err := loadPlanningStageStateInSession(session, manifest.RunID)
 	if err != nil {
 		return empty, err
 	}
@@ -247,7 +257,7 @@ func writePlanningStageOutput(root string, manifest planningStageManifest, outpu
 		return empty, err
 	}
 
-	config := planningStageWriteConfig(repositoryRoot, dataRoot, "planning-stage-output-"+manifest.ContentHash[:24], "planning-stage-output", opts)
+	config := planningStageWriteConfigInSession(session, "planning-stage-output-"+manifest.ContentHash[:24], "planning-stage-output", opts)
 	expected := map[string][]byte{planningStageDataRelativePath(reference.Path): bytes.Clone(output)}
 	if resumed, err := resumePlanningStageWrite(config, expected, manifest.ID); err != nil {
 		return empty, err
@@ -275,18 +285,24 @@ func writePlanningStageOutput(root string, manifest planningStageManifest, outpu
 // resulting state in one recoverable lifecycle transaction. A completed Route
 // stage adds its iteration card and timeline index to that same transaction.
 func finalizePlanningStage(root string, manifest planningStageManifest, request planningStageFinalizeRequest) (StageReceipt, error) {
+	var receipt StageReceipt
+	err := withPlanningMutationSession(root, "planning-stage-finalize", func(session *planningMutationSession) error {
+		var err error
+		receipt, err = finalizePlanningStageInSession(session, manifest, request)
+		return err
+	})
+	return receipt, err
+}
+
+func finalizePlanningStageInSession(session *planningMutationSession, manifest planningStageManifest, request planningStageFinalizeRequest) (StageReceipt, error) {
 	empty := StageReceipt{}
-	repositoryRoot, dataRoot, err := planningStageRoots(root)
-	if err != nil {
-		return empty, err
-	}
 	if err := validatePlanningStageManifest(manifest); err != nil {
 		return empty, err
 	}
-	if err := validatePersistedPlanningStageManifest(repositoryRoot, manifest); err != nil {
+	if err := validatePersistedPlanningStageManifestInSession(session, manifest); err != nil {
 		return empty, err
 	}
-	chain, err := readPlanningStageReceiptChain(repositoryRoot, manifest.RunID)
+	chain, err := readPlanningStageReceiptChainInSession(session, manifest.RunID)
 	if err != nil {
 		return empty, err
 	}
@@ -294,10 +310,10 @@ func finalizePlanningStage(root string, manifest planningStageManifest, request 
 		if receipt.ManifestID != manifest.ID {
 			continue
 		}
-		if err := planningStageReceiptMatchesFinalizeRequest(repositoryRoot, receipt, request, chain.Index.Entries[index]); err != nil {
+		if err := planningStageReceiptMatchesFinalizeRequestInSession(session, receipt, request, chain.Index.Entries[index]); err != nil {
 			return empty, &planningStageReceiptConflictError{ManifestID: manifest.ID, Detail: err.Error()}
 		}
-		config, err := planningStageFinalizationConfig(repositoryRoot, dataRoot, manifest, planningStageWriteOptions{})
+		config, err := planningStageFinalizationConfig(session, manifest, planningStageWriteOptions{})
 		if err != nil {
 			return empty, err
 		}
@@ -312,14 +328,14 @@ func finalizePlanningStage(root string, manifest planningStageManifest, request 
 		return receipt, nil
 	}
 
-	state, err := loadPlanningStageState(repositoryRoot, manifest.RunID)
+	state, err := loadPlanningStageStateInSession(session, manifest.RunID)
 	if err != nil {
 		return empty, err
 	}
 	if err := validatePlanningStageRunningState(state, manifest); err != nil {
 		return empty, err
 	}
-	output, _, err := loadPlanningStageOutput(repositoryRoot, manifest)
+	output, _, err := loadPlanningStageOutputInSession(session, manifest)
 	if err != nil {
 		return empty, err
 	}
@@ -364,7 +380,7 @@ func finalizePlanningStage(root string, manifest planningStageManifest, request 
 	var timelineIndexBytes []byte
 	var timelineCards []colony.PlanningIterationCard
 	if request.RouteCard != nil {
-		card, cardBytes, _, timelineIndexBytes, timelineCards, err = preparePlanningStageRouteCard(repositoryRoot, manifest, receipt, *request.RouteCard)
+		card, cardBytes, _, timelineIndexBytes, timelineCards, err = preparePlanningStageRouteCardInSession(session, manifest, receipt, *request.RouteCard)
 		if err != nil {
 			return empty, err
 		}
@@ -412,7 +428,7 @@ func finalizePlanningStage(root string, manifest planningStageManifest, request 
 		return empty, fmt.Errorf("marshal planning stage receipt index: %w", err)
 	}
 
-	config, err := planningStageFinalizationConfig(repositoryRoot, dataRoot, manifest, planningStageWriteOptions{Fault: request.Fault, Rename: request.Rename})
+	config, err := planningStageFinalizationConfig(session, manifest, planningStageWriteOptions{Fault: request.Fault, Rename: request.Rename})
 	if err != nil {
 		return empty, err
 	}
@@ -425,14 +441,13 @@ func finalizePlanningStage(root string, manifest planningStageManifest, request 
 		expected[planningStageDataRelativePath(planningTimelineCardRepositoryPath(manifest.RunID, card.Iteration, card.ID))] = cardBytes
 		expected[planningStageDataRelativePath(planningTimelineIndexRepositoryPath(manifest.RunID))] = timelineIndexBytes
 	}
+	if _, _, err := session.ReadFile(lifecycleTransactionRootData, planningStageDataRelativePath(entry.ReceiptPath)); err != nil {
+		return empty, err
+	}
 	if resumed, err := resumePlanningStageWrite(config, expected, manifest.ID); err != nil {
 		return empty, err
 	} else if resumed {
-		completed, err := readPlanningStageReceiptChain(repositoryRoot, manifest.RunID)
-		if err != nil {
-			return empty, err
-		}
-		return planningStageReceiptByManifest(completed, manifest.ID)
+		return receipt, nil
 	}
 
 	tx, err := beginLifecycleTransaction(config)
@@ -463,14 +478,10 @@ func finalizePlanningStage(root string, manifest planningStageManifest, request 
 	if _, err := tx.Commit(); err != nil {
 		return empty, err
 	}
-	completed, err := readPlanningStageReceiptChain(repositoryRoot, manifest.RunID)
-	if err != nil {
-		return empty, err
-	}
 	if card.ID != "" && len(timelineCards) == 0 {
 		return empty, fmt.Errorf("planning stage Route finalization lost its timeline card")
 	}
-	return planningStageReceiptByManifest(completed, manifest.ID)
+	return receipt, nil
 }
 
 // resumePlanningStage reconstructs one action from durable stage state,
@@ -734,8 +745,9 @@ func validatePlanningStageReceiptSequence(manifest planningStageManifest, prior 
 	return nil
 }
 
-func preparePlanningStageRouteCard(root string, manifest planningStageManifest, receipt StageReceipt, requested colony.PlanningIterationCard) (colony.PlanningIterationCard, []byte, planningTimelineIndex, []byte, []colony.PlanningIterationCard, error) {
+func preparePlanningStageRouteCardInSession(session *planningMutationSession, manifest planningStageManifest, receipt StageReceipt, requested colony.PlanningIterationCard) (colony.PlanningIterationCard, []byte, planningTimelineIndex, []byte, []colony.PlanningIterationCard, error) {
 	emptyCard := colony.PlanningIterationCard{}
+	root := session.RepositoryRoot()
 	if manifest.ExpectedCaste != planningStageCasteRouteSetter || manifest.ScoutReceipt == nil {
 		return emptyCard, nil, planningTimelineIndex{}, nil, nil, fmt.Errorf("only Route-Setter with an exact Scout receipt can append an iteration card")
 	}
@@ -754,7 +766,7 @@ func preparePlanningStageRouteCard(root string, manifest planningStageManifest, 
 	if err != nil {
 		return emptyCard, nil, planningTimelineIndex{}, nil, nil, err
 	}
-	index, cards, exists, err := readPlanningTimelineChain(root, manifest.RunID)
+	index, cards, exists, err := readPlanningTimelineChainInSession(session, manifest.RunID)
 	if err != nil {
 		return emptyCard, nil, planningTimelineIndex{}, nil, nil, err
 	}
@@ -800,10 +812,12 @@ func preparePlanningStageRouteCard(root string, manifest planningStageManifest, 
 		return emptyCard, nil, planningTimelineIndex{}, nil, nil, err
 	}
 	cardPath := planningTimelineCardRepositoryPath(manifest.RunID, card.Iteration, card.ID)
-	if _, statErr := os.Lstat(filepath.Join(root, filepath.FromSlash(cardPath))); statErr == nil {
+	_, cardExists, err := session.ReadFile(lifecycleTransactionRootData, planningStageDataRelativePath(cardPath))
+	if err != nil {
+		return emptyCard, nil, planningTimelineIndex{}, nil, nil, err
+	}
+	if cardExists {
 		return emptyCard, nil, planningTimelineIndex{}, nil, nil, &planningStageReceiptConflictError{ManifestID: manifest.ID, Detail: "Route card path exists outside its timeline index"}
-	} else if !os.IsNotExist(statErr) {
-		return emptyCard, nil, planningTimelineIndex{}, nil, nil, statErr
 	}
 	index.Entries = append(index.Entries, planningTimelineIndexEntry{
 		Iteration: card.Iteration, CardID: card.ID, CardHash: card.ContentHash,
@@ -839,9 +853,20 @@ func planningStageRouteCardRequestHash(manifest planningStageManifest, card *col
 }
 
 func readPlanningStageReceiptChain(root, runID string) (planningStageReceiptChain, error) {
+	return readPlanningStageReceiptChainWithSession(root, runID, nil)
+}
+
+func readPlanningStageReceiptChainInSession(session *planningMutationSession, runID string) (planningStageReceiptChain, error) {
+	if err := session.requireActive(); err != nil {
+		return planningStageReceiptChain{}, err
+	}
+	return readPlanningStageReceiptChainWithSession(session.RepositoryRoot(), runID, session)
+}
+
+func readPlanningStageReceiptChainWithSession(root, runID string, session *planningMutationSession) (planningStageReceiptChain, error) {
 	empty := planningStageReceiptChain{}
 	indexPath := planningStageReceiptIndexRepositoryPath(runID)
-	content, exists, err := readOptionalPlanningStageFile(root, indexPath)
+	content, exists, err := readOptionalPlanningStageFileWithSession(root, indexPath, session)
 	if err != nil {
 		return empty, err
 	}
@@ -866,7 +891,7 @@ func readPlanningStageReceiptChain(root, runID string) (planningStageReceiptChai
 		if entry.ReceiptPath != wantPath {
 			return empty, fmt.Errorf("planning stage receipt index entry %d has a non-canonical receipt path", position)
 		}
-		receiptBytes, ok, err := readOptionalPlanningStageFile(root, entry.ReceiptPath)
+		receiptBytes, ok, err := readOptionalPlanningStageFileWithSession(root, entry.ReceiptPath, session)
 		if err != nil {
 			return empty, err
 		}
@@ -883,14 +908,14 @@ func readPlanningStageReceiptChain(root, runID string) (planningStageReceiptChai
 		if err := validatePlanningStageReceiptIndexEntry(entry, receipt); err != nil {
 			return empty, fmt.Errorf("planning stage receipt index entry %d: %w", position, err)
 		}
-		manifest, err := loadPlanningStageManifest(root, runID, receipt.ManifestID)
+		manifest, err := loadPlanningStageManifestWithSession(root, runID, receipt.ManifestID, session)
 		if err != nil {
 			return empty, err
 		}
 		if manifest.ContentHash != receipt.ManifestHash || manifest.ExpectedCaste != receipt.Caste || manifest.Pass != receipt.Pass || manifest.InputFrontierHash != receipt.InputFrontierHash {
 			return empty, fmt.Errorf("planning stage receipt %q conflicts with its manifest", receipt.ID)
 		}
-		output, _, err := loadPlanningStageOutput(root, manifest)
+		output, _, err := loadPlanningStageOutputWithSession(root, manifest, session)
 		if err != nil {
 			return empty, err
 		}
@@ -926,7 +951,7 @@ func readPlanningStageReceiptChain(root, runID string) (planningStageReceiptChai
 		chain.Receipts = append(chain.Receipts, receipt)
 	}
 	if needsTimeline {
-		_, cards, exists, err := readPlanningTimelineChain(root, runID)
+		_, cards, exists, err := readPlanningTimelineChainWithSession(root, runID, session)
 		if err != nil {
 			return empty, err
 		}
@@ -950,7 +975,7 @@ func readPlanningStageReceiptChain(root, runID string) (planningStageReceiptChai
 			if card.RouteSetterReceiptID != receipt.ID || card.RouteSetterReceiptHash != receipt.ContentHash {
 				return empty, fmt.Errorf("iteration card %q does not bind its exact Route receipt", card.ID)
 			}
-			manifest, err := loadPlanningStageManifest(root, runID, receipt.ManifestID)
+			manifest, err := loadPlanningStageManifestWithSession(root, runID, receipt.ManifestID, session)
 			if err != nil {
 				return empty, err
 			}
@@ -1027,11 +1052,19 @@ func validatePlanningStageReceiptIndexEntry(entry planningStageReceiptIndexEntry
 }
 
 func planningStageReceiptMatchesFinalizeRequest(root string, receipt StageReceipt, request planningStageFinalizeRequest, entry planningStageReceiptIndexEntry) error {
+	return planningStageReceiptMatchesFinalizeRequestWithSession(root, receipt, request, entry, nil)
+}
+
+func planningStageReceiptMatchesFinalizeRequestInSession(session *planningMutationSession, receipt StageReceipt, request planningStageFinalizeRequest, entry planningStageReceiptIndexEntry) error {
+	return planningStageReceiptMatchesFinalizeRequestWithSession(session.RepositoryRoot(), receipt, request, entry, session)
+}
+
+func planningStageReceiptMatchesFinalizeRequestWithSession(root string, receipt StageReceipt, request planningStageFinalizeRequest, entry planningStageReceiptIndexEntry, session *planningMutationSession) error {
 	if receipt.ResultingState != request.To || receipt.CandidateSnapshotHash != strings.TrimSpace(request.CandidateSnapshotHash) ||
 		receipt.DecisionResumeStage != request.DecisionResumeStage || receipt.FailureReason != strings.TrimSpace(request.FailureReason) {
 		return fmt.Errorf("finalizer transition differs from completed receipt")
 	}
-	manifest, err := loadPlanningStageManifest(root, receipt.RunID, receipt.ManifestID)
+	manifest, err := loadPlanningStageManifestWithSession(root, receipt.RunID, receipt.ManifestID, session)
 	if err != nil {
 		return err
 	}
@@ -1099,13 +1132,24 @@ func planningStageWriteConfig(root, dataRoot, transactionID, command string, opt
 	}
 }
 
-func planningStageFinalizationConfig(root, dataRoot string, manifest planningStageManifest, opts planningStageWriteOptions) (lifecycleTransactionConfig, error) {
+func planningStageWriteConfigInSession(session *planningMutationSession, transactionID, command string, opts planningStageWriteOptions) lifecycleTransactionConfig {
+	return lifecycleTransactionConfig{
+		TransactionID: transactionID,
+		Command:       command,
+		Allowlist: lifecycleTransactionAllowlist{
+			RepositoryRoot: session.RepositoryRoot(), LifecycleDataRoot: session.DataRoot(),
+		},
+		Session: session, Fault: opts.Fault, Rename: opts.Rename,
+	}
+}
+
+func planningStageFinalizationConfig(session *planningMutationSession, manifest planningStageManifest, opts planningStageWriteOptions) (lifecycleTransactionConfig, error) {
 	if manifest.ExpectedCaste == planningStageCasteRouteSetter {
 		transactionID, err := planningTimelineTransactionID(manifest.RunID, manifest.ID)
 		if err != nil {
 			return lifecycleTransactionConfig{}, err
 		}
-		return planningStageWriteConfig(root, dataRoot, transactionID, "planning-timeline-append", opts), nil
+		return planningStageWriteConfigInSession(session, transactionID, "planning-timeline-append", opts), nil
 	}
 	digest, err := jsonSHA256(struct {
 		RunID      string `json:"run_id"`
@@ -1114,7 +1158,7 @@ func planningStageFinalizationConfig(root, dataRoot string, manifest planningSta
 	if err != nil {
 		return lifecycleTransactionConfig{}, err
 	}
-	return planningStageWriteConfig(root, dataRoot, "planning-stage-finalize-"+digest[:24], "planning-stage-finalize", opts), nil
+	return planningStageWriteConfigInSession(session, "planning-stage-finalize-"+digest[:24], "planning-stage-finalize", opts), nil
 }
 
 func resumePlanningStageWrite(config lifecycleTransactionConfig, expected map[string][]byte, manifestID string) (bool, error) {
@@ -1148,7 +1192,15 @@ func planningStageLifecycleReceiptExists(config lifecycleTransactionConfig) bool
 }
 
 func validatePersistedPlanningStageManifest(root string, manifest planningStageManifest) error {
-	stored, err := loadPlanningStageManifest(root, manifest.RunID, manifest.ID)
+	return validatePersistedPlanningStageManifestWithSession(root, manifest, nil)
+}
+
+func validatePersistedPlanningStageManifestInSession(session *planningMutationSession, manifest planningStageManifest) error {
+	return validatePersistedPlanningStageManifestWithSession(session.RepositoryRoot(), manifest, session)
+}
+
+func validatePersistedPlanningStageManifestWithSession(root string, manifest planningStageManifest, session *planningMutationSession) error {
+	stored, err := loadPlanningStageManifestWithSession(root, manifest.RunID, manifest.ID, session)
 	if err != nil {
 		return err
 	}
@@ -1164,8 +1216,16 @@ func validatePersistedPlanningStageManifest(root string, manifest planningStageM
 }
 
 func loadPlanningStageManifest(root, runID, manifestID string) (planningStageManifest, error) {
+	return loadPlanningStageManifestWithSession(root, runID, manifestID, nil)
+}
+
+func loadPlanningStageManifestInSession(session *planningMutationSession, runID, manifestID string) (planningStageManifest, error) {
+	return loadPlanningStageManifestWithSession(session.RepositoryRoot(), runID, manifestID, session)
+}
+
+func loadPlanningStageManifestWithSession(root, runID, manifestID string, session *planningMutationSession) (planningStageManifest, error) {
 	empty := planningStageManifest{}
-	content, ok, err := readOptionalPlanningStageFile(root, planningStageManifestRepositoryPath(runID, manifestID))
+	content, ok, err := readOptionalPlanningStageFileWithSession(root, planningStageManifestRepositoryPath(runID, manifestID), session)
 	if err != nil {
 		return empty, err
 	}
@@ -1183,8 +1243,16 @@ func loadPlanningStageManifest(root, runID, manifestID string) (planningStageMan
 }
 
 func loadPlanningStageState(root, runID string) (planningStageState, error) {
+	return loadPlanningStageStateWithSession(root, runID, nil)
+}
+
+func loadPlanningStageStateInSession(session *planningMutationSession, runID string) (planningStageState, error) {
+	return loadPlanningStageStateWithSession(session.RepositoryRoot(), runID, session)
+}
+
+func loadPlanningStageStateWithSession(root, runID string, session *planningMutationSession) (planningStageState, error) {
 	empty := planningStageState{}
-	content, ok, err := readOptionalPlanningStageFile(root, planningStageStateRepositoryPath(runID))
+	content, ok, err := readOptionalPlanningStageFileWithSession(root, planningStageStateRepositoryPath(runID), session)
 	if err != nil {
 		return empty, err
 	}
@@ -1205,9 +1273,17 @@ func loadPlanningStageState(root, runID string) (planningStageState, error) {
 }
 
 func loadPlanningStageOutput(root string, manifest planningStageManifest) (planningStageOutputReference, []byte, error) {
+	return loadPlanningStageOutputWithSession(root, manifest, nil)
+}
+
+func loadPlanningStageOutputInSession(session *planningMutationSession, manifest planningStageManifest) (planningStageOutputReference, []byte, error) {
+	return loadPlanningStageOutputWithSession(session.RepositoryRoot(), manifest, session)
+}
+
+func loadPlanningStageOutputWithSession(root string, manifest planningStageManifest, session *planningMutationSession) (planningStageOutputReference, []byte, error) {
 	empty := planningStageOutputReference{}
 	outputPath := planningStageOutputRepositoryPath(manifest)
-	content, ok, err := readOptionalPlanningStageFile(root, outputPath)
+	content, ok, err := readOptionalPlanningStageFileWithSession(root, outputPath, session)
 	if err != nil {
 		return empty, nil, err
 	}
@@ -1218,8 +1294,23 @@ func loadPlanningStageOutput(root string, manifest planningStageManifest) (plann
 }
 
 func readOptionalPlanningStageFile(root, repositoryPath string) ([]byte, bool, error) {
+	return readOptionalPlanningStageFileWithSession(root, repositoryPath, nil)
+}
+
+func readOptionalPlanningStageFileInSession(session *planningMutationSession, repositoryPath string) ([]byte, bool, error) {
+	return readOptionalPlanningStageFileWithSession(session.RepositoryRoot(), repositoryPath, session)
+}
+
+func readOptionalPlanningStageFileWithSession(root, repositoryPath string, session *planningMutationSession) ([]byte, bool, error) {
 	if err := validatePlanningArtifactPath(repositoryPath); err != nil {
 		return nil, false, err
+	}
+	if session != nil {
+		relativePath := planningStageDataRelativePath(repositoryPath)
+		if relativePath == repositoryPath {
+			return nil, false, fmt.Errorf("planning stage artifact %q is outside lifecycle data", repositoryPath)
+		}
+		return session.ReadFile(lifecycleTransactionRootData, relativePath)
 	}
 	fullPath := filepath.Join(root, filepath.FromSlash(repositoryPath))
 	info, err := os.Lstat(fullPath)

@@ -128,11 +128,19 @@ func (err *planningTimelineProtectedError) Error() string {
 // its canonical bytes, and commits the card plus its ordered index through one
 // lifecycle transaction. It never writes renderer text into planning history.
 func appendPlanningIterationCard(root string, card colony.PlanningIterationCard, opts planningTimelineAppendOptions) (planningTimelineAppendReceipt, error) {
+	var receipt planningTimelineAppendReceipt
+	err := withPlanningMutationSession(root, "planning-timeline-append", func(session *planningMutationSession) error {
+		var err error
+		receipt, err = appendPlanningIterationCardInSession(session, card, opts)
+		return err
+	})
+	return receipt, err
+}
+
+func appendPlanningIterationCardInSession(session *planningMutationSession, card colony.PlanningIterationCard, opts planningTimelineAppendOptions) (planningTimelineAppendReceipt, error) {
 	empty := planningTimelineAppendReceipt{}
-	repositoryRoot, err := canonicalPlanningTimelineRoot(root)
-	if err != nil {
-		return empty, err
-	}
+	repositoryRoot := session.RepositoryRoot()
+	dataRoot := session.DataRoot()
 	if err := validatePlanningTimelineSegment("run_id", card.RunID); err != nil {
 		return empty, err
 	}
@@ -144,7 +152,7 @@ func appendPlanningIterationCard(root string, card colony.PlanningIterationCard,
 		return empty, fmt.Errorf("planning timeline card: %w", err)
 	}
 
-	index, cards, exists, err := readPlanningTimelineChain(repositoryRoot, canonicalCard.RunID)
+	index, cards, exists, err := readPlanningTimelineChainInSession(session, canonicalCard.RunID)
 	if err != nil {
 		return empty, err
 	}
@@ -167,7 +175,7 @@ func appendPlanningIterationCard(root string, card colony.PlanningIterationCard,
 			if err != nil {
 				return empty, fmt.Errorf("hash replayed planning timeline prefix: %w", err)
 			}
-			writeReceipt, err := loadPlanningTimelineWriteReceipt(repositoryRoot, entry.TransactionID)
+			writeReceipt, err := loadPlanningTimelineWriteReceipt(repositoryRoot, entry.TransactionID, session)
 			if err != nil {
 				return empty, err
 			}
@@ -222,9 +230,10 @@ func appendPlanningIterationCard(root string, card colony.PlanningIterationCard,
 		return empty, err
 	}
 
-	dataRoot := filepath.Join(repositoryRoot, ".aether", "data")
-	if err := os.MkdirAll(dataRoot, 0o755); err != nil {
-		return empty, fmt.Errorf("create planning lifecycle data root: %w", err)
+	cardRelativePath := planningTimelineDataRelativePath(cardPath)
+	_, cardExists, err := session.ReadFile(lifecycleTransactionRootData, cardRelativePath)
+	if err != nil {
+		return empty, err
 	}
 	config := lifecycleTransactionConfig{
 		TransactionID: transactionID,
@@ -233,8 +242,9 @@ func appendPlanningIterationCard(root string, card colony.PlanningIterationCard,
 			RepositoryRoot:    repositoryRoot,
 			LifecycleDataRoot: dataRoot,
 		},
-		Fault:  opts.Fault,
-		Rename: opts.Rename,
+		Session: session,
+		Fault:   opts.Fault,
+		Rename:  opts.Rename,
 	}
 	if pending, err := planningTimelineTransactionHasIntent(config); err != nil {
 		return empty, err
@@ -258,10 +268,8 @@ func appendPlanningIterationCard(root string, card colony.PlanningIterationCard,
 	if len(legacyArtifacts) > 0 {
 		return empty, fmt.Errorf("planning timeline has legacy_unbound iteration evidence and cannot append a current chain")
 	}
-	if _, statErr := os.Lstat(filepath.Join(repositoryRoot, filepath.FromSlash(cardPath))); statErr == nil {
+	if cardExists {
 		return empty, &planningTimelineConflictError{ReceiptID: opts.ReceiptID, Detail: fmt.Sprintf("card path %q exists outside the timeline index", cardPath)}
-	} else if !os.IsNotExist(statErr) {
-		return empty, fmt.Errorf("inspect planning timeline card path %q: %w", cardPath, statErr)
 	}
 	tx, err := beginLifecycleTransaction(config)
 	if err != nil {
@@ -299,8 +307,8 @@ func planningTimelineAppendReceiptFor(index planningTimelineIndex, entry plannin
 	}
 }
 
-func loadPlanningTimelineWriteReceipt(root, transactionID string) (colony.LifecycleReceipt, error) {
-	config := planningTimelineLifecycleConfig(root, transactionID)
+func loadPlanningTimelineWriteReceipt(root, transactionID string, session *planningMutationSession) (colony.LifecycleReceipt, error) {
+	config := planningTimelineLifecycleConfig(root, transactionID, session)
 	tx, err := beginLifecycleTransaction(config)
 	if err != nil {
 		return colony.LifecycleReceipt{}, err
@@ -381,14 +389,19 @@ func loadPlanningTimelineHistoricalReceipt(tx *lifecycleTransaction) (colony.Lif
 	return receipt, true, nil
 }
 
-func planningTimelineLifecycleConfig(root, transactionID string) lifecycleTransactionConfig {
+func planningTimelineLifecycleConfig(root, transactionID string, session *planningMutationSession) lifecycleTransactionConfig {
+	dataRoot := filepath.Join(root, ".aether", "data")
+	if session != nil {
+		dataRoot = session.DataRoot()
+	}
 	return lifecycleTransactionConfig{
 		TransactionID: transactionID,
 		Command:       "planning-timeline-append",
 		Allowlist: lifecycleTransactionAllowlist{
 			RepositoryRoot:    root,
-			LifecycleDataRoot: filepath.Join(root, ".aether", "data"),
+			LifecycleDataRoot: dataRoot,
 		},
+		Session: session,
 	}
 }
 
@@ -537,20 +550,24 @@ func planningTimelineDataRelativePath(repositoryPath string) string {
 }
 
 func readPlanningTimelineChain(root, runID string) (planningTimelineIndex, []colony.PlanningIterationCard, bool, error) {
-	indexPath := filepath.Join(root, filepath.FromSlash(planningTimelineIndexRepositoryPath(runID)))
-	info, err := os.Lstat(indexPath)
-	if os.IsNotExist(err) {
-		return planningTimelineIndex{}, nil, false, nil
+	return readPlanningTimelineChainWithSession(root, runID, nil)
+}
+
+func readPlanningTimelineChainInSession(session *planningMutationSession, runID string) (planningTimelineIndex, []colony.PlanningIterationCard, bool, error) {
+	if err := session.requireActive(); err != nil {
+		return planningTimelineIndex{}, nil, false, err
 	}
-	if err != nil {
-		return planningTimelineIndex{}, nil, false, fmt.Errorf("inspect planning timeline index: %w", err)
-	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-		return planningTimelineIndex{}, nil, false, fmt.Errorf("planning timeline index must be a regular non-symlink file")
-	}
-	content, err := os.ReadFile(indexPath)
+	return readPlanningTimelineChainWithSession(session.RepositoryRoot(), runID, session)
+}
+
+func readPlanningTimelineChainWithSession(root, runID string, session *planningMutationSession) (planningTimelineIndex, []colony.PlanningIterationCard, bool, error) {
+	indexRepositoryPath := planningTimelineIndexRepositoryPath(runID)
+	content, exists, err := readPlanningTimelineChainFile(root, indexRepositoryPath, session)
 	if err != nil {
 		return planningTimelineIndex{}, nil, false, fmt.Errorf("read planning timeline index: %w", err)
+	}
+	if !exists {
+		return planningTimelineIndex{}, nil, false, nil
 	}
 	var index planningTimelineIndex
 	if err := decodePlanningTimelineJSON(content, &index); err != nil {
@@ -568,17 +585,12 @@ func readPlanningTimelineChain(root, runID string) (planningTimelineIndex, []col
 		if entry.CardPath != wantPath {
 			return planningTimelineIndex{}, nil, false, fmt.Errorf("planning timeline entries[%d].card_path is not the canonical card locator", i)
 		}
-		cardPath := filepath.Join(root, filepath.FromSlash(entry.CardPath))
-		cardInfo, statErr := os.Lstat(cardPath)
-		if statErr != nil {
-			return planningTimelineIndex{}, nil, false, fmt.Errorf("inspect planning timeline card %d: %w", i+1, statErr)
-		}
-		if cardInfo.Mode()&os.ModeSymlink != 0 || !cardInfo.Mode().IsRegular() {
-			return planningTimelineIndex{}, nil, false, fmt.Errorf("planning timeline card %d must be a regular non-symlink file", i+1)
-		}
-		cardBytes, readErr := os.ReadFile(cardPath)
+		cardBytes, cardExists, readErr := readPlanningTimelineChainFile(root, entry.CardPath, session)
 		if readErr != nil {
 			return planningTimelineIndex{}, nil, false, fmt.Errorf("read planning timeline card %d: %w", i+1, readErr)
+		}
+		if !cardExists {
+			return planningTimelineIndex{}, nil, false, fmt.Errorf("planning timeline card %d is missing: %w", i+1, os.ErrNotExist)
 		}
 		if err := decodePlanningTimelineJSON(cardBytes, &cards[i]); err != nil {
 			return planningTimelineIndex{}, nil, false, fmt.Errorf("decode planning timeline card %d: %w", i+1, err)
@@ -588,6 +600,28 @@ func readPlanningTimelineChain(root, runID string) (planningTimelineIndex, []col
 		return planningTimelineIndex{}, nil, false, err
 	}
 	return index, cards, true, nil
+}
+
+func readPlanningTimelineChainFile(root, repositoryPath string, session *planningMutationSession) ([]byte, bool, error) {
+	if session != nil {
+		return session.ReadFile(lifecycleTransactionRootData, planningTimelineDataRelativePath(repositoryPath))
+	}
+	fullPath := filepath.Join(root, filepath.FromSlash(repositoryPath))
+	info, err := os.Lstat(fullPath)
+	if os.IsNotExist(err) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return nil, false, fmt.Errorf("planning timeline artifact %q must be a regular non-symlink file", repositoryPath)
+	}
+	content, err := readStableLifecycleRegularFile(fullPath, info)
+	if err != nil {
+		return nil, false, err
+	}
+	return content, true, nil
 }
 
 func planningTimelineLegacyArtifacts(root, runID string) ([]string, error) {

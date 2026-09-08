@@ -277,6 +277,52 @@ func TestPlanningMutationSession200(t *testing.T) {
 		}
 	})
 
+	t.Run("multiple transactions reuse one held session", func(t *testing.T) {
+		root := t.TempDir()
+		dataRoot := filepath.Join(root, ".aether", "data")
+		firstPath := filepath.Join(dataRoot, "planning", "nested-first.txt")
+		secondPath := filepath.Join(dataRoot, "planning", "nested-second.txt")
+		mustWritePlanningMutationFile(t, firstPath, []byte("first-before"))
+		mustWritePlanningMutationFile(t, secondPath, []byte("second-before"))
+
+		err := withPlanningMutationSession(root, "test-nested-transactions", func(session *planningMutationSession) error {
+			for _, target := range []string{"planning/nested-first.txt", "planning/nested-second.txt"} {
+				if _, exists, err := session.ReadFile(lifecycleTransactionRootData, target); err != nil || !exists {
+					return fmt.Errorf("capture %s: exists=%v err=%w", target, exists, err)
+				}
+			}
+			for index, target := range []struct {
+				id      string
+				path    string
+				content string
+			}{
+				{id: "nested-first", path: "planning/nested-first.txt", content: "first-after"},
+				{id: "nested-second", path: "planning/nested-second.txt", content: "second-after"},
+			} {
+				tx, err := beginLifecycleTransaction(planningMutationTestConfig(root, target.id, session))
+				if err != nil {
+					return err
+				}
+				if err := tx.DeclareWrite(lifecycleTransactionRootData, target.path, []byte(target.content)); err != nil {
+					return err
+				}
+				if _, err := tx.Commit(); err != nil {
+					return fmt.Errorf("commit nested transaction %d: %w", index+1, err)
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := string(mustReadPlanningMutationFile(t, firstPath)); got != "first-after" {
+			t.Fatalf("first nested target = %q", got)
+		}
+		if got := string(mustReadPlanningMutationFile(t, secondPath)); got != "second-after" {
+			t.Fatalf("second nested target = %q", got)
+		}
+	})
+
 	t.Run("linked data root is refused without outside mutation", func(t *testing.T) {
 		root := t.TempDir()
 		outside := t.TempDir()
