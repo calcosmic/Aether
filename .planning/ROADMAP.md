@@ -60,7 +60,7 @@ The phase names below identify areas to investigate, not predetermined implement
 Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase research artifact using `.planning/research/v1.28-classic-synthesis-template.md`. This is targeted engineering archaeology within the implementation phase, not a standalone pre-restoration phase and not another owner questionnaire. The comprehensive report is the starting map; it does not substitute for examining the relevant old and current implementations.
 
 - [x] **Phase 199 — Front Door and Classic Contract** (completed 2026-09-07)
-- [x] **Phase 200 — Iterative Planning** (completed 2026-09-08)
+- [ ] **Phase 200 — Iterative Planning**
 - [ ] **Phase 201 — Queen-Led Work Cycle**
 - [ ] **Phase 202 — Swarm, Oracle, and Live Colony**
 - [ ] **Phase 203 — Biological Runtime**
@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 25/25 plans complete
+**Plans:** 40 plans (25 complete; 15 gap-closure plans pending)
 
 Plans:
 
@@ -251,6 +251,54 @@ Plans:
 **Wave 13** *(blocked on Wave 12 completion)*
 
 - [x] 200-23-PLAN.md — Prove the Classic synthesis and full public planning journey.
+
+**Wave 14** *(gap closure; blocked on Wave 13 completion)*
+
+- [ ] 200-26-PLAN.md — Repair the Phase 199 vocabulary inventory and make its historical gate receipt durable across later GSD bookkeeping.
+
+**Wave 15** *(gap closure; blocked on Wave 14 completion)*
+
+- [ ] 200-27-PLAN.md — Enforce physical repository containment before store or lock initialization.
+
+**Wave 16** *(gap closure; blocked on Wave 15 completion)*
+
+- [ ] 200-28-PLAN.md — Add a shared read-through-commit mutation session and prove it on timeline/stage persistence.
+
+**Wave 17** *(gap closure; blocked on Wave 16 completion)*
+
+- [ ] 200-29-PLAN.md — Recompute typed specification and approval authority at every validation boundary.
+- [ ] 200-30-PLAN.md — Bind the canonical semantic delta and complete review payload into candidate identity.
+
+**Wave 18** *(gap closure; blocked on Wave 17 completion)*
+
+- [ ] 200-31-PLAN.md — Independently derive candidate acceptance and impact coverage inside one mutation session.
+
+**Wave 19** *(gap closure; blocked on Wave 18 completion)*
+
+- [ ] 200-32-PLAN.md — Move every named planning/specification/revision writer and refresh deletion into the shared session.
+- [ ] 200-33-PLAN.md — Define the all-target, authority-bound build-start transaction.
+
+**Wave 20** *(gap closure; blocked on Wave 19 completion)*
+
+- [ ] 200-34-PLAN.md — Migrate every production build-start caller and conditional effect to the atomic transaction.
+- [ ] 200-37-PLAN.md — Enforce candidate expiry and stale-before-expiry recovery at review, acceptance, and execution authority.
+
+**Wave 21** *(gap closure; blocked on Wave 20 completion)*
+
+- [ ] 200-35-PLAN.md — Introduce the transaction-only test fixture and migrate the core build-attempt fixture callers.
+- [ ] 200-38-PLAN.md — Render expiry/recovery consistently in terminal, JSON, lifecycle facts, and Next Up.
+
+**Wave 22** *(gap closure; blocked on Wave 21 completion)*
+
+- [ ] 200-36-PLAN.md — Migrate the remaining build-start fixtures and retire every partial start helper.
+
+**Wave 23** *(gap closure; blocked on Wave 22 completion)*
+
+- [ ] 200-39-PLAN.md — Prove all five original attacks, the full public journey, Classic corpus, source parity, and exact edge accounting.
+
+**Wave 24** *(gap closure; blocked on Wave 23 completion)*
+
+- [ ] 200-40-PLAN.md — Run focused, source, full, and race gates and update the existing Phase 200 gate receipt.
 
 **Success criteria:**
 
