@@ -247,7 +247,10 @@ const (
 	candidateInit            nextActionCandidateKey = "init"
 	candidateDiscuss         nextActionCandidateKey = "discuss"
 	candidateSpec            nextActionCandidateKey = "spec"
+	candidateSpecApprove     nextActionCandidateKey = "spec_approve"
+	candidateSpecRepair      nextActionCandidateKey = "spec_repair"
 	candidatePlan            nextActionCandidateKey = "plan"
+	candidatePlanPreset      nextActionCandidateKey = "plan_preset"
 	candidatePlanCandidate   nextActionCandidateKey = "plan_candidate"
 	candidatePlanAcceptExact nextActionCandidateKey = "plan_accept_exact"
 	candidatePlanRepair      nextActionCandidateKey = "plan_repair"
@@ -306,9 +309,24 @@ var nextActionCandidates = []nextActionCandidate{
 		Why:      "Review the readable specification and explicitly approve or revise that exact contract.",
 	},
 	{
+		Key:      candidateSpecApprove,
+		Template: "aether spec --approve --revision-id %s --revision-hash %s --approval-token '%s'",
+		Why:      "Approve only the exact readable specification revision and content hash shown by inspection.",
+	},
+	{
+		Key:      candidateSpecRepair,
+		Template: "aether spec --repair-projection",
+		Why:      "Restore the readable specification projection from canonical state without changing its authority.",
+	},
+	{
 		Key:      candidatePlan,
 		Template: "aether plan",
 		Why:      "Break the goal into numbered phases you can build one at a time.",
+	},
+	{
+		Key:      candidatePlanPreset,
+		Template: "aether plan --preset <name>",
+		Why:      "Choose Fast, Balanced, Deep, or Exhaustive before any planning worker is authorized.",
 	},
 	{
 		Key:      candidatePlanCandidate,
@@ -420,6 +438,39 @@ func candidateCommand(key nextActionCandidateKey, args ...interface{}) (string, 
 		command = fmt.Sprintf(candidate.Template, args...)
 	}
 	return command, candidate.Why, true
+}
+
+// availableCandidateCommand is the narrow adapter for command results that
+// already know their exact authority boundary (for example an exact
+// Specification approval receipt). Command spelling still comes from the one
+// enumerable candidate set and still passes through the live Cobra gate.
+func availableCandidateCommand(key nextActionCandidateKey, args ...interface{}) string {
+	command, _, ok := candidateCommand(key, args...)
+	if !ok {
+		return ""
+	}
+	command, ok = availableCommand(command)
+	if !ok {
+		return ""
+	}
+	return command
+}
+
+// nextActionForCandidateOverride resolves a run-specific boundary through the
+// same pure next-action decision used by lifecycle cards and JSON envelopes.
+// The caller chooses only a candidate key and its plain-English reason; it
+// cannot introduce another hand-typed command spelling.
+func nextActionForCandidateOverride(state colony.ColonyState, lastCommand string, key nextActionCandidateKey, recommendation string, args ...interface{}) nextAction {
+	state = normalizeLegacyColonyState(state)
+	in := nextActionInput{
+		State:       state,
+		LastCommand: strings.TrimSpace(lastCommand),
+		NoColony:    colonyStateIsUnstarted(state),
+	}
+	if command := availableCandidateCommand(key, args...); command != "" {
+		in.Override = &nextActionOverride{Command: command, Recommendation: strings.TrimSpace(recommendation)}
+	}
+	return resolveNextAction(in)
 }
 
 func lifecycleActionFromCandidate(id string, key nextActionCandidateKey, reason string, evidence []colony.LifecycleEvidence, args ...interface{}) LifecycleProjectedAction {

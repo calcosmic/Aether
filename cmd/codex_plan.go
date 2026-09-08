@@ -320,7 +320,13 @@ func planningPresetRequiredResult(state colony.ColonyState, selection planningPr
 	if state.Goal != nil {
 		goal = strings.TrimSpace(*state.Goal)
 	}
-	return map[string]interface{}{
+	answer := nextActionForCandidateOverride(
+		state,
+		"plan",
+		candidatePlanPreset,
+		"Choose Fast, Balanced, Deep, or Exhaustive before planning starts.",
+	)
+	result := map[string]interface{}{
 		"planned":          false,
 		"status":           string(planningStagePresetRequired),
 		"goal":             goal,
@@ -331,8 +337,10 @@ func planningPresetRequiredResult(state colony.ColonyState, selection planningPr
 		"dispatches":       []codexPlanningDispatch{},
 		"dispatch_count":   0,
 		"state_effect":     "unchanged",
-		"next":             "choose Fast, Balanced, Deep, or Exhaustive with `aether plan --preset <name>`",
+		"next":             nextActionPrimarySuggestion(answer),
 	}
+	applyNextActionToResult(result, answer)
+	return result
 }
 
 type codexPlanningLoop struct {

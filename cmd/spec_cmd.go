@@ -669,17 +669,17 @@ func buildSpecCommandResult(
 
 func specCommandNextAction(specificationID string, revision colony.SpecRevision, projection specificationProjectionInspection) string {
 	if projection.Drifted {
-		return "aether spec --repair-projection"
+		return availableCandidateCommand(candidateSpecRepair)
 	}
 	if revision.Status == colony.SpecStatusDraft {
-		return fmt.Sprintf(
-			"aether spec --approve --revision-id %s --revision-hash %s --approval-token '%s'",
+		return availableCandidateCommand(
+			candidateSpecApprove,
 			revision.ID,
 			revision.ContentHash,
 			specificationApprovalToken(specificationID, revision.ID, revision.ContentHash),
 		)
 	}
-	return "aether plan"
+	return availableCandidateCommand(candidatePlan)
 }
 
 type specCommandVisualItem struct {
