@@ -1,5 +1,6 @@
-# Plan Command Contract
+# plan -- Iterative Planning and Candidate Contract
 
+**Last verified:** 2026-09-08
 **Status:** Phase 200 authoritative contract
 **Machine authority:** Go runtime and canonical `.aether/data/` lifecycle records
 **Readable projection:** wrappers and terminal renderers only
@@ -8,6 +9,26 @@ In plain English: approving a Specification gives Aether permission to plan;
 stopping the planning loop creates a proposal to review; accepting that exact
 proposal is the only action that makes a new plan active. Those are three
 different owner decisions and none implies either of the others.
+
+## Inputs
+
+Planning accepts one approved Specification binding, one explicit quality
+preset, and then only the current Go-issued stage manifest plus its one strict
+Scout or Route-Setter result. Material decision answers and candidate
+acceptance use the exact IDs, hashes, tokens, and commands returned by Go.
+
+## Outputs
+
+Every operation returns a structured state-machine result: the current stage,
+state effect, receipt or refusal, exact recovery/next action, and only the next
+artifact the caller is authorized to use. Detailed schemas are defined below.
+
+## State Mutations
+
+Preset selection, inspection, candidate review, and refused requests do not
+change state. Valid stage finalization appends only Go-validated evidence,
+receipts, cards, and candidates. Only exact candidate acceptance may activate
+a new PlanRevision; replay and failure rules are defined below.
 
 ## Public Spelling
 
@@ -40,7 +61,7 @@ adapter. Codex uses direct `aether ...` spelling; there is no Codex-native
   Route-Setters propose evidence and plan content; Go validates it and owns
   every transition.
 
-## Preconditions and Preset Selection
+## Preconditions
 
 Planning requires the current canonical Specification revision to be
 `APPROVED`, with a valid approval receipt, readable projection, and reconciled
@@ -48,6 +69,8 @@ affected scope. Missing, draft, superseded, projection-drifted, or unreconciled
 Specification state dispatches no worker and returns the exact recovery action,
 normally `aether spec`, `aether spec --repair-projection`, or the current
 reconciliation action.
+
+### Preset selection
 
 With no valid explicit policy, `aether plan` / `aether host plan` returns
 `preset_required: true`, `state_effect: none`, and these four unbiased options:

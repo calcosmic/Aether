@@ -1,5 +1,6 @@
-# Specification Command Contract
+# spec -- Specification Lifecycle Contract
 
+**Last verified:** 2026-09-08
 **Status:** Phase 200 authoritative contract
 **Schema:** `spec-command/v1`
 **Authority:** canonical Go state; `.aether/SPEC.md` is a readable projection
@@ -7,6 +8,35 @@
 In plain English: the Specification is the owner's signed brief. Editing it
 creates a new draft; approving the exact draft allows planning against it. It
 does not accept a plan, activate work, or make a candidate buildable.
+
+## Inputs
+
+`aether spec` accepts exactly one operation: inspect; add, modify, or remove one
+typed item; approve one exact revision; or repair the readable projection.
+Mutation inputs bind the section, stable identity or lineage, content/evidence,
+scope, predecessor revision/hash, or approval revision/hash/token described
+below.
+
+## Outputs
+
+Every successful operation returns the shared `spec-command/v1` result with the
+complete nine-part body, immutable revision identity, classified delta,
+affected scope, projection standing, receipt when issued, replay status, and
+exact next action.
+
+## State Mutations
+
+Inspect never mutates. Add, modify, and remove create one immutable successor
+draft; approve records authority for exactly one current draft; repair rewrites
+only the readable projection. Exact replay is idempotent, while every refused
+or divergent request leaves canonical Specification and Plan state unchanged.
+
+## Preconditions
+
+A canonical Specification must exist. Revision operations require the named
+current predecessor and valid typed inputs; approval requires the exact current
+draft revision ID, full content hash, and Go-issued approval token. File-backed
+text must resolve to a contained, regular, non-empty repository file.
 
 ## Public Spelling
 
