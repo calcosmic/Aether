@@ -183,10 +183,12 @@ func TestLifecycleFlatMirrorsMatchCanonical(t *testing.T) {
 	}
 }
 
-// wrapperHostContractManifestKeys are the 15 manifest and completion field
-// keys Task 1 of this plan documents in
+// wrapperHostContractManifestKeys are the current manifest and completion
+// field keys documented in
 // .aether/docs/wrapper-host-contract.md's "Manifest and Completion Packet
-// Shapes" section.
+// Shapes" section. Planning is deliberately stage-shaped: the retired depth
+// and research proposal cards and the old whole-chain/next-iteration aliases
+// are not part of this required inventory.
 var wrapperHostContractManifestKeys = []string{
 	"result.manifest.dispatch_manifest",
 	"dispatch_manifest.execution_plan",
@@ -197,11 +199,24 @@ var wrapperHostContractManifestKeys = []string{
 	"dispatch.permission_profile",
 	"dispatch_manifest.orchestrator_boundary_guidance",
 	"result.manifest.continue_manifest",
-	"result.plan_manifest",
+	"result.plan_manifest.stage_manifest",
+	"stage_manifest.expected_caste",
+	"stage_manifest.expected_result_type",
+	"result.stage_receipt",
+	"result.route_stage_manifest",
+	"result.route_stage_receipt",
+	"result.scout_stage_manifest",
+	"result.decision_cards",
+	"result.iteration_card",
+	"result.plan_candidate",
+	"result.acceptance_command",
+	"result.completion_path",
+}
+
+var retiredPlanningHostContractRequirements = []string{
 	"result.planning_manifest",
 	"result.depth_proposal_card",
 	"result.research_proposal_card",
-	"result.completion_path",
 	"result.requires_next_iteration",
 }
 
@@ -230,6 +245,14 @@ func TestWrapperHostContractDocumentsManifestShapes(t *testing.T) {
 	for _, key := range wrapperHostContractManifestKeys {
 		if !strings.Contains(text, key) {
 			t.Errorf("%s missing manifest key %q", contractPath, key)
+		}
+	}
+
+	for _, retired := range retiredPlanningHostContractRequirements {
+		for _, required := range wrapperHostContractManifestKeys {
+			if required == retired {
+				t.Errorf("retired planning key %q remains a required wrapper-host manifest shape", retired)
+			}
 		}
 	}
 }
@@ -329,13 +352,15 @@ func TestLifecycleWrappersDoNotParseEnvelopeAsPrimaryJob(t *testing.T) {
 		}
 	}
 
-	// contract_pointer_is_singular: build, plan, and continue each reference
-	// the wrapper-host contract doc exactly once; init references it zero
-	// times because it has no host-manifest step at all.
+	// contract_pointer_is_singular: build and continue each reference the
+	// wrapper-host contract doc exactly once; init references it zero times
+	// because it has no host-manifest step at all. Plan's managed projections
+	// are generated from plan.yaml, whose runtime.contract owns the one pointer,
+	// so the projection itself intentionally carries zero duplicate pointers.
 	t.Run("contract_pointer_is_singular", func(t *testing.T) {
 		for _, verb := range lifecycleWrapperVerbs {
 			wantCount := 1
-			if verb == "init" {
+			if verb == "init" || verb == "plan" {
 				wantCount = 0
 			}
 			for _, path := range canonicalWrapperPaths(repoRoot, verb) {
@@ -346,11 +371,19 @@ func TestLifecycleWrappersDoNotParseEnvelopeAsPrimaryJob(t *testing.T) {
 				gotCount := strings.Count(string(content), wrapperHostContractPointer)
 				if gotCount != wantCount {
 					t.Errorf(
-						"%s: references %q %d time(s), want %d -- D-03 puts envelope mechanics in the contract doc referenced exactly once per host-backed wrapper, and init has no host-manifest step at all",
+						"%s: references %q %d time(s), want %d -- D-03 keeps envelope mechanics in the shared contract; plan points there once from canonical plan.yaml instead of duplicating it in managed projections",
 						path, wrapperHostContractPointer, gotCount, wantCount,
 					)
 				}
 			}
+		}
+
+		planSource, err := os.ReadFile(filepath.Join(repoRoot, ".aether", "commands", "plan.yaml"))
+		if err != nil {
+			t.Fatalf("read canonical plan wrapper source: %v", err)
+		}
+		if got := strings.Count(string(planSource), wrapperHostContractPointer); got != 1 {
+			t.Errorf("canonical plan.yaml references %q %d time(s), want exactly 1", wrapperHostContractPointer, got)
 		}
 	})
 

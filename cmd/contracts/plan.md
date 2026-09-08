@@ -1,193 +1,277 @@
-# plan -- Lifecycle Contract
+# Plan Command Contract
 
-**Last verified:** 2026-07-22
-**Source files:** cmd/codex_plan.go, cmd/codex_plan_finalize.go, cmd/plan_revision.go, cmd/codex_workflow_cmds.go
+**Status:** Phase 200 authoritative contract
+**Machine authority:** Go runtime and canonical `.aether/data/` lifecycle records
+**Readable projection:** wrappers and terminal renderers only
 
-## Lifecycle
+In plain English: approving a Specification gives Aether permission to plan;
+stopping the planning loop creates a proposal to review; accepting that exact
+proposal is the only action that makes a new plan active. Those are three
+different owner decisions and none implies either of the others.
 
-`plan` has separate manifest, host-dispatch, and finalization steps.
+## Public Spelling
 
-1. `aether plan --plan-only` and `aether host plan` emit a planning dispatch manifest for one iteration. They do not prove that workers ran.
-2. The Codex or host layer dispatches the manifest's Scout, then Route-Setter, outside the `plan` command.
-3. `aether plan-finalize --completion-file <file>` validates the manifest and terminal worker results. It writes the canonical plan state only when the runtime stop condition is reached; otherwise it records inspectable iteration state and asks the host to request the next manifest.
+| Platform | Specification | Planning | Candidate review |
+|----------|---------------|----------|------------------|
+| Codex CLI | `aether spec` | `aether plan` | `aether plan --candidate` |
+| Claude Code | `/ant-spec` | `/ant-plan` | `/ant-plan` candidate stage |
+| OpenCode | `/ant-spec` | `/ant-plan` | `/ant-plan` candidate stage |
 
-Direct `aether plan` may still run Go-owned local planning, but host/wrapper orchestration must follow the manifest and finalizer contract above.
+Claude and OpenCode wrappers invoke the same Go operations through the host
+adapter. Codex uses direct `aether ...` spelling; there is no Codex-native
+`$ant-*` alias. If prose and the structured runtime disagree, the runtime wins.
 
-## Inputs
+## Authority Terms
 
-### `aether plan` Flags
+- **Specification approval** means the owner approved one immutable
+  Specification revision, identified by revision ID and full content hash, as
+  the contract planning must satisfy. It does not stop planning or activate a
+  plan.
+- **Planning stop** means Go selected one of `target_met`,
+  `diminishing_returns`, `stalled_gap`, or `pass_cap` after validating a
+  completed pass. It creates a `pending_review` candidate, not an active plan.
+- **Candidate acceptance** means the owner accepted one exact stopped proposal
+  through its receipt-bound `acceptance_command`. Only its
+  `PlanAcceptanceReceipt` may activate a PlanRevision.
+- **Receipt** means an immutable Go-issued record binding the exact request,
+  inputs, result, and resulting state. A worker report, host confirmation, file
+  save, or recommendation is not a receipt.
+- **Authority** means permission to change canonical state. Scouts and
+  Route-Setters propose evidence and plan content; Go validates it and owns
+  every transition.
 
-| Flag | Type | Required | Default | Description |
-|------|------|----------|---------|-------------|
-| --refresh | bool | no | false | Regenerate the plan even when an existing plan is present |
-| --force | bool | no | false | Alias for --refresh |
-| --plan-only | bool | no | false | Emit a dispatch manifest for host orchestration |
-| --repair-artifact | bool | no | false | Repair and validate dependency references in `.aether/data/planning/phase-plan.json` without rerunning workers |
-| --depth | string | no | "" | Planning depth: fast, balanced, deep, or exhaustive |
-| --planning-depth | string | no | "" | Task decomposition depth: light, standard, or deep |
-| --verification-depth | string | no | "" | Verification depth: light, standard, or heavy |
-| --target | int | no | depth preset | Planning confidence target, clamped to 70-99 |
-| --max-iterations | int | no | depth preset | Planning loop budget, clamped to 2-12 |
-| --accept | bool | no | false | Accept the current best plan even if confidence remains below target |
-| --revision-type | string | with completed-phase refresh | manual | Why future work is changing: manual, user_feedback, research, verification_failure, or scope_change |
-| --revision-reason | string | with completed-phase refresh | "" | Traceable explanation for changing unfinished work |
-| --revision-evidence | path[] | research/verification revision | [] | Repository-relative source artifact; repeatable |
-| --synthetic | bool | no | false | Use local synthesis behavior instead of external worker completion |
-| --worker-timeout | duration | no | 0 | Include a per-worker timeout in planning dispatch contracts |
+## Preconditions and Preset Selection
 
-### `aether plan-finalize` Flags
+Planning requires the current canonical Specification revision to be
+`APPROVED`, with a valid approval receipt, readable projection, and reconciled
+affected scope. Missing, draft, superseded, projection-drifted, or unreconciled
+Specification state dispatches no worker and returns the exact recovery action,
+normally `aether spec`, `aether spec --repair-projection`, or the current
+reconciliation action.
 
-| Flag | Type | Required | Default | Description |
-|------|------|----------|---------|-------------|
-| --completion-file | path | yes | "" | JSON completion packet containing `plan_manifest` and terminal worker results |
+With no valid explicit policy, `aether plan` / `aether host plan` returns
+`preset_required: true`, `state_effect: none`, and these four unbiased options:
 
-### Arguments
+| ID | Label | Target | Pass cap |
+|----|-------|--------|----------|
+| `fast` | Fast | 80 | 4 |
+| `balanced` | Balanced | 90 | 6 |
+| `deep` | Deep | 95 | 8 |
+| `exhaustive` | Exhaustive | 99 | 12 |
 
-None.
+No preset is selected or recommended by default. A wrapper may collect exactly
+one owner choice and request `aether host plan --preset
+<fast|balanced|deep|exhaustive>`. An exact `--target` plus `--max-iterations`
+pair is accepted only when it maps to one preset. The old owner-facing depth
+and phase-research approval ceremony is retired; routine read-only research is
+automatic inside the selected policy.
 
-## Outputs
+## Staged State Machine
 
-### Stdout
+The closed stage vocabulary is:
 
-All paths return a JSON envelope through `outputWorkflow`.
+`preset_required`, `scout_ready`, `scout_running`, `owner_decision`,
+`spec_approval_required`, `reconciliation_required`, `route_ready`,
+`route_running`, `continue_ready`, `candidate_ready`, `accepted`, and `failed`.
 
-| Path | Structured result |
-|------|-------------------|
-| New `--plan-only` / `host plan` | `plan_only: true`, `existing_plan: false`, `dispatch_mode: "plan-only"` or `"agent-delegate"`, `requires_finalizer: true`, `dispatches`, `plan_manifest`, and `planning_manifest`. The manifest includes `planning_run_id`, `iteration`, `target_confidence`, `max_iterations`, `previous_confidence`, `selected_gaps`, `previous_plan_draft`, and `expected_workers`. |
-| Existing plan without refresh | `plan_only: true`, `existing_plan: true`, `requires_finalizer: false`, existing `phases`, `count`, and `next` build command |
-| Pending `plan-finalize` iteration | `planned: false`, `iteration_completed: true`, `requires_next_iteration: true`, `planning_loop.stop_reason: "pending"`, `selected_gaps`, `evidence_hash`, and next `aether host plan ...` command |
-| `plan-finalize` | Final `phases`, `confidence`, accepted `plan_revision`, planning artifact paths, terminal `dispatches`, `dispatch_mode: "external-task"`, and next build command |
-| `plan --repair-artifact` | `repaired`, `repairs`, `validated`, `phase_plan`, `phase_count`, `task_count`, and next finalizer command |
+Only `scout_running` and `route_running` carry a worker manifest, and each
+manifest authorizes exactly one worker. The ordinary path is:
 
-Both manifest and finalizer outputs include `planning_loop` with
-`target_confidence`, `max_iterations`, `iterations`, `stop_reason`, and final
-confidence evidence. Stop reasons are `target_reached`, `stalled`,
-`max_iterations`, `accepted`, or `pending` for an intermediate iteration that
-must not be treated as a completed colony plan.
+1. `preset_required` -> `scout_ready` -> `scout_running`.
+2. Finalize the exact Scout result. Go issues either an owner-decision boundary
+   or a receipt-bound Route-Setter authorization.
+3. `route_ready` -> `route_running`. Finalize the exact Route-Setter result.
+4. Go persists and returns the complete iteration card before choosing
+   `continue_ready`, `owner_decision`, or `candidate_ready`.
+5. A continuation issues a new Scout manifest for the weakest evidenced gap.
+   A candidate remains non-active until exact acceptance moves
+   `candidate_ready` -> `accepted`.
 
-### Files Created/Modified
+The host must never dispatch Scout and Route-Setter as one whole-chain wave,
+predict a later stage, reuse a consumed authorization, or treat a worker's
+claimed next action as authority.
 
-| Path | Operation | When |
-|------|-----------|------|
-| .aether/data/pending-decisions.json | create/update | Only in Orchestrator mode when plan materializes boundary questions |
-| .aether/data/planning/iteration-state.json | create/update | `plan-finalize` when a valid iteration is below target and requires another manifest |
-| .aether/data/planning/iterations/ | create/update | `plan-finalize` stores inspectable per-iteration Scout and phase-plan evidence |
-| .aether/data/planning/SCOUT.md | create/update | `plan-finalize` after validation |
-| .aether/data/planning/ROUTE-SETTER.md | create/update | `plan-finalize` after validation |
-| .aether/data/planning/phase-plan.json | create/update | `plan-finalize` after validation |
-| .aether/data/phase-research/ | recreate | `plan-finalize` after validation |
-| .aether/data/COLONY_STATE.json | update | `plan-finalize` writes phases, current phase, granularity, confidence, and events |
-| .aether/data/spawn-tree.txt | append/update | `plan-finalize` records external planning worker results |
-| .aether/data/spawn-runs.json | update | `plan-finalize` records runtime spawn-run status |
-| .aether/data/session.json | update | `plan-finalize` updates the next-command session summary |
+## Stage Manifest and Finalization Contracts
 
-`aether plan --plan-only` must not create `.aether/data/planning/`, `.aether/data/phase-research/`, spawn-tree records, session summaries, spawn-run records, `.aether/CONTEXT.md`, `.aether/HANDOFF.md`, or plan fields in `.aether/data/COLONY_STATE.json`.
+`planning-stage-manifest/v1` is content addressed. Every manifest requires:
 
-### Exit Codes
+- `id`, `content_hash`, and one-use `authorization_id`
+- `run_id`, positive `pass`, selected `preset`
+- approved Specification `revision_id`, `content_hash`, status, and approval
+  receipt ID/hash
+- `base_plan_revision_id` and `base_plan_revision_hash`
+- `prior_card_hash` and `input_frontier_hash`
+- `expected_caste` and matching `expected_result_type`
 
-| Code | Meaning |
-|------|---------|
-| 0 | Success |
-| 1 | Colony not initialized, missing active goal, invalid manifest/completion evidence, stale workspace, or planning failure |
+A Scout manifest additionally carries the authorized `evidence_frontier` and
+one `weakest_gap`; it cannot carry future Route-Setter bindings. A Route-Setter
+manifest additionally carries the exact Scout receipt and
+`candidate_snapshot_hash`; it cannot carry a fresh Scout evidence frontier.
 
-## State Mutations
+The finalizer command is:
 
-### Manifest Step
-
-`aether plan --plan-only` and `aether host plan` are planning-intent surfaces. Dispatch entries with `status: "planned"` describe work the host should run later. They are not completion evidence.
-
-When an existing plan is present and no refresh is requested, the result is a no-finalizer response: `existing_plan: true`, `requires_finalizer: false`, and no `plan_manifest` or `planning_manifest`. Renderers should report the existing plan and next command only. They must not claim Scout or Route-Setter execution, render synthetic worker-complete ceremony, or ask the host to call `plan-finalize`.
-
-### Host Dispatch Step
-
-The host dispatches the manifest's exactly one Scout and exactly one Route-Setter externally, preserving that order. `planned` and `spawned` mean pending or active work; they must not be persisted, rendered, or summarized as completed worker results.
-
-Only terminal worker evidence, such as completed or failed worker result JSON, may be passed to `plan-finalize` as execution evidence.
-
-Completion packets must include the current `planning_run_id`, `iteration`, Scout evidence (`scout_report`), Route-Setter draft (`phase_plan` with confidence dimensions and unresolved gaps), and a compact source summary. If an `evidence_hash` is supplied, Go verifies it against the Scout and Route-Setter evidence; either way Go computes the authoritative evidence hash.
-
-### Finalizer Step
-
-`aether plan-finalize --completion-file <file>` is the state-mutating host-planning step. Before writing state, it validates:
-
-- the completion file includes a `plan_manifest`
-- the manifest came from `plan-only` or `agent-delegate` mode and has `requires_finalizer: true`
-- the manifest root, goal, colony mode, granularity, freshness, and workspace still match
-- `base_revision_id` and `base_plan_state_hash` still match the active canonical plan
-- each revision evidence file still exists inside the repository and its content hash matches the dispatched manifest
-- the manifest has exactly one expected Scout followed by exactly one expected Route-Setter
-- Scout and Route-Setter results are terminal and complete
-- Scout evidence and the Route-Setter phase plan are present
-- the Route-Setter phase plan is valid and not stale pre-existing evidence
-- completion packets are not reused for a planning iteration
-- confidence does not change without changed Scout/Route-Setter evidence or resolved gaps
-- every task dependency references a known runtime task id and the dependency graph has no cycles
-- planning-loop stop evidence is computed by the Go finalizer from the accepted
-  confidence and manifest loop controls
-
-After validation, if the stop reason is `pending`, the finalizer writes only inspectable planning iteration state and returns `requires_next_iteration: true`. It does not write a completed colony plan. If the stop reason is `target_reached`, `stalled`, `max_iterations`, or `accepted`, the finalizer writes canonical planning artifacts, updates `.aether/data/COLONY_STATE.json`, records spawn/run metadata, emits completion ceremony, clears intermediate iteration state, and updates session summary.
-
-For `--refresh` after completed work, the finalizer performs one atomic revision transaction. Completed phases and their task/evidence state remain byte-equivalent snapshots with the same IDs. Only the unfinished suffix is replaced, and its local task dependencies are offset behind the immutable prefix. `COLONY_STATE.json` records the active revision ID, parent, reason, evidence paths and input-content hash, planning evidence hash, plan hash, full immutable snapshot, and preserved/superseded/replacement phase IDs. If validation or the atomic write fails, the prior active plan remains canonical.
-
-### `phase-plan.json` Schema
-
-Route-Setter writes the machine plan artifact at `.aether/data/planning/phase-plan.json`:
-
-```json
-{
-  "phases": [
-    {
-      "name": "Phase name",
-      "description": "Phase objective",
-      "tasks": [
-        {
-          "goal": "Concrete task outcome",
-          "constraints": [],
-          "hints": [],
-          "success_criteria": [],
-          "evidence_requirements": [],
-          "depends_on": ["1.1"]
-        }
-      ],
-      "success_criteria": [],
-      "evidence_requirements": []
-    }
-  ],
-  "confidence": {
-    "knowledge": 0,
-    "requirements": 0,
-    "risks": 0,
-    "dependencies": 0,
-    "effort": 0,
-    "overall": 0
-  },
-  "gaps": []
-}
+```text
+aether plan-finalize --completion-file <completion-file>
 ```
 
-Do not include task id fields in the artifact. Aether assigns task ids from the task's array position after ignoring empty-goal tasks: first task in phase 1 is `1.1`, second task in phase 1 is `1.2`, first task in phase 2 is `2.1`.
+The completion packet submits the unchanged current `plan_manifest` plus
+exactly one of `scout_result` or `route_result`. Strict decoding rejects legacy
+whole-chain worker arrays, combined Scout/Route results, state patches,
+acceptance fields, invented next stages, and unknown fields.
 
-`depends_on` must be an array of those runtime task ids only. Do not use task text, file paths, descriptions, or custom ids such as `P1-T1`. The finalizer rejects invalid text dependencies with an actionable error. Common custom aliases such as `P1-T1` are normalized to `1.1` only when the target runtime task exists; validation is not weakened.
+### Scout proposal
 
-`evidence_requirements` optionally binds each success criterion to exact repository-relative `artifacts` and/or named `checks`. Supported checks are `build`, `types`, `lint`, `tests`, `claims`, and `watcher`. Once one requirement is present, every phase-level and task-level criterion in that phase must be bound. Runtime state under `.aether/data` cannot be used as product evidence.
+`planning-scout-result/v1` repeats the manifest ID/hash, run/pass/caste,
+Specification and base-plan bindings, and input frontier. It may propose only
+`findings`, `new_evidence`, `unresolved_gaps`, and
+`material_decision_candidates`. It cannot propose scores, semantic plan
+content, stops, candidates, acceptance, activation, or state mutations.
 
-If the worker artifact is nearly valid but has repairable dependency aliases, run:
+On success Go returns `stage_receipt`, the normalized `scout_artifact`, admitted
+evidence, remaining gaps, and exactly one current boundary: `decision_cards`,
+`route_stage_manifest`, or `successor_specification` approval/reconciliation.
+The StageReceipt binds its ID/hash and request digest to run/pass, manifest
+ID/hash, input-frontier hash, output path/hash, caste, prior receipt, resulting
+state, and any decision-resume or candidate-snapshot boundary.
 
-```bash
-aether plan --repair-artifact
+### Route-Setter proposal and Go validation
+
+`planning-route-setter-result/v1` repeats every current manifest binding,
+including the Scout receipt and candidate snapshot. It may propose plan-shaped
+content, proposal evidence IDs, five `dimension_assessments`, and material
+decision candidates. It cannot set an overall, stop reason, candidate status,
+acceptance, activation, state patch, or next stage.
+
+The five dimensions are exactly `knowledge`, `requirements`, `risks`,
+`dependencies`, and `effort`. Each Route-Setter assessment proposes whole-number
+`before` and `after` values, applicable `fresh_evidence_ids`,
+`resolved_gap_ids`, a typed `remaining_gap`, rationale, and producer receipt.
+Go validates evidence freshness/admissibility and the before value, rejects a
+supplied or mismatched overall, then derives weighted overall readiness,
+semantic delta, weakest gap, and stop policy. A score never rises because prose
+was restated or unrelated evidence appeared.
+
+On success Go returns `route_stage_receipt`, proposal hash, the persisted
+`iteration_card`, stop policy, and exactly one boundary:
+`scout_stage_manifest`, `decision_cards`, `successor_specification`, or
+`plan_candidate`.
+
+## Material Owner Decisions
+
+Only behavior, authority, risk tolerance, scope, or acceptance meaning may
+require an owner decision. Each decision card identifies the exact decision,
+why it is needed now, cited evidence, Queen recommendation, viable choices and
+consequences, affected semantic IDs, prior-answer/revalidation status, and the
+condition under which planning resumes. Evidence-answerable research,
+mechanics, scoring, or formatting questions do not become owner prompts.
+
+The host may collect every exact answer in the current batch. Go binds them to
+goal, session, approved Specification, base plan, batch ID/hash, frontier
+receipt or completed-card hash, decision/choice IDs, and equivalence hashes.
+The closed resolution is:
+
+- `direct_resume`: the answer does not change the approved contract; Go resumes
+  the exact previously authorized Scout or Route-Setter boundary.
+- `successor_spec_required`: the answer changes behavior, authority, risk,
+  scope, acceptance meaning, or affected semantic IDs; Go creates a distinct
+  successor `DRAFT`, moves to `spec_approval_required`, and requires exact
+  approval plus affected-scope reconciliation before a new Scout can run.
+
+The wrapper never decides which branch applies and never edits the
+Specification. A first-pass decision occurs after Scout and before Route-Setter;
+a later decision occurs only after the completed iteration card is visible.
+
+## Iteration Cards and Read-Only Detail
+
+Every completed Scout -> Route-Setter pass appends one immutable
+`planning-iteration/v2` card. The card binds ID/hash, run and iteration, both
+stage receipt IDs/hashes, evidence IDs, all five assessments, Go-derived
+overall/target facts, weakest gap, semantic delta, stop decision, and
+`evidence_that_would_change`.
+
+Gaps, iteration cards, stop decisions, and plan candidates all carry explicit
+`evidence_that_would_change`; below-target uncertainty is never hidden. Read one
+card without mutation through:
+
+```text
+aether plan --candidate --details --show-iteration <positive-pass>
 ```
 
-Then rerun `aether plan-finalize --completion-file <file>` with the same completion packet.
+The result operation is `candidate_iteration_detail` and binds `candidate_id`,
+`timeline_id`, `timeline_digest`, and the exact card.
 
-## Orchestrator Boundary Questions
+## Candidate Review, Queen Recommendation, and Acceptance
 
-In Orchestrator colony mode, `plan --plan-only` may materialize at most one planning-scope boundary question in `.aether/data/pending-decisions.json` and add `orchestrator_boundary_guidance` that routes `next` to `aether discuss`. This clarification side effect is not worker execution and does not make planned or spawned dispatches completed.
+`aether plan --candidate` is read-only. It returns `candidate_review`, the
+`pending_review` candidate ID/hash and expiry, approved Specification and base
+plan bindings, proposal/hash, five scores and derived actual/target readiness,
+stop decision, residual gaps, `evidence_that_would_change`, semantic delta,
+complete timeline/digest/cards, and `acceptance_command`.
 
-Outside Orchestrator mode, boundary-question fields should be empty/no-op.
+The candidate's recommendation is advice, never authority. It requires a
+content-addressed recommendation ID/hash, disposition `accept` or `revise`,
+candidate ID, evidence IDs, rationale, producer `queen`, producer ID, and
+creation time. A wrapper may render it but may not create or modify it.
 
-## Preconditions
+After the owner explicitly accepts the exact reviewed candidate, execute the
+returned `acceptance_command` verbatim:
 
-- Colony state exists in `.aether/data/COLONY_STATE.json`
-- The colony has an active goal
-- Store initialization succeeds
-- `plan-finalize` receives a fresh completion file produced from the current manifest and workspace
+```text
+aether plan --accept-candidate <candidate-id> --spec-revision <revision-id> --spec-hash <content-hash> --base-plan-revision <revision-id> --timeline-digest <digest> --proposal-hash <hash> --acceptance-token <token>
+```
+
+The deprecated `--accept` flag never accepts or activates a plan. Successful
+acceptance atomically writes a `plan-acceptance/v1` receipt binding candidate
+ID/hash, Specification revision ID/hash, base-plan ID/hash, timeline ID/digest,
+proposal hash, hashed acceptance token, owner, time, and activated PlanRevision
+ID/hash. Only then may the UI offer guided build and Autopilot as coequal next
+actions.
+
+## Replay, Conflict, and Recovery
+
+Every mutating operation is content-addressed and retry-safe:
+
+- An exact retry of stage dispatch, stage output, stage finalization,
+  decision-resume, Specification mutation/approval, or candidate acceptance
+  returns the existing artifact/receipt with `replayed: true` or an equivalent
+  idempotent result. It appends no duplicate state.
+- A retry with the same identity but different bytes, hashes, answers,
+  frontier, Specification, base plan, proposal, timeline, or token is a
+  divergent replay. It fails non-zero, leaves canonical state unchanged, and
+  returns the exact read-only recovery/inspection command for the current
+  boundary.
+- A stale worker result retains completed prior receipts and issues no next
+  stage. A stale candidate acceptance leaves the active PlanRevision unchanged
+  and routes to `aether plan --candidate`.
+
+The closed execution-authority refusal codes shared by Build and Autopilot are:
+
+`plan_authority_state_unavailable`, `plan_authority_policy_missing`,
+`plan_authority_no_active_plan`, `plan_authority_legacy_invalid`,
+`plan_authority_specification_not_approved`,
+`plan_authority_stale_specification`,
+`plan_authority_candidate_not_accepted`, `plan_authority_candidate_invalid`,
+`plan_authority_stale_base`, `plan_authority_broken_timeline`,
+`plan_authority_acceptance_invalid`, and `plan_authority_affected_scope`.
+
+Each refusal carries `eligible: false`, `state_effect: none`, a diagnostic, and
+an exact `recovery_command`. Renderers may translate the explanation but must
+not infer or rewrite the code or command.
+
+## Host Boundary
+
+Wrappers may render structured Go results, collect one selected preset, collect
+the exact owner answers for the current decision batch, dispatch only the one
+authorized worker, and execute a runtime-returned exact command. They may not:
+
+- edit `COLONY_STATE.json`, `.aether/SPEC.md`, canonical Specification or plan
+  artifacts, transaction journals, projections, or active revision pointers
+- derive or alter stable IDs, hashes, evidence admissibility, scores, overall
+  readiness, gaps, semantic deltas, materiality, stop reasons, or next actions
+- mint or alter stage/approval/acceptance receipts, decision tokens, Queen
+  recommendations, candidate status, or acceptance commands
+- treat Specification approval, preset selection, worker completion, planning
+  stop, generic confirmation, or candidate readiness as plan acceptance
+
+See `.aether/docs/wrapper-host-contract.md` for the shared host envelope and
+wrapper obligations.

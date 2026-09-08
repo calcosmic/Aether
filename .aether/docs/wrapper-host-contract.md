@@ -30,7 +30,7 @@ The open question: should wrappers become thin pass-throughs (just call `aether 
 
 | Layer | May | Must Not |
 |-------|-----|----------|
-| **Wrappers** | Call `aether host` for host-backed flows, spawn workers, render ceremony, add colony framing/narration, read a build dispatch's brief from `brief_path` (a runtime-produced file holding the identical bytes as the inline `brief`, preferred for briefs subject to Read-tool long-line truncation) | Duplicate verification/gating, mutate colony state, parse visual output as authoritative, expose raw provider stdout/stderr or auth probe output, document unimplemented future host targets as implemented |
+| **Wrappers** | Call `aether host` for host-backed flows, spawn only runtime-authorized workers, render ceremony, collect a runtime-defined preset or exact owner answer, execute a runtime-returned exact command, add colony framing/narration, read a build dispatch's brief from `brief_path` (a runtime-produced file holding the identical bytes as the inline `brief`, preferred for briefs subject to Read-tool long-line truncation) | Duplicate verification/gating, mutate colony state, edit `SPEC.md` or plan artifacts, compute planning scores/stops, mint receipts/tokens/recommendations, change candidate status or active revision, parse visual output as authoritative, expose raw provider stdout/stderr or auth probe output, document unimplemented future host targets as implemented |
 | **TS Host** | Parse flags, call Go CLI via JSON, render dashboards, manage event streams | Write to `.aether/data/` directly, duplicate Go-owned logic, invent provider/auth diagnostics |
 | **Go CLI** | Own all state mutations, verification, gating, finalizers, canonical artifact writes, provider availability preflight diagnostics | Spawn platform agents (Claude/OpenCode/Codex workers) |
 
@@ -55,14 +55,60 @@ can name a step without enumerating a schema.
 | `dispatch.permission_profile` | TS host | Preserve, never broaden `repository_read_only`; reject `scoped_write` or `test_write` when the host cannot enforce it. |
 | `dispatch_manifest.orchestrator_boundary_guidance` | TS host | Route to `aether discuss` when active or `next` is `aether discuss`; request a fresh manifest after resolution. |
 | `result.manifest.continue_manifest` | TS host | The sole source of reviewer names, castes, waves, and briefs for heavy continue — spawn exactly what it names. |
-| `result.plan_manifest` | TS host | The sole source of `planning_run_id`, `iteration`, selected gaps, and worker briefs for one planning iteration. |
-| `result.planning_manifest` | TS host | Equivalent alias to `result.plan_manifest` depending on host response shape; treat identically. |
-| `result.depth_proposal_card` | TS host | Print verbatim, never re-reason or restate the runtime's depth recommendation. |
-| `result.research_proposal_card` | TS host | Print verbatim, never re-reason or compose a research recommendation when non-empty. |
+| `result.plan_manifest.stage_manifest` | TS host over Go | The sole planning worker authority for the current stage. It binds one `authorization_id`, run/pass, preset, approved Specification revision/hash/receipt, base-plan revision/hash, input frontier, expected caste/result type, and caste-specific predecessor fields. |
+| `stage_manifest.expected_caste` | Go CLI | Dispatch exactly one `scout` or one `route_setter`. A Route-Setter stage exists only after the exact Scout receipt; a later Scout exists only after a completed card. |
+| `stage_manifest.expected_result_type` | Go CLI | Require exactly `planning-scout-result/v1` or `planning-route-setter-result/v1`; do not add state, score, stop, candidate, acceptance, or next-stage fields to worker output. |
+| `result.stage_receipt` | Go CLI | Retain the content-addressed Scout receipt returned by finalization; it proves the consumed manifest/output and resulting boundary but grants no future-stage authority. |
+| `result.route_stage_manifest` | Go CLI | When present, this alone authorizes the current pass's Route-Setter and binds the exact Scout receipt plus candidate snapshot. |
+| `result.route_stage_receipt` | Go CLI | Retain the content-addressed Route-Setter receipt and render the complete iteration card before acting on the next boundary. |
+| `result.scout_stage_manifest` | Go CLI | When present after a card, this alone authorizes the next pass's gap-targeted Scout. |
+| `result.decision_cards` | Go CLI | Render the complete evidence-first owner batch and submit only the exact selected answers with the issued resume binding. The host never selects or classifies an answer. |
+| `result.iteration_card` | Go CLI | Render once and retain in order: receipts, evidence, five validated dimensions, weakest gap, semantic delta, stop/pause reason, and `evidence_that_would_change`. |
+| `result.plan_candidate` | Go CLI | Label the stopped proposal `NOT ACTIVE`; review it through `aether plan --candidate` before exposing any acceptance choice. |
+| `result.acceptance_command` | Go CLI | After explicit owner acceptance, execute the full command verbatim. Never reconstruct, shorten, or substitute its Specification/base/timeline/proposal/token bindings. |
 | `result.completion_path` | Go CLI | Finalize only the Go-owned path — the durable packet at this path, never the staged completion file directly. |
-| `result.requires_next_iteration` | Go CLI | Never treat as a completed plan when true; request the next planning iteration instead. |
 
 Wrapper prose points here once and does not restate this table.
+
+The planning rows deliberately do not list the retired whole-chain
+`result.planning_manifest`, `result.depth_proposal_card`,
+`result.research_proposal_card`, or `result.requires_next_iteration` contract.
+Planning now advances only through the current stage manifest, its exact
+finalizer receipt, and the next boundary selected by Go.
+
+## Planning Authority and Replay
+
+In plain language, a stage manifest is a one-use ticket for one worker; a
+receipt proves what Go accepted at that boundary; neither lets the wrapper
+decide what happens next.
+
+- Specification approval, a planning stop, and candidate acceptance are three
+  separate transitions. Specification approval permits planning against one
+  revision. A Go-selected stop creates a reviewable non-active candidate. Only
+  the exact candidate `acceptance_command` may activate a PlanRevision.
+- Route-Setter proposes five readiness dimensions. Go validates the evidence
+  and derives overall readiness, semantic delta, weakest gap, materiality, and
+  stop policy. The host renders those results and never recomputes them.
+- A material owner answer returns either `direct_resume` or
+  `successor_spec_required`. The host never chooses the branch. A successor
+  remains DRAFT until exact Specification approval and affected-scope
+  reconciliation complete.
+- Gaps, completed cards, stop decisions, and candidates retain
+  `evidence_that_would_change`. Candidate review retains the Queen
+  recommendation's producer, producer ID, evidence IDs, rationale, and
+  accept/revise disposition; advice grants no authority.
+- Exact replay is idempotent: return the existing artifact/receipt and do not
+  duplicate state. Divergent replay or stale identity fails with state
+  unchanged and the runtime's exact recovery command. The wrapper may not
+  repair a mismatch by selecting newer IDs or editing the packet.
+
+## Platform Display Spelling
+
+Claude Code and OpenCode render owner navigation as `/ant-spec`, `/ant-plan`,
+`/ant-build`, and `/ant-run`, while executing the runtime command supplied by
+the host. Codex is runtime-native and displays `aether spec`, `aether plan`,
+`aether build`, and `aether run`; it does not advertise a native `$ant-*`
+surface. Platform spelling changes presentation, never state or authority.
 
 ## Terminal Worker Result Belongs to the Wrapper
 
