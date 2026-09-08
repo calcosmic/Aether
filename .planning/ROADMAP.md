@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 29/40 plans executed
+**Plans:** 30/40 plans executed
 
 Plans:
 
@@ -270,7 +270,7 @@ Plans:
 
 **Wave 18** *(gap closure; blocked on Wave 17 completion)*
 
-- [ ] 200-30-PLAN.md — Bind the canonical semantic delta and complete review payload into candidate identity.
+- [x] 200-30-PLAN.md — Bind the canonical semantic delta and complete review payload into candidate identity.
 
 **Wave 19** *(gap closure; blocked on Wave 18 completion)*
 

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 200-29-PLAN.md
-last_updated: "2026-09-08T21:36:16.239Z"
+stopped_at: Completed 200-30-PLAN.md
+last_updated: "2026-09-08T22:37:47.411Z"
 last_activity: 2026-09-08
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 74
-  completed_plans: 63
+  completed_plans: 64
   percent: 14
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 30 of 40
+Plan: 31 of 40
 Status: Ready to execute
 Last activity: 2026-09-08
 
@@ -140,6 +140,7 @@ Last activity: 2026-09-08
 | Phase 200 P27 | 22 min | 2 tasks | 6 files |
 | Phase 200 P28 | 24 min | 3 tasks | 5 files |
 | Phase 200 P29 | 21 min | 3 tasks | 6 files |
+| Phase 200 P30 | 45 min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -432,6 +433,8 @@ Last activity: 2026-09-08
 - [Phase 200]: Stable specification item IDs derive from their typed section and visible canonical lineage, and the item hash binds that exact ID.
 - [Phase 200]: Revision created_at is immutable body material; status and approval remain separate receipt-bound lifecycle authority.
 - [Phase 200]: Persisted specification loads and repository-backed planning, build, and run gates require canonical recomputation while explicit specification-less legacy plans remain compatible.
+- [Phase 200]: Candidate identity excludes only mutable status/acceptance and clears only proposal-, phase-, and task-level candidate back-references plus the recommendation candidate ID while deriving the immutable digest. — This avoids a fixed-point hash while binding every actual review and authority input.
+- [Phase 200]: Retained state permits structural legacy compatibility, while artifact review and build/run authority require loader-attested canonical candidate, timeline, and acceptance-receipt validation. — Legacy pre-addressed in-memory shapes remain readable without allowing them to grant execution authority.
 
 ### Pending Todos
 
@@ -548,8 +551,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-08T21:36:16.230Z
-Stopped at: Completed 200-29-PLAN.md
+Last session: 2026-09-08T22:37:47.402Z
+Stopped at: Completed 200-30-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
