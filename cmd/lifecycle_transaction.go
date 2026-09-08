@@ -104,6 +104,7 @@ type lifecycleTransactionConfig struct {
 	TransactionID string
 	Command       string
 	Allowlist     lifecycleTransactionAllowlist
+	Session       *planningMutationSession
 	Rename        func(oldPath, newPath string) error
 	Fault         lifecycleTransactionFaultHook
 }
@@ -214,7 +215,13 @@ func beginLifecycleTransaction(config lifecycleTransactionConfig) (*lifecycleTra
 	if strings.TrimSpace(config.Command) == "" {
 		return nil, fmt.Errorf("lifecycle transaction: command is required")
 	}
-	roots, err := resolveLifecycleTransactionRoots(config.Allowlist)
+	var roots map[lifecycleTransactionRootKind]lifecycleResolvedRoot
+	var err error
+	if config.Session != nil {
+		roots, err = config.Session.lifecycleRoots(config.Allowlist)
+	} else {
+		roots, err = resolveLifecycleTransactionRoots(config.Allowlist)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -357,7 +364,12 @@ func (tx *lifecycleTransaction) declare(kind lifecycleTransactionRootKind, relat
 	if _, duplicate := tx.targets[targetPath]; duplicate {
 		return fmt.Errorf("lifecycle transaction: duplicate target %q", targetPath)
 	}
-	state, err := readLifecycleFileState(targetPath)
+	var state lifecycleFileState
+	if tx.config.Session != nil {
+		state, err = tx.config.Session.capturedBaseline(kind, cleanRelative)
+	} else {
+		state, err = readLifecycleFileState(targetPath)
+	}
 	if err != nil {
 		return fmt.Errorf("lifecycle transaction: read baseline for %q: %w", targetPath, err)
 	}
@@ -467,7 +479,7 @@ func (tx *lifecycleTransaction) Validate() error {
 		if root.Path != declaration.Root.Path || targetPath != declaration.TargetPath || clean != declaration.RelativeTarget {
 			return fmt.Errorf("lifecycle transaction: resolved target changed for %q", declaration.RelativeTarget)
 		}
-		state, err := readLifecycleFileState(declaration.TargetPath)
+		state, err := tx.currentDeclarationState(declaration)
 		if err != nil {
 			return fmt.Errorf("lifecycle transaction: verify baseline for %q: %w", declaration.TargetPath, err)
 		}
@@ -479,7 +491,19 @@ func (tx *lifecycleTransaction) Validate() error {
 	return nil
 }
 
+func (tx *lifecycleTransaction) currentDeclarationState(declaration *lifecycleTransactionDeclaration) (lifecycleFileState, error) {
+	if tx.config.Session != nil {
+		return tx.config.Session.currentFileState(declaration.Root.Kind, declaration.RelativeTarget)
+	}
+	return readLifecycleFileState(declaration.TargetPath)
+}
+
 func (tx *lifecycleTransaction) Commit() (colony.LifecycleReceipt, error) {
+	if tx.config.Session != nil {
+		if err := tx.config.Session.requireActive(); err != nil {
+			return colony.LifecycleReceipt{}, err
+		}
+	}
 	lifecycleTransactionProcessMu.Lock()
 	defer lifecycleTransactionProcessMu.Unlock()
 
@@ -575,7 +599,7 @@ func (tx *lifecycleTransaction) stageAndPersistIntent() error {
 			}
 			preimagePath := ""
 			if declaration.BeforeExists {
-				state, err := readLifecycleFileState(declaration.TargetPath)
+				state, err := tx.currentDeclarationState(declaration)
 				if err != nil {
 					return err
 				}
@@ -921,6 +945,11 @@ func (tx *lifecycleTransaction) restoreLifecycleTarget(target lifecycleTransacti
 }
 
 func (tx *lifecycleTransaction) Rollback() error {
+	if tx.config.Session != nil {
+		if err := tx.config.Session.requireActive(); err != nil {
+			return err
+		}
+	}
 	lifecycleTransactionProcessMu.Lock()
 	defer lifecycleTransactionProcessMu.Unlock()
 	if _, committed, err := tx.loadCommittedReceipt(); err != nil {
@@ -946,6 +975,11 @@ func resumeLifecycleTransaction(config lifecycleTransactionConfig) (colony.Lifec
 	tx, err := beginLifecycleTransaction(config)
 	if err != nil {
 		return colony.LifecycleReceipt{}, err
+	}
+	if config.Session != nil {
+		if err := config.Session.requireActive(); err != nil {
+			return colony.LifecycleReceipt{}, err
+		}
 	}
 	lifecycleTransactionProcessMu.Lock()
 	defer lifecycleTransactionProcessMu.Unlock()

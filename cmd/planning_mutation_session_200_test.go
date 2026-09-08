@@ -21,13 +21,14 @@ import (
 const planningMutationHelperEnvironment = "AETHER_PLANNING_MUTATION_SESSION_HELPER"
 
 type planningMutationProcessResult struct {
-	Observed string                        `json:"observed,omitempty"`
-	Receipt  planningTimelineAppendReceipt `json:"receipt,omitempty"`
-	Error    string                        `json:"error,omitempty"`
+	Observed string                         `json:"observed,omitempty"`
+	Receipt  *planningTimelineAppendReceipt `json:"receipt,omitempty"`
+	Error    string                         `json:"error,omitempty"`
 }
 
 type planningMutationChildProcess struct {
 	command     *exec.Cmd
+	output      *bytes.Buffer
 	ready       *os.File
 	release     *os.File
 	result      *os.File
@@ -338,6 +339,9 @@ func TestPlanningTimelineConcurrentProcesses200(t *testing.T) {
 	if len(loaded.Cards) != 2 || loaded.Index == nil {
 		t.Fatalf("timeline = %#v, want two serialized cards", loaded)
 	}
+	if firstResult.Receipt == nil || secondResult.Receipt == nil {
+		t.Fatalf("timeline children returned no receipts: first=%#v second=%#v", firstResult, secondResult)
+	}
 	if loaded.Cards[0].ID != firstResult.Receipt.CardID || loaded.Cards[1].ID != secondResult.Receipt.CardID {
 		t.Fatalf("timeline order = %q then %q, receipts = %q then %q", loaded.Cards[0].ID, loaded.Cards[1].ID, firstResult.Receipt.CardID, secondResult.Receipt.CardID)
 	}
@@ -425,7 +429,7 @@ func runPlanningMutationSessionHelper(t *testing.T) {
 		if err != nil {
 			response.Error = err.Error()
 		} else {
-			response.Receipt = receipt
+			response.Receipt = &receipt
 		}
 	default:
 		response.Error = "unknown helper mode " + mode
@@ -544,6 +548,9 @@ func startPlanningMutationChild(t *testing.T, mode, root, token, card string, ho
 		command.Env = append(command.Env, "AETHER_PLANNING_MUTATION_PREDECESSOR="+string(predecessor))
 	}
 	command.ExtraFiles = []*os.File{readyWrite, releaseRead, resultWrite, holdReadyWrite, holdReleaseRead}
+	output := &bytes.Buffer{}
+	command.Stdout = output
+	command.Stderr = output
 	if err := command.Start(); err != nil {
 		cancel()
 		t.Fatalf("start planning mutation helper: %v", err)
@@ -554,7 +561,7 @@ func startPlanningMutationChild(t *testing.T, mode, root, token, card string, ho
 	_ = holdReadyWrite.Close()
 	_ = holdReleaseRead.Close()
 	return &planningMutationChildProcess{
-		command: command, ready: readyRead, release: releaseWrite, result: resultRead,
+		command: command, output: output, ready: readyRead, release: releaseWrite, result: resultRead,
 		holdReady: holdReadyRead, holdRelease: holdReleaseWrite, cancel: cancel,
 	}
 }
@@ -571,7 +578,7 @@ func awaitPlanningMutationChild(t *testing.T, child *planningMutationChildProces
 		t.Fatalf("read planning mutation helper result: %v", readErr)
 	}
 	if waitErr != nil {
-		t.Fatalf("planning mutation helper failed: %v; result=%s", waitErr, content)
+		t.Fatalf("planning mutation helper failed: %v; result=%s; output=%s", waitErr, content, child.output.String())
 	}
 	var result planningMutationProcessResult
 	if err := json.Unmarshal(content, &result); err != nil {
