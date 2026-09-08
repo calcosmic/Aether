@@ -37,6 +37,7 @@ key-decisions:
   - "Every answer is bound to the runtime-issued decision ID and followed by a fresh Discuss result; prior answers remain reusable only under exact equivalence."
   - "Settled discussion ends at a draft or retained approved specification and routes to Specification review, never directly to planning."
   - "Oracle guidance remains unchanged while Codex Discuss orchestration adopts the same runtime-owned evidence boundary as Claude and OpenCode."
+  - "Legacy compose/fallback phrases remain only as explicitly inert migration markers so older wrapper-contract checks can recognize the surface without restoring wrapper-owned decisions."
 
 patterns-established:
   - "Wrapper parity: one YAML-owned runtime call, one structured result, platform-native rendering, and no host-side lifecycle writes."
@@ -69,11 +70,13 @@ completed: 2026-09-08
 - Rewrote the public lifecycle contract to cover current flags, evidence ownership, structured outputs, draft-spec transactions, projections, receipts, and state effects.
 - Updated only the Discuss portion of the combined research skill; the Oracle interview, template, depth, confidence, background, fallback, and status behavior remains intact.
 - Added semantic parity coverage for the canonical YAML, both Claude entry points, OpenCode wrapper, public contract, research skill, Oracle anchors, and live Cobra flag help.
+- Restored the pre-existing wrapper compatibility anchors and Codex drift-guard references as visibly retired, non-executable guidance while making the Claude/OpenCode peer bodies byte-identical.
 
 ## Task Commits
 
 1. **Task 1: Align evidence-first Discuss wrappers** — `6fb3c0e9` (feat)
 2. **Task 2: Codify public Discuss and research-skill contract** — `3b9c5e1e` (feat)
+3. **Wave 10 compatibility repair: Preserve generator-era anchors without restoring their authority** — `a130616e` (fix)
 
 ## Files Created/Modified
 
@@ -94,7 +97,21 @@ completed: 2026-09-08
 
 ## Deviations from Plan
 
-None - plan executed exactly as written.
+### Auto-fixed Issues
+
+**1. [Rule 1 - Bug] Restored inert compatibility and cross-platform drift anchors**
+
+- **Found during:** Wave 10 full command-package verification after Plan 200-24 completed
+- **Issue:** The evidence-first rewrite removed exact legacy compose/fallback recognition anchors and two required Codex drift-guard references; the Claude and OpenCode wrappers also differed by one platform name, and the public contract used a lowercase `State mutations` heading that violated the contract validator.
+- **Fix:** Added a canonical `legacy_compatibility` declaration and matching visibly retired, non-executable wrapper section; made all three wrapper bodies platform-neutral and byte-identical; restored `cmd/command_guide.go`, `aether-colony-research`, and exact command-guide references; capitalized `## State Mutations`; and tightened the Plan 20 test so these markers are permitted only with explicit disabled-authority language.
+- **Files modified:** `.aether/commands/discuss.yaml`, `.claude/commands/ant-discuss.md`, `.claude/commands/ant/discuss.md`, `.opencode/commands/ant/discuss.md`, `cmd/contracts/discuss.md`, `cmd/discuss_wrapper_contract_200_test.go`
+- **Verification:** All 12 named compatibility/parity tests, all 5 Plan 20 focused tests, and source-check pass.
+- **Committed in:** `a130616e`
+
+---
+
+**Total deviations:** 1 auto-fixed bug
+**Impact on plan:** Compatibility vocabulary is present only as inert migration text; Go still exclusively owns evidence, materiality, cards, answer binding, persistence, and the draft-specification handoff.
 
 ## Issues Encountered
 
@@ -104,6 +121,7 @@ None - plan executed exactly as written.
 ## Verification
 
 - `go test ./cmd -run 'TestDiscussWrapperContract200|TestDiscuss.*DraftSpec|Test.*ResearchSkill' -count=1` — 5 passed.
+- `go test ./cmd -run 'TestIntelligentWrappersCarryCodexDriftGuard|TestClaudeOpenCodeCommandParity|TestCommandSourceHygiene|TestDiscussWrapperComposesGroundedQuestions|TestDiscussGeneratorIsFallbackOnly|TestContractStructure' -count=1` — 12 passed.
 - `go run ./cmd/aether source-check` — passed all 16 canonical-source, 5 retired-mirror, and 124 generated-wrapper checks with no findings.
 - `git diff --check` — passed before both task commits.
 - Stub scan across all seven plan files — no functional stubs; the only textual match was the intentional Go slice declaration `[]string` in the regression test.
@@ -125,7 +143,7 @@ None - no external service or local configuration is required.
 ## Self-Check: PASSED
 
 - All seven plan-owned wrapper, documentation, skill, and test files plus this summary exist.
-- Both task commit hashes are present in repository history.
+- Both task commit hashes and the Wave 10 compatibility repair hash are present in repository history.
 
 ---
 *Phase: 200-iterative-planning*
