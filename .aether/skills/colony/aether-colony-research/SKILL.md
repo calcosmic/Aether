@@ -100,20 +100,40 @@ Codex/Claude fallback unless the user explicitly set `AETHER_WORKER_PLATFORM=ope
 1. Run:
 
 ```bash
-AETHER_OUTPUT_MODE=json aether discuss-analyze --target .
+AETHER_OUTPUT_MODE=json aether discuss
 ```
 
-2. Use the runtime suggestions to formulate codebase-aware questions. Cover
-   architecture, dependencies, testing, deployment, performance, and product
-   intent where relevant.
-3. Present questions honestly. Do not invent answers.
-4. Persist answers only through runtime commands such as:
+2. Treat the Go result as authoritative. The runtime collects current charter,
+   survey, codebase, constraint, clarification, specification-revision, and
+   plan-revision evidence; it alone decides which gaps are evidence-answerable
+   and which choices remain material. Do not compose fallback questions or
+   impose a fixed question count.
+3. When `material_batch.cards` is present, render the complete batch. For every
+   card show `decision`, `why_now`, typed `evidence`,
+   `queen_recommendation`, each choice and its `consequence`,
+   `affected_semantic_ids`, `prior_answer`, `revalidation`,
+   `planning_resumes`, and `exact_answer_syntax`. A recommendation is not an
+   owner answer.
+4. Ask the owner to answer a card using the exact runtime-issued decision ID
+   and answer binding. Persist it only through the syntax returned by the card,
+   equivalent to:
 
 ```bash
-AETHER_OUTPUT_MODE=visual aether discuss --resolve <id> --answer "<answer>"
+AETHER_OUTPUT_MODE=json aether discuss --resolve <exact-id> --answer "<answer>"
 ```
 
-5. When runtime reports `discussion_status: settled`, route back to `aether plan`.
+5. After each owner answer, rerun `AETHER_OUTPUT_MODE=json aether discuss` and
+   render the fresh result. Do not assume the previous card list, ordering, or
+   remaining count is still current.
+6. Reuse a prior answer only when the runtime says it is equivalent across the
+   exact goal, session, approved specification revision, base plan revision,
+   decision meaning, behavior, authority, scope, risk, acceptance meaning, and
+   affected semantic IDs. Otherwise surface the runtime's revalidation need.
+7. When the runtime reports `discussion_status: settled`, render the returned
+   `draft_spec` or existing `approved_spec` and direct the owner to the exact
+   next command, `aether spec`. A draft is not plan approval: specification
+   review and exact-revision approval remain a separate owner action before
+   planning can begin.
 
 ## Guardrails
 
