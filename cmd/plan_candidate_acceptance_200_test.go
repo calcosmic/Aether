@@ -237,6 +237,60 @@ func TestPlanCandidateAcceptanceConcurrentProcesses200(t *testing.T) {
 	}
 }
 
+// TestPlanAuthorityRejectsReaddressedFalseImpact200 proves that build/run
+// authority cannot rely on acceptance-time content addressing. Every retained
+// binding below is rewritten consistently around a false authority impact;
+// only a fresh base/specification/proposal derivation can detect the lie.
+func TestPlanAuthorityRejectsReaddressedFalseImpact200(t *testing.T) {
+	state, cards := validCurrentPlanningState(t)
+	candidate := planCandidateSemanticIntegrity200Clone(t, state.Plan.Candidates[0])
+	falseImpact := colony.PlanningAuthorityImpact{
+		Kind: colony.PlanningAuthorityCandidateStatus, SourceID: "forged-accepted-authority",
+		AffectedSemanticIDs: []string{candidate.Proposal.SemanticID},
+		Rationale:           "A consistently re-addressed assertion is still not independent authority.",
+	}
+	if err := colony.AddressPlanningAuthorityImpact(&falseImpact); err != nil {
+		t.Fatalf("address false accepted authority impact: %v", err)
+	}
+	candidate.SemanticDelta.AuthorityImpacts = append(candidate.SemanticDelta.AuthorityImpacts, falseImpact)
+	if err := colony.AddressPlanningSemanticDelta(&candidate.SemanticDelta); err != nil {
+		t.Fatalf("re-address false accepted semantic delta: %v", err)
+	}
+	candidate.Acceptance = nil
+	if err := addressPlanCandidateReviewPayload(&candidate); err != nil {
+		t.Fatalf("re-address false accepted candidate: %v", err)
+	}
+	receipt, err := newPlanCandidateAcceptanceReceipt(
+		candidate,
+		planCandidateAcceptanceToken(candidate),
+		candidate.Proposal,
+		"owner:forged-authority",
+		time.Date(2026, time.September, 9, 10, 0, 0, 0, time.UTC),
+	)
+	if err != nil {
+		t.Fatalf("re-address false accepted receipt: %v", err)
+	}
+	candidate.Status = colony.PlanCandidateAccepted
+	candidate.Acceptance = &receipt
+
+	state.Plan.Candidates[0] = candidate
+	state.Plan.ActiveRevisionID = candidate.Proposal.ID
+	state.Plan.Revisions[len(state.Plan.Revisions)-1] = candidate.Proposal
+	state.Plan.Phases = clonePhases(candidate.Proposal.Phases)
+	if err := validatePlanningState(state); err != nil {
+		t.Fatalf("self-consistent forged accepted fixture is not structurally canonical: %v", err)
+	}
+	facts := lifecycleFactsFromStateSnapshot(state, false, time.Date(2026, time.September, 9, 10, 1, 0, 0, time.UTC))
+	bindings := planAuthorityVerifiedBindings{
+		Candidate: &candidate, Acceptance: &receipt, Timeline: &candidate.Timeline,
+		Cards: clonePlanningCards(t, cards), CandidateCanonical: true, TimelineCanonical: true, AcceptanceCanonical: true,
+	}
+	decision := validateAcceptedPlanAuthority(facts, bindings)
+	if decision.Eligible || decision.RefusalCode != planAuthorityRefusalCandidateInvalid || !strings.Contains(decision.Diagnostic, "derived") {
+		t.Fatalf("build/run authority accepted a re-addressed false impact: %+v", decision)
+	}
+}
+
 type planCandidateAcceptance200ProcessResult struct {
 	Result *planCandidateAcceptanceResult `json:"result,omitempty"`
 	Error  string                         `json:"error,omitempty"`
