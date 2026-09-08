@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -8,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -18,6 +20,7 @@ import (
 // assignment leaks into subsequent tests. Belt-and-suspenders with per-test
 // cleanup via saveGlobals.
 func TestMain(m *testing.M) {
+	extendDefaultCommandPackageTestTimeout()
 	origOutputMode, hadOutputMode := os.LookupEnv("AETHER_OUTPUT_MODE")
 	origHivePolicy, hadHivePolicy := os.LookupEnv(hivePolicyEnv)
 	_ = os.Setenv("AETHER_OUTPUT_MODE", "json")
@@ -117,6 +120,21 @@ func TestMain(m *testing.M) {
 	}
 
 	os.Exit(code)
+}
+
+// extendDefaultCommandPackageTestTimeout keeps the growing integration suite
+// from reaching Go's stock ten-minute deadline before t.Parallel isolation
+// wrappers are scheduled. Explicit non-default budgets (including every
+// isolated child budget) remain untouched and therefore stay fail-closed.
+func extendDefaultCommandPackageTestTimeout() {
+	if !flag.Parsed() {
+		flag.Parse()
+	}
+	timeoutFlag := flag.Lookup("test.timeout")
+	if timeoutFlag == nil || timeoutFlag.Value.String() != (10*time.Minute).String() {
+		return
+	}
+	_ = timeoutFlag.Value.Set((30 * time.Minute).String())
 }
 
 // saveGlobals captures the current values of all mutable package-level globals
