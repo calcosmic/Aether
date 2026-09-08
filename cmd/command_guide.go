@@ -13,6 +13,7 @@ const (
 	commandGuideCategoryLiteral           = "literal"
 	commandGuideCategoryFullOrchestration = "full-orchestration"
 	commandGuideCategorySemiIntelligent   = "semi-intelligent"
+	commandGuideCategoryRuntimeNative     = "runtime-native"
 
 	commandGuideSkillCreation   = "aether-colony-creation"
 	commandGuideSkillResearch   = "aether-colony-research"
@@ -193,6 +194,19 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 			"Never invoke entomb automatically or fold it into the seal workflow.",
 		},
 	}
+	catalog["spec"] = commandGuideDefinition{
+		Category: commandGuideCategoryRuntimeNative,
+		Intent: "Inspect, revise, approve, or repair the canonical owner-readable Specification through the Go runtime. " +
+			"Specification approval is separate from planning stop and exact plan-candidate acceptance.",
+		Literal:    true,
+		RunCommand: "AETHER_OUTPUT_MODE=visual aether spec $ARGUMENTS",
+		RawBypass:  "Runtime-native passthrough is the default; Codex uses `aether spec`, while Claude/OpenCode use their generated `/ant-spec` wrapper over the same Go operations.",
+		DriftGuards: []string{
+			"Keep all nine typed body categories, immutable revision/hash bindings, exact approval token, projection repair, replay result, receipt, and next action owned by Go.",
+			"Do not parse `.aether/SPEC.md` as authority or treat Specification approval as a planning stop, candidate acceptance, plan activation, or build eligibility.",
+			"When this surface changes, update `.aether/commands/spec.yaml`, Claude/OpenCode wrappers, `cmd/contracts/spec.md`, and `command-guide` together.",
+		},
+	}
 
 	catalog["init"] = commandGuideDefinition{
 		Category:       commandGuideCategoryFullOrchestration,
@@ -255,41 +269,42 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 	catalog["plan"] = commandGuideDefinition{
 		Category:       commandGuideCategoryFullOrchestration,
 		SkillReference: commandGuideSkillBuildCycle,
-		Intent:         "Select planning depth, enforce clarification gates, and use runtime manifests for Scout and Route-Setter orchestration.",
+		Intent:         "Plan from one approved Specification through one Go-authorized Scout or Route-Setter stage at a time, then review and explicitly accept the exact stopped candidate.",
 		Literal:        false,
 		PreSteps: []string{
 			"Load the aether-colony-build-cycle Codex skill.",
-			"Decision Moment 1 (depth proposal): request a first manifest with `aether host plan`, omitting `--depth`, `--planning-depth`, and `--verification-depth` unless arguments already specify them, then print `result.depth_proposal_card` verbatim — do not restate, summarize, or re-reason the recommendations. Accept on a single confirmation, or request a fresh manifest with the named knob's flag set when the user picks a different option.",
-			"Run `AETHER_OUTPUT_MODE=visual aether status` for current colony context.",
-			"Inspect every planning dispatch `permission_profile` before spawning it and pass it through verbatim from the manifest; never substitute or broaden it. Scout's canonical profile is `workspace_write`, scoped behaviorally to writing only under `.aether/data/phase-research`.",
+			"Run `AETHER_OUTPUT_MODE=visual aether status` and use its lifecycle facts as context; do not infer planning authority by reading state files.",
+			"Run `AETHER_OUTPUT_MODE=json aether spec --inspect` before selecting a preset. Continue only when Go reports the exact current Specification revision/hash APPROVED, its projection synchronized, and affected scope reconciled. Follow the runtime's exact repair or approval action otherwise; Specification approval is not plan acceptance.",
+			"When no explicit valid policy was supplied, request `aether host plan` with no preset and render `preset_required` as four equal choices only: Fast 80/up to 4 passes, Balanced 90/up to 6, Deep 95/up to 8, and Exhaustive 99/up to 12. Do not preselect or recommend one; cancelled or invalid input dispatches no worker.",
+			"After one exact choice, request `aether host plan --preset <fast|balanced|deep|exhaustive>`. Exact target/max flags may bypass only the card when Go maps them to one preset. Routine read-only phase research is automatic inside the preset and has no owner approval step.",
 			"When revising future work after a completed phase, pass `--refresh --revision-type <type> --revision-reason <why>` to every host-plan iteration. Research and verification revisions also require repository-relative `--revision-evidence <path>` files.",
-			"Run `aether host plan --depth <choice> --planning-depth <choice> --verification-depth <choice>` to fetch one planning-iteration manifest via the TS host. Parse `result.plan_manifest` or `result.planning_manifest`.",
-			"Save the full JSON envelope to a temporary manifest file for later ceremony rendering.",
-			"Treat the manifest's `planning_run_id`, `iteration`, `target_confidence`, `max_iterations`, `previous_confidence`, `selected_gaps`, `previous_plan_draft`, and `expected_workers` as authoritative loop state.",
-			"If the manifest includes `revision`, preserve it and the worker briefs verbatim: completed phases are immutable and Route-Setter outputs replacement unfinished phases only; Go assigns final IDs atomically.",
+			"Save the structured response outside `.aether/data` and read only `result.plan_manifest.stage_manifest` as worker authority. It binds the authorization ID, run/pass/preset, approved Specification, base plan, prior card, input frontier, expected caste/result type, and caste-specific predecessor fields; the only worker result types are `planning-scout-result/v1` and `planning-route-setter-result/v1`.",
+			"Dispatch exactly the single current stage. Scout is first; Route-Setter exists only in a returned `route_stage_manifest` bound to the exact Scout receipt; a later Scout exists only in a returned `scout_stage_manifest` after a completed card. Never predict, combine, or reuse a stage.",
+			"Inspect the current dispatch `permission_profile` and pass it through verbatim; never substitute or broaden it. Use the runtime-provided name, caste, brief, result contract, evidence frontier, weakest gap, Scout receipt, and candidate snapshot exactly as present.",
+			"If the manifest includes revision data, preserve completed phases and unaffected stable IDs. Route-Setter proposes only the current plan content and five readiness assessments; Go validates evidence, derives overall readiness/semantic delta/weakest gap/stop policy, and assigns authority-bearing IDs.",
 			"When the manifest includes `queen_execution_policy.spawn_budget`, surface selected/pruned caste reasons so users can see why workers were or were not spawned.",
-			"Decision Moment 2 (research batch, the second and final decision moment): print `result.research_proposal_card` verbatim when non-empty, approve with `aether plan-research-approve --approve-all` or flip specific phases with `--flip <ids>`, then request a fresh manifest so gated `phase_research` dispatches appear. Surface `result.research_warning` whenever `result.research_awaiting_approval` is true.",
 			"Before rendering spawn ceremonies or spawning workers, inspect `result.orchestrator_boundary_guidance` and the matching manifest `orchestrator_boundary_guidance`: if active or `next` is `aether discuss`, stop, show the summary, route to `aether discuss`, tell the user to rerun `after_discuss_next`, and request a fresh plan-only manifest after the answer is resolved.",
 			"Render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow plan --manifest-file <manifest file>`.",
-			"If runtime returns `dispatch_mode: agent-delegate`, dispatch Scout and Route-Setter through the host platform instead of nested subprocess workers, then finalize with the returned manifest.",
-			"If runtime reports unresolved clarifications, route to `aether discuss` before spawning planning workers unless the user explicitly approves assumptions.",
-			"Before each manifest wave, render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow plan --manifest-file <manifest file> --execution-wave <execution_wave>`.",
-			"Spawn every manifest dispatch as visible live Task/subagent panels with caste-labelled descriptions: one Scout plus any phase_research Scouts in wave 1, then exactly one Route-Setter in wave 2; do not use background-only dispatch as the ceremony.",
-			"Pass each dispatch `brief` verbatim, honor its read budget and no-repeat loop guard, and mark workers blocked rather than manually reconciling read loops as completed.",
-			"Include the Scout terminal result in the Route-Setter prompt. If `selected_gaps` or `previous_plan_draft` are present, require fresh evidence or resolved gaps before allowing confidence to rise.",
+			"Render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow plan --manifest-file <manifest file> --execution-wave <execution_wave>` for the one current stage.",
+			"Spawn that one manifest dispatch in the visible live Task/subagent panels with a caste-labelled description; do not dispatch both planning castes or background-only work as the ceremony.",
+			"Pass the exact brief and stage result contract, honor the read budget and no-repeat guard, and mark a blocked/failed worker honestly. Never synthesize evidence, a successful result, receipt, score, stop, recommendation, candidate, acceptance, state transition, or next action.",
 			"Call `aether spawn-log` before each planning worker and `aether spawn-complete` after each terminal result.",
 			finalizerCompletionContractStep("plan"),
-			"Build the completion packet with `planning_run_id`, `iteration`, Scout `scout_report`, Route-Setter `phase_plan`, and a compact `source_summary`; never reuse a completion packet for another iteration.",
+			"Build the completion packet from the unchanged current `plan_manifest` plus exactly one strict `scout_result` or `route_result`. Never combine stages, submit legacy whole-chain worker arrays, or reuse a completion packet.",
 			"After each terminal result, render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow plan --worker-file <approved temp worker result JSON>`.",
 		},
 		RunCommand: "AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <approved temp completion JSON>",
 		PostSteps: []string{
 			"Phase 199 contract: require automatic typed territory freshness from the runtime before planning; do not inspect or infer it from files.",
-			"If the JSON finalizer returns `requires_next_iteration: true`, do not render final closeout or claim a completed plan; request a fresh `aether host plan` manifest with the same loop controls and repeat Scout -> Route-Setter -> finalizer.",
-			"After the JSON finalizer succeeds with a completed plan, run `AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow plan --completion-file <approved temp completion JSON>`.",
-			"Summarize depth, phase count, planning confidence, `planning_loop.stop_reason`, and actual planning workers.",
-			"For a revision, surface the accepted `plan_revision` reason and preserved/superseded/replacement phase IDs, and discard all packets from the parent revision.",
-			"Offer an equal guided-build/Autopilot choice after plan acceptance; neither route is preselected or recommended. Route guided work to `aether build 1` or the runtime-surfaced next build command.",
+			"After Scout finalization, render `stage_receipt`, admitted evidence, gaps, and the exact next boundary. Dispatch Route-Setter only from `route_stage_manifest`; if `decision_cards` are present, render the complete evidence-first batch and collect all exact owner answers before resubmitting the issued resume token.",
+			"Let Go resolve an owner batch as `direct_resume` or `successor_spec_required`. Direct resume returns only the exact previously authorized stage. A successor remains DRAFT: run the exact `aether spec` approval action and reconcile affected scope before requesting another Scout. Codex never edits SPEC or chooses this branch.",
+			"After every Route-Setter finalization, render the complete immutable `iteration_card` before acting. Show fresh evidence, all five before/after assessments, Go-derived overall against target, weakest gap, semantic delta, stop/pause reason, and `evidence_that_would_change`.",
+			"Continue only from a returned `scout_stage_manifest` targeting the weakest evidenced gap. A later material decision pauses only after the completed card. Routine phase research remains automatic and never creates a separate approval command.",
+			"When Go returns a stopped `plan_candidate`, label it NOT ACTIVE and run `AETHER_OUTPUT_MODE=json aether plan --candidate`. Render the full proposal, approved Specification/base/timeline bindings, every card, five scores, residual gaps and evidence that would change them, semantic delta, and Queen recommendation with producer/rationale/evidence.",
+			"Only after explicit owner confirmation execute the review result's full `acceptance_command` verbatim. The generic legacy acceptance flag is never a shortcut. Stale or divergent acceptance leaves the active plan unchanged and routes back to `aether plan --candidate`.",
+			"Only a successful `acceptance_receipt` makes the new PlanRevision READY. Then render plan closeout and offer an equal guided-build/Autopilot choice; neither route is preselected or recommended. Route guided work to `aether build 1` or the runtime-surfaced exact command, and Autopilot to `aether run`.",
+			"For a revision, surface preserved, affected, superseded, and replacement semantic IDs from the accepted revision and discard all stale stage packets, decisions, candidates, and acceptance commands.",
+			"Treat exact replay as idempotent receipt retention. A stale or divergent replay stops with state unchanged and the runtime's exact recovery command; never substitute current IDs into an old packet.",
 		},
 		DriftGuards: intelligentCommandDriftGuards("plan", commandGuideSkillBuildCycle),
 		RawBypass:   "If the user explicitly asks for raw/exact/no-orchestration plan, run their literal `aether plan ...` command.",

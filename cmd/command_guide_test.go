@@ -162,7 +162,7 @@ func TestCodexLifecycleGuidesRequireVisibleWorkerActivity(t *testing.T) {
 			"AETHER_OUTPUT_MODE=json aether colonize-finalize",
 		},
 		"plan": {
-			"aether host plan --depth <choice> --planning-depth <choice>",
+			"aether host plan --preset <fast|balanced|deep|exhaustive>",
 			"visible live Task/subagent panels",
 			"aether spawn-log",
 			"aether spawn-complete",
@@ -230,12 +230,16 @@ func TestCodexHostBackedGuidesUseTypeScriptHostSpine(t *testing.T) {
 	}{
 		"plan": {
 			required: []string{
-				"aether host plan --depth <choice> --planning-depth <choice>",
-				"Parse `result.plan_manifest` or `result.planning_manifest`",
+				"aether host plan --preset <fast|balanced|deep|exhaustive>",
+				"result.plan_manifest.stage_manifest",
 				"AETHER_OUTPUT_MODE=json aether plan-finalize",
 			},
 			retired: []string{
 				"AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice>",
+				"result.planning_manifest",
+				"result.depth_proposal_card",
+				"result.research_proposal_card",
+				"result.requires_next_iteration",
 			},
 		},
 		"colonize": {
@@ -438,7 +442,7 @@ func TestCodexLifecycleSkillMirrorsWorkerActivityContract(t *testing.T) {
 	text := string(content)
 	for _, want := range []string{
 		"aether host colonize",
-		"aether host plan --depth <choice> --planning-depth <choice>",
+		"aether host plan --preset <fast|balanced|deep|exhaustive>",
 		"aether build <phase> --plan-only",
 		"AETHER_OUTPUT_MODE=visual aether continue --verification-depth standard",
 		"aether host continue --dry-run --classic-ceremony",
@@ -454,6 +458,11 @@ func TestCodexLifecycleSkillMirrorsWorkerActivityContract(t *testing.T) {
 	}
 	for _, forbidden := range []string{
 		"AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice>",
+		"result.planning_manifest",
+		"result.depth_proposal_card",
+		"result.research_proposal_card",
+		"result.requires_next_iteration",
+		"plan-research-approve",
 		"AETHER_OUTPUT_MODE=json aether build <phase> --plan-only",
 		"AETHER_OUTPUT_MODE=json aether continue --plan-only --verification-depth heavy",
 	} {
@@ -587,6 +596,33 @@ func TestCommandGuideLiteralCommandsArePassthrough(t *testing.T) {
 		if len(guide.PreSteps) != 0 || len(guide.PostSteps) != 0 {
 			t.Errorf("%s literal guide should not include pre/post orchestration", command)
 		}
+	}
+}
+
+func TestCommandGuideSpecRuntimeNative(t *testing.T) {
+	guide, err := buildCommandGuide("spec", "codex")
+	if err != nil {
+		t.Fatalf("buildCommandGuide(spec, codex): %v", err)
+	}
+	if guide.Category != commandGuideCategoryRuntimeNative || !guide.Literal || guide.SkillReference != "" {
+		t.Fatalf("spec guide lost runtime-native identity: %#v", guide)
+	}
+	if guide.RunCommand != "AETHER_OUTPUT_MODE=visual aether spec $ARGUMENTS" {
+		t.Errorf("spec guide runtime command = %q", guide.RunCommand)
+	}
+	text := strings.Join(append(append([]string{guide.Intent, guide.RunCommand, guide.RawBypass}, guide.DriftGuards...), guide.PreSteps...), "\n")
+	for _, want := range []string{"nine typed body categories", "revision/hash", "approval token", "projection repair", "planning stop", "candidate acceptance", "aether spec", "/ant-spec"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("spec command-guide missing %q", want)
+		}
+	}
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("resolve repository root: %v", err)
+	}
+	meta := readCommandGuideYAMLMetadata(t, filepath.Join(repoRoot, ".aether", "commands", "spec.yaml"))
+	if meta.CodexOrchestration.Category != guide.Category || meta.CodexOrchestration.Skill != "" {
+		t.Errorf("spec YAML/runtime-native guide identity drifted: YAML=%#v guide=%#v", meta.CodexOrchestration, guide)
 	}
 }
 
@@ -1146,6 +1182,101 @@ func TestCommandGuidePlanSmoke(t *testing.T) {
 	}
 	if len(guide.PostSteps) < 1 {
 		t.Errorf("PostSteps should have at least 1 entry, got %d", len(guide.PostSteps))
+	}
+}
+
+var phase200PlanGuidanceAnchors = []string{
+	"AETHER_OUTPUT_MODE=json aether spec --inspect",
+	"Fast 80/up to 4",
+	"Balanced 90/up to 6",
+	"Deep 95/up to 8",
+	"Exhaustive 99/up to 12",
+	"aether host plan --preset <fast|balanced|deep|exhaustive>",
+	"result.plan_manifest.stage_manifest",
+	"planning-scout-result/v1",
+	"planning-route-setter-result/v1",
+	"route_stage_manifest",
+	"scout_stage_manifest",
+	"decision_cards",
+	"direct_resume",
+	"successor_spec_required",
+	"iteration_card",
+	"evidence_that_would_change",
+	"NOT ACTIVE",
+	"AETHER_OUTPUT_MODE=json aether plan --candidate",
+	"acceptance_command",
+	"acceptance_receipt",
+	"exact replay",
+	"divergent replay",
+	"Go validates",
+	"never synthesize",
+	"aether build 1",
+	"aether run",
+}
+
+var phase200RetiredPlanGuidance = []string{
+	"result.planning_manifest",
+	"result.depth_proposal_card",
+	"result.research_proposal_card",
+	"result.requires_next_iteration",
+	"plan-research-approve",
+	"aether host plan --depth <choice> --planning-depth <choice>",
+	"Scout `scout_report`",
+	"Route-Setter `phase_plan`",
+	"explicit `--accept`",
+}
+
+func TestCommandGuidePlan200StagedAuthority(t *testing.T) {
+	guide, err := buildCommandGuide("plan", "codex")
+	if err != nil {
+		t.Fatalf("buildCommandGuide(plan, codex): %v", err)
+	}
+	parts := append([]string{guide.Intent}, guide.PreSteps...)
+	parts = append(parts, guide.RunCommand)
+	parts = append(parts, guide.PostSteps...)
+	parts = append(parts, guide.DriftGuards...)
+	text := strings.Join(parts, "\n")
+	for _, want := range phase200PlanGuidanceAnchors {
+		if !strings.Contains(strings.ToLower(text), strings.ToLower(want)) {
+			t.Errorf("Codex plan guide missing Phase 200 authority marker %q", want)
+		}
+	}
+	for _, retired := range phase200RetiredPlanGuidance {
+		if strings.Contains(text, retired) {
+			t.Errorf("Codex plan guide still teaches retired planning contract %q", retired)
+		}
+	}
+	if strings.Contains(text, "/ant-") || strings.Contains(text, "$ant-") {
+		t.Errorf("Codex plan guide must use direct aether spelling:\n%s", text)
+	}
+	if guide.RunCommand != "AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <approved temp completion JSON>" {
+		t.Errorf("plan finalizer command = %q", guide.RunCommand)
+	}
+}
+
+func TestPhase200BuildCycleSkill(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("resolve repository root: %v", err)
+	}
+	path := filepath.Join(repoRoot, ".aether", "skills", "colony", commandGuideSkillBuildCycle, "SKILL.md")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	text := string(raw)
+	for _, want := range phase200PlanGuidanceAnchors {
+		if !strings.Contains(strings.ToLower(text), strings.ToLower(want)) {
+			t.Errorf("build-cycle skill missing Phase 200 authority marker %q", want)
+		}
+	}
+	for _, retired := range phase200RetiredPlanGuidance {
+		if strings.Contains(text, retired) {
+			t.Errorf("build-cycle skill still teaches retired planning contract %q", retired)
+		}
+	}
+	if strings.Contains(text, "/ant-") {
+		t.Errorf("Codex build-cycle skill must use direct aether command spelling")
 	}
 }
 

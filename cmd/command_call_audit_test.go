@@ -1180,6 +1180,7 @@ var knownEnrichmentSubcommands = map[string]bool{
 	"plan-finalize":               true,
 	"plan-research-approve":       true,
 	"plan":                        true,
+	"spec":                        true, // owner-invoked; approved-Spec preflight blocks planning after errors
 	"porter":                      true,
 	"preferences":                 true,
 	"print-next-up":               true,
