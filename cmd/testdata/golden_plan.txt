@@ -9,3 +9,17 @@ Deep       Target 95  Up to 8 passes
 Exhaustive Target 99  Up to 12 passes
 Choose the planning preset: Fast, Balanced, Deep, or Exhaustive.
 Planning did not start. State: unchanged.
+━━ 📊 W H A T   N E X T ━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+── Where things stand ──
+Goal: Golden workflow test colony
+The goal is saved. No phases have been drawn up yet.
+
+── What changed ──
+  - The last thing you ran was plan.
+
+━━ 🐜 N E X T   U P ━━
+Run `/ant-plan --preset <name>` — Choose Fast, Balanced, Deep, or Exhaustive before planning starts.
+
+Don't close this chat yet -- the handover note that lets you pick up where you left off has not been
+  written to disk.
