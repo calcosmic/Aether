@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 30/40 plans executed
+**Plans:** 31/40 plans executed
 
 Plans:
 
@@ -274,7 +274,7 @@ Plans:
 
 **Wave 19** *(gap closure; blocked on Wave 18 completion)*
 
-- [ ] 200-31-PLAN.md — Independently derive candidate acceptance and impact coverage inside one mutation session.
+- [x] 200-31-PLAN.md — Independently derive candidate acceptance and impact coverage inside one mutation session.
 
 **Wave 20** *(gap closure; blocked on Wave 19 completion)*
 
