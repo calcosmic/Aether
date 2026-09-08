@@ -26,6 +26,18 @@ func TestLifecycleWrappersHaveVisualCloseoutAfterJSONFinalizer(t *testing.T) {
 			if workflow == "build" {
 				finalizer = "AETHER_OUTPUT_MODE=json aether build-finalize"
 			}
+			if workflow == "plan" {
+				// Phase 200 separates a stopped candidate from an accepted plan.
+				// Plan wrappers therefore cross the exact acceptance boundary before
+				// exposing build/run, rather than rendering the legacy finalizer closeout.
+				assertSubstringsInOrder(t, wrapperPath, text, []string{
+					finalizer,
+					"AETHER_OUTPUT_MODE=json aether plan --candidate",
+					"acceptance_command",
+					"acceptance_receipt",
+				})
+				continue
+			}
 			closeout := "AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow " + workflow
 			assertSubstringsInOrder(t, wrapperPath, text, []string{finalizer, closeout})
 		}
@@ -68,11 +80,20 @@ func TestLifecycleWrappersRenderRuntimeCeremonySurfaces(t *testing.T) {
 				t.Fatalf("read %s: %v", wrapperPath, err)
 			}
 			text := string(content)
-			// TS host workflows delegate manifest orchestration to aether host and retain visual closeout.
-			for _, want := range []string{
-				"aether host " + workflow,
-				"AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow " + workflow,
-			} {
+			// TS host workflows delegate manifest orchestration to aether host.
+			// Plan now closes through exact candidate acceptance; the other
+			// workflows retain the visual closeout ceremony.
+			wants := []string{"aether host " + workflow}
+			if workflow == "plan" {
+				wants = append(wants,
+					"AETHER_OUTPUT_MODE=json aether plan --candidate",
+					"acceptance_command",
+					"acceptance_receipt",
+				)
+			} else {
+				wants = append(wants, "AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow "+workflow)
+			}
+			for _, want := range wants {
 				if !strings.Contains(text, want) {
 					t.Errorf("%s missing TS host visual contract %q", wrapperPath, want)
 				}
