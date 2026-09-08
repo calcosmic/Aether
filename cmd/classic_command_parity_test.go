@@ -79,9 +79,49 @@ func assertClassicPublicCommandParity(t *testing.T, manifest classicPublicComman
 	}
 }
 
+func TestDiscussAndSpecRegisteredAcrossPublicSurfaces(t *testing.T) {
+	manifest := loadClassicPublicCommandParity(t)
+	rows := make(map[string]classicPublicCommandParityRow, len(manifest.Commands))
+	for _, row := range manifest.Commands {
+		rows[row.PublicName] = row
+	}
+
+	root, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("find command source root: %v", err)
+	}
+	for _, publicName := range []string{"discuss", "spec"} {
+		row, ok := rows[publicName]
+		if !ok {
+			t.Fatalf("normal public inventory is missing %q", publicName)
+		}
+		if row.Category != "normal" || row.CobraName != publicName {
+			t.Fatalf("public %s row = %+v, want normal Cobra command %s", publicName, row, publicName)
+		}
+		classicAssertCobraPublicCommand(t, row)
+		classicAssertCanonicalAndManagedCommand(t, root, row)
+	}
+
+	for _, publicName := range []string{"discuss", "spec", "plan"} {
+		if got, want := platformCommandName(publicName, "claude"), "/ant-"+publicName; got != want {
+			t.Fatalf("Claude spelling for %s = %q, want %q", publicName, got, want)
+		}
+		if got, want := platformCommandName(publicName, "opencode"), "/ant-"+publicName; got != want {
+			t.Fatalf("OpenCode spelling for %s = %q, want %q", publicName, got, want)
+		}
+		if got, want := platformCommandName(publicName, "codex"), "aether "+publicName; got != want {
+			t.Fatalf("Codex spelling for %s = %q, want %q", publicName, got, want)
+		} else if strings.Contains(got, "$ant-") {
+			t.Fatalf("Codex spelling for %s advertises unsupported native alias %q", publicName, got)
+		}
+	}
+}
+
 func classicPublicCommandInventory() []classicPublicCommandParityRow {
 	return []classicPublicCommandParityRow{
 		{Category: "normal", PublicName: "init", CobraName: "init", Description: "Start a guided colony for one goal."},
+		{Category: "normal", PublicName: "discuss", CobraName: "discuss", Description: "💬 Resolve evidence-backed material decisions and hand settled intent to a draft specification"},
+		{Category: "normal", PublicName: "spec", CobraName: "spec", Description: "📜 Review, revise, approve, or repair the owner-readable specification"},
 		{Category: "normal", PublicName: "plan", CobraName: "plan", Description: "📋 Generate a depth-scoped colony plan with real Scout and Route-Setter agents"},
 		{Category: "normal", PublicName: "build", CobraName: "build", Description: "🔨 Build a phase — Queen dispatches workers, colony self-organizes"},
 		{Category: "normal", PublicName: "run", CobraName: "run", Description: "Autopilot the remaining accepted phases within the displayed safety contract."},
@@ -112,14 +152,22 @@ func classicAssertCanonicalAndManagedCommand(t *testing.T, root string, row clas
 		t.Fatalf("read canonical command %s: %v", row.PublicName, err)
 	}
 	classicAssertCommandMetadata(t, canonical, canonicalData, row, true)
-	for _, platform := range []string{"claude", "opencode"} {
-		path := filepath.Join(root, "."+platform, "commands", "ant", row.PublicName+".md")
+	managed := []struct {
+		platform string
+		path     string
+	}{
+		{platform: "claude-flat", path: filepath.Join(root, ".claude", "commands", "ant-"+row.PublicName+".md")},
+		{platform: "claude", path: filepath.Join(root, ".claude", "commands", "ant", row.PublicName+".md")},
+		{platform: "opencode", path: filepath.Join(root, ".opencode", "commands", "ant", row.PublicName+".md")},
+	}
+	for _, surface := range managed {
+		path := surface.path
 		data, err := os.ReadFile(path)
 		if err != nil {
-			t.Fatalf("read %s wrapper for %s: %v", platform, row.PublicName, err)
+			t.Fatalf("read %s wrapper for %s: %v", surface.platform, row.PublicName, err)
 		}
 		if !bytes.HasPrefix(data, []byte("<!-- Aether-managed: runtime spec at .aether/commands/"+row.PublicName+".yaml.")) {
-			t.Fatalf("%s wrapper for %s is not canonical-YAML managed", platform, row.PublicName)
+			t.Fatalf("%s wrapper for %s is not canonical-YAML managed", surface.platform, row.PublicName)
 		}
 		classicAssertCommandMetadata(t, path, data, row, false)
 	}
