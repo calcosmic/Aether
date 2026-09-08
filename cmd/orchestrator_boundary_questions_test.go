@@ -22,15 +22,17 @@ func TestOrchestratorBoundaryQuestionsCreatedForPlanOnlyWorkflows(t *testing.T) 
 		withTestWorkspace(t, root)
 
 		goal := "orchestrate boundary questions"
-		createTestColonyState(t, dataDir, colony.ColonyState{
+		state := codexPlanSpecificationFixture(t, colony.ColonyState{
 			Version:    "3.0",
 			Goal:       &goal,
 			State:      colony.StateREADY,
 			ColonyMode: colony.ColonyModeOrchestrator,
 			Plan:       colony.Plan{Phases: []colony.Phase{}},
-		})
+		}, colony.SpecStatusApproved)
+		createTestColonyState(t, dataDir, state)
+		writeCodexPlanSpecificationProjection(t, root, state)
 
-		result, err := runCodexPlanWithOptions(root, codexPlanOptions{PlanOnly: true})
+		result, err := runCodexPlanWithOptions(root, codexPlanOptions{PlanOnly: true, Preset: "balanced", PresetSet: true})
 		if err != nil {
 			t.Fatalf("runCodexPlanWithOptions: %v", err)
 		}
@@ -186,14 +188,16 @@ func TestDefaultColonyModeDoesNotCreateBoundaryQuestions(t *testing.T) {
 		withTestWorkspace(t, root)
 
 		goal := "default mode plan boundary"
-		createTestColonyState(t, dataDir, colony.ColonyState{
+		state := codexPlanSpecificationFixture(t, colony.ColonyState{
 			Version: "3.0",
 			Goal:    &goal,
 			State:   colony.StateREADY,
 			Plan:    colony.Plan{Phases: []colony.Phase{}},
-		})
+		}, colony.SpecStatusApproved)
+		createTestColonyState(t, dataDir, state)
+		writeCodexPlanSpecificationProjection(t, root, state)
 
-		result, err := runCodexPlanWithOptions(root, codexPlanOptions{PlanOnly: true})
+		result, err := runCodexPlanWithOptions(root, codexPlanOptions{PlanOnly: true, Preset: "balanced", PresetSet: true})
 		if err != nil {
 			t.Fatalf("runCodexPlanWithOptions: %v", err)
 		}
@@ -329,15 +333,17 @@ func TestResolvedBoundaryQuestionFlowsThroughClarifiedIntent(t *testing.T) {
 	withTestWorkspace(t, root)
 
 	goal := "resolve orchestrator boundary"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	state := codexPlanSpecificationFixture(t, colony.ColonyState{
 		Version:    "3.0",
 		Goal:       &goal,
 		State:      colony.StateREADY,
 		ColonyMode: colony.ColonyModeOrchestrator,
 		Plan:       colony.Plan{Phases: []colony.Phase{}},
-	})
+	}, colony.SpecStatusApproved)
+	createTestColonyState(t, dataDir, state)
+	writeCodexPlanSpecificationProjection(t, root, state)
 
-	result, err := runCodexPlanWithOptions(root, codexPlanOptions{PlanOnly: true})
+	result, err := runCodexPlanWithOptions(root, codexPlanOptions{PlanOnly: true, Preset: "balanced", PresetSet: true})
 	if err != nil {
 		t.Fatalf("runCodexPlanWithOptions: %v", err)
 	}

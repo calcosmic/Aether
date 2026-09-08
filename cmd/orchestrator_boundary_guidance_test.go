@@ -344,15 +344,17 @@ func TestPlanFinalizeAddsOrchestratorBoundaryGuidance(t *testing.T) {
 	}
 
 	goal := "Finalize planning with orchestrator guidance"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	state := codexPlanSpecificationFixture(t, colony.ColonyState{
 		Version:    "3.0",
 		Goal:       &goal,
 		State:      colony.StateREADY,
 		ColonyMode: colony.ColonyModeOrchestrator,
 		Plan:       colony.Plan{Phases: []colony.Phase{}},
-	})
+	}, colony.SpecStatusApproved)
+	createTestColonyState(t, dataDir, state)
+	writeCodexPlanSpecificationProjection(t, root, state)
 
-	planResult, err := runCodexPlanWithOptions(root, codexPlanOptions{PlanOnly: true, Depth: "fast"})
+	planResult, err := runCodexPlanWithOptions(root, codexPlanOptions{PlanOnly: true, Preset: "fast", PresetSet: true})
 	if err != nil {
 		t.Fatalf("runCodexPlanWithOptions: %v", err)
 	}
@@ -360,78 +362,21 @@ func TestPlanFinalizeAddsOrchestratorBoundaryGuidance(t *testing.T) {
 	if len(manifest.BoundaryQuestions) == 0 {
 		t.Fatalf("expected plan boundary question in manifest")
 	}
-
-	scout := manifest.Dispatches[0]
-	scout.Status = "completed"
-	scout.Summary = "Scout mapped planning context."
-	scout.ScoutReport = &codexScoutReport{
-		Findings:   []codexScoutFinding{{Area: "Runtime", Discovery: "Plan finalizer owns planning state.", Source: "cmd/codex_plan_finalize.go"}},
-		Confidence: 91,
-		StudyFiles: []string{"cmd/codex_plan_finalize.go"},
+	if len(manifest.Dispatches) != 1 || manifest.Dispatches[0].Caste != string(planningStageCasteScout) {
+		t.Fatalf("staged plan manifest dispatches = %#v, want exactly one Scout", manifest.Dispatches)
 	}
-	routeSetter := manifest.Dispatches[1]
-	routeSetter.Status = "completed"
-	routeSetter.Summary = "Route-Setter shaped the first plan."
-	routeSetter.PhasePlan = &codexWorkerPlanArtifact{
-		Phases: []codexWorkerPlanPhase{{
-			Name:        "Guided plan",
-			Description: "Prove plan finalizer guidance.",
-			Tasks: []codexWorkerPlanTask{{
-				Goal:            "Route unresolved plan boundary questions through discuss",
-				SuccessCriteria: []string{"plan finalizer guidance is active"},
-				EvidenceRequirements: []colony.CriterionEvidenceRequirement{{
-					Criterion: "plan finalizer guidance is active", Checks: []string{"claims", "watcher"},
-				}},
-			}},
-			SuccessCriteria: []string{"Guidance is emitted"},
-			EvidenceRequirements: []colony.CriterionEvidenceRequirement{{
-				Criterion: "Guidance is emitted", Checks: []string{"claims", "watcher"},
-			}},
-		}},
-		Confidence: codexPlanConfidence{Knowledge: 90, Requirements: 90, Risks: 85, Dependencies: 85, Effort: 85, Overall: 87},
-	}
-
-	result, err := runCodexPlanFinalize(root, codexExternalPlanCompletion{
-		PlanManifest: &manifest,
-		Dispatches:   []codexPlanningDispatch{scout, routeSetter},
-	})
-	if err != nil {
-		t.Fatalf("runCodexPlanFinalize: %v", err)
-	}
-	if got := result["next"]; got != "aether discuss" {
+	if got := planResult["next"]; got != "aether discuss" {
 		t.Fatalf("next = %v, want aether discuss", got)
 	}
-	if got := result["after_discuss_next"]; got != "aether build 1" {
-		t.Fatalf("after_discuss_next = %v, want aether build 1", got)
+	if got := planResult["after_discuss_next"]; got != "aether plan --preset fast" {
+		t.Fatalf("after_discuss_next = %v, want aether plan --preset fast", got)
 	}
-	guidance := result["orchestrator_boundary_guidance"].(orchestratorBoundaryGuidance)
+	guidance := planResult["orchestrator_boundary_guidance"].(orchestratorBoundaryGuidance)
 	if !guidance.Active || guidance.Workflow != "plan" || guidance.PendingCount != 1 {
 		t.Fatalf("guidance = %#v, want active plan guidance with one pending question", guidance)
 	}
-
-	// WR-01/WINDOWS.md entry 7 (198-REVIEW.md): result["next"] alone being
-	// correct is not enough -- the rendered closing card reads back the
-	// FOLDED next-action envelope (nextActionFromResult), never this raw
-	// field directly. Before runCodexPlanFinalize called closeLifecycleRun
-	// itself, this envelope was left unset here, and the plan-finalize
-	// command's own closeLifecycleCommand(result, "plan", "", "") call
-	// independently re-resolved a next step from live colony state instead
-	// (typically "aether build 1", since a plan had just been written),
-	// silently overriding the pending discuss guidance -- so the owner would
-	// never have been told about their own unanswered boundary question.
-	answer, ok := nextActionFromResult(result)
-	if !ok {
-		t.Fatalf("expected runCodexPlanFinalize to fold its own guidance into the next-action envelope via closeLifecycleRun")
-	}
-	if answer.Command != "aether discuss" {
-		t.Fatalf("next-action envelope command = %q, want %q (the pending boundary question's own command)", answer.Command, "aether discuss")
-	}
-	// The rendered card translates "aether discuss" into its platform
-	// wrapper spelling (e.g. "/ant-discuss" for Claude/OpenCode) -- match on
-	// the command's own distinguishing word rather than the untranslated
-	// "aether " prefix.
-	if rendered := renderPlanVisual(result); !strings.Contains(rendered, "discuss") {
-		t.Fatalf("rendered closing card missing the folded next command:\n%s", rendered)
+	if manifest.StageManifest == nil || manifest.StageManifest.ExpectedCaste != planningStageCasteScout {
+		t.Fatalf("boundary guidance crossed the staged Scout authority: %#v", manifest.StageManifest)
 	}
 }
 

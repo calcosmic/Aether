@@ -251,6 +251,7 @@ const (
 	candidateSpecRepair      nextActionCandidateKey = "spec_repair"
 	candidatePlan            nextActionCandidateKey = "plan"
 	candidatePlanPreset      nextActionCandidateKey = "plan_preset"
+	candidatePlanRefresh     nextActionCandidateKey = "plan_preset_refresh"
 	candidatePlanCandidate   nextActionCandidateKey = "plan_candidate"
 	candidatePlanAcceptExact nextActionCandidateKey = "plan_accept_exact"
 	candidatePlanRepair      nextActionCandidateKey = "plan_repair"
@@ -325,8 +326,13 @@ var nextActionCandidates = []nextActionCandidate{
 	},
 	{
 		Key:      candidatePlanPreset,
-		Template: "aether plan --preset <name>",
+		Template: "aether plan --preset %s",
 		Why:      "Choose Fast, Balanced, Deep, or Exhaustive before any planning worker is authorized.",
+	},
+	{
+		Key:      candidatePlanRefresh,
+		Template: "aether plan --refresh --preset %s",
+		Why:      "Refresh planning from current repository evidence using the owner's selected preset.",
 	},
 	{
 		Key:      candidatePlanCandidate,

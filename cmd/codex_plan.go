@@ -325,6 +325,7 @@ func planningPresetRequiredResult(state colony.ColonyState, selection planningPr
 		"plan",
 		candidatePlanPreset,
 		"Choose Fast, Balanced, Deep, or Exhaustive before planning starts.",
+		"<name>",
 	)
 	result := map[string]interface{}{
 		"planned":          false,
@@ -1615,15 +1616,15 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		return planningPresetRequiredResult(state, preset), nil
 	}
 	planningPhase := colony.Phase{ID: 1}
+	boundary, err := materializeOrchestratorBoundaryQuestions("plan", state, planningPhase, planBoundaryQuestionCandidates(state, granularity, planDepth, planningDepth, verificationDepth))
+	if err != nil {
+		return nil, err
+	}
 	if len(state.Plan.Phases) > 0 && !opts.Refresh {
 		nextPhase := firstBuildablePhase(state.Plan.Phases)
 		nextCommand := "aether build 1"
 		if nextPhase > 0 {
 			nextCommand = fmt.Sprintf("aether build %d", nextPhase)
-		}
-		boundary, err := materializeOrchestratorBoundaryQuestions("plan", state, planningPhase, planBoundaryQuestionCandidates(state, granularity, planDepth, planningDepth, verificationDepth))
-		if err != nil {
-			return nil, err
 		}
 		result := map[string]interface{}{
 			"plan_only":                  true,
@@ -1752,48 +1753,52 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 	dispatchContract = planningScoutStageDispatchContract(dispatches, opts.WorkerTimeout)
 
 	manifest := codexPlanManifest{
-		Goal:                  *state.Goal,
-		Root:                  root,
-		GeneratedAt:           generatedAt.Format(time.RFC3339),
-		BaseRevisionID:        baseRevisionID,
-		BasePlanStateHash:     basePlanStateHash,
-		ColonyMode:            string(state.EffectiveColonyMode()),
-		Refresh:               opts.Refresh,
-		Revision:              revisionContext,
-		ExistingPlan:          len(state.Plan.Phases) > 0,
-		ExistingPhaseCount:    len(state.Plan.Phases),
-		Synthetic:             opts.Synthetic,
-		SyntheticWarning:      planningSyntheticWarningForMode(opts.Synthetic),
-		PlanningRunID:         stageManifest.RunID,
-		Iteration:             stageManifest.Pass,
-		TargetConfidence:      planningLoop.TargetConfidence,
-		MaxIterations:         planningLoop.MaxIterations,
-		SelectedPreset:        preset.Policy.ID,
-		PresetSelectionSource: preset.SelectionSource,
-		PreviousConfidence:    iterationSeed.PreviousConfidence,
-		PreviousEvidenceHash:  iterationSeed.PreviousEvidenceHash,
-		SelectedGaps:          append([]string{}, iterationSeed.SelectedGaps...),
-		PreviousPlanDraft:     iterationSeed.PreviousPlanDraft,
-		ExpectedWorkers:       append([]codexPlanningDispatch{}, dispatches...),
-		Depth:                 planDepth,
-		Granularity:           string(granularity),
-		GranularityMin:        granularityMin(granularity),
-		GranularityMax:        granularityMax(granularity),
-		PlanningDepth:         planningDepth,
-		VerificationDepth:     verificationDepth,
-		PlanningLoop:          planningLoop,
-		Survey:                survey,
-		Dispatches:            dispatches,
-		Snapshots:             artifactSnapshots,
-		DispatchMode:          "plan-only",
-		DispatchContract:      dispatchContract,
-		FinalizeSurface:       "pending",
-		RequiresFinalizer:     true,
-		ResearchPolicy:        &header.ResearchPolicy,
-		PhaseResearchEvidence: append([]phaseResearchEvidenceAttribution(nil), header.PhaseResearchEvidence...),
-		StageManifest:         &stageManifest,
-		PlanningRunHeader:     &header,
-		ContextCapsule:        contextCapsule,
+		Goal:                      *state.Goal,
+		Root:                      root,
+		GeneratedAt:               generatedAt.Format(time.RFC3339),
+		BaseRevisionID:            baseRevisionID,
+		BasePlanStateHash:         basePlanStateHash,
+		ColonyMode:                string(state.EffectiveColonyMode()),
+		Refresh:                   opts.Refresh,
+		Revision:                  revisionContext,
+		ExistingPlan:              len(state.Plan.Phases) > 0,
+		ExistingPhaseCount:        len(state.Plan.Phases),
+		Synthetic:                 opts.Synthetic,
+		SyntheticWarning:          planningSyntheticWarningForMode(opts.Synthetic),
+		PlanningRunID:             stageManifest.RunID,
+		Iteration:                 stageManifest.Pass,
+		TargetConfidence:          planningLoop.TargetConfidence,
+		MaxIterations:             planningLoop.MaxIterations,
+		SelectedPreset:            preset.Policy.ID,
+		PresetSelectionSource:     preset.SelectionSource,
+		PreviousConfidence:        iterationSeed.PreviousConfidence,
+		PreviousEvidenceHash:      iterationSeed.PreviousEvidenceHash,
+		SelectedGaps:              append([]string{}, iterationSeed.SelectedGaps...),
+		PreviousPlanDraft:         iterationSeed.PreviousPlanDraft,
+		ExpectedWorkers:           append([]codexPlanningDispatch{}, dispatches...),
+		Depth:                     planDepth,
+		Granularity:               string(granularity),
+		GranularityMin:            granularityMin(granularity),
+		GranularityMax:            granularityMax(granularity),
+		PlanningDepth:             planningDepth,
+		VerificationDepth:         verificationDepth,
+		PlanningLoop:              planningLoop,
+		Survey:                    survey,
+		Dispatches:                dispatches,
+		Snapshots:                 artifactSnapshots,
+		DispatchMode:              "plan-only",
+		DispatchContract:          dispatchContract,
+		FinalizeSurface:           "pending",
+		RequiresFinalizer:         true,
+		ResearchPolicy:            &header.ResearchPolicy,
+		PhaseResearchEvidence:     append([]phaseResearchEvidenceAttribution(nil), header.PhaseResearchEvidence...),
+		StageManifest:             &stageManifest,
+		PlanningRunHeader:         &header,
+		ContextCapsule:            contextCapsule,
+		BoundaryQuestions:         append([]discussQuestion(nil), boundary.Questions...),
+		BoundaryQuestionCount:     len(boundary.Questions),
+		BoundaryQuestionsCreated:  boundary.Created,
+		BoundaryQuestionsExisting: boundary.Existing,
 	}
 	if opts.Territory != nil {
 		attachTerritoryToPlanManifest(&manifest, *opts.Territory)
@@ -1854,6 +1859,13 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		result["territory_freshness"] = manifest.Territory
 		result["territory_snapshot_id"] = manifest.Territory.SnapshotID
 	}
+	addBoundaryQuestionResultFields(result, boundary)
+	afterDiscussKey := candidatePlanPreset
+	if opts.Refresh {
+		afterDiscussKey = candidatePlanRefresh
+	}
+	afterDiscussNext := availableCandidateCommand(afterDiscussKey, string(preset.Policy.ID))
+	addOrchestratorBoundaryGuidance(result, "plan", state, afterDiscussNext, boundary.Questions)
 	return result, nil
 }
 
