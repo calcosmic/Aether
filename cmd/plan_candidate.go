@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
@@ -170,6 +171,169 @@ func planCandidateRequestFromInputs(inputs planCandidateCommandInputs) planCandi
 		TimelineDigest: strings.TrimSpace(inputs.TimelineDigest), ProposalHash: strings.TrimSpace(inputs.ProposalHash),
 		AcceptanceToken: strings.TrimSpace(inputs.AcceptanceToken),
 	}
+}
+
+// canonicalPlanCandidateProposalHash is the only proposal preimage used by
+// construction, review, acceptance, standalone validation, and build/run
+// authority. Candidate back-references are derived after addressing and are
+// therefore cleared before hashing to avoid a fixed point.
+func canonicalPlanCandidateProposalHash(revision colony.PlanRevision) (string, error) {
+	stripped := clonePlanCandidateProposal(revision)
+	stripped.CandidateID = ""
+	stripped.CandidateContentHash = ""
+	for phaseIndex := range stripped.Phases {
+		stripped.Phases[phaseIndex].CandidateID = ""
+		stripped.Phases[phaseIndex].CandidateContentHash = ""
+		for taskIndex := range stripped.Phases[phaseIndex].Tasks {
+			stripped.Phases[phaseIndex].Tasks[taskIndex].CandidateID = ""
+			stripped.Phases[phaseIndex].Tasks[taskIndex].CandidateContentHash = ""
+		}
+	}
+	return planDefinitionHash(stripped.Phases)
+}
+
+// canonicalPlanCandidateContentHash binds the complete immutable review and
+// authority payload. Mutable status and acceptance are deliberately omitted;
+// their separate receipt transition must not rewrite what the owner reviewed.
+func canonicalPlanCandidateContentHash(candidate colony.PlanCandidate) (string, error) {
+	proposal := clonePlanCandidateProposal(candidate.Proposal)
+	proposal.CandidateID = ""
+	proposal.CandidateContentHash = ""
+	for phaseIndex := range proposal.Phases {
+		proposal.Phases[phaseIndex].CandidateID = ""
+		proposal.Phases[phaseIndex].CandidateContentHash = ""
+		for taskIndex := range proposal.Phases[phaseIndex].Tasks {
+			proposal.Phases[phaseIndex].Tasks[taskIndex].CandidateID = ""
+			proposal.Phases[phaseIndex].Tasks[taskIndex].CandidateContentHash = ""
+		}
+	}
+	recommendation := candidate.Recommendation
+	recommendation.CandidateID = ""
+	normalizeGap := func(gap colony.PlanningGap) colony.PlanningGap {
+		gap.EvidenceIDs = uniqueSortedStrings(gap.EvidenceIDs)
+		return gap
+	}
+	normalizeAssessment := func(assessment colony.PlanningDimensionAssessment) colony.PlanningDimensionAssessment {
+		assessment.FreshEvidenceIDs = uniqueSortedStrings(assessment.FreshEvidenceIDs)
+		assessment.ResolvedGapIDs = uniqueSortedStrings(assessment.ResolvedGapIDs)
+		assessment.RemainingGap = normalizeGap(assessment.RemainingGap)
+		return assessment
+	}
+	normalizeChanges := func(values []colony.PlanningSemanticChange) []colony.PlanningSemanticChange {
+		result := append([]colony.PlanningSemanticChange(nil), values...)
+		for index := range result {
+			result[index].EvidenceIDs = uniqueSortedStrings(result[index].EvidenceIDs)
+		}
+		return result
+	}
+	delta := candidate.SemanticDelta
+	delta.Phases = normalizeChanges(delta.Phases)
+	delta.Tasks = normalizeChanges(delta.Tasks)
+	delta.Dependencies = normalizeChanges(delta.Dependencies)
+	delta.RequirementLinks = normalizeChanges(delta.RequirementLinks)
+	delta.AcceptanceChecks = normalizeChanges(delta.AcceptanceChecks)
+	delta.NegativeExpectations = normalizeChanges(delta.NegativeExpectations)
+	delta.RecoveryExpectations = normalizeChanges(delta.RecoveryExpectations)
+	delta.PublicPaths = normalizeChanges(delta.PublicPaths)
+	delta.AuthorityImpacts = append([]colony.PlanningAuthorityImpact(nil), delta.AuthorityImpacts...)
+	for index := range delta.AuthorityImpacts {
+		delta.AuthorityImpacts[index].AffectedSemanticIDs = uniqueSortedStrings(delta.AuthorityImpacts[index].AffectedSemanticIDs)
+	}
+	assessments := append([]colony.PlanningDimensionAssessment(nil), candidate.DimensionAssessments...)
+	for index := range assessments {
+		assessments[index] = normalizeAssessment(assessments[index])
+	}
+	residual := append([]colony.PlanningGap(nil), candidate.ResidualGaps...)
+	for index := range residual {
+		residual[index] = normalizeGap(residual[index])
+	}
+	stop := candidate.StopDecision
+	stop.EvidenceIDs = uniqueSortedStrings(stop.EvidenceIDs)
+	recommendation.EvidenceIDs = uniqueSortedStrings(recommendation.EvidenceIDs)
+	payload := struct {
+		SchemaVersion             string                               `json:"schema_version"`
+		CreatedAt                 time.Time                            `json:"created_at"`
+		ExpiresAt                 time.Time                            `json:"expires_at"`
+		Proposal                  colony.PlanRevision                  `json:"proposal"`
+		ProposalHash              string                               `json:"proposal_hash"`
+		BasePlanRevisionID        string                               `json:"base_plan_revision_id"`
+		BasePlanRevisionHash      string                               `json:"base_plan_revision_hash"`
+		SpecificationRevisionID   string                               `json:"specification_revision_id"`
+		SpecificationRevisionHash string                               `json:"specification_revision_hash"`
+		Timeline                  colony.PlanningTimelineBinding       `json:"timeline"`
+		StopDecision              colony.PlanningStopDecision          `json:"stop_decision"`
+		DimensionAssessments      []colony.PlanningDimensionAssessment `json:"dimension_assessments"`
+		SemanticDelta             colony.PlanningSemanticDelta         `json:"semantic_delta"`
+		ResidualGaps              []colony.PlanningGap                 `json:"residual_gaps"`
+		EvidenceThatWouldChange   string                               `json:"evidence_that_would_change"`
+		Recommendation            colony.QueenPlanRecommendation       `json:"recommendation"`
+	}{
+		SchemaVersion: candidate.SchemaVersion, CreatedAt: candidate.CreatedAt, ExpiresAt: candidate.ExpiresAt,
+		Proposal: proposal, ProposalHash: candidate.ProposalHash,
+		BasePlanRevisionID: candidate.BasePlanRevisionID, BasePlanRevisionHash: candidate.BasePlanRevisionHash,
+		SpecificationRevisionID: candidate.SpecificationRevisionID, SpecificationRevisionHash: candidate.SpecificationRevisionHash,
+		Timeline: candidate.Timeline, StopDecision: stop, DimensionAssessments: assessments,
+		SemanticDelta: delta, ResidualGaps: residual, EvidenceThatWouldChange: candidate.EvidenceThatWouldChange,
+		Recommendation: recommendation,
+	}
+	return jsonSHA256(payload)
+}
+
+// addressPlanCandidateReviewPayload derives proposal and recommendation
+// identities, then candidate identity, and only then populates all backrefs.
+func addressPlanCandidateReviewPayload(candidate *colony.PlanCandidate) error {
+	if candidate == nil {
+		return fmt.Errorf("plan candidate is required")
+	}
+	proposalHash, err := canonicalPlanCandidateProposalHash(candidate.Proposal)
+	if err != nil {
+		return fmt.Errorf("proposal_hash: %w", err)
+	}
+	candidate.ProposalHash = proposalHash
+	candidate.Proposal.PlanHash = proposalHash
+	candidate.Proposal.ID = fmt.Sprintf("plan-r%d-%s", candidate.Proposal.Number, proposalHash[:12])
+	if err := colony.AddressQueenPlanRecommendation(&candidate.Recommendation); err != nil {
+		return fmt.Errorf("recommendation: %w", err)
+	}
+	hash, err := canonicalPlanCandidateContentHash(*candidate)
+	if err != nil {
+		return fmt.Errorf("candidate content hash: %w", err)
+	}
+	candidate.ContentHash = hash
+	candidate.ID = "plan-candidate-" + hash[:12]
+	bindPlanCandidateBackReferences(candidate)
+	return nil
+}
+
+func bindPlanCandidateBackReferences(candidate *colony.PlanCandidate) {
+	candidate.Proposal.CandidateID = candidate.ID
+	candidate.Proposal.CandidateContentHash = candidate.ContentHash
+	for phaseIndex := range candidate.Proposal.Phases {
+		candidate.Proposal.Phases[phaseIndex].CandidateID = candidate.ID
+		candidate.Proposal.Phases[phaseIndex].CandidateContentHash = candidate.ContentHash
+		for taskIndex := range candidate.Proposal.Phases[phaseIndex].Tasks {
+			candidate.Proposal.Phases[phaseIndex].Tasks[taskIndex].CandidateID = candidate.ID
+			candidate.Proposal.Phases[phaseIndex].Tasks[taskIndex].CandidateContentHash = candidate.ContentHash
+		}
+	}
+	candidate.Recommendation.CandidateID = candidate.ID
+}
+
+func clonePlanCandidateProposal(revision colony.PlanRevision) colony.PlanRevision {
+	clone := revision
+	clone.Evidence = append([]string(nil), revision.Evidence...)
+	clone.PreservedPhaseIDs = append([]int(nil), revision.PreservedPhaseIDs...)
+	clone.SupersededPhaseIDs = append([]int(nil), revision.SupersededPhaseIDs...)
+	clone.ReplacementPhaseIDs = append([]int(nil), revision.ReplacementPhaseIDs...)
+	clone.RequirementProofLinks = append([]string(nil), revision.RequirementProofLinks...)
+	clone.AcceptanceProofLinks = append([]string(nil), revision.AcceptanceProofLinks...)
+	clone.NegativeProofLinks = append([]string(nil), revision.NegativeProofLinks...)
+	clone.RecoveryProofLinks = append([]string(nil), revision.RecoveryProofLinks...)
+	clone.PublicPathProofLinks = append([]string(nil), revision.PublicPathProofLinks...)
+	clone.AffectedSemanticIDs = append([]string(nil), revision.AffectedSemanticIDs...)
+	clone.PreservedSemanticIDs = append([]string(nil), revision.PreservedSemanticIDs...)
+	clone.Phases = clonePhases(revision.Phases)
+	return clone
 }
 
 func runPlanCandidateCommand(root string, inputs planCandidateCommandInputs) (map[string]interface{}, bool, error) {

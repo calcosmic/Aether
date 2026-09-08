@@ -63,6 +63,9 @@ func TestPlanCandidateSemanticIntegrity200CopiedHashesRejectEveryReviewMutation(
 		name   string
 		mutate func(*colony.PlanCandidate)
 	}{
+		{name: "candidate schema", mutate: func(value *colony.PlanCandidate) { value.SchemaVersion += "-stale" }},
+		{name: "candidate id", mutate: func(value *colony.PlanCandidate) { value.ID += "-stale" }},
+		{name: "candidate content hash", mutate: func(value *colony.PlanCandidate) { value.ContentHash = strings.Repeat("0", 64) }},
 		{name: "proposal phase", mutate: func(value *colony.PlanCandidate) { value.Proposal.Phases[0].Description += " tampered" }},
 		{name: "proposal hash", mutate: func(value *colony.PlanCandidate) { value.ProposalHash = strings.Repeat("1", 64) }},
 		{name: "proposal plan hash", mutate: func(value *colony.PlanCandidate) { value.Proposal.PlanHash = strings.Repeat("2", 64) }},
@@ -70,6 +73,7 @@ func TestPlanCandidateSemanticIntegrity200CopiedHashesRejectEveryReviewMutation(
 		{name: "base revision hash", mutate: func(value *colony.PlanCandidate) { value.BasePlanRevisionHash = strings.Repeat("3", 64) }},
 		{name: "spec revision id", mutate: func(value *colony.PlanCandidate) { value.SpecificationRevisionID += "-stale" }},
 		{name: "spec revision hash", mutate: func(value *colony.PlanCandidate) { value.SpecificationRevisionHash = strings.Repeat("4", 64) }},
+		{name: "timeline schema", mutate: func(value *colony.PlanCandidate) { value.Timeline.SchemaVersion += "-stale" }},
 		{name: "timeline id", mutate: func(value *colony.PlanCandidate) { value.Timeline.ID += "-stale" }},
 		{name: "timeline content hash", mutate: func(value *colony.PlanCandidate) { value.Timeline.ContentHash = strings.Repeat("5", 64) }},
 		{name: "timeline run", mutate: func(value *colony.PlanCandidate) { value.Timeline.RunID += "-stale" }},
@@ -78,13 +82,23 @@ func TestPlanCandidateSemanticIntegrity200CopiedHashesRejectEveryReviewMutation(
 		{name: "timeline last card", mutate: func(value *colony.PlanCandidate) { value.Timeline.LastCardHash = strings.Repeat("7", 64) }},
 		{name: "timeline digest", mutate: func(value *colony.PlanCandidate) { value.Timeline.TimelineDigest = strings.Repeat("8", 64) }},
 		{name: "timeline path", mutate: func(value *colony.PlanCandidate) { value.Timeline.Path += "-stale" }},
+		{name: "stop schema", mutate: func(value *colony.PlanCandidate) { value.StopDecision.SchemaVersion += "-stale" }},
+		{name: "stop id", mutate: func(value *colony.PlanCandidate) { value.StopDecision.ID += "-stale" }},
+		{name: "stop content hash", mutate: func(value *colony.PlanCandidate) { value.StopDecision.ContentHash = strings.Repeat("b", 64) }},
 		{name: "stop reason", mutate: func(value *colony.PlanCandidate) { value.StopDecision.Reason = colony.PlanningStopTargetMet }},
 		{name: "stop selected gap", mutate: func(value *colony.PlanCandidate) { value.StopDecision.SelectedGapID += "-stale" }},
 		{name: "stop residual gaps", mutate: func(value *colony.PlanCandidate) { value.StopDecision.ResidualGapIDs[0] += "-stale" }},
 		{name: "stop evidence", mutate: func(value *colony.PlanCandidate) { value.StopDecision.EvidenceIDs[0] += "-stale" }},
 		{name: "stop rationale", mutate: func(value *colony.PlanCandidate) { value.StopDecision.Rationale += " tampered" }},
 		{name: "stop causal evidence", mutate: func(value *colony.PlanCandidate) { value.StopDecision.EvidenceThatWouldChange += " tampered" }},
-		{name: "assessment score", mutate: func(value *colony.PlanCandidate) { value.DimensionAssessments[0].After++ }},
+		{name: "assessment schema", mutate: func(value *colony.PlanCandidate) { value.DimensionAssessments[0].SchemaVersion += "-stale" }},
+		{name: "assessment id", mutate: func(value *colony.PlanCandidate) { value.DimensionAssessments[0].ID += "-stale" }},
+		{name: "assessment content hash", mutate: func(value *colony.PlanCandidate) { value.DimensionAssessments[0].ContentHash = strings.Repeat("c", 64) }},
+		{name: "assessment dimension", mutate: func(value *colony.PlanCandidate) {
+			value.DimensionAssessments[0].Dimension = colony.PlanningDimensionEffort
+		}},
+		{name: "assessment before score", mutate: func(value *colony.PlanCandidate) { value.DimensionAssessments[0].Before++ }},
+		{name: "assessment after score", mutate: func(value *colony.PlanCandidate) { value.DimensionAssessments[0].After++ }},
 		{name: "assessment evidence", mutate: func(value *colony.PlanCandidate) { value.DimensionAssessments[1].FreshEvidenceIDs[0] += "-stale" }},
 		{name: "assessment resolved gap", mutate: func(value *colony.PlanCandidate) {
 			value.DimensionAssessments[2].ResolvedGapIDs = []string{"resolved-tampered"}
@@ -94,8 +108,39 @@ func TestPlanCandidateSemanticIntegrity200CopiedHashesRejectEveryReviewMutation(
 		{name: "assessment remaining gap", mutate: func(value *colony.PlanCandidate) {
 			value.DimensionAssessments[0].RemainingGap.Description += " tampered"
 		}},
+		{name: "assessment gap schema", mutate: func(value *colony.PlanCandidate) {
+			value.DimensionAssessments[0].RemainingGap.SchemaVersion += "-stale"
+		}},
+		{name: "assessment gap id", mutate: func(value *colony.PlanCandidate) { value.DimensionAssessments[0].RemainingGap.ID += "-stale" }},
+		{name: "assessment gap content hash", mutate: func(value *colony.PlanCandidate) {
+			value.DimensionAssessments[0].RemainingGap.ContentHash = strings.Repeat("d", 64)
+		}},
+		{name: "assessment gap dimension", mutate: func(value *colony.PlanCandidate) {
+			value.DimensionAssessments[0].RemainingGap.Dimension = colony.PlanningDimensionEffort
+		}},
+		{name: "assessment gap materiality", mutate: func(value *colony.PlanCandidate) {
+			value.DimensionAssessments[0].RemainingGap.Materiality = colony.PlanningGapMaterial
+		}},
+		{name: "assessment gap severity", mutate: func(value *colony.PlanCandidate) { value.DimensionAssessments[0].RemainingGap.Severity++ }},
+		{name: "assessment gap evidence", mutate: func(value *colony.PlanCandidate) {
+			value.DimensionAssessments[0].RemainingGap.EvidenceIDs[0] += "-stale"
+		}},
+		{name: "assessment gap causal evidence", mutate: func(value *colony.PlanCandidate) {
+			value.DimensionAssessments[0].RemainingGap.EvidenceThatWouldChange += " tampered"
+		}},
 		{name: "delta id", mutate: func(value *colony.PlanCandidate) { value.SemanticDelta.ID += "-stale" }},
 		{name: "delta hash", mutate: func(value *colony.PlanCandidate) { value.SemanticDelta.ContentHash = strings.Repeat("9", 64) }},
+		{name: "delta schema", mutate: func(value *colony.PlanCandidate) { value.SemanticDelta.SchemaVersion += "-stale" }},
+		{name: "semantic change content hash", mutate: func(value *colony.PlanCandidate) { value.SemanticDelta.Phases[0].ContentHash = strings.Repeat("e", 64) }},
+		{name: "semantic change kind", mutate: func(value *colony.PlanCandidate) {
+			value.SemanticDelta.Phases[0].Kind = colony.PlanningSemanticChangeRemoved
+		}},
+		{name: "semantic change before hash", mutate: func(value *colony.PlanCandidate) { value.SemanticDelta.Phases[0].BeforeHash = strings.Repeat("f", 64) }},
+		{name: "semantic change after hash", mutate: func(value *colony.PlanCandidate) { value.SemanticDelta.Phases[0].AfterHash = strings.Repeat("0", 64) }},
+		{name: "semantic change evidence", mutate: func(value *colony.PlanCandidate) { value.SemanticDelta.Phases[0].EvidenceIDs[0] += "-stale" }},
+		{name: "residual gap schema", mutate: func(value *colony.PlanCandidate) { value.ResidualGaps[0].SchemaVersion += "-stale" }},
+		{name: "residual gap id", mutate: func(value *colony.PlanCandidate) { value.ResidualGaps[0].ID += "-stale" }},
+		{name: "residual gap content hash", mutate: func(value *colony.PlanCandidate) { value.ResidualGaps[0].ContentHash = strings.Repeat("3", 64) }},
 		{name: "residual gap dimension", mutate: func(value *colony.PlanCandidate) { value.ResidualGaps[0].Dimension = colony.PlanningDimensionEffort }},
 		{name: "residual gap materiality", mutate: func(value *colony.PlanCandidate) { value.ResidualGaps[1].Materiality = colony.PlanningGapMaterial }},
 		{name: "residual gap severity", mutate: func(value *colony.PlanCandidate) { value.ResidualGaps[2].Severity++ }},
@@ -104,6 +149,9 @@ func TestPlanCandidateSemanticIntegrity200CopiedHashesRejectEveryReviewMutation(
 		{name: "residual gap causal evidence", mutate: func(value *colony.PlanCandidate) { value.ResidualGaps[0].EvidenceThatWouldChange += " tampered" }},
 		{name: "candidate causal evidence", mutate: func(value *colony.PlanCandidate) { value.EvidenceThatWouldChange += " tampered" }},
 		{name: "recommendation disposition", mutate: func(value *colony.PlanCandidate) { value.Recommendation.Disposition = colony.PlanRecommendationAccept }},
+		{name: "recommendation schema", mutate: func(value *colony.PlanCandidate) { value.Recommendation.SchemaVersion += "-stale" }},
+		{name: "recommendation id", mutate: func(value *colony.PlanCandidate) { value.Recommendation.ID += "-stale" }},
+		{name: "recommendation content hash", mutate: func(value *colony.PlanCandidate) { value.Recommendation.ContentHash = strings.Repeat("1", 64) }},
 		{name: "recommendation evidence", mutate: func(value *colony.PlanCandidate) { value.Recommendation.EvidenceIDs[0] += "-stale" }},
 		{name: "recommendation rationale", mutate: func(value *colony.PlanCandidate) { value.Recommendation.Rationale += " tampered" }},
 		{name: "recommendation producer id", mutate: func(value *colony.PlanCandidate) { value.Recommendation.ProducerID += "-stale" }},
@@ -113,11 +161,34 @@ func TestPlanCandidateSemanticIntegrity200CopiedHashesRejectEveryReviewMutation(
 		{name: "created at", mutate: func(value *colony.PlanCandidate) { value.CreatedAt = value.CreatedAt.Add(time.Second) }},
 		{name: "expires at", mutate: func(value *colony.PlanCandidate) { value.ExpiresAt = value.ExpiresAt.Add(time.Second) }},
 		{name: "proposal candidate backref", mutate: func(value *colony.PlanCandidate) { value.Proposal.CandidateID += "-stale" }},
+		{name: "proposal candidate hash backref", mutate: func(value *colony.PlanCandidate) { value.Proposal.CandidateContentHash = strings.Repeat("4", 64) }},
 		{name: "phase candidate backref", mutate: func(value *colony.PlanCandidate) { value.Proposal.Phases[0].CandidateID += "-stale" }},
+		{name: "phase candidate hash backref", mutate: func(value *colony.PlanCandidate) {
+			value.Proposal.Phases[0].CandidateContentHash = strings.Repeat("5", 64)
+		}},
+		{name: "task candidate backref", mutate: func(value *colony.PlanCandidate) { value.Proposal.Phases[0].Tasks[0].CandidateID += "-stale" }},
 		{name: "task candidate hash backref", mutate: func(value *colony.PlanCandidate) {
 			value.Proposal.Phases[0].Tasks[0].CandidateContentHash = strings.Repeat("a", 64)
 		}},
 		{name: "recommendation candidate backref", mutate: func(value *colony.PlanCandidate) { value.Recommendation.CandidateID += "-stale" }},
+	}
+	for index := range candidate.DimensionAssessments {
+		index := index
+		mutations = append(mutations, struct {
+			name   string
+			mutate func(*colony.PlanCandidate)
+		}{name: "assessment record " + string(candidate.DimensionAssessments[index].Dimension), mutate: func(value *colony.PlanCandidate) {
+			value.DimensionAssessments[index].After++
+		}})
+	}
+	for index := range candidate.ResidualGaps {
+		index := index
+		mutations = append(mutations, struct {
+			name   string
+			mutate func(*colony.PlanCandidate)
+		}{name: "residual gap record " + candidate.ResidualGaps[index].ID, mutate: func(value *colony.PlanCandidate) {
+			value.ResidualGaps[index].Severity++
+		}})
 	}
 	sections := []struct {
 		name   string
@@ -146,16 +217,16 @@ func TestPlanCandidateSemanticIntegrity200CopiedHashesRejectEveryReviewMutation(
 	}
 	for _, section := range sections {
 		section := section
-		if len(section.values(&candidate)) == 0 {
-			continue
+		for index := range section.values(&candidate) {
+			index := index
+			mutations = append(mutations, struct {
+				name   string
+				mutate func(*colony.PlanCandidate)
+			}{name: "semantic change " + section.name + " " + section.values(&candidate)[index].SemanticID, mutate: func(value *colony.PlanCandidate) {
+				changes := section.values(value)
+				changes[index].SemanticID += "-stale"
+			}})
 		}
-		mutations = append(mutations, struct {
-			name   string
-			mutate func(*colony.PlanCandidate)
-		}{name: "semantic change " + section.name, mutate: func(value *colony.PlanCandidate) {
-			changes := section.values(value)
-			changes[0].SemanticID += "-stale"
-		}})
 	}
 	for index := range candidate.SemanticDelta.AuthorityImpacts {
 		index := index
@@ -166,6 +237,34 @@ func TestPlanCandidateSemanticIntegrity200CopiedHashesRejectEveryReviewMutation(
 			value.SemanticDelta.AuthorityImpacts[index].Rationale += " tampered"
 		}})
 	}
+	mutations = append(mutations,
+		struct {
+			name   string
+			mutate func(*colony.PlanCandidate)
+		}{name: "authority impact id", mutate: func(value *colony.PlanCandidate) { value.SemanticDelta.AuthorityImpacts[0].ID += "-stale" }},
+		struct {
+			name   string
+			mutate func(*colony.PlanCandidate)
+		}{name: "authority impact content hash", mutate: func(value *colony.PlanCandidate) {
+			value.SemanticDelta.AuthorityImpacts[0].ContentHash = strings.Repeat("2", 64)
+		}},
+		struct {
+			name   string
+			mutate func(*colony.PlanCandidate)
+		}{name: "authority impact kind", mutate: func(value *colony.PlanCandidate) {
+			value.SemanticDelta.AuthorityImpacts[0].Kind = colony.PlanningAuthorityCandidateStatus
+		}},
+		struct {
+			name   string
+			mutate func(*colony.PlanCandidate)
+		}{name: "authority impact source", mutate: func(value *colony.PlanCandidate) { value.SemanticDelta.AuthorityImpacts[0].SourceID += "-stale" }},
+		struct {
+			name   string
+			mutate func(*colony.PlanCandidate)
+		}{name: "authority impact affected ids", mutate: func(value *colony.PlanCandidate) {
+			value.SemanticDelta.AuthorityImpacts[0].AffectedSemanticIDs[0] += "-stale"
+		}},
+	)
 
 	path := filepath.Join(root, filepath.FromSlash(planningRouteCandidateRepositoryPath(candidate.Timeline.RunID)))
 	original, err := os.ReadFile(path)
@@ -189,6 +288,26 @@ func TestPlanCandidateSemanticIntegrity200CopiedHashesRejectEveryReviewMutation(
 				t.Fatal(err)
 			}
 		})
+	}
+	invalidProducer := planCandidateSemanticIntegrity200Clone(t, candidate)
+	invalidProducer.Recommendation.Producer = colony.PlanRecommendationProducer("tampered")
+	if err := validatePlanningRecordHashes(invalidProducer); err == nil {
+		t.Fatal("invalid recommendation producer passed direct canonical validation")
+	}
+	tamperedProducer := bytes.Replace(original, []byte(`"producer": "queen"`), []byte(`"producer": "tampered"`), 1)
+	if bytes.Equal(tamperedProducer, original) {
+		t.Fatal("recommendation producer was not present in persisted fixture")
+	}
+	if err := os.WriteFile(path, tamperedProducer, 0600); err != nil {
+		t.Fatal(err)
+	}
+	before := planCandidateTestSnapshot(t, root)
+	if _, err := reviewPlanCandidate(root); err == nil {
+		t.Fatal("review loaded an invalid recommendation producer")
+	}
+	planCandidateTestAssertSnapshot(t, root, before)
+	if err := os.WriteFile(path, original, 0600); err != nil {
+		t.Fatal(err)
 	}
 }
 

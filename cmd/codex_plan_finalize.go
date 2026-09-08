@@ -3246,36 +3246,39 @@ func applyPlanningRouteEvidence(delta *colony.PlanningSemanticDelta, evidenceIDs
 		}
 	}
 	changed := false
-	sections := []*[]colony.PlanningSemanticChange{
-		&delta.Phases, &delta.Tasks, &delta.Dependencies, &delta.RequirementLinks,
-		&delta.AcceptanceChecks, &delta.NegativeExpectations, &delta.RecoveryExpectations, &delta.PublicPaths,
+	sections := []struct {
+		name    colony.PlanningSemanticSection
+		changes *[]colony.PlanningSemanticChange
+	}{
+		{name: colony.PlanningSemanticSectionPhases, changes: &delta.Phases},
+		{name: colony.PlanningSemanticSectionTasks, changes: &delta.Tasks},
+		{name: colony.PlanningSemanticSectionDependencies, changes: &delta.Dependencies},
+		{name: colony.PlanningSemanticSectionRequirementLinks, changes: &delta.RequirementLinks},
+		{name: colony.PlanningSemanticSectionAcceptanceChecks, changes: &delta.AcceptanceChecks},
+		{name: colony.PlanningSemanticSectionNegativeExpectations, changes: &delta.NegativeExpectations},
+		{name: colony.PlanningSemanticSectionRecoveryExpectations, changes: &delta.RecoveryExpectations},
+		{name: colony.PlanningSemanticSectionPublicPaths, changes: &delta.PublicPaths},
 	}
 	for _, section := range sections {
-		for index := range *section {
-			if (*section)[index].Kind == colony.PlanningSemanticChangePreserved {
-				continue
+		for index := range *section.changes {
+			change := &(*section.changes)[index]
+			if change.Kind != colony.PlanningSemanticChangePreserved {
+				changed = true
+				if len(evidenceIDs) == 0 {
+					return fmt.Errorf("semantic change %q requires evidence from the current frontier or an explicit decision", change.SemanticID)
+				}
+				change.EvidenceIDs = append([]string(nil), evidenceIDs...)
 			}
-			changed = true
-			if len(evidenceIDs) == 0 {
-				return fmt.Errorf("semantic change %q requires evidence from the current frontier or an explicit decision", (*section)[index].SemanticID)
+			if err := colony.AddressPlanningSemanticChange(section.name, change); err != nil {
+				return fmt.Errorf("semantic change %q: %w", change.SemanticID, err)
 			}
-			(*section)[index].EvidenceIDs = append([]string(nil), evidenceIDs...)
 		}
 	}
 	if !changed && len(evidenceIDs) > 0 {
 		// Evidence may still ground confidence movement even when the plan is
 		// semantically unchanged; retaining the IDs on the result is useful.
 	}
-	payload := *delta
-	payload.ID = ""
-	payload.ContentHash = ""
-	hash, err := jsonSHA256(payload)
-	if err != nil {
-		return err
-	}
-	delta.ContentHash = hash
-	delta.ID = "planning-delta-" + hash[:12]
-	return delta.Validate()
+	return colony.AddressPlanningSemanticDelta(delta)
 }
 
 func planningRoutePriorScores(manifest planningStageManifest, cards []colony.PlanningIterationCard) (planningConfidenceScores, error) {
@@ -3311,31 +3314,13 @@ func normalizePlanningRouteAssessments(manifest planningStageManifest, assessmen
 		assessment.FreshEvidenceIDs = uniqueSortedStrings(assessment.FreshEvidenceIDs)
 		assessment.ResolvedGapIDs = uniqueSortedStrings(assessment.ResolvedGapIDs)
 		assessment.ProducerReceiptID = strings.TrimSpace(assessment.ProducerReceiptID)
-		gap := assessment.RemainingGap
-		gap.SchemaVersion = colony.PlanningSchemaVersion
-		gap.ID = strings.TrimSpace(gap.ID)
-		gap.Description = normalizePlanningDecisionText(gap.Description)
-		gap.EvidenceThatWouldChange = normalizePlanningDecisionText(gap.EvidenceThatWouldChange)
-		gap.EvidenceIDs = uniqueSortedStrings(gap.EvidenceIDs)
-		gap.ContentHash = ""
-		gapHash, err := jsonSHA256(gap)
-		if err != nil {
-			return nil, err
+		assessment.RemainingGap.SchemaVersion = colony.PlanningSchemaVersion
+		assessment.RemainingGap.Description = normalizePlanningDecisionText(assessment.RemainingGap.Description)
+		assessment.RemainingGap.EvidenceThatWouldChange = normalizePlanningDecisionText(assessment.RemainingGap.EvidenceThatWouldChange)
+		assessment.RemainingGap.EvidenceIDs = uniqueSortedStrings(assessment.RemainingGap.EvidenceIDs)
+		if err := colony.AddressPlanningDimensionAssessment(&assessment); err != nil {
+			return nil, fmt.Errorf("dimension_assessments[%d]: %w", index, err)
 		}
-		gap.ContentHash = gapHash
-		gap.ID = "planning-gap-" + gapHash[:12]
-		if err := gap.Validate(); err != nil {
-			return nil, fmt.Errorf("dimension_assessments[%d].remaining_gap: %w", index, err)
-		}
-		assessment.RemainingGap = gap
-		assessment.ID = ""
-		assessment.ContentHash = ""
-		assessmentHash, err := jsonSHA256(assessment)
-		if err != nil {
-			return nil, err
-		}
-		assessment.ContentHash = assessmentHash
-		assessment.ID = "planning-assessment-" + assessmentHash[:12]
 		result[index] = assessment
 	}
 	return result, nil
@@ -4081,30 +4066,11 @@ func buildPlanningRouteCandidate(root string, completed planningRouteStageFinali
 	if len(causal) == 0 {
 		return empty, fmt.Errorf("candidate requires residual evidence_that_would_change")
 	}
-	candidateHash, err := jsonSHA256(struct {
-		RunID                     string                      `json:"run_id"`
-		ProposalSemanticHash      string                      `json:"proposal_semantic_hash"`
-		BasePlanRevisionID        string                      `json:"base_plan_revision_id"`
-		BasePlanRevisionHash      string                      `json:"base_plan_revision_hash"`
-		SpecificationRevisionID   string                      `json:"specification_revision_id"`
-		SpecificationRevisionHash string                      `json:"specification_revision_hash"`
-		TimelineDigest            string                      `json:"timeline_digest"`
-		StopDecision              colony.PlanningStopDecision `json:"stop_decision"`
-	}{completed.Receipt.RunID, completed.Validation.ProposalHash, base.ID, base.Hash,
-		completed.Validation.Result.Specification.RevisionID, completed.Validation.Result.Specification.ContentHash, timeline.Binding.TimelineDigest, completed.Card.Decision})
-	if err != nil {
-		return empty, err
-	}
-	candidateID := "plan-candidate-" + candidateHash[:12]
 	proposalInput, preservedPrefix, err := planningRouteCandidateProposalInput(state.Plan, completed.Validation.Result.Proposal.Phases)
 	if err != nil {
 		return empty, err
 	}
-	phases := planningRouteCandidatePhases(proposalInput, preservedPrefix, candidateID, candidateHash, completed.Validation.Result.Specification, *timeline.Binding, completed.Validation.SemanticDelta)
-	proposalHash, err := planDefinitionHash(phases)
-	if err != nil {
-		return empty, err
-	}
+	phases := planningRouteCandidatePhases(proposalInput, preservedPrefix, "", "", completed.Validation.Result.Specification, *timeline.Binding, completed.Validation.SemanticDelta)
 	number := base.Number + 1
 	parentID := base.ID
 	if base.ID == "plan-unbound" {
@@ -4118,19 +4084,16 @@ func buildPlanningRouteCandidate(root string, completed planningRouteStageFinali
 		return empty, err
 	}
 	proposal := colony.PlanRevision{
-		SchemaVersion: planRevisionSchemaVersion, Number: number, ID: fmt.Sprintf("plan-r%d-%s", number, proposalHash[:12]), ParentID: parentID,
+		SchemaVersion: planRevisionSchemaVersion, Number: number, ParentID: parentID,
 		CreatedAt: completed.Card.CreatedAt.UTC().Format(time.RFC3339Nano), ReasonType: colony.PlanRevisionResearch,
 		Reason: "Evidence-backed iterative planning candidate", EvidenceHash: evidenceHash,
-		PlanningRunID: completed.Receipt.RunID, PlanHash: proposalHash,
+		PlanningRunID:     completed.Receipt.RunID,
 		PreservedPhaseIDs: phaseIDs(state.Plan.Phases[:preservedPrefix]), SupersededPhaseIDs: phaseIDs(state.Plan.Phases[preservedPrefix:]), ReplacementPhaseIDs: phaseIDs(phases[preservedPrefix:]),
 		SemanticID:            completed.Validation.Result.Proposal.SemanticID,
 		RequirementProofLinks: requirements, AcceptanceProofLinks: acceptance, NegativeProofLinks: negative, RecoveryProofLinks: recovery, PublicPathProofLinks: publicPaths,
 		SpecificationRevisionID: completed.Validation.Result.Specification.RevisionID, SpecificationRevisionHash: completed.Validation.Result.Specification.ContentHash,
-		CandidateID: candidateID, CandidateContentHash: candidateHash, PlanningTimelineID: timeline.Binding.ID, PlanningTimelineDigest: timeline.Binding.TimelineDigest,
+		PlanningTimelineID: timeline.Binding.ID, PlanningTimelineDigest: timeline.Binding.TimelineDigest,
 		AffectedSemanticIDs: affected, PreservedSemanticIDs: preserved, Phases: phases,
-	}
-	if err := validateStandalonePlanRevision(proposal); err != nil {
-		return empty, fmt.Errorf("candidate proposal: %w", err)
 	}
 	disposition := colony.PlanRecommendationRevise
 	if completed.Card.Decision.Reason == colony.PlanningStopTargetMet {
@@ -4142,26 +4105,23 @@ func buildPlanningRouteCandidate(root string, completed planningRouteStageFinali
 	}
 	rationale := fmt.Sprintf("Go-derived confidence %d%% stopped as %s against the %d%% target; %d non-material gap(s) remain.", completed.Validation.Confidence.Scores.Overall, completed.Card.Decision.Reason, completed.Validation.RunHeader.TargetConfidence, len(residual))
 	recommendation := colony.QueenPlanRecommendation{
-		SchemaVersion: colony.PlanningSchemaVersion, CandidateID: candidateID, Disposition: disposition,
+		SchemaVersion: colony.PlanningSchemaVersion, Disposition: disposition,
 		EvidenceIDs: uniqueSortedStrings(evidenceIDs), Rationale: rationale, Producer: colony.PlanRecommendationProducerQueen,
 		ProducerID: "go-queen/planning-route/v1", CreatedAt: completed.Card.CreatedAt.UTC(),
 	}
-	recommendationHash, err := jsonSHA256(recommendation)
-	if err != nil {
-		return empty, err
-	}
-	recommendation.ContentHash = recommendationHash
-	recommendation.ID = "queen-recommendation-" + recommendationHash[:12]
 	candidate := colony.PlanCandidate{
-		SchemaVersion: colony.PlanCandidateSchemaVersion, ID: candidateID, ContentHash: candidateHash,
-		Status: colony.PlanCandidatePendingReview, CreatedAt: completed.Card.CreatedAt.UTC(), ExpiresAt: completed.Card.CreatedAt.UTC().Add(7 * 24 * time.Hour),
-		Proposal: proposal, ProposalHash: proposal.PlanHash,
+		SchemaVersion: colony.PlanCandidateSchemaVersion,
+		Status:        colony.PlanCandidatePendingReview, CreatedAt: completed.Card.CreatedAt.UTC(), ExpiresAt: completed.Card.CreatedAt.UTC().Add(7 * 24 * time.Hour),
+		Proposal:           proposal,
 		BasePlanRevisionID: base.ID, BasePlanRevisionHash: base.Hash,
 		SpecificationRevisionID: completed.Validation.Result.Specification.RevisionID, SpecificationRevisionHash: completed.Validation.Result.Specification.ContentHash,
 		Timeline: *timeline.Binding, StopDecision: completed.Card.Decision,
 		DimensionAssessments: append([]colony.PlanningDimensionAssessment(nil), completed.Card.DimensionAssessments...),
 		SemanticDelta:        completed.Card.SemanticDelta, ResidualGaps: residual,
 		EvidenceThatWouldChange: strings.Join(causal, "; "), Recommendation: recommendation,
+	}
+	if err := addressPlanCandidateReviewPayload(&candidate); err != nil {
+		return empty, err
 	}
 	if err := validatePlanningRecordHashes(candidate); err != nil {
 		return empty, err

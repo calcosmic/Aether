@@ -197,7 +197,9 @@ func createPhaseInsertCandidate(root string, request phaseInsertCandidateRequest
 		return empty, fmt.Errorf("hash phase insertion evidence: %w", err)
 	}
 	evidenceID := "phase-insert-evidence-" + evidenceHash[:12]
-	phaseInsertApplyDeltaEvidence(&delta, evidenceID)
+	if err := phaseInsertApplyDeltaEvidence(&delta, evidenceID); err != nil {
+		return empty, err
+	}
 	if len(impact.AffectedSemanticIDs) > 0 {
 		if err := phaseInsertAppendImpactAuthority(&delta, approved.Revision.ID, impact.AffectedSemanticIDs); err != nil {
 			return empty, err
@@ -252,59 +254,40 @@ func createPhaseInsertCandidate(root string, request phaseInsertCandidateRequest
 		return empty, err
 	}
 
-	candidateHash, err := jsonSHA256(struct {
-		RunID                     string   `json:"run_id"`
-		ProposalSemanticHash      string   `json:"proposal_semantic_hash"`
-		BasePlanRevisionID        string   `json:"base_plan_revision_id"`
-		BasePlanRevisionHash      string   `json:"base_plan_revision_hash"`
-		SpecificationRevisionID   string   `json:"specification_revision_id"`
-		SpecificationRevisionHash string   `json:"specification_revision_hash"`
-		TimelineDigest            string   `json:"timeline_digest"`
-		Coverage                  []string `json:"coverage"`
-	}{runID, afterSnapshot.ContentHash, base.ID, base.Hash, approved.Revision.ID, approved.Revision.ContentHash, timeline.TimelineDigest, coverageIDs})
-	if err != nil {
-		return empty, err
-	}
-	candidateID := "plan-candidate-" + candidateHash[:12]
 	affected, preserved := planningRouteDeltaSemanticIDs(delta)
 	affected = canonicalPlanImpactIDs(append(affected, impact.AffectedSemanticIDs...))
 	preserved = planImpactDifference(preserved, affected)
-	boundPhases := phaseInsertCandidatePhases(proposalInput, candidateID, candidateHash, approved.Binding, timeline, affected, preserved, coverageIDs)
-	proposalHash, err := planDefinitionHash(boundPhases)
-	if err != nil {
-		return empty, err
-	}
+	boundPhases := phaseInsertCandidatePhases(proposalInput, "", "", approved.Binding, timeline, affected, preserved, coverageIDs)
 	requirements, acceptance, negative, recovery, publicPaths := planningRouteProposalProofLinks(boundPhases)
 	preservedPhaseIDs, supersededPhaseIDs := phaseInsertRevisionPhaseSets(state.Plan.Phases, impact)
 	proposal := colony.PlanRevision{
 		SchemaVersion: planRevisionSchemaVersion, Number: base.Number + 1,
-		ID: fmt.Sprintf("plan-r%d-%s", base.Number+1, proposalHash[:12]), ParentID: base.ID,
+		ParentID:  base.ID,
 		CreatedAt: createdAt.Format(time.RFC3339Nano), ReasonType: colony.PlanRevisionScopeChange,
 		Reason:       "Owner-requested corrective phase insertion: " + strings.TrimSpace(request.Name),
-		EvidenceHash: evidenceHash, PlanningRunID: runID, PlanHash: proposalHash,
+		EvidenceHash: evidenceHash, PlanningRunID: runID,
 		PreservedPhaseIDs: preservedPhaseIDs, SupersededPhaseIDs: supersededPhaseIDs,
 		ReplacementPhaseIDs: []int{boundPhases[request.After].ID}, SemanticID: active.SemanticID,
 		RequirementProofLinks: requirements, AcceptanceProofLinks: acceptance,
 		NegativeProofLinks: negative, RecoveryProofLinks: recovery, PublicPathProofLinks: publicPaths,
 		SpecificationRevisionID: approved.Revision.ID, SpecificationRevisionHash: approved.Revision.ContentHash,
-		CandidateID: candidateID, CandidateContentHash: candidateHash,
 		PlanningTimelineID: timeline.ID, PlanningTimelineDigest: timeline.TimelineDigest,
 		AffectedSemanticIDs: affected, PreservedSemanticIDs: preserved, Phases: boundPhases,
 	}
-	if err := validateStandalonePlanRevision(proposal); err != nil {
-		return empty, fmt.Errorf("inserted phase proposal: %w", err)
-	}
-	recommendation, err := phaseInsertRecommendation(candidateID, evidenceID, createdAt)
+	recommendation, err := phaseInsertRecommendation("", evidenceID, createdAt)
 	if err != nil {
 		return empty, err
 	}
 	candidate := colony.PlanCandidate{
-		SchemaVersion: colony.PlanCandidateSchemaVersion, ID: candidateID, ContentHash: candidateHash,
-		Status: colony.PlanCandidatePendingReview, CreatedAt: createdAt, ExpiresAt: createdAt.Add(7 * 24 * time.Hour),
-		Proposal: proposal, ProposalHash: proposalHash, BasePlanRevisionID: base.ID, BasePlanRevisionHash: base.Hash,
+		SchemaVersion: colony.PlanCandidateSchemaVersion,
+		Status:        colony.PlanCandidatePendingReview, CreatedAt: createdAt, ExpiresAt: createdAt.Add(7 * 24 * time.Hour),
+		Proposal: proposal, BasePlanRevisionID: base.ID, BasePlanRevisionHash: base.Hash,
 		SpecificationRevisionID: approved.Revision.ID, SpecificationRevisionHash: approved.Revision.ContentHash,
 		Timeline: timeline, StopDecision: decision, DimensionAssessments: assessments, SemanticDelta: delta,
 		ResidualGaps: gaps, EvidenceThatWouldChange: decision.EvidenceThatWouldChange, Recommendation: recommendation,
+	}
+	if err := addressPlanCandidateReviewPayload(&candidate); err != nil {
+		return empty, err
 	}
 	if err := validatePlanCandidateImpactCoverage(candidate, impact); err != nil {
 		return empty, fmt.Errorf("affected_scope: %w", err)
@@ -350,7 +333,7 @@ func createPhaseInsertCandidate(root string, request phaseInsertCandidateRequest
 		}
 		files[path] = content
 	}
-	if err := persistPlanningScoutFiles(root, "phase-insert-candidate-"+candidateHash[:24], "phase-insert-candidate", candidate.ID, files, nil); err != nil {
+	if err := persistPlanningScoutFiles(root, "phase-insert-candidate-"+candidate.ContentHash[:24], "phase-insert-candidate", candidate.ID, files, nil); err != nil {
 		return empty, err
 	}
 	acceptRequest := planCandidateAcceptanceRequest{
@@ -497,20 +480,34 @@ func specPublicPathIDList(values []colony.SpecPublicPath) []string {
 	return result
 }
 
-func phaseInsertApplyDeltaEvidence(delta *colony.PlanningSemanticDelta, evidenceID string) {
+func phaseInsertApplyDeltaEvidence(delta *colony.PlanningSemanticDelta, evidenceID string) error {
 	if delta == nil {
-		return
+		return fmt.Errorf("phase insertion semantic delta is required")
 	}
-	for _, section := range []*[]colony.PlanningSemanticChange{
-		&delta.Phases, &delta.Tasks, &delta.Dependencies, &delta.RequirementLinks,
-		&delta.AcceptanceChecks, &delta.NegativeExpectations, &delta.RecoveryExpectations, &delta.PublicPaths,
+	for _, section := range []struct {
+		name    colony.PlanningSemanticSection
+		changes *[]colony.PlanningSemanticChange
+	}{
+		{name: colony.PlanningSemanticSectionPhases, changes: &delta.Phases},
+		{name: colony.PlanningSemanticSectionTasks, changes: &delta.Tasks},
+		{name: colony.PlanningSemanticSectionDependencies, changes: &delta.Dependencies},
+		{name: colony.PlanningSemanticSectionRequirementLinks, changes: &delta.RequirementLinks},
+		{name: colony.PlanningSemanticSectionAcceptanceChecks, changes: &delta.AcceptanceChecks},
+		{name: colony.PlanningSemanticSectionNegativeExpectations, changes: &delta.NegativeExpectations},
+		{name: colony.PlanningSemanticSectionRecoveryExpectations, changes: &delta.RecoveryExpectations},
+		{name: colony.PlanningSemanticSectionPublicPaths, changes: &delta.PublicPaths},
 	} {
-		for index := range *section {
-			if (*section)[index].Kind != colony.PlanningSemanticChangePreserved {
-				(*section)[index].EvidenceIDs = []string{evidenceID}
+		for index := range *section.changes {
+			change := &(*section.changes)[index]
+			if change.Kind != colony.PlanningSemanticChangePreserved {
+				change.EvidenceIDs = []string{evidenceID}
+			}
+			if err := colony.AddressPlanningSemanticChange(section.name, change); err != nil {
+				return fmt.Errorf("phase insertion semantic change %q: %w", change.SemanticID, err)
 			}
 		}
 	}
+	return nil
 }
 
 func phaseInsertAppendImpactAuthority(delta *colony.PlanningSemanticDelta, specificationID string, affected []string) error {
@@ -518,20 +515,14 @@ func phaseInsertAppendImpactAuthority(delta *colony.PlanningSemanticDelta, speci
 		return nil
 	}
 	rationale := "The approved specification successor requires this exact affected closure to be reconciled by the insertion candidate"
-	hash, err := jsonSHA256(struct {
-		Kind      colony.PlanningAuthorityImpactKind `json:"kind"`
-		SourceID  string                             `json:"source_id"`
-		Affected  []string                           `json:"affected_semantic_ids"`
-		Rationale string                             `json:"rationale"`
-	}{colony.PlanningAuthoritySpecSupersession, specificationID, canonicalPlanImpactIDs(affected), rationale})
-	if err != nil {
-		return err
-	}
-	delta.AuthorityImpacts = append(delta.AuthorityImpacts, colony.PlanningAuthorityImpact{
-		ID: "authority-impact-" + hash[:12], ContentHash: hash,
+	impact := colony.PlanningAuthorityImpact{
 		Kind: colony.PlanningAuthoritySpecSupersession, SourceID: specificationID,
 		AffectedSemanticIDs: canonicalPlanImpactIDs(affected), Rationale: rationale,
-	})
+	}
+	if err := colony.AddressPlanningAuthorityImpact(&impact); err != nil {
+		return err
+	}
+	delta.AuthorityImpacts = append(delta.AuthorityImpacts, impact)
 	return nil
 }
 
@@ -539,17 +530,7 @@ func addressPhaseInsertDelta(delta *colony.PlanningSemanticDelta) error {
 	if delta == nil {
 		return fmt.Errorf("phase insertion semantic delta is required")
 	}
-	delta.SchemaVersion = colony.PlanningSchemaVersion
-	payload := *delta
-	payload.ID = ""
-	payload.ContentHash = ""
-	hash, err := jsonSHA256(payload)
-	if err != nil {
-		return fmt.Errorf("hash phase insertion semantic delta: %w", err)
-	}
-	delta.ContentHash = hash
-	delta.ID = "planning-delta-" + hash[:12]
-	return delta.Validate()
+	return colony.AddressPlanningSemanticDelta(delta)
 }
 
 func phaseInsertConfidenceScore(confidence *float64) int {
@@ -580,29 +561,16 @@ func phaseInsertAssessments(score int, evidenceID string) ([]colony.PlanningDime
 			EvidenceIDs:             []string{evidenceID},
 			EvidenceThatWouldChange: "Owner rejection, a newer approved specification, or a changed base plan requires a new insertion candidate.",
 		}
-		gapPayload := gap
-		gapPayload.ID, gapPayload.ContentHash = "", ""
-		gapHash, err := jsonSHA256(gapPayload)
-		if err != nil {
+		if err := colony.AddressPlanningGap(&gap); err != nil {
 			return nil, nil, err
 		}
-		gap.ContentHash = gapHash
-		gap.ID = "planning-gap-" + gapHash[:12]
 		assessment := colony.PlanningDimensionAssessment{
 			SchemaVersion: colony.PlanningSchemaVersion, Dimension: dimension,
 			Before: score, After: score, FreshEvidenceIDs: []string{evidenceID}, RemainingGap: gap,
 			Rationale:         "The owner-requested insertion is isolated as a proposal; readiness remains unchanged until exact acceptance.",
-			ProducerReceiptID: "phase-insert-proposal-" + gapHash[:12],
+			ProducerReceiptID: "phase-insert-proposal-" + gap.ContentHash[:12],
 		}
-		assessmentPayload := assessment
-		assessmentPayload.ID, assessmentPayload.ContentHash = "", ""
-		assessmentHash, err := jsonSHA256(assessmentPayload)
-		if err != nil {
-			return nil, nil, err
-		}
-		assessment.ContentHash = assessmentHash
-		assessment.ID = "planning-assessment-" + assessmentHash[:12]
-		if err := assessment.Validate(); err != nil {
+		if err := colony.AddressPlanningDimensionAssessment(&assessment); err != nil {
 			return nil, nil, err
 		}
 		assessments = append(assessments, assessment)
@@ -625,15 +593,10 @@ func phaseInsertStopDecision(gaps []colony.PlanningGap, evidenceID string) (colo
 		Rationale:               "The bounded manual insertion proposal is complete and now requires exact owner acceptance rather than automatic activation.",
 		EvidenceThatWouldChange: gaps[0].EvidenceThatWouldChange,
 	}
-	payload := decision
-	payload.ID, payload.ContentHash = "", ""
-	hash, err := jsonSHA256(payload)
-	if err != nil {
+	if err := addressPlanningStopDecision(&decision); err != nil {
 		return colony.PlanningStopDecision{}, err
 	}
-	decision.ContentHash = hash
-	decision.ID = "planning-stop-" + hash[:12]
-	return decision, decision.Validate()
+	return decision, nil
 }
 
 func phaseInsertTimelinePreview(card colony.PlanningIterationCard) (colony.PlanningTimelineBinding, error) {
@@ -715,14 +678,12 @@ func phaseInsertRecommendation(candidateID, evidenceID string, createdAt time.Ti
 		Rationale: "The requested phase is specification-covered, isolated from the active revision, and safe to review for exact acceptance.",
 		Producer:  colony.PlanRecommendationProducerQueen, ProducerID: "go-queen/phase-insert/v1", CreatedAt: createdAt,
 	}
-	payload := recommendation
-	payload.ID, payload.ContentHash = "", ""
-	hash, err := jsonSHA256(payload)
-	if err != nil {
+	if err := colony.AddressQueenPlanRecommendation(&recommendation); err != nil {
 		return colony.QueenPlanRecommendation{}, err
 	}
-	recommendation.ContentHash = hash
-	recommendation.ID = "queen-recommendation-" + hash[:12]
+	if candidateID == "" {
+		return recommendation, nil
+	}
 	return recommendation, recommendation.Validate()
 }
 
@@ -845,7 +806,7 @@ func acceptPlanCandidate(root string, request planCandidateAcceptanceRequest, op
 	if candidate.BasePlanRevisionHash != base.Hash {
 		return empty, fmt.Errorf("base_plan_revision_hash: current base no longer matches candidate")
 	}
-	computedProposalHash, err := planDefinitionHash(candidate.Proposal.Phases)
+	computedProposalHash, err := canonicalPlanCandidateProposalHash(candidate.Proposal)
 	if err != nil {
 		return empty, fmt.Errorf("proposal_hash: %w", err)
 	}
@@ -873,7 +834,7 @@ func acceptPlanCandidate(root string, request planCandidateAcceptanceRequest, op
 		revision.AffectedSemanticIDs = append([]string(nil), impact.AffectedSemanticIDs...)
 		revision.PreservedSemanticIDs = append([]string(nil), impact.PreservedSemanticIDs...)
 	}
-	if computed, hashErr := planDefinitionHash(revision.Phases); hashErr != nil || computed != revision.PlanHash {
+	if computed, hashErr := canonicalPlanCandidateProposalHash(revision); hashErr != nil || computed != revision.PlanHash {
 		if hashErr != nil {
 			return empty, fmt.Errorf("proposal_hash: %w", hashErr)
 		}

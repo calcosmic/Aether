@@ -275,12 +275,18 @@ func validatePlanRevisionChain(values []colony.PlanRevision, current bool) (map[
 			if revision.ID != wantID {
 				return nil, fmt.Errorf("revisions[%d].id %q is not content-addressed by plan_hash", i, revision.ID)
 			}
-			computed, err := planDefinitionHash(revision.Phases)
+			computed, err := canonicalPlanCandidateProposalHash(revision)
 			if err != nil {
-				return nil, fmt.Errorf("hash revisions[%d] phases: %w", i, err)
+				return nil, fmt.Errorf("hash revisions[%d] canonical proposal: %w", i, err)
 			}
 			if computed != revision.PlanHash {
-				return nil, fmt.Errorf("revisions[%d].plan_hash does not match its phase snapshot", i)
+				legacyComputed, legacyErr := planDefinitionHash(revision.Phases)
+				if legacyErr != nil {
+					return nil, fmt.Errorf("hash revisions[%d] legacy proposal: %w", i, legacyErr)
+				}
+				if legacyComputed != revision.PlanHash {
+					return nil, fmt.Errorf("revisions[%d].plan_hash does not match its phase snapshot", i)
+				}
 			}
 		}
 		byID[revision.ID] = revision
@@ -419,10 +425,12 @@ func validatePlanCandidateState(candidate colony.PlanCandidate, revisions map[st
 	if err := validateContentAddressedID("id", candidate.ID, candidate.ContentHash); err != nil {
 		return err
 	}
-	if err := validatePlanningRecordHashes(candidate); err != nil {
-		return err
-	}
-	if err := candidate.Validate(); err != nil {
+	canonical := validatePlanningRecordHashes(candidate) == nil
+	if canonical {
+		if err := candidate.Validate(); err != nil {
+			return err
+		}
+	} else if err := validateRetainedPlanCandidateShape(candidate); err != nil {
 		return err
 	}
 
@@ -458,7 +466,11 @@ func validatePlanCandidateState(candidate colony.PlanCandidate, revisions map[st
 	if candidate.Proposal.ID == "" || candidate.ProposalHash != candidate.Proposal.PlanHash {
 		return fmt.Errorf("proposal binding is incomplete")
 	}
-	if err := validateStandalonePlanRevision(candidate.Proposal); err != nil {
+	if canonical {
+		if err := validateStandalonePlanRevision(candidate.Proposal); err != nil {
+			return fmt.Errorf("proposal: %w", err)
+		}
+	} else if err := validateRetainedPlanRevisionShape(candidate.Proposal); err != nil {
 		return fmt.Errorf("proposal: %w", err)
 	}
 	if err := validateCandidateGapReachability(candidate); err != nil {
@@ -472,6 +484,219 @@ func validatePlanCandidateState(candidate colony.PlanCandidate, revisions map[st
 		receipt.BasePlanRevisionID != candidate.BasePlanRevisionID || receipt.BasePlanRevisionHash != candidate.BasePlanRevisionHash ||
 		receipt.TimelineID != candidate.Timeline.ID || receipt.TimelineDigest != candidate.Timeline.TimelineDigest || receipt.ProposalHash != candidate.ProposalHash {
 		return fmt.Errorf("acceptance receipt does not exactly bind candidate authorities")
+	}
+	return nil
+}
+
+// validateRetainedPlanCandidateShape preserves read compatibility for state
+// snapshots written before complete review-payload addressing. State alone is
+// never execution authority: persisted candidate and timeline artifacts are
+// independently canonicalized by their loaders before review or build/run.
+func validateRetainedPlanCandidateShape(candidate colony.PlanCandidate) error {
+	if !candidate.Status.Valid() || candidate.CreatedAt.IsZero() || candidate.ExpiresAt.IsZero() {
+		return fmt.Errorf("candidate status and timestamps are required")
+	}
+	for _, required := range []struct {
+		name  string
+		value string
+	}{
+		{name: "proposal.id", value: candidate.Proposal.ID},
+		{name: "proposal_hash", value: candidate.ProposalHash},
+		{name: "base_plan_revision_id", value: candidate.BasePlanRevisionID},
+		{name: "base_plan_revision_hash", value: candidate.BasePlanRevisionHash},
+		{name: "specification_revision_id", value: candidate.SpecificationRevisionID},
+		{name: "specification_revision_hash", value: candidate.SpecificationRevisionHash},
+	} {
+		if strings.TrimSpace(required.value) == "" {
+			return fmt.Errorf("%s is required", required.name)
+		}
+	}
+	if candidate.Proposal.PlanHash != candidate.ProposalHash {
+		return fmt.Errorf("proposal_hash must match proposal.plan_hash")
+	}
+	if err := validateTimelineBindingStructure(candidate.Timeline); err != nil {
+		return fmt.Errorf("timeline: %w", err)
+	}
+	if err := candidate.StopDecision.Validate(); err != nil {
+		return fmt.Errorf("stop_decision: %w", err)
+	}
+	if candidate.StopDecision.Reason == colony.PlanningStopContinue || candidate.StopDecision.Reason == colony.PlanningStopOwnerDecision {
+		return fmt.Errorf("stop_decision.reason %q is not candidate eligible", candidate.StopDecision.Reason)
+	}
+	if err := validateRetainedPlanningAssessments(candidate.DimensionAssessments); err != nil {
+		return err
+	}
+	if err := validateRetainedPlanningDelta(candidate.SemanticDelta); err != nil {
+		return fmt.Errorf("semantic_delta: %w", err)
+	}
+	for i := range candidate.ResidualGaps {
+		if err := candidate.ResidualGaps[i].Validate(); err != nil {
+			return fmt.Errorf("residual_gaps[%d]: %w", i, err)
+		}
+	}
+	if strings.TrimSpace(candidate.EvidenceThatWouldChange) == "" {
+		return fmt.Errorf("evidence_that_would_change is required")
+	}
+	if err := validateRetainedRecommendation(candidate.Recommendation, candidate.ID); err != nil {
+		return fmt.Errorf("recommendation: %w", err)
+	}
+	if candidate.Status == colony.PlanCandidateAccepted {
+		if candidate.Acceptance == nil {
+			return fmt.Errorf("acceptance is required for accepted candidate")
+		}
+		if err := candidate.Acceptance.Validate(); err != nil {
+			return fmt.Errorf("acceptance: %w", err)
+		}
+		if candidate.Acceptance.CandidateID != candidate.ID || candidate.Acceptance.CandidateContentHash != candidate.ContentHash {
+			return fmt.Errorf("acceptance candidate binding must match candidate")
+		}
+	} else if candidate.Acceptance != nil {
+		return fmt.Errorf("acceptance is permitted only for accepted candidate")
+	}
+	return nil
+}
+
+func validateRetainedPlanRevisionShape(revision colony.PlanRevision) error {
+	if revision.SchemaVersion != planRevisionSchemaVersion || revision.Number <= 0 || strings.TrimSpace(revision.ID) == "" || strings.TrimSpace(revision.CreatedAt) == "" || !revision.ReasonType.Valid() || strings.TrimSpace(revision.Reason) == "" || len(revision.Phases) == 0 {
+		return fmt.Errorf("current proposal revision is partially populated")
+	}
+	if err := validateSHA256("plan_hash", revision.PlanHash); err != nil {
+		return err
+	}
+	if revision.ID != fmt.Sprintf("plan-r%d-%s", revision.Number, revision.PlanHash[:12]) {
+		return fmt.Errorf("id %q is not content-addressed by plan_hash", revision.ID)
+	}
+	computed, err := planDefinitionHash(revision.Phases)
+	if err != nil {
+		return err
+	}
+	if computed != revision.PlanHash {
+		return fmt.Errorf("plan_hash does not match proposal phases")
+	}
+	return nil
+}
+
+func validateTimelineBindingStructure(binding colony.PlanningTimelineBinding) error {
+	if err := validatePlanningSchemaVersion("schema_version", binding.SchemaVersion, colony.PlanningTimelineSchemaVersion); err != nil {
+		return err
+	}
+	if err := validateAddressedHash("planning timeline binding", binding.ID, binding.ContentHash); err != nil {
+		return err
+	}
+	return binding.Validate()
+}
+
+func validateRetainedPlanningAssessments(assessments []colony.PlanningDimensionAssessment) error {
+	dimensions := colony.PlanningDimensions()
+	if len(assessments) != len(dimensions) {
+		return fmt.Errorf("dimension_assessments must contain exactly five dimensions")
+	}
+	seen := make(map[colony.PlanningDimension]struct{}, len(assessments))
+	for i := range assessments {
+		assessment := assessments[i]
+		if err := validatePlanningSchemaVersion(fmt.Sprintf("dimension_assessments[%d].schema_version", i), assessment.SchemaVersion, colony.PlanningSchemaVersion); err != nil {
+			return err
+		}
+		if err := validateAddressedHash(fmt.Sprintf("dimension_assessments[%d]", i), assessment.ID, assessment.ContentHash); err != nil {
+			return err
+		}
+		if !assessment.Dimension.Valid() || assessment.Before < 0 || assessment.Before > 100 || assessment.After < 0 || assessment.After > 100 {
+			return fmt.Errorf("dimension_assessments[%d] has an invalid dimension or whole-number score", i)
+		}
+		if _, duplicate := seen[assessment.Dimension]; duplicate {
+			return fmt.Errorf("dimension_assessments contains duplicate %q", assessment.Dimension)
+		}
+		seen[assessment.Dimension] = struct{}{}
+		if err := validateRetainedIDs(fmt.Sprintf("dimension_assessments[%d].fresh_evidence_ids", i), assessment.FreshEvidenceIDs, false); err != nil {
+			return err
+		}
+		if err := validateRetainedIDs(fmt.Sprintf("dimension_assessments[%d].resolved_gap_ids", i), assessment.ResolvedGapIDs, false); err != nil {
+			return err
+		}
+		if err := assessment.RemainingGap.Validate(); err != nil {
+			return fmt.Errorf("dimension_assessments[%d].remaining_gap: %w", i, err)
+		}
+		if assessment.RemainingGap.Dimension != assessment.Dimension || strings.TrimSpace(assessment.Rationale) == "" || strings.TrimSpace(assessment.ProducerReceiptID) == "" {
+			return fmt.Errorf("dimension_assessments[%d] has incomplete gap or producer attribution", i)
+		}
+	}
+	return nil
+}
+
+func validateRetainedPlanningDelta(delta colony.PlanningSemanticDelta) error {
+	if err := validatePlanningSchemaVersion("schema_version", delta.SchemaVersion, colony.PlanningSchemaVersion); err != nil {
+		return err
+	}
+	if err := validateAddressedHash("planning delta", delta.ID, delta.ContentHash); err != nil {
+		return err
+	}
+	sections := [][]colony.PlanningSemanticChange{
+		delta.Phases, delta.Tasks, delta.Dependencies, delta.RequirementLinks,
+		delta.AcceptanceChecks, delta.NegativeExpectations, delta.RecoveryExpectations, delta.PublicPaths,
+	}
+	count := len(delta.AuthorityImpacts)
+	seenChanges := make(map[string]struct{})
+	for _, changes := range sections {
+		count += len(changes)
+		for i := range changes {
+			if err := changes[i].Validate(); err != nil {
+				return err
+			}
+			if _, duplicate := seenChanges[changes[i].SemanticID]; duplicate {
+				return fmt.Errorf("semantic_id %q is duplicated", changes[i].SemanticID)
+			}
+			seenChanges[changes[i].SemanticID] = struct{}{}
+		}
+	}
+	if count == 0 {
+		return fmt.Errorf("semantic delta must contain at least one semantic change or authority impact")
+	}
+	seenImpacts := make(map[string]struct{}, len(delta.AuthorityImpacts))
+	for i := range delta.AuthorityImpacts {
+		impact := delta.AuthorityImpacts[i]
+		if err := validateAddressedHash(fmt.Sprintf("authority_impacts[%d]", i), impact.ID, impact.ContentHash); err != nil {
+			return err
+		}
+		if !impact.Kind.Valid() || strings.TrimSpace(impact.SourceID) == "" || strings.TrimSpace(impact.Rationale) == "" {
+			return fmt.Errorf("authority_impacts[%d] has incomplete attribution", i)
+		}
+		if err := validateRetainedIDs(fmt.Sprintf("authority_impacts[%d].affected_semantic_ids", i), impact.AffectedSemanticIDs, true); err != nil {
+			return err
+		}
+		if _, duplicate := seenImpacts[impact.ID]; duplicate {
+			return fmt.Errorf("authority_impacts[%d].id %q is duplicated", i, impact.ID)
+		}
+		seenImpacts[impact.ID] = struct{}{}
+	}
+	return nil
+}
+
+func validateRetainedRecommendation(recommendation colony.QueenPlanRecommendation, candidateID string) error {
+	if err := validatePlanningSchemaVersion("schema_version", recommendation.SchemaVersion, colony.PlanningSchemaVersion); err != nil {
+		return err
+	}
+	if err := validateAddressedHash("queen recommendation", recommendation.ID, recommendation.ContentHash); err != nil {
+		return err
+	}
+	if recommendation.CandidateID != candidateID || !recommendation.Disposition.Valid() || !recommendation.Producer.Valid() || recommendation.CreatedAt.IsZero() || strings.TrimSpace(recommendation.Rationale) == "" || strings.TrimSpace(recommendation.ProducerID) == "" {
+		return fmt.Errorf("recommendation identity or attribution is incomplete")
+	}
+	return validateRetainedIDs("recommendation.evidence_ids", recommendation.EvidenceIDs, true)
+}
+
+func validateRetainedIDs(field string, values []string, required bool) error {
+	if required && len(values) == 0 {
+		return fmt.Errorf("%s are required", field)
+	}
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		if value != strings.TrimSpace(value) || value == "" {
+			return fmt.Errorf("%s contains an empty or non-canonical ID", field)
+		}
+		if _, duplicate := seen[value]; duplicate {
+			return fmt.Errorf("%s contains duplicate ID %q", field, value)
+		}
+		seen[value] = struct{}{}
 	}
 	return nil
 }
@@ -516,6 +741,9 @@ func validateStandalonePlanRevision(revision colony.PlanRevision) error {
 	if revision.SchemaVersion != planRevisionSchemaVersion || revision.Number <= 0 || strings.TrimSpace(revision.ID) == "" || strings.TrimSpace(revision.CreatedAt) == "" || !revision.ReasonType.Valid() || strings.TrimSpace(revision.Reason) == "" {
 		return fmt.Errorf("current proposal revision is partially populated")
 	}
+	if len(revision.Phases) == 0 {
+		return fmt.Errorf("current proposal revision requires phases")
+	}
 	if err := validateSHA256("plan_hash", revision.PlanHash); err != nil {
 		return err
 	}
@@ -523,17 +751,37 @@ func validateStandalonePlanRevision(revision colony.PlanRevision) error {
 	if revision.ID != wantID {
 		return fmt.Errorf("id %q is not content-addressed by plan_hash", revision.ID)
 	}
-	computed, err := planDefinitionHash(revision.Phases)
+	computed, err := canonicalPlanCandidateProposalHash(revision)
 	if err != nil {
 		return err
 	}
 	if computed != revision.PlanHash {
 		return fmt.Errorf("plan_hash does not match proposal phases")
 	}
+	if err := validateSHA256("candidate_content_hash", revision.CandidateContentHash); err != nil {
+		return err
+	}
+	if revision.CandidateID != "plan-candidate-"+revision.CandidateContentHash[:12] {
+		return fmt.Errorf("candidate_id does not match candidate_content_hash")
+	}
+	for phaseIndex := range revision.Phases {
+		phase := revision.Phases[phaseIndex]
+		if phase.CandidateID != revision.CandidateID || phase.CandidateContentHash != revision.CandidateContentHash {
+			return fmt.Errorf("phases[%d] candidate back-reference does not match proposal", phaseIndex)
+		}
+		for taskIndex := range phase.Tasks {
+			if phase.Tasks[taskIndex].CandidateID != revision.CandidateID || phase.Tasks[taskIndex].CandidateContentHash != revision.CandidateContentHash {
+				return fmt.Errorf("phases[%d].tasks[%d] candidate back-reference does not match proposal", phaseIndex, taskIndex)
+			}
+		}
+	}
 	return nil
 }
 
 func validatePlanningRecordHashes(candidate colony.PlanCandidate) error {
+	if err := validatePlanningSchemaVersion("schema_version", candidate.SchemaVersion, colony.PlanCandidateSchemaVersion); err != nil {
+		return err
+	}
 	if err := validateTimelineBindingShape(candidate.Timeline); err != nil {
 		return fmt.Errorf("timeline: %w", err)
 	}
@@ -559,6 +807,9 @@ func validatePlanningRecordHashes(candidate colony.PlanCandidate) error {
 	if err := validateAddressedHash("recommendation", candidate.Recommendation.ID, candidate.Recommendation.ContentHash); err != nil {
 		return err
 	}
+	if err := candidate.Recommendation.Validate(); err != nil {
+		return fmt.Errorf("recommendation: %w", err)
+	}
 	if candidate.Acceptance != nil {
 		if err := validatePlanningSchemaVersion("acceptance.schema_version", candidate.Acceptance.SchemaVersion, colony.PlanAcceptanceSchemaVersion); err != nil {
 			return err
@@ -581,6 +832,7 @@ func validatePlanningRecordHashes(candidate colony.PlanCandidate) error {
 		}
 	}
 	for _, value := range []struct{ name, hash string }{
+		{name: "content_hash", hash: candidate.ContentHash},
 		{name: "proposal_hash", hash: candidate.ProposalHash},
 		{name: "base_plan_revision_hash", hash: candidate.BasePlanRevisionHash},
 		{name: "specification_revision_hash", hash: candidate.SpecificationRevisionHash},
@@ -589,13 +841,67 @@ func validatePlanningRecordHashes(candidate colony.PlanCandidate) error {
 			return err
 		}
 	}
+	proposalHash, err := canonicalPlanCandidateProposalHash(candidate.Proposal)
+	if err != nil {
+		return fmt.Errorf("proposal_hash: %w", err)
+	}
+	if candidate.ProposalHash != proposalHash || candidate.Proposal.PlanHash != proposalHash {
+		return fmt.Errorf("proposal_hash does not match the canonical stripped proposal")
+	}
+	if err := validateStandalonePlanRevision(candidate.Proposal); err != nil {
+		return fmt.Errorf("proposal: %w", err)
+	}
+	wantCandidateHash, err := canonicalPlanCandidateContentHash(candidate)
+	if err != nil {
+		return err
+	}
+	if candidate.ContentHash != wantCandidateHash || candidate.ID != "plan-candidate-"+wantCandidateHash[:12] {
+		return fmt.Errorf("candidate content address does not match its complete immutable review payload")
+	}
+	if err := validatePlanCandidateBackReferences(candidate); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validatePlanCandidateBackReferences(candidate colony.PlanCandidate) error {
+	bindings := []struct {
+		label string
+		id    string
+		hash  string
+	}{
+		{label: "proposal", id: candidate.Proposal.CandidateID, hash: candidate.Proposal.CandidateContentHash},
+	}
+	for phaseIndex := range candidate.Proposal.Phases {
+		phase := candidate.Proposal.Phases[phaseIndex]
+		bindings = append(bindings, struct {
+			label string
+			id    string
+			hash  string
+		}{label: fmt.Sprintf("proposal.phases[%d]", phaseIndex), id: phase.CandidateID, hash: phase.CandidateContentHash})
+		for taskIndex := range phase.Tasks {
+			bindings = append(bindings, struct {
+				label string
+				id    string
+				hash  string
+			}{label: fmt.Sprintf("proposal.phases[%d].tasks[%d]", phaseIndex, taskIndex), id: phase.Tasks[taskIndex].CandidateID, hash: phase.Tasks[taskIndex].CandidateContentHash})
+		}
+	}
+	for _, binding := range bindings {
+		if binding.id != candidate.ID || binding.hash != candidate.ContentHash {
+			return fmt.Errorf("%s candidate back-reference does not match candidate identity", binding.label)
+		}
+	}
+	if candidate.Recommendation.CandidateID != candidate.ID {
+		return fmt.Errorf("recommendation candidate back-reference does not match candidate identity")
+	}
 	return nil
 }
 
 // validatePlanningTimelineBinding validates the immutable card chain supplied
 // by the artifact loader against the small binding retained in state.
 func validatePlanningTimelineBinding(binding colony.PlanningTimelineBinding, cards []colony.PlanningIterationCard) error {
-	if err := validateTimelineBindingShape(binding); err != nil {
+	if err := validateTimelineBindingStructure(binding); err != nil {
 		return err
 	}
 	if len(cards) == 0 || len(cards) != len(binding.CardIDs) {
@@ -605,7 +911,7 @@ func validatePlanningTimelineBinding(binding colony.PlanningTimelineBinding, car
 	seen := make(map[string]struct{}, len(cards))
 	for i := range cards {
 		card := cards[i]
-		if err := validatePlanningIterationCardShape(card); err != nil {
+		if err := validateRetainedPlanningIterationCardShape(card); err != nil {
 			return fmt.Errorf("cards[%d]: %w", i, err)
 		}
 		if card.RunID != binding.RunID {
@@ -635,6 +941,68 @@ func validatePlanningTimelineBinding(binding colony.PlanningTimelineBinding, car
 	}
 	if binding.TimelineDigest != digest {
 		return fmt.Errorf("timeline_digest does not match the ordered card chain")
+	}
+	return nil
+}
+
+func validateRetainedPlanningIterationCardShape(card colony.PlanningIterationCard) error {
+	if err := validatePlanningSchemaVersion("schema_version", card.SchemaVersion, colony.PlanningIterationSchemaVersion); err != nil {
+		return err
+	}
+	if err := validateAddressedHash("card", card.ID, card.ContentHash); err != nil {
+		return err
+	}
+	for _, required := range []struct {
+		name  string
+		value string
+	}{
+		{name: "run_id", value: card.RunID},
+		{name: "scout_receipt_id", value: card.ScoutReceiptID},
+		{name: "route_setter_receipt_id", value: card.RouteSetterReceiptID},
+		{name: "evidence_that_would_change", value: card.EvidenceThatWouldChange},
+	} {
+		if strings.TrimSpace(required.value) == "" {
+			return fmt.Errorf("%s is required", required.name)
+		}
+	}
+	if card.Iteration <= 0 || card.CreatedAt.IsZero() {
+		return fmt.Errorf("iteration and created_at are required")
+	}
+	if err := validateSHA256("scout_receipt_hash", card.ScoutReceiptHash); err != nil {
+		return err
+	}
+	if err := validateSHA256("route_setter_receipt_hash", card.RouteSetterReceiptHash); err != nil {
+		return err
+	}
+	if err := validateRetainedIDs("evidence_ids", card.EvidenceIDs, true); err != nil {
+		return err
+	}
+	if err := validateRetainedPlanningAssessments(card.DimensionAssessments); err != nil {
+		return err
+	}
+	if err := card.WeakestGap.Validate(); err != nil {
+		return fmt.Errorf("weakest_gap: %w", err)
+	}
+	if err := validateRetainedPlanningDelta(card.SemanticDelta); err != nil {
+		return fmt.Errorf("semantic_delta: %w", err)
+	}
+	if err := card.Decision.Validate(); err != nil {
+		return fmt.Errorf("decision: %w", err)
+	}
+	knownGaps := make(map[string]struct{}, len(card.DimensionAssessments))
+	for _, assessment := range card.DimensionAssessments {
+		knownGaps[assessment.RemainingGap.ID] = struct{}{}
+	}
+	if _, ok := knownGaps[card.WeakestGap.ID]; !ok {
+		return fmt.Errorf("weakest_gap does not resolve to a dimension assessment remaining gap")
+	}
+	if card.Decision.SelectedGapID != "" && card.Decision.SelectedGapID != card.WeakestGap.ID {
+		return fmt.Errorf("decision.selected_gap_id does not resolve to weakest_gap")
+	}
+	for _, id := range card.Decision.ResidualGapIDs {
+		if _, ok := knownGaps[id]; !ok {
+			return fmt.Errorf("decision.residual_gap_ids references absent gap %q", id)
+		}
 	}
 	return nil
 }
@@ -738,56 +1106,55 @@ func validateTimelineBindingShape(binding colony.PlanningTimelineBinding) error 
 	if err := validatePlanningArtifactPath(binding.Path); err != nil {
 		return fmt.Errorf("path: %w", err)
 	}
-	return binding.Validate()
+	if err := binding.Validate(); err != nil {
+		return err
+	}
+	want, err := planningTimelineBindingContentHash(binding)
+	if err != nil {
+		return err
+	}
+	if binding.ContentHash != want || binding.ID != "planning-timeline-"+want[:12] {
+		return fmt.Errorf("planning timeline binding content address does not match its canonical payload")
+	}
+	return nil
 }
 
 func validatePlanningAssessmentShape(label string, assessment colony.PlanningDimensionAssessment) error {
 	if err := validatePlanningSchemaVersion(label+".schema_version", assessment.SchemaVersion, colony.PlanningSchemaVersion); err != nil {
 		return err
 	}
-	if err := validateAddressedHash(label, assessment.ID, assessment.ContentHash); err != nil {
+	if err := assessment.Validate(); err != nil {
+		return fmt.Errorf("%s: %w", label, err)
+	}
+	if err := validatePlanningGapShape(label+".remaining_gap", assessment.RemainingGap); err != nil {
 		return err
 	}
-	return validatePlanningGapShape(label+".remaining_gap", assessment.RemainingGap)
+	return nil
 }
 
 func validatePlanningGapShape(label string, gap colony.PlanningGap) error {
 	if err := validatePlanningSchemaVersion(label+".schema_version", gap.SchemaVersion, colony.PlanningSchemaVersion); err != nil {
 		return err
 	}
-	return validateAddressedHash(label, gap.ID, gap.ContentHash)
+	if err := gap.Validate(); err != nil {
+		return fmt.Errorf("%s: %w", label, err)
+	}
+	want, err := colony.CanonicalPlanningGapContentHash(gap)
+	if err != nil {
+		return fmt.Errorf("%s: %w", label, err)
+	}
+	if gap.ContentHash != want || gap.ID != "planning-gap-"+want[:12] {
+		return fmt.Errorf("%s content address does not match its canonical body", label)
+	}
+	return nil
 }
 
 func validatePlanningDeltaShape(label string, delta colony.PlanningSemanticDelta) error {
 	if err := validatePlanningSchemaVersion(label+".schema_version", delta.SchemaVersion, colony.PlanningSchemaVersion); err != nil {
 		return err
 	}
-	if err := validateAddressedHash(label, delta.ID, delta.ContentHash); err != nil {
-		return err
-	}
-	sections := [][]colony.PlanningSemanticChange{delta.Phases, delta.Tasks, delta.Dependencies, delta.RequirementLinks, delta.AcceptanceChecks, delta.NegativeExpectations, delta.RecoveryExpectations, delta.PublicPaths}
-	for sectionIndex := range sections {
-		for itemIndex := range sections[sectionIndex] {
-			change := sections[sectionIndex][itemIndex]
-			if err := validateSHA256(fmt.Sprintf("%s.change[%d][%d].content_hash", label, sectionIndex, itemIndex), change.ContentHash); err != nil {
-				return err
-			}
-			if change.BeforeHash != "" {
-				if err := validateSHA256(fmt.Sprintf("%s.change[%d][%d].before_hash", label, sectionIndex, itemIndex), change.BeforeHash); err != nil {
-					return err
-				}
-			}
-			if change.AfterHash != "" {
-				if err := validateSHA256(fmt.Sprintf("%s.change[%d][%d].after_hash", label, sectionIndex, itemIndex), change.AfterHash); err != nil {
-					return err
-				}
-			}
-		}
-	}
-	for i := range delta.AuthorityImpacts {
-		if err := validateAddressedHash(fmt.Sprintf("%s.authority_impacts[%d]", label, i), delta.AuthorityImpacts[i].ID, delta.AuthorityImpacts[i].ContentHash); err != nil {
-			return err
-		}
+	if err := delta.Validate(); err != nil {
+		return fmt.Errorf("%s: %w", label, err)
 	}
 	return nil
 }
@@ -796,7 +1163,48 @@ func validatePlanningStopShape(label string, decision colony.PlanningStopDecisio
 	if err := validatePlanningSchemaVersion(label+".schema_version", decision.SchemaVersion, colony.PlanningSchemaVersion); err != nil {
 		return err
 	}
-	return validateAddressedHash(label, decision.ID, decision.ContentHash)
+	if err := validateAddressedHash(label, decision.ID, decision.ContentHash); err != nil {
+		return err
+	}
+	want, err := canonicalPlanningStopDecisionHash(decision)
+	if err != nil {
+		return fmt.Errorf("%s: %w", label, err)
+	}
+	if decision.ContentHash != want || decision.ID != "planning-stop-"+want[:12] {
+		return fmt.Errorf("%s content address does not match its canonical body", label)
+	}
+	return decision.Validate()
+}
+
+func canonicalPlanningStopDecisionHash(decision colony.PlanningStopDecision) (string, error) {
+	payload := struct {
+		Reason                  colony.PlanningStopReason `json:"reason"`
+		SelectedGapID           string                    `json:"selected_gap_id"`
+		ResidualGapIDs          []string                  `json:"residual_gap_ids"`
+		EvidenceIDs             []string                  `json:"evidence_ids"`
+		Rationale               string                    `json:"rationale"`
+		EvidenceThatWouldChange string                    `json:"evidence_that_would_change"`
+	}{
+		Reason: decision.Reason, SelectedGapID: decision.SelectedGapID,
+		ResidualGapIDs: append([]string(nil), decision.ResidualGapIDs...), EvidenceIDs: uniqueSortedStrings(decision.EvidenceIDs),
+		Rationale: decision.Rationale, EvidenceThatWouldChange: decision.EvidenceThatWouldChange,
+	}
+	return jsonSHA256(payload)
+}
+
+func addressPlanningStopDecision(decision *colony.PlanningStopDecision) error {
+	if decision == nil {
+		return fmt.Errorf("planning stop decision is required")
+	}
+	decision.SchemaVersion = colony.PlanningSchemaVersion
+	decision.EvidenceIDs = uniqueSortedStrings(decision.EvidenceIDs)
+	hash, err := canonicalPlanningStopDecisionHash(*decision)
+	if err != nil {
+		return err
+	}
+	decision.ContentHash = hash
+	decision.ID = "planning-stop-" + hash[:12]
+	return validatePlanningStopShape("stop_decision", *decision)
 }
 
 func validatePlanningArtifactPath(path string) error {
