@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 200-21-PLAN.md
-last_updated: "2026-09-08T01:11:04.044Z"
+stopped_at: Completed 200-25-PLAN.md
+last_updated: "2026-09-08T01:23:05.674Z"
 last_activity: 2026-09-08
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 59
-  completed_plans: 56
+  completed_plans: 57
   percent: 14
 ---
 
@@ -133,6 +133,7 @@ Last activity: 2026-09-08
 | Phase 200 P20 | 13min | 2 tasks | 7 files |
 | Phase 200 P24 | 18 min | 2 tasks | 10 files |
 | Phase 200 P21 | 15 min | 2 tasks | 7 files |
+| Phase 200 P25 | 8 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -400,6 +401,9 @@ Last activity: 2026-09-08
 - [Phase 200]: Claude and OpenCode dispatch only the single planning stage currently authorized by Go. — Scout, Route-Setter, later Scout passes, and owner boundaries stay receipt-bound instead of wrapper-predicted.
 - [Phase 200]: Every completed Scout to Route-Setter pass renders its causal iteration card before continuation, later material pause, or candidate review. — Visible evidence, score movement, semantic change, weakest gap, and stop causality remain append-only.
 - [Phase 200]: A reasoned stop creates a NOT ACTIVE candidate and the wrapper executes only the full runtime-issued acceptance command. — Specification approval, stopping, candidate review, and exact plan acceptance remain separate authority transitions.
+- [Phase 200]: Wrappers remain guidance-only and delegate every specification mutation to Go-owned aether spec.
+- [Phase 200]: Specification approval remains separate from plan-candidate acceptance; only the matching plan draft may enter the executable queue.
+- [Phase 200]: Claude and OpenCode expose /ant-spec while Codex uses direct aether spec guidance.
 
 ### Pending Todos
 
@@ -515,8 +519,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-08T01:11:04.035Z
-Stopped at: Completed 200-21-PLAN.md
+Last session: 2026-09-08T01:23:05.664Z
+Stopped at: Completed 200-25-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

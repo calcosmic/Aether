@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 22/25 plans executed
+**Plans:** 23/25 plans executed
 
 Plans:
 
@@ -242,7 +242,7 @@ Plans:
 **Wave 11** *(blocked on Wave 10 completion)*
 
 - [x] 200-21-PLAN.md — Synchronize staged planning wrappers and regressions.
-- [ ] 200-25-PLAN.md — Synchronize specification wrappers and public parity inventory.
+- [x] 200-25-PLAN.md — Synchronize specification wrappers and public parity inventory.
 
 **Wave 12** *(blocked on Wave 11 completion)*
 
