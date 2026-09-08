@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 200-19-PLAN.md
-last_updated: "2026-09-07T23:58:14.575Z"
-last_activity: 2026-09-07
+stopped_at: Completed 200-20-PLAN.md
+last_updated: "2026-09-08T00:18:33.994Z"
+last_activity: 2026-09-08
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 59
-  completed_plans: 53
+  completed_plans: 54
   percent: 14
 ---
 
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 20 of 25
+Plan: 21 of 25
 Status: Ready to execute
-Last activity: 2026-09-07
+Last activity: 2026-09-08
 
 ## Performance Metrics
 
@@ -130,6 +130,7 @@ Last activity: 2026-09-07
 | Phase 200 P17 | 46m | 3 tasks | 10 files |
 | Phase 200 P18 | 32min | 2 tasks | 6 files |
 | Phase 200 P19 | 22min | 2 tasks | 4 files |
+| Phase 200 P20 | 13min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -386,6 +387,10 @@ Last activity: 2026-09-07
 - [Phase 200]: JSON retains machine stop enums and adds explicit public-label siblings.
 - [Phase 200]: Build and run appear coequally only after receipt-backed plan acceptance.
 - [Phase 200]: Canonical Phase 200 planning results route before the legacy whole-plan renderer.
+- [Phase 200]: Wrappers render the complete Go-issued material batch and never compose, classify, truncate, or answer decision cards.
+- [Phase 200]: Every answer is bound to the runtime-issued decision ID and followed by a fresh Discuss result; prior answers remain reusable only under exact equivalence.
+- [Phase 200]: Settled discussion ends at a draft or retained approved specification and routes to Specification review, never directly to planning.
+- [Phase 200]: Oracle guidance remains unchanged while Codex Discuss orchestration adopts the same runtime-owned evidence boundary as Claude and OpenCode.
 
 ### Pending Todos
 
@@ -501,8 +506,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-07T23:58:14.566Z
-Stopped at: Completed 200-19-PLAN.md
+Last session: 2026-09-08T00:18:33.986Z
+Stopped at: Completed 200-20-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
