@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 20/25 plans executed
+**Plans:** 21/25 plans executed
 
 Plans:
 
@@ -237,7 +237,7 @@ Plans:
 **Wave 10** *(blocked on Wave 9 completion)*
 
 - [x] 200-20-PLAN.md — Synchronize evidence-first discuss wrappers and guidance.
-- [ ] 200-24-PLAN.md — Synchronize init closeout with the discuss-first journey.
+- [x] 200-24-PLAN.md — Synchronize init closeout with the discuss-first journey.
 
 **Wave 11** *(blocked on Wave 10 completion)*
 

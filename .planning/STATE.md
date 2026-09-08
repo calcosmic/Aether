@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 200-20-PLAN.md
-last_updated: "2026-09-08T00:18:33.994Z"
+stopped_at: Completed 200-24-PLAN.md
+last_updated: "2026-09-08T00:39:47.012Z"
 last_activity: 2026-09-08
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 59
-  completed_plans: 54
+  completed_plans: 55
   percent: 14
 ---
 
@@ -131,6 +131,7 @@ Last activity: 2026-09-08
 | Phase 200 P18 | 32min | 2 tasks | 6 files |
 | Phase 200 P19 | 22min | 2 tasks | 4 files |
 | Phase 200 P20 | 13min | 2 tasks | 7 files |
+| Phase 200 P24 | 18 min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -391,6 +392,9 @@ Last activity: 2026-09-08
 - [Phase 200]: Every answer is bound to the runtime-issued decision ID and followed by a fresh Discuss result; prior answers remain reusable only under exact equivalence.
 - [Phase 200]: Settled discussion ends at a draft or retained approved specification and routes to Specification review, never directly to planning.
 - [Phase 200]: Oracle guidance remains unchanged while Codex Discuss orchestration adopts the same runtime-owned evidence boundary as Claude and OpenCode.
+- [Phase 200]: Repository-aware init proposals remain visible context, but only the shared lifecycle projection determines persisted or displayed next-action authority. — Exploration may explain options without skipping the owner-governed lifecycle.
+- [Phase 200]: Init ends at Discuss; Discuss creates the draft specification, Specification owns exact approval, and only then may Planning begin. — Specification approval and plan acceptance remain separate authority transitions.
+- [Phase 200]: Claude and OpenCode use slash commands while direct Codex output remains runtime-native aether syntax. — Platform parity preserves equal lifecycle truth without advertising unsupported aliases.
 
 ### Pending Todos
 
@@ -506,8 +510,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-08T00:18:33.986Z
-Stopped at: Completed 200-20-PLAN.md
+Last session: 2026-09-08T00:39:47.003Z
+Stopped at: Completed 200-24-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
