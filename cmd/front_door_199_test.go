@@ -87,7 +87,7 @@ func TestFrontDoorHelpActiveStanding(t *testing.T) {
 
 	got := frontDoorHelpOutput199(t, root, 180)
 	first := strings.SplitN(strings.TrimSpace(got), "\n", 2)[0]
-	want := "Colony: Atlas | Goal: Ship the bridge | Episode: bridge_7 | Phase: 2/3 | Standing: READY | Ants: Builder, Watcher | Blockers: 0 | Next Up: /ant-build 2 or /ant-run"
+	want := "Colony: Atlas | Goal: Ship the bridge | Episode: bridge_7 | Phase: 2/3 | Standing: READY | Ants: Builder, Watcher | Blockers: 0 | Next Up: /ant-resume"
 	if first != want {
 		t.Fatalf("active standing line:\n got: %q\nwant: %q", first, want)
 	}
@@ -156,8 +156,13 @@ func TestFrontDoorInitFiveStages(t *testing.T) {
 		}
 		last = index
 	}
-	if !strings.Contains(got, "Bootstrapped") || !strings.HasSuffix(strings.TrimSpace(got), "Next Up: /ant-plan") {
+	if !strings.Contains(got, "Bootstrapped") ||
+		!strings.Contains(got, "Discuss settles intent before specification review; it does not approve a specification or a plan.") ||
+		!strings.HasSuffix(strings.TrimSpace(got), "Next Up: /ant-discuss") {
 		t.Fatalf("init setup/closeout contract is incomplete:\n%s", got)
+	}
+	if strings.Contains(got, "Next Up: /ant-plan") {
+		t.Fatalf("init still skips discussion and specification review:\n%s", got)
 	}
 }
 

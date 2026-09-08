@@ -82,9 +82,10 @@ func TestInitProposalsHouseStyle(t *testing.T) {
 	}
 }
 
-// TestInitSuggestedNextMatchesTopProposal kills the hardcoded "aether plan":
-// the session's recorded suggestion is whatever the runtime actually ranked
-// first for THIS repo.
+// TestInitSuggestedNextMatchesTopProposal retains its Phase-199 name for the
+// focused verification gate. The authoritative top proposal is now the shared
+// lifecycle projection: repo-aware exploratory proposals may remain visible,
+// but session and recovery artifacts must record discuss before SPEC review.
 func TestInitSuggestedNextMatchesTopProposal(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	t.Setenv("AETHER_PLATFORM", "claude")
@@ -120,8 +121,25 @@ func TestInitSuggestedNextMatchesTopProposal(t *testing.T) {
 	if err := store.LoadJSON("session.json", &session); err != nil {
 		t.Fatalf("load session: %v", err)
 	}
-	if session.SuggestedNext != "aether colonize" {
-		t.Fatalf("session.SuggestedNext = %q — still hardcoded instead of the top proposal", session.SuggestedNext)
+	if session.SuggestedNext != "aether discuss" {
+		t.Fatalf("session.SuggestedNext = %q, want the shared init-to-discuss lifecycle projection", session.SuggestedNext)
+	}
+	if !strings.Contains(output, "Discuss settles intent before specification review; it does not approve a specification or a plan.") ||
+		!strings.HasSuffix(strings.TrimSpace(output), "Next Up: /ant-discuss") {
+		t.Fatalf("init did not close at the discuss-before-SPEC authority boundary:\n%s", output)
+	}
+	for _, forbidden := range []string{"Next Up: /ant-plan", "Next Up: /ant-colonize", "Next Up: aether plan"} {
+		if strings.Contains(output, forbidden) {
+			t.Fatalf("init output contains a direct post-init shortcut %q:\n%s", forbidden, output)
+		}
+	}
+
+	contextRaw, err := os.ReadFile(filepath.Join(root, ".aether", "CONTEXT.md"))
+	if err != nil {
+		t.Fatalf("read CONTEXT.md: %v", err)
+	}
+	if !strings.Contains(string(contextRaw), "aether discuss") {
+		t.Fatalf("recovery context did not persist the shared discuss handoff:\n%s", contextRaw)
 	}
 }
 
