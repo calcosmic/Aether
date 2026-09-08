@@ -477,31 +477,7 @@ func surveyContainsSignal(entries []string, signal string) bool {
 	return false
 }
 
-// phaseResearchDecisionType remains solely so the deprecated
-// plan-research-approve command can resolve legacy rows in old colonies. New
-// planning runs never create this decision type.
+// phaseResearchDecisionType is retained only as the legacy record discriminator
+// used by migration regression tests. Phase 200 planning never creates these
+// rows, and the former public approval command has been retired.
 const phaseResearchDecisionType = "research-decision"
-
-// phaseResearchDecisionResolution builds the resolution string written when a
-// research decision is resolved -- the durable record of the flip (T-164-06),
-// so it carries the resulting direction, not just the fact of a flip.
-func phaseResearchDecisionResolution(rec phaseResearchRecommendation, flipped bool, auto bool) string {
-	var resolution string
-	if flipped {
-		resolution = fmt.Sprintf("user overrode: %s research on phase %d", oppositeRecommend(rec.Recommend), rec.PhaseID)
-	} else {
-		resolution = fmt.Sprintf("approved: %s phase %d", rec.Recommend, rec.PhaseID)
-	}
-	if auto {
-		resolution = "auto-accepted (autopilot) -- " + resolution
-	}
-	return resolution
-}
-
-// oppositeRecommend returns the opposite research direction of recommend.
-func oppositeRecommend(recommend string) string {
-	if recommend == "skip" {
-		return "research"
-	}
-	return "skip"
-}
