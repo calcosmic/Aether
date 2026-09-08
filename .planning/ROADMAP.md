@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 27/40 plans executed
+**Plans:** 28/40 plans executed
 
 Plans:
 
@@ -262,7 +262,7 @@ Plans:
 
 **Wave 16** *(gap closure; blocked on Wave 15 completion)*
 
-- [ ] 200-28-PLAN.md — Add a shared read-through-commit mutation session and prove it on timeline/stage persistence.
+- [x] 200-28-PLAN.md — Add a shared read-through-commit mutation session and prove it on timeline/stage persistence.
 
 **Wave 17** *(gap closure; blocked on Wave 16 completion)*
 

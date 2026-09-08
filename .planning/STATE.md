@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 200-27-PLAN.md
-last_updated: "2026-09-08T20:44:10.876Z"
+stopped_at: Completed 200-28-PLAN.md
+last_updated: "2026-09-08T21:12:33.056Z"
 last_activity: 2026-09-08
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 74
-  completed_plans: 61
+  completed_plans: 62
   percent: 14
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 28 of 40
+Plan: 29 of 40
 Status: Ready to execute
 Last activity: 2026-09-08
 
@@ -138,6 +138,7 @@ Last activity: 2026-09-08
 | Phase 200 P23 | 1h 44m | 3 tasks | 22 files |
 | Phase 200 P26 | 48 min | 2 tasks | 3 files |
 | Phase 200 P27 | 22 min | 2 tasks | 6 files |
+| Phase 200 P28 | 24 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -424,6 +425,9 @@ Last activity: 2026-09-08
 - [Phase 200]: Repository storage keeps an open physical root directory handle and performs every data and lock open relative to that authority.
 - [Phase 200]: Store BasePath preserves its established caller-visible spelling, while filesystem authority comes only from the canonical root handle.
 - [Phase 200]: Lock filenames digest the complete normalized logical data path instead of filepath.Base.
+- [Phase 200]: Use one repository-authorized synthetic data target as the shared mutation-lock identity. — Store.UpdateFile holds the cross-process lock for the whole callback without rewriting planning state.
+- [Phase 200]: Require every session-backed transaction target to have an exact captured present-or-absent baseline before declaration. — A transaction cannot silently recapture newer state or write an undeclared target.
+- [Phase 200]: Keep read-only loader compatibility while mutating timeline and stage entrypoints use session-only helpers. — Plan 28 strengthens scoped writers without changing out-of-scope callers.
 
 ### Pending Todos
 
@@ -540,8 +544,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-08T20:44:10.867Z
-Stopped at: Completed 200-27-PLAN.md
+Last session: 2026-09-08T21:12:33.047Z
+Stopped at: Completed 200-28-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
