@@ -862,6 +862,33 @@ func planHasCurrentBindings(plan colony.Plan) bool {
 	return false
 }
 
+// syncActivePlanRevisionExecutionFacts keeps mutable lifecycle status beside
+// the immutable accepted definition. Definition hashes deliberately exclude
+// these fields, but current-schema validation requires the active projection
+// and its revision snapshot to describe the same execution state.
+func syncActivePlanRevisionExecutionFacts(plan *colony.Plan) {
+	if plan == nil || plan.AcceptancePolicy != colony.PlanAcceptanceExplicitOwner || strings.TrimSpace(plan.ActiveRevisionID) == "" {
+		return
+	}
+	for revisionIndex := range plan.Revisions {
+		revision := &plan.Revisions[revisionIndex]
+		if revision.ID != plan.ActiveRevisionID || len(revision.Phases) != len(plan.Phases) {
+			continue
+		}
+		for phaseIndex := range plan.Phases {
+			if len(revision.Phases[phaseIndex].Tasks) != len(plan.Phases[phaseIndex].Tasks) {
+				return
+			}
+			revision.Phases[phaseIndex].Status = plan.Phases[phaseIndex].Status
+			revision.Phases[phaseIndex].WatcherFailureCount = plan.Phases[phaseIndex].WatcherFailureCount
+			for taskIndex := range plan.Phases[phaseIndex].Tasks {
+				revision.Phases[phaseIndex].Tasks[taskIndex].Status = plan.Phases[phaseIndex].Tasks[taskIndex].Status
+			}
+		}
+		return
+	}
+}
+
 func currentSpecificationRevision(specification colony.Specification) (colony.SpecRevision, bool) {
 	return specificationRevisionByID(specification, specification.CurrentRevisionID)
 }

@@ -1390,6 +1390,7 @@ func applyCodexBuildState(state *colony.ColonyState, phaseNum int, startedAt tim
 			state.Plan.Phases[i].Status = colony.PhasePending
 		}
 	}
+	syncActivePlanRevisionExecutionFacts(&state.Plan)
 
 	phase := state.Plan.Phases[phaseNum-1]
 	// This planner call only ever runs after the SAME plan already succeeded in
@@ -2874,6 +2875,7 @@ func reconcileCompletedBuildTasks(state *colony.ColonyState, phaseNum int, dispa
 		phase.Tasks[idx].Status = colony.TaskCompleted
 		taskIDs = append(taskIDs, taskID)
 	}
+	syncActivePlanRevisionExecutionFacts(&state.Plan)
 	return uniqueSortedStrings(taskIDs)
 }
 
@@ -3004,6 +3006,7 @@ func applyPriorCompletedPhaseTaskRepairs(root string, state *colony.ColonyState,
 			)
 		}
 	}
+	syncActivePlanRevisionExecutionFacts(&state.Plan)
 	return uniqueSortedStrings(repaired), nil
 }
 

@@ -221,6 +221,7 @@ func incrementWatcherFailureCount(phaseID int) error {
 		for i := range updated.Plan.Phases {
 			if updated.Plan.Phases[i].ID == phaseID {
 				updated.Plan.Phases[i].WatcherFailureCount++
+				syncActivePlanRevisionExecutionFacts(&updated.Plan)
 				return nil
 			}
 		}
@@ -235,6 +236,7 @@ func resetWatcherFailureCount(phaseID int) error {
 		for i := range updated.Plan.Phases {
 			if updated.Plan.Phases[i].ID == phaseID {
 				updated.Plan.Phases[i].WatcherFailureCount = 0
+				syncActivePlanRevisionExecutionFacts(&updated.Plan)
 				return nil
 			}
 		}
@@ -1330,6 +1332,7 @@ func reconcileContinueCompletedBuildTasks(state *colony.ColonyState, phase *colo
 				}
 				break
 			}
+			syncActivePlanRevisionExecutionFacts(&updated.Plan)
 			return nil
 		}); err != nil {
 			return false, fmt.Errorf("failed to reconcile completed build tasks in colony state: %w", err)

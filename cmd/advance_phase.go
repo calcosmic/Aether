@@ -100,6 +100,7 @@ func advancePhase(params advancePhaseParams) (advancePhaseResult, error) {
 				fmt.Sprintf("%s|phase_advanced|%s|Completed phase %d, ready for phase %d", params.Now.Format(time.RFC3339), params.Source, params.PhaseID, nextIdx+1),
 			)
 		}
+		syncActivePlanRevisionExecutionFacts(&updated.Plan)
 		return nil
 	}); err != nil {
 		return advancePhaseResult{}, err

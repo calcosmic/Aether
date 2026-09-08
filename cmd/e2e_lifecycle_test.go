@@ -234,9 +234,11 @@ func testFullLifecycleInDownstreamRepo(t *testing.T) {
 	if contextState.AcceptedCharter != nil {
 		contextState.AcceptedCharter.Charter = contextState.Charter
 	}
+	contextState = codexPlanSpecificationFixture(t, contextState, colony.SpecStatusApproved)
 	if err := contextStore.SaveJSON("COLONY_STATE.json", contextState); err != nil {
 		t.Fatalf("save accepted downstream context: %v", err)
 	}
+	writeCodexPlanSpecificationProjection(t, downstream, contextState)
 	t.Log("Step 2: PASSED -- colony initialized")
 
 	// ---- Step 3: Plan ----
@@ -245,12 +247,9 @@ func testFullLifecycleInDownstreamRepo(t *testing.T) {
 	t.Setenv("AETHER_AGENT_DELEGATE", "0")
 	t.Setenv("AETHER_ACTIVE_PLATFORM", "codex")
 	writeFreshTerritorySnapshot199(t, downstream, time.Now().UTC().Add(-time.Minute))
-	rootCmd.SetArgs([]string{"plan", "--synthetic"})
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("plan failed: %v", err)
-	}
+	acceptStagedPlanningCandidate200(t, downstream)
 
-	// Verify phases generated (plan with existing plan returns existing)
+	// Verify the exact accepted candidate activated buildable phases.
 	assertPhaseCount(t, downstream, 1)
 	t.Log("Step 3: PASSED -- plan generated")
 
@@ -327,7 +326,6 @@ func testFullLifecycleInDownstreamRepo(t *testing.T) {
 	if err := store.LoadJSON("COLONY_STATE.json", &preSealState); err != nil {
 		t.Fatalf("load pre-seal state: %v", err)
 	}
-
 	// Model the accepted downstream work as completed with its verification
 	// evidence. A verified seal intentionally refuses a merely relabelled plan:
 	// every task and each persisted gate must support the completion claim.
@@ -335,6 +333,11 @@ func testFullLifecycleInDownstreamRepo(t *testing.T) {
 		preSealState.Plan.Phases[i].Status = colony.PhaseCompleted
 		for j := range preSealState.Plan.Phases[i].Tasks {
 			preSealState.Plan.Phases[i].Tasks[j].Status = colony.TaskCompleted
+		}
+	}
+	for index := range preSealState.Plan.Revisions {
+		if preSealState.Plan.Revisions[index].ID == preSealState.Plan.ActiveRevisionID {
+			preSealState.Plan.Revisions[index].Phases = clonePhases(preSealState.Plan.Phases)
 		}
 	}
 	preSealState.GateResults = []colony.GateResultEntry{
@@ -361,7 +364,7 @@ func testFullLifecycleInDownstreamRepo(t *testing.T) {
 		t.Fatalf("load sealed state: %v", err)
 	}
 	if sealedState.State != colony.StateCOMPLETED {
-		t.Errorf("state after seal = %s, want COMPLETED", sealedState.State)
+		t.Errorf("state after seal = %s, want COMPLETED; output:\n%s", sealedState.State, outBuf.String())
 	}
 	if sealedState.Milestone != "Crowned Anthill" {
 		t.Errorf("milestone after seal = %q, want Crowned Anthill", sealedState.Milestone)

@@ -4100,7 +4100,7 @@ func buildPlanningRouteCandidate(root string, completed planningRouteStageFinali
 	if err != nil {
 		return empty, err
 	}
-	phases := planningRouteCandidatePhases(proposalInput, candidateID, candidateHash, completed.Validation.Result.Specification, *timeline.Binding, completed.Validation.SemanticDelta)
+	phases := planningRouteCandidatePhases(proposalInput, preservedPrefix, candidateID, candidateHash, completed.Validation.Result.Specification, *timeline.Binding, completed.Validation.SemanticDelta)
 	proposalHash, err := planDefinitionHash(phases)
 	if err != nil {
 		return empty, err
@@ -4202,8 +4202,11 @@ func planningRouteCandidateProposalInput(plan colony.Plan, input []colony.Phase)
 	return result, prefix, nil
 }
 
-func planningRouteCandidatePhases(input []colony.Phase, candidateID, candidateHash string, specification planningStageSpecificationBinding, timeline colony.PlanningTimelineBinding, delta colony.PlanningSemanticDelta) []colony.Phase {
+func planningRouteCandidatePhases(input []colony.Phase, preservedPrefix int, candidateID, candidateHash string, specification planningStageSpecificationBinding, timeline colony.PlanningTimelineBinding, delta colony.PlanningSemanticDelta) []colony.Phase {
 	phases := renumberRevisionPhases(input, 0)
+	if preservedPrefix > 0 && preservedPrefix < len(phases) {
+		phases[preservedPrefix].Status = colony.PhaseReady
+	}
 	affected, preserved := planningRouteDeltaSemanticIDs(delta)
 	affectedSet := make(map[string]struct{}, len(affected))
 	preservedSet := make(map[string]struct{}, len(preserved))

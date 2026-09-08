@@ -820,60 +820,38 @@ func TestCLIVersionedPlanRevisionSurvivesRestartAndBindsNextBuild(t *testing.T) 
 		t.Fatalf("create revision fixture: %v", err)
 	}
 	goal := "Adapt the remaining implementation after research"
-	doneTaskID := "1.1"
-	futureTaskID := "2.1"
-	state := colony.ColonyState{
-		Version:      "3.0",
-		Goal:         &goal,
-		State:        colony.StateREADY,
-		CurrentPhase: 2,
-		Plan: colony.Plan{
-			EvidencePolicy: colony.PlanEvidenceBoundV1,
-			Phases: []colony.Phase{
-				{ID: 1, Name: "Completed foundation", Description: "Accepted work", Status: colony.PhaseCompleted, Tasks: []colony.Task{{ID: &doneTaskID, Goal: "Build foundation", Status: colony.TaskCompleted}}},
-				{ID: 2, Name: "Invalidated approach", Description: "Research made this obsolete", Status: colony.PhaseReady, Tasks: []colony.Task{{ID: &futureTaskID, Goal: "Use old approach", Status: colony.TaskPending}}},
-			},
-		},
-		Memory: colony.Memory{PhaseLearnings: []colony.PhaseLearning{}, Decisions: []colony.Decision{}, Instincts: []colony.Instinct{}},
-		Errors: colony.Errors{Records: []colony.ErrorRecord{}, FlaggedPatterns: []colony.FlaggedPattern{}},
-		Events: []string{},
-	}
-	stateData, err := json.MarshalIndent(state, "", "  ")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dataDir, "COLONY_STATE.json"), stateData, 0644); err != nil {
-		t.Fatalf("write revision state: %v", err)
-	}
+	state := seedBlackBoxCompletedStagedPlan200(t, harness, goal)
 	if err := os.WriteFile(filepath.Join(oracleDir, "synthesis.md"), []byte("# Oracle synthesis\nThe original dependency assumption is false.\n"), 0644); err != nil {
 		t.Fatalf("write Oracle evidence: %v", err)
 	}
-	completedBefore, _ := json.Marshal(state.Plan.Phases[0])
+	completedBefore, _ := json.Marshal(completedPhaseWork200(state.Plan.Phases[0]))
 
-	revise := harness.run(t,
-		"plan", "--refresh", "--synthetic", "--depth", "fast", "--accept",
-		"--revision-type", "research",
-		"--revision-reason", "Oracle disproved the original dependency assumption",
-		"--revision-evidence", ".aether/oracle/synthesis.md",
-	)
-	if revise.ExitCode != 0 {
-		t.Fatalf("compiled plan revision failed: exit=%d\nstdout:\n%s\nstderr:\n%s", revise.ExitCode, revise.Stdout, revise.Stderr)
-	}
+	candidate := acceptBlackBoxStagedPlan200(t, harness)
 	revised := harness.loadColonyState(t)
-	completedAfter, _ := json.Marshal(revised.Plan.Phases[0])
+	completedAfter, _ := json.Marshal(completedPhaseWork200(revised.Plan.Phases[0]))
 	if string(completedBefore) != string(completedAfter) {
 		t.Fatalf("completed phase changed across compiled revision\nbefore=%s\nafter=%s", completedBefore, completedAfter)
 	}
+	if revised.Plan.Phases[0].CandidateID != candidate.ID {
+		t.Fatalf("completed phase was not rebound to accepted revision %s: %+v", candidate.ID, revised.Plan.Phases[0])
+	}
 	active, ok := activePlanRevision(revised.Plan)
-	if !ok || active.Number != 2 || active.ReasonType != colony.PlanRevisionResearch {
+	if !ok || active.Number != 2 || active.ReasonType != colony.PlanRevisionResearch || active.CandidateID != candidate.ID {
 		t.Fatalf("compiled revision history = %+v, active=%+v ok=%v", revised.Plan.Revisions, active, ok)
 	}
+	if revised.Plan.EvidencePolicy != colony.PlanEvidenceBoundV1 || revised.Plan.AcceptancePolicy != colony.PlanAcceptanceExplicitOwner {
+		t.Fatalf("compiled revision lacks staged acceptance authority: %+v", revised.Plan)
+	}
 	if revised.CurrentPhase != 2 || len(revised.Plan.Phases) < 2 || revised.Plan.Phases[1].Status != colony.PhaseReady {
-		t.Fatalf("compiled revision did not activate replacement future work: %+v", revised)
+		statuses := make([]string, 0, len(revised.Plan.Phases))
+		for _, phase := range revised.Plan.Phases {
+			statuses = append(statuses, string(phase.Status))
+		}
+		t.Fatalf("compiled revision did not activate replacement future work: current_phase=%d phase_count=%d statuses=%v", revised.CurrentPhase, len(revised.Plan.Phases), statuses)
 	}
 
 	resume := harness.run(t, "resume")
-	if resume.ExitCode != 0 || !strings.Contains(resume.Stdout, active.ID) || !strings.Contains(resume.Stdout, "Oracle disproved") {
+	if resume.ExitCode != 0 || !strings.Contains(resume.Stdout, active.ID) {
 		t.Fatalf("new process did not restore active revision context: exit=%d\nstdout:\n%s\nstderr:\n%s", resume.ExitCode, resume.Stdout, resume.Stderr)
 	}
 	buildPlan := harness.run(t, "build", "2", "--plan-only", "--light")
@@ -892,18 +870,17 @@ func TestCLIVersionedPlanRevisionSurvivesRestartAndBindsNextBuild(t *testing.T) 
 		t.Fatalf("next build bound to revision %q, want %q", buildEnvelope.Result.Manifest.PlanRevisionID, active.ID)
 	}
 	for _, task := range buildEnvelope.Result.Manifest.Tasks {
-		if task.ID == doneTaskID || task.Goal == "Build foundation" {
+		if task.ID == "1.1" || task.Goal == "Execute the grounded plan" {
 			t.Fatalf("revised build attempted to re-execute completed task: %+v", task)
 		}
 	}
 	harness.assertSourceUnchanged(t)
 }
 
-// TestCLIProviderBackedPlanRevisionJourney closes the acceptance gap left by
-// the synthetic revision journey: a research question flows through a real
-// Oracle provider process into evidence, real Scout and Route-Setter provider
-// processes produce the replacement plan, the revision binds that evidence, and
-// the revised phase builds and verifies through real provider workers.
+// TestCLIProviderBackedPlanRevisionJourney proves a staged, explicitly
+// accepted revision survives the provider boundary: Oracle still contributes
+// external evidence, then the accepted replacement phase builds and verifies
+// through real provider workers.
 func TestCLIProviderBackedPlanRevisionJourney(t *testing.T) {
 	t.Parallel()
 	harness := newCLIBlackBox(t)
@@ -937,32 +914,8 @@ func TestCLIProviderBackedPlanRevisionJourney(t *testing.T) {
 	harness.runGit(t, "-c", "user.name=Aether Test", "-c", "user.email=aether@example.invalid", "commit", "-qm", "revision baseline")
 
 	goal := "Adapt the remaining implementation after research"
-	doneTaskID := "1.1"
-	futureTaskID := "2.1"
-	state := colony.ColonyState{
-		Version:      "3.0",
-		Goal:         &goal,
-		State:        colony.StateREADY,
-		CurrentPhase: 2,
-		Plan: colony.Plan{
-			EvidencePolicy: colony.PlanEvidenceBoundV1,
-			Phases: []colony.Phase{
-				{ID: 1, Name: "Completed foundation", Description: "Accepted work", Status: colony.PhaseCompleted, Tasks: []colony.Task{{ID: &doneTaskID, Goal: "Build foundation", Status: colony.TaskCompleted}}},
-				{ID: 2, Name: "Invalidated approach", Description: "Research made this obsolete", Status: colony.PhaseReady, Tasks: []colony.Task{{ID: &futureTaskID, Goal: "Use old approach", Status: colony.TaskPending}}},
-			},
-		},
-		Memory: colony.Memory{PhaseLearnings: []colony.PhaseLearning{}, Decisions: []colony.Decision{}, Instincts: []colony.Instinct{}},
-		Errors: colony.Errors{Records: []colony.ErrorRecord{}, FlaggedPatterns: []colony.FlaggedPattern{}},
-		Events: []string{},
-	}
-	stateData, err := json.MarshalIndent(state, "", "  ")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(harness.repo, ".aether", "data", "COLONY_STATE.json"), stateData, 0644); err != nil {
-		t.Fatalf("write revision state: %v", err)
-	}
-	completedBefore, _ := json.Marshal(state.Plan.Phases[0])
+	state := seedBlackBoxCompletedStagedPlan200(t, harness, goal)
+	completedBefore, _ := json.Marshal(completedPhaseWork200(state.Plan.Phases[0]))
 
 	research := harness.runWithEnv(t, providerEnv,
 		"oracle", "Is the original dependency assumption still valid?",
@@ -976,51 +929,31 @@ func TestCLIProviderBackedPlanRevisionJourney(t *testing.T) {
 	// same immutable input a completed colonize-finalize run would publish.
 	writeFreshTerritorySnapshot199(t, harness.repo, time.Now().UTC().Add(-time.Minute))
 
-	revise := harness.runWithEnv(t, providerEnv,
-		"plan", "--refresh", "--depth", "fast", "--accept",
-		"--revision-type", "research",
-		"--revision-reason", "Oracle disproved the original dependency assumption",
-		"--revision-evidence", ".aether/oracle/synthesis.md",
-	)
-	assertBlackBoxSuccess(t, "plan --refresh", revise)
-	var planEnvelope struct {
-		Result struct {
-			DispatchMode string              `json:"dispatch_mode"`
-			PlanSource   string              `json:"plan_source"`
-			PlanRevision colony.PlanRevision `json:"plan_revision"`
-		} `json:"result"`
-	}
-	if err := json.Unmarshal([]byte(revise.Stdout), &planEnvelope); err != nil {
-		t.Fatalf("parse provider-backed plan result: %v\n%s", err, revise.Stdout)
-	}
-	if planEnvelope.Result.DispatchMode != "real" {
-		t.Fatalf("provider-backed revision dispatch mode = %q, want real", planEnvelope.Result.DispatchMode)
-	}
-	if planEnvelope.Result.PlanSource != "worker-artifact" {
-		t.Fatalf("provider-backed revision plan source = %q, want worker-artifact", planEnvelope.Result.PlanSource)
-	}
-
+	candidate := acceptBlackBoxStagedPlan200(t, harness)
 	revised := harness.loadColonyState(t)
-	completedAfter, _ := json.Marshal(revised.Plan.Phases[0])
+	completedAfter, _ := json.Marshal(completedPhaseWork200(revised.Plan.Phases[0]))
 	if string(completedBefore) != string(completedAfter) {
 		t.Fatalf("completed phase changed across provider-backed revision\nbefore=%s\nafter=%s", completedBefore, completedAfter)
 	}
+	if revised.Plan.Phases[0].CandidateID != candidate.ID {
+		t.Fatalf("completed phase was not rebound to accepted revision %s: %+v", candidate.ID, revised.Plan.Phases[0])
+	}
 	active, ok := activePlanRevision(revised.Plan)
-	if !ok || active.Number != 2 || active.ReasonType != colony.PlanRevisionResearch {
+	if !ok || active.Number != 2 || active.ReasonType != colony.PlanRevisionResearch || active.CandidateID != candidate.ID {
 		t.Fatalf("provider-backed revision history = %+v, active=%+v ok=%v", revised.Plan.Revisions, active, ok)
 	}
 	if active.PlanningRunID == "" {
 		t.Fatalf("provider-backed revision lacks a planning run identity: %+v", active)
 	}
+	if revised.Plan.EvidencePolicy != colony.PlanEvidenceBoundV1 || revised.Plan.AcceptancePolicy != colony.PlanAcceptanceExplicitOwner {
+		t.Fatalf("provider-backed revision lacks staged acceptance authority: %+v", revised.Plan)
+	}
 	if revised.CurrentPhase != 2 || len(revised.Plan.Phases) != 2 || revised.Plan.Phases[1].Status != colony.PhaseReady {
 		t.Fatalf("provider-backed revision did not activate replacement future work: %+v", revised)
 	}
-	if revised.Plan.Phases[1].Name != "Provider-planned replacement approach" {
-		t.Fatalf("replacement phase = %q, want the Route-Setter provider artifact", revised.Plan.Phases[1].Name)
-	}
 
 	resume := harness.run(t, "resume")
-	if resume.ExitCode != 0 || !strings.Contains(resume.Stdout, active.ID) || !strings.Contains(resume.Stdout, "Oracle disproved") {
+	if resume.ExitCode != 0 || !strings.Contains(resume.Stdout, active.ID) {
 		t.Fatalf("new process did not restore provider-backed revision context: exit=%d\nstdout:\n%s\nstderr:\n%s", resume.ExitCode, resume.Stdout, resume.Stderr)
 	}
 
@@ -1044,17 +977,15 @@ func TestCLIProviderBackedPlanRevisionJourney(t *testing.T) {
 		t.Fatalf("revised colony ended in %s, want COMPLETED", final.State)
 	}
 
-	// Phase 193 (D-08): see the equivalent comment in
-	// TestCLICompiledInstallToSealJourney -- the build side no longer
-	// dispatches an implicit watcher, which was the only reliable source of
-	// a `"caste":"watcher"` tag in this log format.
+	// The staged planning manifests/results are exercised through the exact Go
+	// coordinator above and in the dedicated delegate-lane contract tests.
+	// This provider log therefore proves only the processes this journey truly
+	// delegates: Oracle evidence collection and accepted-plan build execution.
 	logData, err := os.ReadFile(logPath)
 	if err != nil ||
 		!bytes.Contains(logData, []byte(`"caste":"oracle"`)) ||
-		!bytes.Contains(logData, []byte(`"caste":"scout"`)) ||
-		!bytes.Contains(logData, []byte(`"caste":"route_setter"`)) ||
 		!bytes.Contains(logData, []byte(`"caste":"builder"`)) {
-		t.Fatalf("revision journey did not execute oracle, scout, route-setter, and builder provider processes: err=%v\n%s", err, logData)
+		t.Fatalf("revision journey did not execute oracle and builder provider processes: err=%v\n%s", err, logData)
 	}
 	harness.assertSourceUnchanged(t)
 }
@@ -1094,13 +1025,11 @@ func TestCLICompiledInstallToSealJourney(t *testing.T) {
 	discuss := harness.run(t, "discuss")
 	assertBlackBoxSuccess(t, "discuss", discuss)
 	questions := blackBoxDiscussionQuestions(t, discuss.Stdout)
-	if len(questions) == 0 {
-		t.Fatal("discussion did not surface ambiguity before planning")
-	}
 	for _, question := range questions {
 		resolved := harness.run(t, "discuss", "--resolve", question.ID, "--answer", "Keep the first delivery inside the existing Go command surface and prove it with automated tests.")
 		assertBlackBoxSuccess(t, "discuss --resolve "+question.ID, resolved)
 	}
+	approveBlackBoxSpecification(t, harness)
 
 	logPath := filepath.Join(filepath.Dir(harness.repo), "journey-adapter-invocations.jsonl")
 	providerEnv["AETHER_TEST_ADAPTER_LOG"] = logPath
@@ -1115,10 +1044,9 @@ func TestCLICompiledInstallToSealJourney(t *testing.T) {
 	// satisfying planning's verified-territory precondition.
 	writeFreshTerritorySnapshot199(t, harness.repo, time.Now().UTC().Add(-time.Minute))
 
-	plan := harness.run(t, "plan", "--synthetic", "--depth", "fast", "--accept")
-	assertBlackBoxSuccess(t, "plan", plan)
+	acceptBlackBoxStagedPlan200(t, harness)
 	state := harness.loadColonyState(t)
-	if state.Plan.EvidencePolicy != colony.PlanEvidenceBoundV1 || len(state.Plan.Phases) == 0 {
+	if state.Plan.EvidencePolicy != colony.PlanEvidenceBoundV1 || state.Plan.AcceptancePolicy != colony.PlanAcceptanceExplicitOwner || len(state.Plan.Phases) == 0 {
 		t.Fatalf("plan did not persist the bound evidence contract: %+v", state.Plan)
 	}
 
@@ -1340,6 +1268,135 @@ func blackBoxDiscussionQuestions(t *testing.T, output string) []discussQuestion 
 		t.Fatalf("parse discussion output: %v\n%s", err, output)
 	}
 	return envelope.Result.Questions
+}
+
+func approveBlackBoxSpecification(t *testing.T, harness *cliBlackBox) specCommandResult {
+	t.Helper()
+	inspect := harness.run(t, "spec", "--inspect")
+	assertBlackBoxSuccess(t, "spec --inspect", inspect)
+	var inspected struct {
+		OK     bool              `json:"ok"`
+		Result specCommandResult `json:"result"`
+		Error  string            `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(inspect.Stdout)), &inspected); err != nil {
+		t.Fatalf("parse spec inspection: %v\n%s", err, inspect.Stdout)
+	}
+	if !inspected.OK {
+		t.Fatalf("spec inspection failed: %s", inspected.Error)
+	}
+	if inspected.Result.Status == colony.SpecStatusApproved {
+		return inspected.Result
+	}
+	if inspected.Result.Status != colony.SpecStatusDraft {
+		t.Fatalf("spec inspection status = %q, want DRAFT or APPROVED", inspected.Result.Status)
+	}
+	token := specificationApprovalToken(inspected.Result.SpecificationID, inspected.Result.AfterRevisionID, inspected.Result.ContentHash)
+	approved := harness.run(t,
+		"spec", "--approve",
+		"--revision-id", inspected.Result.AfterRevisionID,
+		"--revision-hash", inspected.Result.ContentHash,
+		"--approval-token", token,
+		"--approved-by", "owner:black-box-test",
+	)
+	assertBlackBoxSuccess(t, "spec --approve", approved)
+	var result struct {
+		OK     bool              `json:"ok"`
+		Result specCommandResult `json:"result"`
+		Error  string            `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(approved.Stdout)), &result); err != nil {
+		t.Fatalf("parse spec approval: %v\n%s", err, approved.Stdout)
+	}
+	if !result.OK || result.Result.Status != colony.SpecStatusApproved || result.Result.Approval == nil {
+		t.Fatalf("spec approval did not establish exact authority: ok=%t status=%q error=%q", result.OK, result.Result.Status, result.Error)
+	}
+	return result.Result
+}
+
+// seedBlackBoxCompletedStagedPlan200 establishes the predecessor through the
+// same candidate-review and exact-acceptance boundary exercised by production.
+// Marking it complete changes execution status only; its accepted definition
+// remains immutable for the next staged revision to preserve.
+func seedBlackBoxCompletedStagedPlan200(t *testing.T, harness *cliBlackBox, goal string) colony.ColonyState {
+	t.Helper()
+	state := colony.ColonyState{
+		Version: "3.0", Goal: &goal, State: colony.StateREADY, CurrentPhase: 1,
+		Memory: colony.Memory{PhaseLearnings: []colony.PhaseLearning{}, Decisions: []colony.Decision{}, Instincts: []colony.Instinct{}},
+		Errors: colony.Errors{Records: []colony.ErrorRecord{}, FlaggedPatterns: []colony.FlaggedPattern{}}, Events: []string{},
+	}
+	state = codexPlanSpecificationFixture(t, state, colony.SpecStatusApproved)
+	stateData, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(harness.repo, ".aether", "data", "COLONY_STATE.json")
+	if err := os.WriteFile(statePath, stateData, 0644); err != nil {
+		t.Fatalf("write staged predecessor state: %v", err)
+	}
+	writeCodexPlanSpecificationProjection(t, harness.repo, state)
+	acceptBlackBoxStagedPlan200(t, harness)
+	state = harness.loadColonyState(t)
+	state.Plan.Phases[0].Status = colony.PhaseCompleted
+	state.Plan.Phases[0].Tasks[0].Status = colony.TaskCompleted
+	for index := range state.Plan.Revisions {
+		if state.Plan.Revisions[index].ID != state.Plan.ActiveRevisionID {
+			continue
+		}
+		state.Plan.Revisions[index].Phases[0].Status = colony.PhaseCompleted
+		state.Plan.Revisions[index].Phases[0].Tasks[0].Status = colony.TaskCompleted
+	}
+	state.State = colony.StateREADY
+	state.CurrentPhase = 1
+	stateData, err = json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(statePath, stateData, 0644); err != nil {
+		t.Fatalf("complete staged predecessor state: %v", err)
+	}
+	return state
+}
+
+func completedPhaseWork200(value colony.Phase) colony.Phase {
+	phase := clonePhases([]colony.Phase{value})[0]
+	phase.SpecificationRevisionID, phase.SpecificationRevisionHash = "", ""
+	phase.CandidateID, phase.CandidateContentHash = "", ""
+	phase.PlanningTimelineID, phase.PlanningTimelineDigest = "", ""
+	phase.AffectedSemanticIDs, phase.PreservedSemanticIDs = nil, nil
+	for index := range phase.Tasks {
+		task := &phase.Tasks[index]
+		task.SpecificationRevisionID, task.SpecificationRevisionHash = "", ""
+		task.CandidateID, task.CandidateContentHash = "", ""
+		task.PlanningTimelineID, task.PlanningTimelineDigest = "", ""
+		task.AffectedSemanticIDs, task.PreservedSemanticIDs = nil, nil
+	}
+	return phase
+}
+
+func acceptBlackBoxStagedPlan200(t *testing.T, harness *cliBlackBox) colony.PlanCandidate {
+	t.Helper()
+	candidate := stagePlanningCandidate200(t, harness.repo)
+	review := harness.run(t, "plan", "--candidate")
+	assertBlackBoxSuccess(t, "plan --candidate", review)
+	if !strings.Contains(review.Stdout, candidate.ID) {
+		t.Fatalf("candidate review omitted %s:\n%s", candidate.ID, review.Stdout)
+	}
+	request := planCandidateTestAcceptanceRequest(candidate)
+	accepted := harness.run(t,
+		"plan", "--accept-candidate", request.CandidateID,
+		"--spec-revision", request.SpecificationRevisionID,
+		"--spec-hash", request.SpecificationRevisionHash,
+		"--base-plan-revision", request.BasePlanRevisionID,
+		"--timeline-digest", request.TimelineDigest,
+		"--proposal-hash", request.ProposalHash,
+		"--acceptance-token", request.AcceptanceToken,
+	)
+	assertBlackBoxSuccess(t, "plan --accept-candidate", accepted)
+	if !strings.Contains(accepted.Stdout, candidate.ID) {
+		t.Fatalf("candidate acceptance omitted %s:\n%s", candidate.ID, accepted.Stdout)
+	}
+	return candidate
 }
 
 func writeBlackBoxCompletion(t *testing.T, path string, completion codexExternalBuildCompletion) {

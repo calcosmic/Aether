@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -379,7 +380,10 @@ func planningRealRepo200DriveTwoPasses(t *testing.T, root string) (planningRoute
 
 func planningRealRepo200FirstRouteFixture(t *testing.T, root string) (planningStageManifest, planningRouteStageResult) {
 	t.Helper()
-	state := mustReadSpecificationTestState(t, root)
+	state, err := loadSpecificationColonyState(root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if state.Specification == nil {
 		t.Fatal("approved Specification is missing")
 	}
@@ -401,8 +405,9 @@ func planningRealRepo200FirstRouteFixture(t *testing.T, root string) (planningSt
 		ApprovalReceiptID: specification.Approval.ID, ApprovalReceiptHash: approvalHash,
 	}
 	seed := planningRealRepo200Evidence(t, root, binding, baseID, "seed", "The approved Specification and repository state seed this run.", time.Date(2026, time.September, 8, 2, 1, 0, 0, time.UTC))
+	runID := "planning-real-repo-200-" + baseHash[:12]
 	initial := planningStageState{
-		Stage: planningStageScoutReady, RunID: "planning-real-repo-200", Pass: 1, Preset: planningStagePresetBalanced,
+		Stage: planningStageScoutReady, RunID: runID, Pass: 1, Preset: planningStagePresetBalanced,
 		Specification: binding, BasePlanRevisionID: baseID, BasePlanRevisionHash: baseHash,
 		PriorCardHash: planningStageTestHash("d"), InputFrontierHash: planningStageTestHash("e"),
 	}
@@ -457,6 +462,7 @@ func planningRealRepo200FirstRouteFixture(t *testing.T, root string) (planningSt
 	}
 	routeManifest := scoutCompleted.RouteDispatch.Manifest
 	proposal := planningRouteStageProposal(specification)
+	proposal = planningRouteProposalForExistingBase200(t, state.Plan, proposal)
 	assessments := make([]colony.PlanningDimensionAssessment, 0, len(colony.PlanningDimensions()))
 	for index, dimension := range colony.PlanningDimensions() {
 		assessments = append(assessments, colony.PlanningDimensionAssessment{
@@ -474,6 +480,159 @@ func planningRealRepo200FirstRouteFixture(t *testing.T, root string) (planningSt
 		ScoutReceipt: *routeManifest.ScoutReceipt, CandidateSnapshotHash: routeManifest.CandidateSnapshotHash,
 		Proposal: proposal, ProposalEvidenceIDs: []string{fresh.Reference.ID}, DimensionAssessments: assessments,
 	}
+}
+
+func planningRouteProposalForExistingBase200(t *testing.T, base colony.Plan, proposal planningRoutePlanProposal) planningRoutePlanProposal {
+	t.Helper()
+	prefix, err := completedPlanPrefix(base.Phases)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(base.Phases) == 0 {
+		return proposal
+	}
+	usedSemanticIDs := make(map[string]struct{})
+	for _, phase := range base.Phases {
+		usedSemanticIDs[phase.SemanticID] = struct{}{}
+		for _, task := range phase.Tasks {
+			usedSemanticIDs[task.SemanticID] = struct{}{}
+		}
+	}
+	renamed := make(map[string]string)
+	for phaseIndex := range proposal.Phases {
+		phase := &proposal.Phases[phaseIndex]
+		original := phase.SemanticID
+		phase.SemanticID = planningRouteUniqueSemanticID200(original, usedSemanticIDs)
+		renamed[original] = phase.SemanticID
+		usedSemanticIDs[phase.SemanticID] = struct{}{}
+		for taskIndex := range phase.Tasks {
+			task := &phase.Tasks[taskIndex]
+			original = task.SemanticID
+			task.SemanticID = planningRouteUniqueSemanticID200(original, usedSemanticIDs)
+			renamed[original] = task.SemanticID
+			usedSemanticIDs[task.SemanticID] = struct{}{}
+		}
+	}
+	for index := range proposal.TaskDeclarations {
+		if replacement := renamed[proposal.TaskDeclarations[index].TaskSemanticID]; replacement != "" {
+			proposal.TaskDeclarations[index].TaskSemanticID = replacement
+		}
+	}
+	for index, semanticID := range proposal.UserFacingSemanticIDs {
+		if replacement := renamed[semanticID]; replacement != "" {
+			proposal.UserFacingSemanticIDs[index] = replacement
+		}
+	}
+
+	preserved := clonePhases(base.Phases[:prefix])
+	declarations := make([]planningRouteTaskDeclaration, 0, len(proposal.TaskDeclarations)+prefix)
+	for phaseIndex := range preserved {
+		phase := &preserved[phaseIndex]
+		if strings.TrimSpace(phase.SemanticID) == "" {
+			t.Fatalf("completed phase %d requires a stable semantic ID before staged revision", phase.ID)
+		}
+		phase.Status = ""
+		phase.WatcherFailureCount = 0
+		phase.SpecificationRevisionID, phase.SpecificationRevisionHash = "", ""
+		phase.CandidateID, phase.CandidateContentHash = "", ""
+		phase.PlanningTimelineID, phase.PlanningTimelineDigest = "", ""
+		phase.AffectedSemanticIDs, phase.PreservedSemanticIDs = nil, nil
+		for taskIndex := range phase.Tasks {
+			task := &phase.Tasks[taskIndex]
+			if strings.TrimSpace(task.SemanticID) == "" {
+				t.Fatalf("completed phase %d task %d requires a stable semantic ID before staged revision", phase.ID, taskIndex+1)
+			}
+			task.Status = ""
+			task.SpecificationRevisionID, task.SpecificationRevisionHash = "", ""
+			task.CandidateID, task.CandidateContentHash = "", ""
+			task.PlanningTimelineID, task.PlanningTimelineDigest = "", ""
+			task.AffectedSemanticIDs, task.PreservedSemanticIDs = nil, nil
+			declarations = append(declarations, planningRouteTaskDeclaration{
+				TaskSemanticID: task.SemanticID,
+				NoFileReason:   "Completed work is preserved and is not redispatched by this revision.",
+			})
+		}
+	}
+
+	replacements := clonePhases(proposal.Phases)
+	for phaseIndex := range replacements {
+		replacements[phaseIndex].ID = prefix + phaseIndex + 1
+		for taskIndex := range replacements[phaseIndex].Tasks {
+			id := fmt.Sprintf("%d.%d", replacements[phaseIndex].ID, taskIndex+1)
+			replacements[phaseIndex].Tasks[taskIndex].ID = &id
+		}
+	}
+	proposal.Phases = append(preserved, replacements...)
+	proposal.TaskDeclarations = append(declarations, proposal.TaskDeclarations...)
+
+	for phaseIndex := prefix; phaseIndex < len(base.Phases); phaseIndex++ {
+		phase := base.Phases[phaseIndex]
+		phaseSemanticID := strings.TrimSpace(phase.SemanticID)
+		if phaseSemanticID == "" {
+			phaseSemanticID = fmt.Sprintf("legacy-phase-%d", phase.ID)
+		}
+		proposal.Removals = append(proposal.Removals, planningRouteRemoval{
+			SemanticID: phaseSemanticID, Classification: colony.PlanningSemanticChangeRemoved,
+			Rationale: "Fresh staged planning replaces this unfinished route.",
+		})
+		for taskIndex := range phase.Tasks {
+			taskSemanticID := strings.TrimSpace(phase.Tasks[taskIndex].SemanticID)
+			if taskSemanticID == "" {
+				taskSemanticID = legacyPlanningTaskSemanticID(phase.ID, taskIndex, phase.Tasks[taskIndex].ID)
+			}
+			proposal.Removals = append(proposal.Removals, planningRouteRemoval{
+				SemanticID: taskSemanticID, Classification: colony.PlanningSemanticChangeRemoved,
+				Rationale: "Fresh staged planning replaces this unfinished task.",
+			})
+		}
+	}
+	return proposal
+}
+
+func planningRouteUniqueSemanticID200(candidate string, used map[string]struct{}) string {
+	result := candidate
+	for {
+		if _, exists := used[result]; !exists {
+			return result
+		}
+		result += "-successor"
+	}
+}
+
+// stagePlanningCandidate200 drives the same receipt-bound Route stop used by
+// the public Phase 200 workflow and leaves the resulting candidate inactive.
+func stagePlanningCandidate200(t *testing.T, root string) colony.PlanCandidate {
+	t.Helper()
+	manifest, routeResult := planningRealRepo200FirstRouteFixture(t, root)
+	planningRouteStageSetPolicy(t, root, manifest.RunID, 70, 6)
+	coordinated, err := coordinatePlanningRouteStage(root, manifest, planningRouteStageTestBytes(t, routeResult))
+	if err != nil {
+		t.Fatalf("finalize staged Route-Setter result: %v", err)
+	}
+	if coordinated.Candidate == nil {
+		t.Fatal("staged planning fixture did not stop at a reviewable candidate")
+	}
+	return *coordinated.Candidate
+}
+
+// acceptStagedPlanningCandidate200 crosses the exact receipt-bound acceptance
+// boundary after stagePlanningCandidate200. Older lifecycle fixtures call this
+// instead of the retired --accept shortcut, so a Specification-bearing plan
+// can never enter build as legacy_unbound.
+func acceptStagedPlanningCandidate200(t *testing.T, root string) (colony.PlanCandidate, planCandidateAcceptanceResult) {
+	t.Helper()
+	candidate := stagePlanningCandidate200(t, root)
+	accepted, err := acceptPlanCandidate(root, planCandidateTestAcceptanceRequest(candidate), planCandidateAcceptanceOptions{
+		AcceptedBy: "owner:phase-200-migration-test",
+		AcceptedAt: candidate.CreatedAt.Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("accept exact staged planning candidate: %v", err)
+	}
+	if accepted.Receipt.CandidateID != candidate.ID || accepted.Revision.ID != candidate.Proposal.ID {
+		t.Fatalf("staged acceptance receipt does not bind the candidate: candidate=%+v accepted=%+v", candidate, accepted)
+	}
+	return candidate, accepted
 }
 
 func planningRealRepo200Evidence(t *testing.T, root string, binding planningStageSpecificationBinding, baseID, origin, content string, observedAt time.Time) planningEvidenceRecord {
