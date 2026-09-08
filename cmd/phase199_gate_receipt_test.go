@@ -77,8 +77,17 @@ func TestPhase199GateReceiptSchema(t *testing.T) {
 	complete := phase199ValidCompleteReceipt(t)
 	for name, mutate := range map[string]func(*phase199GateReceipt){
 		"missing gate": func(r *phase199GateReceipt) { r.Gates = r.Gates[:1] },
-		"stale gate": func(r *phase199GateReceipt) {
-			r.Gates[0].StartedAt = time.Now().UTC().Add(-25 * time.Hour).Format(time.RFC3339Nano)
+		"created after first gate": func(r *phase199GateReceipt) {
+			r.CreatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		},
+		"future created_at": func(r *phase199GateReceipt) {
+			r.CreatedAt = time.Now().UTC().Add(2 * time.Minute).Format(time.RFC3339Nano)
+		},
+		"overlapping gates": func(r *phase199GateReceipt) {
+			r.Gates[1].StartedAt = time.Now().UTC().Add(-90 * time.Second).Format(time.RFC3339Nano)
+		},
+		"gate exceeds duration bound": func(r *phase199GateReceipt) {
+			r.Gates[0].StartedAt = time.Now().UTC().Add(-3 * time.Hour).Format(time.RFC3339Nano)
 		},
 		"nonzero exit":       func(r *phase199GateReceipt) { r.Gates[0].ExitCode = 1 },
 		"substitute command": func(r *phase199GateReceipt) { r.Gates[1].Command = "go test ./...  -race" },
@@ -105,6 +114,20 @@ func TestPhase199GateReceiptSchema(t *testing.T) {
 				t.Fatalf("final-mode validator accepted %s receipt", name)
 			}
 		})
+	}
+}
+
+func TestPhase199GateReceiptSurvivesLaterLifecycleBookkeeping(t *testing.T) {
+	receipt := phase199ValidCompleteReceipt(t)
+	now := time.Now().UTC()
+	receipt.CreatedAt = now.Add(-72 * time.Hour).Format(time.RFC3339Nano)
+	receipt.Gates[0].StartedAt = now.Add(-71 * time.Hour).Format(time.RFC3339Nano)
+	receipt.Gates[0].FinishedAt = now.Add(-70 * time.Hour).Format(time.RFC3339Nano)
+	receipt.Gates[1].StartedAt = now.Add(-69 * time.Hour).Format(time.RFC3339Nano)
+	receipt.Gates[1].FinishedAt = now.Add(-68 * time.Hour).Format(time.RFC3339Nano)
+
+	if err := validatePhase199GateReceiptSchema(receipt, now); err != nil {
+		t.Fatalf("durable historical receipt rejected after ordinary lifecycle time elapsed: %v", err)
 	}
 }
 
