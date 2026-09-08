@@ -33,6 +33,8 @@ var planWrapperPresetLines = []string{
 	"Exhaustive  Target 99   Up to 12 passes",
 }
 
+const planWrapperHostSpineCompatibility = "The TS host is the sole entry point for planning manifest generation. `--planning-depth` remains only as a legacy host-contract compatibility marker; it is not an owner control and this wrapper never presents or selects it. The four-preset card is the only owner-facing planning-budget choice."
+
 // stripCommentLines removes HTML-comment lines (the wrappers open with an
 // Aether-managed banner) so a comment cannot satisfy a live contract check.
 func stripCommentLines(text string) string {
@@ -110,6 +112,7 @@ func TestPlanWrapperCardsParity(t *testing.T) {
 				"No option is preselected, recommended, or silently chosen.",
 				"Choose the planning preset: Fast, Balanced, Deep, or Exhaustive.",
 				"Planning did not start. State: unchanged.",
+				planWrapperHostSpineCompatibility,
 			} {
 				if !strings.Contains(text, want) {
 					t.Errorf("%s missing unbiased preset contract %q", name, want)
@@ -120,6 +123,9 @@ func TestPlanWrapperCardsParity(t *testing.T) {
 			if !strings.Contains(yamlText, line) {
 				t.Errorf("plan.yaml missing exact preset line %q", line)
 			}
+		}
+		if !strings.Contains(yamlText, planWrapperHostSpineCompatibility) {
+			t.Errorf("plan.yaml missing inert legacy host-spine compatibility contract")
 		}
 		for _, forbidden := range []string{"defaults to Deep", "default to Deep", "Queen recommends Deep", "smart default"} {
 			for name, text := range wrappers {
@@ -207,7 +213,7 @@ func TestPlanWrapperCardsParity(t *testing.T) {
 			"research_awaiting_approval",
 			"research_warning",
 			"plan-research-approve",
-			"--planning-depth",
+			"aether host plan --depth <choice> --planning-depth <choice>",
 			"--verification-depth",
 		}
 		all := map[string]string{"plan.yaml": yamlText}

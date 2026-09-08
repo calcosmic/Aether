@@ -29,10 +29,13 @@ func TestPlanWrapperCeremonyContract(t *testing.T) {
 		"preset_required",
 		"preset_options",
 		"aether host plan --preset <fast|balanced|deep|exhaustive>",
+		planWrapperHostSpineCompatibility,
 		"temporary manifest file outside `.aether/data/`",
 		"result.plan_manifest",
 		"result.planning_manifest",
 		"orchestrator_boundary_guidance",
+		"after_discuss_next",
+		"aether discuss",
 		"unresolved_clarifications",
 		"/ant-discuss",
 		"## Scout Stage",
@@ -73,6 +76,7 @@ func TestPlanWrapperCeremonyContract(t *testing.T) {
 		"<success_criteria>",
 		"<failure_modes>",
 		"<read_only>",
+		"aether command-guide plan --platform codex",
 	}
 
 	inOrder := []string{
@@ -105,7 +109,7 @@ func TestPlanWrapperCeremonyContract(t *testing.T) {
 		"research_awaiting_approval",
 		"research_warning",
 		"plan-research-approve",
-		"--planning-depth",
+		"aether host plan --depth <choice> --planning-depth <choice>",
 		"--verification-depth",
 		"result.requires_next_iteration",
 		"scout_report",

@@ -62,13 +62,15 @@ Choose the planning preset: Fast, Balanced, Deep, or Exhaustive.
 
 No option is preselected, recommended, or silently chosen. Ask once with host-native option controls. Invalid, blank, cancelled, or interrupted input starts no worker and reports `Planning did not start. State: unchanged.` Valid explicit owner flags bypass only this card.
 
+The TS host is the sole entry point for planning manifest generation. `--planning-depth` remains only as a legacy host-contract compatibility marker; it is not an owner control and this wrapper never presents or selects it. The four-preset card is the only owner-facing planning-budget choice.
+
 After one exact selection, request a fresh result:
 
 ```bash
 AETHER_OUTPUT_MODE=json aether host plan --preset <fast|balanced|deep|exhaustive> $ARGUMENTS
 ```
 
-Parse `result.plan_manifest` or `result.planning_manifest`, and save the returned envelope to a temporary manifest file outside `.aether/data/`. Require `selected_preset`, `selection_source`, one Scout `stage_manifest`, and exactly one authorized Scout dispatch. If `orchestrator_boundary_guidance` or `unresolved_clarifications` routes to `/ant-discuss`, stop and request a fresh manifest after that boundary is resolved.
+Parse `result.plan_manifest` or `result.planning_manifest`, and save the returned envelope to a temporary manifest file outside `.aether/data/`. Require `selected_preset`, `selection_source`, one Scout `stage_manifest`, and exactly one authorized Scout dispatch. Respect `orchestrator_boundary_guidance` and `unresolved_clarifications`: if either routes to `aether discuss`, stop at `/ant-discuss`. After resolution, run `after_discuss_next` and request a fresh manifest; never reuse the pre-discuss manifest.
 
 The selected preset authorizes routine read-only phase research and later weakest-gap passes within its cap. Do not introduce another research decision.
 
@@ -254,7 +256,7 @@ This wrapper never edits specification projections, planning artifacts, colony s
 
 ## Cross-Platform Drift Guard
 
-Keep `.aether/commands/plan.yaml`, both Claude projections, the OpenCode projection, the public plan/host contracts, `cmd/command_guide.go`, and the Codex `aether-colony-build-cycle` skill aligned. Verify with `aether source-check` and the focused planning wrapper tests.
+Keep `.aether/commands/plan.yaml`, both Claude projections, the OpenCode projection, the public plan/host contracts, `cmd/command_guide.go`, and the Codex `aether-colony-build-cycle` skill aligned. Verify that `aether command-guide plan --platform codex` still describes the same staged flow, then run the focused planning wrapper and repository source-parity gates.
 
 ## Guardrails
 

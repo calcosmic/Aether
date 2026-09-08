@@ -23,6 +23,7 @@ wrapper_additions:
     Exhaustive  Target 99   Up to 12 passes
 
     No option is preselected, recommended, or silently chosen. Invalid, blank, cancelled, or interrupted input starts no worker and leaves state unchanged. After one exact selection, request a fresh manifest with `aether host plan --preset <fast|balanced|deep|exhaustive>`. Valid explicit owner flags bypass only this card; Go still validates the approved specification and preset bounds.
+    The TS host is the sole entry point for planning manifest generation. `--planning-depth` remains only as a legacy host-contract compatibility marker; it is not an owner control and this wrapper never presents or selects it. The four-preset card is the only owner-facing planning-budget choice.
   staged_scout_route_loop: |
     A planning result initially authorizes exactly one Scout through `plan_manifest.stage_manifest`. Dispatch only that stage, pass its exact manifest and brief, then submit its strict `scout_result` with the unchanged `plan_manifest` to `aether plan-finalize --completion-file <completion_file>`. Render `stage_receipt`, admitted evidence, remaining gaps, and the returned next boundary.
     Route-Setter has no authority until Scout finalization returns `route_stage_manifest`. Dispatch exactly one Route-Setter only from that manifest, bind the completed Scout receipt, and submit its strict `route_result` through a fresh completion file. Never combine Scout and Route-Setter results into a retired whole-chain packet, predict the next stage, reuse a consumed manifest, or dispatch beyond the exact runtime authorization.
@@ -43,6 +44,8 @@ wrapper_additions:
     Every stage uses one colony beat, Purpose, Reads, Spawns when applicable, imperative instructions, and Stop conditions. Carry only runtime-returned identifiers and artifacts across stages: approved specification binding, selected preset, planning run/pass, current stage manifest, stage receipt, weakest gap, completed card/timeline digest, candidate ID/hash, and next action.
 guardrails:
   - "The host adapter is the manifest entry point; use structured Go results and never parse visual output as state."
+  - "Respect orchestrator_boundary_guidance and route to aether discuss when the boundary is active."
+  - "After a discuss redirect, request a fresh manifest after_discuss_next; never reuse a pre-discuss manifest."
   - "Dispatch exactly one runtime-authorized stage at a time: Scout first, then Route-Setter only after the Scout receipt, then later Scout stages only after completed cards."
   - "Use visible live Task/subagent panels. Run aether spawn-log before each dispatch and aether spawn-complete afterward."
   - "Pass every returned permission_profile, identity, stage manifest, result contract, context capsule, and brief verbatim; never substitute or broaden them."
