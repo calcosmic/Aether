@@ -143,7 +143,7 @@ func TestInitSuggestedNextMatchesTopProposal(t *testing.T) {
 	}
 }
 
-func TestInitWrapperClosesAtPlan(t *testing.T) {
+func TestInitWrapperClosesAtDiscussThenDraftSpec(t *testing.T) {
 	for _, path := range []string{"../.claude/commands/ant/init.md", "../.claude/commands/ant-init.md", "../.opencode/commands/ant/init.md"} {
 		raw, err := os.ReadFile(path)
 		if err != nil {
@@ -152,15 +152,22 @@ func TestInitWrapperClosesAtPlan(t *testing.T) {
 		text := string(raw)
 		for _, anchor := range []string{
 			"Ranked `proposals`",
-			"do not replace the normal guided handoff",
-			"Next Up: /ant-plan",
+			"do not replace the runtime-backed",
+			"After `/ant-discuss`, Go creates and immediately renders one DRAFT specification revision.",
+			"`/ant-spec` owns review, revision, and exact specification approval.",
+			"Next Up: /ant-discuss",
 		} {
 			if !strings.Contains(text, anchor) {
-				t.Fatalf("%s lost the post-init /ant-plan contract anchor %q", path, anchor)
+				t.Fatalf("%s lost the post-init discuss-to-draft-spec contract anchor %q", path, anchor)
 			}
 		}
-		if !strings.HasSuffix(strings.TrimSpace(text), "Next Up: /ant-plan") {
-			t.Fatalf("%s does not end at the exact guided plan command", path)
+		if !strings.HasSuffix(strings.TrimSpace(text), "Next Up: /ant-discuss") {
+			t.Fatalf("%s does not end at the exact guided discuss command", path)
+		}
+		for _, forbidden := range []string{"Next Up: /ant-plan", "`next_action` — exact `/ant-plan`", "successful closeout ends with exact `Next Up: /ant-plan`"} {
+			if strings.Contains(text, forbidden) {
+				t.Fatalf("%s still contains premature planning guidance %q", path, forbidden)
+			}
 		}
 	}
 }

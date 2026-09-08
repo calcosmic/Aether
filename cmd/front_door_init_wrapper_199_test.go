@@ -45,6 +45,7 @@ type frontDoorInitSpec199 struct {
 		ActiveColonyRefusal    string   `yaml:"active_colony_refusal"`
 		ClaudeOpenCodeCloseout string   `yaml:"claude_opencode_closeout"`
 		CodexCloseout          string   `yaml:"codex_closeout"`
+		PostInitJourney        []string `yaml:"post_init_journey"`
 	} `yaml:"guided_contract"`
 }
 
@@ -97,8 +98,14 @@ func TestFrontDoorInitWrapperParity(t *testing.T) {
 	if spec.GuidedContract.ActiveColonyRefusal != frontDoorInitRefusal199 {
 		t.Errorf("canonical active-colony refusal = %q", spec.GuidedContract.ActiveColonyRefusal)
 	}
-	if spec.GuidedContract.ClaudeOpenCodeCloseout != "/ant-plan" || spec.GuidedContract.CodexCloseout != "aether plan" {
+	if spec.GuidedContract.ClaudeOpenCodeCloseout != "/ant-discuss" || spec.GuidedContract.CodexCloseout != "aether discuss" {
 		t.Errorf("canonical host closeouts = Claude/OpenCode %q, Codex %q", spec.GuidedContract.ClaudeOpenCodeCloseout, spec.GuidedContract.CodexCloseout)
+	}
+	journey := strings.Join(spec.GuidedContract.PostInitJourney, "\n")
+	if len(spec.GuidedContract.PostInitJourney) != 4 ||
+		!strings.Contains(journey, "DRAFT specification") ||
+		!strings.Contains(journey, "exactly approved specification") {
+		t.Errorf("canonical post-init journey is incomplete: %#v", spec.GuidedContract.PostInitJourney)
 	}
 
 	hostWrappers := []struct {
@@ -125,10 +132,20 @@ func TestFrontDoorInitWrapperParity(t *testing.T) {
 			if !strings.Contains(text, `description: "`+frontDoorInitDescription199+`"`) {
 				t.Errorf("wrapper does not use exact init description %q", frontDoorInitDescription199)
 			}
-			if !strings.HasSuffix(strings.TrimSpace(text), "Next Up: /ant-plan") {
-				t.Errorf("wrapper does not close with exact /ant-plan:\n%s", text)
+			if !strings.HasSuffix(strings.TrimSpace(text), "Next Up: /ant-discuss") {
+				t.Errorf("wrapper does not close with exact /ant-discuss:\n%s", text)
 			}
-			for _, forbidden := range []string{"Next Up: aether plan", "$ant-", "aether lay-eggs"} {
+			for _, anchor := range []string{
+				"offers `/ant-discuss` without invoking it automatically",
+				"After `/ant-discuss`, Go creates and immediately renders one DRAFT specification revision.",
+				"`/ant-spec` owns review, revision, and exact specification approval.",
+				"Only an exactly approved specification may proceed to `/ant-plan`; init never calls it directly.",
+			} {
+				if !strings.Contains(text, anchor) {
+					t.Errorf("wrapper is missing specification-first journey anchor %q", anchor)
+				}
+			}
+			for _, forbidden := range []string{"Next Up: /ant-plan", "Next Up: aether plan", "Next Up: aether discuss", "$ant-", "aether lay-eggs"} {
 				if strings.Contains(text, forbidden) {
 					t.Errorf("wrapper contains host-inappropriate init guidance %q", forbidden)
 				}
@@ -176,6 +193,10 @@ func assertNoDirectInitStateWrites199(t *testing.T, text string) {
 		"touch .aether/data/",
 		"mkdir .aether/data/",
 		"writefile(.aether/data/",
+		"> spec.md",
+		"tee spec.md",
+		"touch spec.md",
+		"writefile(spec.md",
 	} {
 		if strings.Contains(lower, forbidden) {
 			t.Errorf("surface contains a direct .aether/data write pattern %q", forbidden)
