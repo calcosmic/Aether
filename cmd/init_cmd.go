@@ -355,15 +355,12 @@ var initCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "warning: could not apply shelf selection(s): %s\n", strings.Join(shelfFailed, ", "))
 		}
 
-		// Ranked next-move proposals, computed from what the repo actually
-		// contains — the runtime proposes, the wrapper asks, the user picks.
-		// The top proposal replaces the old hardcoded "aether plan" as the
-		// recorded suggestion.
+		// Ranked exploratory proposals remain useful context about the repo, but
+		// they do not own lifecycle authority. The shared projection owns the
+		// persisted handoff so init cannot skip discussion or SPEC review merely
+		// because planning or surveying ranked highly for this repository.
 		proposals := computeInitProposals(repoRoot, goal, priorStateBackup != "")
-		suggestedNext := "aether plan"
-		if len(proposals) > 0 {
-			suggestedNext = proposals[0].Command
-		}
+		suggestedNext := lifecycleNextActionForState(state, "init", "", "").Command
 
 		// Create session.json
 		session := colony.SessionFile{
@@ -580,6 +577,7 @@ func renderFrontDoorInitVisual(state colony.ColonyState, setupOutcome string, te
 	}
 
 	b.WriteString(renderStageMarker("5. Closeout"))
+	b.WriteString("Discuss settles intent before specification review; it does not approve a specification or a plan.\n")
 	return b.String()
 }
 
