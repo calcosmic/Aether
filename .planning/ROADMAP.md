@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 23/25 plans executed
+**Plans:** 24/25 plans executed
 
 Plans:
 
@@ -246,7 +246,7 @@ Plans:
 
 **Wave 12** *(blocked on Wave 11 completion)*
 
-- [ ] 200-22-PLAN.md — Publish Phase 200 contracts and platform guidance.
+- [x] 200-22-PLAN.md — Publish Phase 200 contracts and platform guidance.
 
 **Wave 13** *(blocked on Wave 12 completion)*
 

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 200-25-PLAN.md
-last_updated: "2026-09-08T01:23:05.674Z"
+stopped_at: Completed 200-22-PLAN.md
+last_updated: "2026-09-08T02:05:36.955Z"
 last_activity: 2026-09-08
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 59
-  completed_plans: 57
+  completed_plans: 58
   percent: 14
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 22 of 25
+Plan: 23 of 25
 Status: Ready to execute
 Last activity: 2026-09-08
 
@@ -134,6 +134,7 @@ Last activity: 2026-09-08
 | Phase 200 P24 | 18 min | 2 tasks | 10 files |
 | Phase 200 P21 | 15 min | 2 tasks | 7 files |
 | Phase 200 P25 | 8 min | 2 tasks | 7 files |
+| Phase 200 P22 | 24min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -404,6 +405,10 @@ Last activity: 2026-09-08
 - [Phase 200]: Wrappers remain guidance-only and delegate every specification mutation to Go-owned aether spec.
 - [Phase 200]: Specification approval remains separate from plan-candidate acceptance; only the matching plan draft may enter the executable queue.
 - [Phase 200]: Claude and OpenCode expose /ant-spec while Codex uses direct aether spec guidance.
+- [Phase 200]: Codex planning dispatches only the single Scout or Route-Setter stage currently authorized by Go. — Receipt-bound one-stage authority prevents wrapper prediction and cross-stage replay.
+- [Phase 200]: Specification approval, planning stop, and exact candidate acceptance remain separate owner boundaries. — Only the final acceptance receipt may expose build or Autopilot.
+- [Phase 200]: Specification is runtime-native in Codex while Claude and OpenCode retain slash-command projections. — All platforms preserve the same Go-owned authority through their supported command spelling.
+- [Phase 200]: The canonical Plan YAML owns the singular wrapper-host contract pointer. — Managed projections remain synchronized without duplicating host-contract authority text.
 
 ### Pending Todos
 
@@ -519,8 +524,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-08T01:23:05.664Z
-Stopped at: Completed 200-25-PLAN.md
+Last session: 2026-09-08T02:05:36.946Z
+Stopped at: Completed 200-22-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
