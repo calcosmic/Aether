@@ -68,13 +68,14 @@ type planAuthorityDecision struct {
 // repository loaders. Error fields preserve which verification boundary
 // failed without making the pure policy perform I/O.
 type planAuthorityVerifiedBindings struct {
-	Candidate       *colony.PlanCandidate
-	Acceptance      *colony.PlanAcceptanceReceipt
-	Timeline        *colony.PlanningTimelineBinding
-	Cards           []colony.PlanningIterationCard
-	CandidateError  string
-	TimelineError   string
-	AcceptanceError string
+	Candidate          *colony.PlanCandidate
+	Acceptance         *colony.PlanAcceptanceReceipt
+	Timeline           *colony.PlanningTimelineBinding
+	Cards              []colony.PlanningIterationCard
+	SpecificationError string
+	CandidateError     string
+	TimelineError      string
+	AcceptanceError    string
 }
 
 // validateAcceptedPlanAuthority is the single pure execution-authority policy.
@@ -90,6 +91,9 @@ func validateAcceptedPlanAuthority(facts LifecycleFacts, bindings planAuthorityV
 
 	state := facts.State.Value
 	plan := state.Plan
+	if strings.TrimSpace(bindings.SpecificationError) != "" {
+		return refusePlanAuthority(decision, planAuthorityRefusalSpecificationNotApproved, "aether spec", "specification integrity: "+strings.TrimSpace(bindings.SpecificationError))
+	}
 	if bindings.Candidate != nil && bindings.Candidate.Status != colony.PlanCandidateAccepted {
 		decision.Candidate = planAuthorityBinding{ID: bindings.Candidate.ID, Hash: bindings.Candidate.ContentHash}
 		return refusePlanAuthority(decision, planAuthorityRefusalCandidateNotAccepted, "aether plan --candidate", "a reviewable plan candidate has not been explicitly accepted")
@@ -258,6 +262,11 @@ func validateCurrentPlanAuthority(state colony.ColonyState, planning LifecyclePl
 func loadPlanAuthorityVerifiedBindings(root string, facts LifecycleFacts) planAuthorityVerifiedBindings {
 	state := facts.State.Value
 	root = strings.TrimSpace(root)
+	if state.Specification != nil {
+		if err := validateCanonicalSpecificationState(*state.Specification); err != nil {
+			return planAuthorityVerifiedBindings{SpecificationError: err.Error()}
+		}
+	}
 	active, ok := activePlanRevision(state.Plan)
 	if ok && strings.TrimSpace(active.CandidateID) != "" {
 		if retained, found := planAuthorityCandidateByID(state.Plan.Candidates, active.CandidateID); found {

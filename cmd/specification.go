@@ -293,6 +293,9 @@ func createSpecificationDraft(root string, request specificationDraftRequest, op
 		return empty, fmt.Errorf("clone state for specification draft: %w", err)
 	}
 	updated.Specification = &built
+	if err := validateCanonicalSpecificationState(*updated.Specification); err != nil {
+		return empty, fmt.Errorf("validate canonical specification successor: %w", err)
+	}
 	if err := validatePlanningState(updated); err != nil {
 		return empty, fmt.Errorf("validate state with specification draft: %w", err)
 	}
@@ -592,6 +595,9 @@ func approveSpecification(root string, request specificationApprovalRequest, opt
 	updated.Specification.Revisions[currentIndex].Status = colony.SpecStatusApproved
 	updated.Specification.Revisions[currentIndex].Approval = &approval
 	approved := updated.Specification.Revisions[currentIndex]
+	if err := validateCanonicalSpecificationState(*updated.Specification); err != nil {
+		return empty, fmt.Errorf("validate canonical specification approval: %w", err)
+	}
 	if err := validatePlanningState(updated); err != nil {
 		return empty, fmt.Errorf("validate state with specification approval: %w", err)
 	}
