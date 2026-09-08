@@ -629,7 +629,9 @@ func renderCanonicalPlanningResult(result map[string]interface{}, options planni
 				}
 			}
 		}
-		return renderPlanningPresetVisual(stringValue(result["goal"]), planningSpecificationRevisionFromResult(result), selection, options), true
+		visual := renderPlanningPresetVisual(stringValue(result["goal"]), planningSpecificationRevisionFromResult(result), selection, options)
+		visual += renderLifecycleClosing(result, "plan")
+		return finalizePlanningVisual(visual, options), true
 	}
 	if manifest, ok := planningStageManifestValue(result["stage_manifest"]); ok {
 		return renderPlanningStageVisual(manifest, stringValue(result["status"]), planningWorkerNameFromResult(result, manifest.ExpectedCaste), false, 0, 0, options), true
