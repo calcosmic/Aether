@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 200-24-PLAN.md
-last_updated: "2026-09-08T00:39:47.012Z"
+stopped_at: Completed 200-21-PLAN.md
+last_updated: "2026-09-08T01:11:04.044Z"
 last_activity: 2026-09-08
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 59
-  completed_plans: 55
+  completed_plans: 56
   percent: 14
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 21 of 25
+Plan: 22 of 25
 Status: Ready to execute
 Last activity: 2026-09-08
 
@@ -132,6 +132,7 @@ Last activity: 2026-09-08
 | Phase 200 P19 | 22min | 2 tasks | 4 files |
 | Phase 200 P20 | 13min | 2 tasks | 7 files |
 | Phase 200 P24 | 18 min | 2 tasks | 10 files |
+| Phase 200 P21 | 15 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -395,6 +396,10 @@ Last activity: 2026-09-08
 - [Phase 200]: Repository-aware init proposals remain visible context, but only the shared lifecycle projection determines persisted or displayed next-action authority. — Exploration may explain options without skipping the owner-governed lifecycle.
 - [Phase 200]: Init ends at Discuss; Discuss creates the draft specification, Specification owns exact approval, and only then may Planning begin. — Specification approval and plan acceptance remain separate authority transitions.
 - [Phase 200]: Claude and OpenCode use slash commands while direct Codex output remains runtime-native aether syntax. — Platform parity preserves equal lifecycle truth without advertising unsupported aliases.
+- [Phase 200]: Planning wrappers require an exact approved Specification before preset selection and expose Fast 80/4, Balanced 90/6, Deep 95/8, and Exhaustive 99/12 without a default. — The owner chooses the quality budget while Go retains contract and preset authority.
+- [Phase 200]: Claude and OpenCode dispatch only the single planning stage currently authorized by Go. — Scout, Route-Setter, later Scout passes, and owner boundaries stay receipt-bound instead of wrapper-predicted.
+- [Phase 200]: Every completed Scout to Route-Setter pass renders its causal iteration card before continuation, later material pause, or candidate review. — Visible evidence, score movement, semantic change, weakest gap, and stop causality remain append-only.
+- [Phase 200]: A reasoned stop creates a NOT ACTIVE candidate and the wrapper executes only the full runtime-issued acceptance command. — Specification approval, stopping, candidate review, and exact plan acceptance remain separate authority transitions.
 
 ### Pending Todos
 
@@ -510,8 +515,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-08T00:39:47.003Z
-Stopped at: Completed 200-24-PLAN.md
+Last session: 2026-09-08T01:11:04.035Z
+Stopped at: Completed 200-21-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
