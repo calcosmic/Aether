@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: verifying
-stopped_at: Completed 200-23-PLAN.md; inherited Phase 199 vocabulary gate remains
-last_updated: "2026-09-08T03:31:07.894Z"
+stopped_at: Completed 200-23 follow-up; inherited Phase 199 vocabulary gate remains
+last_updated: "2026-09-08T03:56:11.221Z"
 last_activity: 2026-09-08
 progress:
   total_phases: 7
@@ -135,7 +135,7 @@ Last activity: 2026-09-08
 | Phase 200 P21 | 15 min | 2 tasks | 7 files |
 | Phase 200 P25 | 8 min | 2 tasks | 7 files |
 | Phase 200 P22 | 24min | 2 tasks | 11 files |
-| Phase 200 P23 | 1h 16m | 3 tasks | 17 files |
+| Phase 200 P23 | 1h 44m | 3 tasks | 22 files |
 
 ## Accumulated Context
 
@@ -414,6 +414,8 @@ Last activity: 2026-09-08
 - [Phase 200]: Exercise production planning kernels in real temporary Git repositories without live providers or network access. — This gives deterministic end-to-end authority proof suitable for CI.
 - [Phase 200]: Migrate legacy immediate-dispatch fixtures to explicit Specification and preset authority boundaries. — Current lifecycle safety boundaries remain authoritative.
 - [Phase 200]: Do not claim a green repository gate while the protected Phase 199 vocabulary inventory remains mismatched. — All Phase 200-owned gates pass, but required full and race commands remain nonzero for one inherited root cause.
+- [Phase 200]: Exact Specification approval, repair, and Plan preset advice comes from the shared next-action candidate registry. — Run-specific commands remain live-tree-gated without creating new hand-typed advice sites.
+- [Phase 200]: Fresh staged Plan manifests materialize Orchestrator boundary questions before the one-Scout authorization. — After Discuss, planning re-enters through the owner's exact selected preset instead of bypassing or reusing the stale manifest.
 
 ### Pending Todos
 
@@ -530,8 +532,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-08T03:31:07.885Z
-Stopped at: Completed 200-23-PLAN.md; inherited Phase 199 vocabulary gate remains
+Last session: 2026-09-08T03:56:11.211Z
+Stopped at: Completed 200-23 follow-up; inherited Phase 199 vocabulary gate remains
 Resume file: None
 
 ## Operator Next Steps
