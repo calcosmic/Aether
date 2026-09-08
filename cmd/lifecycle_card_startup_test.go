@@ -166,7 +166,7 @@ func startupLifecycleSurfaces() []lifecycleSurfaceCase {
 			args:    []string{"plan"},
 			command: "plan",
 			prepare: readyNoPlan,
-			keep:    []string{"Plan size: "},
+			keep:    []string{"Choose Planning Preset", "Planning did not start. State: unchanged."},
 		},
 		{
 			// The replan variant: a plan already exists and is reloaded.
@@ -186,7 +186,7 @@ func startupLifecycleSurfaces() []lifecycleSurfaceCase {
 					}},
 				})
 			},
-			keep: []string{"Existing colony plan loaded."},
+			keep: []string{"Choose Planning Preset", "Planning did not start. State: unchanged."},
 		},
 		{
 			// The repaired-plan variant.
@@ -216,7 +216,7 @@ func startupLifecycleSurfaces() []lifecycleSurfaceCase {
 					t.Fatalf("write the planning artifact the repair path reads: %v", err)
 				}
 			},
-			keep: []string{"dependency references"},
+			keep: []string{"Choose Planning Preset", "Planning did not start. State: unchanged."},
 		},
 		{
 			// The blocked variant: planning stopped on a problem that needs the
@@ -233,7 +233,7 @@ func startupLifecycleSurfaces() []lifecycleSurfaceCase {
 				})
 				writeLifecyclePlanBlocker(t, dataDir, "the planning step could not write the phase list")
 			},
-			keep: []string{"Goal: " + goal},
+			keep: []string{"Choose Planning Preset", "Planning did not start. State: unchanged."},
 		},
 	}
 }
@@ -272,7 +272,9 @@ func TestStartupLifecycleCardsComeFromTheResolver(t *testing.T) {
 		t.Run(surface.name, func(t *testing.T) {
 			run := runLifecycleSurface(t, surface, false)
 
-			if !strings.Contains(run.visual, run.card) {
+			if surface.command == "discuss" || surface.command == "plan" {
+				assertPhase200StartupBoundary(t, surface, run.visual)
+			} else if !strings.Contains(run.visual, run.card) {
 				t.Errorf("%s does not end with the shared card.\n--- the card the resolver produced ---\n%s\n--- what the command printed ---\n%s",
 					surface.name, run.card, run.visual)
 			}
@@ -293,8 +295,51 @@ func TestStartupLifecycleEnvelopesMatchTheirCards(t *testing.T) {
 	for _, surface := range startupLifecycleSurfaces() {
 		t.Run(surface.name, func(t *testing.T) {
 			run := runLifecycleSurface(t, surface, true)
+			if surface.command == "discuss" {
+				assertPhase200DiscussEnvelope(t, surface.name, run.envelope)
+				return
+			}
 			assertEnvelopeMatchesCard(t, surface.name, run)
 		})
+	}
+}
+
+func assertPhase200StartupBoundary(t *testing.T, surface lifecycleSurfaceCase, visual string) {
+	t.Helper()
+	switch surface.command {
+	case "discuss":
+		for _, want := range []string{"Draft Specification", "[DRAFT]", "Run `aether spec`", "planning remains unauthorized until the exact contract is approved"} {
+			if !strings.Contains(visual, want) {
+				t.Errorf("%s lost Phase 200 discuss boundary %q\n%s", surface.name, want, visual)
+			}
+		}
+		if strings.Contains(visual, "Run `aether plan`") {
+			t.Errorf("%s skipped exact Specification approval\n%s", surface.name, visual)
+		}
+	case "plan":
+		for _, want := range []string{"Choose Planning Preset", "Fast", "Balanced", "Deep", "Exhaustive", "Planning did not start. State: unchanged."} {
+			if !strings.Contains(visual, want) {
+				t.Errorf("%s lost Phase 200 preset boundary %q\n%s", surface.name, want, visual)
+			}
+		}
+		for _, forbidden := range []string{"Planning Wave", "P L A N   D I S P A T C H", ".aether/data/spawn-tree.txt"} {
+			if strings.Contains(visual, forbidden) {
+				t.Errorf("%s crossed the unselected preset boundary via %q\n%s", surface.name, forbidden, visual)
+			}
+		}
+	}
+}
+
+func assertPhase200DiscussEnvelope(t *testing.T, label string, envelope map[string]interface{}) {
+	t.Helper()
+	if envelope[nextActionCommandKey] != "aether spec" {
+		t.Fatalf("%s next action = %v, want exact Specification review", label, envelope[nextActionCommandKey])
+	}
+	if envelope["specification_status"] != string(colony.SpecStatusDraft) || envelope["draft_spec"] == nil {
+		t.Fatalf("%s did not carry its persisted DRAFT Specification: %+v", label, envelope)
+	}
+	if next := strings.ToLower(stringValue(envelope["next"])); strings.Contains(next, "aether plan") {
+		t.Fatalf("%s machine result skipped Specification approval: %+v", label, envelope)
 	}
 }
 

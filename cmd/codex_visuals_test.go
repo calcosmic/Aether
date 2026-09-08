@@ -390,9 +390,14 @@ func TestPlanVisualOutput(t *testing.T) {
 	if strings.Contains(output, `{"ok":true`) {
 		t.Fatalf("expected visual output, got JSON: %s", output)
 	}
-	for _, want := range []string{"📋", "P L A N", "P L A N   D I S P A T C H", "Planning Wave 1 starting", "✓", "aether build 1"} {
+	for _, want := range []string{"📋", "P L A N", "Choose Planning Preset", "Fast", "Balanced", "Deep", "Exhaustive", "Planning did not start. State: unchanged."} {
 		if !strings.Contains(output, want) {
 			t.Errorf("plan visual output missing %q\n%s", want, output)
+		}
+	}
+	for _, forbidden := range []string{"P L A N   D I S P A T C H", "Planning Wave 1 starting", "aether build 1"} {
+		if strings.Contains(output, forbidden) {
+			t.Errorf("unselected preset crossed the planning authority boundary via %q\n%s", forbidden, output)
 		}
 	}
 }
@@ -681,8 +686,11 @@ func TestPlanVisualOutputShowsSpawnTreeContract(t *testing.T) {
 	}
 
 	output := stdout.(*bytes.Buffer).String()
-	if !strings.Contains(output, ".aether/data/spawn-tree.txt") {
-		t.Errorf("plan visual output missing spawn tree contract\n%s", output)
+	if strings.Contains(output, ".aether/data/spawn-tree.txt") {
+		t.Errorf("preset selection prompt claimed a spawn tree before dispatch\n%s", output)
+	}
+	if _, err := os.Stat(filepath.Join(dataDir, "spawn-tree.txt")); !os.IsNotExist(err) {
+		t.Errorf("preset selection prompt wrote a spawn tree before dispatch: %v", err)
 	}
 }
 
@@ -720,16 +728,20 @@ func TestPlanVisualOutputShowsDispatchContractDetails(t *testing.T) {
 
 	output := stdout.(*bytes.Buffer).String()
 	for _, want := range []string{
-		"Contract",
-		"2 staged workers, scout then route-setter",
-		effectivePlanningDispatchTimeout(0).String() + " worker max",
-		"route-setter only runs after a completed scout stage",
-		"authenticated platform dispatcher",
-		"dispatch_mode, planning_warning, synthetic, synthetic_warning, artifact_source, plan_source",
+		"Planning contract: SPEC Unreported [APPROVED]",
+		"Choose Planning Preset",
+		"Fast       Target 80  Up to 4 passes",
+		"Balanced   Target 90  Up to 6 passes",
+		"Deep       Target 95  Up to 8 passes",
+		"Exhaustive Target 99  Up to 12 passes",
+		"Planning did not start. State: unchanged.",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("plan visual output missing %q\n%s", want, output)
 		}
+	}
+	if strings.Contains(output, "2 staged workers") || strings.Contains(output, "authenticated platform dispatcher") {
+		t.Errorf("preset selection prompt exposed a dispatch contract before owner selection\n%s", output)
 	}
 }
 

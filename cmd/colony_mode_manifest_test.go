@@ -27,9 +27,11 @@ func TestPlanOnlyEmitsExplicitOrchestratorColonyMode(t *testing.T) {
 		ColonyMode: colony.ColonyModeOrchestrator,
 		Plan:       colony.Plan{Phases: []colony.Phase{}},
 	}
+	state = codexPlanSpecificationFixture(t, state, colony.SpecStatusApproved)
 	createTestColonyState(t, dataDir, state)
+	writeCodexPlanSpecificationProjection(t, root, state)
 
-	result, err := runCodexPlanWithOptions(root, codexPlanOptions{PlanOnly: true})
+	result, err := runCodexPlanWithOptions(root, codexPlanOptions{PlanOnly: true, Preset: "balanced", PresetSet: true})
 	if err != nil {
 		t.Fatalf("runCodexPlanWithOptions: %v", err)
 	}
@@ -43,7 +45,9 @@ func TestPlanOnlyEmitsExplicitOrchestratorColonyMode(t *testing.T) {
 	if manifest.ColonyMode != string(colony.ColonyModeOrchestrator) {
 		t.Fatalf("manifest colony_mode = %q, want orchestrator", manifest.ColonyMode)
 	}
-	assertPlanOnlyGuidanceActive(t, result, manifest.OrchestratorGuidance, "plan", "aether plan")
+	if manifest.StageManifest == nil || manifest.StageManifest.ExpectedCaste != planningStageCasteScout || len(manifest.Dispatches) != 1 {
+		t.Fatalf("orchestrator plan manifest did not preserve the staged Scout boundary: %+v", manifest)
+	}
 }
 
 func TestBuildPlanOnlyEmitsExplicitOrchestratorColonyMode(t *testing.T) {

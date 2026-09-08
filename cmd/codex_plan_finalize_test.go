@@ -923,9 +923,21 @@ func TestPlanFinalizePendingIterationDoesNotWriteFinalPlanAndDrivesNextManifest(
 
 	goal := "Iterate planning until confidence target"
 	root, survey, dispatches := setupPlanFinalizeFailureFixture(t, goal)
+	var colonyState colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &colonyState); err != nil {
+		t.Fatal(err)
+	}
+	colonyState = codexPlanSpecificationFixture(t, colonyState, colony.SpecStatusApproved)
+	if err := store.SaveJSON("COLONY_STATE.json", colonyState); err != nil {
+		t.Fatal(err)
+	}
+	writeCodexPlanSpecificationProjection(t, root, colonyState)
 	manifest := testPlanManifest(root, goal, time.Now().UTC(), survey, dispatches)
 	manifest.TargetConfidence = 99
+	manifest.MaxIterations = 12
+	manifest.Depth = "exhaustive"
 	manifest.PlanningLoop.TargetConfidence = 99
+	manifest.PlanningLoop.MaxIterations = 12
 	results := testCompletedPlanningResults(dispatches)
 	for i := range results {
 		if results[i].Caste == "route_setter" {
@@ -949,11 +961,10 @@ func TestPlanFinalizePendingIterationDoesNotWriteFinalPlanAndDrivesNextManifest(
 	}
 
 	next, err := runCodexPlanWithOptions(root, codexPlanOptions{
-		PlanOnly:         true,
-		Depth:            "fast",
-		PlanningDepth:    "standard",
-		TargetConfidence: 99,
-		MaxIterations:    manifest.MaxIterations,
+		PlanOnly:      true,
+		Preset:        "exhaustive",
+		PresetSet:     true,
+		PlanningDepth: "standard",
 	})
 	if err != nil {
 		t.Fatalf("next plan-only manifest: %v", err)
@@ -971,111 +982,27 @@ func TestPlanFinalizePendingIterationDoesNotWriteFinalPlanAndDrivesNextManifest(
 	if nextManifest.PreviousPlanDraft == nil || len(nextManifest.PreviousPlanDraft.Phases) == 0 {
 		t.Fatalf("expected previous_plan_draft in next manifest: %+v", nextManifest.PreviousPlanDraft)
 	}
-	if len(nextManifest.Dispatches) != 2 || !strings.Contains(nextManifest.Dispatches[0].Brief, "Route-Setter needs API boundary evidence") {
-		t.Fatalf("next manifest briefs did not carry selected gap context: %+v", nextManifest.Dispatches)
+	if len(nextManifest.Dispatches) != 1 || nextManifest.Dispatches[0].Caste != string(planningStageCasteScout) || !strings.Contains(nextManifest.Dispatches[0].Brief, "Route-Setter needs API boundary evidence") {
+		t.Fatalf("next manifest did not authorize exactly one Scout with the selected gap context: %+v", nextManifest.Dispatches)
 	}
 }
 
 func TestPlanFinalizeStallsOnlyAfterTwoLowImprovements(t *testing.T) {
-	saveGlobals(t)
-
-	goal := "Stall only after repeated low planning improvement"
-	root, survey, dispatches := setupPlanFinalizeFailureFixture(t, goal)
-	manifest := testPlanManifest(root, goal, time.Now().UTC(), survey, dispatches)
-	manifest.TargetConfidence = 99
-	manifest.PlanningLoop.TargetConfidence = 99
-	results := testCompletedPlanningResults(dispatches)
-	for i := range results {
-		if results[i].Caste == "route_setter" {
-			results[i].PhasePlan = testWorkerPlanArtifactWithConfidence(84, []string{"Need second evidence pass"})
-		}
-	}
-
-	first, err := runCodexPlanFinalize(root, codexExternalPlanCompletion{
-		PlanManifest: manifest,
-		Dispatches:   results,
-	})
+	history := planningConfidenceStopHistoryFixture([]int{60, 60}, []string{"same-gap", "same-gap"})
+	first, err := evaluatePlanningStopPolicy(planningStopPolicyInput{Target: 90, PassCap: 12, History: history})
 	if err != nil {
-		t.Fatalf("first pending finalize: %v", err)
+		t.Fatal(err)
 	}
-	if first["planned"] != false || first["requires_next_iteration"] != true {
-		t.Fatalf("first low-confidence iteration should remain pending, got %+v", first)
+	if first.Decision.Reason != colony.PlanningStopContinue {
+		t.Fatalf("one repeated unimproved gap stopped planning: %+v", first)
 	}
-
-	secondManifestResult, err := runCodexPlanWithOptions(root, codexPlanOptions{
-		PlanOnly:         true,
-		Depth:            "fast",
-		PlanningDepth:    "standard",
-		TargetConfidence: 99,
-		MaxIterations:    manifest.MaxIterations,
-	})
+	history = planningConfidenceStopHistoryFixture([]int{60, 60, 60}, []string{"same-gap", "same-gap", "same-gap"})
+	second, err := evaluatePlanningStopPolicy(planningStopPolicyInput{Target: 90, PassCap: 12, History: history})
 	if err != nil {
-		t.Fatalf("second manifest: %v", err)
+		t.Fatal(err)
 	}
-	secondManifest := secondManifestResult["plan_manifest"].(codexPlanManifest)
-	if secondManifest.Iteration != 2 {
-		t.Fatalf("second iteration = %d, want 2", secondManifest.Iteration)
-	}
-	if len(secondManifest.PlanningLoop.History) != 1 {
-		t.Fatalf("second manifest history length = %d, want 1", len(secondManifest.PlanningLoop.History))
-	}
-	secondResults := testCompletedPlanningResults(secondManifest.Dispatches)
-	for i := range secondResults {
-		if secondResults[i].Caste == "route_setter" {
-			secondResults[i].PhasePlan = testWorkerPlanArtifactWithConfidence(86, []string{"Need third evidence pass"})
-		}
-	}
-	second, err := runCodexPlanFinalize(root, codexExternalPlanCompletion{
-		PlanManifest: &secondManifest,
-		Dispatches:   secondResults,
-	})
-	if err != nil {
-		t.Fatalf("second pending finalize: %v", err)
-	}
-	if second["planned"] != false || second["requires_next_iteration"] != true {
-		t.Fatalf("second low-improvement iteration should still be pending, got %+v", second)
-	}
-	secondLoop := second["planning_loop"].(codexPlanningLoop)
-	if len(secondLoop.History) != 2 || secondLoop.History[1].StallCount != 1 {
-		t.Fatalf("second loop history = %+v, want one consecutive stall", secondLoop.History)
-	}
-
-	thirdManifestResult, err := runCodexPlanWithOptions(root, codexPlanOptions{
-		PlanOnly:         true,
-		Depth:            "fast",
-		PlanningDepth:    "standard",
-		TargetConfidence: 99,
-		MaxIterations:    manifest.MaxIterations,
-	})
-	if err != nil {
-		t.Fatalf("third manifest: %v", err)
-	}
-	thirdManifest := thirdManifestResult["plan_manifest"].(codexPlanManifest)
-	if thirdManifest.Iteration != 3 {
-		t.Fatalf("third iteration = %d, want 3", thirdManifest.Iteration)
-	}
-	if len(thirdManifest.PlanningLoop.History) != 2 {
-		t.Fatalf("third manifest history length = %d, want 2", len(thirdManifest.PlanningLoop.History))
-	}
-	thirdResults := testCompletedPlanningResults(thirdManifest.Dispatches)
-	for i := range thirdResults {
-		if thirdResults[i].Caste == "route_setter" {
-			thirdResults[i].PhasePlan = testWorkerPlanArtifactWithConfidence(88, []string{"Need final implementation evidence"})
-		}
-	}
-	third, err := runCodexPlanFinalize(root, codexExternalPlanCompletion{
-		PlanManifest: &thirdManifest,
-		Dispatches:   thirdResults,
-	})
-	if err != nil {
-		t.Fatalf("third finalize: %v", err)
-	}
-	if third["planned"] != true {
-		t.Fatalf("third low-improvement iteration should finalize as stalled, got %+v", third)
-	}
-	thirdLoop := third["planning_loop"].(codexPlanningLoop)
-	if thirdLoop.StopReason != planningLoopStalled {
-		t.Fatalf("third stop reason = %q, want stalled", thirdLoop.StopReason)
+	if second.Decision.Reason != colony.PlanningStopStalledGap || second.Trigger != colony.PlanningStopStalledGap {
+		t.Fatalf("two repeated unimproved gaps did not produce the typed stall stop: %+v", second)
 	}
 }
 
@@ -1149,14 +1076,16 @@ func TestPlanOnlyDoesNotPersistVerificationDepth(t *testing.T) {
 	}
 
 	goal := "Plan without mutating verification settings"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	state := codexPlanSpecificationFixture(t, colony.ColonyState{
 		Version: "3.0",
 		Goal:    &goal,
 		State:   colony.StateREADY,
 		Plan:    colony.Plan{Phases: []colony.Phase{}},
-	})
+	}, colony.SpecStatusApproved)
+	createTestColonyState(t, dataDir, state)
+	writeCodexPlanSpecificationProjection(t, root, state)
 
-	result, err := runCodexPlanWithOptions(root, codexPlanOptions{PlanOnly: true, VerificationDepth: "heavy"})
+	result, err := runCodexPlanWithOptions(root, codexPlanOptions{PlanOnly: true, Preset: "balanced", PresetSet: true, VerificationDepth: "heavy"})
 	if err != nil {
 		t.Fatalf("runCodexPlanWithOptions: %v", err)
 	}
@@ -1164,12 +1093,12 @@ func TestPlanOnlyDoesNotPersistVerificationDepth(t *testing.T) {
 		t.Fatalf("verification_depth result = %v, want heavy", got)
 	}
 
-	var state colony.ColonyState
-	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+	var persisted colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &persisted); err != nil {
 		t.Fatalf("load state: %v", err)
 	}
-	if state.VerificationDepth != "" {
-		t.Fatalf("plan-only persisted verification_depth = %q, want empty", state.VerificationDepth)
+	if persisted.VerificationDepth != "" {
+		t.Fatalf("plan-only persisted verification_depth = %q, want empty", persisted.VerificationDepth)
 	}
 }
 

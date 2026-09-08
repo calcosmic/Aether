@@ -434,14 +434,17 @@ func TestE2ERegressionStuckPlanInvestigation(t *testing.T) {
 		if !ok {
 			t.Fatalf("plan result.result is not a map: %T", envelope["result"])
 		}
-		if inner["planned"] != true {
-			t.Fatalf("plan result.planned != true: %v", inner["planned"])
+		if inner["planned"] != false || inner["preset_required"] != true {
+			t.Fatalf("unselected planning preset did not stop without dispatch: %+v", inner)
 		}
-		count, ok := inner["count"].(float64)
-		if !ok || count < 1 {
-			t.Fatalf("plan result.count < 1: %v", inner["count"])
+		if inner["state_effect"] != "unchanged" || inner["dispatch_count"] != float64(0) {
+			t.Fatalf("preset boundary changed state or dispatched work: %+v", inner)
 		}
-		t.Logf("plan succeeded: %d phases generated, dispatch_mode=%v", int(count), inner["dispatch_mode"])
+		next, _ := inner["next"].(string)
+		if !strings.Contains(next, "aether plan --preset <name>") {
+			t.Fatalf("preset boundary lacks exact recovery: %+v", inner)
+		}
+		t.Log("plan returned the unbiased preset boundary without hanging")
 	case <-time.After(60 * time.Second):
 		t.Fatal("aether plan hung -- stuck-plan bug reproduced")
 	}

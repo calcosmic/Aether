@@ -186,15 +186,7 @@ func compareGolden(t *testing.T, goldenPath, got string) {
 }
 
 func TestGoldenPlanVisualOutput(t *testing.T) {
-	saveGlobals(t)
-	resetRootCmd(t)
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
-
 	goldenPath := filepath.Join(goldenTestdataDir(), "golden_plan.txt")
-
-	withTestWorkspace(t, root)
-	withWorkingDir(t, root)
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	// Pin the platform: command naming in visual output is platform-specific,
 	// so an unpinned golden records whatever host the suite happened to run on.
@@ -203,28 +195,24 @@ func TestGoldenPlanVisualOutput(t *testing.T) {
 	t.Setenv("AETHER_PLATFORM", "claude")
 
 	goal := "Golden workflow test colony"
-	createTestColonyState(t, dataDir, colony.ColonyState{
-		Version: "3.0",
-		Goal:    &goal,
-		State:   colony.StateREADY,
-		Plan:    colony.Plan{Phases: []colony.Phase{}},
-	})
-
-	stdout = &bytes.Buffer{}
-	rootCmd.SetArgs([]string{"plan"})
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("plan returned error: %v", err)
+	selection, err := resolvePlanningPreset(codexPlanOptions{})
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	output := stdout.(*bytes.Buffer).String()
+	output := renderPlanVisual(planningPresetRequiredResult(colony.ColonyState{Goal: &goal}, selection))
 	compareGolden(t, goldenPath, output)
 
 	// Verify golden content expectations (only when not updating)
 	if !*updateGolden {
 		clean := normalizeForGolden(output)
-		for _, want := range []string{"P L A N", "P L A N   D I S P A T C H", "Planning Wave", "Choice: Run `/ant-build 1`", "Choice: Run `/ant-run`"} {
+		for _, want := range []string{"P L A N", "Choose Planning Preset", "Fast", "Balanced", "Deep", "Exhaustive", "Planning did not start. State: unchanged."} {
 			if !strings.Contains(clean, want) {
 				t.Errorf("plan golden output missing %q", want)
+			}
+		}
+		for _, forbidden := range []string{"P L A N   D I S P A T C H", "Planning Wave", "Choice: Run `/ant-build 1`"} {
+			if strings.Contains(clean, forbidden) {
+				t.Errorf("unselected preset golden crossed the planning boundary via %q", forbidden)
 			}
 		}
 	}

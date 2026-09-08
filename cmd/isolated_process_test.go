@@ -352,6 +352,9 @@ func isolatedProcessSourceVersion() ([]byte, error) {
 }
 
 func TestIsolatedProcessHelperReportsChildStatus(t *testing.T) {
+	if deadline, ok := t.Deadline(); ok && time.Until(deadline) < 30*time.Second {
+		t.Skipf("less than 30s remains in the parent package budget; launching nested test binaries would violate the required exit cushion")
+	}
 	output, err := runIsolatedTestBinary(t, isolatedProcessSuccessProbeName)
 	if err != nil {
 		t.Fatalf("success probe returned an error: %v\n%s", err, output)

@@ -284,11 +284,13 @@ func TestPlanEmitsLifecycleCeremonyEvents(t *testing.T) {
 		State:        colony.StateREADY,
 		CurrentPhase: 0,
 	}
+	state = codexPlanSpecificationFixture(t, state, colony.SpecStatusApproved)
 	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
 		t.Fatalf("save state: %v", err)
 	}
+	writeCodexPlanSpecificationProjection(t, root, state)
 
-	if _, err := runCodexPlanWithOptions(root, codexPlanOptions{Synthetic: true}); err != nil {
+	if _, err := runCodexPlanWithOptions(root, codexPlanOptions{Synthetic: true, Preset: "balanced", PresetSet: true}); err != nil {
 		t.Fatalf("plan returned error: %v", err)
 	}
 

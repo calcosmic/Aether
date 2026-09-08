@@ -106,6 +106,86 @@
         "approval"
       ]
     },
+    "PlanningEvidenceRef": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "content_hash": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "origin": {
+          "type": "string"
+        },
+        "repository_path": {
+          "type": "string"
+        },
+        "goal_id": {
+          "type": "string"
+        },
+        "session_id": {
+          "type": "string"
+        },
+        "specification_revision_id": {
+          "type": "string"
+        },
+        "plan_revision_id": {
+          "type": "string"
+        },
+        "source_revision": {
+          "type": "string"
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "excerpt_digest": {
+          "type": "string"
+        },
+        "applicable_dimensions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "fresh": {
+          "type": "boolean"
+        },
+        "admissible": {
+          "type": "boolean"
+        },
+        "admissibility_reason": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "id",
+        "content_hash",
+        "kind",
+        "origin",
+        "repository_path",
+        "goal_id",
+        "session_id",
+        "specification_revision_id",
+        "plan_revision_id",
+        "source_revision",
+        "observed_at",
+        "excerpt_digest",
+        "applicable_dimensions",
+        "fresh",
+        "admissible",
+        "admissibility_reason"
+      ]
+    },
     "TaskReceipt": {
       "properties": {
         "task_id": {
@@ -485,6 +565,9 @@
         "generated_at": {
           "type": "string"
         },
+        "plan_authority": {
+          "$ref": "#/$defs/planAuthorityDecision"
+        },
         "plan_revision_id": {
           "type": "string"
         },
@@ -623,6 +706,7 @@
         "root",
         "colony_depth",
         "generated_at",
+        "plan_authority",
         "state",
         "checkpoint",
         "claims_path",
@@ -1067,10 +1151,19 @@
         "id": {
           "type": "string"
         },
+        "stable_id": {
+          "type": "string"
+        },
         "category": {
           "type": "string"
         },
+        "domain": {
+          "type": "string"
+        },
         "question": {
+          "type": "string"
+        },
+        "decision": {
           "type": "string"
         },
         "options": {
@@ -1080,6 +1173,42 @@
           "type": "array"
         },
         "reasoning": {
+          "type": "string"
+        },
+        "why_now": {
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/PlanningEvidenceRef"
+          },
+          "type": "array"
+        },
+        "queen_recommendation": {
+          "type": "string"
+        },
+        "choices": {
+          "items": {
+            "$ref": "#/$defs/planningDecisionChoice"
+          },
+          "type": "array"
+        },
+        "affected_semantic_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "prior_answer": {
+          "type": "string"
+        },
+        "revalidation": {
+          "type": "string"
+        },
+        "planning_resumes": {
+          "type": "string"
+        },
+        "exact_answer_syntax": {
           "type": "string"
         },
         "hard_constraint": {
@@ -1181,6 +1310,114 @@
         "source",
         "question"
       ]
+    },
+    "planAuthorityBinding": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "hash": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "planAuthorityDecision": {
+      "properties": {
+        "eligible": {
+          "type": "boolean"
+        },
+        "classification": {
+          "type": "string"
+        },
+        "active_revision": {
+          "$ref": "#/$defs/planAuthorityBinding"
+        },
+        "specification": {
+          "$ref": "#/$defs/planAuthorityBinding"
+        },
+        "candidate": {
+          "$ref": "#/$defs/planAuthorityBinding"
+        },
+        "timeline": {
+          "$ref": "#/$defs/planAuthorityBinding"
+        },
+        "acceptance": {
+          "$ref": "#/$defs/planAuthorityBinding"
+        },
+        "refusal_code": {
+          "type": "string"
+        },
+        "affected_semantic_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "recovery_command": {
+          "type": "string"
+        },
+        "diagnostic": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "eligible"
+      ]
+    },
+    "planningDecisionChoice": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "consequence": {
+          "type": "string"
+        },
+        "impact": {
+          "$ref": "#/$defs/planningDecisionContractImpact"
+        },
+        "affected_semantic_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "id",
+        "label",
+        "consequence",
+        "impact"
+      ]
+    },
+    "planningDecisionContractImpact": {
+      "properties": {
+        "behavior": {
+          "type": "string"
+        },
+        "authority": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "risk": {
+          "type": "string"
+        },
+        "acceptance": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
     },
     "stringList": {
       "oneOf": [
