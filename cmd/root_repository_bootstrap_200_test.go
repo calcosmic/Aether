@@ -202,8 +202,9 @@ func TestRepositoryBootstrapContainment200(t *testing.T) {
 		before := snapshotRepositoryTree200(t, fixture.base)
 		result := runRepositoryBootstrapProcess200(t, fixture, fixture.repo,
 			filepath.Join(fixture.repo, ".aether", "data"), nil, "status")
-		if result.exitCode != 0 {
-			t.Fatalf("read-only status failed with %d:\n%s", result.exitCode, result.output)
+		if strings.Contains(result.output, repositoryContainmentMessage) ||
+			!strings.Contains(result.output, "No colony initialized") {
+			t.Fatalf("read-only status did not reach the expected no-colony result (exit %d):\n%s", result.exitCode, result.output)
 		}
 		if after := snapshotRepositoryTree200(t, fixture.base); after != before {
 			t.Fatalf("first read-only status created filesystem state\nbefore:\n%s\nafter:\n%s", before, after)
@@ -240,6 +241,7 @@ type repositoryBootstrapFixture200 struct {
 	repo    string
 	outside string
 	home    string
+	temp    string
 }
 
 func newRepositoryBootstrapFixture200(t *testing.T) *repositoryBootstrapFixture200 {
@@ -250,14 +252,12 @@ func newRepositoryBootstrapFixture200(t *testing.T) *repositoryBootstrapFixture2
 		repo:    filepath.Join(base, "repo"),
 		outside: filepath.Join(base, "outside"),
 		home:    filepath.Join(base, "home"),
+		temp:    t.TempDir(),
 	}
 	for _, dir := range []string{fixture.repo, fixture.outside, fixture.home} {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			t.Fatalf("create fixture directory %s: %v", dir, err)
 		}
-	}
-	if err := os.MkdirAll(filepath.Join(base, "tmp"), 0700); err != nil {
-		t.Fatalf("create fixture temp directory: %v", err)
 	}
 	return fixture
 }
@@ -309,7 +309,7 @@ func startRepositoryBootstrapProcess200(t *testing.T, fixture *repositoryBootstr
 		"COLONY_DATA_DIR":             dataRoot,
 		"HOME":                        fixture.home,
 		"NO_COLOR":                    "1",
-		"TMPDIR":                      filepath.Join(fixture.base, "tmp"),
+		"TMPDIR":                      fixture.temp,
 		"USERPROFILE":                 fixture.home,
 		repositoryBootstrapHelperEnv:  "1",
 		repositoryBootstrapArgsEnv:    string(encodedArgs),

@@ -8,18 +8,275 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
+
+const repositoryContainmentError = "storage: repository containment refused"
+
+// RepositoryRoot is an open, physically resolved repository authority. The
+// repository directory handle remains open for the lifetime of the Store so
+// every repository-scoped path can be reopened relative to that trusted root
+// without following a replaced intermediate component.
+type RepositoryRoot struct {
+	physicalRoot   string
+	dataPath       string
+	dataComponents []string
+	lockComponents []string
+	rootDir        *os.File
+	mu             sync.RWMutex
+}
+
+// OpenRepositoryRoot validates a repository-scoped data path without creating
+// anything. Existing path components are opened one at a time with no-follow
+// semantics; missing components are allowed so a later mutating command can
+// create them relative to the verified repository handle.
+func OpenRepositoryRoot(repositoryRoot, dataPath string) (*RepositoryRoot, error) {
+	rootInput := strings.TrimSpace(repositoryRoot)
+	dataInput := strings.TrimSpace(dataPath)
+	if rootInput == "" {
+		return nil, repositoryContainmentRefusal("repository root path must not be empty", nil)
+	}
+	if dataInput == "" {
+		return nil, repositoryContainmentRefusal("data root path must not be empty", nil)
+	}
+	if hasDegeneratePathComponent(dataPath) {
+		return nil, repositoryContainmentRefusal(fmt.Sprintf("data root %q contains a dot or dot-dot component", dataPath), nil)
+	}
+
+	rootAbs, err := filepath.Abs(rootInput)
+	if err != nil {
+		return nil, repositoryContainmentRefusal(fmt.Sprintf("resolve repository root %q", repositoryRoot), err)
+	}
+	rootAbs = filepath.Clean(rootAbs)
+	rootPhysical, err := filepath.EvalSymlinks(rootAbs)
+	if err != nil {
+		return nil, repositoryContainmentRefusal(fmt.Sprintf("resolve physical repository root %q", rootAbs), err)
+	}
+	rootPhysical, err = filepath.Abs(rootPhysical)
+	if err != nil {
+		return nil, repositoryContainmentRefusal(fmt.Sprintf("normalize physical repository root %q", rootPhysical), err)
+	}
+	rootInfo, err := os.Lstat(rootPhysical)
+	if err != nil {
+		return nil, repositoryContainmentRefusal(fmt.Sprintf("inspect physical repository root %q", rootPhysical), err)
+	}
+	if !rootInfo.IsDir() || rootInfo.Mode()&os.ModeSymlink != 0 {
+		return nil, repositoryContainmentRefusal(fmt.Sprintf("physical repository root %q is not a real directory", rootPhysical), nil)
+	}
+
+	dataAbs, err := filepath.Abs(dataInput)
+	if err != nil {
+		return nil, repositoryContainmentRefusal(fmt.Sprintf("resolve data root %q", dataPath), err)
+	}
+	dataAbs = filepath.Clean(dataAbs)
+	dataRel, err := filepath.Rel(rootAbs, dataAbs)
+	if err != nil {
+		return nil, repositoryContainmentRefusal(fmt.Sprintf("compare data root %q with repository %q", dataAbs, rootAbs), err)
+	}
+	dataComponents, err := containedPathComponents(dataRel)
+	if err != nil {
+		// macOS commonly exposes the same temporary directory as both /var and
+		// /private/var. Accept the candidate's already-physical spelling only
+		// when it is component-contained by the canonical repository itself.
+		// We do not EvalSymlinks on the candidate, so links below the repository
+		// remain visible to (and rejected by) the no-follow component walk.
+		physicalRel, physicalRelErr := filepath.Rel(rootPhysical, dataAbs)
+		if physicalRelErr != nil {
+			return nil, repositoryContainmentRefusal(fmt.Sprintf("data root %q is outside repository %q", dataAbs, rootAbs), err)
+		}
+		dataComponents, physicalRelErr = containedPathComponents(physicalRel)
+		if physicalRelErr != nil {
+			return nil, repositoryContainmentRefusal(fmt.Sprintf("data root %q is outside repository %q", dataAbs, rootAbs), err)
+		}
+		dataRel = physicalRel
+	}
+	lockRel := filepath.Join(filepath.Dir(dataRel), "locks")
+	lockComponents, err := containedPathComponents(lockRel)
+	if err != nil {
+		return nil, repositoryContainmentRefusal(fmt.Sprintf("locks root derived from %q is outside repository %q", dataAbs, rootAbs), err)
+	}
+
+	rootDir, err := platformOpenDirectory(rootPhysical)
+	if err != nil {
+		return nil, repositoryContainmentRefusal(fmt.Sprintf("open physical repository root %q", rootPhysical), err)
+	}
+	authority := &RepositoryRoot{
+		physicalRoot: rootPhysical,
+		// Preserve the caller-visible absolute spelling for BasePath compatibility
+		// (macOS commonly spells /private/var as /var). Repository I/O never uses
+		// this string as authority; it stays anchored to rootDir below.
+		dataPath:       dataAbs,
+		dataComponents: dataComponents,
+		lockComponents: lockComponents,
+		rootDir:        rootDir,
+	}
+	if err := authority.revalidate(); err != nil {
+		_ = authority.Close()
+		return nil, err
+	}
+	return authority, nil
+}
+
+// Close releases the repository directory authority. Stores intentionally keep
+// it open for their process lifetime; read-only probes close it when no colony
+// exists and no Store is constructed.
+func (r *RepositoryRoot) Close() error {
+	if r == nil {
+		return nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.rootDir == nil {
+		return nil
+	}
+	err := r.rootDir.Close()
+	r.rootDir = nil
+	return err
+}
+
+// DataFileExists checks a repository data file without creating the data path,
+// locks directory, or lock file. It is the bootstrap probe used by the first
+// read-only status invocation.
+func (r *RepositoryRoot) DataFileExists(path string) (bool, error) {
+	components, err := containedPathComponents(path)
+	if err != nil {
+		return false, repositoryContainmentRefusal(fmt.Sprintf("invalid data file path %q", path), err)
+	}
+	parentComponents := appendPathComponents(r.dataComponents, components[:len(components)-1]...)
+	parent, err := r.openDirectoryChain(parentComponents, false)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	}
+	defer parent.Close()
+	file, err := platformOpenRegularFileAt(parent, components[len(components)-1], os.O_RDONLY, 0)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		return false, repositoryContainmentRefusal(fmt.Sprintf("open data file %q", path), err)
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return false, repositoryContainmentRefusal(fmt.Sprintf("inspect data file %q", path), err)
+	}
+	if !info.Mode().IsRegular() {
+		return false, repositoryContainmentRefusal(fmt.Sprintf("data file %q is not a regular file", path), nil)
+	}
+	return true, nil
+}
+
+func (r *RepositoryRoot) revalidate() error {
+	for _, components := range [][]string{r.dataComponents, r.lockComponents} {
+		dir, err := r.openDirectoryChain(components, false)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			return err
+		}
+		if err := dir.Close(); err != nil {
+			return repositoryContainmentRefusal("close validated repository component", err)
+		}
+	}
+	return nil
+}
+
+func (r *RepositoryRoot) openDirectoryChain(components []string, create bool) (*os.File, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.rootDir == nil {
+		return nil, repositoryContainmentRefusal("repository authority is closed", nil)
+	}
+	if len(components) == 0 {
+		return nil, repositoryContainmentRefusal("repository-relative directory path must not be empty", nil)
+	}
+	parent := r.rootDir
+	var owned *os.File
+	for _, component := range components {
+		next, err := platformOpenDirectoryAt(parent, component, create)
+		if owned != nil {
+			_ = owned.Close()
+			owned = nil
+		}
+		if err != nil {
+			return nil, repositoryContainmentRefusal(fmt.Sprintf("open repository component %q", component), err)
+		}
+		owned = next
+		parent = next
+	}
+	return owned, nil
+}
+
+func repositoryContainmentRefusal(message string, cause error) error {
+	if cause == nil {
+		return fmt.Errorf("%s: %s", repositoryContainmentError, message)
+	}
+	return fmt.Errorf("%s: %s: %w", repositoryContainmentError, message, cause)
+}
+
+func containedPathComponents(path string) ([]string, error) {
+	if strings.TrimSpace(path) == "" || filepath.IsAbs(path) || filepath.VolumeName(path) != "" {
+		return nil, fmt.Errorf("path must be a non-empty relative path")
+	}
+	clean := filepath.Clean(path)
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return nil, fmt.Errorf("path escapes its root")
+	}
+	components := strings.FieldsFunc(clean, func(r rune) bool {
+		return r == '/' || r == '\\'
+	})
+	if len(components) == 0 {
+		return nil, fmt.Errorf("path has no components")
+	}
+	for _, component := range components {
+		if component == "" || component == "." || component == ".." {
+			return nil, fmt.Errorf("path contains a degenerate component")
+		}
+	}
+	return components, nil
+}
+
+func appendPathComponents(base []string, suffix ...string) []string {
+	joined := make([]string, 0, len(base)+len(suffix))
+	joined = append(joined, base...)
+	joined = append(joined, suffix...)
+	return joined
+}
+
+func hasDegeneratePathComponent(path string) bool {
+	trimmed := strings.TrimSpace(path)
+	if trimmed == "" || trimmed == "." || trimmed == ".." {
+		return true
+	}
+	volume := filepath.VolumeName(trimmed)
+	trimmed = strings.TrimPrefix(trimmed, volume)
+	for _, component := range strings.FieldsFunc(trimmed, func(r rune) bool {
+		return r == '/' || r == '\\'
+	}) {
+		if component == "." || component == ".." {
+			return true
+		}
+	}
+	return false
+}
 
 // Store provides thread-safe atomic file operations within a base directory.
 // All file paths are resolved relative to basePath unless they are absolute.
 // File operations are coordinated via FileLocker for cross-process safety.
 type Store struct {
-	basePath string
-	locker   *FileLocker
+	basePath   string
+	locker     *FileLocker
+	repository *RepositoryRoot
 }
 
 // NewStore creates a new Store rooted at basePath.
@@ -35,6 +292,35 @@ func NewStore(basePath string) (*Store, error) {
 		return nil, fmt.Errorf("storage: create file locker: %w", err)
 	}
 	return &Store{basePath: basePath, locker: locker}, nil
+}
+
+// NewRepositoryStore creates a Store exclusively through an already-open
+// repository authority. Validation is repeated before any directory creation
+// so a component replaced after bootstrap validation is refused rather than
+// followed. The authority remains attached to the Store for all later I/O.
+func NewRepositoryStore(root *RepositoryRoot) (*Store, error) {
+	if root == nil {
+		return nil, repositoryContainmentRefusal("repository authority is required", nil)
+	}
+	if err := root.revalidate(); err != nil {
+		return nil, err
+	}
+	dataDir, err := root.openDirectoryChain(root.dataComponents, true)
+	if err != nil {
+		return nil, err
+	}
+	if err := dataDir.Close(); err != nil {
+		return nil, repositoryContainmentRefusal("close verified data directory", err)
+	}
+	locksDir, err := root.openDirectoryChain(root.lockComponents, true)
+	if err != nil {
+		return nil, err
+	}
+	if err := locksDir.Close(); err != nil {
+		return nil, repositoryContainmentRefusal("close verified locks directory", err)
+	}
+	locker := newRepositoryFileLocker(root, root.lockComponents)
+	return &Store{basePath: root.dataPath, locker: locker, repository: root}, nil
 }
 
 // BasePath returns the store's root directory.
@@ -63,10 +349,9 @@ func (s *Store) UpdateFile(path string, mutate func(existing []byte) ([]byte, er
 	}
 	defer s.locker.Unlock(path)
 
-	fullPath := s.resolvePath(path)
-	existing, err := os.ReadFile(fullPath)
+	existing, err := s.readFileUnlocked(path)
 	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("storage: read %q: %w", fullPath, err)
+		return fmt.Errorf("storage: read %q: %w", s.resolvePath(path), err)
 	}
 
 	updated, err := mutate(existing)
@@ -77,6 +362,9 @@ func (s *Store) UpdateFile(path string, mutate func(existing []byte) ([]byte, er
 }
 
 func (s *Store) atomicWriteLocked(path string, data []byte) error {
+	if s.repository != nil {
+		return s.atomicWriteRepository(path, data)
+	}
 
 	fullPath := s.resolvePath(path)
 	dir := filepath.Dir(fullPath)
@@ -112,6 +400,52 @@ func (s *Store) atomicWriteLocked(path string, data []byte) error {
 	}
 
 	success = true
+	return nil
+}
+
+func (s *Store) atomicWriteRepository(path string, data []byte) error {
+	parent, name, relative, err := s.repositoryFileParent(path, true)
+	if err != nil {
+		return err
+	}
+	defer parent.Close()
+	if strings.HasSuffix(strings.ToLower(relative), ".json") && !json.Valid(data) {
+		return fmt.Errorf("storage: invalid JSON for %q", s.resolvePath(path))
+	}
+	if target, openErr := platformOpenRegularFileAt(parent, name, os.O_RDONLY, 0); openErr == nil {
+		if closeErr := target.Close(); closeErr != nil {
+			return fmt.Errorf("storage: close existing target %q: %w", s.resolvePath(path), closeErr)
+		}
+	} else if !errors.Is(openErr, os.ErrNotExist) {
+		return repositoryContainmentRefusal(fmt.Sprintf("refuse non-regular or linked target %q", relative), openErr)
+	}
+
+	rnd := make([]byte, 8)
+	if _, err := rand.Read(rnd); err != nil {
+		return fmt.Errorf("storage: generate temporary name for %q: %w", s.resolvePath(path), err)
+	}
+	tmpName := fmt.Sprintf(".%s.tmp.%d-%s", name, os.Getpid(), hex.EncodeToString(rnd))
+	tmp, err := platformOpenRegularFileAt(parent, tmpName, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+	if err != nil {
+		return fmt.Errorf("storage: create repository temp for %q: %w", s.resolvePath(path), err)
+	}
+	keepTemp := true
+	defer func() {
+		_ = tmp.Close()
+		if keepTemp {
+			_ = platformUnlinkAt(parent, tmpName)
+		}
+	}()
+	if _, err := tmp.Write(data); err != nil {
+		return fmt.Errorf("storage: write repository temp for %q: %w", s.resolvePath(path), err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("storage: close repository temp for %q: %w", s.resolvePath(path), err)
+	}
+	if err := platformRenameAt(parent, tmpName, parent, name); err != nil {
+		return fmt.Errorf("storage: rename repository temp for %q: %w", s.resolvePath(path), err)
+	}
+	keepTemp = false
 	return nil
 }
 
@@ -201,7 +535,7 @@ func (s *Store) LoadJSON(path string, dest interface{}) error {
 	defer s.locker.RUnlock(path)
 
 	fullPath := s.resolvePath(path)
-	data, err := os.ReadFile(fullPath)
+	data, err := s.readFileUnlocked(path)
 	if err != nil {
 		return fmt.Errorf("storage: read %q: %w", fullPath, err)
 	}
@@ -219,7 +553,7 @@ func (s *Store) LoadRawJSON(path string) ([]byte, error) {
 	defer s.locker.RUnlock(path)
 
 	fullPath := s.resolvePath(path)
-	data, err := os.ReadFile(fullPath)
+	data, err := s.readFileUnlocked(path)
 	if err != nil {
 		return nil, fmt.Errorf("storage: read %q: %w", fullPath, err)
 	}
@@ -238,18 +572,30 @@ func (s *Store) AppendJSONL(path string, entry interface{}) error {
 	}
 	defer s.locker.Unlock(path)
 
-	fullPath := s.resolvePath(path)
-	dir := filepath.Dir(fullPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("storage: create dir %q: %w", dir, err)
-	}
-
 	line, err := json.Marshal(entry)
 	if err != nil {
 		return fmt.Errorf("storage: marshal JSONL entry: %w", err)
 	}
 
-	f, err := os.OpenFile(fullPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	fullPath := s.resolvePath(path)
+	var f *os.File
+	if s.repository != nil {
+		parent, name, _, parentErr := s.repositoryFileParent(path, true)
+		if parentErr != nil {
+			return parentErr
+		}
+		defer parent.Close()
+		f, err = platformOpenRegularFileAt(parent, name, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err == nil {
+			_, err = f.Seek(0, io.SeekEnd)
+		}
+	} else {
+		dir := filepath.Dir(fullPath)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return fmt.Errorf("storage: create dir %q: %w", dir, err)
+		}
+		f, err = os.OpenFile(fullPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	}
 	if err != nil {
 		return fmt.Errorf("storage: open JSONL %q: %w", fullPath, err)
 	}
@@ -270,7 +616,7 @@ func (s *Store) ReadJSONL(path string) ([]json.RawMessage, error) {
 	defer s.locker.RUnlock(path)
 
 	fullPath := s.resolvePath(path)
-	data, err := os.ReadFile(fullPath)
+	data, err := s.readFileUnlocked(path)
 	if err != nil {
 		return nil, fmt.Errorf("storage: read JSONL %q: %w", fullPath, err)
 	}
@@ -299,7 +645,7 @@ func (s *Store) ReadFile(path string) ([]byte, error) {
 	defer s.locker.RUnlock(path)
 
 	fullPath := s.resolvePath(path)
-	data, err := os.ReadFile(fullPath)
+	data, err := s.readFileUnlocked(path)
 	if err != nil {
 		return nil, fmt.Errorf("storage: read %q: %w", fullPath, err)
 	}
@@ -319,4 +665,85 @@ func (s *Store) resolvePath(path string) string {
 		return path
 	}
 	return filepath.Join(s.basePath, path)
+}
+
+// FileExists reports whether a regular store file exists. Repository-backed
+// stores use their open root authority, so this never follows intermediate
+// links or creates a lock merely to inspect a path.
+func (s *Store) FileExists(path string) (bool, error) {
+	if s.repository != nil {
+		return s.repository.DataFileExists(path)
+	}
+	info, err := os.Stat(s.resolvePath(path))
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return info.Mode().IsRegular(), nil
+}
+
+func (s *Store) readFileUnlocked(path string) ([]byte, error) {
+	if s.repository == nil {
+		return os.ReadFile(s.resolvePath(path))
+	}
+	parent, name, relative, err := s.repositoryFileParent(path, false)
+	if err != nil {
+		return nil, err
+	}
+	defer parent.Close()
+	file, err := platformOpenRegularFileAt(parent, name, os.O_RDONLY, 0)
+	if err != nil {
+		return nil, fmt.Errorf("storage: open repository file %q: %w", relative, err)
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("storage: inspect repository file %q: %w", relative, err)
+	}
+	if !info.Mode().IsRegular() {
+		return nil, repositoryContainmentRefusal(fmt.Sprintf("repository file %q is not regular", relative), nil)
+	}
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return nil, fmt.Errorf("storage: read repository file %q: %w", relative, err)
+	}
+	return data, nil
+}
+
+func (s *Store) repositoryFileParent(path string, create bool) (*os.File, string, string, error) {
+	relative, err := s.repositoryRelativePath(path)
+	if err != nil {
+		return nil, "", "", err
+	}
+	components, err := containedPathComponents(relative)
+	if err != nil {
+		return nil, "", "", repositoryContainmentRefusal(fmt.Sprintf("invalid store path %q", path), err)
+	}
+	parents := appendPathComponents(s.repository.dataComponents, components[:len(components)-1]...)
+	parent, err := s.repository.openDirectoryChain(parents, create)
+	if err != nil {
+		return nil, "", "", err
+	}
+	return parent, components[len(components)-1], relative, nil
+}
+
+func (s *Store) repositoryRelativePath(path string) (string, error) {
+	trimmed := strings.TrimSpace(path)
+	if trimmed == "" {
+		return "", repositoryContainmentRefusal("store path must not be empty", nil)
+	}
+	if filepath.IsAbs(trimmed) {
+		relative, err := filepath.Rel(s.basePath, filepath.Clean(trimmed))
+		if err != nil {
+			return "", repositoryContainmentRefusal(fmt.Sprintf("compare store path %q with data root", path), err)
+		}
+		trimmed = relative
+	}
+	clean := filepath.Clean(trimmed)
+	if _, err := containedPathComponents(clean); err != nil {
+		return "", repositoryContainmentRefusal(fmt.Sprintf("store path %q escapes repository data root", path), err)
+	}
+	return clean, nil
 }

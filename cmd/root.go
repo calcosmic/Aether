@@ -164,6 +164,22 @@ var store *storage.Store
 // tracer is the shared trace logger initialized alongside store.
 var tracer *trace.Tracer
 
+// repositoryBootstrapValidatedHook is nil in production. The Phase 200
+// subprocess test installs it in its child process to pause after physical
+// validation and deterministically replace a component before the first open.
+var repositoryBootstrapValidatedHook func() error
+
+// Capture whether an empty COLONY_DATA_DIR came from the process environment.
+// The command test suite restores previously-unset variables with Setenv(key,
+// ""); treating that test-only runtime artifact as an explicit operator value
+// would make later executions depend on test order. A real CLI process receives
+// its environment before package initialization, so an explicitly empty value
+// is still rejected.
+var colonyDataDirConfiguredAtProcessStart = func() bool {
+	_, configured := os.LookupEnv("COLONY_DATA_DIR")
+	return configured
+}()
+
 // stdout and stderr are package-level writers that tests can override.
 var stdout io.Writer = os.Stdout
 var stderr io.Writer = os.Stderr
@@ -193,22 +209,58 @@ var rootCmd = &cobra.Command{
 			return nil
 		}
 
-		dataDir := storage.ResolveDataDir(context.Background())
+		previousDataDir := ""
+		if store != nil {
+			previousDataDir = store.BasePath()
+		}
+		store = nil
+		tracer = nil
+		ctx := context.Background()
+		repositoryRoot := storage.ResolveAetherRoot(ctx)
+		dataDir := filepath.Join(repositoryRoot, ".aether", "data")
+		if configuredDataDir, configured := os.LookupEnv("COLONY_DATA_DIR"); configured {
+			if configuredDataDir != "" || colonyDataDirConfiguredAtProcessStart {
+				dataDir = configuredDataDir
+			}
+		}
+		// Cobra may be executed repeatedly by embedders and package tests. When
+		// an existing store agrees with the selected data path, recover the
+		// repository root from the conventional .aether/data boundary instead
+		// of trusting a stale AETHER_ROOT left by an earlier invocation.
+		if previousRoot, ok := repositoryRootForDataPath(previousDataDir); ok &&
+			sameRepositoryBootstrapPath(previousDataDir, dataDir) {
+			repositoryRoot = previousRoot
+		}
+		repository, err := storage.OpenRepositoryRoot(repositoryRoot, dataDir)
+		if err != nil {
+			return fmt.Errorf("failed to validate repository store: %w", err)
+		}
+		if repositoryBootstrapValidatedHook != nil {
+			if err := repositoryBootstrapValidatedHook(); err != nil {
+				_ = repository.Close()
+				return fmt.Errorf("failed at repository bootstrap validation barrier: %w", err)
+			}
+		}
 		// A first status inspection must be genuinely read-only.  Creating the
 		// store creates .aether/data and its sibling lock directory, which would
 		// turn a no-colony status request into a repository mutation.  Once a
 		// state file exists, status continues through the normal store-backed
 		// dashboard path.
 		if cmd.Name() == "status" && cmd.Annotations["aether.io/read-only"] == "true" {
-			if _, err := os.Stat(filepath.Join(dataDir, "COLONY_STATE.json")); errors.Is(err, os.ErrNotExist) {
-				store = nil
-				tracer = nil
+			exists, err := repository.DataFileExists("COLONY_STATE.json")
+			if err != nil {
+				_ = repository.Close()
+				return fmt.Errorf("failed to inspect repository store: %w", err)
+			}
+			if !exists {
+				_ = repository.Close()
 				return nil
 			}
 		}
-		s, err := storage.NewStore(dataDir)
+		s, err := storage.NewRepositoryStore(repository)
 		if err != nil {
-			return fmt.Errorf("failed to initialize store: %w", err)
+			_ = repository.Close()
+			return fmt.Errorf("failed to initialize repository store: %w", err)
 		}
 		store = s
 		tracer = trace.NewTracer(s)
@@ -217,10 +269,69 @@ var rootCmd = &cobra.Command{
 		// owned by the command so future read-only expert surfaces can make the
 		// same guarantee without growing a name switch here.
 		if cmd.Annotations["aether.io/read-only"] != "true" {
-			checkAndEmitFirstRun(dataDir)
+			if err := checkAndEmitFirstRunFromStore(s); err != nil {
+				return fmt.Errorf("failed to initialize first-run state: %w", err)
+			}
 		}
 		return nil
 	},
+}
+
+// checkAndEmitFirstRunFromStore retains the welcome contract while routing its
+// probes and marker write through the verified repository store. The legacy
+// path-based helper remains for its direct unit tests and non-root callers.
+func checkAndEmitFirstRunFromStore(s *storage.Store) error {
+	welcomeExists, welcomeErr := s.FileExists(".welcomed")
+	if welcomeErr != nil {
+		return welcomeErr
+	}
+	if welcomeExists {
+		return nil
+	}
+	stateExists, stateErr := s.FileExists("COLONY_STATE.json")
+	if stateErr != nil {
+		return stateErr
+	}
+	if stateExists {
+		return nil
+	}
+	if !shouldRenderVisualOutput(stdout) {
+		return nil
+	}
+	writeVisualOutput(stdout, renderWelcomeBanner())
+	return s.AtomicWrite(".welcomed", []byte{})
+}
+
+func repositoryRootForDataPath(dataPath string) (string, bool) {
+	if strings.TrimSpace(dataPath) == "" {
+		return "", false
+	}
+	absolute, err := filepath.Abs(dataPath)
+	if err != nil {
+		return "", false
+	}
+	clean := filepath.Clean(absolute)
+	aetherDir := filepath.Dir(clean)
+	if filepath.Base(clean) != "data" || filepath.Base(aetherDir) != ".aether" {
+		return "", false
+	}
+	return filepath.Dir(aetherDir), true
+}
+
+func sameRepositoryBootstrapPath(left, right string) bool {
+	leftAbs, leftErr := filepath.Abs(left)
+	rightAbs, rightErr := filepath.Abs(right)
+	if leftErr != nil || rightErr != nil {
+		return false
+	}
+	leftAbs = filepath.Clean(leftAbs)
+	rightAbs = filepath.Clean(rightAbs)
+	if leftAbs == rightAbs {
+		return true
+	}
+	leftPhysical, leftErr := filepath.EvalSymlinks(leftAbs)
+	rightPhysical, rightErr := filepath.EvalSymlinks(rightAbs)
+	return leftErr == nil && rightErr == nil && filepath.Clean(leftPhysical) == filepath.Clean(rightPhysical)
 }
 
 // skipStoreInit returns true for commands that don't require a store
