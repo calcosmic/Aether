@@ -140,11 +140,14 @@ func TestWrapperOrchestratedCommandsPreserveLiveWorkerCeremony(t *testing.T) {
 				t.Fatalf("read %s: %v", wrapperPath, err)
 			}
 			text := string(content)
-			// TS host wrappers delegate orchestration; only require core safety markers
-			for _, want := range []string{
-				"Do not set `run_in_background`",
-				"background agents",
-			} {
+			// Phase 200's plan wrapper names the concrete staged safety rule:
+			// one visible Scout first, with no background execution. Other host
+			// workflows retain the established generic background-agent wording.
+			wants := []string{"Do not set `run_in_background`", "background agents"}
+			if command == "plan" {
+				wants = []string{"Exactly one visible Scout", "set background execution"}
+			}
+			for _, want := range wants {
 				if !strings.Contains(text, want) {
 					t.Errorf("%s missing live worker ceremony contract %q", wrapperPath, want)
 				}

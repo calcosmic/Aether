@@ -647,7 +647,7 @@ func TestPlanOnlyUnchanged(t *testing.T) {
 		// Snapshot before
 		before := snapshotDataDir(t, dataDir)
 
-		rootCmd.SetArgs([]string{"plan", "--plan-only"})
+		rootCmd.SetArgs([]string{"plan", "--plan-only", "--preset", "balanced"})
 		if err := rootCmd.Execute(); err != nil {
 			t.Fatalf("plan --plan-only returned error: %v", err)
 		}

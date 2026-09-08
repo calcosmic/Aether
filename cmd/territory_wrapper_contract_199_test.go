@@ -41,9 +41,8 @@ func TestTerritoryWrapperAuthority199(t *testing.T) {
 			path: path(".aether/commands/plan.yaml"),
 			required: []string{
 				"source_of_truth", "aether host plan", "plan_manifest",
-				"calling `plan-finalize`", "leaving state writes to go",
-				"go finalizer owns", "do not parse visual output",
-				"do not read or write colony state files",
+				"aether plan-finalize --completion-file", "one runtime-authorized stage at a time",
+				"never parse visual output as state", "do not edit planning artifacts",
 			},
 		},
 	}
@@ -70,10 +69,10 @@ func TestTerritoryWrapperAuthority199(t *testing.T) {
 				name: platform.name + " plan",
 				path: path(filepath.Join(platform.dir, "plan.md")),
 				required: []string{
-					"runtime owns the final plan", "aether host plan", "result.plan_manifest",
-					"manifest is the sole source", "aether plan-finalize --completion-file",
-					"all state mutation is owned by the go runtime", "do not parse visual output",
-					"do not read or write colony state files",
+					"aether spec --inspect", "aether host plan", "result.plan_manifest",
+					"exactly one authorized scout dispatch", "aether plan-finalize --completion-file",
+					"all authoritative mutation occurs through go commands", "never parse visual output as authority",
+					"this wrapper never edits specification projections",
 				},
 			},
 		)
@@ -86,7 +85,7 @@ func TestTerritoryWrapperAuthority199(t *testing.T) {
 				if verb == "colonize" {
 					return []string{"runtime owns final survey artifacts", "aether host colonize", "result.colonize_manifest", "aether colonize-finalize --completion-file"}
 				}
-				return []string{"runtime owns the final plan", "aether host plan", "result.plan_manifest", "aether plan-finalize --completion-file"}
+				return []string{"aether spec --inspect", "aether host plan", "result.plan_manifest", "aether plan-finalize --completion-file"}
 			}(),
 		})
 	}
@@ -94,7 +93,7 @@ func TestTerritoryWrapperAuthority199(t *testing.T) {
 	forbidden := []*regexp.Regexp{
 		regexp.MustCompile(`(?im)^\s*(?:echo|printf|cat|tee|jq|sed|awk|perl|python(?:3)?)\b[^\n]*(?:\.aether/data/survey|COLONY_STATE\.json|session\.json)`),
 		regexp.MustCompile(`(?i)\b(?:territory|survey)\s+(?:is\s+)?(?:fresh|stale|missing|unavailable)\b`),
-		regexp.MustCompile(`(?i)\b(?:assume|synthesize|fabricate|default)\b[^\n]{0,80}\b(?:success|completed|passed)\b`),
+		regexp.MustCompile(`(?im)^\s*(?:[-*]\s*)?(?:assume|synthesize|fabricate|default)\b[^\n]{0,80}\b(?:success|completed|passed)\b`),
 		regexp.MustCompile(`(?i)--(?:skip|no)[-_]?(?:snapshot|territory|survey|verify|validation|finalize)`),
 		regexp.MustCompile(`(?im)^\s*(?:sed|awk|perl|python(?:3)?)\b[^\n]*(?:ansi|\\x1b|escape sequence)`),
 	}

@@ -44,20 +44,19 @@ func TestPlanDelegateManifestCarriesOneSteeringNote(t *testing.T) {
 	store = s
 
 	goal := "198.2-01 plan delegate capsule test colony"
-	if err := s.SaveJSON("COLONY_STATE.json", colony.ColonyState{
+	state := codexPlanSpecificationFixture(t, colony.ColonyState{
 		Version: "1.0",
 		Goal:    &goal,
 		State:   colony.StateREADY,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	}, colony.SpecStatusApproved)
+	saveApprovedPlanColony198_2(t, s, tmpDir, state)
 
 	const sentinel = "SENTINEL-198-2-01-STEERING-PLAN"
 	if _, _, err := writePheromoneSignal("FOCUS", sentinel, "", "test", "", "", 0.9, nil); err != nil {
 		t.Fatalf("seed steering note via writePheromoneSignal: %v", err)
 	}
 
-	result, err := runCodexPlanWithOptions(tmpDir, codexPlanOptions{PlanOnly: true})
+	result, err := runCodexPlanWithOptions(tmpDir, stagedPlanOnlyOptions198_2())
 	if err != nil {
 		t.Fatalf("runCodexPlanWithOptions(plan-only): %v", err)
 	}
@@ -76,15 +75,14 @@ func TestPlanDelegateManifestCarriesOneSteeringNote(t *testing.T) {
 		store = s2
 
 		goal2 := "198.2-01 memory-free colony"
-		if err := s2.SaveJSON("COLONY_STATE.json", colony.ColonyState{
+		state2 := codexPlanSpecificationFixture(t, colony.ColonyState{
 			Version: "1.0",
 			Goal:    &goal2,
 			State:   colony.StateREADY,
-		}); err != nil {
-			t.Fatal(err)
-		}
+		}, colony.SpecStatusApproved)
+		saveApprovedPlanColony198_2(t, s2, tmpDir2, state2)
 
-		result2, err := runCodexPlanWithOptions(tmpDir2, codexPlanOptions{PlanOnly: true})
+		result2, err := runCodexPlanWithOptions(tmpDir2, stagedPlanOnlyOptions198_2())
 		if err != nil {
 			t.Fatalf("runCodexPlanWithOptions(plan-only, memory-free): %v", err)
 		}
@@ -112,15 +110,18 @@ func TestPlanDelegateManifestCarriesOneSteeringNote(t *testing.T) {
 		store = s3
 
 		goal3 := "198.2-01 hosted path colony"
-		if err := s3.SaveJSON("COLONY_STATE.json", colony.ColonyState{
+		state3 := codexPlanSpecificationFixture(t, colony.ColonyState{
 			Version: "1.0",
 			Goal:    &goal3,
 			State:   colony.StateREADY,
-		}); err != nil {
-			t.Fatal(err)
-		}
+		}, colony.SpecStatusApproved)
+		saveApprovedPlanColony198_2(t, s3, tmpDir3, state3)
 
-		result3, err := runCodexPlanWithOptions(tmpDir3, codexPlanOptions{Synthetic: true})
+		result3, err := runCodexPlanWithOptions(tmpDir3, codexPlanOptions{
+			Synthetic: true,
+			Preset:    "balanced",
+			PresetSet: true,
+		})
 		if err != nil {
 			t.Fatalf("runCodexPlanWithOptions(hosted/synthetic): %v", err)
 		}
@@ -372,17 +373,28 @@ func newSeededColony198_2(t *testing.T) (s *storage.Store, tmpDir, hubDir string
 	store = s
 
 	goal := "198.2-01 every-memory-source test colony"
-	if err := s.SaveJSON("COLONY_STATE.json", colony.ColonyState{
+	state := codexPlanSpecificationFixture(t, colony.ColonyState{
 		Version:      "1.0",
 		Goal:         &goal,
 		State:        colony.StateREADY,
 		CurrentPhase: 1,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	}, colony.SpecStatusApproved)
+	saveApprovedPlanColony198_2(t, s, tmpDir, state)
 
 	hubDir = filepath.Join(t.TempDir(), "hub")
 	return s, tmpDir, hubDir
+}
+
+func saveApprovedPlanColony198_2(t *testing.T, s *storage.Store, root string, state colony.ColonyState) {
+	t.Helper()
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatal(err)
+	}
+	writeCodexPlanSpecificationProjection(t, root, state)
+}
+
+func stagedPlanOnlyOptions198_2() codexPlanOptions {
+	return codexPlanOptions{PlanOnly: true, Preset: "balanced", PresetSet: true}
 }
 
 // seedRelayNote198_2 persists one worker handoff carrying sentinel in
@@ -436,7 +448,7 @@ func TestPlanAndColonizeDelegateLanesCarryEveryMemorySource(t *testing.T) {
 			name: "plan",
 			capsule: func(t *testing.T, tmpDir string) string {
 				t.Helper()
-				result, err := runCodexPlanWithOptions(tmpDir, codexPlanOptions{PlanOnly: true})
+				result, err := runCodexPlanWithOptions(tmpDir, stagedPlanOnlyOptions198_2())
 				if err != nil {
 					t.Fatalf("runCodexPlanWithOptions(plan-only): %v", err)
 				}
@@ -499,7 +511,7 @@ func TestPlanAndColonizeCapsulesMatchTheInProcessLane(t *testing.T) {
 			t.Fatalf("seed steering note: %v", err)
 		}
 
-		result, err := runCodexPlanWithOptions(tmpDir, codexPlanOptions{PlanOnly: true})
+		result, err := runCodexPlanWithOptions(tmpDir, stagedPlanOnlyOptions198_2())
 		if err != nil {
 			t.Fatalf("runCodexPlanWithOptions(plan-only): %v", err)
 		}
@@ -584,7 +596,7 @@ func TestDelegateCapsuleRendersSteeringAndRelayExactlyOnce(t *testing.T) {
 		}
 		seedRelayNote198_2(t, relaySentinel)
 
-		result, err := runCodexPlanWithOptions(tmpDir, codexPlanOptions{PlanOnly: true})
+		result, err := runCodexPlanWithOptions(tmpDir, stagedPlanOnlyOptions198_2())
 		if err != nil {
 			t.Fatalf("runCodexPlanWithOptions(plan-only): %v", err)
 		}
@@ -654,11 +666,11 @@ func TestDelegateCapsuleIsStableAcrossRuns(t *testing.T) {
 			t.Fatalf("seed steering note: %v", err)
 		}
 
-		first, err := runCodexPlanWithOptions(tmpDir, codexPlanOptions{PlanOnly: true})
+		first, err := runCodexPlanWithOptions(tmpDir, stagedPlanOnlyOptions198_2())
 		if err != nil {
 			t.Fatalf("runCodexPlanWithOptions(plan-only) first run: %v", err)
 		}
-		second, err := runCodexPlanWithOptions(tmpDir, codexPlanOptions{PlanOnly: true})
+		second, err := runCodexPlanWithOptions(tmpDir, stagedPlanOnlyOptions198_2())
 		if err != nil {
 			t.Fatalf("runCodexPlanWithOptions(plan-only) second run: %v", err)
 		}
