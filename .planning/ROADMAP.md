@@ -267,36 +267,39 @@ Plans:
 **Wave 17** *(gap closure; blocked on Wave 16 completion)*
 
 - [x] 200-29-PLAN.md — Recompute typed specification and approval authority at every validation boundary.
-- [ ] 200-30-PLAN.md — Bind the canonical semantic delta and complete review payload into candidate identity.
 
 **Wave 18** *(gap closure; blocked on Wave 17 completion)*
 
-- [ ] 200-31-PLAN.md — Independently derive candidate acceptance and impact coverage inside one mutation session.
+- [ ] 200-30-PLAN.md — Bind the canonical semantic delta and complete review payload into candidate identity.
 
 **Wave 19** *(gap closure; blocked on Wave 18 completion)*
+
+- [ ] 200-31-PLAN.md — Independently derive candidate acceptance and impact coverage inside one mutation session.
+
+**Wave 20** *(gap closure; blocked on Wave 19 completion)*
 
 - [ ] 200-32-PLAN.md — Move every named planning/specification/revision writer and refresh deletion into the shared session.
 - [ ] 200-33-PLAN.md — Define the all-target, authority-bound build-start transaction.
 
-**Wave 20** *(gap closure; blocked on Wave 19 completion)*
+**Wave 21** *(gap closure; blocked on Wave 20 completion)*
 
 - [ ] 200-34-PLAN.md — Migrate every production build-start caller and conditional effect to the atomic transaction.
 - [ ] 200-37-PLAN.md — Enforce candidate expiry and stale-before-expiry recovery at review, acceptance, and execution authority.
 
-**Wave 21** *(gap closure; blocked on Wave 20 completion)*
+**Wave 22** *(gap closure; blocked on Wave 21 completion)*
 
 - [ ] 200-35-PLAN.md — Introduce the transaction-only test fixture and migrate the core build-attempt fixture callers.
 - [ ] 200-38-PLAN.md — Render expiry/recovery consistently in terminal, JSON, lifecycle facts, and Next Up.
 
-**Wave 22** *(gap closure; blocked on Wave 21 completion)*
+**Wave 23** *(gap closure; blocked on Wave 22 completion)*
 
 - [ ] 200-36-PLAN.md — Migrate the remaining build-start fixtures and retire every partial start helper.
 
-**Wave 23** *(gap closure; blocked on Wave 22 completion)*
+**Wave 24** *(gap closure; blocked on Wave 23 completion)*
 
 - [ ] 200-39-PLAN.md — Prove all five original attacks, the full public journey, Classic corpus, source parity, and exact edge accounting.
 
-**Wave 24** *(gap closure; blocked on Wave 23 completion)*
+**Wave 25** *(gap closure; blocked on Wave 24 completion)*
 
 - [ ] 200-40-PLAN.md — Run focused, source, full, and race gates and update the existing Phase 200 gate receipt.
 
