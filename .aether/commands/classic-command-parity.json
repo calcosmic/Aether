@@ -10,9 +10,21 @@
     },
     {
       "category": "normal",
+      "public_name": "discuss",
+      "cobra_name": "discuss",
+      "description": "💬 Resolve evidence-backed material decisions and hand settled intent to a draft specification"
+    },
+    {
+      "category": "normal",
+      "public_name": "spec",
+      "cobra_name": "spec",
+      "description": "📜 Review, revise, approve, or repair the owner-readable specification"
+    },
+    {
+      "category": "normal",
       "public_name": "plan",
       "cobra_name": "plan",
-      "description": "📋 Generate a depth-scoped colony plan with real Scout and Route-Setter agents"
+      "description": "📋 Run an evidence-backed Scout to Route-Setter planning loop and review the exact candidate"
     },
     {
       "category": "normal",

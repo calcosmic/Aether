@@ -122,7 +122,7 @@ func classicPublicCommandInventory() []classicPublicCommandParityRow {
 		{Category: "normal", PublicName: "init", CobraName: "init", Description: "Start a guided colony for one goal."},
 		{Category: "normal", PublicName: "discuss", CobraName: "discuss", Description: "💬 Resolve evidence-backed material decisions and hand settled intent to a draft specification"},
 		{Category: "normal", PublicName: "spec", CobraName: "spec", Description: "📜 Review, revise, approve, or repair the owner-readable specification"},
-		{Category: "normal", PublicName: "plan", CobraName: "plan", Description: "📋 Generate a depth-scoped colony plan with real Scout and Route-Setter agents"},
+		{Category: "normal", PublicName: "plan", CobraName: "plan", Description: "📋 Run an evidence-backed Scout to Route-Setter planning loop and review the exact candidate"},
 		{Category: "normal", PublicName: "build", CobraName: "build", Description: "🔨 Build a phase — Queen dispatches workers, colony self-organizes"},
 		{Category: "normal", PublicName: "run", CobraName: "run", Description: "Autopilot the remaining accepted phases within the displayed safety contract."},
 		{Category: "normal", PublicName: "status", CobraName: "status", Description: "Show the complete authoritative colony snapshot."},
