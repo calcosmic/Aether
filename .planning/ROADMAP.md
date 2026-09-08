@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 26/40 plans executed
+**Plans:** 27/40 plans executed
 
 Plans:
 
@@ -258,7 +258,7 @@ Plans:
 
 **Wave 15** *(gap closure; blocked on Wave 14 completion)*
 
-- [ ] 200-27-PLAN.md — Enforce physical repository containment before store or lock initialization.
+- [x] 200-27-PLAN.md — Enforce physical repository containment before store or lock initialization.
 
 **Wave 16** *(gap closure; blocked on Wave 15 completion)*
 

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 200-26-PLAN.md
-last_updated: "2026-09-08T20:03:08.272Z"
+stopped_at: Completed 200-27-PLAN.md
+last_updated: "2026-09-08T20:44:10.876Z"
 last_activity: 2026-09-08
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 74
-  completed_plans: 60
+  completed_plans: 61
   percent: 14
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 27 of 40
+Plan: 28 of 40
 Status: Ready to execute
 Last activity: 2026-09-08
 
@@ -137,6 +137,7 @@ Last activity: 2026-09-08
 | Phase 200 P22 | 24min | 2 tasks | 11 files |
 | Phase 200 P23 | 1h 44m | 3 tasks | 22 files |
 | Phase 200 P26 | 48 min | 2 tasks | 3 files |
+| Phase 200 P27 | 22 min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -420,6 +421,9 @@ Last activity: 2026-09-08
 - [Phase 200]: Historical Phase 199 STATE evidence is verified from the recorded Git blob and never compared with later live STATE bytes. — This keeps the receipt durable after legitimate planning-state advancement while preserving immutable historical evidence.
 - [Phase 200]: Only the exact .gsd/dispatch-isolation-sentinel.json path may change; every other pre-existing .gsd entry is protected by closed membership and lstat identity. — This permits the orchestrator-owned sentinel mutation without weakening scratch-tree tamper detection.
 - [Phase 200]: Config verification accepts exact bytes or the single semantic workflow._auto_chain_active true-to-false reset. — This permits the documented orchestrator cleanup and rejects every unrelated config mutation.
+- [Phase 200]: Repository storage keeps an open physical root directory handle and performs every data and lock open relative to that authority.
+- [Phase 200]: Store BasePath preserves its established caller-visible spelling, while filesystem authority comes only from the canonical root handle.
+- [Phase 200]: Lock filenames digest the complete normalized logical data path instead of filepath.Base.
 
 ### Pending Todos
 
@@ -536,8 +540,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-08T20:03:08.261Z
-Stopped at: Completed 200-26-PLAN.md
+Last session: 2026-09-08T20:44:10.867Z
+Stopped at: Completed 200-27-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
