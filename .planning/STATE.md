@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 200-28-PLAN.md
-last_updated: "2026-09-08T21:12:33.056Z"
+stopped_at: Completed 200-29-PLAN.md
+last_updated: "2026-09-08T21:36:16.239Z"
 last_activity: 2026-09-08
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 74
-  completed_plans: 62
+  completed_plans: 63
   percent: 14
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 29 of 40
+Plan: 30 of 40
 Status: Ready to execute
 Last activity: 2026-09-08
 
@@ -139,6 +139,7 @@ Last activity: 2026-09-08
 | Phase 200 P26 | 48 min | 2 tasks | 3 files |
 | Phase 200 P27 | 22 min | 2 tasks | 6 files |
 | Phase 200 P28 | 24 min | 3 tasks | 5 files |
+| Phase 200 P29 | 21 min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -428,6 +429,9 @@ Last activity: 2026-09-08
 - [Phase 200]: Use one repository-authorized synthetic data target as the shared mutation-lock identity. — Store.UpdateFile holds the cross-process lock for the whole callback without rewriting planning state.
 - [Phase 200]: Require every session-backed transaction target to have an exact captured present-or-absent baseline before declaration. — A transaction cannot silently recapture newer state or write an undeclared target.
 - [Phase 200]: Keep read-only loader compatibility while mutating timeline and stage entrypoints use session-only helpers. — Plan 28 strengthens scoped writers without changing out-of-scope callers.
+- [Phase 200]: Stable specification item IDs derive from their typed section and visible canonical lineage, and the item hash binds that exact ID.
+- [Phase 200]: Revision created_at is immutable body material; status and approval remain separate receipt-bound lifecycle authority.
+- [Phase 200]: Persisted specification loads and repository-backed planning, build, and run gates require canonical recomputation while explicit specification-less legacy plans remain compatible.
 
 ### Pending Todos
 
@@ -544,8 +548,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-08T21:12:33.047Z
-Stopped at: Completed 200-28-PLAN.md
+Last session: 2026-09-08T21:36:16.230Z
+Stopped at: Completed 200-29-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

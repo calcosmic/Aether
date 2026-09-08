@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 28/40 plans executed
+**Plans:** 29/40 plans executed
 
 Plans:
 
@@ -266,7 +266,7 @@ Plans:
 
 **Wave 17** *(gap closure; blocked on Wave 16 completion)*
 
-- [ ] 200-29-PLAN.md — Recompute typed specification and approval authority at every validation boundary.
+- [x] 200-29-PLAN.md — Recompute typed specification and approval authority at every validation boundary.
 - [ ] 200-30-PLAN.md — Bind the canonical semantic delta and complete review payload into candidate identity.
 
 **Wave 18** *(gap closure; blocked on Wave 17 completion)*
