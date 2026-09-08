@@ -852,7 +852,14 @@ func acceptPlanCandidateInSession(session *planningMutationSession, request plan
 		return empty, fmt.Errorf("derived authority: %w", err)
 	}
 	derivedAffected, derivedPreserved := derivedPlanCandidateScope(finalCard.SemanticDelta, derived)
-	activatedPhases, preserved, err := preserveCompletedCandidateWorkForImpact(state.Plan.Phases, candidate.Proposal.Phases, derived.Impact)
+	// Completion preservation follows the independently verified candidate
+	// scope, not the broader graph used to prove semantic reachability. The
+	// latter may include a shared proof attached to an otherwise unchanged
+	// completed phase (for example, an inserted corrective phase), which must
+	// not erase already-earned execution credit.
+	activationImpact := derived.Impact
+	activationImpact.AffectedSemanticIDs = append([]string(nil), derivedAffected...)
+	activatedPhases, preserved, err := preserveCompletedCandidateWorkForImpact(state.Plan.Phases, candidate.Proposal.Phases, activationImpact)
 	if err != nil {
 		return empty, err
 	}

@@ -245,15 +245,19 @@ func validateDerivedPlanCandidateAuthority(candidate colony.PlanCandidate, final
 }
 
 func derivedPlanCandidateScope(finalDelta colony.PlanningSemanticDelta, derived derivedPlanCandidateAuthority) ([]string, []string) {
-	affected, _ := planningRouteDeltaSemanticIDs(finalDelta)
-	universe := planImpactIDSet(derived.SemanticIDs)
+	affected, finalPreserved := planningRouteDeltaSemanticIDs(finalDelta)
+	// Root-level aggregate proof nodes are generation conveniences rather than
+	// universal proposal nodes. Include them only when the immutable final card
+	// actually classified them (phase insertion does; normal Route output does
+	// not), so neither candidate form gains or loses synthetic scope.
+	universe := planImpactIDSet(append(append([]string(nil), derived.SemanticIDs...), append(affected, finalPreserved...)...))
 	for _, id := range derived.SpecificationImpact.AffectedSemanticIDs {
 		if _, belongs := universe[id]; belongs {
 			affected = append(affected, id)
 		}
 	}
 	affected = canonicalPlanImpactIDs(affected)
-	return affected, planImpactDifference(derived.SemanticIDs, affected)
+	return affected, planImpactDifference(sortedPlanImpactSet(universe), affected)
 }
 
 func derivedPlanCandidateApprovalImpact(candidate colony.PlanCandidate) (colony.PlanningAuthorityImpact, error) {
@@ -443,18 +447,41 @@ func unresolvedPlanImpact(state colony.ColonyState) (planImpactClosure, bool, er
 			return planImpactClosure{}, false, nil
 		}
 		markers := canonicalPlanImpactIDs(active.AffectedSemanticIDs)
-		if candidate, found := planImpactAcceptedCandidate(state.Plan, active); found {
-			markers = planImpactDifference(markers, candidate.Proposal.AffectedSemanticIDs)
-			if len(markers) != 0 && validatePlanCandidateImpactCoverage(candidate, planImpactClosure{AffectedSemanticIDs: markers}) == nil {
-				markers = nil
+		if len(markers) == 0 {
+			return planImpactClosure{}, false, nil
+		}
+		candidate, found := planImpactAcceptedCandidate(state.Plan, active)
+		if !found {
+			return planImpactClosure{SpecificationRevisionID: current.ID, SpecificationRevisionHash: current.ContentHash, AffectedSemanticIDs: markers}, true, nil
+		}
+		if err := validatePlanningRecordHashes(candidate); err != nil {
+			return planImpactClosure{}, false, fmt.Errorf("accepted candidate canonical identity: %w", err)
+		}
+		base := colony.PlanRevision{ID: candidate.BasePlanRevisionID, PlanHash: candidate.BasePlanRevisionHash}
+		if candidate.BasePlanRevisionID != "plan-unbound" {
+			var ok bool
+			base, ok = planImpactRevisionByID(state.Plan.Revisions, candidate.BasePlanRevisionID)
+			if !ok || base.PlanHash != candidate.BasePlanRevisionHash {
+				return planImpactClosure{}, false, fmt.Errorf("accepted candidate base revision is unavailable")
 			}
 		}
-		if len(markers) == 0 {
+		derived, err := derivePlanCandidateAuthority(base, *state.Specification, candidate.Proposal)
+		if err != nil {
+			return planImpactClosure{}, false, fmt.Errorf("derive accepted plan impact: %w", err)
+		}
+		independentlyAffected := planImpactIDSet(derived.Impact.AffectedSemanticIDs)
+		unexplained := make([]string, 0)
+		for _, marker := range markers {
+			if _, ok := independentlyAffected[marker]; !ok {
+				unexplained = append(unexplained, marker)
+			}
+		}
+		if len(unexplained) == 0 {
 			return planImpactClosure{}, false, nil
 		}
 		return planImpactClosure{
 			SpecificationRevisionID: current.ID, SpecificationRevisionHash: current.ContentHash,
-			AffectedSemanticIDs: markers,
+			AffectedSemanticIDs: unexplained,
 		}, true, nil
 	}
 
@@ -472,6 +499,15 @@ func unresolvedPlanImpact(state colony.ColonyState) (planImpactClosure, bool, er
 		return planImpactClosure{}, false, err
 	}
 	return impact, len(impact.AffectedSemanticIDs) > 0, nil
+}
+
+func planImpactRevisionByID(revisions []colony.PlanRevision, id string) (colony.PlanRevision, bool) {
+	for index := range revisions {
+		if revisions[index].ID == id {
+			return revisions[index], true
+		}
+	}
+	return colony.PlanRevision{}, false
 }
 
 func planImpactAcceptedCandidate(plan colony.Plan, revision colony.PlanRevision) (colony.PlanCandidate, bool) {

@@ -182,6 +182,9 @@ func validCurrentPlanningState(t *testing.T) (colony.ColonyState, []colony.Plann
 		if err != nil {
 			t.Fatalf("load production-addressed planning-state fixture: %v", err)
 		}
+		goal := "Restore iterative planning"
+		state.Goal = &goal
+		state.SessionID = planningStateStringPtr("session-200")
 		timeline, err := loadPlanningTimeline(root, accepted.Candidate.Timeline.RunID)
 		if err != nil {
 			t.Fatalf("load production-addressed planning timeline: %v", err)
@@ -198,6 +201,15 @@ func validCurrentPlanningState(t *testing.T) (colony.ColonyState, []colony.Plann
 	var state colony.ColonyState
 	if err := json.Unmarshal(currentPlanningStateFixtureJSON, &state); err != nil {
 		t.Fatalf("clone production-addressed planning-state fixture: %v", err)
+	}
+	// Progress-focused callers historically model one runtime transition by
+	// mutating Plan.Phases. Preserve that helper contract while keeping every
+	// immutable identity itself sourced from the production constructors.
+	for index := range state.Plan.Revisions {
+		if state.Plan.Revisions[index].ID == state.Plan.ActiveRevisionID {
+			state.Plan.Revisions[index].Phases = state.Plan.Phases
+			break
+		}
 	}
 	var cards []colony.PlanningIterationCard
 	if err := json.Unmarshal(currentPlanningCardsFixtureJSON, &cards); err != nil {

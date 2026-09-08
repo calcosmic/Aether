@@ -283,11 +283,55 @@ func TestPlanAuthorityRejectsReaddressedFalseImpact200(t *testing.T) {
 	facts := lifecycleFactsFromStateSnapshot(state, false, time.Date(2026, time.September, 9, 10, 1, 0, 0, time.UTC))
 	bindings := planAuthorityVerifiedBindings{
 		Candidate: &candidate, Acceptance: &receipt, Timeline: &candidate.Timeline,
-		Cards: clonePlanningCards(t, cards), CandidateCanonical: true, TimelineCanonical: true, AcceptanceCanonical: true,
+		Cards: clonePlanningCards(t, cards),
 	}
 	decision := validateAcceptedPlanAuthority(facts, bindings)
 	if decision.Eligible || decision.RefusalCode != planAuthorityRefusalCandidateInvalid || !strings.Contains(decision.Diagnostic, "derived") {
 		t.Fatalf("build/run authority accepted a re-addressed false impact: %+v", decision)
+	}
+}
+
+func TestPlanAuthorityRederivesAcceptedPhaseInsert200(t *testing.T) {
+	root, firstCandidate := planCandidateTestPending(t)
+	if _, err := acceptPlanCandidate(root, planCandidateTestAcceptanceRequest(firstCandidate), planCandidateAcceptanceOptions{
+		AcceptedBy: "owner:phase-insert-base", AcceptedAt: time.Date(2026, time.September, 9, 10, 5, 0, 0, time.UTC),
+	}); err != nil {
+		t.Fatalf("accept phase-insert base: %v", err)
+	}
+	baseState, err := loadSpecificationColonyState(root)
+	if err != nil {
+		t.Fatalf("load phase-insert base: %v", err)
+	}
+	baseRevision, ok := activePlanRevision(baseState.Plan)
+	if !ok || baseState.Specification == nil {
+		t.Fatal("phase-insert base lacks accepted plan or specification")
+	}
+	specificationRevision, ok := currentSpecificationRevision(*baseState.Specification)
+	if !ok || len(specificationRevision.Requirements) == 0 {
+		t.Fatal("phase-insert base lacks a current requirement")
+	}
+	inserted, err := createPhaseInsertCandidate(root, phaseInsertCandidateRequest{
+		After: len(baseState.Plan.Phases), Name: "Independent authority recheck",
+		Description: "Prove build and run rederive a later accepted phase insertion.",
+		Constraints: "Keep the accepted predecessor immutable.", SpecificationItemID: specificationRevision.Requirements[0].ID,
+		ExpectedBasePlanRevisionID: baseRevision.ID, CreatedAt: time.Date(2026, time.September, 9, 10, 6, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("create phase-insert candidate: %v", err)
+	}
+	if _, err := acceptPlanCandidate(root, planCandidateTestAcceptanceRequest(inserted.Candidate), planCandidateAcceptanceOptions{
+		AcceptedBy: "owner:phase-insert", AcceptedAt: time.Date(2026, time.September, 9, 10, 7, 0, 0, time.UTC),
+	}); err != nil {
+		t.Fatalf("accept phase-insert candidate: %v", err)
+	}
+	state, err := loadSpecificationColonyState(root)
+	if err != nil {
+		t.Fatalf("load accepted phase-insert state: %v", err)
+	}
+	facts := lifecycleFactsFromStateSnapshot(state, false, time.Date(2026, time.September, 9, 10, 8, 0, 0, time.UTC))
+	bindings := loadPlanAuthorityVerifiedBindings(root, facts)
+	if decision := validateAcceptedPlanAuthority(facts, bindings); !decision.Eligible {
+		t.Fatalf("independently derived phase-insert authority was refused: %+v", decision)
 	}
 }
 
