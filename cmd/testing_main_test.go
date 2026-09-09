@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"go/ast"
@@ -9,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -26,7 +29,12 @@ import (
 // assignment leaks into subsequent tests. Belt-and-suspenders with per-test
 // cleanup via saveGlobals.
 func TestMain(m *testing.M) {
-	extendDefaultCommandPackageTestTimeout()
+	if !flag.Parsed() {
+		flag.Parse()
+	}
+	if shouldRunFullSuiteController(currentFullSuiteInvocation()) {
+		os.Exit(runFullSuiteController())
+	}
 	origOutputMode, hadOutputMode := os.LookupEnv("AETHER_OUTPUT_MODE")
 	origHivePolicy, hadHivePolicy := os.LookupEnv(hivePolicyEnv)
 	_ = os.Setenv("AETHER_OUTPUT_MODE", "json")
@@ -128,19 +136,525 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// extendDefaultCommandPackageTestTimeout keeps the growing integration suite
-// from reaching Go's stock ten-minute deadline before t.Parallel isolation
-// wrappers are scheduled. Explicit non-default budgets (including every
-// isolated child budget) remain untouched and therefore stay fail-closed.
-func extendDefaultCommandPackageTestTimeout() {
-	if !flag.Parsed() {
-		flag.Parse()
+const (
+	fullSuiteShardEnv       = "AETHER_CMD_FULL_SUITE_SHARD"
+	fullSuiteSerialLaneName = "serial-shared-checkout"
+	fullSuiteParallelLanes  = 8
+	fullSuiteChildTimeout   = 9 * time.Minute
+	fullSuiteCommandTimeout = 9*time.Minute + 15*time.Second
+	fullSuiteOverallTimeout = 10 * time.Minute
+)
+
+type fullSuiteInvocation struct {
+	Run           string
+	RunExplicit   bool
+	List          string
+	ListExplicit  bool
+	Bench         string
+	BenchExplicit bool
+	Fuzz          string
+	FuzzExplicit  bool
+	Skip          string
+	SkipExplicit  bool
+	Count         int
+	Short         bool
+	FailFast      bool
+	CPU           string
+	Shuffle       string
+	Profiled      bool
+	ShardMarker   string
+}
+
+type fullSuiteLane struct {
+	Name          string
+	Serial        bool
+	Tests         []string
+	EstimatedCost time.Duration
+}
+
+type fullSuiteChildRequest struct {
+	Executable string
+	Lane       fullSuiteLane
+	Args       []string
+	Env        []string
+}
+
+type fullSuiteChildResult struct {
+	Output   string
+	Executed []string
+	Duration time.Duration
+	Err      error
+}
+
+type fullSuiteLaneReport struct {
+	Name       string
+	Planned    int
+	Executed   int
+	Duration   time.Duration
+	Successful bool
+}
+
+type fullSuiteRunReport struct {
+	Discovered int
+	Executed   int
+	Passed     bool
+	Lanes      []fullSuiteLaneReport
+}
+
+type fullSuiteChildRunner func(context.Context, fullSuiteChildRequest) fullSuiteChildResult
+
+func currentFullSuiteInvocation() fullSuiteInvocation {
+	visited := make(map[string]bool)
+	flag.Visit(func(value *flag.Flag) {
+		visited[value.Name] = true
+	})
+	return fullSuiteInvocation{
+		Run:           testFlagString("test.run"),
+		RunExplicit:   visited["test.run"],
+		List:          testFlagString("test.list"),
+		ListExplicit:  visited["test.list"],
+		Bench:         testFlagString("test.bench"),
+		BenchExplicit: visited["test.bench"],
+		Fuzz:          testFlagString("test.fuzz"),
+		FuzzExplicit:  visited["test.fuzz"],
+		Skip:          testFlagString("test.skip"),
+		SkipExplicit:  visited["test.skip"],
+		Count:         testFlagInt("test.count", 1),
+		Short:         testFlagBool("test.short"),
+		FailFast:      testFlagBool("test.failfast"),
+		CPU:           testFlagString("test.cpu"),
+		Shuffle:       testFlagString("test.shuffle"),
+		Profiled:      fullSuiteProfileRequested(),
+		ShardMarker:   os.Getenv(fullSuiteShardEnv),
 	}
-	timeoutFlag := flag.Lookup("test.timeout")
-	if timeoutFlag == nil || timeoutFlag.Value.String() != (10*time.Minute).String() {
-		return
+}
+
+func testFlagString(name string) string {
+	if value := flag.Lookup(name); value != nil {
+		return value.Value.String()
 	}
-	_ = timeoutFlag.Value.Set((30 * time.Minute).String())
+	return ""
+}
+
+func testFlagInt(name string, fallback int) int {
+	value := flag.Lookup(name)
+	if value == nil {
+		return fallback
+	}
+	var parsed int
+	if _, err := fmt.Sscan(value.Value.String(), &parsed); err != nil {
+		return fallback
+	}
+	return parsed
+}
+
+func testFlagBool(name string) bool {
+	return testFlagString(name) == "true"
+}
+
+func fullSuiteProfileRequested() bool {
+	for _, name := range []string{
+		"test.blockprofile",
+		"test.cpuprofile",
+		"test.memprofile",
+		"test.mutexprofile",
+		"test.trace",
+		"test.gocoverdir",
+	} {
+		if strings.TrimSpace(testFlagString(name)) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func shouldRunFullSuiteController(invocation fullSuiteInvocation) bool {
+	if invocation.Count != 1 || invocation.ShardMarker != "" {
+		return false
+	}
+	if invocation.RunExplicit || invocation.ListExplicit || invocation.BenchExplicit || invocation.FuzzExplicit || invocation.SkipExplicit {
+		return false
+	}
+	if invocation.Run != "" || invocation.List != "" || invocation.Bench != "" || invocation.Fuzz != "" || invocation.Skip != "" {
+		return false
+	}
+	if invocation.Short || invocation.FailFast || invocation.Profiled || strings.TrimSpace(invocation.CPU) != "" {
+		return false
+	}
+	return invocation.Shuffle == "" || invocation.Shuffle == "off"
+}
+
+func planFullSuiteLanes(discovered []string, serialTests map[string]struct{}, costs map[string]time.Duration, parallelLaneCount int) ([]fullSuiteLane, error) {
+	if parallelLaneCount < 1 {
+		return nil, fmt.Errorf("full-suite parallel lane count must be positive, got %d", parallelLaneCount)
+	}
+	seen := make(map[string]struct{}, len(discovered))
+	ordered := append([]string(nil), discovered...)
+	for _, testName := range ordered {
+		if strings.TrimSpace(testName) == "" {
+			return nil, errors.New("full-suite discovery returned an empty test name")
+		}
+		if _, exists := seen[testName]; exists {
+			return nil, fmt.Errorf("full-suite discovery returned duplicate test %s", testName)
+		}
+		seen[testName] = struct{}{}
+	}
+	sort.Strings(ordered)
+
+	serialLane := fullSuiteLane{Name: fullSuiteSerialLaneName, Serial: true}
+	parallelTests := make([]string, 0, len(ordered))
+	for _, testName := range ordered {
+		cost := costs[testName]
+		if cost <= 0 {
+			cost = time.Second
+		}
+		if _, serial := serialTests[testName]; serial {
+			serialLane.Tests = append(serialLane.Tests, testName)
+			serialLane.EstimatedCost += cost
+			continue
+		}
+		parallelTests = append(parallelTests, testName)
+	}
+
+	sort.SliceStable(parallelTests, func(i, j int) bool {
+		leftCost := costs[parallelTests[i]]
+		rightCost := costs[parallelTests[j]]
+		if leftCost != rightCost {
+			return leftCost > rightCost
+		}
+		return parallelTests[i] < parallelTests[j]
+	})
+	if parallelLaneCount > len(parallelTests) && len(parallelTests) > 0 {
+		parallelLaneCount = len(parallelTests)
+	}
+	parallel := make([]fullSuiteLane, parallelLaneCount)
+	for index := range parallel {
+		parallel[index].Name = fmt.Sprintf("parallel-%02d", index+1)
+	}
+	for _, testName := range parallelTests {
+		lightest := 0
+		for index := 1; index < len(parallel); index++ {
+			if parallel[index].EstimatedCost < parallel[lightest].EstimatedCost {
+				lightest = index
+			}
+		}
+		cost := costs[testName]
+		if cost <= 0 {
+			cost = time.Second
+		}
+		parallel[lightest].Tests = append(parallel[lightest].Tests, testName)
+		parallel[lightest].EstimatedCost += cost
+	}
+
+	lanes := make([]fullSuiteLane, 0, len(parallel)+1)
+	if len(serialLane.Tests) > 0 {
+		lanes = append(lanes, serialLane)
+	}
+	for _, lane := range parallel {
+		sort.Strings(lane.Tests)
+		if len(lane.Tests) > 0 {
+			lanes = append(lanes, lane)
+		}
+	}
+	if err := validateFullSuitePlan(discovered, lanes); err != nil {
+		return nil, err
+	}
+	return lanes, nil
+}
+
+func validateFullSuitePlan(discovered []string, lanes []fullSuiteLane) error {
+	discoveredCounts := make(map[string]int, len(discovered))
+	for _, testName := range discovered {
+		discoveredCounts[testName]++
+		if discoveredCounts[testName] > 1 {
+			return fmt.Errorf("full-suite discovery contains duplicate test %s", testName)
+		}
+	}
+	plannedCounts := make(map[string]int, len(discovered))
+	for _, lane := range lanes {
+		if strings.TrimSpace(lane.Name) == "" {
+			return errors.New("full-suite plan contains an unnamed lane")
+		}
+		for _, testName := range lane.Tests {
+			plannedCounts[testName]++
+			if plannedCounts[testName] > 1 {
+				return fmt.Errorf("full-suite plan contains duplicate test %s", testName)
+			}
+			if discoveredCounts[testName] == 0 {
+				return fmt.Errorf("full-suite plan contains undiscovered test %s", testName)
+			}
+		}
+	}
+	var missing []string
+	for testName := range discoveredCounts {
+		if plannedCounts[testName] == 0 {
+			missing = append(missing, testName)
+		}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		return fmt.Errorf("full-suite plan is missing tests: %s", strings.Join(missing, ", "))
+	}
+	return nil
+}
+
+func runFullSuiteController() int {
+	executable, err := os.Executable()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "full-suite controller: resolve current test binary: %v\n", err)
+		return 1
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), fullSuiteOverallTimeout)
+	defer cancel()
+	discovered, err := discoverFullSuiteTests(ctx, executable)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "full-suite controller: %v\n", err)
+		return 1
+	}
+	lanes, err := planFullSuiteLanes(discovered, nil, nil, fullSuiteParallelLanes)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "full-suite controller: %v\n", err)
+		return 1
+	}
+	report, runErr := runFullSuiteLanes(ctx, executable, lanes, fullSuiteParallelLanes, runFullSuiteChildProcess)
+	writeFullSuiteReport(os.Stdout, report)
+	if runErr != nil {
+		fmt.Fprintf(os.Stderr, "full-suite controller failed: %v\n", runErr)
+		return 1
+	}
+	return 0
+}
+
+func discoverFullSuiteTests(ctx context.Context, executable string) ([]string, error) {
+	command := exec.CommandContext(ctx, executable,
+		"-test.list=^(Test|Example)",
+		"-test.count=1",
+		"-test.timeout=30s",
+	)
+	command.Env = fullSuiteChildEnvironment("discovery")
+	output, err := command.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("discover top-level tests with current binary: %w\n%s", err, output)
+	}
+	validName := regexp.MustCompile(`^(Test|Example)[A-Za-z0-9_]*$`)
+	var discovered []string
+	for _, line := range strings.Split(string(output), "\n") {
+		name := strings.TrimSpace(line)
+		if validName.MatchString(name) {
+			discovered = append(discovered, name)
+		}
+	}
+	if len(discovered) == 0 {
+		return nil, fmt.Errorf("current test binary reported no top-level tests:\n%s", output)
+	}
+	return discovered, nil
+}
+
+func fullSuiteChildRequestForLane(executable string, lane fullSuiteLane) fullSuiteChildRequest {
+	quoted := make([]string, 0, len(lane.Tests))
+	for _, testName := range lane.Tests {
+		quoted = append(quoted, regexp.QuoteMeta(testName))
+	}
+	runSelector := "^(" + strings.Join(quoted, "|") + ")$"
+	args := []string{
+		"-test.run=" + runSelector,
+		"-test.count=1",
+		"-test.timeout=" + fullSuiteChildTimeout.String(),
+		"-test.v=true",
+	}
+	if parallel := testFlagString("test.parallel"); strings.TrimSpace(parallel) != "" {
+		args = append(args, "-test.parallel="+parallel)
+	}
+	if testFlagBool("test.fullpath") {
+		args = append(args, "-test.fullpath=true")
+	}
+	return fullSuiteChildRequest{
+		Executable: executable,
+		Lane:       lane,
+		Args:       args,
+		Env:        fullSuiteChildEnvironment(lane.Name),
+	}
+}
+
+func fullSuiteChildEnvironment(laneName string) []string {
+	environment := make([]string, 0, len(os.Environ())+1)
+	for _, entry := range os.Environ() {
+		key, _, _ := strings.Cut(entry, "=")
+		if key == fullSuiteShardEnv {
+			continue
+		}
+		environment = append(environment, entry)
+	}
+	return append(environment, fullSuiteShardEnv+"="+fmt.Sprintf("%d:%s", os.Getpid(), laneName))
+}
+
+func runFullSuiteChildProcess(ctx context.Context, request fullSuiteChildRequest) fullSuiteChildResult {
+	started := time.Now()
+	childCtx, cancel := context.WithTimeout(ctx, fullSuiteCommandTimeout)
+	defer cancel()
+	command := exec.CommandContext(childCtx, request.Executable, request.Args...)
+	command.Env = request.Env
+	command.WaitDelay = isolatedProcessWaitDelay
+	output, err := command.CombinedOutput()
+	if childCtx.Err() != nil {
+		err = errors.Join(err, fmt.Errorf("lane %s exceeded %s: %w", request.Lane.Name, fullSuiteCommandTimeout, childCtx.Err()))
+	}
+	return fullSuiteChildResult{
+		Output:   string(output),
+		Executed: fullSuiteExecutedTopLevels(output),
+		Duration: time.Since(started),
+		Err:      err,
+	}
+}
+
+func fullSuiteExecutedTopLevels(output []byte) []string {
+	const prefix = "=== RUN   "
+	var names []string
+	for _, line := range strings.Split(string(output), "\n") {
+		if !strings.HasPrefix(line, prefix) {
+			continue
+		}
+		name := strings.TrimSpace(strings.TrimPrefix(line, prefix))
+		if name != "" && !strings.Contains(name, "/") {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+func runFullSuiteLanes(ctx context.Context, executable string, lanes []fullSuiteLane, parallelism int, runner fullSuiteChildRunner) (fullSuiteRunReport, error) {
+	report := fullSuiteRunReport{Lanes: make([]fullSuiteLaneReport, len(lanes))}
+	if strings.TrimSpace(executable) == "" {
+		return report, errors.New("full-suite current executable is empty")
+	}
+	if parallelism < 1 {
+		return report, fmt.Errorf("full-suite parallelism must be positive, got %d", parallelism)
+	}
+	if runner == nil {
+		return report, errors.New("full-suite child runner is nil")
+	}
+	var discovered []string
+	for _, lane := range lanes {
+		discovered = append(discovered, lane.Tests...)
+	}
+	if err := validateFullSuitePlan(discovered, lanes); err != nil {
+		return report, err
+	}
+	report.Discovered = len(discovered)
+
+	results := make([]fullSuiteChildResult, len(lanes))
+	runLane := func(index int) {
+		request := fullSuiteChildRequestForLane(executable, lanes[index])
+		func() {
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					results[index] = fullSuiteChildResult{Err: fmt.Errorf("child runner panic: %v", recovered)}
+				}
+			}()
+			results[index] = runner(ctx, request)
+		}()
+	}
+	var parallelIndexes []int
+	for index, lane := range lanes {
+		if lane.Serial {
+			runLane(index)
+		} else {
+			parallelIndexes = append(parallelIndexes, index)
+		}
+	}
+	jobs := make(chan int)
+	var workers sync.WaitGroup
+	workerCount := parallelism
+	if workerCount > len(parallelIndexes) {
+		workerCount = len(parallelIndexes)
+	}
+	for worker := 0; worker < workerCount; worker++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for index := range jobs {
+				runLane(index)
+			}
+		}()
+	}
+	for _, index := range parallelIndexes {
+		jobs <- index
+	}
+	close(jobs)
+	workers.Wait()
+
+	var failures []string
+	for index, lane := range lanes {
+		result := results[index]
+		laneReport := fullSuiteLaneReport{
+			Name:       lane.Name,
+			Planned:    len(lane.Tests),
+			Executed:   len(result.Executed),
+			Duration:   result.Duration,
+			Successful: result.Err == nil,
+		}
+		report.Lanes[index] = laneReport
+		report.Executed += len(result.Executed)
+		if accountingErr := validateFullSuiteExecution(lane.Tests, result.Executed); accountingErr != nil {
+			laneReport.Successful = false
+			report.Lanes[index] = laneReport
+			failures = append(failures, fmt.Sprintf("lane %s accounting: %v", lane.Name, accountingErr))
+		}
+		if result.Err != nil {
+			failures = append(failures, fmt.Sprintf("lane %s: %v\n%s", lane.Name, result.Err, strings.TrimSpace(result.Output)))
+		}
+	}
+	report.Passed = len(failures) == 0 && report.Executed == report.Discovered
+	if !report.Passed {
+		if len(failures) == 0 {
+			failures = append(failures, fmt.Sprintf("full-suite accounting discovered=%d executed=%d", report.Discovered, report.Executed))
+		}
+		return report, errors.New(strings.Join(failures, "\n"))
+	}
+	return report, nil
+}
+
+func validateFullSuiteExecution(planned, executed []string) error {
+	plannedCounts := make(map[string]int, len(planned))
+	for _, testName := range planned {
+		plannedCounts[testName]++
+	}
+	executedCounts := make(map[string]int, len(executed))
+	for _, testName := range executed {
+		executedCounts[testName]++
+		if executedCounts[testName] > 1 {
+			return fmt.Errorf("duplicate executed test %s", testName)
+		}
+		if plannedCounts[testName] == 0 {
+			return fmt.Errorf("unexpected executed test %s", testName)
+		}
+	}
+	var missing []string
+	for testName := range plannedCounts {
+		if executedCounts[testName] == 0 {
+			missing = append(missing, testName)
+		}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		return fmt.Errorf("missing executed tests: %s", strings.Join(missing, ", "))
+	}
+	return nil
+}
+
+func writeFullSuiteReport(output *os.File, report fullSuiteRunReport) {
+	status := "PASS"
+	if !report.Passed {
+		status = "FAIL"
+	}
+	fmt.Fprintf(output, "FULL-SUITE %s discovered=%d executed=%d lanes=%d\n", status, report.Discovered, report.Executed, len(report.Lanes))
+	for _, lane := range report.Lanes {
+		laneStatus := "PASS"
+		if !lane.Successful {
+			laneStatus = "FAIL"
+		}
+		fmt.Fprintf(output, "FULL-SUITE lane=%s status=%s planned=%d executed=%d duration=%s\n", lane.Name, laneStatus, lane.Planned, lane.Executed, lane.Duration.Round(time.Millisecond))
+	}
 }
 
 // saveGlobals captures the current values of all mutable package-level globals
