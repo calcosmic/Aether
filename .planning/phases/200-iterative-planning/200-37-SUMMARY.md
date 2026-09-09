@@ -74,6 +74,8 @@ Each task followed a fail-first TDD boundary and was committed atomically:
 2. **Task 2 GREEN: Enforce one canonical standing in review and acceptance** - `b59ab68a` (feat)
 3. **Task 3 GREEN: Validate timely acceptance again at build and run authority** - `1d09365b` (fix)
 
+**Plan metadata:** `091fd049` (docs)
+
 ## Files Created/Modified
 
 - `cmd/plan_candidate_expiry_200_test.go` - Injected-clock boundary, stale-binding, atomic expiry, safe review, replay, and execution-authority proofs.
@@ -99,6 +101,7 @@ Each task followed a fail-first TDD boundary and was committed atomically:
 - Combined candidate and authority suite repeated three times - passed (672 tests across 2 packages).
 - Combined candidate and authority suite under `go test -race` - passed (224 tests across 2 packages; no data races).
 - `go vet ./cmd ./pkg/colony`, implementation-range `git diff --check`, exact six-file ownership, and deletion checks - passed.
+- GSD progress metadata records 35/40 summaries while Current Position deliberately remains Plan 35, the next incomplete plan in the declared wave order.
 - The known repository-wide `go test ./...` command was not run because this plan calls for bounded candidate/authority verification and the repository documents that command's approximately 11-minute runtime.
 
 ## TDD Gate Compliance
@@ -143,6 +146,9 @@ Each task followed a fail-first TDD boundary and was committed atomically:
 ## Issues Encountered
 
 - The first broad Task 3 pass exposed the phase-insert dual-base semantics described above; it was resolved within the plan's declared files.
+- The installed GSD state synchronizer again stripped Phase 200 provenance fields and misreported phase-level completion while updating summary counts. After the normal metadata commit, the fields were restored against commit `091fd049` using the same scoped provenance pattern as Plan 34 commit `d9413473`.
+- `state.advance-plan` was intentionally not invoked because Plan 37 is Wave 21 while Plan 35 is the next incomplete Wave 22 plan; blindly incrementing the current Plan 35 position would have skipped required work.
+- PLAN-04 through PLAN-06 were already checked complete in REQUIREMENTS.md. The installed marker helper reported them as not found because each bold requirement label continues past the ID, so no requirements bytes needed changing.
 - No authentication, package, architectural, or external-service blocker occurred.
 
 ## Known Stubs
@@ -157,12 +163,13 @@ None - no packages, credentials, migrations, or external services were added.
 
 - Later planning/build work can consume one stable candidate-standing contract rather than re-deriving expiry independently.
 - `aether plan --refresh` is the existing deterministic recovery for every stale or expired review.
+- Wave 22 can proceed with Plan 35 (and its independent Plan 38 lane) without losing the out-of-order Plan 37 completion count.
 - No Plan 37 implementation, race, verification, scope, or protected-state blocker remains.
 
 ## Self-Check: PASSED
 
 - All six declared source/test files and this summary exist.
-- Commits `b8264507`, `b59ab68a`, and `1d09365b` exist in repository history.
+- Commits `b8264507`, `b59ab68a`, `1d09365b`, and metadata commit `091fd049` exist in repository history.
 - Focused, repeated, race, vet, diff, ownership, deletion, and protected-state checks pass.
 - Protected `.planning/config.json`, `.gsd/`, and Phase 199 PATTERNS dirt remains present and unstaged; the two byte-hashed files exactly match their pre-execution hashes.
 
