@@ -32,7 +32,7 @@ func TestBoundaryBuildFixturesUseCanonicalAuthority200(t *testing.T) {
 		{
 			file:      "build_attempt_test.go",
 			signature: "func TestResumeDashboard" + "DoesNotRedispatchLiveBuildProcess(",
-			want:      []string{"ProcessState: testBuildProcessLive", "ExecutionOwner:", "DispatchMode:"},
+			want:      []string{"ProcessState:", "testBuildProcessLive", "ExecutionOwner:", "DispatchMode:"},
 		},
 	}
 	for _, tc := range cases {
@@ -390,7 +390,13 @@ func TestBuildAttemptIdempotentResubmit(t *testing.T) {
 func TestResumeDashboardDoesNotRedispatchLiveBuildProcess(t *testing.T) {
 	saveGlobals(t)
 	startedAt := time.Now().UTC()
-	commitTestBuildStart(t, testBuildStartOptions{GeneratedAt: startedAt, ExecutionOwner: "go-runtime"})
+	commitTestBuildStart(t, testBuildStartOptions{
+		Phase:          1,
+		GeneratedAt:    startedAt,
+		ProcessState:   testBuildProcessLive,
+		ExecutionOwner: "runtime-worker-dispatch",
+		DispatchMode:   "direct",
+	})
 	result := buildResumeDashboardResult()
 	recovery, ok := result["recovery"].(map[string]interface{})
 	if !ok || recovery["next"] != "aether watch" {

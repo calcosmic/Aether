@@ -227,11 +227,6 @@ func TestBuildFinalizeAddsOrchestratorBoundaryGuidance(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
-	withWorkingDir(t, root)
-	withTestWorkspace(t, root)
-
 	goal := "Build finalizer boundary guidance"
 	taskID := "1.1"
 	startedAt := time.Now().UTC()
@@ -249,7 +244,10 @@ func TestBuildFinalizeAddsOrchestratorBoundaryGuidance(t *testing.T) {
 			Tasks:  []colony.Task{{ID: &taskID, Goal: "Implement boundary guidance", Status: colony.TaskInProgress}},
 		}}},
 	}
-	createTestColonyState(t, dataDir, state)
+	accepted := createApprovedAcceptedBuildTestColony(t, state)
+	root := accepted.Root
+	withWorkingDir(t, root)
+	withTestWorkspace(t, root)
 
 	source := orchestratorBoundaryClarificationSource("build", 1, "build-scope", true)
 	if err := store.SaveJSON(pendingDecisionsFile, PendingDecisionFile{Decisions: []PendingDecision{{
@@ -270,10 +268,11 @@ func TestBuildFinalizeAddsOrchestratorBoundaryGuidance(t *testing.T) {
 		ColonyMode:      string(colony.ColonyModeOrchestrator),
 		PlanOnly:        true,
 		DispatchMode:    "plan-only",
+		ExecutionOwner:  "host-queen",
 		GeneratedAt:     startedAt.Format(time.RFC3339),
 		State:           string(colony.StateEXECUTING),
 		WorkerBriefs:    []string{},
-		Tasks:           []codexBuildTaskPlan{},
+		Tasks:           []codexBuildTaskPlan{{ID: taskID, Goal: "Implement boundary guidance", Status: colony.TaskInProgress}},
 		SuccessCriteria: []string{},
 		Dispatches: []codexBuildDispatch{{
 			Stage:  "wave",
@@ -291,6 +290,21 @@ func TestBuildFinalizeAddsOrchestratorBoundaryGuidance(t *testing.T) {
 			Options: []string{},
 		}},
 	}
+	start := commitTestBuildStartAt(t, root, 1, startedAt, testBuildStartOptions{
+		Variant:        buildStartPlanOnly,
+		Phase:          1,
+		GeneratedAt:    startedAt,
+		ProcessState:   testBuildProcessDead,
+		SelectedTasks:  []string{taskID},
+		Dispatches:     manifest.Dispatches,
+		ExecutionOwner: "host-queen",
+		DispatchMode:   "plan-only",
+		Manifest:       &manifest,
+	})
+	if start.Manifest == nil {
+		t.Fatal("canonical build start returned no bound manifest")
+	}
+	manifest = *start.Manifest
 	completion := codexExternalBuildCompletion{
 		DispatchManifest: &manifest,
 		Results: []codexExternalBuildWorkerResult{{

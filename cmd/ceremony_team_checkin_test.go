@@ -647,8 +647,6 @@ func TestOneWorkerWithPersistedOwnerDecisionStillPauses(t *testing.T) {
 func TestPendingDecisionStillRendersFullCheckinCard(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
-	dataDir := setupBuildFlowTest(t)
-	root := dataDir[:len(dataDir)-len("/.aether/data")]
 
 	// Phase ID 5 (not checkinFixturePhase's shared ID 1) sidesteps
 	// chaosShouldRunInLightMode's deterministic phaseID%10<3 sampling
@@ -656,7 +654,7 @@ func TestPendingDecisionStillRendersFullCheckinCard(t *testing.T) {
 	// one builder -- the forced-reviewer signal below is a build-time
 	// ANNOUNCEMENT independent of review depth (D-05), so it stays live
 	// regardless.
-	taskID := "1.1"
+	taskID := "5.1"
 	phase := colony.Phase{
 		ID:          5,
 		Name:        "Password reset",
@@ -665,9 +663,32 @@ func TestPendingDecisionStillRendersFullCheckinCard(t *testing.T) {
 		Status:      colony.PhaseReady,
 		Tasks:       []colony.Task{{ID: &taskID, Goal: "Do the work", Status: colony.TaskPending}},
 	}
-	setUpCheckinFixtureColony(t, dataDir, phase)
+	phases := make([]colony.Phase, 0, 5)
+	for index, priorTaskID := range []string{"1.1", "2.1", "3.1", "4.1"} {
+		priorID := priorTaskID
+		phases = append(phases, colony.Phase{
+			ID:          index + 1,
+			Name:        "Completed prerequisite",
+			Description: "Keep the requested fifth phase honestly reachable",
+			Mode:        colony.PhaseModePrototype,
+			Status:      colony.PhaseCompleted,
+			Tasks:       []colony.Task{{ID: &priorID, Goal: "Complete prerequisite work", Status: colony.TaskCompleted}},
+		})
+	}
+	phases = append(phases, phase)
+	goal := phase.Name
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		CurrentPhase: 5,
+		Plan:         colony.Plan{Phases: phases},
+	})
+	root := accepted.Root
+	withWorkingDir(t, root)
 
-	result, _, _, dispatches, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{LightFlag: true})
+	result, _, _, dispatches, err := runCodexBuildPlanOnlyWithOptions(root, 5, nil, codexBuildOptions{LightFlag: true})
 	if err != nil {
 		t.Fatalf("runCodexBuildPlanOnlyWithOptions: %v", err)
 	}
