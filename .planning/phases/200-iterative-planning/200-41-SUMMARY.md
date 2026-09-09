@@ -76,6 +76,8 @@ Each task was committed atomically through its RED and GREEN TDD gates:
 5. **Task 3 RED: Reproduce sequential root contamination** - `c3862c44` (test)
 6. **Task 3 GREEN: Isolate shared build-flow setup** - `9857d1af` (test)
 
+**Plan metadata:** `17242c17` (docs), followed by a scoped provenance-restoration commit.
+
 ## Files Created/Modified
 
 - `cmd/testing_main_test.go` - Defines the shared repository binder, exact cleanup contract, and binding regression proof.
@@ -122,7 +124,7 @@ None - no external service configuration required.
 ## Self-Check: PASSED
 
 - All five modified test files and this summary exist.
-- All six RED/GREEN task commits are present in repository history.
+- All six RED/GREEN task commits and the plan metadata commit are present in repository history.
 
 ---
 *Phase: 200-iterative-planning*
