@@ -68,21 +68,10 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	resetRootCmd(t)
 	forceBuildJSONOutput(t)
 
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
-	oldDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get cwd: %v", err)
-	}
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("failed to chdir to test root: %v", err)
-	}
-	defer os.Chdir(oldDir)
-
 	goal := "Bring Codex build parity to the ant process"
 	researchID := "1.1"
 	implementID := "1.2"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
 		Version:      "3.0",
 		Goal:         &goal,
 		State:        colony.StateREADY,
@@ -104,6 +93,15 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 			},
 		},
 	})
+	dataDir, root := accepted.DataRoot, accepted.Root
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to test root: %v", err)
+	}
+	defer os.Chdir(oldDir)
 
 	rootCmd.SetArgs([]string{"build", "1"})
 	if err := rootCmd.Execute(); err != nil {
@@ -537,20 +535,9 @@ func TestDispatchEntryCarriesBriefPath(t *testing.T) {
 	resetRootCmd(t)
 	forceBuildJSONOutput(t)
 
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
-	oldDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get cwd: %v", err)
-	}
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("failed to chdir to test root: %v", err)
-	}
-	defer os.Chdir(oldDir)
-
 	goal := "Prove every dispatch entry names its brief file"
 	researchID := "1.1"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
 		Version:      "3.0",
 		Goal:         &goal,
 		State:        colony.StateREADY,
@@ -571,6 +558,15 @@ func TestDispatchEntryCarriesBriefPath(t *testing.T) {
 			},
 		},
 	})
+	root := accepted.Root
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to test root: %v", err)
+	}
+	defer os.Chdir(oldDir)
 
 	rootCmd.SetArgs([]string{"build", "1"})
 	if err := rootCmd.Execute(); err != nil {
@@ -1668,11 +1664,9 @@ func TestBuildPlanOnlyKeepsRoutineUIQueenSelectionLean(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
 	goal := "Build a routine settings panel"
 	taskID := "1.1"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
 		Version:      "3.0",
 		Goal:         &goal,
 		State:        colony.StateREADY,
@@ -1680,7 +1674,7 @@ func TestBuildPlanOnlyKeepsRoutineUIQueenSelectionLean(t *testing.T) {
 		CurrentPhase: 0,
 		Plan: colony.Plan{
 			Phases: []colony.Phase{{
-				ID:          3,
+				ID:          1,
 				Name:        "Settings UI panel",
 				Description: "Build a settings panel for user preferences",
 				Mode:        colony.PhaseModePrototype,
@@ -1693,6 +1687,7 @@ func TestBuildPlanOnlyKeepsRoutineUIQueenSelectionLean(t *testing.T) {
 			}},
 		},
 	})
+	root := accepted.Root
 
 	result, _, _, _, err := runCodexBuildPlanOnly(root, 1, nil)
 	if err != nil {
@@ -1762,11 +1757,9 @@ func TestBuildPlanOnlyHeavyReviewAllowsPolicyMeasurerAndChaos(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
 	goal := "Optimize query performance"
 	taskID := "1.1"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
 		Version:      "3.0",
 		Goal:         &goal,
 		State:        colony.StateREADY,
@@ -1774,7 +1767,7 @@ func TestBuildPlanOnlyHeavyReviewAllowsPolicyMeasurerAndChaos(t *testing.T) {
 		CurrentPhase: 0,
 		Plan: colony.Plan{
 			Phases: []colony.Phase{{
-				ID:          4,
+				ID:          1,
 				Name:        "Performance optimization",
 				Description: "Optimize query latency and reduce memory usage",
 				Mode:        colony.PhaseModePrototype,
@@ -1787,6 +1780,7 @@ func TestBuildPlanOnlyHeavyReviewAllowsPolicyMeasurerAndChaos(t *testing.T) {
 			}},
 		},
 	})
+	root := accepted.Root
 
 	result, _, _, _, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{HeavyFlag: true})
 	if err != nil {
@@ -1805,10 +1799,9 @@ func TestBuildPlanOnlyCLIForwardsVerificationDepth(t *testing.T) {
 	resetRootCmd(t)
 	forceBuildJSONOutput(t)
 
-	dataDir := setupBuildFlowTest(t)
 	goal := "Optimize query performance"
 	taskID := "1.1"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
 		Version:      "3.0",
 		Goal:         &goal,
 		State:        colony.StateREADY,
@@ -1816,7 +1809,7 @@ func TestBuildPlanOnlyCLIForwardsVerificationDepth(t *testing.T) {
 		CurrentPhase: 0,
 		Plan: colony.Plan{
 			Phases: []colony.Phase{{
-				ID:          4,
+				ID:          1,
 				Name:        "Performance optimization",
 				Description: "Optimize query latency and reduce memory usage",
 				Mode:        colony.PhaseModePrototype,
@@ -1829,6 +1822,7 @@ func TestBuildPlanOnlyCLIForwardsVerificationDepth(t *testing.T) {
 			}},
 		},
 	})
+	withWorkingDir(t, accepted.Root)
 
 	rootCmd.SetArgs([]string{"build", "1", "--plan-only", "--verification-depth", "heavy"})
 	if err := rootCmd.Execute(); err != nil {
@@ -1851,10 +1845,9 @@ func TestBuildCLIForwardsVerificationDepth(t *testing.T) {
 	resetRootCmd(t)
 	forceBuildJSONOutput(t)
 
-	dataDir := setupBuildFlowTest(t)
 	goal := "Optimize query performance"
 	taskID := "1.1"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
 		Version:      "3.0",
 		Goal:         &goal,
 		State:        colony.StateREADY,
@@ -1875,6 +1868,7 @@ func TestBuildCLIForwardsVerificationDepth(t *testing.T) {
 			}},
 		},
 	})
+	withWorkingDir(t, accepted.Root)
 
 	rootCmd.SetArgs([]string{"build", "1", "--synthetic", "--verification-depth", "heavy"})
 	if err := rootCmd.Execute(); err != nil {
@@ -1971,20 +1965,9 @@ func TestBuildFinalizeRecordsExternalTaskResultsForContinue(t *testing.T) {
 	resetRootCmd(t)
 	forceBuildJSONOutput(t)
 
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
-	oldDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get cwd: %v", err)
-	}
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("failed to chdir to test root: %v", err)
-	}
-	defer os.Chdir(oldDir)
-
 	goal := "Finalize wrapper-spawned agents"
 	taskID := "1.1"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
 		Version:      "3.0",
 		Goal:         &goal,
 		State:        colony.StateREADY,
@@ -2000,6 +1983,15 @@ func TestBuildFinalizeRecordsExternalTaskResultsForContinue(t *testing.T) {
 			}},
 		},
 	})
+	dataDir, root := accepted.DataRoot, accepted.Root
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to test root: %v", err)
+	}
+	defer os.Chdir(oldDir)
 
 	result, _, _, _, err := runCodexBuildPlanOnly(root, 1, nil)
 	if err != nil {
@@ -2281,22 +2273,11 @@ func TestBuildSupportsTaskScopedRedispatch(t *testing.T) {
 	resetRootCmd(t)
 	forceBuildJSONOutput(t)
 
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
-	oldDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get cwd: %v", err)
-	}
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("failed to chdir to test root: %v", err)
-	}
-	defer os.Chdir(oldDir)
-
 	goal := "Redispatch only the missing task"
 	taskOneID := "1.1"
 	taskTwoID := "1.2"
 	now := time.Now().UTC()
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
 		Version:        "3.0",
 		Goal:           &goal,
 		State:          colony.StateEXECUTING,
@@ -2317,6 +2298,15 @@ func TestBuildSupportsTaskScopedRedispatch(t *testing.T) {
 			},
 		},
 	})
+	root := accepted.Root
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to test root: %v", err)
+	}
+	defer os.Chdir(oldDir)
 
 	rootCmd.SetArgs([]string{"build", "1", "--task", taskTwoID})
 	if err := rootCmd.Execute(); err != nil {
@@ -2372,71 +2362,86 @@ func TestBuildRepairsCompletedPriorPhaseTasksFromTrustedManifest(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
-	withTestWorkspace(t, root)
-	withWorkingDir(t, root)
-
 	goal := "Repair completed phase task statuses before next build"
 	phaseOneTaskID := "1.1"
 	phaseOneSecondTaskID := "1.2"
 	phaseTwoTaskID := "2.1"
 	now := time.Now().UTC()
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	acceptedState := colony.ColonyState{
 		Version:      "3.0",
 		Goal:         &goal,
 		State:        colony.StateREADY,
-		CurrentPhase: 2,
+		CurrentPhase: 1,
 		ColonyDepth:  "light",
 		Plan: colony.Plan{
 			Phases: []colony.Phase{
 				{
 					ID:     1,
 					Name:   "Already closed phase",
-					Status: colony.PhaseCompleted,
+					Status: colony.PhaseReady,
 					Tasks: []colony.Task{
 						{ID: &phaseOneTaskID, Goal: "Finish the first prior task", Status: colony.TaskPending},
-						{ID: &phaseOneSecondTaskID, Goal: "Finish the second prior task", Status: colony.TaskInProgress, DependsOn: []string{phaseOneTaskID}},
+						{ID: &phaseOneSecondTaskID, Goal: "Finish the second prior task", Status: colony.TaskPending, DependsOn: []string{phaseOneTaskID}},
 					},
 				},
 				{
 					ID:     2,
 					Name:   "Next phase",
-					Status: colony.PhaseReady,
+					Status: colony.PhasePending,
 					Tasks:  []colony.Task{{ID: &phaseTwoTaskID, Goal: "Start only after prior tasks are reconciled", Status: colony.TaskPending}},
 				},
 			},
 		},
-	})
+	}
+	accepted := createApprovedAcceptedBuildTestColony(t, acceptedState)
+	root := accepted.Root
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
 
-	if err := store.SaveJSON("build/phase-1/manifest.json", codexBuildManifest{
-		Phase:        1,
-		PhaseName:    "Already closed phase",
-		Goal:         goal,
-		Root:         root,
-		ColonyDepth:  "light",
-		DispatchMode: "external-task",
-		GeneratedAt:  now.Format(time.RFC3339),
-		State:        string(colony.StateBUILT),
-		ClaimsPath:   displayDataPath("last-build-claims.json"),
+	priorDispatches := []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-prior-1", Task: "Finish the first prior task", Status: "completed", TaskID: phaseOneTaskID, Outputs: []string{"main.go"}},
+		{Stage: "wave", Wave: 2, Caste: "builder", Name: "Forge-prior-2", Task: "Finish the second prior task", Status: "completed", TaskID: phaseOneSecondTaskID, Outputs: []string{"main.go"}},
+		{Stage: "verification", Caste: "watcher", Name: "Keen-prior-3", Task: "Verify prior phase", Status: "completed", Outputs: []string{"main_test.go"}},
+	}
+	priorManifest := codexBuildManifest{
+		Phase:          1,
+		PhaseName:      "Already closed phase",
+		Goal:           goal,
+		Root:           root,
+		ColonyDepth:    "light",
+		DispatchMode:   "direct",
+		ExecutionOwner: "runtime-worker-dispatch",
+		GeneratedAt:    now.Format(time.RFC3339),
+		State:          string(colony.StateBUILT),
+		SelectedTasks:  []string{phaseOneTaskID, phaseOneSecondTaskID},
 		Tasks: []codexBuildTaskPlan{
 			{ID: phaseOneTaskID, Goal: "Finish the first prior task", Status: colony.TaskCompleted},
 			{ID: phaseOneSecondTaskID, Goal: "Finish the second prior task", Status: colony.TaskCompleted, DependsOn: []string{phaseOneTaskID}},
 		},
-		Dispatches: []codexBuildDispatch{
-			{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-prior-1", Task: "Finish the first prior task", Status: "completed", TaskID: phaseOneTaskID, Outputs: []string{"main.go"}},
-			{Stage: "wave", Wave: 2, Caste: "builder", Name: "Forge-prior-2", Task: "Finish the second prior task", Status: "completed", TaskID: phaseOneSecondTaskID, Outputs: []string{"main.go"}},
-			{Stage: "verification", Caste: "watcher", Name: "Keen-prior-3", Task: "Verify prior phase", Status: "completed", Outputs: []string{"main_test.go"}},
-		},
-	}); err != nil {
-		t.Fatalf("failed to seed prior manifest: %v", err)
+		Dispatches: priorDispatches,
 	}
-	if err := store.SaveJSON("last-build-claims.json", codexBuildClaims{
-		FilesModified: []string{"main.go"},
-		BuildPhase:    1,
-		Timestamp:     now.Format(time.RFC3339),
-	}); err != nil {
-		t.Fatalf("failed to seed prior claims: %v", err)
+	commitTestBuildStartAt(t, root, 1, now, testBuildStartOptions{
+		Variant:        buildStartDirect,
+		Phase:          1,
+		GeneratedAt:    now,
+		ProcessState:   testBuildProcessDead,
+		SelectedTasks:  []string{phaseOneTaskID, phaseOneSecondTaskID},
+		Dispatches:     priorDispatches,
+		ExecutionOwner: "runtime-worker-dispatch",
+		DispatchMode:   "direct",
+		Manifest:       &priorManifest,
+	})
+
+	completedState := acceptedState
+	completedState.State = colony.StateREADY
+	completedState.CurrentPhase = 2
+	completedState.Plan.Phases[0].Status = colony.PhaseCompleted
+	completedState.Plan.Phases[0].Tasks[0].Status = colony.TaskPending
+	completedState.Plan.Phases[0].Tasks[1].Status = colony.TaskInProgress
+	completedState.Plan.Phases[1].Status = colony.PhaseReady
+	applyAcceptedBuildTestExecutionFacts(t, root, completedState)
+	if _, err := os.Stat(filepath.Join(accepted.DataRoot, "build", "phase-1", "manifest.json")); err != nil {
+		t.Fatalf("canonical build start did not persist prior manifest: %v", err)
 	}
 
 	if _, err := runCodexBuild(root, 2, nil, true); err != nil {
@@ -3015,11 +3020,10 @@ func TestBuildJobProposalRoundTrip(t *testing.T) {
 	resetRootCmd(t)
 	forceBuildJSONOutput(t)
 
-	dataDir := setupBuildFlowTest(t)
 	goal := "Wire Queen job proposals into build planning"
 	firstID := "1.1"
 	secondID := "1.2"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
 		Version: "3.0",
 		Goal:    &goal,
 		State:   colony.StateREADY,
@@ -3033,6 +3037,7 @@ func TestBuildJobProposalRoundTrip(t *testing.T) {
 			},
 		}}},
 	})
+	withWorkingDir(t, accepted.Root)
 
 	proposal := `{"name":"proposal-wire","task_ids":["1.1","1.2"],"owner_caste":"builder","relationship":"dependency_chain","benefit":"one implementation context"}`
 	rootCmd.SetArgs([]string{"build", "1", "--plan-only", "--no-checkin", "--job-proposal", proposal})

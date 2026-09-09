@@ -275,6 +275,7 @@ func createApprovedAcceptedBuildTestColony(t *testing.T, desired colony.ColonySt
 	}); err != nil {
 		t.Fatalf("accept exact build fixture candidate: %v", err)
 	}
+	applyAcceptedBuildTestExecutionFacts(t, root, desired)
 
 	binding := bindCommandTestRepositoryAt(t, root)
 	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\n\nfunc main() {}\n"), 0o644); err != nil {
@@ -287,6 +288,49 @@ func createApprovedAcceptedBuildTestColony(t *testing.T, desired colony.ColonySt
 	})
 	state := mustReadSpecificationTestState(t, root)
 	return approvedAcceptedBuildTestColony{Root: root, DataRoot: binding.DataDir, Candidate: candidate, State: state}
+}
+
+func applyAcceptedBuildTestExecutionFacts(t *testing.T, root string, desired colony.ColonyState) {
+	t.Helper()
+	if err := withPlanningMutationSession(root, "test-accepted-build-execution", func(session *planningMutationSession) error {
+		state, err := loadSpecificationColonyStateInSession(session)
+		if err != nil {
+			return err
+		}
+		if desired.State != "" {
+			state.State = desired.State
+		}
+		if desired.CurrentPhase > 0 {
+			state.CurrentPhase = desired.CurrentPhase
+		}
+		state.BuildStartedAt = desired.BuildStartedAt
+		desiredPhases := make(map[int]colony.Phase, len(desired.Plan.Phases))
+		for _, phase := range desired.Plan.Phases {
+			desiredPhases[phase.ID] = phase
+		}
+		for phaseIndex := range state.Plan.Phases {
+			phase := &state.Plan.Phases[phaseIndex]
+			wanted, ok := desiredPhases[phase.ID]
+			if !ok {
+				continue
+			}
+			phase.Status = wanted.Status
+			phase.WatcherFailureCount = wanted.WatcherFailureCount
+			wantedTasks := make(map[string]colony.Task, len(wanted.Tasks))
+			for taskIndex, task := range wanted.Tasks {
+				wantedTasks[buildTaskID(task, taskIndex)] = task
+			}
+			for taskIndex := range phase.Tasks {
+				if task, found := wantedTasks[buildTaskID(phase.Tasks[taskIndex], taskIndex)]; found {
+					phase.Tasks[taskIndex].Status = task.Status
+				}
+			}
+		}
+		syncActivePlanRevisionExecutionFacts(&state.Plan)
+		return persistPlanningColonyStateInSession(session, "test-accepted-build-execution", state)
+	}); err != nil {
+		t.Fatalf("seed accepted build execution facts: %v", err)
+	}
 }
 
 func acceptedBuildTestProposal(t *testing.T, template planningRoutePlanProposal, phases []colony.Phase) planningRoutePlanProposal {
@@ -491,6 +535,12 @@ func testBuildStartEffects(t *testing.T, root string, state colony.ColonyState, 
 	}
 	if options.Manifest != nil {
 		manifest = *options.Manifest
+		// Authority bindings are transaction output, not caller-authored fixture
+		// data. Preserve the caller's semantic manifest while forcing the exact
+		// accepted revision and state hash that commitBuildStart is about to bind.
+		manifest.PlanAuthority = request.PlanAuthority
+		manifest.PlanRevisionID = request.PlanAuthority.ActiveRevision.ID
+		manifest.PlanStateHash = planSHA
 	}
 	if rule.manifest {
 		effects.ManifestPath = options.ManifestPath
