@@ -46,6 +46,35 @@ func TestContinueLifecycleFixturesUseAcceptedAuthority200(t *testing.T) {
 	}
 }
 
+func completeCanonicalContinueAttempt200(t *testing.T, fixture testBuildStartFixture, builtState colony.ColonyState, dispatches []codexBuildDispatch) {
+	t.Helper()
+	summary := &codex.ClaimsSummary{FilesModified: []string{"main.go"}}
+	for _, dispatch := range dispatches {
+		if dispatch.TaskID == "" || dispatch.Caste != "builder" {
+			continue
+		}
+		summary.TaskClaims = append(summary.TaskClaims, codex.TaskClaimsSummary{TaskID: dispatch.TaskID, FilesModified: []string{"main.go"}})
+	}
+	claims, err := recordBuildAttemptTerminal(fixture.Root, fixture.AttemptPath, fixture.Request.Phase, fixture.Request.GeneratedAt, dispatches, summary, fixture.Request.DispatchMode, nil)
+	if err != nil {
+		t.Fatalf("record canonical continue terminal evidence: %v", err)
+	}
+	if err := store.SaveJSON("last-build-claims.json", claims); err != nil {
+		t.Fatalf("persist canonical continue claims: %v", err)
+	}
+	applyAcceptedBuildTestExecutionFacts(t, fixture.Root, builtState)
+	if err := transitionBuildAttempt(fixture.AttemptPath, buildAttemptBuilt, "fixture built lifecycle state committed", dispatches, claims, fixture.Request.DispatchMode, nil); err != nil {
+		t.Fatalf("complete canonical continue attempt: %v", err)
+	}
+
+	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
+	for _, dispatch := range dispatches {
+		if err := spawnTree.RecordSpawn("Queen", dispatch.Caste, dispatch.Name, dispatch.Task, 1); err != nil {
+			t.Fatalf("record canonical continue spawn evidence: %v", err)
+		}
+	}
+}
+
 func TestContinueConsumesBuildPacketAndAdvancesPhase(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
 	saveGlobals(t)
@@ -574,29 +603,23 @@ func TestContinueFinalizeRecordsExternalReviewAndAdvances(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
-	withTestWorkspace(t, root)
-	withWorkingDir(t, root)
-
 	goal := "Finalize wrapper continue review"
-	now := time.Now().UTC()
+	now := time.Now().UTC().Truncate(time.Second)
 	taskID := "1.1"
 	nextTaskID := "2.1"
-	createTestColonyState(t, dataDir, colony.ColonyState{
-		Version:        "3.0",
-		Goal:           &goal,
-		State:          colony.StateBUILT,
-		CurrentPhase:   1,
-		BuildStartedAt: &now,
+	acceptedState := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
 		Plan: colony.Plan{
 			Phases: []colony.Phase{
 				{
 					ID:          1,
 					Name:        "Wrapper continue finalize",
 					Description: "Record wrapper review workers",
-					Status:      colony.PhaseInProgress,
-					Tasks:       []colony.Task{{ID: &taskID, Goal: "Verify wrapper review", Status: colony.TaskInProgress}},
+					Status:      colony.PhaseReady,
+					Tasks:       []colony.Task{{ID: &taskID, Goal: "Verify wrapper review", Status: colony.TaskPending}},
 				},
 				{
 					ID:     2,
@@ -606,13 +629,39 @@ func TestContinueFinalizeRecordsExternalReviewAndAdvances(t *testing.T) {
 				},
 			},
 		},
-	})
+	}
+	accepted := createApprovedAcceptedBuildTestColony(t, acceptedState)
+	dataDir, root := accepted.DataRoot, accepted.Root
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+	acceptedPhase := accepted.State.Plan.Phases[0]
 
 	buildDispatches := []codexBuildDispatch{
-		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Mason-31", Task: "Verify wrapper review", Status: "completed", TaskID: taskID},
-		{Stage: "verification", Caste: "watcher", Name: "Keen-32", Task: "Independent verification before advancement", Status: "completed"},
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Mason-31", Task: "Verify wrapper review", Status: "completed", TaskID: taskID, Outputs: []string{"main.go"}},
+		{Stage: "verification", Caste: "watcher", Name: "Keen-32", Task: "Independent verification before advancement", Status: "completed", Outputs: []string{"main.go"}},
 	}
-	seedContinueBuildPacket(t, dataDir, 1, "Wrapper continue finalize", goal, buildDispatches)
+	manifest := codexBuildManifest{
+		Phase: 1, PhaseName: "Wrapper continue finalize", Goal: goal, Root: root,
+		ColonyDepth: "standard", DispatchMode: "direct", ExecutionOwner: "runtime-worker-dispatch",
+		GeneratedAt: now.Format(time.RFC3339), State: string(colony.StateBUILT),
+		ClaimsPath: displayDataPath("last-build-claims.json"), SelectedTasks: []string{taskID},
+		Tasks:                   []codexBuildTaskPlan{{ID: taskID, Goal: "Verify wrapper review", Status: colony.TaskCompleted}},
+		SuccessCriteria:         append([]string(nil), acceptedPhase.SuccessCriteria...),
+		CriterionEvidencePolicy: phaseCriterionEvidencePolicy(acceptedPhase),
+		EvidenceRequirements:    flattenPhaseCriterionEvidenceRequirements(acceptedPhase),
+		Dispatches:              buildDispatches,
+	}
+	fixture := commitTestBuildStartAt(t, root, 1, now, testBuildStartOptions{
+		Variant: buildStartDirect, Phase: 1, GeneratedAt: now, ProcessState: testBuildProcessDead,
+		SelectedTasks: []string{taskID}, Dispatches: buildDispatches,
+		ExecutionOwner: "runtime-worker-dispatch", DispatchMode: "direct", Manifest: &manifest,
+	})
+	builtState := acceptedState
+	builtState.State = colony.StateBUILT
+	builtState.BuildStartedAt = &now
+	builtState.Plan.Phases[0].Status = colony.PhaseInProgress
+	builtState.Plan.Phases[0].Tasks[0].Status = colony.TaskInProgress
+	completeCanonicalContinueAttempt200(t, fixture, builtState, buildDispatches)
 
 	planResult, _, _, _, err := runCodexContinuePlanOnly(root, codexContinueOptions{HeavyFlag: true})
 	if err != nil {
@@ -4945,28 +4994,22 @@ func TestContinueEndToEndAfterAbandonedRecovery(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
-	withTestWorkspace(t, root)
-	withWorkingDir(t, root)
-
 	goal := "End-to-end abandoned recovery"
-	staleTime := time.Now().UTC().Add(-2 * time.Hour)
+	staleTime := time.Now().UTC().Add(-2 * time.Hour).Truncate(time.Second)
 	taskID := "1.1"
 	nextTaskID := "2.1"
-	createTestColonyState(t, dataDir, colony.ColonyState{
-		Version:        "3.0",
-		Goal:           &goal,
-		State:          colony.StateBUILT,
-		CurrentPhase:   1,
-		BuildStartedAt: &staleTime,
+	acceptedState := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
 		Plan: colony.Plan{
 			Phases: []colony.Phase{
 				{
 					ID:     1,
 					Name:   "Abandoned recovery",
-					Status: colony.PhaseInProgress,
-					Tasks:  []colony.Task{{ID: &taskID, Goal: "Recover from abandoned", Status: colony.TaskInProgress}},
+					Status: colony.PhaseReady,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Recover from abandoned", Status: colony.TaskPending}},
 				},
 				{
 					ID:     2,
@@ -4976,34 +5019,38 @@ func TestContinueEndToEndAfterAbandonedRecovery(t *testing.T) {
 				},
 			},
 		},
-	})
+	}
+	accepted := createApprovedAcceptedBuildTestColony(t, acceptedState)
+	root := accepted.Root
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+	acceptedPhase := accepted.State.Plan.Phases[0]
 
-	// Manually write a manifest with all dispatches stuck at "spawned"
-	buildDir := filepath.Join(dataDir, "build", "phase-1")
-	if err := os.MkdirAll(filepath.Join(buildDir, "worker-briefs"), 0755); err != nil {
-		t.Fatalf("failed to create build dir: %v", err)
+	stalledDispatches := []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-e2e1", Task: "Recover from abandoned", Status: "spawned", TaskID: taskID},
 	}
-	manifest := codexBuildManifest{
-		Phase:        1,
-		PhaseName:    "Abandoned recovery",
-		Goal:         goal,
-		Root:         root,
-		ColonyDepth:  "standard",
-		DispatchMode: "real",
-		GeneratedAt:  staleTime.Format(time.RFC3339),
-		State:        string(colony.StateBUILT),
-		ClaimsPath:   displayDataPath("last-build-claims.json"),
-		Dispatches: []codexBuildDispatch{
-			{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-e2e1", Task: "Recover from abandoned", Status: "spawned", TaskID: taskID},
-		},
+	stalledManifest := codexBuildManifest{
+		Phase: 1, PhaseName: "Abandoned recovery", Goal: goal, Root: root,
+		ColonyDepth: "standard", DispatchMode: "direct", ExecutionOwner: "runtime-worker-dispatch",
+		GeneratedAt: staleTime.Format(time.RFC3339), State: string(colony.StateBUILT),
+		ClaimsPath: displayDataPath("last-build-claims.json"), SelectedTasks: []string{taskID},
+		Tasks:                   []codexBuildTaskPlan{{ID: taskID, Goal: "Recover from abandoned", Status: colony.TaskInProgress}},
+		SuccessCriteria:         append([]string(nil), acceptedPhase.SuccessCriteria...),
+		CriterionEvidencePolicy: phaseCriterionEvidencePolicy(acceptedPhase),
+		EvidenceRequirements:    flattenPhaseCriterionEvidenceRequirements(acceptedPhase),
+		Dispatches:              stalledDispatches,
 	}
-	manifestJSON, err := json.Marshal(manifest)
-	if err != nil {
-		t.Fatalf("marshal manifest: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(buildDir, "manifest.json"), manifestJSON, 0644); err != nil {
-		t.Fatalf("write manifest: %v", err)
-	}
+	commitTestBuildStartAt(t, root, 1, staleTime, testBuildStartOptions{
+		Variant: buildStartDirect, Phase: 1, GeneratedAt: staleTime, ProcessState: testBuildProcessDead,
+		SelectedTasks: []string{taskID}, Dispatches: stalledDispatches,
+		ExecutionOwner: "runtime-worker-dispatch", DispatchMode: "direct", Manifest: &stalledManifest,
+	})
+	stalledState := acceptedState
+	stalledState.State = colony.StateBUILT
+	stalledState.BuildStartedAt = &staleTime
+	stalledState.Plan.Phases[0].Status = colony.PhaseInProgress
+	stalledState.Plan.Phases[0].Tasks[0].Status = colony.TaskInProgress
+	applyAcceptedBuildTestExecutionFacts(t, root, stalledState)
 
 	var outBuf bytes.Buffer
 	stdout = &outBuf
@@ -5028,23 +5075,38 @@ func TestContinueEndToEndAfterAbandonedRecovery(t *testing.T) {
 		t.Fatal("expected advanced=false for abandoned build")
 	}
 
-	// Now simulate re-dispatch: re-seed manifest with completed dispatches
-	// and proper claims, then reset state to BUILT
-	seedContinueBuildPacket(t, dataDir, 1, "Abandoned recovery", goal, []codexBuildDispatch{
-		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-e2e1", Task: "Recover from abandoned", Status: "completed", TaskID: taskID},
-		{Stage: "verification", Caste: "watcher", Name: "Keen-e2e2", Task: "Independent verification before advancement", Status: "completed"},
+	// Simulate the recommended redispatch through a second canonical start,
+	// then record its terminal worker evidence through the ordinary journal.
+	redispatchReady := acceptedState
+	applyAcceptedBuildTestExecutionFacts(t, root, redispatchReady)
+	redispatchAt := time.Now().UTC().Truncate(time.Second)
+	completedDispatches := []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-e2e1", Task: "Recover from abandoned", Status: "completed", TaskID: taskID, Outputs: []string{"main.go"}},
+		{Stage: "verification", Caste: "watcher", Name: "Keen-e2e2", Task: "Independent verification before advancement", Status: "completed", Outputs: []string{"main.go"}},
+	}
+	completedManifest := codexBuildManifest{
+		Phase: 1, PhaseName: "Abandoned recovery", Goal: goal, Root: root,
+		ColonyDepth: "standard", DispatchMode: "direct", ExecutionOwner: "runtime-worker-dispatch",
+		GeneratedAt: redispatchAt.Format(time.RFC3339), State: string(colony.StateBUILT),
+		ClaimsPath: displayDataPath("last-build-claims.json"), SelectedTasks: []string{taskID},
+		Tasks:                   []codexBuildTaskPlan{{ID: taskID, Goal: "Recover from abandoned", Status: colony.TaskCompleted}},
+		SuccessCriteria:         append([]string(nil), acceptedPhase.SuccessCriteria...),
+		CriterionEvidencePolicy: phaseCriterionEvidencePolicy(acceptedPhase),
+		EvidenceRequirements:    flattenPhaseCriterionEvidenceRequirements(acceptedPhase),
+		Dispatches:              completedDispatches,
+	}
+	redispatch := commitTestBuildStartAt(t, root, 1, redispatchAt, testBuildStartOptions{
+		Variant: buildStartDirect, Phase: 1, GeneratedAt: redispatchAt, ProcessState: testBuildProcessDead,
+		SelectedTasks: []string{taskID}, Dispatches: completedDispatches,
+		ExecutionOwner: "runtime-worker-dispatch", DispatchMode: "direct", Manifest: &completedManifest,
+		StalePaths: buildStartStaleArtifactPaths(1, true),
 	})
-
-	// Reset state back to BUILT so continue can run again
-	var state colony.ColonyState
-	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
-		t.Fatalf("load state: %v", err)
-	}
-	state.State = colony.StateBUILT
-	state.BuildStartedAt = &staleTime
-	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
-		t.Fatalf("save state: %v", err)
-	}
+	redispatchBuilt := acceptedState
+	redispatchBuilt.State = colony.StateBUILT
+	redispatchBuilt.BuildStartedAt = &redispatchAt
+	redispatchBuilt.Plan.Phases[0].Status = colony.PhaseInProgress
+	redispatchBuilt.Plan.Phases[0].Tasks[0].Status = colony.TaskInProgress
+	completeCanonicalContinueAttempt200(t, redispatch, redispatchBuilt, completedDispatches)
 
 	// Second continue: should advance now that dispatches are completed
 	outBuf.Reset()
@@ -5333,29 +5395,23 @@ func TestContinueFinalizeWritesWorkerOutcomeReports(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
-	withTestWorkspace(t, root)
-	withWorkingDir(t, root)
-
 	goal := "Write worker outcome reports"
-	now := time.Now().UTC()
+	now := time.Now().UTC().Truncate(time.Second)
 	taskID := "1.1"
 	nextTaskID := "2.1"
-	createTestColonyState(t, dataDir, colony.ColonyState{
-		Version:        "3.0",
-		Goal:           &goal,
-		State:          colony.StateBUILT,
-		CurrentPhase:   1,
-		BuildStartedAt: &now,
+	acceptedState := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
 		Plan: colony.Plan{
 			Phases: []colony.Phase{
 				{
 					ID:          1,
 					Name:        "Outcome report phase",
 					Description: "Test outcome report writing",
-					Status:      colony.PhaseInProgress,
-					Tasks:       []colony.Task{{ID: &taskID, Goal: "Build task", Status: colony.TaskInProgress}},
+					Status:      colony.PhaseReady,
+					Tasks:       []colony.Task{{ID: &taskID, Goal: "Build task", Status: colony.TaskPending}},
 				},
 				{
 					ID:     2,
@@ -5365,13 +5421,39 @@ func TestContinueFinalizeWritesWorkerOutcomeReports(t *testing.T) {
 				},
 			},
 		},
-	})
+	}
+	accepted := createApprovedAcceptedBuildTestColony(t, acceptedState)
+	dataDir, root := accepted.DataRoot, accepted.Root
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+	acceptedPhase := accepted.State.Plan.Phases[0]
 
 	buildDispatches := []codexBuildDispatch{
-		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Mason-31", Task: "Build task", Status: "completed", TaskID: taskID},
-		{Stage: "verification", Caste: "watcher", Name: "Keen-32", Task: "Independent verification", Status: "completed"},
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Mason-31", Task: "Build task", Status: "completed", TaskID: taskID, Outputs: []string{"main.go"}},
+		{Stage: "verification", Caste: "watcher", Name: "Keen-32", Task: "Independent verification", Status: "completed", Outputs: []string{"main.go"}},
 	}
-	seedContinueBuildPacket(t, dataDir, 1, "Outcome report phase", goal, buildDispatches)
+	manifest := codexBuildManifest{
+		Phase: 1, PhaseName: "Outcome report phase", Goal: goal, Root: root,
+		ColonyDepth: "standard", DispatchMode: "direct", ExecutionOwner: "runtime-worker-dispatch",
+		GeneratedAt: now.Format(time.RFC3339), State: string(colony.StateBUILT),
+		ClaimsPath: displayDataPath("last-build-claims.json"), SelectedTasks: []string{taskID},
+		Tasks:                   []codexBuildTaskPlan{{ID: taskID, Goal: "Build task", Status: colony.TaskCompleted}},
+		SuccessCriteria:         append([]string(nil), acceptedPhase.SuccessCriteria...),
+		CriterionEvidencePolicy: phaseCriterionEvidencePolicy(acceptedPhase),
+		EvidenceRequirements:    flattenPhaseCriterionEvidenceRequirements(acceptedPhase),
+		Dispatches:              buildDispatches,
+	}
+	fixture := commitTestBuildStartAt(t, root, 1, now, testBuildStartOptions{
+		Variant: buildStartDirect, Phase: 1, GeneratedAt: now, ProcessState: testBuildProcessDead,
+		SelectedTasks: []string{taskID}, Dispatches: buildDispatches,
+		ExecutionOwner: "runtime-worker-dispatch", DispatchMode: "direct", Manifest: &manifest,
+	})
+	builtState := acceptedState
+	builtState.State = colony.StateBUILT
+	builtState.BuildStartedAt = &now
+	builtState.Plan.Phases[0].Status = colony.PhaseInProgress
+	builtState.Plan.Phases[0].Tasks[0].Status = colony.TaskInProgress
+	completeCanonicalContinueAttempt200(t, fixture, builtState, buildDispatches)
 
 	planResult, _, _, _, err := runCodexContinuePlanOnly(root, codexContinueOptions{})
 	if err != nil {
