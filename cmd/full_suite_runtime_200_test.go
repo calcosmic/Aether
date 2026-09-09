@@ -145,6 +145,27 @@ func TestFullSuiteRuntime200UsesCurrentBinary(t *testing.T) {
 	if realReport.Discovered != 1 || realReport.Executed != 1 || !realReport.Passed {
 		t.Fatalf("real current-binary report = %+v, want 1/1 passing", realReport)
 	}
+
+	discoveryContext, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	discovered, err := discoverFullSuiteTests(discoveryContext, executable)
+	if err != nil {
+		t.Fatalf("current test binary discovery failed: %v", err)
+	}
+	foundProbe := false
+	seen := make(map[string]struct{}, len(discovered))
+	for _, testName := range discovered {
+		if _, duplicate := seen[testName]; duplicate {
+			t.Fatalf("current test binary discovery duplicated %s", testName)
+		}
+		seen[testName] = struct{}{}
+		if testName == "TestFullSuiteRuntime200CurrentBinaryProbe" {
+			foundProbe = true
+		}
+	}
+	if !foundProbe {
+		t.Fatalf("current test binary discovery omitted the compiled probe from %d top-level entries", len(discovered))
+	}
 }
 
 func TestFullSuiteRuntime200CurrentBinaryProbe(t *testing.T) {
