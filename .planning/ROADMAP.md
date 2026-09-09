@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 37/40 plans executed
+**Plans:** 38/40 plans executed
 
 Plans:
 
@@ -293,7 +293,7 @@ Plans:
 
 **Wave 23** *(gap closure; blocked on Wave 22 completion)*
 
-- [ ] 200-36-PLAN.md — Migrate the remaining build-start fixtures and retire every partial start helper.
+- [x] 200-36-PLAN.md — Migrate the remaining build-start fixtures and retire every partial start helper.
 
 **Wave 24** *(gap closure; blocked on Wave 23 completion)*
 

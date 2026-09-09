@@ -5,15 +5,15 @@ milestone_name: Classic Colony Restoration
 current_phase: 200
 current_phase_name: Iterative Planning
 status: executing
-stopped_at: Completed 200-38-PLAN.md; next incomplete remains 200-36 by wave order
-last_updated: "2026-09-09T03:46:07.000Z"
+stopped_at: Completed 200-36-PLAN.md; next incomplete is 200-39
+last_updated: "2026-09-09T04:11:13.213Z"
 last_activity: 2026-09-09
-state_head: dcbf89395c77865a26c8e81bcfb8fcd916494ee3
+state_head: 2f11e37efaa43403ab881d1e02832903d9d18b3f
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 74
-  completed_plans: 71
+  completed_plans: 72
   percent: 0
 ---
 
@@ -32,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 36 of 40
+Plan: 39 of 40
 Status: Ready to execute
 Last activity: 2026-09-09
 
@@ -151,6 +151,7 @@ Last activity: 2026-09-09
 | Phase 200 P37 | 34min | 3 tasks | 6 files |
 | Phase 200 P35 | 24min | 2 tasks | 6 files |
 | Phase 200 P38 | 31min | 2 tasks | 6 files |
+| Phase 200 P36 | 21min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -472,6 +473,8 @@ Last activity: 2026-09-09
 - [Phase 200]: The newest reviewable authority frontier wins: a newer expired candidate continues to require refresh instead of silently exposing an older accepted plan build action.
 - [Phase 200]: The complete D-16 acceptance command is captured in lifecycle facts and passed through unchanged; the resolver never reconstructs security-sensitive flags.
 - [Phase 200]: The existing lifecyclePlanningFromSnapshot signature remains as a compatibility adapter over the captured-time implementation, keeping production callers outside the six-file scope unchanged.
+- [Phase 200]: Plan 36 preserves six-task retry semantics through explicit legacy-unbound authority while every start effect uses the canonical transaction. — The compatibility fixture stays realistic without weakening production authority validation.
+- [Phase 200]: Plan 36 keeps child retries journal-visible but never latest, and repository AST enforcement rejects retired partial start writers. — Recovery records cannot impersonate dispatched work or reopen multi-write bypasses.
 
 ### Pending Todos
 
@@ -588,8 +591,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-09T03:45:50.033Z
-Stopped at: Completed 200-38-PLAN.md; next incomplete remains 200-36 by wave order
+Last session: 2026-09-09T04:11:13.185Z
+Stopped at: Completed 200-36-PLAN.md; next incomplete is 200-39
 Resume file: None
 
 ## Operator Next Steps
