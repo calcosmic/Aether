@@ -166,3 +166,62 @@ func TestPheromoneCountEmpty(t *testing.T) {
 		t.Errorf("focus = %v, want 0 for empty store", result["focus"])
 	}
 }
+
+func TestPheromoneFixtureRestoresRepositoryAuthority200(t *testing.T) {
+	originalRoot, hadRoot := os.LookupEnv("AETHER_ROOT")
+	originalDataDir, hadDataDir := os.LookupEnv("COLONY_DATA_DIR")
+	originalStore := store
+	originalTracer := tracer
+	t.Cleanup(func() {
+		if hadRoot {
+			_ = os.Setenv("AETHER_ROOT", originalRoot)
+		} else {
+			_ = os.Unsetenv("AETHER_ROOT")
+		}
+		if hadDataDir {
+			_ = os.Setenv("COLONY_DATA_DIR", originalDataDir)
+		} else {
+			_ = os.Unsetenv("COLONY_DATA_DIR")
+		}
+		store = originalStore
+		tracer = originalTracer
+	})
+
+	_ = os.Unsetenv("AETHER_ROOT")
+	_ = os.Unsetenv("COLONY_DATA_DIR")
+	store = nil
+	tracer = nil
+
+	var fixtureRoot string
+	t.Run("legacy pheromone fixture", func(t *testing.T) {
+		saveGlobals(t)
+		fixtureRoot = t.TempDir()
+		dataDir := fixtureRoot + "/.aether/data"
+		if err := os.MkdirAll(dataDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		fixtureStore, err := storage.NewStore(dataDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		store = fixtureStore
+		_ = os.Setenv("AETHER_ROOT", fixtureRoot)
+		defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	})
+
+	if got, ok := os.LookupEnv("AETHER_ROOT"); ok {
+		t.Errorf("AETHER_ROOT survived deleted pheromone fixture: %q", got)
+	}
+	if got, ok := os.LookupEnv("COLONY_DATA_DIR"); ok {
+		t.Errorf("COLONY_DATA_DIR survived deleted pheromone fixture: %q", got)
+	}
+	if store != nil {
+		t.Error("repository store survived deleted pheromone fixture")
+	}
+	if tracer != nil {
+		t.Error("repository tracer survived deleted pheromone fixture")
+	}
+	if _, err := os.Stat(fixtureRoot); !os.IsNotExist(err) {
+		t.Errorf("fixture root still exists after subtest cleanup: %v", err)
+	}
+}
