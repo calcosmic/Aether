@@ -2,19 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
-current_phase: 200
-current_phase_name: Iterative Planning
 status: executing
-stopped_at: Completed 200-37-PLAN.md; next incomplete remains 200-35 by wave order
-last_updated: "2026-09-09T02:44:49.000Z"
+stopped_at: Completed 200-35-PLAN.md; next incomplete remains 200-38 by wave order
+last_updated: "2026-09-09T03:12:18.462Z"
 last_activity: 2026-09-09
-state_head: 091fd049eccf2fdc904a46b9aa0c05dd85f40f19
 progress:
   total_phases: 7
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 74
-  completed_plans: 69
-  percent: 0
+  completed_plans: 70
+  percent: 14
 ---
 
 # Project State
@@ -32,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 35 of 40
+Plan: 36 of 40
 Status: Ready to execute
 Last activity: 2026-09-09
 
@@ -149,6 +146,7 @@ Last activity: 2026-09-09
 | Phase 200 P33 | 30min | 3 tasks | 3 files |
 | Phase 200 P34 | 27min | 3 tasks | 6 files |
 | Phase 200 P37 | 34min | 3 tasks | 6 files |
+| Phase 200 P35 | 24min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -462,6 +460,10 @@ Last activity: 2026-09-09
 - [Phase 200]: Review and acceptance share one injected UTC time — The public command samples the clock once and passes that exact value through repository-session assessment.
 - [Phase 200]: Candidate expiry reuses the terminal failed stage with candidate_expired reason — This records durable expiry without widening the closed planning-stage vocabulary.
 - [Phase 200]: Planning-stage snapshot base and immutable candidate base remain distinct — Phase-insert stages bind a mutable state snapshot while candidate authority binds the retained active revision.
+- [Phase 200]: Canonical test starts seed accepted prerequisites, call commitBuildStart once, and return durable repository evidence. — This makes test setup exercise the same atomic boundary as production.
+- [Phase 200]: Arbitrary test statuses are reached only through transitionBuildAttempt after a canonical start. — Fixtures cannot recreate attempt and latest-pointer state directly.
+- [Phase 200]: Public-build goal prerequisites use the repository mutation session; build-start targets are never written directly. — Tests reach their intended preflight boundary without bypassing repository authority.
+- [Phase 200]: Valid attempt-ID filtering remains test-local until Plan 36 fixes start-receipt enumeration. — The known production compatibility issue stays within its already assigned scope.
 
 ### Pending Todos
 
@@ -578,8 +580,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-09T02:44:49.000Z
-Stopped at: Completed 200-37-PLAN.md; next incomplete remains 200-35 by wave order
+Last session: 2026-09-09T03:12:18.453Z
+Stopped at: Completed 200-35-PLAN.md; next incomplete remains 200-38 by wave order
 Resume file: None
 
 ## Operator Next Steps
