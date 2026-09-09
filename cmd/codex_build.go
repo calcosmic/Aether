@@ -355,6 +355,40 @@ type codexBuildOptions struct {
 	BuildStartBeforeCommit func() error
 }
 
+const partialBuildRecoveryResultKey = "partial_recovery"
+
+// addPartialBuildRecoveryResult keeps the receipt-backed Plan 48 recovery
+// outcome intact while preserving the established top-level JSON fields used
+// by wrappers. The nested value is the single typed source consumed by the
+// terminal renderer; the compatibility fields are projections of it, never a
+// second recovery decision.
+func addPartialBuildRecoveryResult(result map[string]interface{}, recovery partialBuildRetryOutcome) {
+	recovery.UnfinishedTaskIDs = append([]string(nil), recovery.UnfinishedTaskIDs...)
+	result[partialBuildRecoveryResultKey] = recovery
+	result["recovery_job"] = true
+	result["parent_attempt_id"] = recovery.ParentAttemptID
+	result["retry_attempt_id"] = recovery.RetryAttemptID
+	result["retry_attempt_path"] = recovery.RetryAttemptPath
+	result["unfinished_task_ids"] = append([]string(nil), recovery.UnfinishedTaskIDs...)
+	result["recovery_command"] = recovery.RedispatchCommand
+	result["next"] = recovery.RedispatchCommand
+}
+
+// partialBuildRecoveryFromResult deliberately accepts only the typed runtime
+// projection. Rendering must not rebuild a command from task IDs or infer a
+// partial outcome from prose/legacy map keys.
+func partialBuildRecoveryFromResult(result map[string]interface{}) (partialBuildRetryOutcome, bool) {
+	if result == nil {
+		return partialBuildRetryOutcome{}, false
+	}
+	recovery, ok := result[partialBuildRecoveryResultKey].(partialBuildRetryOutcome)
+	if !ok || len(recovery.UnfinishedTaskIDs) == 0 || strings.TrimSpace(recovery.RedispatchCommand) == "" {
+		return partialBuildRetryOutcome{}, false
+	}
+	recovery.UnfinishedTaskIDs = append([]string(nil), recovery.UnfinishedTaskIDs...)
+	return recovery, true
+}
+
 // directCodexBuildPreparation is the read-only result of validating and
 // planning a direct build. The same preparation runs before provider readiness
 // and again after compatibility repairs are authorized, so the two validation
@@ -1058,28 +1092,23 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 			if phaseNum >= 1 && phaseNum <= len(partialState.Plan.Phases) {
 				partialPhase = partialState.Plan.Phases[phaseNum-1]
 			}
-			result := map[string]interface{}{
-				"phase":               phaseNum,
-				"phase_name":          updatedPhase.Name,
-				"state":               string(partialState.State),
-				"recovery_job":        true,
-				"unfinished_task_ids": retryPlan.UnfinishedTaskIDs,
-				"recovery_command":    retryPlan.RedispatchCommand,
-				"next":                retryPlan.RedispatchCommand,
-			}
 			retryOutcome, persistErr := commitPartialBuildRetryPlan(partialState, phaseNum, partialPhase, dispatchManifest.AttemptID, time.Now().UTC(), retryPlan)
 			if persistErr != nil {
-				visualFprintf(stderr, "warning: could not record a D-10 recovery attempt for phase %d's partial credit: %v\n", phaseNum, persistErr)
+				return nil, fmt.Errorf("phase %d partial credit was recorded but its recovery attempt was not committed: %w", phaseNum, persistErr)
 			}
-			if retryOutcome != nil {
-				result["parent_attempt_id"] = retryOutcome.ParentAttemptID
-				result["retry_attempt_id"] = retryOutcome.RetryAttemptID
-				result["retry_attempt_path"] = retryOutcome.RetryAttemptPath
+			if retryOutcome == nil {
+				return nil, fmt.Errorf("phase %d partial credit did not produce the required durable recovery attempt", phaseNum)
 			}
+			result := map[string]interface{}{
+				"phase":      phaseNum,
+				"phase_name": updatedPhase.Name,
+				"state":      string(partialState.State),
+			}
+			addPartialBuildRecoveryResult(result, *retryOutcome)
 			emitVisualProgress(renderDecisionBlock("⚠", "Partial Credit — Recovery Job Created",
-				fmt.Sprintf("Phase %d: %d task(s) unfinished: %s", phaseNum, len(retryPlan.UnfinishedTaskIDs), strings.Join(retryPlan.UnfinishedTaskIDs, ", ")),
+				fmt.Sprintf("Phase %d: %d task(s) unfinished: %s", phaseNum, len(retryOutcome.UnfinishedTaskIDs), strings.Join(retryOutcome.UnfinishedTaskIDs, ", ")),
 				"The credited tasks' proof was kept; nothing proven was rolled back or redone.",
-				retryPlan.RedispatchCommand))
+				retryOutcome.RedispatchCommand))
 			closeLifecycleRun(result, partialState, "build")
 			return result, nil
 		}

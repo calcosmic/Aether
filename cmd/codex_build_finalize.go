@@ -190,9 +190,7 @@ var buildFinalizeCmd = &cobra.Command{
 		// half-built phase was ready to be checked and never showed the
 		// command that finishes the rest.
 		if partial, _ := result["recovery_job"].(bool); partial {
-			unfinished, _ := result["unfinished_task_ids"].([]string)
-			recoveryCommand, _ := result["recovery_command"].(string)
-			outputWorkflow(result, renderBuildPartialCreditVisual(state, phase, unfinished, recoveryCommand))
+			outputWorkflow(result, renderBuildPartialCreditResultVisual(state, phase, result))
 			return nil
 		}
 		outputWorkflow(result, renderBuildFinalizeVisual(state, phase, dispatches))
@@ -960,13 +958,7 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		result["recovery_instructions"] = recoveryInstructions
 	}
 	if partialRetryOutcome != nil {
-		result["recovery_job"] = true
-		result["parent_attempt_id"] = partialRetryOutcome.ParentAttemptID
-		result["retry_attempt_id"] = partialRetryOutcome.RetryAttemptID
-		result["retry_attempt_path"] = partialRetryOutcome.RetryAttemptPath
-		result["unfinished_task_ids"] = partialRetryOutcome.UnfinishedTaskIDs
-		result["recovery_command"] = partialRetryOutcome.RedispatchCommand
-		result["next"] = partialRetryOutcome.RedispatchCommand
+		addPartialBuildRecoveryResult(result, *partialRetryOutcome)
 	}
 	addOrchestratorBoundaryGuidance(result, "build", updatedState, "aether continue", manifest.BoundaryQuestions)
 	// One closing answer for the screen and the wrapper (Phase 197 plan 04).
@@ -1458,13 +1450,7 @@ func idempotentExternalPartialFinalizeResult(state colony.ColonyState, phaseNum 
 		"idempotent":        true,
 		"next":              "aether continue",
 	}
-	result["recovery_job"] = true
-	result["parent_attempt_id"] = recovery.ParentAttemptID
-	result["retry_attempt_id"] = recovery.RetryAttemptID
-	result["retry_attempt_path"] = recovery.RetryAttemptPath
-	result["unfinished_task_ids"] = append([]string{}, recovery.UnfinishedTaskIDs...)
-	result["recovery_command"] = recovery.RedispatchCommand
-	result["next"] = recovery.RedispatchCommand
+	addPartialBuildRecoveryResult(result, *recovery)
 	var boundaryQuestions []discussQuestion
 	if record.PlanManifest != nil {
 		boundaryQuestions = record.PlanManifest.BoundaryQuestions

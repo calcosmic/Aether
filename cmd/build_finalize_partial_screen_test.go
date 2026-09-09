@@ -75,7 +75,7 @@ func TestWrapperPartialFinalizeDoesNotShowTheFinishedBuildScreen(t *testing.T) {
 
 	stdout = &bytes.Buffer{}
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
-	outputWorkflow(result, renderBuildPartialCreditVisual(state, phase, partial.UnfinishedTaskIDs, partial.RedispatchCommand))
+	outputWorkflow(result, renderBuildPartialCreditResultVisual(state, phase, result))
 
 	out := stdout.(*bytes.Buffer).String()
 	for _, claim := range []string{

@@ -235,7 +235,7 @@ func TestPartialBuildDoesNotShowTheOrdinaryBuildDoneScreen(t *testing.T) {
 	}
 	stdout = &bytes.Buffer{}
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
-	outputWorkflow(result, renderBuildPartialCreditVisual(state, state.Plan.Phases[0], partial.UnfinishedTaskIDs, partial.RedispatchCommand))
+	outputWorkflow(result, renderBuildPartialCreditResultVisual(state, state.Plan.Phases[0], result))
 
 	out := stdout.(*bytes.Buffer).String()
 	for _, claim := range []string{

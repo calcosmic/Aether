@@ -441,9 +441,7 @@ var buildCmd = &cobra.Command{
 		// the continue command -- none of which is true when tasks are still
 		// unstarted -- while never showing the recovery command at all.
 		if partial, _ := result["recovery_job"].(bool); partial {
-			unfinished, _ := result["unfinished_task_ids"].([]string)
-			recoveryCommand, _ := result["recovery_command"].(string)
-			outputWorkflow(result, renderBuildPartialCreditVisual(state, state.Plan.Phases[phaseNum-1], unfinished, recoveryCommand))
+			outputWorkflow(result, renderBuildPartialCreditResultVisual(state, state.Plan.Phases[phaseNum-1], result))
 			return nil
 		}
 

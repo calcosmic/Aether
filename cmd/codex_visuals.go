@@ -2075,6 +2075,20 @@ func renderBuildPartialCreditVisual(state colony.ColonyState, phase colony.Phase
 	return b.String()
 }
 
+// renderBuildPartialCreditResultVisual renders only from the typed, durable
+// recovery child carried by the build result. A missing projection is an
+// explicit error screen: falling back to the ordinary build-complete screen
+// would falsely tell the owner that unfinished work was done.
+func renderBuildPartialCreditResultVisual(state colony.ColonyState, phase colony.Phase, result map[string]interface{}) string {
+	recovery, ok := partialBuildRecoveryFromResult(result)
+	if !ok {
+		return renderVisualError("Partial build recovery evidence is incomplete", map[string]interface{}{
+			"recovery": "inspect the build attempt journal before continuing",
+		})
+	}
+	return renderBuildPartialCreditVisual(state, phase, recovery.UnfinishedTaskIDs, recovery.RedispatchCommand)
+}
+
 func renderBuildPlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch, reviewDepth colony.VerificationDepth, policyOpt ...codexQueenExecutionPolicy) string {
 	var policy codexQueenExecutionPolicy
 	if len(policyOpt) > 0 {
