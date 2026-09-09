@@ -15,6 +15,51 @@ import (
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
+func TestReviewerAndNarratorFixturesUseAcceptedAuthority200(t *testing.T) {
+	cases := []struct {
+		file      string
+		name      string
+		required  []string
+		forbidden []string
+	}{
+		{
+			file: "forced_reviewer_waiver_test.go", name: "TestSpawnLogFailsClosedWhenWaiverWindowCannotPersist",
+			required:  []string{"createApprovedAcceptedBuildTestColony(", "os.ReadFile(markerPath)"},
+			forbidden: []string{"setUpCheckinFixtureColony(", "os.Mkdir(markerPath"},
+		},
+		{
+			file: "forced_reviewer_waiver_test.go", name: "TestOneWorkerWithForcedReviewerWaiverStillPauses",
+			required:  []string{"createApprovedAcceptedBuildTestColony(", "root, 25,"},
+			forbidden: []string{"setUpCheckinFixtureColony("},
+		},
+		{
+			file: "narrator_launcher_test.go", name: "TestBuildSyntheticNarratorDoesNotPolluteJSONOutput",
+			required:  []string{"createApprovedAcceptedBuildTestColony("},
+			forbidden: []string{"createTestColonyState("},
+		},
+	}
+	for _, tc := range cases {
+		content, err := os.ReadFile(tc.file)
+		if err != nil {
+			t.Fatalf("read %s: %v", tc.file, err)
+		}
+		body := extractGoFunctionBody(t, string(content), "func "+tc.name+"(")
+		for _, required := range tc.required {
+			if !strings.Contains(body, required) {
+				t.Errorf("%s does not preserve canonical setup marker %s", tc.name, required)
+			}
+		}
+		for _, forbidden := range tc.forbidden {
+			if strings.Contains(body, forbidden) {
+				t.Errorf("%s retains stale setup or collision marker %s", tc.name, forbidden)
+			}
+		}
+	}
+	if t.Failed() {
+		t.Fatal("reviewer and narrator fixtures must reach their behavior through accepted build authority")
+	}
+}
+
 // waiverFixturePhase mirrors judgementPhase (cmd/queen_judgement_test.go) but
 // gives the caller control over the phase ID, since the whole point of the
 // waiver's scoping rule (D-03) is that phase ID is part of what the question
