@@ -216,6 +216,10 @@ func TestPlanningAdversarial200(t *testing.T) {
 			t.Fatal("early stale acceptance mutated repository authority")
 		}
 	})
+
+	t.Run("integrated public reads preserve protected repository inputs", func(t *testing.T) {
+		t.Fatal("RED: protected state, configuration, Phase 199 evidence, and .gsd fingerprints are not yet enforced")
+	})
 }
 
 // TestPlanningGapEdgeAccounting200 maps each spec-less truth to the named Go

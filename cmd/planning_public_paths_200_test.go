@@ -120,6 +120,18 @@ func TestPlanningPublicPaths200(t *testing.T) {
 			})
 		}
 	})
+
+	t.Run("init discuss spec and plan retain four surface parity", func(t *testing.T) {
+		t.Fatal("RED: lifecycle parity is not yet proved across runtime, contracts, guides, and managed projections")
+	})
+
+	t.Run("candidate acceptance and refresh recovery stay exact and available", func(t *testing.T) {
+		t.Fatal("RED: current acceptance and stale or expired refresh recovery are not yet proved through both projections")
+	})
+
+	t.Run("Phase 199 focused gates remain green", func(t *testing.T) {
+		t.Fatal("RED: the focused Phase 199 vocabulary and gate receipt proofs are not yet composed here")
+	})
 }
 
 func planningPublicPaths200Read(t *testing.T, root, relative string) string {
