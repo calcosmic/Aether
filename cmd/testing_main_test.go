@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/storage"
+	"github.com/calcosmic/Aether/pkg/trace"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -143,7 +145,6 @@ func extendDefaultCommandPackageTestTimeout() {
 // first action.
 func saveGlobals(t *testing.T) {
 	t.Helper()
-	origStore := store
 	origStdout := stdout
 	origStderr := stderr
 	origFlagType := flagTypeFilter
@@ -154,7 +155,6 @@ func saveGlobals(t *testing.T) {
 	origHistoryLimit := historyLimit
 	origHistoryFilter := historyFilter
 	origPhaseNumber := phaseNumber
-	origTracer := tracer
 	origContinueContextUpdater := continueContextUpdater
 	origContinueSignalHousekeeper := continueSignalHousekeeper
 	origNewCodexWorkerInvoker := newCodexWorkerInvoker
@@ -165,7 +165,10 @@ func saveGlobals(t *testing.T) {
 	origResumeNoHandoff := resumeNoHandoff
 	origColonyPrimeTemplatesPathOverride := colonyPrimeTemplatesPathOverride
 	t.Cleanup(func() {
-		store = origStore
+		// A Store and its tracer are repository authorities, not ordinary test
+		// values. Never resurrect one after its temporary repository may have
+		// been deleted by another cleanup.
+		store = nil
 		stdout = origStdout
 		stderr = origStderr
 		flagTypeFilter = origFlagType
@@ -176,7 +179,7 @@ func saveGlobals(t *testing.T) {
 		historyLimit = origHistoryLimit
 		historyFilter = origHistoryFilter
 		phaseNumber = origPhaseNumber
-		tracer = origTracer
+		tracer = nil
 		continueContextUpdater = origContinueContextUpdater
 		continueSignalHousekeeper = origContinueSignalHousekeeper
 		newCodexWorkerInvoker = origNewCodexWorkerInvoker
@@ -193,6 +196,61 @@ func saveGlobals(t *testing.T) {
 func forceJSONOutputModeForTest(t *testing.T) {
 	t.Helper()
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
+}
+
+type commandTestRepository struct {
+	Root    string
+	DataDir string
+	Store   *storage.Store
+}
+
+// bindCommandTestRepository gives command tests the same single physical
+// authority production requires: AETHER_ROOT, COLONY_DATA_DIR, store, and
+// tracer all point at one repository-local .aether/data tree. Cleanup is
+// registered after TempDir so process globals are cleared before the directory
+// is removed; testing.T.Setenv preserves absent-versus-present environment
+// state exactly.
+func bindCommandTestRepository(t *testing.T) commandTestRepository {
+	t.Helper()
+
+	repositoryRoot := t.TempDir()
+	dataDir := filepath.Join(repositoryRoot, ".aether", "data")
+	authority, err := storage.OpenRepositoryRoot(repositoryRoot, dataDir)
+	if err != nil {
+		t.Fatalf("open command-test repository authority: %v", err)
+	}
+	boundStore, err := storage.NewRepositoryStore(authority)
+	if err != nil {
+		_ = authority.Close()
+		t.Fatalf("create command-test repository store: %v", err)
+	}
+
+	t.Setenv("AETHER_ROOT", repositoryRoot)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
+
+	store = boundStore
+	tracer = trace.NewTracer(boundStore)
+	rootCmd.SetArgs([]string{})
+	rootCmd.SetOut(os.Stdout)
+	rootCmd.SetErr(os.Stderr)
+	resetFlags(rootCmd)
+
+	t.Cleanup(func() {
+		// This cleanup runs before Setenv restoration and TempDir deletion.
+		// Do not restore a possibly stale repository authority here.
+		store = nil
+		tracer = nil
+		rootCmd.SetArgs([]string{})
+		rootCmd.SetOut(os.Stdout)
+		rootCmd.SetErr(os.Stderr)
+		resetFlags(rootCmd)
+	})
+
+	return commandTestRepository{
+		Root:    repositoryRoot,
+		DataDir: dataDir,
+		Store:   boundStore,
+	}
 }
 
 func TestRepositoryTestBinding200(t *testing.T) {
