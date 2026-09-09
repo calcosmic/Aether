@@ -595,11 +595,11 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-09T05:05:13.597Z
-Stopped at: Completed 200-39-PLAN.md; next incomplete is 200-40
+Last session: 2026-09-09T05:57:14Z
+Stopped at: Replanned Phase 200 after the failed final repository gate; next incomplete is 200-41
 Resume file: None
 
 ## Operator Next Steps
 
-- Discuss Phase 200: Iterative Planning.
-- Plan Phase 200 after its Classic Scout/Route-Setter mechanism synthesis is recorded.
+- Execute 200-41-PLAN.md, then follow Waves 26-34 before rerunning the unchanged final receipt Plan 200-40.
+- Preserve the Phase 200 Scout/Route-Setter objective and do not waive normal or race gate failures.

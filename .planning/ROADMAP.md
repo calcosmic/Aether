@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 39/40 plans executed
+**Plans:** 39/55 plans executed
 
 Plans:
 
@@ -299,9 +299,54 @@ Plans:
 
 - [x] 200-39-PLAN.md — Prove all five original attacks, the full public journey, Classic corpus, source parity, and exact edge accounting.
 
-**Wave 25** *(gap closure; blocked on Wave 24 completion)*
+**Wave 25** *(second gap closure; blocked on Wave 24 completion)*
 
-- [ ] 200-40-PLAN.md — Run focused, source, full, and race gates and update the existing Phase 200 gate receipt.
+- [ ] 200-41-PLAN.md — Bind command tests to one contained temporary repository and restore root/store globals exactly.
+
+**Wave 26** *(second gap closure; blocked on Wave 25 completion)*
+
+- [ ] 200-42-PLAN.md — Remove stale-root cleanup from curation, flag, history, memory, and phase tests.
+- [ ] 200-43-PLAN.md — Remove stale-root cleanup from pheromone and shelf lifecycle tests.
+- [ ] 200-44-PLAN.md — Remove stale-root cleanup from shelf/worktree tests and ratchet out the anti-pattern.
+
+**Wave 27** *(second gap closure; blocked on Wave 26 completion)*
+
+- [ ] 200-45-PLAN.md — Restore missing-versus-corrupt semantics for repository-backed optional ledgers.
+- [ ] 200-46-PLAN.md — Reconnect local Queen promotion through a contained repository writer boundary.
+- [ ] 200-47-PLAN.md — Canonicalize build-attempt paths and rebind legacy-unbound manifests safely.
+
+**Wave 28** *(second gap closure; blocked on Wave 27 completion)*
+
+- [ ] 200-48-PLAN.md — Restore durable exactly-once partial-finalize retry and replay behavior.
+
+**Wave 29** *(second gap closure; blocked on Wave 28 completion)*
+
+- [ ] 200-49-PLAN.md — Migrate core build fixtures to exact accepted-plan and canonical start authority.
+
+**Wave 30** *(second gap closure; blocked on Wave 29 completion)*
+
+- [ ] 200-50-PLAN.md — Migrate downstream continue/run/recovery/reviewer/narrator fixtures.
+- [ ] 200-51-PLAN.md — Restore truthful partial-build and shared blocker presentation.
+
+**Wave 31** *(second gap closure; blocked on Wave 30 completion)*
+
+- [ ] 200-52-PLAN.md — Canonicalize legacy planning fixtures and complete atomic force-replan cleanup.
+
+**Wave 32** *(second gap closure; blocked on Wave 31 completion)*
+
+- [ ] 200-53-PLAN.md — Restore output-mode, visual parity, brief, and single-spend presentation.
+
+**Wave 33** *(second gap closure; blocked on Wave 32 completion)*
+
+- [ ] 200-54-PLAN.md — Reconcile lifecycle cards, reviewed goldens, and shrinking static baselines.
+
+**Wave 34** *(second gap closure; blocked on Wave 33 completion)*
+
+- [ ] 200-55-PLAN.md — Run every cmd test exactly once and bring normal/race suites under the fixed 11-minute harness.
+
+**Wave 35** *(final receipt; blocked on Wave 34 completion)*
+
+- [ ] 200-40-PLAN.md — Run the unchanged focused, source, full, and race gates and update the existing Phase 200 gate receipt.
 
 **Success criteria:**
 
