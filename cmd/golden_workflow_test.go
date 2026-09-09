@@ -64,6 +64,10 @@ var ceremonyElapsedRe = regexp.MustCompile(`(?m)(Ceremony complete in )\d+s$`)
 // host load even when every other byte of the check's outcome is identical.
 var liveCheckLineDurationRe = regexp.MustCompile(`(?m)^(\s*)(Build|Types|Lint|Tests) (✓|✗) \(\d+\.\d+s\)`)
 
+// goTestSummaryDurationRe matches Go's package timing when a successful test
+// summary is embedded inside bound requirement evidence.
+var goTestSummaryDurationRe = regexp.MustCompile(`(tests passed \(exit 0\): ok[ \t]+\S+[ \t]+)\d+(?:\.\d+)?s`)
+
 // normalizeWorkerNames replaces all worker name patterns (CapitalWord-Number)
 // with a fixed placeholder so golden files are stable across test runs.
 // Worker names are hash-based on temp directory paths, making them non-deterministic.
@@ -82,6 +86,7 @@ func normalizeForGolden(s string) string {
 	clean = stepElapsedRe.ReplaceAllString(clean, "$1 (0s)")
 	clean = ceremonyElapsedRe.ReplaceAllString(clean, "${1}0s")
 	clean = liveCheckLineDurationRe.ReplaceAllString(clean, "$1$2 $3 (0.0s)")
+	clean = goTestSummaryDurationRe.ReplaceAllString(clean, "${1}0.0s")
 
 	var filtered strings.Builder
 	for _, line := range strings.Split(clean, "\n") {

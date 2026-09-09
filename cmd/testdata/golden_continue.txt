@@ -43,6 +43,9 @@ Claims: builder claims verified
   Types ✓ (0.0s)
   Lint — skipped: no command resolved; skipped
   Tests ✓ (0.0s)
+📋 Requirement Evidence
+  ✓ The exact Route proposal is validated — proved by: tests check passed: tests passed (exit 0): ok  	example.com/aether-test	0.0s
+  ✓ The exact Route proposal is validated — proved by: tests check passed: tests passed (exit 0): ok  	example.com/aether-test	0.0s
 Workers
   - Worker-XX
   - Worker-XX

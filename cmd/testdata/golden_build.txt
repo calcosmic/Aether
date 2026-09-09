@@ -4,12 +4,13 @@ Step 1/5: Prepare (0s)
 Worker wave dispatching.
 [Phase 1/1] [████████████████] 100%
 Phase: Golden phase
+Objective: Golden phase exercises accepted build authority
 
 ━━ 🐜 S P A W N   P L A N ━━
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Wave 1
   Execution: serial — single task in this wave
-  🔨🐜 Builder Worker-XX  First golden task (+1 more step)  [covers tasks g-task-1, g-task-2]
+  🔨🐜 Builder Worker-XX  First golden task (+1 more step)  [covers tasks 1.1, 1.2]
 
 Total planned dispatches: 1
 2 covered tasks were folded into 1 worker — every task still has a claimant, listed above.
@@ -29,7 +30,7 @@ Wave 11 starting (in-repo, serial)
 
 … 🔨🐜 Builder Worker-XX  running wave 11  Worker: Worker-XX  [simulated worker heartbeat observed]
 
-✓ 🔨🐜 Builder Worker-XX  completed (0.0s, 0 tool calls)  FakeInvoker completed task g-task-1 for worker Worker-XX (caste: builder)
+✓ 🔨🐜 Builder Worker-XX  completed (0.0s, 0 tool calls)  FakeInvoker completed task 1.1 for worker Worker-XX (caste: builder)
 
   Step 4/5: Verify (0s)
   Step 5/5: Complete (0s)
@@ -39,6 +40,7 @@ Ceremony complete in 0s
 [Phase 1/1] [████████████████] 100%
 Phase: Golden phase
 Review depth: standard (Phase 1 of 1)
+Objective: Golden phase exercises accepted build authority
 ── Context ──
 Steering signals: none — run `/ant-focus "<area>"` or `/ant-redirect "<avoid>"` to steer this build.
 ── Tasks ──
@@ -48,12 +50,14 @@ Steering signals: none — run `/ant-focus "<area>"` or `/ant-redirect "<avoid>"
 ── Dispatch ──
 Queen's Team
   🔨🐜 Builder — this phase has tasks that need code written
+  Kept by safety policy: Builder — this phase has tasks that need code written
+  Not called (2): Gatekeeper — not sent -- nobody asked for it and nothing in this phase forces it; Watcher — not sent -- nobody asked for it and nothing in this phase forces it
 
 ━━ 🐜 S P A W N   P L A N ━━
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Wave 1
   Execution: serial — single task in this wave
-  🔨🐜 Builder Worker-XX  First golden task (+1 more step)  [covers tasks g-task-1, g-task-2]  ✓ completed — nothing to flag 0.0s  FakeInvoker completed task g-task-1 for worker Worker-XX (caste: builder)
+  🔨🐜 Builder Worker-XX  First golden task (+1 more step)  [covers tasks 1.1, 1.2]  ✓ completed — nothing to flag 0.0s  FakeInvoker completed task 1.1 for worker Worker-XX (caste: builder)
 
 Total planned dispatches: 1
 2 covered tasks were folded into 1 worker — every task still has a claimant, listed above.
@@ -94,6 +98,6 @@ This is a natural break, and everything is written down -- it is safe to close t
 
 ── What The Helpers Cost ──
 Cost: not known. The one worker that ran had no figure reported by its tool, so there is no total to show.
-  🔨🐜 Builder Worker-XX (job: automatic-g-task-1)  —  not reported
+  🔨🐜 Builder Worker-XX (job: automatic-1.1)  —  not reported
 (1 worker's tool did not report usage, so its use is not in the total.)
 (The coordinator's own back-and-forth, the main session itself, is not counted here. These figures are the helpers it sent.)
