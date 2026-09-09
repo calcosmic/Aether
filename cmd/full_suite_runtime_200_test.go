@@ -87,12 +87,12 @@ func TestFullSuiteRuntime200PropagatesFailure(t *testing.T) {
 	runner := func(_ context.Context, request fullSuiteChildRequest) fullSuiteChildResult {
 		if request.Lane.Name == "parallel-02" {
 			return fullSuiteChildResult{
-				Output:   "panic: deliberate child diagnostic\nWARNING: DATA RACE",
+				Output:   "bravo user output\npanic: deliberate child diagnostic\nWARNING: DATA RACE",
 				Executed: []string{"TestBravo"},
 				Err:      errors.New("exit status 2"),
 			}
 		}
-		return fullSuiteChildResult{Executed: append([]string(nil), request.Lane.Tests...)}
+		return fullSuiteChildResult{Output: "alpha user output\n", Executed: append([]string(nil), request.Lane.Tests...)}
 	}
 
 	report, err := runFullSuiteLanes(context.Background(), "/current/cmd.test", lanes, 2, runner)
@@ -106,6 +106,17 @@ func TestFullSuiteRuntime200PropagatesFailure(t *testing.T) {
 	}
 	if report.Passed {
 		t.Fatalf("failed child produced passing report: %+v", report)
+	}
+	var rendered strings.Builder
+	writeFullSuiteReport(&rendered, report)
+	output := rendered.String()
+	for _, want := range []string{"alpha user output", "bravo user output", "deliberate child diagnostic", "DATA RACE"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("rendered report omitted child output %q:\n%s", want, output)
+		}
+	}
+	if strings.Index(output, "alpha user output") > strings.Index(output, "bravo user output") {
+		t.Fatalf("concurrent child output was not emitted in deterministic lane order:\n%s", output)
 	}
 }
 
