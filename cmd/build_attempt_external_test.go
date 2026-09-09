@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -897,7 +898,11 @@ func TestGroupedJobPartialRetryIsAppendOnlyExternal(t *testing.T) {
 		t.Fatalf("partial credit advanced colony to BUILT: %s", updatedState.State)
 	}
 	if recovery, _ := result["recovery_job"].(bool); !recovery {
-		t.Fatalf("result did not report a D-10 recovery job: %+v", result)
+		var captured string
+		if buffer, ok := stderr.(*bytes.Buffer); ok {
+			captured = buffer.String()
+		}
+		t.Fatalf("result did not report a D-10 recovery job: %+v\nstderr: %s", result, captured)
 	}
 	gotParentID, _ := result["parent_attempt_id"].(string)
 	if gotParentID != parentAttemptID {
@@ -941,6 +946,20 @@ func TestGroupedJobPartialRetryIsAppendOnlyExternal(t *testing.T) {
 	if child.ParentJobName == "" {
 		t.Fatalf("child attempt has no ParentJobName recorded: %+v", child)
 	}
+	if !reflect.DeepEqual(child.SelectedTasks, pending) {
+		t.Fatalf("child selected tasks = %v, want exactly unfinished tasks %v", child.SelectedTasks, pending)
+	}
+	if child.Status != buildAttemptPrepared {
+		t.Fatalf("child attempt status = %q, want %q until the recovery command is dispatched", child.Status, buildAttemptPrepared)
+	}
+	wantCommand := buildUnfinishedRetryRedispatchCommand(1, pending)
+	if got, _ := result["recovery_command"].(string); got != wantCommand {
+		t.Fatalf("recovery command = %q, want %q", got, wantCommand)
+	}
+	_, latest, ok := loadLatestBuildAttempt(1)
+	if !ok || latest.ID != parentAttemptID {
+		t.Fatalf("latest attempt = %+v (found=%t), want unchanged parent %q", latest, ok, parentAttemptID)
+	}
 
 	// Idempotency at the full entrypoint layer: re-running reconcilePartialBuildRetry
 	// directly (the same call build-finalize makes) for the same parent must
@@ -965,6 +984,53 @@ func TestGroupedJobPartialRetryIsAppendOnlyExternal(t *testing.T) {
 	}
 	if childrenLinkedToParent != 1 {
 		t.Fatalf("expected exactly 1 attempt linked to parent %s, found %d (duplicate child created)", parentAttemptID, childrenLinkedToParent)
+	}
+}
+
+// TestPartialRetryFailureIsNeverSuccessful200 locks the owner-facing half of
+// the D-10 contract: finalize may either return a durable recovery child or a
+// non-success, but it may never return nil error while omitting the only job
+// that can finish the partially credited work.
+func TestPartialRetryFailureIsNeverSuccessful200(t *testing.T) {
+	root, manifest, chain, ids := setupCoherentJobExternalFinalizeTest(t, "Partial recovery must be durable before success")
+
+	proven := ids[:4]
+	receipts := make([]codex.TaskReceipt, 0, len(proven))
+	touchedFiles := make([]string, 0, len(proven))
+	for _, id := range proven {
+		receipts = append(receipts, receiptForTask(t, root, id))
+		touchedFiles = append(touchedFiles, taskFileName(id))
+	}
+	results := []codexExternalBuildWorkerResult{{
+		Stage: chain.Stage, Wave: chain.Wave, ExecutionWave: normalizedDispatchWave(chain),
+		Caste: chain.Caste, Name: chain.Name, TaskID: chain.TaskID,
+		Status:        "failed",
+		Summary:       "crashed after finishing four of six steps",
+		FilesModified: touchedFiles,
+		Handoff: codex.WorkerHandoff{
+			VerificationStatus: "fail",
+			CommandsRun:        []string{"go test ./..."},
+		},
+		TaskReceipts: receipts,
+	}}
+	completion := codexExternalBuildCompletion{DispatchManifest: &manifest, Dispatches: results}
+
+	result, _, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+	if err != nil {
+		return
+	}
+	if recovery, _ := result["recovery_job"].(bool); !recovery {
+		t.Fatalf("partial finalize returned success without a durable recovery job: %+v", result)
+	}
+	parentID := manifest.AttemptID
+	children := 0
+	for _, record := range listBuildAttemptsForPhase(1) {
+		if record.ParentAttemptID == parentID {
+			children++
+		}
+	}
+	if children != 1 {
+		t.Fatalf("partial finalize returned success with %d durable recovery children, want exactly one", children)
 	}
 }
 
