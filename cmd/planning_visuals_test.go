@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
@@ -249,8 +250,11 @@ func planningVisualCandidateFixture() planCandidateReview {
 	}
 	candidate := colony.PlanCandidate{
 		ID: "CANDIDATE-01", Status: colony.PlanCandidatePendingReview,
-		Proposal:           colony.PlanRevision{ID: "PLAN-REV-02", Phases: []colony.Phase{{ID: 2, Name: "Render planning truth"}}},
-		BasePlanRevisionID: "PLAN-REV-01", SpecificationRevisionID: "SPEC-REV-01",
+		ContentHash: strings.Repeat("c", 64), CreatedAt: time.Date(2026, time.September, 8, 10, 0, 0, 0, time.UTC),
+		ExpiresAt:    time.Date(2026, time.September, 15, 10, 0, 0, 0, time.UTC),
+		Proposal:     colony.PlanRevision{ID: "PLAN-REV-02", Phases: []colony.Phase{{ID: 2, Name: "Render planning truth"}}},
+		ProposalHash: strings.Repeat("p", 64), BasePlanRevisionID: "PLAN-REV-01", BasePlanRevisionHash: strings.Repeat("b", 64),
+		SpecificationRevisionID: "SPEC-REV-01", SpecificationRevisionHash: strings.Repeat("s", 64),
 		StopDecision: stop, DimensionAssessments: card.DimensionAssessments, SemanticDelta: card.SemanticDelta,
 		ResidualGaps: []colony.PlanningGap{card.WeakestGap}, EvidenceThatWouldChange: "A verified dependency contract",
 		Recommendation: recommendation,
@@ -259,7 +263,11 @@ func planningVisualCandidateFixture() planCandidateReview {
 		Operation: planCandidateOperationReview, Candidate: candidate, TargetConfidence: 80, ActualConfidence: 82,
 		StopDecision: stop, ResidualGaps: candidate.ResidualGaps, EvidenceThatWouldChange: candidate.EvidenceThatWouldChange,
 		SemanticDelta: candidate.SemanticDelta, Recommendation: recommendation, Iterations: []colony.PlanningIterationCard{card},
-		AcceptanceCommand: "aether plan --accept-candidate CANDIDATE-01 --acceptance-token TOKEN",
+		Standing: planCandidateStandingCurrent,
+		Acceptance: planCandidateAcceptanceRequest{CandidateID: candidate.ID, SpecificationRevisionID: candidate.SpecificationRevisionID,
+			SpecificationRevisionHash: candidate.SpecificationRevisionHash, BasePlanRevisionID: candidate.BasePlanRevisionID,
+			TimelineDigest: candidate.Timeline.TimelineDigest, ProposalHash: candidate.ProposalHash, AcceptanceToken: "TOKEN"},
+		AcceptanceCommand: "aether plan --accept-candidate CANDIDATE-01 --spec-revision SPEC-REV-01 --spec-hash " + strings.Repeat("s", 64) + " --base-plan-revision PLAN-REV-01 --timeline-digest TIMELINE-DIGEST-01 --proposal-hash " + strings.Repeat("p", 64) + " --acceptance-token TOKEN",
 	}
 }
 
