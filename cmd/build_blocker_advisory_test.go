@@ -318,10 +318,9 @@ func blockerAdvisoryFixturePhase() colony.Phase {
 }
 
 type blockerAdvisoryJSONProjection struct {
-	Signals          []buildBlockerSignal `json:"signals"`
-	Ask              bool                 `json:"ask"`
-	BoundaryQuestion bool                 `json:"boundary_question"`
-	Question         string               `json:"question,omitempty"`
+	Signals  []buildBlockerSignal `json:"signals"`
+	Ask      bool                 `json:"ask"`
+	Question string               `json:"question,omitempty"`
 }
 
 func runAcceptedBlockerAdvisoryBuild(t *testing.T, phase colony.Phase, mode colony.ColonyMode, outputMode string, args ...string) string {
@@ -470,9 +469,6 @@ func TestBothBuildLanesAgreeOnBoundaryQuestionSignal(t *testing.T) {
 			out := runAcceptedBlockerAdvisoryBuild(t, boundaryQuestionFixturePhase(), colony.ColonyModeOrchestrator, "json", lane.args...)
 			projection := blockerAdvisoryProjectionFromJSON(t, out)
 			assertOneBlockerSignal(t, projection, "unanswered-question", true)
-			if !projection.BoundaryQuestion {
-				t.Fatal("build_advisory must identify the shared boundary-question signal")
-			}
 		})
 	}
 }

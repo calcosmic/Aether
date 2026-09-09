@@ -317,6 +317,10 @@ type codexBuildOptions struct {
 	DispatchWorkers         bool
 	CircuitBreakerThreshold int
 	Verbose                 bool
+	// NonInteractive suppresses only the blocker advisory's owner question.
+	// The typed advisory and its named signals remain in the result so headless
+	// callers do not lose blocker truth.
+	NonInteractive bool
 	// Full gates the raw-prompt path of --print-brief. It has no effect on any
 	// mutating build path — only printWorkerBriefs reads it.
 	Full bool
@@ -356,6 +360,49 @@ type codexBuildOptions struct {
 }
 
 const partialBuildRecoveryResultKey = "partial_recovery"
+
+const buildAdvisoryResultKey = "build_advisory"
+
+// codexBuildAdvisoryProjection is the one machine-readable blocker fact shared
+// by plan-only and direct builds. Legacy top-level fields remain projections for
+// wrapper compatibility; terminal rendering consumes this typed value only.
+type codexBuildAdvisoryProjection struct {
+	Signals  []buildBlockerSignal `json:"signals"`
+	Ask      bool                 `json:"ask"`
+	Question string               `json:"question,omitempty"`
+}
+
+func addBuildAdvisoryResult(result map[string]interface{}, advisory buildBlockerAdvisory) {
+	if result == nil || len(advisory.Signals) == 0 {
+		return
+	}
+	signals := append([]buildBlockerSignal(nil), advisory.Signals...)
+	projection := codexBuildAdvisoryProjection{Signals: signals, Ask: advisory.Ask}
+	if projection.Ask {
+		projection.Question = buildBlockerAdvisoryQuestion
+	}
+	result[buildAdvisoryResultKey] = projection
+	result["blocker_advisory"] = append([]buildBlockerSignal(nil), signals...)
+	if projection.Question != "" {
+		result["blocker_advisory_question"] = projection.Question
+	} else {
+		delete(result, "blocker_advisory_question")
+	}
+}
+
+func buildAdvisoryFromResult(result map[string]interface{}) (buildBlockerAdvisory, bool) {
+	if result == nil {
+		return buildBlockerAdvisory{}, false
+	}
+	projection, ok := result[buildAdvisoryResultKey].(codexBuildAdvisoryProjection)
+	if !ok || len(projection.Signals) == 0 {
+		return buildBlockerAdvisory{}, false
+	}
+	return buildBlockerAdvisory{
+		Signals: append([]buildBlockerSignal(nil), projection.Signals...),
+		Ask:     projection.Ask,
+	}, true
+}
 
 // addPartialBuildRecoveryResult keeps the receipt-backed Plan 48 recovery
 // outcome intact while preserving the established top-level JSON fields used
@@ -790,6 +837,7 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 		result["dispatch_manifest"] = manifest
 		result["attempt"] = displayDataPath(receipt.AttemptPath)
 	}
+	addBuildAdvisoryResult(result, decideBuildBlockerAdvisory(buildStartBlockerSignals(manifest), options.NonInteractive))
 	closeLifecycleRun(result, state, "build")
 	return result, state, phase, dispatches, nil
 }
@@ -895,6 +943,21 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	jobDecisions := prepared.JobDecisions
 	casteDecision := prepared.CasteDecision
 	authority := prepared.PlanAuthority
+	// Compute the direct lane's blocker fact while the accepted pre-build
+	// state is still current. The previous command-layer check ran only after
+	// dispatch had transitioned the phase, which made this lane depend on a
+	// different snapshot than plan-only. This is read-only and does not alter
+	// the accepted plan, dispatch manifest, or start transaction.
+	directBoundary, err := checkOrchestratorBoundaryQuestions("build", state, phase, buildBoundaryQuestionCandidates(phase, selectedTaskIDs))
+	if err != nil {
+		return nil, fmt.Errorf("failed to check boundary questions: %w", err)
+	}
+	directAdvisoryManifest := codexBuildManifest{
+		Phase:                 phaseNum,
+		ForcedReviewers:       forcedReviewerRecords(queenForcedReviewersForPhase(phase)),
+		BoundaryQuestionCount: len(directBoundary.Questions),
+	}
+	directBuildAdvisory := decideBuildBlockerAdvisory(buildStartBlockerSignals(directAdvisoryManifest), options.NonInteractive)
 
 	originalState, err := cloneColonyState(state)
 	if err != nil {
@@ -1105,6 +1168,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 				"state":      string(partialState.State),
 			}
 			addPartialBuildRecoveryResult(result, *retryOutcome)
+			addBuildAdvisoryResult(result, directBuildAdvisory)
 			emitVisualProgress(renderDecisionBlock("⚠", "Partial Credit — Recovery Job Created",
 				fmt.Sprintf("Phase %d: %d task(s) unfinished: %s", phaseNum, len(retryOutcome.UnfinishedTaskIDs), strings.Join(retryOutcome.UnfinishedTaskIDs, ", ")),
 				"The credited tasks' proof was kept; nothing proven was rolled back or redone.",
@@ -1283,6 +1347,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	if directSpendNote != "" {
 		result["spend_ledger_note"] = directSpendNote
 	}
+	addBuildAdvisoryResult(result, directBuildAdvisory)
 	runStatus = dispatchRunStatus(dispatches)
 	// One closing answer for the screen and the wrapper (Phase 197 plan 04).
 	closeLifecycleRun(result, updatedState, "build")

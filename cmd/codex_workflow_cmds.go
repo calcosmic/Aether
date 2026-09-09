@@ -350,6 +350,7 @@ var buildCmd = &cobra.Command{
 				QueenCasteReason:  queenCasteReason,
 				QueenCasteWhy:     queenCasteWhy,
 				JobProposals:      jobProposals,
+				NonInteractive:    noCheckinFlag,
 			})
 			if err != nil {
 				outputError(1, err.Error(), nil)
@@ -372,21 +373,6 @@ var buildCmd = &cobra.Command{
 			if checkinDecision.Why != "" {
 				result["checkin_reason_detail"] = checkinDecision.Why
 			}
-			// D-08/D-09: the build-start blocker heads-up, computed from the
-			// SAME manifest before the spawn plan renders -- so a genuinely
-			// stuck phase is named before any dispatch decision is even
-			// shown. --no-checkin is the one non-interactive signal reachable
-			// here (autopilot never calls this RunE at all; it dispatches
-			// through runCodexBuildWithOptions directly). Never a refusal,
-			// never a silent warning: the wrapper decides what happens next
-			// from these two result keys.
-			blockerAdvisory := decideBuildBlockerAdvisory(buildStartBlockerSignals(buildManifest), noCheckinFlag)
-			if len(blockerAdvisory.Signals) > 0 {
-				result["blocker_advisory"] = blockerAdvisory.Signals
-				if blockerAdvisory.Ask {
-					result["blocker_advisory_question"] = buildBlockerAdvisoryQuestion
-				}
-			}
 			reviewDepthPlan := reviewDepthFromResult(result)
 			planOnlyVisual := renderBuildPlanOnlyVisual(state, phase, dispatches, reviewDepthPlan, queenPolicyFromResult(result))
 			// D-12: the automatic fast path still shows a compact, non-blocking
@@ -401,7 +387,7 @@ var buildCmd = &cobra.Command{
 			}
 			// The heads-up leads -- it decides whether the build happens at
 			// all, so it appears before the spawn plan it gates.
-			if advisoryVisual := renderBuildBlockerAdvisory(blockerAdvisory); advisoryVisual != "" {
+			if advisoryVisual := renderBuildAdvisoryResult(result); advisoryVisual != "" {
 				planOnlyVisual = advisoryVisual + "\n\n" + planOnlyVisual
 			}
 			outputWorkflow(result, planOnlyVisual)
@@ -423,6 +409,7 @@ var buildCmd = &cobra.Command{
 			QueenCasteReason:        queenCasteReason,
 			QueenCasteWhy:           queenCasteWhy,
 			JobProposals:            jobProposals,
+			NonInteractive:          noCheckinFlag,
 		})
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -441,7 +428,11 @@ var buildCmd = &cobra.Command{
 		// the continue command -- none of which is true when tasks are still
 		// unstarted -- while never showing the recovery command at all.
 		if partial, _ := result["recovery_job"].(bool); partial {
-			outputWorkflow(result, renderBuildPartialCreditResultVisual(state, state.Plan.Phases[phaseNum-1], result))
+			partialVisual := renderBuildPartialCreditResultVisual(state, state.Plan.Phases[phaseNum-1], result)
+			if advisoryVisual := renderBuildAdvisoryResult(result); advisoryVisual != "" {
+				partialVisual = advisoryVisual + "\n\n" + partialVisual
+			}
+			outputWorkflow(result, partialVisual)
 			return nil
 		}
 
@@ -459,34 +450,11 @@ var buildCmd = &cobra.Command{
 			}
 		}
 		reviewDepthBuild := reviewDepthFromResult(result)
-		// D-08/D-09: the same build-start blocker heads-up as the plan-only
-		// lane above -- the direct dispatch path never derives a full
-		// codexBuildManifest of its own, so the forced-reviewer signal is
-		// re-derived read-only from the phase's own wording (identical
-		// derivation the plan-only manifest uses), and the
-		// last-continue-blocked signal needs no manifest field beyond Phase.
-		// The unanswered-question signal DOES need BoundaryQuestionCount
-		// (WR-01, 198-REVIEW.md): populate it with the same candidates the
-		// plan-only lane uses, via checkOrchestratorBoundaryQuestions's
-		// read-only check -- never the materializing call, since this lane
-		// has already dispatched real work by the time this advisory runs.
-		directBuildPhase := state.Plan.Phases[phaseNum-1]
-		directBoundary, boundaryErr := checkOrchestratorBoundaryQuestions("build", state, directBuildPhase, buildBoundaryQuestionCandidates(directBuildPhase, selectedTasks))
-		if boundaryErr != nil {
-			outputError(2, fmt.Sprintf("failed to check boundary questions: %v", boundaryErr), nil)
-			return nil
-		}
-		directBuildManifest := codexBuildManifest{
-			Phase:                 phaseNum,
-			ForcedReviewers:       forcedReviewerRecords(queenForcedReviewersForPhase(directBuildPhase)),
-			BoundaryQuestionCount: len(directBoundary.Questions),
-		}
-		blockerAdvisoryDirect := decideBuildBlockerAdvisory(buildStartBlockerSignals(directBuildManifest), noCheckinFlag)
 		buildVisual := appendSpendCostLine(
 			renderBuildVisualWithDispatches(state, state.Plan.Phases[phaseNum-1], dispatches, reviewDepthBuild, queenPolicyFromResult(result)),
 			phaseNum,
 		)
-		if advisoryVisual := renderBuildBlockerAdvisory(blockerAdvisoryDirect); advisoryVisual != "" {
+		if advisoryVisual := renderBuildAdvisoryResult(result); advisoryVisual != "" {
 			buildVisual = advisoryVisual + "\n\n" + buildVisual
 		}
 		// The one cost line ends this lane's ending screen too. The

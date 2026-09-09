@@ -2089,6 +2089,17 @@ func renderBuildPartialCreditResultVisual(state colony.ColonyState, phase colony
 	return renderBuildPartialCreditVisual(state, phase, recovery.UnfinishedTaskIDs, recovery.RedispatchCommand)
 }
 
+// renderBuildAdvisoryResult consumes the same typed advisory projection JSON
+// callers receive. It never re-checks mutable colony state or infers blocker
+// truth from already-rendered text.
+func renderBuildAdvisoryResult(result map[string]interface{}) string {
+	advisory, ok := buildAdvisoryFromResult(result)
+	if !ok {
+		return ""
+	}
+	return renderBuildBlockerAdvisory(advisory)
+}
+
 func renderBuildPlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch, reviewDepth colony.VerificationDepth, policyOpt ...codexQueenExecutionPolicy) string {
 	var policy codexQueenExecutionPolicy
 	if len(policyOpt) > 0 {
