@@ -5,15 +5,15 @@ milestone_name: Classic Colony Restoration
 current_phase: 200
 current_phase_name: Iterative Planning
 status: executing
-stopped_at: Completed 200-48-PLAN.md; next incomplete is 200-49
-last_updated: "2026-09-09T12:22:53.378Z"
+stopped_at: Completed 200-49-PLAN.md; next incomplete is 200-50
+last_updated: "2026-09-09T13:17:55.252Z"
 last_activity: 2026-09-09
-state_head: b6504b21f4b1e1dcb12f498838d4e2dc4f91b7d7
+state_head: 27855fe014586ee07b5cd8116d72d0478db4d027
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 89
-  completed_plans: 81
+  completed_plans: 82
   percent: 14
 ---
 
@@ -32,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 49 of 55
+Plan: 50 of 55
 Status: Ready to execute
 Last activity: 2026-09-09
 
@@ -161,6 +161,7 @@ Last activity: 2026-09-09
 | Phase 200 P46 | 27min | 2 tasks | 6 files |
 | Phase 200 P47 | 39min | 2 tasks | 5 files |
 | Phase 200 P48 | 31min | 2 tasks | 5 files |
+| Phase 200 P49 | 48min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -510,6 +511,9 @@ Last activity: 2026-09-09
 - [Phase 200]: Partial parents and children persist the exact unfinished task IDs and redispatch command; replay projects persisted values and uses pure derivation only to detect tampering.
 - [Phase 200]: A recovery child is executable evidence only while prepared and bound to a valid canonical start receipt; missing, forged, duplicate, or exhausted evidence fails closed without repair writes.
 - [Phase 200]: A current partial manifest may reach the read-only replay verifier before stale-state checks, but completion digest, accepted task graph, child journal, and receipt checks still gate every result.
+- [Phase 200]: Plan 49 accepted build fixtures use real specification approval, candidate coordination, owner acceptance, and commitBuildStart; mutable execution status is synchronized without replacing immutable authority bindings.
+- [Phase 200]: Plan 49 execution fixtures name phase, owner, mode, and live or dead process state explicitly; live recovery uses the current test process.
+- [Phase 200]: Plan 49 trusted completed manifests are written by commitBuildStart with transaction-derived authority fields, never by direct fixture journal writes.
 
 ### Pending Todos
 
@@ -626,11 +630,11 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-09T12:22:53.368Z
-Stopped at: Completed 200-48-PLAN.md; next incomplete is 200-49
+Last session: 2026-09-09T13:17:55.243Z
+Stopped at: Completed 200-49-PLAN.md; next incomplete is 200-50
 Resume file: None
 
 ## Operator Next Steps
 
-- Execute 200-47-PLAN.md, then follow Waves 28-34 before rerunning the unchanged final receipt Plan 200-40.
+- Execute 200-50-PLAN.md and 200-51-PLAN.md in Wave 30, then follow Waves 31-34 before rerunning the unchanged final receipt Plan 200-40 in Wave 35.
 - Preserve the Phase 200 Scout/Route-Setter objective and do not waive normal or race gate failures.

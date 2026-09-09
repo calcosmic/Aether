@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 47/55 plans executed
+**Plans:** 48/55 plans executed
 
 Plans:
 
@@ -321,7 +321,7 @@ Plans:
 
 **Wave 29** *(second gap closure; blocked on Wave 28 completion)*
 
-- [ ] 200-49-PLAN.md — Migrate core build fixtures to exact accepted-plan and canonical start authority.
+- [x] 200-49-PLAN.md — Migrate core build fixtures to exact accepted-plan and canonical start authority.
 
 **Wave 30** *(second gap closure; blocked on Wave 29 completion)*
 
