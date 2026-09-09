@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 34/40 plans executed
+**Plans:** 35/40 plans executed
 
 Plans:
 
@@ -284,7 +284,7 @@ Plans:
 **Wave 21** *(gap closure; blocked on Wave 20 completion)*
 
 - [x] 200-34-PLAN.md — Migrate every production build-start caller and conditional effect to the atomic transaction.
-- [ ] 200-37-PLAN.md — Enforce candidate expiry and stale-before-expiry recovery at review, acceptance, and execution authority.
+- [x] 200-37-PLAN.md — Enforce candidate expiry and stale-before-expiry recovery at review, acceptance, and execution authority.
 
 **Wave 22** *(gap closure; blocked on Wave 21 completion)*
 

@@ -2,19 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
-current_phase: 200
-current_phase_name: Iterative Planning
 status: executing
-stopped_at: Completed 200-34-PLAN.md
-last_updated: "2026-09-09T02:06:50.000Z"
+stopped_at: Completed 200-37-PLAN.md; next incomplete remains 200-35 by wave order
+last_updated: "2026-09-09T02:43:57.565Z"
 last_activity: 2026-09-09
-state_head: b0afefa17f610c14e6f64d87e5048b5c49a226a0
 progress:
   total_phases: 7
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 74
-  completed_plans: 68
-  percent: 0
+  completed_plans: 69
+  percent: 14
 ---
 
 # Project State
@@ -148,6 +145,7 @@ Last activity: 2026-09-09
 | Phase 200 P32 | 1h 15min | 3 tasks | 6 files |
 | Phase 200 P33 | 30min | 3 tasks | 3 files |
 | Phase 200 P34 | 27min | 3 tasks | 6 files |
+| Phase 200 P37 | 34min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -457,6 +455,10 @@ Last activity: 2026-09-09
 - [Phase 200]: All six production build-start families commit one authority-bound transaction before dispatch or completion work. — A receipt-last boundary prevents partial attempts, pointers, manifests, reviewer state, and provenance.
 - [Phase 200]: Plan-only and Queen-led starts share one prepared path selected by a closed transaction variant. — Queen reuse must not create or rewrite a second attempt.
 - [Phase 200]: Worker briefs are prepared before start but published only after the durable receipt. — Stale or faulted starts must authorize no runnable worker artifact.
+- [Phase 200]: ExpiresAt is an acceptance deadline — Pending candidates require observed time strictly before expiry, while timely accepted authority remains valid later.
+- [Phase 200]: Review and acceptance share one injected UTC time — The public command samples the clock once and passes that exact value through repository-session assessment.
+- [Phase 200]: Candidate expiry reuses the terminal failed stage with candidate_expired reason — This records durable expiry without widening the closed planning-stage vocabulary.
+- [Phase 200]: Planning-stage snapshot base and immutable candidate base remain distinct — Phase-insert stages bind a mutable state snapshot while candidate authority binds the retained active revision.
 
 ### Pending Todos
 
@@ -573,8 +575,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-09T02:06:50.000Z
-Stopped at: Completed 200-34-PLAN.md
+Last session: 2026-09-09T02:43:57.556Z
+Stopped at: Completed 200-37-PLAN.md; next incomplete remains 200-35 by wave order
 Resume file: None
 
 ## Operator Next Steps
