@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 46/55 plans executed
+**Plans:** 47/55 plans executed
 
 Plans:
 
@@ -317,7 +317,7 @@ Plans:
 
 **Wave 28** *(second gap closure; blocked on Wave 27 completion)*
 
-- [ ] 200-48-PLAN.md — Restore durable exactly-once partial-finalize retry and replay behavior.
+- [x] 200-48-PLAN.md — Restore durable exactly-once partial-finalize retry and replay behavior.
 
 **Wave 29** *(second gap closure; blocked on Wave 28 completion)*
 

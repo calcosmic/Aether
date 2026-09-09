@@ -5,15 +5,15 @@ milestone_name: Classic Colony Restoration
 current_phase: 200
 current_phase_name: Iterative Planning
 status: executing
-stopped_at: Completed 200-47-PLAN.md; next incomplete is 200-48
-last_updated: "2026-09-09T11:44:10.672Z"
+stopped_at: Completed 200-48-PLAN.md; next incomplete is 200-49
+last_updated: "2026-09-09T12:22:53.378Z"
 last_activity: 2026-09-09
-state_head: 7a335df8622d1146a65cb42388d7b9eb96f5e323
+state_head: fb45684b47cf8d08c88c933f4da0323a75214ecc
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 89
-  completed_plans: 80
+  completed_plans: 81
   percent: 14
 ---
 
@@ -32,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 48 of 55
+Plan: 49 of 55
 Status: Ready to execute
 Last activity: 2026-09-09
 
@@ -160,6 +160,7 @@ Last activity: 2026-09-09
 | Phase 200 P45 | 10min | 2 tasks | 5 files |
 | Phase 200 P46 | 27min | 2 tasks | 6 files |
 | Phase 200 P47 | 39min | 2 tasks | 5 files |
+| Phase 200 P48 | 31min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -505,6 +506,10 @@ Last activity: 2026-09-09
 - [Phase 200]: Build-attempt filesystem operations consume canonical data-root-relative paths; public output adds .aether/data exactly once. — This prevents doubled-root reconciliation and traversal ambiguity.
 - [Phase 200]: Only complete historical manifests enter the legacy adapter; partial modern claims fail closed. — Compatibility cannot bypass D-16 or supplied execution identity.
 - [Phase 200]: Exact legacy replay requires both the raw packet digest and valid canonical attempt/receipt evidence. — Replay remains idempotent without trusting the old artifact.
+- [Phase 200]: Partial finalize reports success only after canonical build start has durably committed exactly one unfinished-only recovery child; a child-start fault returns an error while retaining honest credited evidence.
+- [Phase 200]: Partial parents and children persist the exact unfinished task IDs and redispatch command; replay projects persisted values and uses pure derivation only to detect tampering.
+- [Phase 200]: A recovery child is executable evidence only while prepared and bound to a valid canonical start receipt; missing, forged, duplicate, or exhausted evidence fails closed without repair writes.
+- [Phase 200]: A current partial manifest may reach the read-only replay verifier before stale-state checks, but completion digest, accepted task graph, child journal, and receipt checks still gate every result.
 
 ### Pending Todos
 
@@ -621,8 +626,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-09T11:44:10.663Z
-Stopped at: Completed 200-47-PLAN.md; next incomplete is 200-48
+Last session: 2026-09-09T12:22:53.368Z
+Stopped at: Completed 200-48-PLAN.md; next incomplete is 200-49
 Resume file: None
 
 ## Operator Next Steps
