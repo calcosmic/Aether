@@ -36,6 +36,29 @@ func TestBuildStartCallers200(t *testing.T) {
 		}
 	})
 
+	t.Run("auxiliary starts use the canonical transaction", func(t *testing.T) {
+		tests := []struct {
+			file      string
+			function  string
+			forbidden []string
+		}{
+			{file: "codex_build_finalize.go", function: "runCodexBuildFinalize", forbidden: []string{"beginBuildAttempt", "beginBuildAttemptRecord"}},
+			{file: "check_fix_attempt.go", function: "applyAutomaticCheckFixAttempt", forbidden: []string{"beginBuildAttempt", "beginBuildAttemptRecord"}},
+			{file: "coherent_job_retry.go", function: "commitPartialBuildRetryPlan", forbidden: []string{"beginChildBuildAttempt", "beginBuildAttemptRecord", "attachBuildAttemptParentLink"}},
+		}
+		for _, test := range tests {
+			calls := buildStartCallerCalls200(t, buildStartCallerFile200(t, test.file), test.function)
+			if calls["commitBuildStart"] != 1 {
+				t.Fatalf("%s commitBuildStart calls = %d, want exactly one", test.function, calls["commitBuildStart"])
+			}
+			for _, forbidden := range test.forbidden {
+				if calls[forbidden] != 0 {
+					t.Fatalf("%s still calls split build-start writer %s", test.function, forbidden)
+				}
+			}
+		}
+	})
+
 	t.Run("plan-only and Queen-led starts publish one durable receipt", func(t *testing.T) {
 		tests := []struct {
 			name string
