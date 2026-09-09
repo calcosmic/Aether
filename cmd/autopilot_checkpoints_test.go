@@ -661,7 +661,9 @@ func TestRuntimeCheckpointGenerationAcceptsJournalBoundDirectFinalProjection(t *
 	claimsRel := filepath.ToSlash(filepath.Join("build", "phase-1", "claims.json"))
 	fixture := commitTestBuildStart(t, testBuildStartOptions{
 		GeneratedAt: startedAt, ExecutionOwner: "go-runtime", ClaimsPath: claimsRel,
-		MakeLatest: testBuildStartBool(true),
+		SelectedTasks: []string{"1.1"},
+		Dispatches:    []codexBuildDispatch{{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-checkpoint", TaskID: "1.1", Status: "planned"}},
+		MakeLatest:    testBuildStartBool(true),
 	})
 	phase, attemptRel := fixture.Phase, fixture.AttemptPath
 	state := fixture.State
