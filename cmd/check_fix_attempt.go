@@ -273,13 +273,28 @@ func applyAutomaticCheckFixAttempt(ctx context.Context, root string, state colon
 		Task:   record.Reason,
 		Status: "spawned",
 	}
-	attemptRel, err := beginBuildAttempt(state, phase.ID, phase, time.Now().UTC(), record.FailureIndex.ImplicatedTaskIDs, "", "", "", "check-fix-attempt", []codexBuildDispatch{journalDispatch})
+	state, authority, err := resolveCodexBuildPlanAuthority(root, state)
 	if err != nil {
-		// Cannot record the attempt append-only -- D-03 requires the
-		// attempt to be recorded, so an attempt that cannot be journaled
-		// does not run.
 		return floor, nil
 	}
+	startedAt := time.Now().UTC()
+	initialRecord := record
+	initialRecord.Outcome = "pending"
+	request, err := newBuildStartRequest(root, buildStartAutomaticCheckFix, state, authority, phase.ID, record.FailureIndex.ImplicatedTaskIDs, "check-fix-attempt", "check-fix-attempt", startedAt, []codexBuildDispatch{journalDispatch}, buildStartEffects{
+		MakeLatest:     true,
+		CheckFix:       &initialRecord,
+		ReviewerWindow: buildStartReviewerClose,
+	})
+	if err != nil {
+		return floor, nil
+	}
+	receipt, err := commitBuildStart(root, request, buildStartOptions{})
+	if err != nil {
+		// D-03 requires attempt and provenance to be durable together. A
+		// refused/stale transaction therefore never reaches the worker.
+		return floor, nil
+	}
+	attemptRel := receipt.AttemptPath
 
 	_, _ = dispatchBatchByWaveWithVisuals(ctx, invoker, []codex.WorkerDispatch{dispatch}, colony.ModeInRepo, "Check Fix Attempt", true, nil)
 

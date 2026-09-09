@@ -616,18 +616,40 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	}
 	attachBuildArtifactEvidence(root, &claims)
 
-	if err := store.SaveJSON(checkpointRel, state); err != nil {
-		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to checkpoint colony state: %w", err)
-	}
 	attemptRel := binding.Path
+	startedUnbound := !binding.Bound
 	if !binding.Bound {
-		attemptRel, err = beginBuildAttempt(state, phaseNum, phase, startedAt, selectedTaskIDs, checkpointRel, manifestRel, claimsRel, "external-task", dispatches)
-		if err != nil {
+		startState, authority, authorityErr := resolveCodexBuildPlanAuthority(root, state)
+		if authorityErr != nil {
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, authorityErr
+		}
+		request, requestErr := newBuildStartRequest(root, buildStartExternalUnbound, startState, authority, phaseNum, selectedTaskIDs, manifest.ExecutionOwner, manifest.DispatchMode, startedAt, manifest.Dispatches, buildStartEffects{
+			CheckpointPath: checkpointRel,
+			Completion:     &completion,
+			ClaimsPath:     claimsRel,
+			Claims:         &claims,
+			PromoteState:   true,
+			MakeLatest:     true,
+		})
+		if requestErr != nil {
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, requestErr
+		}
+		receipt, commitErr := commitBuildStart(root, request, buildStartOptions{})
+		if commitErr != nil {
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, commitErr
+		}
+		state = startState
+		attemptRel = receipt.AttemptPath
+	} else {
+		if err := store.SaveJSON(checkpointRel, state); err != nil {
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to checkpoint colony state: %w", err)
+		}
+		if _, err := bindBuildAttemptCompletion(attemptRel, completion); err != nil {
 			return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 		}
 	}
-	if _, err := bindBuildAttemptCompletion(attemptRel, completion); err != nil {
-		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	if attemptRel == "" {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("external build start did not return an attempt path")
 	}
 	attemptFinished := false
 	finishAttempt := func(status, summary string, transitionErr error) {
@@ -643,11 +665,12 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 			_ = transitionBuildAttempt(attemptRel, buildAttemptInterrupted, "build-finalize ended before durable finalization", nil, nil, "external-task", fmt.Errorf("build-finalize ended before durable finalization"))
 		}
 	}()
-	if err := transitionBuildAttempt(attemptRel, buildAttemptDispatching, "external worker results received for validation", dispatches, nil, "external-task", nil); err != nil {
-		finishAttempt(buildAttemptFailed, "failed to persist external result collection start", err)
-		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	if !startedUnbound {
+		if err := transitionBuildAttempt(attemptRel, buildAttemptDispatching, "external worker results received for validation", dispatches, nil, "external-task", nil); err != nil {
+			finishAttempt(buildAttemptFailed, "failed to persist external result collection start", err)
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+		}
 	}
-
 	// Prepare the updated state in memory first (needed for downstream writes).
 	// D-08: BUILT means every selected task is actually proven done. A
 	// grouped job that only credited part of its covered tasks (via receipt

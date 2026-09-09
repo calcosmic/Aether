@@ -276,22 +276,30 @@ func commitPartialBuildRetryPlan(state colony.ColonyState, phaseNum int, phase c
 		}, nil
 	}
 
-	childRel, err := beginChildBuildAttempt(
-		state, phaseNum, phase, retryStartedAt,
-		parentAttemptID, plan.Jobs[0].Name,
-		append([]string{}, plan.UnfinishedTaskIDs...),
-		"", "", "",
-		buildExecutionOwner("real", false),
-		plan.Dispatches,
+	state, authority, err := resolveCodexBuildPlanAuthority(buildAttemptWorkspaceRoot(), state)
+	if err != nil {
+		return nil, fmt.Errorf("coherent job retry: resolve plan authority: %w", err)
+	}
+	request, err := newBuildStartRequest(
+		buildAttemptWorkspaceRoot(), buildStartCoherentChildRetry, state, authority,
+		phaseNum, append([]string{}, plan.UnfinishedTaskIDs...),
+		buildExecutionOwner("real", false), "coherent-child-retry", retryStartedAt,
+		plan.Dispatches, buildStartEffects{
+			ParentAttemptID: parentAttemptID,
+			ParentJobName:   plan.Jobs[0].Name,
+		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("coherent job retry: create recovery attempt: %w", err)
+		return nil, fmt.Errorf("coherent job retry: prepare recovery attempt: %w", err)
 	}
-	childID := strings.TrimSuffix(filepath.Base(childRel), filepath.Ext(childRel))
+	receipt, err := commitBuildStart(buildAttemptWorkspaceRoot(), request, buildStartOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("coherent job retry: commit recovery attempt: %w", err)
+	}
 	return &partialBuildRetryOutcome{
 		ParentAttemptID:   parentAttemptID,
-		RetryAttemptID:    childID,
-		RetryAttemptPath:  displayDataPath(childRel),
+		RetryAttemptID:    receipt.AttemptID,
+		RetryAttemptPath:  displayDataPath(receipt.AttemptPath),
 		UnfinishedTaskIDs: append([]string{}, plan.UnfinishedTaskIDs...),
 		RedispatchCommand: plan.RedispatchCommand,
 	}, nil
