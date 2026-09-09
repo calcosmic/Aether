@@ -39,6 +39,7 @@ type planCandidateAcceptanceResult struct {
 	Revision  colony.PlanRevision          `json:"revision"`
 	Receipt   colony.PlanAcceptanceReceipt `json:"acceptance_receipt"`
 	Replayed  bool                         `json:"replayed"`
+	Refusal   *planCandidateRefusalDetails `json:"refusal,omitempty"`
 }
 
 type phaseInsertCandidateRequest struct {
@@ -777,6 +778,12 @@ func phaseInsertPlanningBoundary(state colony.ColonyState, approved approvedPlan
 // Plan 28 repository session is acquired before any authority read and remains
 // held through derivation, atomic apply, rollback, or exact read-only replay.
 func acceptPlanCandidate(root string, request planCandidateAcceptanceRequest, opts planCandidateAcceptanceOptions) (planCandidateAcceptanceResult, error) {
+	// Direct internal callers predating the command clock seam may omit the
+	// timestamp. Preserve that API while still sampling the same seam exactly
+	// once; runPlanCandidateCommand always supplies its already-sampled value.
+	if opts.AcceptedAt.IsZero() {
+		opts.AcceptedAt = planCandidateNow().UTC()
+	}
 	var result planCandidateAcceptanceResult
 	err := withPlanningMutationSession(root, "plan-candidate-accept", func(session *planningMutationSession) error {
 		var err error
@@ -794,38 +801,53 @@ func acceptPlanCandidateInSession(session *planningMutationSession, request plan
 	}
 	candidate := artifact.Candidate
 	if err := validatePlanCandidateAcceptanceRequest(candidate, request); err != nil {
-		return empty, err
+		assessment := unavailablePlanCandidateStanding("acceptance_request_changed", err.Error())
+		return refusePlanCandidateAcceptance(candidate, assessment, err)
 	}
 	state, err := loadSpecificationColonyStateInSession(session)
 	if err != nil {
-		return empty, err
+		assessment := unavailablePlanCandidateStanding("planning_state_unavailable", err.Error())
+		return refusePlanCandidateAcceptance(candidate, assessment, err)
 	}
 	if err := validatePlanningState(state); err != nil {
-		return empty, fmt.Errorf("validate current planning state: %w", err)
+		cause := fmt.Errorf("validate current planning state: %w", err)
+		assessment := unavailablePlanCandidateStanding("planning_state_invalid", cause.Error())
+		return refusePlanCandidateAcceptance(candidate, assessment, cause)
 	}
-	timeline, err := verifiedPlanCandidateTimelineInSession(session, candidate)
+	timeline, err := loadPlanCandidateTimelineAuthorityInSession(session, candidate)
 	if err != nil {
-		return empty, err
+		assessment := unavailablePlanCandidateStanding("timeline_changed", err.Error())
+		return refusePlanCandidateAcceptance(candidate, assessment, err)
 	}
 	persistedReceipt, receiptExists, err := loadPlanCandidateAcceptanceReceiptInSession(session, candidate)
 	if err != nil {
-		return empty, err
+		assessment := unavailablePlanCandidateStanding("acceptance_receipt_invalid", err.Error())
+		return refusePlanCandidateAcceptance(candidate, assessment, err)
 	}
+	authority := planCandidateAuthorityFromState(state, artifact, *timeline.Binding)
+	assessment := assessPlanCandidateStanding(candidate, authority, opts.AcceptedAt)
 
 	if candidate.Status == colony.PlanCandidateAccepted {
 		if !receiptExists || candidate.Acceptance == nil || !reflect.DeepEqual(*persistedReceipt, *candidate.Acceptance) {
-			return empty, fmt.Errorf("acceptance receipt: accepted replay does not bind the exact persisted receipt")
+			cause := fmt.Errorf("acceptance receipt: accepted replay does not bind the exact persisted receipt")
+			assessment = unavailablePlanCandidateStanding("acceptance_receipt_invalid", cause.Error())
+			return refusePlanCandidateAcceptance(candidate, assessment, cause)
+		}
+		if assessment.Standing != planCandidateStandingAccepted {
+			return refusePlanCandidateAcceptance(candidate, assessment, fmt.Errorf("candidate %s cannot replay: %s", candidate.ID, assessment.WhyUnavailable))
 		}
 		return replayAcceptedPlanCandidate(state, candidate)
 	}
 	if receiptExists {
-		return empty, fmt.Errorf("acceptance receipt: pending candidate already has a receipt artifact")
+		cause := fmt.Errorf("acceptance receipt: pending candidate already has a receipt artifact")
+		assessment = unavailablePlanCandidateStanding("acceptance_receipt_invalid", cause.Error())
+		return refusePlanCandidateAcceptance(candidate, assessment, cause)
 	}
-	if candidate.Status != colony.PlanCandidatePendingReview {
-		return empty, fmt.Errorf("candidate status %q cannot be accepted; only pending_review is eligible", candidate.Status)
+	if assessment.Standing == planCandidateStandingExpired && candidate.Status == colony.PlanCandidatePendingReview {
+		return expirePlanCandidateInSession(session, artifact, state, assessment, opts)
 	}
-	if artifact.Stage.Stage != planningStageCandidateReady {
-		return empty, fmt.Errorf("candidate stage %q cannot be accepted; expected candidate_ready", artifact.Stage.Stage)
+	if assessment.Standing != planCandidateStandingCurrent {
+		return refusePlanCandidateAcceptance(candidate, assessment, fmt.Errorf("candidate %s cannot be accepted: %s", candidate.ID, assessment.WhyUnavailable))
 	}
 	if pendingID := strings.TrimSpace(state.Plan.PendingCandidateID); pendingID != "" && pendingID != candidate.ID {
 		return empty, fmt.Errorf("candidate_id: current pending candidate is %q, not %q", pendingID, candidate.ID)
@@ -910,9 +932,6 @@ func acceptPlanCandidateInSession(session *planningMutationSession, request plan
 		acceptedBy = "owner"
 	}
 	acceptedAt := opts.AcceptedAt.UTC()
-	if acceptedAt.IsZero() {
-		acceptedAt = time.Now().UTC()
-	}
 	receipt, err := newPlanCandidateAcceptanceReceipt(candidate, request.AcceptanceToken, revision, acceptedBy, acceptedAt)
 	if err != nil {
 		return empty, err
@@ -1015,6 +1034,156 @@ func acceptPlanCandidateInSession(session *planningMutationSession, request plan
 	return planCandidateAcceptanceResult{Candidate: candidate, Revision: revision, Receipt: receipt}, nil
 }
 
+func unavailablePlanCandidateStanding(reason string, evidence ...string) planCandidateStandingAssessment {
+	return planCandidateStandingAssessment{
+		Standing: planCandidateStandingStale, WhyUnavailable: strings.TrimSpace(reason),
+		Evidence: append([]string(nil), evidence...), AcceptanceAvailable: false,
+		StateEffect: planCandidateStateEffectUnchanged, ActivePlanEffect: planCandidateActivePlanEffectUnchanged,
+		RecoveryCommand: planCandidateRefreshCommand,
+	}
+}
+
+func refusePlanCandidateAcceptance(candidate colony.PlanCandidate, assessment planCandidateStandingAssessment, cause error) (planCandidateAcceptanceResult, error) {
+	if assessment.StateEffect == "" {
+		assessment.StateEffect = planCandidateStateEffectUnchanged
+	}
+	if assessment.ActivePlanEffect == "" {
+		assessment.ActivePlanEffect = planCandidateActivePlanEffectUnchanged
+	}
+	if strings.TrimSpace(assessment.RecoveryCommand) == "" {
+		assessment.RecoveryCommand = planCandidateRefreshCommand
+	}
+	details := planCandidateRefusal(candidate, assessment)
+	return planCandidateAcceptanceResult{Candidate: candidate, Refusal: &details}, &planCandidateRefusalError{Details: details, Cause: cause}
+}
+
+func loadPlanCandidateTimelineAuthorityInSession(session *planningMutationSession, candidate colony.PlanCandidate) (planningTimeline, error) {
+	if err := validatePlanningTimelineSegment("run_id", candidate.Timeline.RunID); err != nil {
+		return planningTimeline{}, err
+	}
+	index, cards, exists, err := readPlanningTimelineChainInSession(session, candidate.Timeline.RunID)
+	if err != nil {
+		return planningTimeline{}, err
+	}
+	if !exists {
+		return planningTimeline{}, fmt.Errorf("candidate %s requires a complete indexed timeline", candidate.ID)
+	}
+	binding, err := planningTimelineBindingFor(index, cards)
+	if err != nil {
+		return planningTimeline{}, err
+	}
+	indexCopy := index
+	return planningTimeline{
+		Classification: planningTimelineCandidateOnly, RunID: candidate.Timeline.RunID,
+		Index: &indexCopy, Cards: cards, Binding: &binding,
+	}, nil
+}
+
+func expirePlanCandidateInSession(session *planningMutationSession, artifact planCandidateArtifact, state colony.ColonyState, assessment planCandidateStandingAssessment, opts planCandidateAcceptanceOptions) (planCandidateAcceptanceResult, error) {
+	candidate := artifact.Candidate
+	if artifact.Stage.Stage != planningStageCandidateReady {
+		assessment = unavailablePlanCandidateStanding("planning_stage_changed",
+			fmt.Sprintf("candidate expiry expected stage %s, current stage is %s", planningStageCandidateReady, artifact.Stage.Stage))
+		return refusePlanCandidateAcceptance(candidate, assessment, fmt.Errorf("candidate %s cannot expire from stage %s", candidate.ID, artifact.Stage.Stage))
+	}
+
+	candidate.Status = colony.PlanCandidateExpired
+	candidate.Acceptance = nil
+	if err := validatePlanningRecordHashes(candidate); err != nil {
+		return planCandidateAcceptanceResult{}, fmt.Errorf("expired candidate: %w", err)
+	}
+	if err := candidate.Validate(); err != nil {
+		return planCandidateAcceptanceResult{}, fmt.Errorf("expired candidate: %w", err)
+	}
+	nextStage, _, err := reducePlanningStage(artifact.Stage, planningStageTransition{
+		To: planningStageFailed, FailureReason: planningStageFailureCandidateExpired,
+	})
+	if err != nil {
+		return planCandidateAcceptanceResult{}, err
+	}
+
+	nextState := state
+	nextState.Plan.Candidates = append([]colony.PlanCandidate(nil), state.Plan.Candidates...)
+	stateChanged := false
+	for index := range nextState.Plan.Candidates {
+		retained := nextState.Plan.Candidates[index]
+		if retained.ID != candidate.ID {
+			continue
+		}
+		if retained.ContentHash != candidate.ContentHash || retained.Status != colony.PlanCandidatePendingReview {
+			return planCandidateAcceptanceResult{}, fmt.Errorf("candidate_id: retained candidate %q conflicts with expiry", candidate.ID)
+		}
+		nextState.Plan.Candidates[index] = candidate
+		stateChanged = true
+	}
+	if nextState.Plan.PendingCandidateID == candidate.ID {
+		nextState.Plan.PendingCandidateID = ""
+		stateChanged = true
+	}
+	if stateChanged {
+		if err := validatePlanningState(nextState); err != nil {
+			return planCandidateAcceptanceResult{}, fmt.Errorf("validate expired candidate state: %w", err)
+		}
+	}
+
+	candidateBytes, err := marshalPlanningStageJSON(candidate)
+	if err != nil {
+		return planCandidateAcceptanceResult{}, err
+	}
+	stageBytes, err := marshalPlanningStageJSON(nextStage)
+	if err != nil {
+		return planCandidateAcceptanceResult{}, err
+	}
+	targets := []struct {
+		path    string
+		content []byte
+	}{
+		{path: planningStageDataRelativePath(planningRouteCandidateRepositoryPath(candidate.Timeline.RunID)), content: candidateBytes},
+		{path: planningStageDataRelativePath(planningStageStateRepositoryPath(candidate.Timeline.RunID)), content: stageBytes},
+	}
+	if stateChanged {
+		stateBytes, marshalErr := marshalSpecificationState(nextState)
+		if marshalErr != nil {
+			return planCandidateAcceptanceResult{}, marshalErr
+		}
+		targets = append(targets, struct {
+			path    string
+			content []byte
+		}{path: "COLONY_STATE.json", content: stateBytes})
+	}
+
+	tx, err := beginLifecycleTransaction(lifecycleTransactionConfig{
+		TransactionID: "plan-candidate-expire-" + candidate.ContentHash[:24],
+		Command:       "plan-candidate-expire",
+		Allowlist: lifecycleTransactionAllowlist{
+			RepositoryRoot: session.RepositoryRoot(), LifecycleDataRoot: session.DataRoot(),
+		},
+		Session: session, Fault: opts.Fault, Rename: opts.Rename,
+	})
+	if err != nil {
+		return planCandidateAcceptanceResult{}, err
+	}
+	for _, target := range targets {
+		if err := tx.DeclareWrite(lifecycleTransactionRootData, target.path, target.content); err != nil {
+			return planCandidateAcceptanceResult{}, err
+		}
+	}
+	if err := tx.Validate(); err != nil {
+		return planCandidateAcceptanceResult{}, err
+	}
+	if _, err := tx.Commit(); err != nil {
+		if rollbackErr := tx.rollbackPreparedTargets(); rollbackErr != nil {
+			return planCandidateAcceptanceResult{}, errors.Join(err, fmt.Errorf("rollback candidate expiry: %w", rollbackErr))
+		}
+		return planCandidateAcceptanceResult{}, err
+	}
+
+	assessment.StateEffect = planCandidateStateEffectMarkedExpired
+	details := planCandidateRefusal(candidate, assessment)
+	cause := fmt.Errorf("candidate %s expired at %s; run `%s`", candidate.ID, candidate.ExpiresAt.UTC().Format(time.RFC3339Nano), planCandidateRefreshCommand)
+	return planCandidateAcceptanceResult{Candidate: candidate, Refusal: &details}, &planCandidateRefusalError{Details: details, Cause: cause}
+}
+
 func loadPlanCandidateArtifactInSession(session *planningMutationSession, requestedID string) (planCandidateArtifact, error) {
 	if err := session.requireActive(); err != nil {
 		return planCandidateArtifact{}, err
@@ -1051,24 +1220,15 @@ func loadPlanCandidateArtifactInSession(session *planningMutationSession, reques
 		if wanted != "" && candidate.ID != wanted {
 			continue
 		}
-		if wanted == "" && candidate.Status != colony.PlanCandidatePendingReview {
+		if wanted == "" && candidate.Status != colony.PlanCandidatePendingReview && candidate.Status != colony.PlanCandidateExpired {
 			continue
 		}
 		if candidate.Timeline.RunID != runID {
 			return planCandidateArtifact{}, fmt.Errorf("candidate %s path does not match timeline run", candidate.ID)
 		}
-		if err := validatePlanningRecordHashes(candidate); err != nil {
-			return planCandidateArtifact{}, fmt.Errorf("candidate %s: %w", candidate.ID, err)
-		}
-		if err := candidate.Validate(); err != nil {
-			return planCandidateArtifact{}, fmt.Errorf("candidate %s: %w", candidate.ID, err)
-		}
 		stage, err := loadPlanningStageStateInSession(session, runID)
 		if err != nil {
 			return planCandidateArtifact{}, err
-		}
-		if stage.Stage != planningStageCandidateReady && stage.Stage != planningStageAccepted {
-			return planCandidateArtifact{}, fmt.Errorf("candidate %s is not at a reviewable planning boundary (stage %s)", candidate.ID, stage.Stage)
 		}
 		header, err := loadPlanCandidateRunHeaderInSession(session, candidate)
 		if err != nil {

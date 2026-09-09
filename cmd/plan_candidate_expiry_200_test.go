@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
@@ -215,7 +216,7 @@ func TestPlanCandidateExpiry200StaleAndExpiredReviewStayReadOnly(t *testing.T) {
 	})
 }
 
-func TestPlanCandidateExpiry200AcceptedReplaySurvivesWallClockButLateForgeryDoesNot(t *testing.T) {
+func TestPlanCandidateExpiry200AcceptedReplaySurvivesWallClock(t *testing.T) {
 	root, candidate := planCandidateTestPending(t)
 	request := planCandidateTestAcceptanceRequest(candidate)
 	acceptedAt := candidate.ExpiresAt.Add(-time.Nanosecond)
@@ -237,7 +238,9 @@ func TestPlanCandidateExpiry200AcceptedReplaySurvivesWallClockButLateForgeryDoes
 	if decision := validateAcceptedPlanAuthority(facts, bindings); !decision.Eligible {
 		t.Fatalf("timely accepted plan expired later: %+v", decision)
 	}
+}
 
+func TestPlanAuthorityRejectsLateCandidateExpiry200(t *testing.T) {
 	lateFacts, lateBindings := planAuthorityCurrentFixture(t)
 	active, ok := activePlanRevision(lateFacts.State.Value.Plan)
 	if !ok || lateBindings.Candidate == nil {
@@ -312,9 +315,9 @@ func planCandidateExpiry200AssertSafeReview(t *testing.T, review planCandidateRe
 
 func planCandidateExpiry200ReadCandidate(t *testing.T, root string, original colony.PlanCandidate) colony.PlanCandidate {
 	t.Helper()
-	content, err := readOptionalPlanningStageFile(root, planningRouteCandidateRepositoryPath(original.Timeline.RunID))
-	if err != nil || !contentExists(content) {
-		t.Fatalf("read persisted candidate: bytes=%d err=%v", len(content), err)
+	content, exists, err := readOptionalPlanningStageFile(root, planningRouteCandidateRepositoryPath(original.Timeline.RunID))
+	if err != nil || !exists {
+		t.Fatalf("read persisted candidate: exists=%t bytes=%d err=%v", exists, len(content), err)
 	}
 	var candidate colony.PlanCandidate
 	if err := json.Unmarshal(content, &candidate); err != nil {
@@ -323,10 +326,8 @@ func planCandidateExpiry200ReadCandidate(t *testing.T, root string, original col
 	return candidate
 }
 
-func contentExists(content []byte) bool { return len(content) > 0 }
-
 func planCandidateExpiry200CandidatePath(root string, candidate colony.PlanCandidate) string {
-	return root + "/" + planningRouteCandidateRepositoryPath(candidate.Timeline.RunID)
+	return filepath.Join(root, filepath.FromSlash(planningRouteCandidateRepositoryPath(candidate.Timeline.RunID)))
 }
 
 func planCandidateExpiry200AssertOnlyChanged(t *testing.T, root string, before map[string][]byte, expected ...string) {
@@ -334,11 +335,17 @@ func planCandidateExpiry200AssertOnlyChanged(t *testing.T, root string, before m
 	after := planCandidateTestSnapshot(t, root)
 	changed := make([]string, 0)
 	for path, old := range before {
+		if planCandidateExpiry200TransactionProofPath(path) {
+			continue
+		}
 		if current, ok := after[path]; !ok || !bytes.Equal(old, current) {
 			changed = append(changed, path)
 		}
 	}
 	for path := range after {
+		if planCandidateExpiry200TransactionProofPath(path) {
+			continue
+		}
 		if _, ok := before[path]; !ok {
 			changed = append(changed, path)
 		}
@@ -352,4 +359,9 @@ func planCandidateExpiry200AssertOnlyChanged(t *testing.T, root string, before m
 	if !reflect.DeepEqual(changed, expected) {
 		t.Fatalf("expiry changed %v, want only %v", changed, expected)
 	}
+}
+
+func planCandidateExpiry200TransactionProofPath(path string) bool {
+	return strings.HasPrefix(path, ".aether/data/.aether-transactions/plan-candidate-expire-") ||
+		strings.HasPrefix(path, ".aether/data/transactions/plan-candidate-expire-")
 }

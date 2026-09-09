@@ -4,12 +4,17 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
+
+// planCandidateNow is the one clock seam for a candidate command. Command
+// handlers sample it once and pass that value through every authority check.
+var planCandidateNow = func() time.Time { return time.Now().UTC() }
 
 type planCandidateOperation string
 
@@ -37,6 +42,205 @@ type planCandidateConfidenceScore struct {
 	Score     int                      `json:"score"`
 }
 
+type planCandidateStanding string
+
+const (
+	planCandidateStandingCurrent  planCandidateStanding = "current"
+	planCandidateStandingExpired  planCandidateStanding = "expired"
+	planCandidateStandingStale    planCandidateStanding = "stale"
+	planCandidateStandingAccepted planCandidateStanding = "accepted"
+)
+
+type planCandidateStateEffect string
+
+const (
+	planCandidateStateEffectUnchanged     planCandidateStateEffect = "unchanged"
+	planCandidateStateEffectMarkedExpired planCandidateStateEffect = "candidate_marked_expired"
+)
+
+type planCandidateActivePlanEffect string
+
+const planCandidateActivePlanEffectUnchanged planCandidateActivePlanEffect = "unchanged"
+
+const planCandidateRefreshCommand = "aether plan --refresh"
+
+// planCandidateCurrentAuthority is the current repository frontier against
+// which an immutable candidate is assessed. It contains facts, not policy;
+// assessPlanCandidateStanding remains pure and performs no I/O.
+type planCandidateCurrentAuthority struct {
+	SpecificationRevisionID   string
+	SpecificationRevisionHash string
+	BasePlanRevisionID        string
+	BasePlanRevisionHash      string
+	ProposalHash              string
+	Timeline                  colony.PlanningTimelineBinding
+	Stage                     planningStageState
+}
+
+type planCandidateStandingAssessment struct {
+	Standing            planCandidateStanding         `json:"standing"`
+	WhyUnavailable      string                        `json:"why_unavailable,omitempty"`
+	Evidence            []string                      `json:"evidence,omitempty"`
+	AcceptanceAvailable bool                          `json:"acceptance_available"`
+	StateEffect         planCandidateStateEffect      `json:"state_effect"`
+	ActivePlanEffect    planCandidateActivePlanEffect `json:"active_plan_effect"`
+	RecoveryCommand     string                        `json:"recovery_command,omitempty"`
+}
+
+// planCandidateRefusalDetails is the stable machine-readable refusal payload
+// returned together with an error. Renderers never need to parse error prose.
+type planCandidateRefusalDetails struct {
+	CandidateID      string                        `json:"candidate_id"`
+	CandidateStatus  colony.PlanCandidateStatus    `json:"candidate_status"`
+	Standing         planCandidateStanding         `json:"standing"`
+	ExpiresAt        time.Time                     `json:"expires_at"`
+	WhyUnavailable   string                        `json:"why_unavailable"`
+	Evidence         []string                      `json:"evidence"`
+	StateEffect      planCandidateStateEffect      `json:"state_effect"`
+	ActivePlanEffect planCandidateActivePlanEffect `json:"active_plan_effect"`
+	RecoveryCommand  string                        `json:"recovery_command"`
+}
+
+type planCandidateRefusalError struct {
+	Details planCandidateRefusalDetails
+	Cause   error
+}
+
+func (e *planCandidateRefusalError) Error() string {
+	if e == nil {
+		return "plan candidate is unavailable"
+	}
+	if e.Cause != nil {
+		return e.Cause.Error()
+	}
+	return fmt.Sprintf("plan candidate %s is %s: %s", e.Details.CandidateID, e.Details.Standing, e.Details.WhyUnavailable)
+}
+
+func (e *planCandidateRefusalError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Cause
+}
+
+func assessPlanCandidateStanding(candidate colony.PlanCandidate, current planCandidateCurrentAuthority, now time.Time) planCandidateStandingAssessment {
+	result := planCandidateStandingAssessment{
+		StateEffect:      planCandidateStateEffectUnchanged,
+		ActivePlanEffect: planCandidateActivePlanEffectUnchanged,
+	}
+	refuse := func(standing planCandidateStanding, reason string, evidence ...string) planCandidateStandingAssessment {
+		result.Standing = standing
+		result.WhyUnavailable = reason
+		result.Evidence = append([]string(nil), evidence...)
+		result.AcceptanceAvailable = false
+		result.RecoveryCommand = planCandidateRefreshCommand
+		return result
+	}
+
+	createdAt := candidate.CreatedAt.UTC()
+	expiresAt := candidate.ExpiresAt.UTC()
+	now = now.UTC()
+	if createdAt.IsZero() || expiresAt.IsZero() || !expiresAt.After(createdAt) {
+		return refuse(planCandidateStandingStale, "candidate_lifetime_invalid",
+			"candidate.expires_at must be strictly after candidate.created_at")
+	}
+	if now.IsZero() || now.Before(createdAt) {
+		return refuse(planCandidateStandingStale, "clock_before_candidate_creation",
+			fmt.Sprintf("candidate.created_at=%s", createdAt.Format(time.RFC3339Nano)),
+			fmt.Sprintf("observed_at=%s", now.Format(time.RFC3339Nano)))
+	}
+
+	proposalHash, err := canonicalPlanCandidateProposalHash(candidate.Proposal)
+	if err != nil || proposalHash != candidate.ProposalHash || candidate.Proposal.PlanHash != candidate.ProposalHash {
+		return refuse(planCandidateStandingStale, "proposal_changed", candidateStandingEvidence("proposal", candidate.ProposalHash, proposalHash, err))
+	}
+	if err := validatePlanningRecordHashes(candidate); err != nil {
+		return refuse(planCandidateStandingStale, "candidate_body_changed", "candidate canonical body: "+err.Error())
+	}
+	if err := candidate.Validate(); err != nil {
+		return refuse(planCandidateStandingStale, "candidate_body_changed", "candidate validation: "+err.Error())
+	}
+
+	if candidate.Status == colony.PlanCandidateExpired {
+		return refuse(planCandidateStandingExpired, "candidate_expired",
+			fmt.Sprintf("candidate.expires_at=%s", expiresAt.Format(time.RFC3339Nano)))
+	}
+	if candidate.Status == colony.PlanCandidatePendingReview && !now.Before(expiresAt) {
+		return refuse(planCandidateStandingExpired, "candidate_expired",
+			fmt.Sprintf("candidate.expires_at=%s", expiresAt.Format(time.RFC3339Nano)),
+			fmt.Sprintf("observed_at=%s", now.Format(time.RFC3339Nano)))
+	}
+	if candidate.Status != colony.PlanCandidatePendingReview && candidate.Status != colony.PlanCandidateAccepted {
+		return refuse(planCandidateStandingStale, "candidate_status_changed", "candidate.status="+string(candidate.Status))
+	}
+
+	if current.SpecificationRevisionID != candidate.SpecificationRevisionID || current.SpecificationRevisionHash != candidate.SpecificationRevisionHash {
+		return refuse(planCandidateStandingStale, "specification_changed",
+			"candidate.specification="+candidate.SpecificationRevisionID+"@"+candidate.SpecificationRevisionHash,
+			"current.specification="+current.SpecificationRevisionID+"@"+current.SpecificationRevisionHash)
+	}
+	if current.BasePlanRevisionID != candidate.BasePlanRevisionID || current.BasePlanRevisionHash != candidate.BasePlanRevisionHash {
+		return refuse(planCandidateStandingStale, "base_plan_changed",
+			"candidate.base_plan="+candidate.BasePlanRevisionID+"@"+candidate.BasePlanRevisionHash,
+			"current.base_plan="+current.BasePlanRevisionID+"@"+current.BasePlanRevisionHash)
+	}
+	if current.ProposalHash != candidate.ProposalHash {
+		return refuse(planCandidateStandingStale, "proposal_changed",
+			"candidate.proposal_hash="+candidate.ProposalHash, "current.proposal_hash="+current.ProposalHash)
+	}
+	if !reflect.DeepEqual(current.Timeline, candidate.Timeline) {
+		return refuse(planCandidateStandingStale, "timeline_changed",
+			"candidate.timeline="+candidate.Timeline.ID+"@"+candidate.Timeline.TimelineDigest,
+			"current.timeline="+current.Timeline.ID+"@"+current.Timeline.TimelineDigest)
+	}
+
+	wantStage := planningStageCandidateReady
+	if candidate.Status == colony.PlanCandidateAccepted {
+		wantStage = planningStageAccepted
+	}
+	if current.Stage.Stage != wantStage || current.Stage.RunID != candidate.Timeline.RunID ||
+		current.Stage.Specification.RevisionID != candidate.SpecificationRevisionID ||
+		current.Stage.Specification.ContentHash != candidate.SpecificationRevisionHash ||
+		current.Stage.BasePlanRevisionID != candidate.BasePlanRevisionID ||
+		current.Stage.BasePlanRevisionHash != candidate.BasePlanRevisionHash {
+		return refuse(planCandidateStandingStale, "planning_stage_changed",
+			fmt.Sprintf("candidate.expected_stage=%s", wantStage), fmt.Sprintf("current.stage=%s", current.Stage.Stage))
+	}
+
+	if candidate.Status == colony.PlanCandidateAccepted {
+		if candidate.Acceptance == nil || candidate.Acceptance.AcceptedAt.Before(createdAt) || !candidate.Acceptance.AcceptedAt.Before(expiresAt) {
+			return refuse(planCandidateStandingStale, "acceptance_time_invalid",
+				fmt.Sprintf("candidate.created_at=%s", createdAt.Format(time.RFC3339Nano)),
+				fmt.Sprintf("candidate.expires_at=%s", expiresAt.Format(time.RFC3339Nano)))
+		}
+		if err := validatePlanCandidateAcceptanceReceiptHash(*candidate.Acceptance); err != nil {
+			return refuse(planCandidateStandingStale, "acceptance_receipt_invalid", "acceptance receipt: "+err.Error())
+		}
+		result.Standing = planCandidateStandingAccepted
+		return result
+	}
+
+	result.Standing = planCandidateStandingCurrent
+	result.AcceptanceAvailable = true
+	return result
+}
+
+func candidateStandingEvidence(label, want, got string, err error) string {
+	if err != nil {
+		return label + ": " + err.Error()
+	}
+	return fmt.Sprintf("%s expected=%s actual=%s", label, want, got)
+}
+
+func planCandidateRefusal(candidate colony.PlanCandidate, assessment planCandidateStandingAssessment) planCandidateRefusalDetails {
+	return planCandidateRefusalDetails{
+		CandidateID: candidate.ID, CandidateStatus: candidate.Status, Standing: assessment.Standing,
+		ExpiresAt: candidate.ExpiresAt.UTC(), WhyUnavailable: assessment.WhyUnavailable,
+		Evidence: append([]string(nil), assessment.Evidence...), StateEffect: assessment.StateEffect,
+		ActivePlanEffect: assessment.ActivePlanEffect, RecoveryCommand: assessment.RecoveryCommand,
+	}
+}
+
 type planCandidateReview struct {
 	Operation               planCandidateOperation         `json:"operation"`
 	Candidate               colony.PlanCandidate           `json:"candidate"`
@@ -52,6 +256,8 @@ type planCandidateReview struct {
 	Iterations              []colony.PlanningIterationCard `json:"iterations"`
 	Acceptance              planCandidateAcceptanceRequest `json:"acceptance"`
 	AcceptanceCommand       string                         `json:"acceptance_command"`
+	Standing                planCandidateStanding          `json:"standing"`
+	Refusal                 *planCandidateRefusalDetails   `json:"refusal,omitempty"`
 }
 
 type planCandidateIterationDetail struct {
@@ -343,7 +549,8 @@ func runPlanCandidateCommand(root string, inputs planCandidateCommandInputs) (ma
 	}
 	switch operation {
 	case planCandidateOperationReview:
-		review, reviewErr := reviewPlanCandidate(root)
+		now := planCandidateNow().UTC()
+		review, reviewErr := reviewPlanCandidateAt(root, now)
 		if reviewErr != nil {
 			return nil, true, reviewErr
 		}
@@ -355,9 +562,16 @@ func runPlanCandidateCommand(root string, inputs planCandidateCommandInputs) (ma
 		}
 		return planCandidateDetailResult(detail), true, nil
 	case planCandidateOperationAccept:
-		accepted, acceptErr := acceptPlanCandidate(root, planCandidateRequestFromInputs(inputs), planCandidateAcceptanceOptions{AcceptedBy: "owner"})
+		now := planCandidateNow().UTC()
+		accepted, acceptErr := acceptPlanCandidate(root, planCandidateRequestFromInputs(inputs), planCandidateAcceptanceOptions{AcceptedBy: "owner", AcceptedAt: now})
 		if acceptErr != nil {
-			return nil, true, acceptErr
+			if accepted.Refusal == nil {
+				return nil, true, acceptErr
+			}
+			return map[string]interface{}{
+				"operation": planCandidateOperationAccept, "candidate": accepted.Candidate,
+				"refusal": *accepted.Refusal,
+			}, true, acceptErr
 		}
 		return map[string]interface{}{
 			"operation": planCandidateOperationAccept, "candidate": accepted.Candidate,
@@ -380,14 +594,40 @@ func planCandidateAcceptanceToken(candidate colony.PlanCandidate) string {
 }
 
 func reviewPlanCandidate(root string) (planCandidateReview, error) {
+	// Preserve the strict internal loader contract used by integrity callers.
+	// The public command uses reviewPlanCandidateAt directly so it can render a
+	// safe, token-free stale/expired card instead of turning corruption into
+	// actionable authority.
 	artifact, err := loadPlanCandidateArtifact(root, "")
 	if err != nil {
 		return planCandidateReview{}, err
 	}
-	timeline, err := verifiedPlanCandidateTimeline(root, artifact.Candidate)
+	if err := validatePlanningRecordHashes(artifact.Candidate); err != nil {
+		return planCandidateReview{}, fmt.Errorf("candidate %s: %w", artifact.Candidate.ID, err)
+	}
+	if err := artifact.Candidate.Validate(); err != nil {
+		return planCandidateReview{}, fmt.Errorf("candidate %s: %w", artifact.Candidate.ID, err)
+	}
+	return reviewPlanCandidateAt(root, planCandidateNow().UTC())
+}
+
+func reviewPlanCandidateAt(root string, now time.Time) (planCandidateReview, error) {
+	artifact, err := loadPlanCandidateArtifact(root, "")
 	if err != nil {
 		return planCandidateReview{}, err
 	}
+	timeline, err := loadPlanningTimeline(root, artifact.Candidate.Timeline.RunID)
+	if err != nil {
+		return planCandidateReview{}, err
+	}
+	if timeline.Binding == nil || timeline.Index == nil {
+		return planCandidateReview{}, fmt.Errorf("candidate %s requires a complete indexed timeline", artifact.Candidate.ID)
+	}
+	authority, err := planCandidateAuthorityFromRepository(root, artifact, *timeline.Binding)
+	if err != nil {
+		return planCandidateReview{}, err
+	}
+	standing := assessPlanCandidateStanding(artifact.Candidate, authority, now)
 
 	scores := make([]planCandidateConfidenceScore, 0, len(colony.PlanningDimensions()))
 	weighted := planningConfidenceScores{}
@@ -399,21 +639,63 @@ func reviewPlanCandidate(root string) (planCandidateReview, error) {
 	for _, dimension := range colony.PlanningDimensions() {
 		scores = append(scores, planCandidateConfidenceScore{Dimension: dimension, Score: byDimension[dimension]})
 	}
-	request := planCandidateAcceptanceRequest{
-		CandidateID: artifact.Candidate.ID, SpecificationRevisionID: artifact.Candidate.SpecificationRevisionID,
-		SpecificationRevisionHash: artifact.Candidate.SpecificationRevisionHash, BasePlanRevisionID: artifact.Candidate.BasePlanRevisionID,
-		TimelineDigest: artifact.Candidate.Timeline.TimelineDigest, ProposalHash: artifact.Candidate.ProposalHash,
-		AcceptanceToken: planCandidateAcceptanceToken(artifact.Candidate),
-	}
-	return planCandidateReview{
+	review := planCandidateReview{
 		Operation: planCandidateOperationReview, Candidate: artifact.Candidate,
 		TargetConfidence: artifact.Header.TargetConfidence, ActualConfidence: weighted.Overall, Scores: scores,
 		StopDecision: artifact.Candidate.StopDecision, ResidualGaps: append([]colony.PlanningGap(nil), artifact.Candidate.ResidualGaps...),
 		EvidenceThatWouldChange: artifact.Candidate.EvidenceThatWouldChange, SemanticDelta: artifact.Candidate.SemanticDelta,
 		Recommendation: artifact.Candidate.Recommendation, Timeline: artifact.Candidate.Timeline,
-		Iterations: append([]colony.PlanningIterationCard(nil), timeline.Cards...), Acceptance: request,
-		AcceptanceCommand: planCandidateAcceptanceCommand(request),
-	}, nil
+		Iterations: append([]colony.PlanningIterationCard(nil), timeline.Cards...), Standing: standing.Standing,
+	}
+	if standing.AcceptanceAvailable {
+		request := planCandidateAcceptanceRequest{
+			CandidateID: artifact.Candidate.ID, SpecificationRevisionID: artifact.Candidate.SpecificationRevisionID,
+			SpecificationRevisionHash: artifact.Candidate.SpecificationRevisionHash, BasePlanRevisionID: artifact.Candidate.BasePlanRevisionID,
+			TimelineDigest: artifact.Candidate.Timeline.TimelineDigest, ProposalHash: artifact.Candidate.ProposalHash,
+			AcceptanceToken: planCandidateAcceptanceToken(artifact.Candidate),
+		}
+		review.Acceptance = request
+		review.AcceptanceCommand = planCandidateAcceptanceCommand(request)
+	} else if standing.Standing != planCandidateStandingAccepted {
+		refusal := planCandidateRefusal(artifact.Candidate, standing)
+		review.Refusal = &refusal
+	}
+	return review, nil
+}
+
+func planCandidateAuthorityFromRepository(root string, artifact planCandidateArtifact, timeline colony.PlanningTimelineBinding) (planCandidateCurrentAuthority, error) {
+	state, err := loadSpecificationColonyState(root)
+	if err != nil {
+		return planCandidateCurrentAuthority{}, err
+	}
+	return planCandidateAuthorityFromState(state, artifact, timeline), nil
+}
+
+func planCandidateAuthorityFromState(state colony.ColonyState, artifact planCandidateArtifact, timeline colony.PlanningTimelineBinding) planCandidateCurrentAuthority {
+	candidate := artifact.Candidate
+	authority := planCandidateCurrentAuthority{Timeline: timeline, Stage: artifact.Stage}
+	if state.Specification != nil {
+		if specification, ok := currentSpecificationRevision(*state.Specification); ok {
+			authority.SpecificationRevisionID = specification.ID
+			authority.SpecificationRevisionHash = specification.ContentHash
+		}
+	}
+	if candidate.Status == colony.PlanCandidateAccepted {
+		authority.BasePlanRevisionID = candidate.BasePlanRevisionID
+		authority.BasePlanRevisionHash = candidate.BasePlanRevisionHash
+		if active, ok := activePlanRevision(state.Plan); ok {
+			authority.ProposalHash = active.PlanHash
+		}
+	} else {
+		if base, _, err := candidateAcceptanceBase(state.Plan, candidate.CreatedAt); err == nil {
+			authority.BasePlanRevisionID = base.ID
+			authority.BasePlanRevisionHash = base.Hash
+		}
+		if proposalHash, err := canonicalPlanCandidateProposalHash(candidate.Proposal); err == nil {
+			authority.ProposalHash = proposalHash
+		}
+	}
+	return authority
 }
 
 func reviewPlanCandidateIteration(root string, iteration int) (planCandidateIterationDetail, error) {
@@ -475,24 +757,15 @@ func loadPlanCandidateArtifact(root, requestedID string) (planCandidateArtifact,
 		if wanted != "" && candidate.ID != wanted {
 			continue
 		}
-		if wanted == "" && candidate.Status != colony.PlanCandidatePendingReview {
+		if wanted == "" && candidate.Status != colony.PlanCandidatePendingReview && candidate.Status != colony.PlanCandidateExpired {
 			continue
 		}
 		if candidate.Timeline.RunID != runID {
 			return planCandidateArtifact{}, fmt.Errorf("candidate %s path does not match timeline run", candidate.ID)
 		}
-		if err := validatePlanningRecordHashes(candidate); err != nil {
-			return planCandidateArtifact{}, fmt.Errorf("candidate %s: %w", candidate.ID, err)
-		}
-		if err := candidate.Validate(); err != nil {
-			return planCandidateArtifact{}, fmt.Errorf("candidate %s: %w", candidate.ID, err)
-		}
 		stage, err := loadPlanningStageState(repositoryRoot, runID)
 		if err != nil {
 			return planCandidateArtifact{}, err
-		}
-		if stage.Stage != planningStageCandidateReady && stage.Stage != planningStageAccepted {
-			return planCandidateArtifact{}, fmt.Errorf("candidate %s is not at a reviewable planning boundary (stage %s)", candidate.ID, stage.Stage)
 		}
 		header, err := loadPlanCandidateRunHeader(repositoryRoot, candidate)
 		if err != nil {
@@ -540,26 +813,6 @@ func loadPlanCandidateRunHeader(root string, candidate colony.PlanCandidate) (pl
 	}
 	if header.Specification.RevisionID != candidate.SpecificationRevisionID || header.Specification.ContentHash != candidate.SpecificationRevisionHash {
 		return planningRunHeader{}, fmt.Errorf("candidate %s does not match its immutable planning run header", candidate.ID)
-	}
-	state, err := loadSpecificationColonyState(root)
-	if err != nil {
-		return planningRunHeader{}, err
-	}
-	if candidate.Status == colony.PlanCandidateAccepted {
-		if err := validatePlanningState(state); err != nil {
-			return planningRunHeader{}, fmt.Errorf("candidate %s accepted state: %w", candidate.ID, err)
-		}
-		return header, nil
-	}
-	if err := validateCandidateRunBase(state.Plan, header); err != nil {
-		return planningRunHeader{}, fmt.Errorf("candidate %s: %w", candidate.ID, err)
-	}
-	base, _, err := candidateAcceptanceBase(state.Plan, candidate.CreatedAt)
-	if err != nil {
-		return planningRunHeader{}, err
-	}
-	if candidate.BasePlanRevisionID != base.ID || candidate.BasePlanRevisionHash != base.Hash {
-		return planningRunHeader{}, fmt.Errorf("candidate %s does not bind the immutable revision represented by its planning run base", candidate.ID)
 	}
 	return header, nil
 }
@@ -618,14 +871,22 @@ func planCandidateReviewResult(review planCandidateReview) map[string]interface{
 		}
 	}
 	confidence.Overall = planScore(review.ActualConfidence)
-	return map[string]interface{}{
+	result := map[string]interface{}{
 		"operation": review.Operation, "candidate": review.Candidate, "phases": review.Candidate.Proposal.Phases,
 		"target_confidence": review.TargetConfidence, "actual_confidence": review.ActualConfidence, "scores": review.Scores,
 		"confidence": confidence, "stop_decision": review.StopDecision, "residual_gaps": review.ResidualGaps,
 		"evidence_that_would_change": review.EvidenceThatWouldChange, "semantic_delta": review.SemanticDelta,
 		"recommendation": review.Recommendation, "timeline": review.Timeline, "iterations": review.Iterations,
-		"acceptance": review.Acceptance, "acceptance_command": review.AcceptanceCommand,
+		"standing": review.Standing,
 	}
+	if review.AcceptanceCommand != "" {
+		result["acceptance"] = review.Acceptance
+		result["acceptance_command"] = review.AcceptanceCommand
+	}
+	if review.Refusal != nil {
+		result["refusal"] = *review.Refusal
+	}
+	return result
 }
 
 func planCandidateDetailResult(detail planCandidateIterationDetail) map[string]interface{} {

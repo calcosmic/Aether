@@ -1236,6 +1236,9 @@ func (c PlanCandidate) Validate() error {
 	if c.ExpiresAt.IsZero() {
 		return fmt.Errorf("expires_at is required")
 	}
+	if !c.ExpiresAt.After(c.CreatedAt) {
+		return fmt.Errorf("expires_at must be strictly after created_at")
+	}
 	for _, required := range []struct {
 		name  string
 		value string

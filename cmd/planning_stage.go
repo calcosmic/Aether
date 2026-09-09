@@ -13,6 +13,11 @@ import (
 
 const planningStageManifestSchemaVersion = "planning-stage-manifest/v1"
 
+// planningStageFailureCandidateExpired keeps expiry inside the existing
+// terminal failed stage vocabulary while giving readers an exact reason. A
+// deadline closes acceptance authority; it is not a new worker lifecycle.
+const planningStageFailureCandidateExpired = "candidate_expired"
+
 // planningStage is the closed, renderer-neutral state vocabulary for one
 // iterative planning run. A stage describes authority, not worker liveness:
 // only the two *_running states have a one-worker dispatch manifest.
