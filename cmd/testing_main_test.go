@@ -301,6 +301,11 @@ func planFullSuiteLanes(discovered []string, serialTests map[string]struct{}, co
 		}
 		seen[testName] = struct{}{}
 	}
+	for testName := range serialTests {
+		if _, exists := seen[testName]; !exists {
+			return nil, fmt.Errorf("full-suite serial inventory names undiscovered test %s", testName)
+		}
+	}
 	sort.Strings(ordered)
 
 	serialLane := fullSuiteLane{Name: fullSuiteSerialLaneName, Serial: true}
@@ -413,7 +418,8 @@ func runFullSuiteController() int {
 		fmt.Fprintf(os.Stderr, "full-suite controller: %v\n", err)
 		return 1
 	}
-	lanes, err := planFullSuiteLanes(discovered, nil, nil, fullSuiteParallelLanes)
+	serialInventory := fullSuiteSerialInventory()
+	lanes, err := planFullSuiteLanes(discovered, fullSuiteSerialTests(serialInventory), nil, fullSuiteParallelLanes)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "full-suite controller: %v\n", err)
 		return 1
@@ -428,13 +434,16 @@ func runFullSuiteController() int {
 }
 
 func discoverFullSuiteTests(ctx context.Context, executable string) ([]string, error) {
-	command := exec.CommandContext(ctx, executable,
-		"-test.list=^(Test|Example)",
-		"-test.count=1",
-		"-test.timeout=30s",
-	)
-	command.Env = fullSuiteChildEnvironment("discovery")
-	output, err := command.CombinedOutput()
+	output, err := withIsolatedProcessTestHub(ctx, func(hubDir string) ([]byte, error) {
+		command := exec.CommandContext(ctx, executable,
+			"-test.list=^(Test|Example)",
+			"-test.count=1",
+			"-test.timeout=30s",
+		)
+		command.Env = fullSuiteChildEnvironment(os.Environ(), "discovery", hubDir)
+		command.WaitDelay = isolatedProcessWaitDelay
+		return command.CombinedOutput()
+	})
 	if err != nil {
 		return nil, fmt.Errorf("discover top-level tests with current binary: %w\n%s", err, output)
 	}
@@ -474,30 +483,37 @@ func fullSuiteChildRequestForLane(executable string, lane fullSuiteLane) fullSui
 		Executable: executable,
 		Lane:       lane,
 		Args:       args,
-		Env:        fullSuiteChildEnvironment(lane.Name),
+		Env:        fullSuiteChildEnvironment(os.Environ(), lane.Name, ""),
 	}
 }
 
-func fullSuiteChildEnvironment(laneName string) []string {
-	environment := make([]string, 0, len(os.Environ())+1)
-	for _, entry := range os.Environ() {
+func fullSuiteChildEnvironment(parent []string, laneName, hubDir string) []string {
+	environment := make([]string, 0, len(parent)+2)
+	for _, entry := range parent {
 		key, _, _ := strings.Cut(entry, "=")
-		if key == fullSuiteShardEnv {
+		switch key {
+		case fullSuiteShardEnv, isolatedProcessHubEnv, "AETHER_ROOT", "COLONY_DATA_DIR":
 			continue
 		}
 		environment = append(environment, entry)
 	}
-	return append(environment, fullSuiteShardEnv+"="+fmt.Sprintf("%d:%s", os.Getpid(), laneName))
+	environment = append(environment, fullSuiteShardEnv+"="+fmt.Sprintf("%d:%s", os.Getpid(), laneName))
+	if hubDir != "" {
+		environment = append(environment, isolatedProcessHubEnv+"="+hubDir)
+	}
+	return environment
 }
 
 func runFullSuiteChildProcess(ctx context.Context, request fullSuiteChildRequest) fullSuiteChildResult {
 	started := time.Now()
 	childCtx, cancel := context.WithTimeout(ctx, fullSuiteCommandTimeout)
 	defer cancel()
-	command := exec.CommandContext(childCtx, request.Executable, request.Args...)
-	command.Env = request.Env
-	command.WaitDelay = isolatedProcessWaitDelay
-	output, err := command.CombinedOutput()
+	output, err := withIsolatedProcessTestHub(childCtx, func(hubDir string) ([]byte, error) {
+		command := exec.CommandContext(childCtx, request.Executable, request.Args...)
+		command.Env = fullSuiteChildEnvironment(request.Env, request.Lane.Name, hubDir)
+		command.WaitDelay = isolatedProcessWaitDelay
+		return command.CombinedOutput()
+	})
 	if childCtx.Err() != nil {
 		err = errors.Join(err, fmt.Errorf("lane %s exceeded %s: %w", request.Lane.Name, fullSuiteCommandTimeout, childCtx.Err()))
 	}
@@ -507,6 +523,31 @@ func runFullSuiteChildProcess(ctx context.Context, request fullSuiteChildRequest
 		Duration: time.Since(started),
 		Err:      err,
 	}
+}
+
+// fullSuiteSerialInventory is deliberately small and names each test instead
+// of classifying broad prefixes. Every entry has concrete evidence that it can
+// observe or register a resource belonging to the source checkout.
+func fullSuiteSerialInventory() map[string]string {
+	return map[string]string{
+		"TestColonyStateWriteAllowlistOnlyShrinks": "fixed checked-in allowlist has an explicit regeneration path",
+		"TestCurrentVocabulary199":                 "live tracked checkout inventory is read through git ls-files",
+		"TestNextActionNeverHardcoded":             "fixed checked-in allowlist has an explicit regeneration path",
+		"TestOrphanAllowlistOnlyShrinks":           "fixed checked-in allowlist has an explicit regeneration path",
+		"TestPhase199GateReceipt":                  "live repository receipt validates git identity and protected fingerprints",
+		"TestWorktreeAllocateAgentPhase":           "source checkout worktree registration guards a legacy allocation path",
+		"TestWorktreeAllocateAuditLog":             "source checkout worktree registration guards a legacy allocation path",
+		"TestWorktreeAllocateHumanBranch":          "source checkout worktree registration guards a legacy allocation path",
+		"TestWorktreeAllocateMergedBranchAllowed":  "source checkout worktree registration guards a legacy allocation path",
+	}
+}
+
+func fullSuiteSerialTests(inventory map[string]string) map[string]struct{} {
+	tests := make(map[string]struct{}, len(inventory))
+	for testName := range inventory {
+		tests[testName] = struct{}{}
+	}
+	return tests
 }
 
 func fullSuiteExecutedTopLevels(output []byte) []string {
