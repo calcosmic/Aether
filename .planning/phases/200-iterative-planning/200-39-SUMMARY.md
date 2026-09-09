@@ -83,7 +83,7 @@ Each task followed a fail-first TDD boundary and was committed atomically:
 5. **Task 3 RED: Define failing public parity boundary** - `c212018f` (test)
 6. **Task 3 GREEN: Prove public planning parity** - `1f33e7ea` (test)
 
-**Plan metadata:** recorded in the final scoped documentation commit.
+**Plan metadata:** `9ad69060` (docs), followed by a scoped provenance-restoration commit.
 
 ## Files Created/Modified
 
@@ -195,7 +195,7 @@ None - no packages, credentials, migrations, or external services were added.
 ## Self-Check: PASSED
 
 - All six declared test/corpus files and this summary exist.
-- Commits `4938cab8`, `88afd161`, `3452d98d`, `3cabbad2`, `c212018f`, and `1f33e7ea` exist in RED/GREEN order.
+- Commits `4938cab8`, `88afd161`, `3452d98d`, `3cabbad2`, `c212018f`, `1f33e7ea`, and metadata commit `9ad69060` exist in RED/GREEN/closeout order.
 - Focused, combined, repeated, race, vet, source-parity, diff, ownership, deletion, and protected-input checks pass.
 
 ---
