@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -1871,10 +1872,12 @@ func TestBuildFinalizeWarnsOnLegacyUnboundManifest(t *testing.T) {
 		var errBuf bytes.Buffer
 		stderr = &errBuf
 
-		// Simulate a legacy completion packet: omit both attempt-binding
-		// fields the newer, fully-bound path relies on.
-		completion.DispatchManifest.AttemptID = ""
-		completion.DispatchManifest.AttemptPath = ""
+		// Simulate a genuinely old completion packet and repository: none of
+		// the modern plan/attempt claims existed, while the historical
+		// plan-only source owner/mode did. The plan-only helper necessarily
+		// created modern attempt evidence, so remove only that temporary
+		// fixture directory before exercising the compatibility adapter.
+		makeLegacyUnboundCompletion200(t, root, &completion)
 
 		result, updatedState, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
 		if err != nil {
@@ -1937,6 +1940,147 @@ func TestBuildFinalizeWarnsOnLegacyUnboundManifest(t *testing.T) {
 			}
 		}
 	})
+}
+
+// TestBuildStartLegacyBinding200 closes the compatibility lane around one
+// explicit old shape. Missing modern fields are rebound by the canonical
+// receipt-last transaction; any mixture of old and modern claims is an
+// ambiguity, not an invitation to guess. Every refusal and exact replay is
+// proved read-only with a full durable-data fingerprint.
+func TestBuildStartLegacyBinding200(t *testing.T) {
+	t.Run("genuine legacy input receives trusted canonical execution identity and replays read-only", func(t *testing.T) {
+		root := setupExternalBuildAttemptTest(t)
+		_, completion := prepareExternalBuildCompletion(t, root)
+		makeLegacyUnboundCompletion200(t, root, &completion)
+
+		first, state, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+		if err != nil {
+			t.Fatalf("finalize genuine legacy completion: %v", err)
+		}
+		attemptRel, attempt, ok := loadLatestBuildAttempt(1)
+		if !ok {
+			t.Fatal("canonical legacy adapter did not persist an attempt")
+		}
+		wantOwner := buildExecutionOwner("external-task", false)
+		if attempt.ExecutionOwner != wantOwner || attempt.DispatchMode != "external-task" {
+			t.Fatalf("legacy execution identity trusted inbound values: owner/mode=%q/%q, want %q/external-task", attempt.ExecutionOwner, attempt.DispatchMode, wantOwner)
+		}
+		if attempt.PlanManifest == nil || attempt.PlanManifest.ExecutionBinding == nil {
+			t.Fatalf("canonical attempt has no derived manifest binding: %+v", attempt.PlanManifest)
+		}
+		bound := attempt.PlanManifest
+		if bound.AttemptID != attempt.ID || bound.ExecutionBinding.AttemptID != attempt.ID ||
+			bound.ExecutionOwner != wantOwner || bound.DispatchMode != "external-task" ||
+			!bound.PlanAuthority.Eligible {
+			t.Fatalf("derived legacy binding is incomplete or untrusted: manifest=%+v attempt=%+v", *bound, attempt)
+		}
+		wantDisplay, pathErr := displayBuildAttemptDataPath(attemptRel)
+		if pathErr != nil {
+			t.Fatalf("display canonical attempt: %v", pathErr)
+		}
+		if bound.AttemptPath != wantDisplay || first["attempt"] != wantDisplay {
+			t.Fatalf("legacy attempt paths = manifest %q/result %v, want %q", bound.AttemptPath, first["attempt"], wantDisplay)
+		}
+		receiptPath := filepath.Join(store.BasePath(), filepath.FromSlash(buildStartReceiptPath(1, attempt.ID)))
+		if _, statErr := os.Stat(receiptPath); statErr != nil {
+			t.Fatalf("canonical start receipt missing: %v", statErr)
+		}
+		if state.State != colony.StateBUILT {
+			t.Fatalf("legacy finalize state=%s, want %s", state.State, colony.StateBUILT)
+		}
+
+		beforeReplay := snapshotProjectDataTree(t, store.BasePath())
+		replayed, replayState, _, _, replayErr := runCodexBuildFinalize(root, 1, completion, false)
+		if replayErr != nil {
+			t.Fatalf("exact legacy replay: %v", replayErr)
+		}
+		afterReplay := snapshotProjectDataTree(t, store.BasePath())
+		if !reflect.DeepEqual(beforeReplay, afterReplay) {
+			t.Fatalf("exact legacy replay mutated durable data\nbefore: %#v\nafter:  %#v", beforeReplay, afterReplay)
+		}
+		if replayed["idempotent"] != true || replayed["attempt"] != wantDisplay || replayState.State != colony.StateBUILT {
+			t.Fatalf("exact legacy replay result=%+v state=%s", replayed, replayState.State)
+		}
+	})
+
+	refusals := []struct {
+		name   string
+		mutate func(*codexBuildManifest)
+	}{
+		{
+			name: "attempt id without attempt path is partial",
+			mutate: func(manifest *codexBuildManifest) {
+				manifest.AttemptPath = ""
+			},
+		},
+		{
+			name: "execution binding without attempt identity is contradictory",
+			mutate: func(manifest *codexBuildManifest) {
+				manifest.AttemptID = ""
+				manifest.AttemptPath = ""
+			},
+		},
+		{
+			name: "modern authority cannot claim the legacy lane",
+			mutate: func(manifest *codexBuildManifest) {
+				manifest.AttemptID = ""
+				manifest.AttemptPath = ""
+				manifest.ExecutionBinding = nil
+			},
+		},
+		{
+			name: "forged modern binding is refused",
+			mutate: func(manifest *codexBuildManifest) {
+				manifest.ExecutionBinding.ExecutionOwner = "forged-owner"
+			},
+		},
+		{
+			name: "legacy source owner and mode cannot contradict history",
+			mutate: func(manifest *codexBuildManifest) {
+				manifest.AttemptID = ""
+				manifest.AttemptPath = ""
+				manifest.ExecutionBinding = nil
+				manifest.PlanAuthority = planAuthorityDecision{}
+				manifest.PlanRevisionID = ""
+				manifest.PlanStateHash = ""
+				manifest.ExecutionOwner = "forged-owner"
+				manifest.DispatchMode = "external-task"
+			},
+		},
+	}
+	for _, test := range refusals {
+		t.Run(test.name, func(t *testing.T) {
+			root := setupExternalBuildAttemptTest(t)
+			_, completion := prepareExternalBuildCompletion(t, root)
+			test.mutate(completion.DispatchManifest)
+			before := snapshotProjectDataTree(t, store.BasePath())
+			if _, _, _, _, err := runCodexBuildFinalize(root, 1, completion, false); err == nil {
+				t.Fatal("ambiguous or forged completion was accepted")
+			}
+			after := snapshotProjectDataTree(t, store.BasePath())
+			if !reflect.DeepEqual(before, after) {
+				t.Fatalf("refusal mutated durable data\nbefore: %#v\nafter:  %#v", before, after)
+			}
+		})
+	}
+}
+
+func makeLegacyUnboundCompletion200(t *testing.T, root string, completion *codexExternalBuildCompletion) {
+	t.Helper()
+	if completion == nil || completion.DispatchManifest == nil {
+		t.Fatal("legacy fixture requires a dispatch manifest")
+	}
+	manifest := completion.DispatchManifest
+	manifest.AttemptID = ""
+	manifest.AttemptPath = ""
+	manifest.ExecutionBinding = nil
+	manifest.PlanAuthority = planAuthorityDecision{}
+	manifest.PlanRevisionID = ""
+	manifest.PlanStateHash = ""
+	buildDir := filepath.Join(root, ".aether", "data", "build", fmt.Sprintf("phase-%d", manifest.Phase))
+	if err := os.RemoveAll(buildDir); err != nil {
+		t.Fatalf("remove modern-only attempt evidence from legacy fixture: %v", err)
+	}
 }
 
 // ---------------------------------------------------------------------------
