@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 51/55 plans executed
+**Plans:** 52/55 plans executed
 
 Plans:
 
@@ -334,7 +334,7 @@ Plans:
 
 **Wave 32** *(second gap closure; blocked on Wave 31 completion)*
 
-- [ ] 200-53-PLAN.md — Restore output-mode, visual parity, brief, and single-spend presentation.
+- [x] 200-53-PLAN.md — Restore output-mode, visual parity, brief, and single-spend presentation.
 
 **Wave 33** *(second gap closure; blocked on Wave 32 completion)*
 

@@ -5,15 +5,15 @@ milestone_name: Classic Colony Restoration
 current_phase: 200
 current_phase_name: Iterative Planning
 status: executing
-stopped_at: Completed 200-52-PLAN.md; next incomplete is 200-53
-last_updated: "2026-09-09T16:16:53.634Z"
+stopped_at: Completed 200-53-PLAN.md; next incomplete is 200-54
+last_updated: "2026-09-09T16:47:07.005Z"
 last_activity: 2026-09-09
-state_head: 677c54dcea03acab34ef585b9340665824a88f9f
+state_head: b16b65c406272dc1003b4ecb163612c0ffdea603
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 89
-  completed_plans: 85
+  completed_plans: 86
   percent: 14
 ---
 
@@ -32,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 53 of 55
+Plan: 54 of 55
 Status: Ready to execute
 Last activity: 2026-09-09
 
@@ -165,6 +165,7 @@ Last activity: 2026-09-09
 | Phase 200 P50 | 32min | 3 tasks | 5 files |
 | Phase 200 P51 | 35min | 2 tasks | 7 files |
 | Phase 200 P52 | 83min | 3 tasks | 9 files |
+| Phase 200 P53 | 20min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -528,6 +529,10 @@ Last activity: 2026-09-09
 - [Phase 200]: Plan 52: force-replan captures each cleanup baseline before classification and commits selected removals through one planning mutation session.
 - [Phase 200]: Plan 52: generated hard-decision lineage preserves short IDs and hashes only when the -hard companion would exceed the specification limit.
 - [Phase 200]: Plan 52: plan-only safety enters through approved specification and accepted-plan authority while lifecycle state remains byte-stable.
+- [Phase 200]: Build visual fixtures enter through accepted plan authority. — Presentation assertions are meaningful only after the runtime reaches its intended screen.
+- [Phase 200]: Visual parity rejects actual extra dispatches, not truthful not-called rationale. — Owner-visible explanations may name a caste precisely because the Queen did not send it.
+- [Phase 200]: Wrapper spend follows the completion manifest phase after state advances. — The cost block belongs to the run being closed, not the next durable current phase.
+- [Phase 200]: Keep the existing output-mode and shared spend renderer unchanged when real-lane proofs pass. — A stale test fixture does not justify production churn or duplicate rendering authority.
 
 ### Pending Todos
 
@@ -644,8 +649,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-09T16:16:53.624Z
-Stopped at: Completed 200-52-PLAN.md; next incomplete is 200-53
+Last session: 2026-09-09T16:47:06.995Z
+Stopped at: Completed 200-53-PLAN.md; next incomplete is 200-54
 Resume file: None
 
 ## Operator Next Steps
