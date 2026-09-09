@@ -13,6 +13,42 @@ import (
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
+func TestBoundaryBuildFixturesUseCanonicalAuthority200(t *testing.T) {
+	cases := []struct {
+		file      string
+		signature string
+		want      []string
+	}{
+		{
+			file:      "ceremony_team_checkin_test.go",
+			signature: "func TestPendingDecisionStillRendersFullCheckinCard(",
+			want:      []string{"createApprovedAcceptedBuildTestColony(", "root, 5,"},
+		},
+		{
+			file:      "orchestrator_boundary_guidance_test.go",
+			signature: "func TestBuildFinalizeAddsOrchestratorBoundaryGuidance(",
+			want:      []string{"createApprovedAcceptedBuildTestColony(", "commitTestBuildStartAt(", "ExecutionOwner:", "DispatchMode:"},
+		},
+		{
+			file:      "build_attempt_test.go",
+			signature: "func TestResumeDashboard" + "DoesNotRedispatchLiveBuildProcess(",
+			want:      []string{"ProcessState: testBuildProcessLive", "ExecutionOwner:", "DispatchMode:"},
+		},
+	}
+	for _, tc := range cases {
+		content, err := os.ReadFile(tc.file)
+		if err != nil {
+			t.Fatalf("read %s: %v", tc.file, err)
+		}
+		body := extractGoFunctionBody(t, string(content), tc.signature)
+		for _, want := range tc.want {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s must contain explicit authority marker %q", tc.signature, want)
+			}
+		}
+	}
+}
+
 func TestBuildAttemptPersistsTransitionsAndTerminalEvidence(t *testing.T) {
 	saveGlobals(t)
 	startedAt := time.Now().UTC()
