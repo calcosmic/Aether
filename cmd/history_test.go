@@ -6,8 +6,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-
-	"github.com/calcosmic/Aether/pkg/storage"
 )
 
 func TestHistoryJSON(t *testing.T) {
@@ -16,13 +14,7 @@ func TestHistoryJSON(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	s, tmpDir := setupTestStore(t)
-	defer os.RemoveAll(tmpDir)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	store = s
+	bindSeededCommandTestRepository(t)
 	rootCmd.SetArgs([]string{"history", "--json"})
 
 	err := rootCmd.Execute()
@@ -57,18 +49,12 @@ func TestHistoryJSONEmpty(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
+	binding := bindCommandTestRepository(t)
 
 	state := `{"version":"3.0","goal":"test","state":"READY","current_phase":1,"plan":{"phases":[]},"events":[],"memory":{"phase_learnings":[],"decisions":[],"instincts":[]},"errors":{"records":[]}}`
-	os.WriteFile(dataDir+"/COLONY_STATE.json", []byte(state), 0644)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	s, _ := storage.NewStore(dataDir)
-	store = s
+	if err := os.WriteFile(binding.DataDir+"/COLONY_STATE.json", []byte(state), 0644); err != nil {
+		t.Fatalf("write empty colony state: %v", err)
+	}
 
 	rootCmd.SetArgs([]string{"history", "--json"})
 
@@ -99,13 +85,7 @@ func TestHistoryDefault(t *testing.T) {
 	stdout = &buf
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
-	s, tmpDir := setupTestStore(t)
-	defer os.RemoveAll(tmpDir)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	store = s
+	bindSeededCommandTestRepository(t)
 	rootCmd.SetArgs([]string{"history"})
 
 	err := rootCmd.Execute()
@@ -147,13 +127,7 @@ func TestHistoryWithLimit(t *testing.T) {
 	stdout = &buf
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
-	s, tmpDir := setupTestStore(t)
-	defer os.RemoveAll(tmpDir)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	store = s
+	bindSeededCommandTestRepository(t)
 	rootCmd.SetArgs([]string{"history", "--limit", "2"})
 
 	err := rootCmd.Execute()
@@ -187,13 +161,7 @@ func TestHistoryWithFilter(t *testing.T) {
 	stdout = &buf
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
-	s, tmpDir := setupTestStore(t)
-	defer os.RemoveAll(tmpDir)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	store = s
+	bindSeededCommandTestRepository(t)
 	rootCmd.SetArgs([]string{"history", "--filter", "build"})
 
 	err := rootCmd.Execute()
@@ -215,19 +183,13 @@ func TestHistoryEmpty(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
 	// Create store with colony state but no events
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
+	binding := bindCommandTestRepository(t)
 
 	// Write colony state with empty events
 	state := `{"version":"3.0","goal":"test","state":"READY","current_phase":1,"plan":{"phases":[]},"events":[],"memory":{"phase_learnings":[],"decisions":[],"instincts":[]},"errors":{"records":[]}}`
-	os.WriteFile(dataDir+"/COLONY_STATE.json", []byte(state), 0644)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	s, _ := storage.NewStore(dataDir)
-	store = s
+	if err := os.WriteFile(binding.DataDir+"/COLONY_STATE.json", []byte(state), 0644); err != nil {
+		t.Fatalf("write empty colony state: %v", err)
+	}
 
 	rootCmd.SetArgs([]string{"history"})
 

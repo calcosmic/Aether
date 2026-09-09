@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/calcosmic/Aether/pkg/colony"
-	"github.com/calcosmic/Aether/pkg/storage"
 )
 
 func TestFlagsListJSON(t *testing.T) {
@@ -18,13 +17,7 @@ func TestFlagsListJSON(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	s, tmpDir := setupTestStore(t)
-	defer os.RemoveAll(tmpDir)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	store = s
+	bindSeededCommandTestRepository(t)
 
 	rootCmd.SetArgs([]string{"flag-list", "--json"})
 
@@ -61,19 +54,13 @@ func TestFlagsListJSONEmpty(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	// Create store with no flags file
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
+	// Create store with no flags file.
+	binding := bindCommandTestRepository(t)
 
 	state := `{"version":"3.0","goal":"test","state":"READY","current_phase":1,"plan":{"phases":[]},"events":[],"memory":{"phase_learnings":[],"decisions":[],"instincts":[]},"errors":{"records":[]}}`
-	os.WriteFile(dataDir+"/COLONY_STATE.json", []byte(state), 0644)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	s, _ := storage.NewStore(dataDir)
-	store = s
+	if err := os.WriteFile(binding.DataDir+"/COLONY_STATE.json", []byte(state), 0644); err != nil {
+		t.Fatalf("write empty colony state: %v", err)
+	}
 
 	rootCmd.SetArgs([]string{"flag-list", "--json"})
 
@@ -104,13 +91,7 @@ func TestFlagsList(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	s, tmpDir := setupTestStore(t)
-	defer os.RemoveAll(tmpDir)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	store = s
+	bindSeededCommandTestRepository(t)
 
 	rootCmd.SetArgs([]string{"flag-list"})
 
@@ -139,13 +120,7 @@ func TestFlagsAlias(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	s, tmpDir := setupTestStore(t)
-	defer os.RemoveAll(tmpDir)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	store = s
+	bindSeededCommandTestRepository(t)
 
 	rootCmd.SetArgs([]string{"flags"})
 
@@ -167,13 +142,7 @@ func TestFlagsFilterByType(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	s, tmpDir := setupTestStore(t)
-	defer os.RemoveAll(tmpDir)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	store = s
+	bindSeededCommandTestRepository(t)
 
 	rootCmd.SetArgs([]string{"flag-list", "--type", "blocker"})
 
@@ -201,13 +170,7 @@ func TestFlagsFilterByStatus(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	s, tmpDir := setupTestStore(t)
-	defer os.RemoveAll(tmpDir)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	store = s
+	bindSeededCommandTestRepository(t)
 
 	rootCmd.SetArgs([]string{"flag-list", "--status", "resolved"})
 
@@ -233,9 +196,8 @@ func TestFlagAddCreatesFlag(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	s, tmpDir := newTestStore(t)
-	defer os.RemoveAll(tmpDir)
-	store = s
+	binding := bindCommandTestRepository(t)
+	s := binding.Store
 
 	rootCmd.SetArgs([]string{"flag-add", "--title", "Test blocker", "--type", "blocker", "--severity", "high", "--description", "Something is broken"})
 	err := rootCmd.Execute()
@@ -276,9 +238,8 @@ func TestFlagResolveUpdatesFlag(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	s, tmpDir := newTestStore(t)
-	defer os.RemoveAll(tmpDir)
-	store = s
+	binding := bindCommandTestRepository(t)
+	s := binding.Store
 
 	// Add a flag first
 	rootCmd.SetArgs([]string{"flag-add", "--title", "To resolve", "--type", "issue", "--severity", "low"})
@@ -330,9 +291,7 @@ func TestFlagCheckBlockersCounts(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	s, tmpDir := newTestStore(t)
-	defer os.RemoveAll(tmpDir)
-	store = s
+	bindCommandTestRepository(t)
 
 	// Add flags of different types
 	rootCmd.SetArgs([]string{"flag-add", "--title", "Blocker 1", "--type", "blocker", "--severity", "critical"})
