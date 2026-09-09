@@ -988,7 +988,7 @@ func TestPlanFinalizePendingIterationDoesNotWriteFinalPlanAndDrivesNextManifest(
 }
 
 func TestPlanFinalizeStallsOnlyAfterTwoLowImprovements(t *testing.T) {
-	history := planningConfidenceStopHistoryFixture([]int{60, 60}, []string{"same-gap", "same-gap"})
+	history := canonicalPlanningFinalizeStopHistoryFixture(t, []int{60, 60}, []string{"same-gap", "same-gap"})
 	first, err := evaluatePlanningStopPolicy(planningStopPolicyInput{Target: 90, PassCap: 12, History: history})
 	if err != nil {
 		t.Fatal(err)
@@ -996,7 +996,7 @@ func TestPlanFinalizeStallsOnlyAfterTwoLowImprovements(t *testing.T) {
 	if first.Decision.Reason != colony.PlanningStopContinue {
 		t.Fatalf("one repeated unimproved gap stopped planning: %+v", first)
 	}
-	history = planningConfidenceStopHistoryFixture([]int{60, 60, 60}, []string{"same-gap", "same-gap", "same-gap"})
+	history = canonicalPlanningFinalizeStopHistoryFixture(t, []int{60, 60, 60}, []string{"same-gap", "same-gap", "same-gap"})
 	second, err := evaluatePlanningStopPolicy(planningStopPolicyInput{Target: 90, PassCap: 12, History: history})
 	if err != nil {
 		t.Fatal(err)
@@ -1004,6 +1004,41 @@ func TestPlanFinalizeStallsOnlyAfterTwoLowImprovements(t *testing.T) {
 	if second.Decision.Reason != colony.PlanningStopStalledGap || second.Trigger != colony.PlanningStopStalledGap {
 		t.Fatalf("two repeated unimproved gaps did not produce the typed stall stop: %+v", second)
 	}
+}
+
+func canonicalPlanningFinalizeStopHistoryFixture(t *testing.T, overalls []int, selectedGapLabels []string) []planningConfidencePass {
+	t.Helper()
+	history := planningConfidenceStopHistoryFixture(overalls, selectedGapLabels)
+	stablePlanHash := planningConfidenceTestDigest("plan-finalize-stop-policy-preserved")
+	for passIndex := range history {
+		pass := &history[passIndex]
+		for assessmentIndex := range pass.Evaluation.Assessments {
+			assessment := &pass.Evaluation.Assessments[assessmentIndex]
+			gapEvidenceHash := planningConfidenceTestDigest("plan-finalize-gap-evidence:" + assessment.RemainingGap.Description)
+			assessment.RemainingGap.EvidenceIDs = []string{"gap-evidence-" + gapEvidenceHash[:12]}
+			if err := colony.AddressPlanningDimensionAssessment(assessment); err != nil {
+				t.Fatalf("address pass %d assessment %d: %v", pass.Iteration, assessmentIndex, err)
+			}
+		}
+		pass.Evaluation.RankedGaps = rankPlanningConfidenceGaps(pass.Evaluation.Assessments, pass.Evaluation.Scores)
+		pass.Evaluation.WeakestGap = clonePlanningConfidenceGap(pass.Evaluation.RankedGaps[0])
+
+		pass.SemanticDelta = colony.PlanningSemanticDelta{
+			Phases: []colony.PlanningSemanticChange{{
+				SemanticID: "phase-stop-policy-fixture",
+				Kind:       colony.PlanningSemanticChangePreserved,
+				BeforeHash: stablePlanHash,
+				AfterHash:  stablePlanHash,
+			}},
+		}
+		if err := colony.AddressPlanningSemanticChange(colony.PlanningSemanticSectionPhases, &pass.SemanticDelta.Phases[0]); err != nil {
+			t.Fatalf("address pass %d semantic change: %v", pass.Iteration, err)
+		}
+		if err := colony.AddressPlanningSemanticDelta(&pass.SemanticDelta); err != nil {
+			t.Fatalf("address pass %d semantic delta: %v", pass.Iteration, err)
+		}
+	}
+	return history
 }
 
 func TestPlanFinalizeRejectsReusedIterationCompletionPacket(t *testing.T) {
