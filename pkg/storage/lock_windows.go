@@ -39,7 +39,7 @@ func platformOpenDirectory(path string) (*os.File, error) {
 		0,
 	)
 	if err != nil {
-		return nil, err
+		return nil, platformNormalizeOpenError(err)
 	}
 	file := os.NewFile(uintptr(handle), path)
 	if err := rejectWindowsReparseHandle(file, true); err != nil {
@@ -145,9 +145,19 @@ func windowsOpenRelative(parent *os.File, name string, access, disposition, attr
 		0,
 	)
 	if err != nil {
-		return nil, windowsNTStatusErr(err)
+		return nil, platformNormalizeOpenError(windowsNTStatusErr(err))
 	}
 	return os.NewFile(uintptr(handle), name), nil
+}
+
+// platformNormalizeOpenError gives CreateFile and NtCreateFile the same
+// portable absence identity exposed by os package file operations. Reparse,
+// directory, permission, and every other error remain unchanged and fail closed.
+func platformNormalizeOpenError(err error) error {
+	if errors.Is(err, windows.ERROR_FILE_NOT_FOUND) || errors.Is(err, windows.ERROR_PATH_NOT_FOUND) || errors.Is(err, os.ErrNotExist) {
+		return os.ErrNotExist
+	}
+	return err
 }
 
 func rejectWindowsReparseHandle(file *os.File, wantDirectory bool) error {

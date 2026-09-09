@@ -350,7 +350,7 @@ func (s *Store) UpdateFile(path string, mutate func(existing []byte) ([]byte, er
 	defer s.locker.Unlock(path)
 
 	existing, err := s.readFileUnlocked(path)
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("storage: read %q: %w", s.resolvePath(path), err)
 	}
 
