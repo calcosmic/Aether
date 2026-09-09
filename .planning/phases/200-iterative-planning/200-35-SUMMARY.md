@@ -123,6 +123,7 @@ Each task followed a fail-first RED/GREEN boundary and was committed atomically:
 ## Deferred Issues
 
 - `listBuildAttemptsForPhase` currently decodes `.start-receipt.json` siblings as empty attempt records. Migrated history assertions therefore filter for `validBuildAttemptID` while still requiring exactly the original and fix journals. This is a production compatibility issue already owned by Plan 36; no out-of-scope production file was changed here.
+- The installed GSD state synchronizer again stripped Phase 200 provenance fields and temporarily advanced the display to numeric Plan 36. The scoped provenance closeout restores those fields against the normal metadata commit and points Current Position to Plan 38, the actual next incomplete plan in Wave 22; Plan 36 remains correctly blocked on that wave.
 
 ## Known Stubs
 
@@ -146,6 +147,7 @@ None - no packages, credentials, or external services were added.
 - All six declared test files and this summary exist.
 - Commits `1be1f601`, `7729625e`, `3e867a3e`, `d76088df`, and `d1588fd4` exist in repository history.
 - The five implementation commits change exactly the six owned test files, delete no tracked file, and pass focused, repeated, race, vet, and diff-hygiene gates.
+- Summary commit `273d430c` and normal planning-metadata commit `45886462` exist; STATE provenance names that exact metadata boundary and preserves Wave 22 ordering.
 - Protected `.planning/config.json`, `.gsd/`, and Phase 199 PATTERNS dirt remains present and unstaged.
 
 ---
