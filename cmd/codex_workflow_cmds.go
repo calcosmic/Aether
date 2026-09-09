@@ -99,8 +99,17 @@ var planCmd = &cobra.Command{
 		}
 		if candidateResult, handled, candidateErr := runPlanCandidateCommand(skillWorkspaceRoot(), candidateInputs); handled {
 			if candidateErr != nil {
+				if refusal, ok := planningCandidateRefusalValue(candidateResult["refusal"]); ok {
+					if shouldRenderVisualOutput(stderr) {
+						markRenderedCommandError(1)
+						writeVisualOutput(stderr, renderPlanningCandidateRefusalVisual(refusal, planningVisualOptions{}))
+					} else {
+						outputError(1, candidateErr.Error(), refusal)
+					}
+					return renderedErrorExit(1)
+				}
 				outputError(1, candidateErr.Error(), nil)
-				return nil
+				return renderedErrorExit(1)
 			}
 			closeLifecycleCommand(candidateResult, "plan", "", "")
 			outputWorkflow(candidateResult, renderPlanVisual(candidateResult))

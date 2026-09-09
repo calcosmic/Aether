@@ -99,13 +99,17 @@ func TestPlanningExpiryPresentation200(t *testing.T) {
 				t.Fatal(marshalErr)
 			}
 			jsonBody := string(encoded)
+			nextJSON, marshalErr := json.Marshal(tc.next)
+			if marshalErr != nil {
+				t.Fatal(marshalErr)
+			}
 			for _, want := range []string{
 				`"standing":"` + string(tc.standing) + `"`,
 				`"expires_at":"` + tc.review.Candidate.ExpiresAt.UTC().Format(time.RFC3339Nano) + `"`,
 				`"state_effect":"` + string(tc.stateEffect) + `"`,
 				`"active_plan_effect":"unchanged"`,
 				`"acceptance_available":` + fmt.Sprint(tc.acceptance),
-				`"next":"` + tc.next + `"`,
+				`"next":` + string(nextJSON),
 			} {
 				if !strings.Contains(jsonBody, want) {
 					t.Errorf("JSON projection missing %q: %s", want, jsonBody)

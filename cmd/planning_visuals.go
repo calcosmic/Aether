@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -119,9 +120,13 @@ type planningCandidateProjection struct {
 	CandidateID               string                           `json:"candidate_id"`
 	CandidateStatus           string                           `json:"candidate_status"`
 	CandidateActive           bool                             `json:"candidate_active"`
+	CandidateContentHash      string                           `json:"candidate_content_hash"`
 	SpecificationRevisionID   string                           `json:"specification_revision_id"`
+	SpecificationRevisionHash string                           `json:"specification_revision_hash"`
 	BasePlanRevisionID        string                           `json:"base_plan_revision_id"`
+	BasePlanRevisionHash      string                           `json:"base_plan_revision_hash"`
 	ProposalRevisionID        string                           `json:"proposal_revision_id"`
+	ProposalHash              string                           `json:"proposal_hash"`
 	TargetConfidence          int                              `json:"target_confidence"`
 	ActualConfidence          int                              `json:"actual_confidence"`
 	Scores                    []planningScoreProjection        `json:"scores"`
@@ -138,8 +143,16 @@ type planningCandidateProjection struct {
 	RecommendationEvidenceIDs []string                         `json:"recommendation_evidence_ids"`
 	RecommendationProducer    string                           `json:"recommendation_producer"`
 	RecommendationProducerID  string                           `json:"recommendation_producer_id"`
+	Standing                  planCandidateStanding            `json:"standing"`
+	ExpiresAt                 time.Time                        `json:"expires_at"`
+	WhyUnavailable            string                           `json:"why_unavailable,omitempty"`
+	Evidence                  []string                         `json:"evidence,omitempty"`
+	AcceptanceAvailable       bool                             `json:"acceptance_available"`
+	StateEffect               planCandidateStateEffect         `json:"state_effect"`
+	ActivePlanEffect          planCandidateActivePlanEffect    `json:"active_plan_effect"`
 	AcceptanceCommand         string                           `json:"acceptance_command,omitempty"`
 	ExecutionActions          []string                         `json:"execution_actions,omitempty"`
+	Next                      string                           `json:"next"`
 }
 
 type planningAcceptanceProjection struct {
@@ -230,12 +243,22 @@ func projectPlanningCandidate(review planCandidateReview) planningCandidateProje
 		projectedGaps = append(projectedGaps, projectPlanningGap(gap))
 	}
 	scores := planningCandidateScores(review)
-	active := candidate.Status == colony.PlanCandidateAccepted && candidate.Acceptance != nil
+	standing := review.Standing
+	if standing == "" {
+		if candidate.Status == colony.PlanCandidateAccepted && candidate.Acceptance != nil {
+			standing = planCandidateStandingAccepted
+		} else {
+			standing = planCandidateStandingCurrent
+		}
+	}
+	active := standing == planCandidateStandingAccepted && candidate.Status == colony.PlanCandidateAccepted && candidate.Acceptance != nil
 	projection := planningCandidateProjection{
 		Screen: "plan_candidate", Identity: planningVisualIdentityProjection{Caste: "queen", Label: "Queen"},
 		CandidateID: candidate.ID, CandidateStatus: string(candidate.Status), CandidateActive: active,
-		SpecificationRevisionID: candidate.SpecificationRevisionID, BasePlanRevisionID: candidate.BasePlanRevisionID,
-		ProposalRevisionID: candidate.Proposal.ID, TargetConfidence: review.TargetConfidence,
+		CandidateContentHash:    candidate.ContentHash,
+		SpecificationRevisionID: candidate.SpecificationRevisionID, SpecificationRevisionHash: candidate.SpecificationRevisionHash,
+		BasePlanRevisionID: candidate.BasePlanRevisionID, BasePlanRevisionHash: candidate.BasePlanRevisionHash,
+		ProposalRevisionID: candidate.Proposal.ID, ProposalHash: candidate.ProposalHash, TargetConfidence: review.TargetConfidence,
 		ActualConfidence: review.ActualConfidence, Scores: scores,
 		StopReason: string(decision.Reason), StopReasonPublicLabel: planningStopReasonPublicLabel(decision.Reason),
 		StopRationale: decision.Rationale, ResidualGaps: projectedGaps,
@@ -246,11 +269,24 @@ func projectPlanningCandidate(review planCandidateReview) planningCandidateProje
 		RecommendationDisposition: string(recommendation.Disposition), RecommendationRationale: recommendation.Rationale,
 		RecommendationEvidenceIDs: append([]string(nil), recommendation.EvidenceIDs...),
 		RecommendationProducer:    string(recommendation.Producer), RecommendationProducerID: recommendation.ProducerID,
+		Standing: standing, ExpiresAt: candidate.ExpiresAt.UTC(),
+		StateEffect: planCandidateStateEffectUnchanged, ActivePlanEffect: planCandidateActivePlanEffectUnchanged,
 	}
-	if active {
+	if review.Refusal != nil {
+		projection.Standing = review.Refusal.Standing
+		projection.ExpiresAt = review.Refusal.ExpiresAt.UTC()
+		projection.WhyUnavailable = review.Refusal.WhyUnavailable
+		projection.Evidence = append([]string(nil), review.Refusal.Evidence...)
+		projection.StateEffect = review.Refusal.StateEffect
+		projection.ActivePlanEffect = review.Refusal.ActivePlanEffect
+		projection.Next = review.Refusal.RecoveryCommand
+	} else if active {
 		projection.ExecutionActions = []string{"aether build", "aether run"}
-	} else {
+		projection.Next = strings.Join(projection.ExecutionActions, " | ")
+	} else if standing == planCandidateStandingCurrent && strings.TrimSpace(review.AcceptanceCommand) != "" {
+		projection.AcceptanceAvailable = true
 		projection.AcceptanceCommand = review.AcceptanceCommand
+		projection.Next = review.AcceptanceCommand
 	}
 	return projection
 }
@@ -391,8 +427,15 @@ func renderPlanningCandidateVisual(review planCandidateReview, options planningV
 		builder.WriteString("CANDIDATE — NOT ACTIVE\n")
 	}
 	fmt.Fprintf(&builder, "Candidate: %s (%s)\n", projection.CandidateID, projection.CandidateStatus)
+	fmt.Fprintf(&builder, "Candidate hash: %s\n", projection.CandidateContentHash)
 	fmt.Fprintf(&builder, "Approved specification: %s\n", projection.SpecificationRevisionID)
+	fmt.Fprintf(&builder, "SPEC hash: %s\n", projection.SpecificationRevisionHash)
 	fmt.Fprintf(&builder, "Base plan: %s\n", projection.BasePlanRevisionID)
+	fmt.Fprintf(&builder, "Base plan hash: %s\n", projection.BasePlanRevisionHash)
+	fmt.Fprintf(&builder, "Proposal hash: %s\n", projection.ProposalHash)
+	fmt.Fprintf(&builder, "Standing: %s\n", projection.Standing)
+	fmt.Fprintf(&builder, "Expires: %s\n", projection.ExpiresAt.Format(time.RFC3339Nano))
+	fmt.Fprintf(&builder, "Active plan: %s\n", projection.ActivePlanEffect)
 	fmt.Fprintf(&builder, "Preset: target %d%%\n", projection.TargetConfidence)
 	fmt.Fprintf(&builder, "Stopped because: %s\n", projection.StopReasonPublicLabel)
 	if projection.StopRationale != "" {
@@ -425,11 +468,17 @@ func renderPlanningCandidateVisual(review planCandidateReview, options planningV
 	fmt.Fprintf(&builder, "Producer: %s (%s)\n", projection.RecommendationProducer, projection.RecommendationProducerID)
 	if projection.CandidateActive {
 		builder.WriteString("Owner acceptance is recorded; build and run are equal execution choices.\n")
-		builder.WriteString(renderNextUp(strings.Join(projection.ExecutionActions, "  |  ")))
-	} else {
+		fmt.Fprintf(&builder, "Next: %s\n", projection.Next)
+	} else if projection.AcceptanceAvailable {
 		builder.WriteString("Candidate remains inactive until explicit owner acceptance.\n")
 		builder.WriteString("Accept this candidate?\n")
-		fmt.Fprintf(&builder, "  %s\n", projection.AcceptanceCommand)
+		fmt.Fprintf(&builder, "Acceptance command: %s\n", projection.AcceptanceCommand)
+		fmt.Fprintf(&builder, "Next: %s\n", projection.Next)
+	} else {
+		fmt.Fprintf(&builder, "Why unavailable: %s\n", projection.WhyUnavailable)
+		renderPlanningValueList(&builder, "Evidence", projection.Evidence)
+		fmt.Fprintf(&builder, "State: %s\n", projection.StateEffect)
+		fmt.Fprintf(&builder, "Next: %s\n", projection.Next)
 	}
 	return finalizePlanningVisual(builder.String(), options)
 }
@@ -731,7 +780,30 @@ func planningCandidateReviewFromResult(result map[string]interface{}) (planCandi
 	if value, ok := result["acceptance"].(planCandidateAcceptanceRequest); ok {
 		review.Acceptance = value
 	}
+	if value, ok := result["standing"].(planCandidateStanding); ok {
+		review.Standing = value
+	} else if value := strings.TrimSpace(stringValue(result["standing"])); value != "" {
+		review.Standing = planCandidateStanding(value)
+	}
+	if value, ok := planningCandidateRefusalValue(result["refusal"]); ok {
+		review.Refusal = &value
+		if review.Standing == "" {
+			review.Standing = value.Standing
+		}
+	}
 	return review, true
+}
+
+func planningCandidateRefusalValue(value interface{}) (planCandidateRefusalDetails, bool) {
+	switch refusal := value.(type) {
+	case planCandidateRefusalDetails:
+		return refusal, true
+	case *planCandidateRefusalDetails:
+		if refusal != nil {
+			return *refusal, true
+		}
+	}
+	return planCandidateRefusalDetails{}, false
 }
 
 func planningCandidateValue(value interface{}) (colony.PlanCandidate, bool) {
@@ -829,6 +901,25 @@ func renderPlanningRefusalVisual(action, because, state, next string, options pl
 	fmt.Fprintf(&builder, "Because: %s\n", projection.Because)
 	fmt.Fprintf(&builder, "State: %s\n", projection.State)
 	fmt.Fprintf(&builder, "Next: %s\n", projection.Next)
+	return finalizePlanningVisual(builder.String(), options)
+}
+
+func renderPlanningCandidateRefusalVisual(details planCandidateRefusalDetails, options planningVisualOptions) string {
+	state := strings.ReplaceAll(string(details.StateEffect), "_", " ")
+	var builder strings.Builder
+	builder.WriteString(renderBanner(commandEmoji("plan"), "Plan Candidate Unavailable"))
+	builder.WriteString("Identity: ")
+	builder.WriteString(casteIdentity("queen"))
+	builder.WriteString("\n")
+	fmt.Fprintf(&builder, "Candidate: %s\n", details.CandidateID)
+	fmt.Fprintf(&builder, "Candidate status: %s\n", details.CandidateStatus)
+	fmt.Fprintf(&builder, "Standing: %s\n", details.Standing)
+	fmt.Fprintf(&builder, "Expires: %s\n", details.ExpiresAt.UTC().Format(time.RFC3339Nano))
+	fmt.Fprintf(&builder, "Why unavailable: %s\n", details.WhyUnavailable)
+	renderPlanningValueList(&builder, "Evidence", details.Evidence)
+	fmt.Fprintf(&builder, "State: %s\n", state)
+	fmt.Fprintf(&builder, "Active plan: %s\n", details.ActivePlanEffect)
+	fmt.Fprintf(&builder, "Next: %s\n", details.RecoveryCommand)
 	return finalizePlanningVisual(builder.String(), options)
 }
 
@@ -1044,7 +1135,20 @@ func planningVisualSafeIdentifier(label, identifier string) string {
 
 func planningVisualLineMayOverflow(line string) bool {
 	plain := strings.TrimSpace(planningStripANSI(line))
-	return strings.HasPrefix(plain, "Identifier: sha256:") && utf8.ValidString(plain)
+	if !utf8.ValidString(plain) {
+		return false
+	}
+	for _, prefix := range []string{
+		"Identifier: sha256:", "Candidate: ", "Candidate hash: ", "SPEC hash: ",
+		"Base plan hash: ", "Proposal hash: ", "Expires: ",
+		"Why unavailable: ",
+		"Acceptance command: aether ", "Next: aether ",
+	} {
+		if strings.HasPrefix(plain, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func renderPlanningSpecSection(builder *strings.Builder, title string, items []specCommandVisualItem) {
