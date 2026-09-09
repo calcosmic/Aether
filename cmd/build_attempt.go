@@ -180,12 +180,11 @@ type buildAttemptRecord struct {
 	// ordinary phase build attempt -- see checkFixAttemptRecord's own doc
 	// comment for the append-only guarantee this field depends on.
 	CheckFix *checkFixAttemptRecord `json:"check_fix,omitempty"`
-	// ParentAttemptID is set ONLY by attachBuildAttemptParentLink, on a NEW
-	// attempt record beginChildBuildAttempt just created for D-10's
-	// unfinished-only recovery job -- never on the parent attempt whose
-	// partial credit triggered it. Optional and omitempty: existing attempt
-	// JSON written before this field existed still decodes cleanly with an
-	// empty string here (mirrors CheckFix's own precedent).
+	// ParentAttemptID is set only while the canonical build-start transaction
+	// derives a NEW D-10 unfinished-only recovery attempt -- never on the
+	// parent attempt whose partial credit triggered it. Optional and
+	// omitempty: existing attempt JSON written before this field existed still
+	// decodes cleanly with an empty string here (mirrors CheckFix's precedent).
 	ParentAttemptID string `json:"parent_attempt_id,omitempty"`
 	// ParentJobName is the coherent job name (cmd/coherent_jobs.go) this
 	// attempt's retry job was derived from -- the original grouped job whose
@@ -200,11 +199,10 @@ type latestBuildAttemptPointer struct {
 	UpdatedAt     string `json:"updated_at"`
 }
 
-// buildAttemptDerivation contains every input that used to be discovered
-// while beginBuildAttemptRecord was already writing its journal. Keeping the
-// clock, random run ID, process identity, platform, and workspace fingerprint
-// outside the derivation lets build start calculate every byte before opening
-// a transaction while preserving the legacy writer as a thin adapter.
+// buildAttemptDerivation contains every input needed to calculate an attempt
+// before any write begins. Keeping the clock, random run ID, process identity,
+// platform, and workspace fingerprint outside the derivation lets canonical
+// build start calculate every byte before opening its transaction.
 type buildAttemptDerivation struct {
 	State               colony.ColonyState
 	Phase               colony.Phase
@@ -319,62 +317,6 @@ func deriveBuildAttempt(input buildAttemptDerivation) (string, buildAttemptRecor
 		}
 	}
 	return attemptRel, record, pointer, nil
-}
-
-func beginBuildAttempt(state colony.ColonyState, phaseNum int, phase colony.Phase, startedAt time.Time, selectedTaskIDs []string, checkpointRel, manifestRel, claimsRel, executionOwner string, dispatches []codexBuildDispatch) (string, error) {
-	return beginBuildAttemptRecord(state, phaseNum, phase, startedAt, selectedTaskIDs, checkpointRel, manifestRel, claimsRel, executionOwner, dispatches, true)
-}
-
-// beginBuildAttemptRecord is beginBuildAttempt's implementation, plus the one
-// switch beginChildBuildAttempt needs: whether this new record becomes the
-// phase's "latest attempt" (WR-03, 195-REVIEW.md).
-//
-// Every attempt that actually dispatches workers must become the latest one --
-// that pointer is how the runtime finds the in-flight attempt. A D-10 recovery
-// record is the opposite: it describes work still to do and never dispatches
-// anything itself. Pointing "latest" at it left the phase looking like it had
-// an ACTIVE attempt while the parent build's dispatch-start marker was still
-// set, so the very next `aether build <N> --plan-only` -- the interactive
-// wrapper's only build path -- refused the owner's own recovery command with
-// "already has workers in flight", naming an attempt that had no completion
-// packet to finalize. The recovery record stays fully discoverable through the
-// phase's attempt journal (findExistingBuildAttemptRetry), which is the only
-// reader it ever had.
-func beginBuildAttemptRecord(state colony.ColonyState, phaseNum int, phase colony.Phase, startedAt time.Time, selectedTaskIDs []string, checkpointRel, manifestRel, claimsRel, executionOwner string, dispatches []codexBuildDispatch, makeLatest bool) (string, error) {
-	if store == nil {
-		return "", fmt.Errorf("no store initialized")
-	}
-	if phaseNum < 1 {
-		return "", fmt.Errorf("build attempt phase must be positive")
-	}
-	runID, err := codex.NewExecutionRunID()
-	if err != nil {
-		return "", err
-	}
-	workspaceFingerprint, err := codex.WorkspaceFingerprint(buildAttemptWorkspaceRoot())
-	if err != nil {
-		return "", fmt.Errorf("fingerprint build workspace: %w", err)
-	}
-	attemptRel, record, pointer, err := deriveBuildAttempt(buildAttemptDerivation{
-		State: state, Phase: phase, PhaseNumber: phaseNum, StartedAt: startedAt,
-		AttemptID: deriveBuildAttemptID(startedAt, os.Getpid()), RunID: runID,
-		ProcessID: os.Getpid(), HostPlatform: buildHostPlatform(), WorkspaceSHA256: workspaceFingerprint,
-		SelectedTaskIDs: selectedTaskIDs, CheckpointPath: checkpointRel, ManifestPath: manifestRel,
-		ClaimsPath: claimsRel, ExecutionOwner: executionOwner, Dispatches: dispatches, MakeLatest: makeLatest,
-	})
-	if err != nil {
-		return "", err
-	}
-	if err := store.SaveJSON(attemptRel, record); err != nil {
-		return "", fmt.Errorf("save build attempt: %w", err)
-	}
-	if pointer != nil {
-		pointerRel := latestBuildAttemptPointerPath(phaseNum)
-		if err := store.SaveJSON(pointerRel, *pointer); err != nil {
-			return "", fmt.Errorf("save latest build attempt pointer: %w", err)
-		}
-	}
-	return attemptRel, nil
 }
 
 func transitionBuildAttempt(attemptRel, status, summary string, dispatches []codexBuildDispatch, claims *codexBuildClaims, dispatchMode string, transitionErr error) error {
@@ -506,13 +448,11 @@ func attachBuildFreeCheckReport(attemptRel string, report buildFreeCheckReport) 
 // checkFixAttemptRecord is the provenance a build attempt carries when it
 // exists ONLY because the verification floor's single bounded automatic
 // builder fix attempt created it (D-02, D-03), rather than a fresh phase
-// build. It always lives on a NEW attempt record produced through
-// beginBuildAttempt/transitionBuildAttempt like any other attempt -- it
-// never overwrites or mutates the parent attempt's own Dispatches, Claims,
-// or Status (TestFixAttemptNeverOverwritesTheFirstResult); the two exist as
-// separate, independently-readable journal entries, the same append-only
-// discipline outOfBandVerificationRecord already established for a
-// differently-caused non-worker closure.
+// build. It always lives on a NEW record produced by canonical build start
+// and advanced through transitionBuildAttempt like any other attempt. It
+// never overwrites or mutates the parent attempt's own Dispatches, Claims, or
+// Status (TestFixAttemptNeverOverwritesTheFirstResult); the two exist as
+// separate, independently-readable journal entries.
 type checkFixAttemptRecord struct {
 	// RecordedAt is when this fix attempt's outcome was recorded (after the
 	// re-run floor completed), not when the attempt began.
@@ -543,8 +483,8 @@ type checkFixAttemptRecord struct {
 // separately, the same as any other attempt), not History. Mirrors
 // attachBuildFreeCheckReport's narrow-setter discipline. Called only from
 // the continue verification path (cmd/codex_continue.go), and only on the
-// NEW attempt record beginBuildAttempt created for this fix attempt -- never
-// on the parent attempt whose failing check triggered it.
+// NEW canonical attempt created for this fix -- never on the parent attempt
+// whose failing check triggered it.
 func attachCheckFixAttempt(attemptRel string, record checkFixAttemptRecord) error {
 	if store == nil || strings.TrimSpace(attemptRel) == "" {
 		return fmt.Errorf("build attempt is not initialized")
@@ -561,9 +501,9 @@ func attachCheckFixAttempt(attemptRel string, record checkFixAttemptRecord) erro
 }
 
 // listBuildAttemptsForPhase loads every attempt record recorded for a phase
-// (every "build/phase-<N>/attempts/*.json" file, skipping the
-// "*.completion.json" siblings), oldest and newest alike -- the append-only
-// journal in full, not just the latest pointer. Used to detect whether a
+// (every "build/phase-<N>/attempts/*.json" file, skipping completion packets
+// and durable "*.start-receipt.json" siblings), oldest and newest alike --
+// the append-only journal in full, not just the latest pointer. Used to detect whether a
 // check-fix attempt for a given check has already been recorded for this
 // phase (planCheckFixAttempt, cmd/check_fix_attempt.go), which
 // loadLatestBuildAttempt alone cannot answer once a later ordinary build
@@ -580,7 +520,7 @@ func listBuildAttemptsForPhase(phaseNum int) []buildAttemptRecord {
 	var records []buildAttemptRecord
 	for _, entry := range entries {
 		name := entry.Name()
-		if entry.IsDir() || !strings.HasSuffix(name, ".json") || strings.HasSuffix(name, ".completion.json") {
+		if entry.IsDir() || !strings.HasSuffix(name, ".json") || strings.HasSuffix(name, ".completion.json") || strings.HasSuffix(name, ".start-receipt.json") {
 			continue
 		}
 		rel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseNum), "attempts", name))
@@ -591,79 +531,6 @@ func listBuildAttemptsForPhase(phaseNum int) []buildAttemptRecord {
 		records = append(records, record)
 	}
 	return records
-}
-
-func prepareBuildAttemptManifestBinding(attemptRel string, manifest *codexBuildManifest) error {
-	if manifest == nil {
-		return fmt.Errorf("build manifest is required")
-	}
-	var record buildAttemptRecord
-	if err := store.LoadJSON(attemptRel, &record); err != nil {
-		return fmt.Errorf("load build attempt for manifest binding: %w", err)
-	}
-	if record.ID != strings.TrimSpace(manifest.AttemptID) || record.Phase != manifest.Phase {
-		return fmt.Errorf("build manifest attempt identity does not match journal record")
-	}
-	binding := codex.ExecutionBinding{
-		SchemaVersion:        codex.ExecutionBindingSchemaVersion,
-		RunID:                record.RunID,
-		AttemptID:            record.ID,
-		WorkspaceFingerprint: record.WorkspaceSHA256,
-		ExecutionOwner:       strings.TrimSpace(manifest.ExecutionOwner),
-	}
-	manifest.ExecutionBinding = &binding
-	digest, err := buildManifestSHA256(*manifest)
-	if err != nil {
-		return fmt.Errorf("hash build manifest: %w", err)
-	}
-	manifest.ExecutionBinding.ManifestSHA256 = digest
-	return manifest.ExecutionBinding.Validate()
-}
-
-func bindBuildAttemptManifest(attemptRel string, manifest codexBuildManifest) error {
-	digest, err := buildManifestSHA256(manifest)
-	if err != nil {
-		return fmt.Errorf("hash build manifest: %w", err)
-	}
-	if manifest.ExecutionBinding == nil {
-		return fmt.Errorf("build manifest requires execution_binding")
-	}
-	if err := manifest.ExecutionBinding.Validate(); err != nil {
-		return err
-	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
-	var record buildAttemptRecord
-	if err := store.UpdateJSONAtomically(attemptRel, &record, func() error {
-		if record.ID != manifest.AttemptID || record.Phase != manifest.Phase {
-			return fmt.Errorf("build manifest attempt identity does not match journal record")
-		}
-		if err := validateBuildExecutionBinding(record, *manifest.ExecutionBinding, digest, true); err != nil {
-			return err
-		}
-		if record.CompletionSHA256 != "" {
-			return fmt.Errorf("build attempt %s already has a bound completion packet", record.ID)
-		}
-		if record.Status != buildAttemptPrepared && record.Status != buildAttemptAwaiting {
-			return fmt.Errorf("build attempt %s is %s and cannot publish another manifest", record.ID, record.Status)
-		}
-		record.ManifestSHA256 = digest
-		record.ExecutionOwner = strings.TrimSpace(manifest.ExecutionBinding.ExecutionOwner)
-		manifestCopy := manifest
-		record.PlanManifest = &manifestCopy
-		record.Status = buildAttemptAwaiting
-		record.UpdatedAt = now
-		record.Dispatches = append([]codexBuildDispatch{}, manifest.Dispatches...)
-		record.DispatchMode = strings.TrimSpace(manifest.DispatchMode)
-		record.History = append(record.History, buildAttemptTransition{
-			Status:    buildAttemptAwaiting,
-			Timestamp: now,
-			Summary:   "plan-only manifest persisted before external worker dispatch",
-		})
-		return nil
-	}); err != nil {
-		return fmt.Errorf("bind build attempt manifest: %w", err)
-	}
-	return nil
 }
 
 func buildManifestSHA256(manifest codexBuildManifest) (string, error) {
@@ -1064,54 +931,6 @@ func buildAttemptStatusTerminal(status string) bool {
 	default:
 		return false
 	}
-}
-
-// attachBuildAttemptParentLink attaches D-10 append-only retry provenance to
-// a NEW attempt record -- the second half of "begin, then attach" that
-// mirrors attachCheckFixAttempt's narrow-setter discipline (touches nothing
-// on the record besides these two fields). Called only on the retry attempt
-// beginBuildAttempt just created, identified by its own attemptRel, NEVER on
-// the parent attempt whose partial credit triggered this retry.
-func attachBuildAttemptParentLink(attemptRel, parentAttemptID, parentJobName string) error {
-	if store == nil || strings.TrimSpace(attemptRel) == "" {
-		return fmt.Errorf("build attempt is not initialized")
-	}
-	parentAttemptID = strings.TrimSpace(parentAttemptID)
-	parentJobName = strings.TrimSpace(parentJobName)
-	if parentAttemptID == "" {
-		return fmt.Errorf("parent attempt id is required to link a retry attempt")
-	}
-	var record buildAttemptRecord
-	return store.UpdateJSONAtomically(attemptRel, &record, func() error {
-		if record.SchemaVersion != buildAttemptSchemaVersion || strings.TrimSpace(record.ID) == "" {
-			return fmt.Errorf("invalid build attempt record")
-		}
-		record.ParentAttemptID = parentAttemptID
-		record.ParentJobName = parentJobName
-		return nil
-	})
-}
-
-// beginChildBuildAttempt creates a NEW append-only build attempt for a D-10
-// unfinished-only retry job, linked to -- but never mutating -- the parent
-// attempt that produced the partial credit that triggered it. It reuses
-// beginBuildAttempt's own record-writing path, then attaches parent provenance
-// onto the brand-new record only. The parent attempt's own file is never
-// opened by this function.
-//
-// It deliberately does NOT move the phase's latest-attempt pointer (WR-03):
-// a recovery record dispatches nothing, so treating it as the phase's live
-// attempt blocked the very plan-only call the owner's recovery command makes.
-// See beginBuildAttemptRecord's doc comment.
-func beginChildBuildAttempt(state colony.ColonyState, phaseNum int, phase colony.Phase, startedAt time.Time, parentAttemptID, parentJobName string, retryTaskIDs []string, checkpointRel, manifestRel, claimsRel, executionOwner string, dispatches []codexBuildDispatch) (string, error) {
-	attemptRel, err := beginBuildAttemptRecord(state, phaseNum, phase, startedAt, retryTaskIDs, checkpointRel, manifestRel, claimsRel, executionOwner, dispatches, false)
-	if err != nil {
-		return "", err
-	}
-	if err := attachBuildAttemptParentLink(attemptRel, parentAttemptID, parentJobName); err != nil {
-		return "", err
-	}
-	return attemptRel, nil
 }
 
 // buildAttemptCompletionSealed reports whether record's completion packet
