@@ -5,15 +5,15 @@ milestone_name: Classic Colony Restoration
 current_phase: 200
 current_phase_name: Iterative Planning
 status: executing
-stopped_at: Completed 200-50-PLAN.md; next incomplete is 200-51
-last_updated: "2026-09-09T13:58:33.443Z"
+stopped_at: Completed 200-51-PLAN.md; next incomplete is 200-52
+last_updated: "2026-09-09T14:42:28.984Z"
 last_activity: 2026-09-09
-state_head: 8083d18f63afc9682cc2459d10e6d3269709ec97
+state_head: 3745d82b9c6e668b62e0ee474c5773509ea374c8
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 89
-  completed_plans: 83
+  completed_plans: 84
   percent: 14
 ---
 
@@ -32,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 51 of 55
+Plan: 52 of 55
 Status: Ready to execute
 Last activity: 2026-09-09
 
@@ -163,6 +163,7 @@ Last activity: 2026-09-09
 | Phase 200 P48 | 31min | 2 tasks | 5 files |
 | Phase 200 P49 | 48min | 3 tasks | 5 files |
 | Phase 200 P50 | 32min | 3 tasks | 5 files |
+| Phase 200 P51 | 35min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -518,6 +519,10 @@ Last activity: 2026-09-09
 - [Phase 200]: Plan 50 downstream continue, run, redispatch, reviewer-waiver, and narrator fixtures cross approved specification, accepted plan, and canonical build start before testing lifecycle behavior.
 - [Phase 200]: Plan 50 reviewer-window failure validates then corrupts the legitimate build-start target and requires preserved bytes plus parseable JSON with truthful exit code 2.
 - [Phase 200]: Plan 50 models the one-worker forced-reviewer policy at exact phase 25 with twenty-four honestly completed prerequisites.
+- [Phase 200]: Plan 51: partial_recovery is the renderer canonical fact; established top-level recovery fields remain compatibility projections.
+- [Phase 200]: Plan 51: build_advisory is computed once per runtime lane and drives both terminal and JSON presentation.
+- [Phase 200]: Plan 51: direct build checks boundary questions read-only against accepted pre-build authority before its start transaction.
+- [Phase 200]: Plan 51: missing durable partial recovery evidence renders an explicit error and never an ordinary completed-build screen.
 
 ### Pending Todos
 
@@ -634,11 +639,11 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-09T13:58:33.434Z
-Stopped at: Completed 200-50-PLAN.md; next incomplete is 200-51
+Last session: 2026-09-09T14:42:28.974Z
+Stopped at: Completed 200-51-PLAN.md; next incomplete is 200-52
 Resume file: None
 
 ## Operator Next Steps
 
-- Execute 200-51-PLAN.md to finish Wave 30, then follow Waves 31-34 before rerunning the unchanged final receipt Plan 200-40 in Wave 35.
+- Execute 200-52-PLAN.md to start Wave 31, then follow Waves 32-34 before rerunning the unchanged final receipt Plan 200-40 in Wave 35.
 - Preserve the Phase 200 Scout/Route-Setter objective and do not waive normal or race gate failures.
