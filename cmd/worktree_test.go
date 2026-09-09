@@ -2061,3 +2061,58 @@ func TestReportOrphanBranches(t *testing.T) {
 		t.Errorf("expected phase-1/builder-1 in orphaned branches, got %+v", orphaned)
 	}
 }
+
+func TestWorktreeFixtureRestoresRepositoryAuthority200(t *testing.T) {
+	originalRoot, hadRoot := os.LookupEnv("AETHER_ROOT")
+	originalDataDir, hadDataDir := os.LookupEnv("COLONY_DATA_DIR")
+	t.Cleanup(func() {
+		if hadRoot {
+			_ = os.Setenv("AETHER_ROOT", originalRoot)
+		} else {
+			_ = os.Unsetenv("AETHER_ROOT")
+		}
+		if hadDataDir {
+			_ = os.Setenv("COLONY_DATA_DIR", originalDataDir)
+		} else {
+			_ = os.Unsetenv("COLONY_DATA_DIR")
+		}
+	})
+
+	_ = os.Unsetenv("AETHER_ROOT")
+	_ = os.Unsetenv("COLONY_DATA_DIR")
+	store = nil
+	tracer = nil
+
+	var fixtureRoot string
+	t.Run("legacy worktree fixture", func(t *testing.T) {
+		saveGlobals(t)
+		fixtureRoot = t.TempDir()
+		dataDir := filepath.Join(fixtureRoot, ".aether", "data")
+		if err := os.MkdirAll(dataDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		fixtureStore, err := storage.NewStore(dataDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		store = fixtureStore
+		_ = os.Setenv("AETHER_ROOT", fixtureRoot)
+		defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	})
+
+	if got, ok := os.LookupEnv("AETHER_ROOT"); ok {
+		t.Errorf("AETHER_ROOT survived deleted worktree fixture: %q", got)
+	}
+	if got, ok := os.LookupEnv("COLONY_DATA_DIR"); ok {
+		t.Errorf("COLONY_DATA_DIR survived deleted worktree fixture: %q", got)
+	}
+	if store != nil {
+		t.Error("repository store survived deleted worktree fixture")
+	}
+	if tracer != nil {
+		t.Error("repository tracer survived deleted worktree fixture")
+	}
+	if _, err := os.Stat(fixtureRoot); !os.IsNotExist(err) {
+		t.Errorf("fixture root still exists after subtest cleanup: %v", err)
+	}
+}
