@@ -5,15 +5,15 @@ milestone_name: Classic Colony Restoration
 current_phase: 200
 current_phase_name: Iterative Planning
 status: executing
-stopped_at: Completed 200-51-PLAN.md; next incomplete is 200-52
-last_updated: "2026-09-09T14:42:28.984Z"
+stopped_at: Completed 200-52-PLAN.md; next incomplete is 200-53
+last_updated: "2026-09-09T16:16:53.634Z"
 last_activity: 2026-09-09
-state_head: 6d70bb1f2819d3ff64efd8289666c63ebd220f65
+state_head: 54723646d20889d1d44e70426ad1650371b0444e
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 89
-  completed_plans: 84
+  completed_plans: 85
   percent: 14
 ---
 
@@ -32,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 52 of 55
+Plan: 53 of 55
 Status: Ready to execute
 Last activity: 2026-09-09
 
@@ -164,6 +164,7 @@ Last activity: 2026-09-09
 | Phase 200 P49 | 48min | 3 tasks | 5 files |
 | Phase 200 P50 | 32min | 3 tasks | 5 files |
 | Phase 200 P51 | 35min | 2 tasks | 7 files |
+| Phase 200 P52 | 83min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -523,6 +524,10 @@ Last activity: 2026-09-09
 - [Phase 200]: Plan 51: build_advisory is computed once per runtime lane and drives both terminal and JSON presentation.
 - [Phase 200]: Plan 51: direct build checks boundary questions read-only against accepted pre-build authority before its start transaction.
 - [Phase 200]: Plan 51: missing durable partial recovery evidence renders an explicit error and never an ordinary completed-build screen.
+- [Phase 200]: Plan 52: valid planning fixtures derive nested identities through production addressers; negative tests re-address only changed valid setup.
+- [Phase 200]: Plan 52: force-replan captures each cleanup baseline before classification and commits selected removals through one planning mutation session.
+- [Phase 200]: Plan 52: generated hard-decision lineage preserves short IDs and hashes only when the -hard companion would exceed the specification limit.
+- [Phase 200]: Plan 52: plan-only safety enters through approved specification and accepted-plan authority while lifecycle state remains byte-stable.
 
 ### Pending Todos
 
@@ -639,11 +644,11 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-09T14:42:28.974Z
-Stopped at: Completed 200-51-PLAN.md; next incomplete is 200-52
+Last session: 2026-09-09T16:16:53.624Z
+Stopped at: Completed 200-52-PLAN.md; next incomplete is 200-53
 Resume file: None
 
 ## Operator Next Steps
 
-- Execute 200-52-PLAN.md to start Wave 31, then follow Waves 32-34 before rerunning the unchanged final receipt Plan 200-40 in Wave 35.
+- Execute 200-53-PLAN.md to start Wave 32, then follow Waves 33-34 before rerunning the unchanged final receipt Plan 200-40 in Wave 35.
 - Preserve the Phase 200 Scout/Route-Setter objective and do not waive normal or race gate failures.

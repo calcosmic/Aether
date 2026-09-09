@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 50/55 plans executed
+**Plans:** 51/55 plans executed
 
 Plans:
 
@@ -330,7 +330,7 @@ Plans:
 
 **Wave 31** *(second gap closure; blocked on Wave 30 completion)*
 
-- [ ] 200-52-PLAN.md — Canonicalize legacy planning fixtures and complete atomic force-replan cleanup.
+- [x] 200-52-PLAN.md — Canonicalize legacy planning fixtures and complete atomic force-replan cleanup.
 
 **Wave 32** *(second gap closure; blocked on Wave 31 completion)*
 
