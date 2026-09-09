@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 36/40 plans executed
+**Plans:** 37/40 plans executed
 
 Plans:
 
@@ -289,7 +289,7 @@ Plans:
 **Wave 22** *(gap closure; blocked on Wave 21 completion)*
 
 - [x] 200-35-PLAN.md — Introduce the transaction-only test fixture and migrate the core build-attempt fixture callers.
-- [ ] 200-38-PLAN.md — Render expiry/recovery consistently in terminal, JSON, lifecycle facts, and Next Up.
+- [x] 200-38-PLAN.md — Render expiry/recovery consistently in terminal, JSON, lifecycle facts, and Next Up.
 
 **Wave 23** *(gap closure; blocked on Wave 22 completion)*
 

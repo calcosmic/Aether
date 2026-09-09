@@ -2,19 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
-current_phase: 200
-current_phase_name: Iterative Planning
 status: executing
-stopped_at: Completed 200-35-PLAN.md; next incomplete remains 200-38 by wave order
-last_updated: "2026-09-09T03:12:33.000Z"
+stopped_at: Completed 200-38-PLAN.md; next incomplete remains 200-36 by wave order
+last_updated: "2026-09-09T03:45:50.042Z"
 last_activity: 2026-09-09
-state_head: 45886462352de4dfb054736f60869ff333560fe5
 progress:
   total_phases: 7
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 74
-  completed_plans: 70
-  percent: 0
+  completed_plans: 71
+  percent: 14
 ---
 
 # Project State
@@ -32,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 38 of 40
+Plan: 36 of 40
 Status: Ready to execute
 Last activity: 2026-09-09
 
@@ -150,6 +147,7 @@ Last activity: 2026-09-09
 | Phase 200 P34 | 27min | 3 tasks | 6 files |
 | Phase 200 P37 | 34min | 3 tasks | 6 files |
 | Phase 200 P35 | 24min | 2 tasks | 6 files |
+| Phase 200 P38 | 31min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -467,6 +465,10 @@ Last activity: 2026-09-09
 - [Phase 200]: Arbitrary test statuses are reached only through transitionBuildAttempt after a canonical start. — Fixtures cannot recreate attempt and latest-pointer state directly.
 - [Phase 200]: Public-build goal prerequisites use the repository mutation session; build-start targets are never written directly. — Tests reach their intended preflight boundary without bypassing repository authority.
 - [Phase 200]: Valid attempt-ID filtering remains test-local until Plan 36 fixes start-receipt enumeration. — The known production compatibility issue stays within its already assigned scope.
+- [Phase 200]: Lifecycle facts assess candidate standing once at CapturedAt; renderers and Next Up consume that captured result without another clock read or state write.
+- [Phase 200]: The newest reviewable authority frontier wins: a newer expired candidate continues to require refresh instead of silently exposing an older accepted plan build action.
+- [Phase 200]: The complete D-16 acceptance command is captured in lifecycle facts and passed through unchanged; the resolver never reconstructs security-sensitive flags.
+- [Phase 200]: The existing lifecyclePlanningFromSnapshot signature remains as a compatibility adapter over the captured-time implementation, keeping production callers outside the six-file scope unchanged.
 
 ### Pending Todos
 
@@ -583,8 +585,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-09T03:12:33.000Z
-Stopped at: Completed 200-35-PLAN.md; next incomplete remains 200-38 by wave order
+Last session: 2026-09-09T03:45:50.033Z
+Stopped at: Completed 200-38-PLAN.md; next incomplete remains 200-36 by wave order
 Resume file: None
 
 ## Operator Next Steps
