@@ -111,7 +111,7 @@
   },
   {
     "file": "cmd/codex_plan.go",
-    "function": "runCodexPlanAgentDelegate",
+    "function": "runCodexPlanAgentDelegateInSession",
     "literal": "dispatch host planning agents, then run `aether plan-finalize --completion-file \u003cfile\u003e`"
   },
   {

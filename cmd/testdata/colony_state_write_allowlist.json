@@ -12,20 +12,8 @@
     "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
   },
   {
-    "file": "cmd/codex_build.go",
-    "function": "runCodexBuildWithOptions",
-    "primitive": "SaveJSON",
-    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
-  },
-  {
     "file": "cmd/codex_colonize.go",
     "function": "updateSurveyState",
-    "primitive": "SaveJSON",
-    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
-  },
-  {
-    "file": "cmd/codex_plan.go",
-    "function": "runCodexPlanWithOptions",
     "primitive": "SaveJSON",
     "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
   },
