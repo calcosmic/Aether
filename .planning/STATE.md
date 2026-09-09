@@ -5,15 +5,15 @@ milestone_name: Classic Colony Restoration
 current_phase: 200
 current_phase_name: Iterative Planning
 status: executing
-stopped_at: Completed 200-39-PLAN.md; next incomplete is 200-40
-last_updated: "2026-09-09T05:05:52.000Z"
+stopped_at: Completed 200-41-PLAN.md; next incomplete is 200-42
+last_updated: "2026-09-09T09:04:53.170Z"
 last_activity: 2026-09-09
 state_head: 9ad69060f037d387ffc87b900a0d5541eb3c1f07
 progress:
   total_phases: 7
   completed_phases: 0
-  total_plans: 74
-  completed_plans: 73
+  total_plans: 89
+  completed_plans: 74
   percent: 0
 ---
 
@@ -32,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 40 of 40
+Plan: 42 of 55
 Status: Ready to execute
 Last activity: 2026-09-09
 
@@ -153,6 +153,7 @@ Last activity: 2026-09-09
 | Phase 200 P38 | 31min | 2 tasks | 6 files |
 | Phase 200 P36 | 21min | 2 tasks | 6 files |
 | Phase 200 P39 | 50min | 3 tasks | 6 files |
+| Phase 200 P41 | 7min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -479,6 +480,9 @@ Last activity: 2026-09-09
 - [Phase 200]: Integrated lifecycle claims must execute real Cobra or named causal test processes; source-text counters are not sufficient proof.
 - [Phase 200]: Managed wrappers remain read-only projections of Go authority; source-check drift requires a separately owned plan.
 - [Phase 200]: Only a current candidate exposes exact acceptance; stale and expired candidates expose only aether plan --refresh.
+- [Phase 200]: [P41] Command fixtures bind AETHER_ROOT, COLONY_DATA_DIR, store, and tracer to one physical temporary repository.
+- [Phase 200]: [P41] Test cleanup clears repository-backed store and tracer globals rather than restoring deleted temporary authority.
+- [Phase 200]: [P41] Legacy recovery keeps non-default configured-data coverage inside the repository containment boundary.
 
 ### Pending Todos
 
@@ -595,11 +599,11 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-09T05:57:14Z
-Stopped at: Replanned Phase 200 after the failed final repository gate; next incomplete is 200-41
+Last session: 2026-09-09T09:04:53.160Z
+Stopped at: Completed 200-41-PLAN.md; next incomplete is 200-42
 Resume file: None
 
 ## Operator Next Steps
 
-- Execute 200-41-PLAN.md, then follow Waves 26-34 before rerunning the unchanged final receipt Plan 200-40.
+- Execute 200-42-PLAN.md, then follow Waves 27-34 before rerunning the unchanged final receipt Plan 200-40.
 - Preserve the Phase 200 Scout/Route-Setter objective and do not waive normal or race gate failures.

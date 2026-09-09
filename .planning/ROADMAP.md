@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 39/55 plans executed
+**Plans:** 40/55 plans executed
 
 Plans:
 
@@ -301,7 +301,7 @@ Plans:
 
 **Wave 25** *(second gap closure; blocked on Wave 24 completion)*
 
-- [ ] 200-41-PLAN.md — Bind command tests to one contained temporary repository and restore root/store globals exactly.
+- [x] 200-41-PLAN.md — Bind command tests to one contained temporary repository and restore root/store globals exactly.
 
 **Wave 26** *(second gap closure; blocked on Wave 25 completion)*
 
