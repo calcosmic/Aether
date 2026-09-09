@@ -533,6 +533,14 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
+	// Plan-only may repair trusted completion evidence in its in-memory view so
+	// dependency planning sees prior work, but it deliberately never persists
+	// those repairs. The canonical start transaction must therefore bind the
+	// exact on-disk state and plan hash, not that read-only projection.
+	canonicalStartState, err := cloneColonyState(state)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("clone canonical plan-only start state: %w", err)
+	}
 	if len(state.Plan.Phases) == 0 {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("No project plan. Run `aether plan` first.")
 	}
@@ -645,6 +653,11 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	providerDiagnostics := dispatchProviderDiagnostics(newCodexWorkerInvoker())
 	manifestRel := filepath.ToSlash(filepath.Join(buildDirRel, "manifest.json"))
 	manifest := buildCodexBuildManifest(root, state, phase, "", "", dispatches, generatedAt, dispatchMode, selectedTaskIDs, briefPaths, true, reviewDepth)
+	canonicalPlanSHA, err := planStateHash(canonicalStartState.Plan)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("hash canonical plan-only start state: %w", err)
+	}
+	manifest.PlanStateHash = canonicalPlanSHA
 	manifest.PlanAuthority = authority
 	manifest.Phase = phaseNum
 	manifest.JobDecisions = append([]coherentJobDecision{}, jobDecisions...)
@@ -715,7 +728,7 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 		result["dispatch_manifest"] = manifest
 	}
 	if manifest.OrchestratorGuidance == nil || !manifest.OrchestratorGuidance.Active {
-		request, err := newBuildStartRequest(root, startVariant, state, authority, phaseNum, selectedTaskIDs, executionOwner, dispatchMode, generatedAt, dispatches, buildStartEffects{
+		request, err := newBuildStartRequest(root, startVariant, canonicalStartState, authority, phaseNum, selectedTaskIDs, executionOwner, dispatchMode, generatedAt, dispatches, buildStartEffects{
 			ManifestPath:   manifestRel,
 			Manifest:       &manifest,
 			MakeLatest:     true,
