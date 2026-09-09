@@ -468,7 +468,7 @@ func marshalBuildStartJSON(value any) ([]byte, error) {
 }
 
 // jsonMarshalIndent is kept as a named seam so all target bytes use the same
-// formatting without ever calling storage.Store.SaveJSON from this path.
+// formatting without invoking legacy per-file persistence from this path.
 func jsonMarshalIndent(value any) ([]byte, error) {
 	return json.MarshalIndent(value, "", "  ")
 }
@@ -928,7 +928,10 @@ func deriveBuildStartReviewerTargets(session *planningMutationSession, request b
 
 func validateBuildStartReceipt(receipt buildStartReceipt, path, requestSHA string, request buildStartRequest, authority planAuthorityDecision) error {
 	if receipt.SchemaVersion != buildStartSchemaVersion || receipt.Path != path || receipt.RequestSHA256 != requestSHA ||
-		receipt.Phase != request.Phase || receipt.AttemptID != request.AttemptID || !reflect.DeepEqual(receipt.PlanAuthority, authority) {
+		receipt.Phase != request.Phase || receipt.AttemptID != request.AttemptID ||
+		receipt.AttemptPath != buildStartAttemptPath(request.Phase, request.AttemptID) ||
+		receipt.GeneratedAt != request.GeneratedAt.UTC().Format(time.RFC3339Nano) ||
+		!reflect.DeepEqual(receipt.PlanAuthority, request.PlanAuthority) || !reflect.DeepEqual(receipt.PlanAuthority, authority) {
 		return fmt.Errorf("build start: durable receipt conflicts with canonical request or current authority")
 	}
 	if receipt.TransactionID != "build-start-"+requestSHA[:24] || receipt.ID != "build-start-receipt-"+requestSHA[:24] {
@@ -939,6 +942,82 @@ func validateBuildStartReceipt(receipt buildStartReceipt, path, requestSHA strin
 	hash, err := jsonSHA256(payload)
 	if err != nil || hash != receipt.ContentHash {
 		return fmt.Errorf("build start: durable receipt content hash conflicts with payload")
+	}
+	if err := validateBuildStartReceiptTargets(receipt.Targets, request); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateBuildStartReceiptTargets(targets []buildStartTargetReceipt, request buildStartRequest) error {
+	type expectedTarget struct {
+		action   lifecycleTransactionAction
+		required bool
+	}
+	expected := map[string]expectedTarget{
+		buildStartAttemptPath(request.Phase, request.AttemptID): {action: lifecycleTransactionWrite, required: true},
+	}
+	add := func(path string, action lifecycleTransactionAction, required bool) {
+		if path != "" {
+			expected[path] = expectedTarget{action: action, required: required}
+		}
+	}
+	add(request.Effects.CheckpointPath, lifecycleTransactionWrite, request.Effects.CheckpointPath != "")
+	add(request.Effects.ManifestPath, lifecycleTransactionWrite, request.Effects.ManifestPath != "")
+	if request.Effects.Completion != nil {
+		add(durableBuildCompletionPath(request.Phase, request.AttemptID), lifecycleTransactionWrite, true)
+	}
+	add(request.Effects.ClaimsPath, lifecycleTransactionWrite, request.Effects.ClaimsPath != "")
+	if request.Effects.PromoteState {
+		add("COLONY_STATE.json", lifecycleTransactionWrite, true)
+	}
+	if request.Effects.MakeLatest {
+		add(latestBuildAttemptPointerPath(request.Phase), lifecycleTransactionWrite, true)
+	}
+	for _, path := range request.Effects.StalePaths {
+		add(path, lifecycleTransactionRemove, true)
+	}
+	if request.Effects.ReviewerWindow != buildStartReviewerNone {
+		add(phaseDispatchWindowFileName, lifecycleTransactionWrite, false)
+	}
+	if request.Effects.ReviewerWindow == buildStartReviewerClose {
+		add(pendingDecisionsFile, lifecycleTransactionWrite, false)
+	}
+
+	seen := make(map[string]struct{}, len(targets))
+	for _, target := range targets {
+		if err := validateBuildStartDataPath(target.Path); err != nil {
+			return fmt.Errorf("build start: durable receipt target: %w", err)
+		}
+		want, ok := expected[target.Path]
+		if !ok {
+			return fmt.Errorf("build start: durable receipt has undeclared target %q", target.Path)
+		}
+		if _, duplicate := seen[target.Path]; duplicate {
+			return fmt.Errorf("build start: durable receipt repeats target %q", target.Path)
+		}
+		seen[target.Path] = struct{}{}
+		if target.Action != string(want.action) {
+			return fmt.Errorf("build start: durable receipt target %q has conflicting action", target.Path)
+		}
+		switch want.action {
+		case lifecycleTransactionWrite:
+			digest := strings.TrimPrefix(target.SHA256, "sha256:")
+			if digest == target.SHA256 || !validSHA256(digest) {
+				return fmt.Errorf("build start: durable receipt target %q has invalid digest", target.Path)
+			}
+		case lifecycleTransactionRemove:
+			if target.SHA256 != lifecycleTransactionMissingDigest {
+				return fmt.Errorf("build start: durable receipt removal %q has conflicting digest", target.Path)
+			}
+		}
+	}
+	for path, target := range expected {
+		if target.required {
+			if _, ok := seen[path]; !ok {
+				return fmt.Errorf("build start: durable receipt omits required target %q", path)
+			}
+		}
 	}
 	return nil
 }

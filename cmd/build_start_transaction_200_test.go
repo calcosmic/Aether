@@ -2,12 +2,14 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -122,6 +124,60 @@ func TestBuildStartTransaction200TargetMatrix(t *testing.T) {
 					t.Fatalf("child retry moved latest pointer: %v", err)
 				}
 			}
+			if request.Effects.Manifest != nil {
+				if attempt.PlanManifest == nil || attempt.ManifestSHA256 == "" || attempt.PlanManifest.ExecutionBinding == nil {
+					t.Fatalf("manifest was not atomically bound to attempt: %+v", attempt)
+				}
+				if err := attempt.PlanManifest.ExecutionBinding.Validate(); err != nil {
+					t.Fatalf("invalid execution binding: %v", err)
+				}
+			}
+			if request.Effects.Completion != nil {
+				if attempt.CompletionSHA256 == "" || attempt.CompletionPath == "" || attempt.Claims == nil {
+					t.Fatalf("completion/claims were not atomically bound: %+v", attempt)
+				}
+			}
+			if request.Effects.PromoteState {
+				var state colony.ColonyState
+				if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+					t.Fatal(err)
+				}
+				if state.State != colony.StateEXECUTING || state.CurrentPhase != request.Phase {
+					t.Fatalf("state was not promoted with start: %+v", state)
+				}
+			}
+			for _, stale := range request.Effects.StalePaths {
+				if _, err := os.Stat(filepath.Join(store.BasePath(), filepath.FromSlash(stale))); !os.IsNotExist(err) {
+					t.Fatalf("stale target %s survived atomic cleanup: %v", stale, err)
+				}
+			}
+			if request.Effects.ReviewerWindow != buildStartReviewerNone {
+				var window phaseDispatchWindowFile
+				if err := store.LoadJSON(phaseDispatchWindowFileName, &window); err != nil {
+					t.Fatal(err)
+				}
+				_, phasePresent := window.Phases[strconv.Itoa(request.Phase)]
+				if request.Effects.ReviewerWindow == buildStartReviewerClose && !phasePresent {
+					t.Fatal("dispatching start did not close reviewer window")
+				}
+				if request.Effects.ReviewerWindow == buildStartReviewerReopen && phasePresent {
+					t.Fatal("plan-only start did not reopen reviewer window")
+				}
+				if request.Effects.ReviewerWindow == buildStartReviewerClose {
+					var pending PendingDecisionFile
+					if err := store.LoadJSON(pendingDecisionsFile, &pending); err != nil {
+						t.Fatal(err)
+					}
+					if len(pending.Decisions) != 2 {
+						t.Fatalf("reviewer close retained %d decisions, want the resolved and other-phase records", len(pending.Decisions))
+					}
+					for _, decision := range pending.Decisions {
+						if !decision.Resolved && decision.Source == "forced-reviewer-waiver" && decision.Phase != nil && *decision.Phase == request.Phase {
+							t.Fatalf("reviewer close retained unresolved current-phase waiver: %+v", decision)
+						}
+					}
+				}
+			}
 		})
 	}
 }
@@ -233,6 +289,8 @@ func TestBuildStartTransaction200StaleAuthorityAndTasksAreZeroEffect(t *testing.
 	}{
 		{name: "state digest", mutate: func(request *buildStartRequest) { request.StateSHA256 = strings.Repeat("f", 64) }},
 		{name: "active revision", mutate: func(request *buildStartRequest) { request.PlanAuthority.ActiveRevision.Hash = strings.Repeat("e", 64) }},
+		{name: "specification", mutate: func(request *buildStartRequest) { request.PlanAuthority.Specification.ID = "forged-specification" }},
+		{name: "candidate", mutate: func(request *buildStartRequest) { request.PlanAuthority.Candidate.Hash = strings.Repeat("d", 64) }},
 		{name: "unknown selected task", mutate: func(request *buildStartRequest) { request.SelectedTasks = []string{"1.404"} }},
 		{name: "manifest phase", mutate: func(request *buildStartRequest) { request.Effects.Manifest.Phase = 2 }},
 		{name: "manifest authority", mutate: func(request *buildStartRequest) { request.Effects.Manifest.PlanAuthority.ActiveRevision.ID = "forged" }},
@@ -304,6 +362,18 @@ func TestBuildStartTransaction200ExactReplayIsReadOnly(t *testing.T) {
 	if dispatched != 1 {
 		t.Fatalf("exact replay dispatched %d total times, want first commit only", dispatched)
 	}
+	manifestPath := filepath.Join(root, ".aether", "data", lifecycleTransactionDirectory, first.TransactionID, "root-01-lifecycle_data", "manifest.json")
+	manifestBytes, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("read lifecycle root manifest: %v", err)
+	}
+	var transactionManifest lifecycleTransactionRootManifest
+	if err := json.Unmarshal(manifestBytes, &transactionManifest); err != nil {
+		t.Fatalf("decode lifecycle root manifest: %v", err)
+	}
+	if len(transactionManifest.Targets) == 0 || transactionManifest.Targets[len(transactionManifest.Targets)-1].RelativeTarget != first.Path {
+		t.Fatalf("durable build-start receipt was not the last declared target: %+v", transactionManifest.Targets)
+	}
 	buildStartTransaction200AssertInventory(t, root, before)
 
 	conflict := request
@@ -312,6 +382,90 @@ func TestBuildStartTransaction200ExactReplayIsReadOnly(t *testing.T) {
 		t.Fatalf("conflicting replay error = %v", err)
 	}
 	buildStartTransaction200AssertInventory(t, root, before)
+
+	t.Run("semantically forged receipt", func(t *testing.T) {
+		root, request := buildStartTransaction200Fixture(t, buildStartDirect)
+		receipt, err := commitBuildStart(root, request, buildStartOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		receipt.AttemptPath = "build/phase-1/attempts/forged.json"
+		payload := receipt
+		payload.ContentHash = ""
+		receipt.ContentHash, err = jsonSHA256(payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		content, err := marshalBuildStartJSON(receipt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(store.BasePath(), filepath.FromSlash(receipt.Path)), content, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := commitBuildStart(root, request, buildStartOptions{}); err == nil || !strings.Contains(err.Error(), "conflict") {
+			t.Fatalf("semantically forged replay error = %v", err)
+		}
+	})
+}
+
+func TestBuildStartTransaction200DoesNotConsultGlobalStore(t *testing.T) {
+	root, request := buildStartTransaction200Fixture(t, buildStartDirect)
+	dataRoot := store.BasePath()
+	store = nil
+	receipt, err := commitBuildStart(root, request, buildStartOptions{})
+	if err != nil {
+		t.Fatalf("session-owned commit with nil global store: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dataRoot, filepath.FromSlash(receipt.Path))); err != nil {
+		t.Fatalf("session-owned commit did not persist receipt: %v", err)
+	}
+}
+
+func TestBuildStartTransaction200ReloadsCanonicalAcceptedAuthority(t *testing.T) {
+	root, request, candidatePath := buildStartTransaction200CurrentAuthorityFixture(t)
+	receipt, err := commitBuildStart(root, request, buildStartOptions{})
+	if err != nil {
+		t.Fatalf("commit current accepted authority: %v", err)
+	}
+	if receipt.PlanAuthority.Classification != planAuthorityCurrentAccepted ||
+		receipt.PlanAuthority.Specification.ID == "" || receipt.PlanAuthority.Candidate.ID == "" ||
+		receipt.PlanAuthority.Timeline.ID == "" || receipt.PlanAuthority.Acceptance.ID == "" {
+		t.Fatalf("receipt omitted exact accepted authority: %+v", receipt.PlanAuthority)
+	}
+
+	t.Run("candidate changes after reload", func(t *testing.T) {
+		root, request, candidatePath := buildStartTransaction200CurrentAuthorityFixture(t)
+		dispatched := 0
+		mutated := false
+		_, err := commitBuildStart(root, request, buildStartOptions{
+			Fault: func(point string) error {
+				if point != buildStartBeforeCommitFaultPoint || mutated {
+					return nil
+				}
+				mutated = true
+				content, readErr := os.ReadFile(candidatePath)
+				if readErr != nil {
+					return readErr
+				}
+				return os.WriteFile(candidatePath, append(content, ' '), 0o644)
+			},
+			Dispatch: func(buildStartReceipt) error { dispatched++; return nil },
+		})
+		if err == nil || !strings.Contains(err.Error(), "baseline") {
+			t.Fatalf("changed candidate baseline error = %v", err)
+		}
+		if dispatched != 0 {
+			t.Fatal("changed accepted candidate authorized dispatch")
+		}
+		if _, statErr := os.Stat(filepath.Join(root, ".aether", "data", filepath.FromSlash(buildStartTransaction200AttemptPath(request)))); !os.IsNotExist(statErr) {
+			t.Fatalf("changed accepted candidate created attempt: %v", statErr)
+		}
+	})
+
+	if _, err := os.Stat(candidatePath); err != nil {
+		t.Fatalf("accepted candidate evidence disappeared: %v", err)
+	}
 }
 
 func TestBuildStartTransaction200PureAttemptDerivation(t *testing.T) {
@@ -467,6 +621,90 @@ func buildStartTransaction200Fixture(t *testing.T, variant buildStartVariant) (s
 		}
 	}
 	return root, request
+}
+
+func buildStartTransaction200CurrentAuthorityFixture(t *testing.T) (string, buildStartRequest, string) {
+	t.Helper()
+	root, candidate := planCandidateSemanticIntegrity200Fixture(t)
+	if _, err := acceptPlanCandidate(root, planCandidateTestAcceptanceRequest(candidate), planCandidateAcceptanceOptions{
+		AcceptedBy: "owner:plan-33-build-start",
+		AcceptedAt: candidate.CreatedAt.Add(time.Minute),
+	}); err != nil {
+		t.Fatalf("accept canonical plan candidate: %v", err)
+	}
+
+	stateBytes, err := os.ReadFile(filepath.Join(root, ".aether", "data", "COLONY_STATE.json"))
+	if err != nil {
+		t.Fatalf("read accepted state: %v", err)
+	}
+	var state colony.ColonyState
+	if err := json.Unmarshal(stateBytes, &state); err != nil {
+		t.Fatalf("decode accepted state: %v", err)
+	}
+	phaseID := firstBuildablePhase(state.Plan.Phases)
+	phase, ok := buildStartPhase(state, phaseID)
+	if !ok || len(phase.Tasks) == 0 {
+		t.Fatalf("accepted plan has no buildable task: phase=%d plan=%+v", phaseID, state.Plan)
+	}
+	selectedTask := buildTaskID(phase.Tasks[0], 0)
+	generatedAt := candidate.CreatedAt.Add(2 * time.Minute).UTC()
+	facts := lifecycleFactsFromStateSnapshot(state, false, generatedAt)
+	facts.Root = root
+	authority, err := preflightCodexBuildPlanAuthority(facts, loadPlanAuthorityVerifiedBindings(root, facts))
+	if err != nil {
+		t.Fatalf("derive accepted plan authority: %v", err)
+	}
+	stateSHA, err := jsonSHA256(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspaceSHA, err := codex.WorkspaceFingerprint(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	planSHA, err := planStateHash(state.Plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dispatches := []codexBuildDispatch{{
+		Stage: "wave", Wave: 1, Caste: "builder", Name: "Mason-accepted-33",
+		Task: "Build from accepted authority", Status: "planned", TaskID: selectedTask, TaskIndex: 1,
+	}}
+	request := buildStartRequest{
+		SchemaVersion:   buildStartSchemaVersion,
+		Variant:         buildStartDirect,
+		StateSHA256:     stateSHA,
+		PlanAuthority:   authority,
+		Phase:           phaseID,
+		SelectedTasks:   []string{selectedTask},
+		ExecutionOwner:  "runtime-worker-dispatch",
+		DispatchMode:    "direct",
+		GeneratedAt:     generatedAt,
+		AttemptID:       deriveBuildAttemptID(generatedAt, 3310),
+		RunID:           "run-33333333333333333333333333333310",
+		ProcessID:       3310,
+		HostPlatform:    "test",
+		WorkspaceSHA256: workspaceSHA,
+		Dispatches:      dispatches,
+	}
+	manifest := codexBuildManifest{
+		Phase: phaseID, PhaseName: phase.Name, Root: root,
+		DispatchMode: request.DispatchMode, ExecutionOwner: request.ExecutionOwner,
+		GeneratedAt: request.GeneratedAt.Format(time.RFC3339), PlanAuthority: authority,
+		PlanRevisionID: authority.ActiveRevision.ID, PlanStateHash: planSHA,
+		State: string(state.State), Dispatches: append([]codexBuildDispatch(nil), dispatches...),
+		SelectedTasks: append([]string(nil), request.SelectedTasks...),
+	}
+	request.Effects = buildStartEffects{
+		CheckpointPath: filepath.ToSlash(filepath.Join("checkpoints", fmt.Sprintf("pre-build-phase-%d.json", phaseID))),
+		ManifestPath:   filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseID), "manifest.json")),
+		Manifest:       &manifest,
+		PromoteState:   true,
+		MakeLatest:     true,
+		ReviewerWindow: buildStartReviewerClose,
+	}
+	candidatePath := filepath.Join(root, filepath.FromSlash(planningRouteCandidateRepositoryPath(candidate.Timeline.RunID)))
+	return root, request, candidatePath
 }
 
 func buildStartTransaction200State(t *testing.T) colony.ColonyState {
