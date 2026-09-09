@@ -2,19 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
-current_phase: 200
-current_phase_name: Iterative Planning
 status: executing
-stopped_at: Completed 200-33-PLAN.md
-last_updated: "2026-09-09T01:36:05.298Z"
+stopped_at: Completed 200-34-PLAN.md
+last_updated: "2026-09-09T02:06:25.121Z"
 last_activity: 2026-09-09
-state_head: 509153bab1e131646320317d27356c6452345f9f
 progress:
   total_phases: 7
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 74
-  completed_plans: 67
-  percent: 0
+  completed_plans: 68
+  percent: 14
 ---
 
 # Project State
@@ -32,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 34 of 40
+Plan: 35 of 40
 Status: Ready to execute
 Last activity: 2026-09-09
 
@@ -147,6 +144,7 @@ Last activity: 2026-09-09
 | Phase 200 P31 | 57min | 3 tasks | 6 files |
 | Phase 200 P32 | 1h 15min | 3 tasks | 6 files |
 | Phase 200 P33 | 30min | 3 tasks | 3 files |
+| Phase 200 P34 | 27min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -453,6 +451,9 @@ Last activity: 2026-09-09
 - [Phase 200]: Build start holds one repository session across authority reload, target derivation, baseline validation, commit, and rollback. — One lock prevents workers from starting against mixed planning authority.
 - [Phase 200]: The content-addressed build-start receipt is declared last and exact replay validates its semantic target contract without dispatching again. — Durability must precede worker authority while retries remain duplicate-free.
 - [Phase 200]: Attempt derivation accepts clock, process, run, platform, workspace, tasks, and provenance explicitly. — Pure derivation makes every build-start byte available before mutation and preserves the legacy adapter.
+- [Phase 200]: All six production build-start families commit one authority-bound transaction before dispatch or completion work. — A receipt-last boundary prevents partial attempts, pointers, manifests, reviewer state, and provenance.
+- [Phase 200]: Plan-only and Queen-led starts share one prepared path selected by a closed transaction variant. — Queen reuse must not create or rewrite a second attempt.
+- [Phase 200]: Worker briefs are prepared before start but published only after the durable receipt. — Stale or faulted starts must authorize no runnable worker artifact.
 
 ### Pending Todos
 
@@ -569,8 +570,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-09T01:36:05.271Z
-Stopped at: Completed 200-33-PLAN.md
+Last session: 2026-09-09T02:06:25.112Z
+Stopped at: Completed 200-34-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
