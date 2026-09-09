@@ -155,9 +155,9 @@ const (
 	fullSuiteHeavyThreshold  = 8 * time.Second
 	fullSuiteChildParallel   = 8
 	fullSuiteChildProcs      = 4
-	fullSuiteChildTimeout    = 9*time.Minute + 30*time.Second
-	fullSuiteCommandTimeout  = 9*time.Minute + 45*time.Second
-	fullSuiteOverallTimeout  = 25 * time.Minute
+	fullSuiteChildTimeout    = 12 * time.Minute
+	fullSuiteCommandTimeout  = 12*time.Minute + 15*time.Second
+	fullSuiteOverallTimeout  = 10*time.Minute + 15*time.Second
 )
 
 type fullSuiteInvocation struct {
