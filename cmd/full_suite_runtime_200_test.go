@@ -22,11 +22,11 @@ func TestFullSuiteRuntime200PartitionExactOnce(t *testing.T) {
 		"TestDelta":   3 * time.Second,
 	}
 
-	first, err := planFullSuiteLanes(discovered, serial, costs, 2)
+	first, err := planFullSuiteLanes(discovered, serial, costs, costs, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := planFullSuiteLanes(discovered, serial, costs, 2)
+	second, err := planFullSuiteLanes(discovered, serial, costs, costs, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func TestFullSuiteRuntime200PartitionExactOnce(t *testing.T) {
 	if err := validateFullSuitePlan(discovered, omitted); err == nil || !strings.Contains(err.Error(), "missing") {
 		t.Fatalf("omitted plan validation error = %v, want explicit missing diagnostic", err)
 	}
-	if _, err := planFullSuiteLanes(append(discovered, "TestAlpha"), serial, costs, 2); err == nil {
+	if _, err := planFullSuiteLanes(append(discovered, "TestAlpha"), serial, costs, costs, 2); err == nil {
 		t.Fatal("duplicate discovery entry was silently accepted")
 	}
 }
@@ -255,7 +255,7 @@ func TestFullSuiteRuntime200SerializesSharedResources(t *testing.T) {
 	for testName := range want {
 		discovered = append(discovered, testName)
 	}
-	lanes, err := planFullSuiteLanes(discovered, fullSuiteSerialTests(inventory), nil, 2)
+	lanes, err := planFullSuiteLanes(discovered, fullSuiteSerialTests(inventory), nil, nil, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -376,6 +376,7 @@ func TestFullSuiteRuntime200ReportsCompleteAccounting(t *testing.T) {
 	classified, err := planFullSuiteLanes(
 		[]string{"TestClassicContractPhase200CausalExecution", "TestPlanningGapEdgeAccounting200", "TestLight"},
 		nil,
+		fullSuiteMeasuredCosts(),
 		fullSuiteMeasuredCosts(),
 		2,
 	)

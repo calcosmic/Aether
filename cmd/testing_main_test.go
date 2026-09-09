@@ -148,16 +148,16 @@ func TestMain(m *testing.M) {
 const (
 	fullSuiteShardEnv        = "AETHER_CMD_FULL_SUITE_SHARD"
 	fullSuiteSerialLaneName  = "serial-shared-checkout"
-	fullSuiteLogicalShards   = 120
-	fullSuiteWorkers         = 24
-	fullSuiteHeavyWorkers    = 6
+	fullSuiteLogicalShards   = 8
+	fullSuiteWorkers         = 12
+	fullSuiteHeavyWorkers    = 8
 	fullSuiteHeavyLaneBudget = 3 * time.Minute
 	fullSuiteHeavyThreshold  = 8 * time.Second
-	fullSuiteChildParallel   = 8
-	fullSuiteChildProcs      = 2
-	fullSuiteChildTimeout    = 9 * time.Minute
-	fullSuiteCommandTimeout  = 9*time.Minute + 15*time.Second
-	fullSuiteOverallTimeout  = 10 * time.Minute
+	fullSuiteChildParallel   = 10
+	fullSuiteChildProcs      = 8
+	fullSuiteChildTimeout    = 9*time.Minute + 30*time.Second
+	fullSuiteCommandTimeout  = 9*time.Minute + 45*time.Second
+	fullSuiteOverallTimeout  = 10*time.Minute + 30*time.Second
 )
 
 type fullSuiteInvocation struct {
@@ -305,7 +305,7 @@ func shouldRunFullSuiteController(invocation fullSuiteInvocation) bool {
 	return invocation.Shuffle == "" || invocation.Shuffle == "off"
 }
 
-func planFullSuiteLanes(discovered []string, serialTests map[string]struct{}, costs map[string]time.Duration, parallelLaneCount int) ([]fullSuiteLane, error) {
+func planFullSuiteLanes(discovered []string, serialTests map[string]struct{}, heavyCosts, balanceCosts map[string]time.Duration, parallelLaneCount int) ([]fullSuiteLane, error) {
 	if parallelLaneCount < 1 {
 		return nil, fmt.Errorf("full-suite parallel lane count must be positive, got %d", parallelLaneCount)
 	}
@@ -328,16 +328,28 @@ func planFullSuiteLanes(discovered []string, serialTests map[string]struct{}, co
 	sort.Strings(ordered)
 
 	serialLane := fullSuiteLane{Name: fullSuiteSerialLaneName, Serial: true}
+	// Solo-measured costs classify heavy lanes; load-observed balancing
+	// weights (falling back to solo, then a small default) pack every lane
+	// so no straggler lane dominates the tail.
+	weightFor := func(testName string) time.Duration {
+		if weight := balanceCosts[testName]; weight > 0 {
+			return weight
+		}
+		if weight := heavyCosts[testName]; weight > 0 {
+			return weight
+		}
+		return 300 * time.Millisecond
+	}
 	heavyTests := make([]string, 0, len(ordered))
 	parallelTests := make([]string, 0, len(ordered))
 	for _, testName := range ordered {
-		cost := costs[testName]
+		cost := heavyCosts[testName]
 		if cost <= 0 {
 			cost = time.Second
 		}
 		if _, serial := serialTests[testName]; serial {
 			serialLane.Tests = append(serialLane.Tests, testName)
-			serialLane.EstimatedCost += cost
+			serialLane.EstimatedCost += weightFor(testName)
 			continue
 		}
 		if cost >= fullSuiteHeavyThreshold {
@@ -349,8 +361,8 @@ func planFullSuiteLanes(discovered []string, serialTests map[string]struct{}, co
 
 	byDescendingCost := func(tests []string) {
 		sort.SliceStable(tests, func(i, j int) bool {
-			leftCost := costs[tests[i]]
-			rightCost := costs[tests[j]]
+			leftCost := weightFor(tests[i])
+			rightCost := weightFor(tests[j])
 			if leftCost != rightCost {
 				return leftCost > rightCost
 			}
@@ -367,7 +379,7 @@ func planFullSuiteLanes(discovered []string, serialTests map[string]struct{}, co
 	// descending costs; a single test above budget gets its own lane.
 	var heavy []fullSuiteLane
 	for _, testName := range heavyTests {
-		cost := costs[testName]
+		cost := heavyCosts[testName]
 		placed := false
 		for index := range heavy {
 			if heavy[index].EstimatedCost+cost <= fullSuiteHeavyLaneBudget {
@@ -396,7 +408,7 @@ func planFullSuiteLanes(discovered []string, serialTests map[string]struct{}, co
 				lightest = index
 			}
 		}
-		cost := costs[testName]
+		cost := weightFor(testName)
 		if cost <= 0 {
 			cost = time.Second
 		}
@@ -476,7 +488,7 @@ func runFullSuiteController() int {
 		return 1
 	}
 	serialInventory := fullSuiteSerialInventory()
-	lanes, err := planFullSuiteLanes(discovered, fullSuiteSerialTests(serialInventory), fullSuiteMeasuredCosts(), fullSuiteLogicalShards)
+	lanes, err := planFullSuiteLanes(discovered, fullSuiteSerialTests(serialInventory), fullSuiteMeasuredCosts(), fullSuiteBalancingCosts(), fullSuiteLogicalShards)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "full-suite controller: %v\n", err)
 		return 1
