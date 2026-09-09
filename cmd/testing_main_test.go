@@ -30,6 +30,14 @@ import (
 // assignment leaks into subsequent tests. Belt-and-suspenders with per-test
 // cleanup via saveGlobals.
 func TestMain(m *testing.M) {
+	// The suite's outcome must not depend on which terminal launches it:
+	// platform detection otherwise sniffs the process tree, so the same
+	// test could pass under a Codex shell and fail under Claude Code. Pin
+	// the historical codex baseline; tests exercising claude/opencode
+	// rendering pin their own platform with t.Setenv, which overrides this.
+	if os.Getenv("AETHER_PLATFORM") == "" {
+		os.Setenv("AETHER_PLATFORM", "codex")
+	}
 	if !flag.Parsed() {
 		flag.Parse()
 	}
@@ -140,13 +148,13 @@ func TestMain(m *testing.M) {
 const (
 	fullSuiteShardEnv        = "AETHER_CMD_FULL_SUITE_SHARD"
 	fullSuiteSerialLaneName  = "serial-shared-checkout"
-	fullSuiteLogicalShards   = 256
-	fullSuiteWorkers         = 10
+	fullSuiteLogicalShards   = 48
+	fullSuiteWorkers         = 12
 	fullSuiteHeavyWorkers    = 6
 	fullSuiteHeavyLaneBudget = 3 * time.Minute
 	fullSuiteHeavyThreshold  = 8 * time.Second
-	fullSuiteChildParallel   = 2
-	fullSuiteChildProcs      = 2
+	fullSuiteChildParallel   = 8
+	fullSuiteChildProcs      = 4
 	fullSuiteChildTimeout    = 9 * time.Minute
 	fullSuiteCommandTimeout  = 9*time.Minute + 15*time.Second
 	fullSuiteOverallTimeout  = 10 * time.Minute
@@ -586,6 +594,7 @@ func fullSuiteSerialInventory() map[string]string {
 		"TestCurrentVocabulary199":                 "live tracked checkout inventory is read through git ls-files",
 		"TestNextActionNeverHardcoded":             "fixed checked-in allowlist has an explicit regeneration path",
 		"TestOrphanAllowlistOnlyShrinks":           "fixed checked-in allowlist has an explicit regeneration path",
+		"TestPackedNPMReleaseCandidateContract":    "real npm installs, a staged release server, and the shared npm cache are load-sensitive",
 		"TestPhase199GateReceipt":                  "live repository receipt validates git identity and protected fingerprints",
 		"TestWorktreeAllocateAgentPhase":           "source checkout worktree registration guards a legacy allocation path",
 		"TestWorktreeAllocateAuditLog":             "source checkout worktree registration guards a legacy allocation path",

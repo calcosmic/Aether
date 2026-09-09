@@ -229,6 +229,7 @@ func TestFullSuiteRuntime200SerializesSharedResources(t *testing.T) {
 		"TestCurrentVocabulary199":                 "live tracked checkout inventory",
 		"TestNextActionNeverHardcoded":             "fixed checked-in allowlist",
 		"TestOrphanAllowlistOnlyShrinks":           "fixed checked-in allowlist",
+		"TestPackedNPMReleaseCandidateContract":    "real npm installs",
 		"TestPhase199GateReceipt":                  "live repository receipt",
 		"TestWorktreeAllocateAgentPhase":           "source checkout worktree registration",
 		"TestWorktreeAllocateAuditLog":             "source checkout worktree registration",
