@@ -195,6 +195,89 @@ func forceJSONOutputModeForTest(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
 }
 
+func TestRepositoryTestBinding200(t *testing.T) {
+	originalRoot, hadRoot := os.LookupEnv("AETHER_ROOT")
+	originalDataDir, hadDataDir := os.LookupEnv("COLONY_DATA_DIR")
+	originalStore := store
+	originalTracer := tracer
+	defer func() {
+		if hadRoot {
+			_ = os.Setenv("AETHER_ROOT", originalRoot)
+		} else {
+			_ = os.Unsetenv("AETHER_ROOT")
+		}
+		if hadDataDir {
+			_ = os.Setenv("COLONY_DATA_DIR", originalDataDir)
+		} else {
+			_ = os.Unsetenv("COLONY_DATA_DIR")
+		}
+		store = originalStore
+		tracer = originalTracer
+		resetFlags(rootCmd)
+	}()
+
+	_ = os.Unsetenv("AETHER_ROOT")
+	_ = os.Unsetenv("COLONY_DATA_DIR")
+	store = nil
+	tracer = nil
+	resetFlags(rootCmd)
+
+	var repositoryRoot string
+	t.Run("binds one contained authority", func(t *testing.T) {
+		binding := bindCommandTestRepository(t)
+		repositoryRoot = binding.Root
+
+		if got := os.Getenv("AETHER_ROOT"); got != binding.Root {
+			t.Fatalf("AETHER_ROOT = %q, want %q", got, binding.Root)
+		}
+		if got := os.Getenv("COLONY_DATA_DIR"); got != binding.DataDir {
+			t.Fatalf("COLONY_DATA_DIR = %q, want %q", got, binding.DataDir)
+		}
+		if store != binding.Store {
+			t.Fatalf("package store = %p, want bound store %p", store, binding.Store)
+		}
+		if tracer == nil {
+			t.Fatal("package tracer was not bound with the repository store")
+		}
+		if got := filepath.Clean(binding.Store.BasePath()); got != filepath.Clean(binding.DataDir) {
+			t.Fatalf("store base path = %q, want %q", got, binding.DataDir)
+		}
+		rel, err := filepath.Rel(binding.Root, binding.DataDir)
+		if err != nil || rel != filepath.Join(".aether", "data") {
+			t.Fatalf("data root is not the repository-local .aether/data path: rel=%q err=%v", rel, err)
+		}
+
+		rootCmd.SetArgs([]string{"stale-command"})
+		rootCmd.SetOut(&strings.Builder{})
+		rootCmd.SetErr(&strings.Builder{})
+		if err := historyCmd.Flags().Set("limit", "999"); err != nil {
+			t.Fatalf("mutate Cobra flag: %v", err)
+		}
+	})
+
+	if _, configured := os.LookupEnv("AETHER_ROOT"); configured {
+		t.Fatal("AETHER_ROOT was initially absent but cleanup left it present")
+	}
+	if _, configured := os.LookupEnv("COLONY_DATA_DIR"); configured {
+		t.Fatal("COLONY_DATA_DIR was initially absent but cleanup left it present")
+	}
+	if store != nil || tracer != nil {
+		t.Fatalf("bootstrap globals survived cleanup: store=%p tracer=%p", store, tracer)
+	}
+	if got := rootCmd.OutOrStdout(); got != os.Stdout {
+		t.Fatalf("Cobra stdout was not reset: got %T", got)
+	}
+	if got := rootCmd.ErrOrStderr(); got != os.Stderr {
+		t.Fatalf("Cobra stderr was not reset: got %T", got)
+	}
+	if historyLimit != 20 {
+		t.Fatalf("Cobra flag state survived cleanup: history limit = %d, want 20", historyLimit)
+	}
+	if _, err := os.Stat(repositoryRoot); !os.IsNotExist(err) {
+		t.Fatalf("temporary repository still exists after cleanup: %v", err)
+	}
+}
+
 func isPermissionDeniedForTest(err error) bool {
 	if err == nil {
 		return false
