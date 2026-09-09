@@ -3,6 +3,9 @@ package cmd
 import (
 	"encoding/json"
 	"errors"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +15,81 @@ import (
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
+
+// TestBuildAttemptExternalFixturesUseCanonicalTransaction200 is the bounded
+// migration ratchet for Plan 36's remaining fixture families. The wider
+// repository ratchet is added only after these callers are gone; this test
+// first gives every migration a fail-first boundary of its own.
+func TestBuildAttemptExternalFixturesUseCanonicalTransaction200(t *testing.T) {
+	files := []string{
+		"build_attempt_external_test.go",
+		"coherent_job_retry_test.go",
+		"coherent_job_retry_plan_only_test.go",
+		"coherent_job_retry_command_test.go",
+		"pause_resume_199_test.go",
+	}
+	forbiddenCalls := map[string]bool{
+		"beginBuildAttempt":       true,
+		"beginBuildAttemptRecord": true,
+		"beginChildBuildAttempt":  true,
+	}
+	var violations []string
+	for _, name := range files {
+		set := token.NewFileSet()
+		parsed, err := parser.ParseFile(set, name, nil, 0)
+		if err != nil {
+			t.Fatalf("parse remaining build-start fixture %s: %v", name, err)
+		}
+		canonicalCalls := 0
+		ast.Inspect(parsed, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			identifier, ok := call.Fun.(*ast.Ident)
+			if !ok {
+				return true
+			}
+			if identifier.Name == "commitTestBuildStart" {
+				canonicalCalls++
+			}
+			if forbiddenCalls[identifier.Name] {
+				violations = append(violations, name+":"+set.Position(call.Pos()).String()+" calls legacy "+identifier.Name)
+			}
+			return true
+		})
+		if canonicalCalls == 0 {
+			violations = append(violations, name+" has no canonical commitTestBuildStart call")
+		}
+		for _, declaration := range parsed.Decls {
+			function, ok := declaration.(*ast.FuncDecl)
+			if !ok || function.Body == nil {
+				continue
+			}
+			hasAttemptRecord := false
+			hasLatestPointer := false
+			ast.Inspect(function.Body, func(node ast.Node) bool {
+				literal, ok := node.(*ast.CompositeLit)
+				if !ok {
+					return true
+				}
+				identifier, ok := literal.Type.(*ast.Ident)
+				if !ok {
+					return true
+				}
+				hasAttemptRecord = hasAttemptRecord || identifier.Name == "buildAttemptRecord"
+				hasLatestPointer = hasLatestPointer || identifier.Name == "latestBuildAttemptPointer"
+				return true
+			})
+			if hasAttemptRecord && hasLatestPointer {
+				violations = append(violations, name+":"+set.Position(function.Pos()).String()+" reconstructs attempt and latest-pointer writes")
+			}
+		}
+	}
+	if len(violations) > 0 {
+		t.Fatalf("remaining build-start fixtures bypass the canonical transaction:\n%s", strings.Join(violations, "\n"))
+	}
+}
 
 func TestBuildCompletionStageMakesWrapperResultResumableWithoutRedispatch(t *testing.T) {
 	root := setupExternalBuildAttemptTest(t)
