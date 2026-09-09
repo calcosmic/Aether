@@ -218,8 +218,41 @@ func TestPlanningAdversarial200(t *testing.T) {
 	})
 
 	t.Run("integrated public reads preserve protected repository inputs", func(t *testing.T) {
-		t.Fatal("RED: protected state, configuration, Phase 199 evidence, and .gsd fingerprints are not yet enforced")
+		repoRoot := findTestModuleRoot(t)
+		watched := []string{
+			filepath.Join(repoRoot, ".planning", "STATE.md"),
+			filepath.Join(repoRoot, ".planning", "config.json"),
+			filepath.Join(repoRoot, ".planning", "phases", "199-front-door-and-classic-contract", "199-UAT.md"),
+			filepath.Join(repoRoot, ".planning", "phases", "199-front-door-and-classic-contract", "199-PATTERNS.md"),
+			filepath.Join(repoRoot, ".gsd"),
+		}
+		before := fingerprintLifecycleFactSurfaces(t, repoRoot, watched)
+		beforeConfig := planningAdversarialProtectedConfig200(t, watched[1])
+
+		planningPublicPaths200RunProof(t, repoRoot, `^TestPlanningPublicPaths200$`)
+
+		after := fingerprintLifecycleFactSurfaces(t, repoRoot, watched)
+		afterConfig := planningAdversarialProtectedConfig200(t, watched[1])
+		if !reflect.DeepEqual(before, after) {
+			t.Fatalf("integrated public reads changed protected repository inputs\nbefore=%+v\nafter=%+v", before, after)
+		}
+		if !reflect.DeepEqual(beforeConfig, afterConfig) {
+			t.Fatalf("integrated public reads changed protected config values\nbefore=%+v\nafter=%+v", beforeConfig, afterConfig)
+		}
 	})
+}
+
+func planningAdversarialProtectedConfig200(t *testing.T, path string) map[string]interface{} {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read protected config: %v", err)
+	}
+	var values map[string]interface{}
+	if err := json.Unmarshal(raw, &values); err != nil {
+		t.Fatalf("parse protected config: %v", err)
+	}
+	return values
 }
 
 // TestPlanningGapEdgeAccounting200 maps each spec-less truth to the named Go
