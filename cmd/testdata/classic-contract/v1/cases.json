@@ -6835,6 +6835,595 @@
           ]
         }
       }
+    },
+    {
+      "id": "phase200.mechanism.specification-canonical-recomputation",
+      "group": "V-200-REVISION",
+      "kind": "behavior",
+      "historical_anchors": [
+        "v5.4:.aether/commands/plan.yaml:65-96"
+      ],
+      "synthesis_decision": "SYN-200-07",
+      "cap_ids": [
+        "CAP-005"
+      ],
+      "source_citations": [
+        "requirement:PLAN-01",
+        "requirement:PLAN-05",
+        "cmd/specification.go",
+        "cmd/specification_integrity_200_test.go"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "spec",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "phase200.mechanism.specification-canonical-recomputation-proved",
+        "semantic_fields": {
+          "fixture": "canonical-state-over-forged-readable-projection",
+          "requirement_ids": [
+            "PLAN-01",
+            "PLAN-05"
+          ],
+          "pre_post_digest": "canonical-authority-unchanged",
+          "artifact_or_receipt": "projection-repair-receipt",
+          "structured_assertions": [
+            "canonical_body_recomputes_addresses",
+            "copied_hash_forgery_grants_no_authority",
+            "identical_recomputation=no-change",
+            "go_test_symbol_resolves"
+          ],
+          "mechanism_id": "SYN-200-07",
+          "public_command": "aether spec",
+          "positive_behavior": "Canonical specification IDs and hashes are recomputed from every typed body and approval field, and identical semantics preserve the exact no-change decision.",
+          "hostile_or_refusal_behavior": "A copied hash cannot conceal forged typed body, scope, lineage, delta, timestamp, stable identity, or approval receipt semantics.",
+          "recovery_command": "aether spec",
+          "go_test_symbol": "TestSpecificationIntegrity200"
+        },
+        "required_text_tokens": [
+          "no-change",
+          "Specification"
+        ],
+        "forbidden_text_tokens": [
+          "aether plan-finalize",
+          "round"
+        ],
+        "state_assertions": [
+          {
+            "path": ".planning/STATE.md",
+            "operator": "unchanged"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/planning/forged-specification-authority.json"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "phase200.mechanism.specification-canonical-recomputation-proved"
+        },
+        "fault_point": "canonical-specification-recomputation"
+      },
+      "phase200_proof": {
+        "class": "success",
+        "scenario": "platform-projection-parity",
+        "evidence_that_would_change": [
+          "Any typed specification or approval field that can change while its canonical address remains valid would invalidate this proof."
+        ],
+        "assertions": {
+          "state_hash_relation": "unchanged",
+          "artifact_set_relation": "unchanged",
+          "dispatch_delta": 0,
+          "receipt_chain_relation": "unchanged",
+          "required_result_fields": [
+            "positive_behavior",
+            "hostile_or_refusal_behavior",
+            "recovery_command",
+            "go_test_symbol"
+          ],
+          "prohibited_side_effects": [
+            "copied-hash-authority",
+            "forged-approval-authority",
+            "worker-dispatch"
+          ]
+        }
+      }
+    },
+    {
+      "id": "phase200.mechanism.candidate-semantic-binding",
+      "group": "V-200-ACCEPT",
+      "kind": "behavior",
+      "historical_anchors": [
+        "3a5b81c2:.claude/commands/ant/plan.md:418-535"
+      ],
+      "synthesis_decision": "SYN-200-06",
+      "cap_ids": [
+        "CAP-012"
+      ],
+      "source_citations": [
+        "requirement:PLAN-02",
+        "requirement:PLAN-05",
+        "cmd/plan_candidate.go",
+        "cmd/plan_candidate_binding_200_test.go"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "plan",
+        "args": [
+          "--candidate"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "phase200.mechanism.candidate-semantic-binding-proved",
+        "semantic_fields": {
+          "fixture": "content-addressed-candidate-nested-semantics",
+          "requirement_ids": [
+            "PLAN-02",
+            "PLAN-05"
+          ],
+          "pre_post_digest": "unchanged-on-refusal",
+          "artifact_or_receipt": "candidate-content-hash-and-exact-review",
+          "structured_assertions": [
+            "nested_semantic_delta_addressed",
+            "authority_impacts_addressed",
+            "copied_hash_forgery_refused",
+            "planning_iteration_pass_vocabulary"
+          ],
+          "mechanism_id": "SYN-200-06",
+          "public_command": "aether plan --candidate",
+          "positive_behavior": "An untouched content-addressed candidate preserves its complete planning iteration/pass timeline, semantic delta, authority impacts, and exact review token.",
+          "hostile_or_refusal_behavior": "Copied top-level hashes cannot conceal a nested delta, remaining-gap, assessment, stop, recommendation, or authority-impact mutation.",
+          "recovery_command": "aether plan --refresh",
+          "go_test_symbol": "TestPlanCandidateSemanticIntegrity200CopiedHashesRejectEveryReviewMutation"
+        },
+        "required_text_tokens": [
+          "planning iteration",
+          "aether plan --refresh"
+        ],
+        "forbidden_text_tokens": [
+          "planning round",
+          "aether plan-finalize"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "unchanged"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/planning/forged-candidate-acceptance.json"
+        ],
+        "replay": {
+          "mode": "reject-altered",
+          "expected_outcome": "phase200.mechanism.candidate-semantic-binding-proved"
+        },
+        "fault_point": "candidate-semantic-validation"
+      },
+      "phase200_proof": {
+        "class": "refusal",
+        "scenario": "divergent-replay-refusal",
+        "evidence_that_would_change": [
+          "Any nested candidate field that can change without invalidating canonical addressing would reopen this boundary."
+        ],
+        "assertions": {
+          "state_hash_relation": "unchanged",
+          "artifact_set_relation": "unchanged",
+          "dispatch_delta": 0,
+          "receipt_chain_relation": "unchanged",
+          "required_result_fields": [
+            "positive_behavior",
+            "hostile_or_refusal_behavior",
+            "recovery_command",
+            "go_test_symbol"
+          ],
+          "prohibited_side_effects": [
+            "candidate-acceptance",
+            "active-plan-replacement",
+            "worker-dispatch"
+          ]
+        }
+      }
+    },
+    {
+      "id": "phase200.mechanism.physical-containment",
+      "group": "V-200-E2E",
+      "kind": "behavior",
+      "historical_anchors": [
+        "3a5b81c2:.claude/commands/ant/plan.md:109-568"
+      ],
+      "synthesis_decision": "SYN-200-01",
+      "cap_ids": [
+        "CAP-012"
+      ],
+      "source_citations": [
+        "requirement:CEC-03",
+        "requirement:PLAN-01",
+        "cmd/root_repository_bootstrap.go",
+        "cmd/root_repository_bootstrap_200_test.go"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "plan",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "phase200.mechanism.physical-containment-proved",
+        "semantic_fields": {
+          "fixture": "repository-and-outside-tree-containment-matrix",
+          "requirement_ids": [
+            "CEC-03",
+            "PLAN-01"
+          ],
+          "pre_post_digest": "outside-tree-unchanged",
+          "artifact_or_receipt": "real-cobra-process-proof",
+          "structured_assertions": [
+            "allowed_repository_mutation",
+            "adjacent_prefix_refused",
+            "intermediate_link_refused",
+            "component_swap_refused"
+          ],
+          "mechanism_id": "SYN-200-01",
+          "public_command": "aether plan",
+          "positive_behavior": "A verified real repository admits the public planning command and confines all runtime data and lock writes beneath that repository.",
+          "hostile_or_refusal_behavior": "Adjacent-prefix roots, empty or dot roots, intermediate symbolic links, and post-validation component swaps fail before outside-tree mutation.",
+          "recovery_command": "aether plan",
+          "go_test_symbol": "TestRepositoryBootstrapContainment200"
+        },
+        "required_text_tokens": [
+          "repository containment",
+          "aether plan"
+        ],
+        "forbidden_text_tokens": [
+          "outside write",
+          "planning round"
+        ],
+        "state_assertions": [
+          {
+            "path": ".planning/STATE.md",
+            "operator": "unchanged"
+          }
+        ],
+        "forbidden_artifacts": [
+          "../outside/.aether/data/planning.json"
+        ],
+        "replay": {
+          "mode": "reject-altered",
+          "expected_outcome": "phase200.mechanism.physical-containment-proved"
+        },
+        "fault_point": "repository-bootstrap-containment"
+      },
+      "phase200_proof": {
+        "class": "refusal",
+        "scenario": "wrapper-authority-refusal",
+        "evidence_that_would_change": [
+          "A public Cobra process writing through an escaped or swapped repository component would invalidate containment."
+        ],
+        "assertions": {
+          "state_hash_relation": "unchanged",
+          "artifact_set_relation": "unchanged",
+          "dispatch_delta": 0,
+          "receipt_chain_relation": "unchanged",
+          "required_result_fields": [
+            "positive_behavior",
+            "hostile_or_refusal_behavior",
+            "recovery_command",
+            "go_test_symbol"
+          ],
+          "prohibited_side_effects": [
+            "outside-tree-write",
+            "escaped-lock-write",
+            "worker-dispatch"
+          ]
+        }
+      }
+    },
+    {
+      "id": "phase200.mechanism.repository-mutation-session",
+      "group": "V-200-REPLAY",
+      "kind": "behavior",
+      "historical_anchors": [
+        "v5.4:.aether/commands/plan.yaml:288-555"
+      ],
+      "synthesis_decision": "SYN-200-01",
+      "cap_ids": [
+        "CAP-012"
+      ],
+      "source_citations": [
+        "requirement:PLAN-02",
+        "requirement:PLAN-04",
+        "cmd/planning_mutation_session.go",
+        "cmd/planning_mutation_session_200_test.go"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "plan",
+        "args": [
+          "--refresh"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "phase200.mechanism.repository-mutation-session-proved",
+        "semantic_fields": {
+          "fixture": "root-locked-baseline-and-stale-writer-matrix",
+          "requirement_ids": [
+            "PLAN-02",
+            "PLAN-04"
+          ],
+          "pre_post_digest": "serializable-or-zero-effect",
+          "artifact_or_receipt": "repository-mutation-session-receipt",
+          "structured_assertions": [
+            "one_root_lock",
+            "present_absent_delete_baselines",
+            "stale_writer_zero_effect",
+            "deterministic_process_barrier"
+          ],
+          "mechanism_id": "SYN-200-01",
+          "public_command": "aether plan",
+          "positive_behavior": "Concurrent planning writers serialize beneath one repository lock and each successful planning iteration observes the exact predecessor state.",
+          "hostile_or_refusal_behavior": "A stale present, absent, delete, or held-session baseline refuses before any partial artifact or receipt publication.",
+          "recovery_command": "aether plan --refresh",
+          "go_test_symbol": "TestPlanningMutationSession200"
+        },
+        "required_text_tokens": [
+          "planning iteration",
+          "aether plan --refresh"
+        ],
+        "forbidden_text_tokens": [
+          "timing sleep",
+          "planning round"
+        ],
+        "state_assertions": [
+          {
+            "path": ".planning/STATE.md",
+            "operator": "unchanged"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/planning/partial-session-receipt.json"
+        ],
+        "replay": {
+          "mode": "reject-altered",
+          "expected_outcome": "phase200.mechanism.repository-mutation-session-proved"
+        },
+        "fault_point": "repository-session-recheck"
+      },
+      "phase200_proof": {
+        "class": "success",
+        "scenario": "exact-replay",
+        "evidence_that_would_change": [
+          "A stale writer that publishes any target or two successful writers that observe the same predecessor would invalidate serialization."
+        ],
+        "assertions": {
+          "state_hash_relation": "unchanged",
+          "artifact_set_relation": "unchanged",
+          "dispatch_delta": 0,
+          "receipt_chain_relation": "unchanged",
+          "required_result_fields": [
+            "positive_behavior",
+            "hostile_or_refusal_behavior",
+            "recovery_command",
+            "go_test_symbol"
+          ],
+          "prohibited_side_effects": [
+            "lost-update",
+            "partial-publication",
+            "outside-tree-write"
+          ]
+        }
+      }
+    },
+    {
+      "id": "phase200.mechanism.atomic-build-start",
+      "group": "V-200-REPLAY",
+      "kind": "behavior",
+      "historical_anchors": [
+        "v5.4:.aether/commands/build.yaml"
+      ],
+      "synthesis_decision": "SYN-200-01",
+      "cap_ids": [
+        "CAP-012"
+      ],
+      "source_citations": [
+        "requirement:PLAN-06",
+        "cmd/build_start_transaction.go",
+        "cmd/build_start_transaction_200_test.go"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "build",
+        "args": [
+          "1"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "phase200.mechanism.atomic-build-start-proved",
+        "semantic_fields": {
+          "fixture": "accepted-authority-build-start-transaction",
+          "requirement_ids": [
+            "PLAN-06"
+          ],
+          "pre_post_digest": "one-atomic-commit-or-unchanged",
+          "artifact_or_receipt": "content-addressed-build-start-receipt",
+          "structured_assertions": [
+            "attempt_and_pointer_atomic",
+            "receipt_is_last_target",
+            "exact_replay_read_only",
+            "forged_replay_refused"
+          ],
+          "mechanism_id": "SYN-200-01",
+          "public_command": "aether build <phase>",
+          "positive_behavior": "An exact accepted plan starts one build transaction whose attempt, manifest, pointer, receipt, and dispatch authority commit as one unit.",
+          "hostile_or_refusal_behavior": "A stale authority, changed baseline, or semantically forged replay creates no attempt and authorizes no dispatch.",
+          "recovery_command": "aether build <phase>",
+          "go_test_symbol": "TestBuildStartTransaction200ExactReplayIsReadOnly"
+        },
+        "required_text_tokens": [
+          "build start",
+          "receipt"
+        ],
+        "forbidden_text_tokens": [
+          "dispatch before receipt",
+          "wrapper authority"
+        ],
+        "state_assertions": [
+          {
+            "path": ".planning/STATE.md",
+            "operator": "unchanged"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/build/phase-1/partial-start.json"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "phase200.mechanism.atomic-build-start-proved"
+        },
+        "fault_point": "build-start-transaction-commit"
+      },
+      "phase200_proof": {
+        "class": "success",
+        "scenario": "exact-replay",
+        "evidence_that_would_change": [
+          "Any dispatch before the durable receipt or any conflicting replay mutation would invalidate atomic build start."
+        ],
+        "assertions": {
+          "state_hash_relation": "unchanged",
+          "artifact_set_relation": "unchanged",
+          "dispatch_delta": 0,
+          "receipt_chain_relation": "unchanged",
+          "required_result_fields": [
+            "positive_behavior",
+            "hostile_or_refusal_behavior",
+            "recovery_command",
+            "go_test_symbol"
+          ],
+          "prohibited_side_effects": [
+            "partial-start",
+            "duplicate-dispatch",
+            "forged-receipt-reuse"
+          ]
+        }
+      }
+    },
+    {
+      "id": "phase200.mechanism.candidate-expiry-recovery",
+      "group": "V-200-ACCEPT",
+      "kind": "behavior",
+      "historical_anchors": [
+        "3a5b81c2:.claude/commands/ant/plan.md:418-535"
+      ],
+      "synthesis_decision": "SYN-200-06",
+      "cap_ids": [
+        "CAP-012"
+      ],
+      "source_citations": [
+        "requirement:PLAN-05",
+        "requirement:PLAN-06",
+        "cmd/plan_candidate.go",
+        "cmd/plan_candidate_expiry_200_test.go"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "plan",
+        "args": [
+          "--accept-candidate",
+          "<candidate-id>"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "phase200.mechanism.candidate-expiry-recovery-proved",
+        "semantic_fields": {
+          "fixture": "just-before-exact-after-expiry-boundary",
+          "requirement_ids": [
+            "PLAN-05",
+            "PLAN-06"
+          ],
+          "pre_post_digest": "active-plan-unchanged-on-expiry",
+          "artifact_or_receipt": "typed-candidate-standing-and-refusal",
+          "structured_assertions": [
+            "just_before_accepts",
+            "exact_deadline_expires",
+            "just_after_expires",
+            "refresh_only_recovery"
+          ],
+          "mechanism_id": "SYN-200-06",
+          "public_command": "aether plan --accept-candidate <candidate-id>",
+          "positive_behavior": "The exact current candidate accepts only before its immutable expiry while preserving one content-addressed acceptance authority.",
+          "hostile_or_refusal_behavior": "Acceptance at or after expiry and stale-before-expiry bindings refuse with typed standing facts and leave the active plan unchanged.",
+          "recovery_command": "aether plan --refresh",
+          "go_test_symbol": "TestPlanCandidateExpiry200AcceptanceBoundaryIsAtomic"
+        },
+        "required_text_tokens": [
+          "candidate_expired",
+          "aether plan --refresh"
+        ],
+        "forbidden_text_tokens": [
+          "acceptance token after expiry",
+          "aether plan-finalize"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "unchanged"
+          }
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/planning/late-acceptance-receipt.json"
+        ],
+        "replay": {
+          "mode": "reject-altered",
+          "expected_outcome": "phase200.mechanism.candidate-expiry-recovery-proved"
+        },
+        "fault_point": "candidate-expiry-acceptance-boundary"
+      },
+      "phase200_proof": {
+        "class": "refusal",
+        "scenario": "stale-candidate-refusal",
+        "evidence_that_would_change": [
+          "An acceptance at the exact deadline, a late acceptance receipt, or a changed active plan would invalidate this boundary."
+        ],
+        "assertions": {
+          "state_hash_relation": "unchanged",
+          "artifact_set_relation": "unchanged",
+          "dispatch_delta": 0,
+          "receipt_chain_relation": "unchanged",
+          "required_result_fields": [
+            "positive_behavior",
+            "hostile_or_refusal_behavior",
+            "recovery_command",
+            "go_test_symbol"
+          ],
+          "prohibited_side_effects": [
+            "late-acceptance-receipt",
+            "active-plan-replacement",
+            "acceptance-token-disclosure"
+          ]
+        }
+      }
     }
   ]
 }

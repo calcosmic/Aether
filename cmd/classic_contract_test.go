@@ -90,8 +90,8 @@ var (
 	classicContractPhase200MechanismProofs = []classicPhase200MechanismProofExpectation{
 		{
 			CaseID: "phase200.mechanism.specification-canonical-recomputation", MechanismID: "SYN-200-07",
-			PublicCommand: "aether spec --repair-projection", RecoveryCommand: "aether spec --repair-projection",
-			GoTestSymbol: "TestSpecCommandRepairProjectionWithoutChangingAuthority",
+			PublicCommand: "aether spec", RecoveryCommand: "aether spec",
+			GoTestSymbol: "TestSpecificationIntegrity200",
 		},
 		{
 			CaseID: "phase200.mechanism.candidate-semantic-binding", MechanismID: "SYN-200-06",
@@ -764,7 +764,7 @@ func executeClassicPhase200Scenario(t *testing.T, scenario string) classicPhase2
 				t.Fatalf("candidate timeline = %+v, want two ordered complete passes", review.Iterations)
 			}
 			accepted, err := acceptPlanCandidate(root, planCandidateTestAcceptanceRequest(candidate), planCandidateAcceptanceOptions{
-				AcceptedBy: "owner:classic-contract", AcceptedAt: time.Date(2026, time.September, 8, 1, 0, 0, 0, time.UTC),
+				AcceptedBy: "owner:classic-contract", AcceptedAt: candidate.CreatedAt.Add(time.Minute),
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -1489,7 +1489,11 @@ func validateClassicPhase200IntegratedMechanismProofs(caseByID map[string]classi
 			return fmt.Errorf("Phase 200 case %q must preserve the exact no-change decision", testCase.ID)
 		}
 		mechanism, ok := mechanismByID[expectation.MechanismID]
-		if !ok || !slices.Contains(mechanism.PositiveCaseIDs, testCase.ID) || !slices.Contains(mechanism.PublicCommands, expectation.PublicCommand) {
+		linkedCases := mechanism.PositiveCaseIDs
+		if testCase.Phase200Proof != nil && testCase.Phase200Proof.Class == "refusal" {
+			linkedCases = mechanism.NegativeCaseIDs
+		}
+		if !ok || !slices.Contains(linkedCases, testCase.ID) || !slices.Contains(mechanism.PublicCommands, expectation.PublicCommand) {
 			return fmt.Errorf("Phase 200 case %q is not causally linked to mechanism %q and public command %q", testCase.ID, expectation.MechanismID, expectation.PublicCommand)
 		}
 		resolves, err := classicPhase200GoTestSymbolResolves(testCase, expectation.GoTestSymbol)

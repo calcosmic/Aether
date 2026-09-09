@@ -264,7 +264,7 @@
       ],
       "public_commands": [
         "aether plan",
-        "aether plan-finalize"
+        "aether build <phase>"
       ],
       "source_citations": [
         ".planning/phases/200-iterative-planning/200-CLASSIC-SYNTHESIS.md#comparative-synthesis-matrix",
@@ -282,11 +282,14 @@
       "modern_invariant": "Only Go-issued, freshness-bound stage manifests and exact receipts may mutate planning authority.",
       "positive_case_ids": [
         "phase200.e2e.approved-two-pass-journey",
-        "phase200.replay.exact"
+        "phase200.replay.exact",
+        "phase200.mechanism.repository-mutation-session",
+        "phase200.mechanism.atomic-build-start"
       ],
       "negative_case_ids": [
         "phase200.e2e.draft-planning-refusal",
-        "phase200.replay.divergent-refusal"
+        "phase200.replay.divergent-refusal",
+        "phase200.mechanism.physical-containment"
       ]
     },
     {
@@ -298,7 +301,7 @@
       ],
       "public_commands": [
         "/ant-plan",
-        "aether plan-finalize"
+        "aether plan"
       ],
       "source_citations": [
         ".planning/phases/200-iterative-planning/200-CLASSIC-SYNTHESIS.md#authoritative-flow",
@@ -330,7 +333,7 @@
         "CAP-069"
       ],
       "public_commands": [
-        "aether plan-finalize"
+        "aether plan"
       ],
       "source_citations": [
         ".planning/phases/200-iterative-planning/200-CLASSIC-SYNTHESIS.md#core-data-contracts",
@@ -425,7 +428,9 @@
       ],
       "public_commands": [
         "/ant-plan",
-        "aether plan --candidate"
+        "aether plan --candidate",
+        "aether plan --refresh",
+        "aether plan --accept-candidate <candidate-id>"
       ],
       "source_citations": [
         ".planning/phases/200-iterative-planning/200-CLASSIC-SYNTHESIS.md#stop-failure-and-recovery-semantics",
@@ -447,7 +452,9 @@
       ],
       "negative_case_ids": [
         "phase200.stop.material-refusal",
-        "phase200.accept.stale-refusal"
+        "phase200.accept.stale-refusal",
+        "phase200.mechanism.candidate-semantic-binding",
+        "phase200.mechanism.candidate-expiry-recovery"
       ]
     },
     {
@@ -478,7 +485,8 @@
       "modern_invariant": "All nine typed owner-readable body categories live in an immutable lineage and only exact owner approval authorizes planning.",
       "positive_case_ids": [
         "phase200.e2e.approved-two-pass-journey",
-        "phase200.revision.scoped"
+        "phase200.revision.scoped",
+        "phase200.mechanism.specification-canonical-recomputation"
       ],
       "negative_case_ids": [
         "phase200.e2e.draft-planning-refusal",
@@ -635,7 +643,11 @@
         "/ant-plan",
         "aether discuss",
         "aether spec",
-        "aether plan"
+        "aether plan",
+        "aether plan --candidate",
+        "aether plan --refresh",
+        "aether plan --accept-candidate <candidate-id>",
+        "aether build <phase>"
       ],
       "source_citations": [
         ".planning/phases/200-iterative-planning/200-CLASSIC-SYNTHESIS.md#verification-contract",
@@ -665,7 +677,10 @@
         "phase200.accept.exact",
         "phase200.revision.scoped",
         "phase200.replay.exact",
-        "phase200.platform.semantic-parity"
+        "phase200.platform.semantic-parity",
+        "phase200.mechanism.specification-canonical-recomputation",
+        "phase200.mechanism.repository-mutation-session",
+        "phase200.mechanism.atomic-build-start"
       ],
       "negative_case_ids": [
         "phase200.e2e.draft-planning-refusal",
@@ -675,7 +690,10 @@
         "phase200.accept.stale-refusal",
         "phase200.revision.unscoped-refusal",
         "phase200.replay.divergent-refusal",
-        "phase200.platform.wrapper-authority-refusal"
+        "phase200.platform.wrapper-authority-refusal",
+        "phase200.mechanism.candidate-semantic-binding",
+        "phase200.mechanism.physical-containment",
+        "phase200.mechanism.candidate-expiry-recovery"
       ]
     }
   ]
