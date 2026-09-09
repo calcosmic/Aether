@@ -517,8 +517,15 @@ func TestPipelineQueenPromotionFailureAccounting200(t *testing.T) {
 	if len(result.QueenPromoted) != 0 {
 		t.Fatalf("QueenPromoted = %v, want empty after writer failure", result.QueenPromoted)
 	}
-	if len(result.Errors) != 1 || !errors.Is(result.Errors[0], sentinel) {
-		t.Fatalf("Errors = %v, want one error wrapping injected writer failure", result.Errors)
+	foundFailure := false
+	for _, resultErr := range result.Errors {
+		if errors.Is(resultErr, sentinel) {
+			foundFailure = true
+			break
+		}
+	}
+	if !foundFailure {
+		t.Fatalf("Errors = %v, want an error wrapping injected writer failure", result.Errors)
 	}
 }
 

@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"sync"
 
@@ -16,11 +17,17 @@ import (
 // pkg/memory and pkg/learn without creating an import cycle.
 type LearningValidator func(content string, trustScore float64)
 
+// QueenInstinctPromoter writes one typed instinct through a caller-owned
+// filesystem authority. The memory package decides what is eligible; the
+// caller decides which repository-local writer is authorized to persist it.
+type QueenInstinctPromoter func(ctx context.Context, instinct colony.InstinctEntry, colonyName string) error
+
 // PipelineConfig holds configuration for the wisdom pipeline.
 type PipelineConfig struct {
-	ColonyName        string
-	QueenPath         string // path to QUEEN.md relative to store
-	LearningValidator LearningValidator
+	ColonyName            string
+	QueenPath             string // path to QUEEN.md relative to store; compatibility default when no promoter is injected
+	LearningValidator     LearningValidator
+	QueenInstinctPromoter QueenInstinctPromoter
 }
 
 // Pipeline wires all wisdom services together via event bus subscriptions.
@@ -187,9 +194,17 @@ func (p *Pipeline) RunConsolidation(ctx context.Context) (*ConsolidationResult, 
 		if inst == nil {
 			continue
 		}
-		_, err := p.Queen.PromoteInstinct(ctx, p.config.QueenPath, *inst, p.config.ColonyName)
+		var err error
+		if p.config.QueenInstinctPromoter != nil {
+			err = p.config.QueenInstinctPromoter(ctx, *inst, p.config.ColonyName)
+		} else {
+			_, err = p.Queen.PromoteInstinct(ctx, p.config.QueenPath, *inst, p.config.ColonyName)
+		}
 		if err != nil {
 			log.Printf("pipeline: queen promote %s failed: %v", instID, err)
+			if p.config.QueenInstinctPromoter != nil {
+				result.Errors = append(result.Errors, fmt.Errorf("queen promote %s: %w", instID, err))
+			}
 			continue
 		}
 		result.QueenPromoted = append(result.QueenPromoted, instID)
