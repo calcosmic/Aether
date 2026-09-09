@@ -332,3 +332,36 @@ func fullSuiteRuntime200AssertChildEnvironment(t *testing.T) {
 	assertIsolatedProcessChildHub(t)
 	t.Logf("FULL-SUITE-PROBE-HUB=%s", os.Getenv(isolatedProcessHubEnv))
 }
+
+func TestFullSuiteRuntime200ReportsCompleteAccounting(t *testing.T) {
+	report := fullSuiteRunReport{
+		Discovered: 3,
+		Executed:   3,
+		Passed:     true,
+		Lanes: []fullSuiteLaneReport{
+			{Name: "parallel-01", Planned: 2, Executed: 2, Duration: time.Second, Successful: true, Output: "alpha output\n"},
+			{Name: "parallel-02", Planned: 1, Executed: 1, Duration: 3 * time.Second, Successful: true, Output: "beta output\n"},
+		},
+	}
+	var rendered strings.Builder
+	writeFullSuiteReport(&rendered, report)
+	output := rendered.String()
+	for _, want := range []string{
+		"FULL-SUITE PASS discovered=3 executed=3 lanes=2",
+		"FULL-SUITE lane=parallel-01 status=PASS planned=2 executed=2 duration=1s",
+		"FULL-SUITE lane=parallel-02 status=PASS planned=1 executed=1 duration=3s",
+		"FULL-SUITE slowest rank=1 lane=parallel-02 duration=3s",
+		"FULL-SUITE slowest rank=2 lane=parallel-01 duration=1s",
+		"alpha output",
+		"beta output",
+	} {
+		if !strings.Contains(output, want) {
+			t.Errorf("complete accounting omitted %q:\n%s", want, output)
+		}
+	}
+	firstOutput := strings.Index(output, "FULL-SUITE output-begin")
+	lastAccounting := strings.Index(output, "FULL-SUITE slowest rank=2")
+	if firstOutput < 0 || lastAccounting < 0 || firstOutput < lastAccounting {
+		t.Fatalf("child output obscured the complete accounting preamble:\n%s", output)
+	}
+}
