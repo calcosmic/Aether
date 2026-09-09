@@ -42,6 +42,13 @@ func newLegacyRecovery199Fixture(t *testing.T) legacyRecovery199Fixture {
 	// .aether/data location.
 	dataDir := filepath.Join(home, "colony-data")
 	hub := filepath.Join(home, ".aether-hub")
+	relativeDataDir, err := filepath.Rel(root, dataDir)
+	if err != nil || relativeDataDir == ".." || strings.HasPrefix(relativeDataDir, ".."+string(filepath.Separator)) {
+		t.Fatalf("legacy recovery data path must remain inside its repository: root=%q data=%q rel=%q err=%v", root, dataDir, relativeDataDir, err)
+	}
+	if filepath.Clean(dataDir) == filepath.Join(filepath.Clean(root), ".aether", "data") {
+		t.Fatalf("legacy recovery fixture lost non-default data-path coverage: %q", dataDir)
+	}
 	for _, dir := range []string{dataDir, hub} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatalf("mkdir %s: %v", dir, err)

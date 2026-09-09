@@ -27,6 +27,9 @@ func setupPatrolData(t *testing.T) string {
 		t.Fatalf("mkdir data: %v", err)
 	}
 	os.Setenv("COLONY_DATA_DIR", dataDir)
+	if got := os.Getenv("AETHER_ROOT"); filepath.Clean(got) != filepath.Clean(tmpDir) {
+		t.Fatalf("patrol fixture repository root = %q, want %q", got, tmpDir)
+	}
 	return dataDir
 }
 
