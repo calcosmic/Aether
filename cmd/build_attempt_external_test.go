@@ -144,6 +144,80 @@ func TestBuildAttemptExternalAttemptEnumerationExcludesStartReceipts200(t *testi
 	}
 }
 
+func TestBuildAttemptPathContract200(t *testing.T) {
+	startedAt := time.Date(2026, time.September, 9, 11, 10, 0, 0, time.UTC)
+	goal := "Keep build-attempt paths inside one data root"
+	phase := colony.Phase{ID: 1, Name: "Canonical paths", Status: colony.PhaseReady}
+	state := colony.ColonyState{
+		Version: "3.0", Goal: &goal, State: colony.StateREADY,
+		Plan: colony.Plan{Phases: []colony.Phase{phase}},
+	}
+	base := buildAttemptDerivation{
+		State: state, Phase: phase, PhaseNumber: 1, StartedAt: startedAt,
+		AttemptID: deriveBuildAttemptID(startedAt, 4700), RunID: "run-path-contract-200",
+		ProcessID: 4700, WorkspaceSHA256: strings.Repeat("a", 64), MakeLatest: true,
+	}
+
+	tests := []struct {
+		name       string
+		claimsPath string
+		want       string
+		wantErr    bool
+	}{
+		{name: "optional empty path stays empty", claimsPath: "", want: ""},
+		{name: "relative path is displayed once", claimsPath: "last-build-claims.json", want: ".aether/data/last-build-claims.json"},
+		{name: "already displayed path is normalized once", claimsPath: ".aether/data/last-build-claims.json", want: ".aether/data/last-build-claims.json"},
+		{name: "duplicate display prefix is ambiguous", claimsPath: ".aether/data/.aether/data/last-build-claims.json", wantErr: true},
+		{name: "absolute path is refused", claimsPath: "/tmp/last-build-claims.json", wantErr: true},
+		{name: "relative traversal is refused", claimsPath: "../last-build-claims.json", wantErr: true},
+		{name: "display traversal is refused", claimsPath: ".aether/data/../last-build-claims.json", wantErr: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			input := base
+			input.ClaimsPath = test.claimsPath
+			attemptPath, record, pointer, err := deriveBuildAttempt(input)
+			if test.wantErr {
+				if err == nil {
+					t.Fatalf("deriveBuildAttempt(%q) succeeded with record %+v; want fail-closed path refusal", test.claimsPath, record)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("deriveBuildAttempt(%q): %v", test.claimsPath, err)
+			}
+			if record.ClaimsPath != test.want {
+				t.Fatalf("persisted claims path = %q, want %q", record.ClaimsPath, test.want)
+			}
+			if strings.HasPrefix(attemptPath, ".aether/data/") {
+				t.Fatalf("internal attempt path kept a public display prefix: %q", attemptPath)
+			}
+			wantAttempt := ".aether/data/" + attemptPath
+			if pointer == nil || pointer.Path != wantAttempt {
+				t.Fatalf("latest pointer path = %+v, want one public prefix %q", pointer, wantAttempt)
+			}
+
+			secondPath, secondRecord, secondPointer, secondErr := deriveBuildAttempt(input)
+			if secondErr != nil {
+				t.Fatalf("repeat derivation: %v", secondErr)
+			}
+			firstBytes, _ := json.Marshal(struct {
+				Path    string
+				Record  buildAttemptRecord
+				Pointer *latestBuildAttemptPointer
+			}{attemptPath, record, pointer})
+			secondBytes, _ := json.Marshal(struct {
+				Path    string
+				Record  buildAttemptRecord
+				Pointer *latestBuildAttemptPointer
+			}{secondPath, secondRecord, secondPointer})
+			if !bytes.Equal(firstBytes, secondBytes) {
+				t.Fatalf("same-attempt replay changed path fields:\nfirst:  %s\nsecond: %s", firstBytes, secondBytes)
+			}
+		})
+	}
+}
+
 // TestBuildStartLegacyHelpersRetired200 is the repository-wide compile-time
 // migration boundary. Pure derivation and post-start transitions remain
 // available, but no package may restore the old multi-write start adapters or
