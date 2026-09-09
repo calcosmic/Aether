@@ -133,7 +133,7 @@ None - no packages, credentials, migrations, or external services were added.
 ## Self-Check: PASSED
 
 - All six declared source/test files and this summary exist.
-- Commits `62c9d5ed`, `20a1ff29`, `9f78dde5`, and `2f11e37e` exist in RED/GREEN order.
+- Commits `62c9d5ed`, `20a1ff29`, `9f78dde5`, `2f11e37e`, and metadata commit `6737c48e` exist in RED/GREEN/closeout order.
 - Focused, repeated, race, compile-only, vet, diff, ownership, deletion, and protected-state checks pass.
 - Protected `.planning/config.json`, `.gsd/`, and Phase 199 PATTERNS dirt remains present and unstaged.
 
