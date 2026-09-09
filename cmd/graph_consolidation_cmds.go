@@ -30,7 +30,7 @@ func pipelineConfigForStore() learn.PipelineConfig {
 		ColonyName: colonyName,
 		QueenPath:  consolidationQueenStorePath,
 		QueenInstinctPromoter: func(ctx context.Context, instinct colony.InstinctEntry, colonyName string) error {
-			return promoteConsolidationQueenInstinct(ctx, dataRoot, instinct, colonyName)
+			return writeConsolidationQueenPromotion(ctx, dataRoot, instinct, colonyName)
 		},
 	}
 }

@@ -34,12 +34,12 @@ const (
 	consolidationQueenRepositoryPath = ".aether/QUEEN.md"
 )
 
-// promoteConsolidationQueenInstinct is the repository-authorized side of the
+// writeConsolidationQueenPromotion is the repository-authorized side of the
 // memory pipeline's typed Queen promotion boundary. Eligibility stays in
 // pkg/memory; cmd only turns the already-approved instinct into the existing
 // local Queen entry and commits that one repository-relative target through
 // the Plan 27-28 mutation session.
-func promoteConsolidationQueenInstinct(ctx context.Context, dataRoot string, instinct colony.InstinctEntry, colonyName string) error {
+func writeConsolidationQueenPromotion(ctx context.Context, dataRoot string, instinct colony.InstinctEntry, colonyName string) error {
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("promote local Queen instinct: %w", err)
 	}
