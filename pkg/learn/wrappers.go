@@ -67,9 +67,12 @@ func (s *PromoteService) Promote(ctx context.Context, obs colony.Observation, co
 }
 
 // PipelineConfig mirrors memory.PipelineConfig for cmd/ consumers.
+type QueenInstinctPromoter = memory.QueenInstinctPromoter
+
 type PipelineConfig struct {
-	ColonyName string
-	QueenPath  string
+	ColonyName            string
+	QueenPath             string
+	QueenInstinctPromoter QueenInstinctPromoter
 }
 
 // Pipeline wraps pkg/memory.Pipeline for cmd/ consumers.
@@ -80,8 +83,9 @@ type Pipeline struct {
 // NewPipeline creates a new pipeline with all services wired together.
 func NewPipeline(store *storage.Store, bus *events.Bus, config PipelineConfig) *Pipeline {
 	mc := memory.PipelineConfig{
-		ColonyName: config.ColonyName,
-		QueenPath:  config.QueenPath,
+		ColonyName:            config.ColonyName,
+		QueenPath:             config.QueenPath,
+		QueenInstinctPromoter: config.QueenInstinctPromoter,
 	}
 	return &Pipeline{inner: memory.NewPipeline(store, bus, mc)}
 }
