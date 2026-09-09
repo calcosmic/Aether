@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/storage"
 )
 
 func TestPlanningExpiryPresentation200(t *testing.T) {
@@ -219,6 +222,232 @@ func TestPlanningExpiryPresentation200(t *testing.T) {
 			t.Fatalf("visual refusal leaked acceptance/success output\nstdout:\n%s\nstderr:\n%s", result.stdout, result.stderr)
 		}
 	})
+}
+
+func TestLifecycleFactsPlanningCandidateStanding200(t *testing.T) {
+	root, candidate := planCandidateTestPending(t)
+	factStore := planningExpiryFactStore200(t, root)
+	currentAt := candidate.ExpiresAt.Add(-time.Nanosecond)
+	before := planCandidateTestSnapshot(t, root)
+
+	currentFacts, err := loadLifecycleFacts(root, factStore, currentAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertLifecycleCandidateStanding200(t, currentFacts, candidate, planCandidateStandingCurrent, "", true, planCandidateStateEffectUnchanged, "")
+	exactAcceptance := planCandidateAcceptanceCommand(planCandidateTestAcceptanceRequest(candidate))
+	if currentFacts.Planning.Value.PendingCandidateAcceptanceCommand != exactAcceptance {
+		t.Fatalf("current lifecycle acceptance = %q, want %q", currentFacts.Planning.Value.PendingCandidateAcceptanceCommand, exactAcceptance)
+	}
+	if after := planCandidateTestSnapshot(t, root); !reflect.DeepEqual(before, after) {
+		t.Fatal("current lifecycle fact load mutated the candidate repository")
+	}
+
+	deadlineFacts, err := loadLifecycleFacts(root, factStore, candidate.ExpiresAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertLifecycleCandidateStanding200(t, deadlineFacts, candidate, planCandidateStandingExpired, "candidate_expired", false, planCandidateStateEffectUnchanged, planCandidateRefreshCommand)
+	if deadlineFacts.Planning.Value.PendingCandidateStatus != colony.PlanCandidatePendingReview {
+		t.Fatalf("read-only deadline load changed pending status: %+v", deadlineFacts.Planning.Value)
+	}
+	if after := planCandidateTestSnapshot(t, root); !reflect.DeepEqual(before, after) {
+		t.Fatal("deadline lifecycle fact load mutated the candidate repository")
+	}
+
+	if _, acceptErr := acceptPlanCandidate(root, planCandidateTestAcceptanceRequest(candidate), planCandidateAcceptanceOptions{
+		AcceptedBy: "owner:lifecycle-facts-200", AcceptedAt: candidate.ExpiresAt,
+	}); acceptErr == nil {
+		t.Fatal("at-deadline setup unexpectedly accepted candidate")
+	}
+	afterExpiry := planCandidateTestSnapshot(t, root)
+	persistedFacts, err := loadLifecycleFacts(root, factStore, candidate.ExpiresAt.Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertLifecycleCandidateStanding200(t, persistedFacts, candidate, planCandidateStandingExpired, "candidate_expired", false, planCandidateStateEffectUnchanged, planCandidateRefreshCommand)
+	if persistedFacts.Planning.Value.PendingCandidateID != "" {
+		t.Fatalf("persisted expiry invented a pending candidate: %+v", persistedFacts.Planning.Value)
+	}
+	if after := planCandidateTestSnapshot(t, root); !reflect.DeepEqual(afterExpiry, after) {
+		t.Fatal("later expired lifecycle review performed another mutation")
+	}
+
+	staleRoot, staleCandidate := planCandidateTestPending(t)
+	staleStore := planningExpiryFactStore200(t, staleRoot)
+	staleState, err := loadSpecificationColonyState(staleRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if staleState.Specification == nil {
+		t.Fatal("stale lifecycle fixture has no specification")
+	}
+	currentRevision, ok := currentSpecificationRevision(*staleState.Specification)
+	if !ok {
+		t.Fatal("stale lifecycle fixture has no current specification revision")
+	}
+	for index := range staleState.Specification.Revisions {
+		if staleState.Specification.Revisions[index].ID == currentRevision.ID {
+			staleState.Specification.Revisions[index].ContentHash = strings.Repeat("0", 64)
+		}
+	}
+	staleBytes, err := json.Marshal(staleState)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(staleStore.BasePath(), "COLONY_STATE.json"), staleBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	staleFacts, err := loadLifecycleFacts(staleRoot, staleStore, staleCandidate.ExpiresAt.Add(-time.Nanosecond))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertLifecycleCandidateStanding200(t, staleFacts, staleCandidate, planCandidateStandingStale, "specification_changed", false, planCandidateStateEffectUnchanged, planCandidateRefreshCommand)
+
+	acceptedRoot, acceptedCandidate := planCandidateTestPending(t)
+	acceptedAt := acceptedCandidate.ExpiresAt.Add(-time.Hour)
+	acceptedResult, err := acceptPlanCandidate(acceptedRoot, planCandidateTestAcceptanceRequest(acceptedCandidate), planCandidateAcceptanceOptions{
+		AcceptedBy: "owner:lifecycle-facts-200", AcceptedAt: acceptedAt,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	acceptedStore := planningExpiryFactStore200(t, acceptedRoot)
+	acceptedBefore := planCandidateTestSnapshot(t, acceptedRoot)
+	acceptedFacts, err := loadLifecycleFacts(acceptedRoot, acceptedStore, acceptedCandidate.ExpiresAt.Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertLifecycleCandidateStanding200(t, acceptedFacts, acceptedResult.Candidate, planCandidateStandingAccepted, "", false, planCandidateStateEffectUnchanged, "")
+	if after := planCandidateTestSnapshot(t, acceptedRoot); !reflect.DeepEqual(acceptedBefore, after) {
+		t.Fatal("accepted lifecycle fact load mutated the candidate repository")
+	}
+}
+
+func TestPlanningExpiryNextAction200(t *testing.T) {
+	root, candidate := planCandidateTestPending(t)
+	factStore := planningExpiryFactStore200(t, root)
+	currentAt := candidate.ExpiresAt.Add(-time.Nanosecond)
+	facts, err := loadLifecycleFacts(root, factStore, currentAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	review, err := reviewPlanCandidateAt(root, currentAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantAcceptance := projectPlanningCandidate(review).Next
+	if wantAcceptance == "" || wantAcceptance != facts.Planning.Value.PendingCandidateAcceptanceCommand {
+		t.Fatalf("review and lifecycle facts disagree on acceptance: review=%q facts=%q", wantAcceptance, facts.Planning.Value.PendingCandidateAcceptanceCommand)
+	}
+
+	currentBefore := facts
+	current := resolveNextAction(nextActionInput{Facts: facts})
+	if !reflect.DeepEqual(currentBefore, facts) {
+		t.Fatal("current Next Up mutated lifecycle facts")
+	}
+	assertPlanningExpiryNextAction200(t, current, "aether plan --candidate", []string{wantAcceptance}, []string{"aether build", "aether run", planCandidateRefreshCommand})
+
+	staleFacts := facts
+	staleFacts.Planning.Value.PendingCandidateStanding = planCandidateStandingStale
+	staleFacts.Planning.Value.PendingCandidateWhyUnavailable = "specification_changed"
+	staleFacts.Planning.Value.PendingCandidateAcceptanceAvailable = false
+	staleFacts.Planning.Value.PendingCandidateAcceptanceCommand = ""
+	staleFacts.Planning.Value.PendingCandidateRecoveryCommand = planCandidateRefreshCommand
+	stale := resolveNextAction(nextActionInput{Facts: staleFacts})
+	assertPlanningExpiryNextAction200(t, stale, planCandidateRefreshCommand, nil, []string{"--accept-candidate", "aether build", "aether run"})
+
+	expiredFacts, err := loadLifecycleFacts(root, factStore, candidate.ExpiresAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expiredBefore := expiredFacts
+	expired := resolveNextAction(nextActionInput{Facts: expiredFacts})
+	if !reflect.DeepEqual(expiredBefore, expiredFacts) {
+		t.Fatal("expired Next Up mutated lifecycle facts")
+	}
+	assertPlanningExpiryNextAction200(t, expired, planCandidateRefreshCommand, nil, []string{"--accept-candidate", "aether build", "aether run"})
+
+	acceptedRoot, acceptedCandidate := planCandidateTestPending(t)
+	acceptedAt := acceptedCandidate.ExpiresAt.Add(-time.Nanosecond)
+	if _, err := acceptPlanCandidate(acceptedRoot, planCandidateTestAcceptanceRequest(acceptedCandidate), planCandidateAcceptanceOptions{
+		AcceptedBy: "owner:next-action-200", AcceptedAt: acceptedAt,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	acceptedFacts, err := loadLifecycleFacts(acceptedRoot, planningExpiryFactStore200(t, acceptedRoot), acceptedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	accepted := resolveNextAction(nextActionInput{Facts: acceptedFacts})
+	assertPlanningExpiryNextAction200(t, accepted, "", []string{"aether build 1", "aether run"}, []string{"--accept-candidate", planCandidateRefreshCommand})
+}
+
+func planningExpiryFactStore200(t *testing.T, root string) *storage.Store {
+	t.Helper()
+	factStore, err := storage.NewStore(filepath.Join(root, ".aether", "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return factStore
+}
+
+func assertLifecycleCandidateStanding200(t *testing.T, facts LifecycleFacts, candidate colony.PlanCandidate, standing planCandidateStanding, why string, acceptance bool, stateEffect planCandidateStateEffect, recovery string) {
+	t.Helper()
+	planning := facts.Planning.Value
+	if !facts.CapturedAt.Equal(facts.Timing.Value.CapturedAt) ||
+		planning.PendingCandidateStanding != standing || !planning.PendingCandidateExpiresAt.Equal(candidate.ExpiresAt.UTC()) ||
+		planning.PendingCandidateWhyUnavailable != why || planning.PendingCandidateAcceptanceAvailable != acceptance ||
+		planning.PendingCandidateStateEffect != stateEffect || planning.PendingCandidateActivePlanEffect != planCandidateActivePlanEffectUnchanged ||
+		planning.PendingCandidateRecoveryCommand != recovery {
+		t.Fatalf("lifecycle candidate standing = %+v at %s", planning, facts.CapturedAt)
+	}
+	if why != "" && len(planning.PendingCandidateEvidence) == 0 {
+		t.Fatalf("lifecycle candidate refusal omitted evidence: %+v", planning)
+	}
+	encoded, err := json.Marshal(planning)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"pending_candidate_standing", "pending_candidate_expires_at", "pending_candidate_state_effect", "pending_candidate_active_plan_effect", "pending_candidate_acceptance_available"} {
+		if !bytes.Contains(encoded, []byte(`"`+key+`"`)) {
+			t.Errorf("lifecycle JSON omitted %s: %s", key, encoded)
+		}
+	}
+}
+
+func assertPlanningExpiryNextAction200(t *testing.T, action nextAction, primary string, wanted, forbidden []string) {
+	t.Helper()
+	if action.Projection == nil {
+		t.Fatal("Next Up omitted lifecycle projection")
+	}
+	commands := []string{action.Command}
+	for _, choice := range action.Projection.NextAction.Choices {
+		commands = append(commands, choice.RuntimeCommand)
+	}
+	for _, alternative := range action.Alternatives {
+		commands = append(commands, alternative.Command)
+	}
+	if action.Command != primary {
+		t.Fatalf("Next Up primary = %q, want %q; all=%v", action.Command, primary, commands)
+	}
+	for _, want := range wanted {
+		if !containsString(commands, want) {
+			t.Errorf("Next Up commands %v omit %q", commands, want)
+		}
+		if _, ok := availableCommand(want); !ok {
+			t.Errorf("Next Up command does not resolve against live Cobra tree: %q", want)
+		}
+	}
+	encoded, err := json.Marshal(action)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, value := range forbidden {
+		if bytes.Contains(encoded, []byte(value)) {
+			t.Errorf("Next Up recursively exposed forbidden %q: %s", value, encoded)
+		}
+	}
 }
 
 func planningExpiryReview200(base planCandidateReview, candidate colony.PlanCandidate, assessment planCandidateStandingAssessment) planCandidateReview {
