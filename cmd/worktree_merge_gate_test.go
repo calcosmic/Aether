@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
-	"github.com/calcosmic/Aether/pkg/storage"
 )
 
 // ---------------------------------------------------------------------------
@@ -36,9 +35,9 @@ func TestWorktreeMergeBackUsesProjectTestCommandInNodeRepo(t *testing.T) {
 	stdout = &stdoutBuf
 	stderr = &stderrBuf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
+	binding := bindCommandTestRepository(t)
+	tmpDir := binding.Root
+	dataDir := binding.DataDir
 
 	runGit(t, tmpDir, "init")
 	runGit(t, tmpDir, "config", "user.email", "test@example.com")
@@ -82,11 +81,7 @@ func TestWorktreeMergeBackUsesProjectTestCommandInNodeRepo(t *testing.T) {
 	state := makeTestStateWithWorktrees(worktrees)
 	os.WriteFile(dataDir+"/COLONY_STATE.json", []byte(state), 0644)
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	s, _ := storage.NewStore(dataDir)
-	store = s
+	s := binding.Store
 
 	rootCmd.SetArgs([]string{"worktree-merge-back", "--branch", "phase-1/builder-node"})
 
@@ -125,9 +120,9 @@ func TestWorktreeMergeBackRefusesWhenTestCommandUnknown(t *testing.T) {
 	var stderrBuf bytes.Buffer
 	stderr = &stderrBuf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
+	binding := bindCommandTestRepository(t)
+	tmpDir := binding.Root
+	dataDir := binding.DataDir
 
 	runGit(t, tmpDir, "init")
 	runGit(t, tmpDir, "config", "user.email", "test@example.com")
@@ -162,11 +157,7 @@ func TestWorktreeMergeBackRefusesWhenTestCommandUnknown(t *testing.T) {
 	state := makeTestStateWithWorktrees(worktrees)
 	os.WriteFile(dataDir+"/COLONY_STATE.json", []byte(state), 0644)
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	s, _ := storage.NewStore(dataDir)
-	store = s
+	s := binding.Store
 
 	rootCmd.SetArgs([]string{"worktree-merge-back", "--branch", "phase-1/builder-unknown"})
 
@@ -213,9 +204,9 @@ func TestWorktreeMergeBackRefusalPreservesTheWorktree(t *testing.T) {
 	var stderrBuf bytes.Buffer
 	stderr = &stderrBuf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
+	binding := bindCommandTestRepository(t)
+	tmpDir := binding.Root
+	dataDir := binding.DataDir
 
 	runGit(t, tmpDir, "init")
 	runGit(t, tmpDir, "config", "user.email", "test@example.com")
@@ -251,12 +242,6 @@ func TestWorktreeMergeBackRefusalPreservesTheWorktree(t *testing.T) {
 	}
 	state := makeTestStateWithWorktrees(worktrees)
 	os.WriteFile(dataDir+"/COLONY_STATE.json", []byte(state), 0644)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	s, _ := storage.NewStore(dataDir)
-	store = s
 
 	rootCmd.SetArgs([]string{"worktree-merge-back", "--branch", branch})
 
@@ -301,9 +286,9 @@ func TestWorktreeMergeBackStillWorksInGoRepo(t *testing.T) {
 	stdout = &stdoutBuf
 	stderr = &stderrBuf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
+	binding := bindCommandTestRepository(t)
+	tmpDir := binding.Root
+	dataDir := binding.DataDir
 
 	runGit(t, tmpDir, "init")
 	runGit(t, tmpDir, "config", "user.email", "test@example.com")
@@ -344,11 +329,7 @@ func TestNewFile(t *testing.T) {}
 	state := makeTestStateWithWorktrees(worktrees)
 	os.WriteFile(dataDir+"/COLONY_STATE.json", []byte(state), 0644)
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	s, _ := storage.NewStore(dataDir)
-	store = s
+	s := binding.Store
 
 	rootCmd.SetArgs([]string{"worktree-merge-back", "--branch", "phase-1/builder-goregress"})
 

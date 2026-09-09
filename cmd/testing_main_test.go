@@ -212,8 +212,15 @@ type commandTestRepository struct {
 // state exactly.
 func bindCommandTestRepository(t *testing.T) commandTestRepository {
 	t.Helper()
+	return bindCommandTestRepositoryAt(t, t.TempDir())
+}
 
-	repositoryRoot := t.TempDir()
+// bindCommandTestRepositoryAt applies the command-test authority contract to
+// an existing temporary repository. Worktree fixtures need this form because
+// they create real Git state beneath the same root that owns .aether/data.
+func bindCommandTestRepositoryAt(t *testing.T, repositoryRoot string) commandTestRepository {
+	t.Helper()
+
 	dataDir := filepath.Join(repositoryRoot, ".aether", "data")
 	authority, err := storage.OpenRepositoryRoot(repositoryRoot, dataDir)
 	if err != nil {
@@ -244,6 +251,7 @@ func bindCommandTestRepository(t *testing.T) commandTestRepository {
 		rootCmd.SetOut(os.Stdout)
 		rootCmd.SetErr(os.Stderr)
 		resetFlags(rootCmd)
+		_ = authority.Close()
 	})
 
 	return commandTestRepository{

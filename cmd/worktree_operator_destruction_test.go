@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
-	"github.com/calcosmic/Aether/pkg/storage"
 )
 
 // This file proves 187-VERIFICATION.md's GAP-1, GAP-2 and GAP-3: three real,
@@ -60,9 +59,9 @@ func TestWorktreeMergeBackPreservesUncommittedWorkAfterMerge(t *testing.T) {
 	stdout = &stdoutBuf
 	stderr = &stderrBuf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
+	binding := bindCommandTestRepository(t)
+	tmpDir := binding.Root
+	dataDir := binding.DataDir
 
 	runGit(t, tmpDir, "init")
 	runGit(t, tmpDir, "config", "user.email", "test@example.com")
@@ -114,12 +113,6 @@ func TestNewFilePreserve(t *testing.T) {}
 	}
 	state := makeTestStateWithWorktrees(worktrees)
 	os.WriteFile(dataDir+"/COLONY_STATE.json", []byte(state), 0644)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	s, _ := storage.NewStore(dataDir)
-	store = s
 
 	rootCmd.SetArgs([]string{"worktree-merge-back", "--branch", branch})
 
@@ -200,9 +193,8 @@ func TestWorktreeCleanupRefusesToDestroyDirtyWorktree(t *testing.T) {
 	stdout = &stdoutBuf
 	stderr = &stderrBuf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
+	binding := bindCommandTestRepository(t)
+	tmpDir := binding.Root
 
 	runGit(t, tmpDir, "init")
 	runGit(t, tmpDir, "config", "user.email", "test@example.com")
@@ -221,12 +213,6 @@ func TestWorktreeCleanupRefusesToDestroyDirtyWorktree(t *testing.T) {
 	if err := os.WriteFile(wtPath+"/dirty-work.txt", []byte(dirtyContent), 0644); err != nil {
 		t.Fatalf("write dirty file: %v", err)
 	}
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	s, _ := storage.NewStore(dataDir)
-	store = s
 
 	rootCmd.SetArgs([]string{"worktree-cleanup", "--branch", branch})
 
@@ -272,9 +258,8 @@ func TestWorktreeCleanupRemovesCleanMergedWorktree(t *testing.T) {
 	stdout = &stdoutBuf
 	stderr = &stderrBuf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
+	binding := bindCommandTestRepository(t)
+	tmpDir := binding.Root
 
 	runGit(t, tmpDir, "init")
 	runGit(t, tmpDir, "config", "user.email", "test@example.com")
@@ -289,12 +274,6 @@ func TestWorktreeCleanupRemovesCleanMergedWorktree(t *testing.T) {
 	wtPath := tmpDir + "/" + wtRelPath
 	// No commits ahead of main, no dirty files: fully clean and merged.
 	runGit(t, tmpDir, "worktree", "add", "-b", branch, wtPath, "HEAD")
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	s, _ := storage.NewStore(dataDir)
-	store = s
 
 	rootCmd.SetArgs([]string{"worktree-cleanup", "--branch", branch})
 
@@ -345,9 +324,8 @@ func TestInitPreservesUnrecordedWorktreeWithUncommittedWork(t *testing.T) {
 	stdout = &stdoutBuf
 	stderr = &stderrBuf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
+	binding := bindCommandTestRepository(t)
+	tmpDir := binding.Root
 
 	runGit(t, tmpDir, "init")
 	runGit(t, tmpDir, "config", "user.email", "test@example.com")
@@ -382,13 +360,7 @@ func TestInitPreservesUnrecordedWorktreeWithUncommittedWork(t *testing.T) {
 		Worktrees:    []colony.WorktreeEntry{},
 	}
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	s, err := storage.NewStore(dataDir)
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
+	s := binding.Store
 	if err := s.SaveJSON("COLONY_STATE.json", priorState); err != nil {
 		t.Fatalf("save prior state: %v", err)
 	}
@@ -450,9 +422,8 @@ func TestInitStillWipesWorktreesDirectoryWhenTrulyEmpty(t *testing.T) {
 	var stdoutBuf bytes.Buffer
 	stdout = &stdoutBuf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
+	binding := bindCommandTestRepository(t)
+	tmpDir := binding.Root
 
 	runGit(t, tmpDir, "init")
 	runGit(t, tmpDir, "config", "user.email", "test@example.com")
@@ -476,13 +447,7 @@ func TestInitStillWipesWorktreesDirectoryWhenTrulyEmpty(t *testing.T) {
 		Worktrees:    []colony.WorktreeEntry{},
 	}
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	s, err := storage.NewStore(dataDir)
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
+	s := binding.Store
 	if err := s.SaveJSON("COLONY_STATE.json", priorState); err != nil {
 		t.Fatalf("save prior state: %v", err)
 	}
@@ -530,9 +495,8 @@ func TestRecoverApplyPreservesUnmergedOrphanBranch(t *testing.T) {
 	stdout = &stdoutBuf
 	stderr = &stderrBuf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
+	binding := bindCommandTestRepository(t)
+	tmpDir := binding.Root
 
 	runGit(t, tmpDir, "init")
 	runGit(t, tmpDir, "config", "user.email", "test@example.com")
@@ -584,13 +548,7 @@ func TestRecoverApplyPreservesUnmergedOrphanBranch(t *testing.T) {
 		},
 	}
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	s, err := storage.NewStore(dataDir)
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
+	s := binding.Store
 	if err := s.SaveJSON("COLONY_STATE.json", priorState); err != nil {
 		t.Fatalf("save prior state: %v", err)
 	}
@@ -645,9 +603,8 @@ func TestRecoverApplyDeletesTrulyMergedOrphanBranch(t *testing.T) {
 	stdout = &stdoutBuf
 	stderr = &stderrBuf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
+	binding := bindCommandTestRepository(t)
+	tmpDir := binding.Root
 
 	runGit(t, tmpDir, "init")
 	runGit(t, tmpDir, "config", "user.email", "test@example.com")
@@ -687,13 +644,7 @@ func TestRecoverApplyDeletesTrulyMergedOrphanBranch(t *testing.T) {
 		},
 	}
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	s, err := storage.NewStore(dataDir)
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
+	s := binding.Store
 	if err := s.SaveJSON("COLONY_STATE.json", priorState); err != nil {
 		t.Fatalf("save prior state: %v", err)
 	}
@@ -753,9 +704,8 @@ func TestAbandonPreservesUnrecordedWorktreeWithUncommittedWork(t *testing.T) {
 	stdout = &stdoutBuf
 	stderr = &stderrBuf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
+	binding := bindCommandTestRepository(t)
+	tmpDir := binding.Root
 
 	runGit(t, tmpDir, "init")
 	runGit(t, tmpDir, "config", "user.email", "test@example.com")
@@ -799,13 +749,7 @@ func TestAbandonPreservesUnrecordedWorktreeWithUncommittedWork(t *testing.T) {
 		},
 	}
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	s, err := storage.NewStore(dataDir)
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
+	s := binding.Store
 	if err := s.SaveJSON("COLONY_STATE.json", priorState); err != nil {
 		t.Fatalf("save prior state: %v", err)
 	}
@@ -852,9 +796,8 @@ func TestAbandonStillClearsWorktreesDirectoryWhenTrulyEmpty(t *testing.T) {
 	var stdoutBuf bytes.Buffer
 	stdout = &stdoutBuf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
+	binding := bindCommandTestRepository(t)
+	tmpDir := binding.Root
 
 	runGit(t, tmpDir, "init")
 	runGit(t, tmpDir, "config", "user.email", "test@example.com")
@@ -891,13 +834,7 @@ func TestAbandonStillClearsWorktreesDirectoryWhenTrulyEmpty(t *testing.T) {
 		},
 	}
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	s, err := storage.NewStore(dataDir)
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
+	s := binding.Store
 	if err := s.SaveJSON("COLONY_STATE.json", priorState); err != nil {
 		t.Fatalf("save prior state: %v", err)
 	}
@@ -929,9 +866,8 @@ func TestAbandonPreviewMentionsWorkerWorkspacesWithWork(t *testing.T) {
 	var stdoutBuf bytes.Buffer
 	stdout = &stdoutBuf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
+	binding := bindCommandTestRepository(t)
+	tmpDir := binding.Root
 
 	runGit(t, tmpDir, "init")
 	runGit(t, tmpDir, "config", "user.email", "test@example.com")
@@ -970,13 +906,7 @@ func TestAbandonPreviewMentionsWorkerWorkspacesWithWork(t *testing.T) {
 		},
 	}
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	s, err := storage.NewStore(dataDir)
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
+	s := binding.Store
 	if err := s.SaveJSON("COLONY_STATE.json", priorState); err != nil {
 		t.Fatalf("save prior state: %v", err)
 	}
