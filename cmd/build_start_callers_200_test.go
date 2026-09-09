@@ -75,7 +75,12 @@ func TestBuildStartCallers200(t *testing.T) {
 				if _, err := os.Stat(filepath.Join(root, ".aether", "data", filepath.FromSlash(receiptRel))); err != nil {
 					t.Fatalf("durable start receipt missing: %v", err)
 				}
-				records := listBuildAttemptsForPhase(1)
+				records := make([]buildAttemptRecord, 0)
+				for _, record := range listBuildAttemptsForPhase(1) {
+					if validBuildAttemptID(record.ID) {
+						records = append(records, record)
+					}
+				}
 				if len(records) != 1 {
 					t.Fatalf("attempt records = %d, want one", len(records))
 				}

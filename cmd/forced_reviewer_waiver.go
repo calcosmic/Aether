@@ -148,34 +148,11 @@ func closeForcedReviewerWaiverWindowForPhase(phaseID int, at time.Time) error {
 // earlier attempt of this exact phase and signal (D-03: "one signal, one
 // phase", not "one attempt") is left completely alone and keeps counting.
 //
-// Called from exactly one place: the top of the plan-only manifest step
-// (runCodexBuildPlanOnlyWithOptions, cmd/codex_build.go) that precedes the
-// interactive wrapper's check-in card render -- NOT from inside
-// beginBuildAttempt itself, because beginBuildAttempt has two OTHER callers
-// that must never reopen this window:
-//
-//  1. applyAutomaticCheckFixAttempt's single bounded automatic builder fix
-//     attempt (cmd/check_fix_attempt.go) runs entirely inside `aether
-//     continue`, AFTER that same continue call has already resolved its own
-//     forced-reviewer decision (runCodexContinueVerification dispatches the
-//     reviewer, THEN calls applyAutomaticCheckFixAttempt) -- and its worker
-//     dispatch never calls spawn-log, so nothing would ever re-close a
-//     window opened there. Reopening it there would leave phaseID's window
-//     open indefinitely (until the next real `aether build --plan-only`),
-//     letting anything able to invoke the `aether` binary during that
-//     stretch -- including the check-fix builder's own Bash tool -- forge a
-//     decline for a LATER continue pass with no check-in card ever having
-//     rendered for that state. That is the exact forgery CR-01's original
-//     fix (194-REVIEW.md iteration 1) closed; this reset must not reopen it
-//     by a different door.
-//  2. runCodexBuildWithOptions's non-plan-only, non-interactive dispatch
-//     path (cmd/codex_build.go, used by the direct/synthetic/compatibility
-//     build lanes -- CLAUDE.md's autopilot lane never shows the check-in
-//     card and never declines a reviewer) dispatches workers directly too,
-//     with the same no-spawn-log gap. Leaving its callers' window state
-//     untouched is the conservative default: whatever protection the window
-//     already had keeps applying, since no legitimate decline is ever
-//     needed on that lane anyway.
+// Production build-start callers no longer invoke this helper. Plan 200-34
+// moved reopen/close together with the attempt and manifest into
+// commitBuildStart, preventing a crash or stale-authority race between those
+// writes. The helper remains temporarily for older focused fixtures until the
+// legacy writer retirement plans remove that test surface.
 //
 // TestForcedReviewerDeclineWindowReopensOnRetriedBuild
 // (cmd/forced_reviewer_waiver_test.go) proves the retry scenario this fixes;

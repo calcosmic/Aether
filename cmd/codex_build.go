@@ -338,6 +338,15 @@ type codexBuildOptions struct {
 	// validates them before any attempt, checkpoint, worktree, or lifecycle
 	// mutation is allowed to begin.
 	JobProposals []coherentJobProposal
+	// BuildStartVariant is an internal route selector used by the Queen-led
+	// wrapper. The public plan-only path leaves it empty and receives the
+	// plan-only variant; Queen-led preparation sets the closed Queen variant so
+	// both paths share one preparation without creating and then rewriting a
+	// second attempt.
+	BuildStartVariant buildStartVariant
+	// BuildStartOptions is a test seam for transaction faults and post-receipt
+	// observation. Production callers leave it empty.
+	BuildStartOptions buildStartOptions
 }
 
 // directCodexBuildPreparation is the read-only result of validating and
@@ -498,6 +507,17 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	if store == nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("no store initialized")
 	}
+	startVariant := options.BuildStartVariant
+	if startVariant == "" {
+		startVariant = buildStartPlanOnly
+	}
+	dispatchMode := "plan-only"
+	if startVariant == buildStartQueenLed {
+		dispatchMode = "queen-led"
+	} else if startVariant != buildStartPlanOnly {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("unsupported host build-start variant %q", startVariant)
+	}
+	executionOwner := buildExecutionOwner(dispatchMode, true)
 
 	state, err := loadActiveColonyState()
 	if err != nil {
@@ -567,7 +587,8 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 		// no worker output, and the wrapper needs a fresh manifest anyway. Let
 		// re-entry supersede it automatically instead of demanding --force;
 		// blocking here made an aborted /ant-build jam every following one.
-		priorIsIdlePlanOnly := priorAttempt.Status == buildAttemptAwaiting && strings.TrimSpace(priorAttempt.DispatchMode) == "plan-only"
+		priorMode := strings.TrimSpace(priorAttempt.DispatchMode)
+		priorIsIdlePlanOnly := priorAttempt.Status == buildAttemptAwaiting && (priorMode == "plan-only" || priorMode == "queen-led")
 		if !options.Force && !priorIsIdlePlanOnly {
 			return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("phase %d already has active build attempt %s (%s); finalize its completion packet or rerun with --force to supersede it", phaseNum, priorAttempt.ID, priorAttempt.Status)
 		}
@@ -600,20 +621,15 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	}
 	attachBuildDispatchContext(root, phase, dispatches, generatedAt)
 	buildDirRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseNum)))
-	// Write every dispatch's composed brief to disk and blank the inline copy
-	// once the write succeeds (clearInlineBrief=true) -- the ONLY dispatch
+	// Derive every dispatch's composed brief and blank the inline copy. The
+	// files are persisted only after the canonical start receipt exists -- the ONLY dispatch
 	// path the interactive wrapper is allowed to call must never ship the
-	// same composed brief twice in one JSON response. A dispatch whose write
-	// fails keeps its inline Brief populated (see writeBuildWorkerBriefFiles).
-	// Clear the previous manifest's brief files first (190-190/WR-01) --
+	// same composed brief twice in one JSON response. The transaction clears
+	// the previous manifest's brief files first (190-190/WR-01) --
 	// this path writes {dispatch.Name}.md into a directory nothing else ever
 	// prunes, and dispatch names change whenever task wording, task selection
 	// or caste coalescing does.
-	cleanupStaleWorkerBriefs(phaseNum)
-	briefPaths, dispatches, err := writeBuildWorkerBriefFiles(root, phase, buildDirRel, dispatches, generatedAt, true)
-	if err != nil {
-		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
-	}
+	briefPaths, dispatches, preparedBriefs := prepareBuildWorkerBriefFiles(root, phase, buildDirRel, dispatches, generatedAt, true)
 	policy = enrichQueenExecutionPolicyWithSpawnBudget(policy, state, phase, "build", reviewDepth, dispatches, judgementReasonsForBudget)
 
 	parallelMode := effectiveParallelMode(state)
@@ -621,10 +637,8 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	executionPlan := buildExecutionPlans(dispatches, parallelMode)
 	dispatchContract := buildDispatchContractForDispatches(dispatches, parallelMode, options.WorkerTimeout)
 	providerDiagnostics := dispatchProviderDiagnostics(newCodexWorkerInvoker())
-	checkpointRel := filepath.ToSlash(filepath.Join("checkpoints", fmt.Sprintf("pre-build-phase-%d.json", phaseNum)))
 	manifestRel := filepath.ToSlash(filepath.Join(buildDirRel, "manifest.json"))
-	claimsRel := "last-build-claims.json"
-	manifest := buildCodexBuildManifest(root, state, phase, "", "", dispatches, generatedAt, "plan-only", selectedTaskIDs, briefPaths, true, reviewDepth)
+	manifest := buildCodexBuildManifest(root, state, phase, "", "", dispatches, generatedAt, dispatchMode, selectedTaskIDs, briefPaths, true, reviewDepth)
 	manifest.PlanAuthority = authority
 	manifest.Phase = phaseNum
 	manifest.JobDecisions = append([]coherentJobDecision{}, jobDecisions...)
@@ -672,11 +686,11 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 		"execution_plan":           executionPlan,
 		"execution_wave_count":     len(executionPlan),
 		"parallel_execution_waves": countParallelBuildExecutionPlans(executionPlan),
-		"dispatch_mode":            "plan-only",
+		"dispatch_mode":            dispatchMode,
 		"dispatch_contract":        dispatchContract,
 		"provider_diagnostics":     providerDiagnostics,
 		"host_platform":            string(codex.DetectActivePlatform()),
-		"execution_owner":          buildExecutionOwner("plan-only", true),
+		"execution_owner":          executionOwner,
 		"profile_contract":         profileContract,
 		"queen_recommendation":     queenRecommendation,
 		"queen_execution_policy":   policy,
@@ -695,43 +709,35 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 		result["dispatch_manifest"] = manifest
 	}
 	if manifest.OrchestratorGuidance == nil || !manifest.OrchestratorGuidance.Active {
-		// CR-01 residual (194-REVIEW.md iteration 3/4): reopen phaseNum's
-		// forced-reviewer decline window for this NEW attempt, before the
-		// wrapper renders the check-in card from the manifest this call
-		// produces. See clearPhaseDispatchWindow's doc comment
-		// (cmd/forced_reviewer_waiver.go) for why this call lives here and
-		// nowhere else.
-		clearPhaseDispatchWindow(phaseNum)
-		attemptRel, err := beginBuildAttempt(state, phaseNum, phase, generatedAt, selectedTaskIDs, checkpointRel, manifestRel, claimsRel, manifest.ExecutionOwner, dispatches)
+		request, err := newBuildStartRequest(root, startVariant, state, authority, phaseNum, selectedTaskIDs, executionOwner, dispatchMode, generatedAt, dispatches, buildStartEffects{
+			ManifestPath:   manifestRel,
+			Manifest:       &manifest,
+			MakeLatest:     true,
+			ReviewerWindow: buildStartReviewerReopen,
+			StalePaths:     buildStartStaleArtifactPaths(phaseNum, false),
+		})
 		if err != nil {
 			return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 		}
-		_, attempt, ok := loadLatestBuildAttempt(phaseNum)
-		if !ok || attemptRel == "" {
-			return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to reload prepared build attempt for phase %d", phaseNum)
-		}
-		manifest.AttemptID = attempt.ID
-		manifest.AttemptPath = displayDataPath(attemptRel)
-		if err := prepareBuildAttemptManifestBinding(attemptRel, &manifest); err != nil {
-			_ = transitionBuildAttempt(attemptRel, buildAttemptFailed, "failed to prepare plan-only execution binding", nil, nil, "plan-only", err)
+		receipt, err := commitBuildStart(root, request, options.BuildStartOptions)
+		if err != nil {
 			return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 		}
-		if err := store.SaveJSON(manifestRel, manifest); err != nil {
-			_ = transitionBuildAttempt(attemptRel, buildAttemptFailed, "failed to persist plan-only manifest", nil, nil, "plan-only", err)
-			return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to persist plan-only build manifest: %w", err)
-		}
-		if err := bindBuildAttemptManifest(attemptRel, manifest); err != nil {
-			_ = transitionBuildAttempt(attemptRel, buildAttemptFailed, "failed to bind plan-only manifest", nil, nil, "plan-only", err)
+		if err := persistBuildWorkerBriefFiles(preparedBriefs); err != nil {
 			return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+		}
+		if err := store.LoadJSON(manifestRel, &manifest); err != nil {
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to reload committed %s build manifest: %w", dispatchMode, err)
 		}
 		result["dispatch_manifest"] = manifest
-		result["attempt"] = displayDataPath(attemptRel)
+		result["attempt"] = displayDataPath(receipt.AttemptPath)
 	}
 	closeLifecycleRun(result, state, "build")
 	return result, state, phase, dispatches, nil
 }
 
 func runCodexBuildQueenLed(root string, phaseNum int, selectedTaskIDs []string, options codexBuildOptions) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
+	options.BuildStartVariant = buildStartQueenLed
 	result, state, phase, dispatches, err := runCodexBuildPlanOnlyWithOptions(root, phaseNum, selectedTaskIDs, options)
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
@@ -751,27 +757,6 @@ func runCodexBuildQueenLed(root string, phaseNum int, selectedTaskIDs []string, 
 	})
 	policy = enrichQueenExecutionPolicyWithSpawnBudget(policy, state, phase, "build", reviewDepth, dispatches)
 
-	if manifest, ok := result["dispatch_manifest"].(codexBuildManifest); ok {
-		manifest.DispatchMode = "queen-led"
-		manifest.ExecutionOwner = buildExecutionOwner("queen-led", true)
-		manifest.ProfileContract = profileContract
-		manifest.QueenRecommendation = queenRecommendation
-		manifest.QueenExecutionPolicy = policy
-		if strings.TrimSpace(manifest.AttemptPath) != "" {
-			attemptRel := strings.TrimPrefix(filepath.ToSlash(manifest.AttemptPath), ".aether/data/")
-			manifestRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseNum), "manifest.json"))
-			if err := prepareBuildAttemptManifestBinding(attemptRel, &manifest); err != nil {
-				return nil, colony.ColonyState{}, colony.Phase{}, nil, err
-			}
-			if err := store.SaveJSON(manifestRel, manifest); err != nil {
-				return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to persist queen-led build manifest: %w", err)
-			}
-			if err := bindBuildAttemptManifest(attemptRel, manifest); err != nil {
-				return nil, colony.ColonyState{}, colony.Phase{}, nil, err
-			}
-		}
-		result["dispatch_manifest"] = manifest
-	}
 	result["queen_led"] = true
 	result["dispatch_mode"] = "queen-led"
 	result["execution_owner"] = buildExecutionOwner("queen-led", true)
@@ -918,15 +903,35 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		plannedDispatchMode = "simulated"
 	}
 
-	cleanupStaleBuildAttemptArtifacts(phaseNum)
-
-	if err := store.SaveJSON(checkpointRel, state); err != nil {
-		return nil, fmt.Errorf("failed to checkpoint colony state: %w", err)
+	briefPaths, dispatches, preparedBriefs := prepareBuildWorkerBriefFiles(root, phase, buildDirRel, dispatches, startedAt, false)
+	for i := range dispatches {
+		if dispatches[i].BriefPath != "" {
+			dispatches[i].Outputs = []string{dispatches[i].BriefPath}
+		}
 	}
-	attemptRel, err := beginBuildAttempt(state, phaseNum, phase, startedAt, selectedTaskIDs, checkpointRel, manifestRel, claimsRel, buildExecutionOwner(plannedDispatchMode, false), dispatches)
+	dispatchManifest := buildCodexBuildManifest(root, state, phase, checkpointRel, claimsRel, dispatches, startedAt, plannedDispatchMode, selectedTaskIDs, briefPaths, false, reviewDepth)
+	dispatchManifest.CasteDecision = casteDecision
+	dispatchManifest.JobDecisions = append([]coherentJobDecision{}, jobDecisions...)
+	dispatchManifest.QueenExecutionPolicy = enrichQueenExecutionPolicyWithSpawnBudget(policy, state, phase, "build", reviewDepth, dispatches)
+	dispatchManifest.PlanAuthority = authority
+	executionOwner := buildExecutionOwner(plannedDispatchMode, false)
+	request, err := newBuildStartRequest(root, buildStartDirect, state, authority, phaseNum, selectedTaskIDs, executionOwner, plannedDispatchMode, startedAt, dispatches, buildStartEffects{
+		CheckpointPath: checkpointRel,
+		ManifestPath:   manifestRel,
+		Manifest:       &dispatchManifest,
+		PromoteState:   true,
+		MakeLatest:     true,
+		ReviewerWindow: buildStartReviewerClose,
+		StalePaths:     buildStartStaleArtifactPaths(phaseNum, true),
+	})
 	if err != nil {
 		return nil, err
 	}
+	receipt, err := commitBuildStart(root, request, options.BuildStartOptions)
+	if err != nil {
+		return nil, err
+	}
+	attemptRel := receipt.AttemptPath
 	attemptFinished := false
 	finishAttempt := func(status, summary string, transitionErr error) {
 		if attemptFinished {
@@ -942,19 +947,17 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		}
 	}()
 
-	updatedState := state
-	applyCodexBuildState(&updatedState, phaseNum, startedAt, selectedTaskIDs, reviewDepth)
-	updatedPhase := updatedState.Plan.Phases[phaseNum-1]
-	if err := store.SaveJSON("COLONY_STATE.json", updatedState); err != nil {
-		finishAttempt(buildAttemptFailed, "failed to project executing lifecycle state", err)
-		return nil, fmt.Errorf("failed to save colony state: %w", err)
+	updatedState, err := loadActiveColonyState()
+	if err != nil {
+		finishAttempt(buildAttemptFailed, "failed to reload committed executing lifecycle state", err)
+		return nil, fmt.Errorf("failed to reload committed colony state: %w", err)
 	}
+	updatedPhase := updatedState.Plan.Phases[phaseNum-1]
 	if progress != nil {
 		progress.Advance("Prepare")
 	}
 
-	briefPaths, dispatches, err := writeCodexBuildArtifacts(root, updatedState, updatedPhase, buildDirRel, checkpointRel, claimsRel, dispatches, startedAt, plannedDispatchMode, selectedTaskIDs, reviewDepth, policy, jobDecisions)
-	if err != nil {
+	if err := persistBuildWorkerBriefFiles(preparedBriefs); err != nil {
 		finishAttempt(buildAttemptFailed, "failed to prepare worker artifacts", err)
 		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
 		return nil, err
@@ -964,30 +967,10 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
 		return nil, err
 	}
-	var dispatchManifest codexBuildManifest
 	if err := store.LoadJSON(manifestRel, &dispatchManifest); err != nil {
 		finishAttempt(buildAttemptFailed, "failed to reload direct build manifest", err)
 		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
 		return nil, fmt.Errorf("failed to reload direct build manifest: %w", err)
-	}
-	dispatchManifest.CasteDecision = casteDecision
-	dispatchManifest.JobDecisions = append([]coherentJobDecision{}, jobDecisions...)
-	dispatchManifest.AttemptID = strings.TrimSpace(strings.TrimSuffix(filepath.Base(attemptRel), filepath.Ext(attemptRel)))
-	dispatchManifest.AttemptPath = displayDataPath(attemptRel)
-	if err := prepareBuildAttemptManifestBinding(attemptRel, &dispatchManifest); err != nil {
-		finishAttempt(buildAttemptFailed, "failed to prepare direct build execution binding", err)
-		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
-		return nil, err
-	}
-	if err := store.SaveJSON(manifestRel, dispatchManifest); err != nil {
-		finishAttempt(buildAttemptFailed, "failed to persist bound direct build manifest", err)
-		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
-		return nil, fmt.Errorf("failed to persist bound direct build manifest: %w", err)
-	}
-	if err := bindBuildAttemptManifest(attemptRel, dispatchManifest); err != nil {
-		finishAttempt(buildAttemptFailed, "failed to bind direct build manifest", err)
-		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
-		return nil, err
 	}
 	if err := transitionBuildAttempt(attemptRel, buildAttemptDispatching, "worker dispatch started", dispatches, nil, "", nil); err != nil {
 		finishAttempt(buildAttemptFailed, "failed to persist dispatch start", err)
@@ -2652,6 +2635,45 @@ func buildExecutionOwner(dispatchMode string, planOnly bool) string {
 	return ""
 }
 
+// newBuildStartRequest captures every identity input before entering the
+// canonical transaction. commitBuildStart reloads the same state, authority,
+// and workspace fingerprint under the repository session and refuses the
+// request if any of them changed in the meantime.
+func newBuildStartRequest(root string, variant buildStartVariant, state colony.ColonyState, authority planAuthorityDecision, phaseNum int, selectedTaskIDs []string, executionOwner, dispatchMode string, generatedAt time.Time, dispatches []codexBuildDispatch, effects buildStartEffects) (buildStartRequest, error) {
+	stateSHA, err := jsonSHA256(state)
+	if err != nil {
+		return buildStartRequest{}, fmt.Errorf("hash build-start state: %w", err)
+	}
+	workspaceSHA, err := codex.WorkspaceFingerprint(root)
+	if err != nil {
+		return buildStartRequest{}, fmt.Errorf("fingerprint build workspace: %w", err)
+	}
+	runID, err := codex.NewExecutionRunID()
+	if err != nil {
+		return buildStartRequest{}, fmt.Errorf("create build-start run id: %w", err)
+	}
+	generatedAt = generatedAt.UTC()
+	processID := os.Getpid()
+	return buildStartRequest{
+		SchemaVersion:   buildStartSchemaVersion,
+		Variant:         variant,
+		StateSHA256:     stateSHA,
+		PlanAuthority:   authority,
+		Phase:           phaseNum,
+		SelectedTasks:   uniqueSortedStrings(selectedTaskIDs),
+		ExecutionOwner:  strings.TrimSpace(executionOwner),
+		DispatchMode:    strings.TrimSpace(dispatchMode),
+		GeneratedAt:     generatedAt,
+		AttemptID:       deriveBuildAttemptID(generatedAt, processID),
+		RunID:           runID,
+		ProcessID:       processID,
+		HostPlatform:    buildHostPlatform(),
+		WorkspaceSHA256: workspaceSHA,
+		Dispatches:      append([]codexBuildDispatch(nil), dispatches...),
+		Effects:         effects,
+	}, nil
+}
+
 func buildWorkerDispatchOptIn(dispatchMode string) bool {
 	switch strings.ToLower(strings.TrimSpace(dispatchMode)) {
 	case "real", "simulated":
@@ -2780,8 +2802,17 @@ func codexBuildDispatchMaps(dispatches []codexBuildDispatch) []map[string]interf
 // empty, which is not what the code does.) The no-silent-drop guarantee is
 // still real and is what matters: the inline Brief is only ever cleared after
 // its file write has succeeded, so no path can lose a worker's prompt.
-func writeBuildWorkerBriefFiles(root string, phase colony.Phase, buildDirRel string, dispatches []codexBuildDispatch, startedAt time.Time, clearInlineBrief bool) ([]string, []codexBuildDispatch, error) {
+type preparedBuildWorkerBriefFile struct {
+	RelativePath string
+	Content      string
+}
+
+// prepareBuildWorkerBriefFiles derives brief paths and bytes without touching
+// the repository. Build-start callers use this before commitBuildStart so a
+// stale authority refusal cannot leave a new brief or erase an old one.
+func prepareBuildWorkerBriefFiles(root string, phase colony.Phase, buildDirRel string, dispatches []codexBuildDispatch, startedAt time.Time, clearInlineBrief bool) ([]string, []codexBuildDispatch, []preparedBuildWorkerBriefFile) {
 	briefPaths := make([]string, 0, len(dispatches))
+	prepared := make([]preparedBuildWorkerBriefFile, 0, len(dispatches))
 
 	for i := range dispatches {
 		briefRel := filepath.ToSlash(filepath.Join(buildDirRel, "worker-briefs", fmt.Sprintf("%s.md", dispatches[i].Name)))
@@ -2790,22 +2821,35 @@ func writeBuildWorkerBriefFiles(root string, phase colony.Phase, buildDirRel str
 			content = composeBuildManifestBrief(root, phase, dispatches[i], startedAt, true)
 			dispatches[i].Brief = content
 		}
-		if err := store.AtomicWrite(briefRel, []byte(content)); err != nil {
-			return nil, nil, fmt.Errorf("failed to write worker brief for %s: %w", dispatches[i].Name, err)
-		}
 		displayPath := displayDataPath(briefRel)
 		briefPaths = append(briefPaths, displayPath)
+		prepared = append(prepared, preparedBuildWorkerBriefFile{RelativePath: briefRel, Content: content})
 		dispatches[i].BriefPath = displayPath
 		if clearInlineBrief {
-			// The file on disk is now the single source of truth for this
-			// dispatch's brief -- nothing downstream (codexBuildDispatchMaps or
-			// the manifest's own Dispatches value copy) may ship the same bytes
-			// a second time under the inline "brief" key.
+			// The prepared file becomes the single source of truth once the
+			// durable start receipt exists and persistBuildWorkerBriefFiles runs.
 			dispatches[i].Brief = ""
 		}
 	}
 	sort.Strings(briefPaths)
 
+	return briefPaths, dispatches, prepared
+}
+
+func persistBuildWorkerBriefFiles(files []preparedBuildWorkerBriefFile) error {
+	for _, file := range files {
+		if err := store.AtomicWrite(file.RelativePath, []byte(file.Content)); err != nil {
+			return fmt.Errorf("failed to write worker brief %s: %w", file.RelativePath, err)
+		}
+	}
+	return nil
+}
+
+func writeBuildWorkerBriefFiles(root string, phase colony.Phase, buildDirRel string, dispatches []codexBuildDispatch, startedAt time.Time, clearInlineBrief bool) ([]string, []codexBuildDispatch, error) {
+	briefPaths, dispatches, prepared := prepareBuildWorkerBriefFiles(root, phase, buildDirRel, dispatches, startedAt, clearInlineBrief)
+	if err := persistBuildWorkerBriefFiles(prepared); err != nil {
+		return nil, nil, err
+	}
 	return briefPaths, dispatches, nil
 }
 
@@ -3587,6 +3631,41 @@ func cleanupStaleBuildAttemptArtifacts(phaseNum int) {
 	}
 	_ = os.RemoveAll(filepath.Join(buildDir, "worker-reports"))
 	cleanupStaleWorkerBriefs(phaseNum)
+}
+
+// buildStartStaleArtifactPaths returns the concrete stale files that the
+// canonical transaction must remove. Direct starts include old outcome data;
+// host-prepared starts include only obsolete worker briefs, preserving the
+// evidence contract of cleanupStaleWorkerBriefs.
+func buildStartStaleArtifactPaths(phaseNum int, includeOutcome bool) []string {
+	if store == nil || phaseNum < 1 {
+		return nil
+	}
+	baseRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseNum)))
+	paths := make([]string, 0)
+	if includeOutcome {
+		for _, name := range []string{"verification.json", "gates.json", "continue.json", "review.json"} {
+			paths = append(paths, baseRel+"/"+name)
+		}
+	}
+	directories := []string{"worker-briefs"}
+	if includeOutcome {
+		directories = append(directories, "worker-reports")
+	}
+	for _, directory := range directories {
+		root := filepath.Join(store.BasePath(), filepath.FromSlash(baseRel), directory)
+		_ = filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+			if err != nil || entry.IsDir() {
+				return nil
+			}
+			rel, relErr := filepath.Rel(store.BasePath(), path)
+			if relErr == nil {
+				paths = append(paths, filepath.ToSlash(rel))
+			}
+			return nil
+		})
+	}
+	return uniqueSortedStrings(paths)
 }
 
 // cleanupStaleWorkerBriefs removes a phase's worker-brief directory so the
