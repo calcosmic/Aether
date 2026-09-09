@@ -286,11 +286,30 @@ func TestLifecycleFactsPlanningCandidateStanding200(t *testing.T) {
 	if !ok {
 		t.Fatal("stale lifecycle fixture has no current specification revision")
 	}
-	for index := range staleState.Specification.Revisions {
-		if staleState.Specification.Revisions[index].ID == currentRevision.ID {
-			staleState.Specification.Revisions[index].ContentHash = strings.Repeat("0", 64)
-		}
+	successorAt := staleCandidate.CreatedAt.Add(time.Minute)
+	successorSpecification, successor, _, err := buildSpecificationSuccessor(*staleState.Specification, staleState.Plan, specificationRevisionRequest{
+		PredecessorRevisionID: currentRevision.ID, PredecessorContentHash: currentRevision.ContentHash,
+		Scope: currentRevision.Scope, CreatedAt: successorAt,
+		Changes: []specificationRevisionChange{{
+			Operation: specificationChangeModify, Section: specificationSectionRequirements,
+			TargetID: currentRevision.Requirements[0].ID,
+			Item:     specificationItemInput{Description: "Render the successor authority explicitly", EvidenceIDs: []string{"owner:lifecycle-stale-200"}},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
+	approvalToken := specificationApprovalToken(successorSpecification.ID, successor.ID, successor.ContentHash)
+	approval, err := buildSpecificationApprovalReceipt(successorSpecification.ID, successor, specificationApprovalRequest{
+		RevisionID: successor.ID, RevisionContentHash: successor.ContentHash, ApprovalToken: approvalToken,
+		ApprovedBy: "owner:lifecycle-stale-200", ApprovedAt: successorAt.Add(time.Minute),
+	}, specificationApprovalTokenHash(approvalToken))
+	if err != nil {
+		t.Fatal(err)
+	}
+	successorSpecification.Revisions[len(successorSpecification.Revisions)-1].Status = colony.SpecStatusApproved
+	successorSpecification.Revisions[len(successorSpecification.Revisions)-1].Approval = &approval
+	staleState.Specification = &successorSpecification
 	staleBytes, err := json.Marshal(staleState)
 	if err != nil {
 		t.Fatal(err)
@@ -332,6 +351,7 @@ func TestPlanningExpiryNextAction200(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	facts = planningExpiryNextActionFacts200(facts)
 	review, err := reviewPlanCandidateAt(root, currentAt)
 	if err != nil {
 		t.Fatal(err)
@@ -361,6 +381,7 @@ func TestPlanningExpiryNextAction200(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	expiredFacts = planningExpiryNextActionFacts200(expiredFacts)
 	expiredBefore := expiredFacts
 	expired := resolveNextAction(nextActionInput{Facts: expiredFacts})
 	if !reflect.DeepEqual(expiredBefore, expiredFacts) {
@@ -379,6 +400,7 @@ func TestPlanningExpiryNextAction200(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	acceptedFacts = planningExpiryNextActionFacts200(acceptedFacts)
 	accepted := resolveNextAction(nextActionInput{Facts: acceptedFacts})
 	assertPlanningExpiryNextAction200(t, accepted, "", []string{"aether build 1", "aether run"}, []string{"--accept-candidate", planCandidateRefreshCommand})
 }
@@ -392,6 +414,13 @@ func planningExpiryFactStore200(t *testing.T, root string) *storage.Store {
 	return factStore
 }
 
+func planningExpiryNextActionFacts200(facts LifecycleFacts) LifecycleFacts {
+	goal := "Render candidate recovery honestly"
+	facts.State.Value.Goal = &goal
+	facts.Identity.Value.Goal = goal
+	return facts
+}
+
 func assertLifecycleCandidateStanding200(t *testing.T, facts LifecycleFacts, candidate colony.PlanCandidate, standing planCandidateStanding, why string, acceptance bool, stateEffect planCandidateStateEffect, recovery string) {
 	t.Helper()
 	planning := facts.Planning.Value
@@ -400,7 +429,7 @@ func assertLifecycleCandidateStanding200(t *testing.T, facts LifecycleFacts, can
 		planning.PendingCandidateWhyUnavailable != why || planning.PendingCandidateAcceptanceAvailable != acceptance ||
 		planning.PendingCandidateStateEffect != stateEffect || planning.PendingCandidateActivePlanEffect != planCandidateActivePlanEffectUnchanged ||
 		planning.PendingCandidateRecoveryCommand != recovery {
-		t.Fatalf("lifecycle candidate standing = %+v at %s", planning, facts.CapturedAt)
+		t.Fatalf("lifecycle candidate standing = %+v at %s (state plan=%+v state source=%+v planning source=%+v)", planning, facts.CapturedAt, facts.State.Value.Plan, facts.State.Source, facts.Planning.Source)
 	}
 	if why != "" && len(planning.PendingCandidateEvidence) == 0 {
 		t.Fatalf("lifecycle candidate refusal omitted evidence: %+v", planning)

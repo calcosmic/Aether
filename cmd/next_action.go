@@ -547,7 +547,40 @@ func lifecycleAuthorityNextAction(facts LifecycleFacts, evidence []colony.Lifecy
 		), lifecycleInspectionChoices(), colony.OutcomeKindNoChange, true
 	}
 
-	if planning.PendingCandidateID != "" && (planning.PendingCandidateStatus == colony.PlanCandidatePendingReview || planning.Stage == string(planningStageCandidateReady)) {
+	switch planning.PendingCandidateStanding {
+	case planCandidateStandingStale, planCandidateStandingExpired:
+		recovery := strings.TrimSpace(planning.PendingCandidateRecoveryCommand)
+		if recovery == "" {
+			recovery = planCandidateRefreshCommand
+		}
+		return lifecycleAction(
+			"refresh_plan_candidate",
+			recovery,
+			fmt.Sprintf("The latest plan candidate is %s (%s). Repository state is %s; refresh from current evidence before accepting or building.", planning.PendingCandidateStanding, planning.PendingCandidateWhyUnavailable, planning.PendingCandidateStateEffect),
+			evidence,
+		), lifecycleInspectionChoices(), colony.OutcomeKindNoChange, true
+	case planCandidateStandingCurrent:
+		if planning.PendingCandidateID != "" {
+			alternatives := make([]LifecycleActionChoice, 0, 3)
+			if planning.PendingCandidateAcceptanceAvailable && strings.TrimSpace(planning.PendingCandidateAcceptanceCommand) != "" {
+				alternatives = append(alternatives, lifecycleChoice(
+					"accept_plan_candidate",
+					planning.PendingCandidateAcceptanceCommand,
+					"Accept this candidate only through the exact specification, base-plan, timeline, proposal, and token bindings captured with its current standing.",
+				))
+			}
+			alternatives = append(alternatives, lifecycleInspectionChoices()...)
+			return lifecycleActionFromCandidate(
+				"review_plan_candidate",
+				candidatePlanCandidate,
+				"Planning stopped with a current reviewable candidate. It remains inactive until you explicitly accept the exact captured bindings.",
+				evidence,
+			), alternatives, colony.OutcomeKindNoChange, true
+		}
+	}
+
+	// Compatibility path for legacy snapshots that predate captured standing.
+	if planning.PendingCandidateStanding == "" && planning.PendingCandidateID != "" && (planning.PendingCandidateStatus == colony.PlanCandidatePendingReview || planning.Stage == string(planningStageCandidateReady)) {
 		alternatives := make([]LifecycleActionChoice, 0, 3)
 		if lifecycleSafeCommandToken(planning.PendingCandidateID) {
 			alternatives = append(alternatives, lifecycleChoiceFromCandidate(
