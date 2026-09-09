@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
@@ -106,7 +107,7 @@ func validateAcceptedPlanAuthority(facts LifecycleFacts, bindings planAuthorityV
 	case colony.PlanAcceptanceLegacyUnbound:
 		return validateLegacyPlanAuthority(state, decision)
 	case colony.PlanAcceptanceExplicitOwner:
-		return validateCurrentPlanAuthority(state, facts.Planning.Value, bindings, decision)
+		return validateCurrentPlanAuthority(state, facts.Planning.Value, bindings, decision, facts.CapturedAt)
 	case "":
 		return refusePlanAuthority(decision, planAuthorityRefusalMissingPolicy, "aether plan", "the plan has no explicit acceptance or migration policy")
 	default:
@@ -132,7 +133,7 @@ func validateLegacyPlanAuthority(state colony.ColonyState, decision planAuthorit
 	return decision
 }
 
-func validateCurrentPlanAuthority(state colony.ColonyState, planning LifecyclePlanningFacts, bindings planAuthorityVerifiedBindings, decision planAuthorityDecision) planAuthorityDecision {
+func validateCurrentPlanAuthority(state colony.ColonyState, planning LifecyclePlanningFacts, bindings planAuthorityVerifiedBindings, decision planAuthorityDecision, observedAt time.Time) planAuthorityDecision {
 	if state.Specification == nil {
 		return refusePlanAuthority(decision, planAuthorityRefusalSpecificationNotApproved, "aether spec", "current plan authority requires an approved specification")
 	}
@@ -255,6 +256,33 @@ func validateCurrentPlanAuthority(state colony.ColonyState, planning LifecyclePl
 		receipt.ProposalHash != active.PlanHash || receipt.AcceptanceTokenHash != expectedTokenHash ||
 		receipt.ActivatedPlanRevisionID != active.ID || receipt.ActivatedPlanRevisionHash != active.PlanHash {
 		return refusePlanAuthority(decision, planAuthorityRefusalAcceptanceInvalid, "aether plan --candidate", "the acceptance receipt does not bind every exact authority field")
+	}
+	// Reuse the same injected-time standing policy used by review and
+	// acceptance. A timely accepted candidate remains accepted after its
+	// former deadline, but a forged receipt at or beyond that deadline never
+	// acquires build or run authority.
+	standing := assessPlanCandidateStanding(candidate, planCandidateCurrentAuthority{
+		SpecificationRevisionID:   currentSpec.ID,
+		SpecificationRevisionHash: currentSpec.ContentHash,
+		BasePlanRevisionID:        base.ID,
+		BasePlanRevisionHash:      base.PlanHash,
+		ProposalHash:              active.PlanHash,
+		Timeline:                  *bindings.Timeline,
+		StageBasePlanRevisionID:   base.ID,
+		StageBasePlanRevisionHash: base.PlanHash,
+		Stage: planningStageState{
+			Stage:                 planningStageAccepted,
+			RunID:                 candidate.Timeline.RunID,
+			Specification:         planningStageSpecificationBinding{RevisionID: currentSpec.ID, ContentHash: currentSpec.ContentHash},
+			BasePlanRevisionID:    base.ID,
+			BasePlanRevisionHash:  base.PlanHash,
+			AcceptanceReceiptID:   receipt.ID,
+			AcceptanceReceiptHash: receipt.ContentHash,
+		},
+	}, observedAt)
+	if standing.Standing != planCandidateStandingAccepted {
+		return refusePlanAuthority(decision, planAuthorityRefusalAcceptanceInvalid, standing.RecoveryCommand,
+			fmt.Sprintf("accepted candidate standing: %s (%s)", standing.Standing, standing.WhyUnavailable))
 	}
 	if _, err := validatePlanRevisionChain(state.Plan.Revisions, true); err != nil {
 		return refusePlanAuthority(decision, planAuthorityRefusalCandidateInvalid, "aether plan", fmt.Sprintf("plan revision chain: %v", err))

@@ -75,6 +75,8 @@ type planCandidateCurrentAuthority struct {
 	ProposalHash              string
 	Timeline                  colony.PlanningTimelineBinding
 	Stage                     planningStageState
+	StageBasePlanRevisionID   string
+	StageBasePlanRevisionHash string
 }
 
 type planCandidateStandingAssessment struct {
@@ -198,11 +200,18 @@ func assessPlanCandidateStanding(candidate colony.PlanCandidate, current planCan
 	if candidate.Status == colony.PlanCandidateAccepted {
 		wantStage = planningStageAccepted
 	}
+	stageBaseID, stageBaseHash := current.StageBasePlanRevisionID, current.StageBasePlanRevisionHash
+	if stageBaseID == "" {
+		stageBaseID = candidate.BasePlanRevisionID
+	}
+	if stageBaseHash == "" {
+		stageBaseHash = candidate.BasePlanRevisionHash
+	}
 	if current.Stage.Stage != wantStage || current.Stage.RunID != candidate.Timeline.RunID ||
 		current.Stage.Specification.RevisionID != candidate.SpecificationRevisionID ||
 		current.Stage.Specification.ContentHash != candidate.SpecificationRevisionHash ||
-		current.Stage.BasePlanRevisionID != candidate.BasePlanRevisionID ||
-		current.Stage.BasePlanRevisionHash != candidate.BasePlanRevisionHash {
+		current.Stage.BasePlanRevisionID != stageBaseID ||
+		current.Stage.BasePlanRevisionHash != stageBaseHash {
 		return refuse(planCandidateStandingStale, "planning_stage_changed",
 			fmt.Sprintf("candidate.expected_stage=%s", wantStage), fmt.Sprintf("current.stage=%s", current.Stage.Stage))
 	}
@@ -673,7 +682,10 @@ func planCandidateAuthorityFromRepository(root string, artifact planCandidateArt
 
 func planCandidateAuthorityFromState(state colony.ColonyState, artifact planCandidateArtifact, timeline colony.PlanningTimelineBinding) planCandidateCurrentAuthority {
 	candidate := artifact.Candidate
-	authority := planCandidateCurrentAuthority{Timeline: timeline, Stage: artifact.Stage}
+	authority := planCandidateCurrentAuthority{
+		Timeline: timeline, Stage: artifact.Stage,
+		StageBasePlanRevisionID: artifact.Header.BasePlanRevisionID, StageBasePlanRevisionHash: artifact.Header.BasePlanRevisionHash,
+	}
 	if state.Specification != nil {
 		if specification, ok := currentSpecificationRevision(*state.Specification); ok {
 			authority.SpecificationRevisionID = specification.ID
