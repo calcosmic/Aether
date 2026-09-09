@@ -148,16 +148,16 @@ func TestMain(m *testing.M) {
 const (
 	fullSuiteShardEnv        = "AETHER_CMD_FULL_SUITE_SHARD"
 	fullSuiteSerialLaneName  = "serial-shared-checkout"
-	fullSuiteLogicalShards   = 8
+	fullSuiteLogicalShards   = 48
 	fullSuiteWorkers         = 12
-	fullSuiteHeavyWorkers    = 8
+	fullSuiteHeavyWorkers    = 6
 	fullSuiteHeavyLaneBudget = 3 * time.Minute
 	fullSuiteHeavyThreshold  = 8 * time.Second
-	fullSuiteChildParallel   = 10
-	fullSuiteChildProcs      = 8
+	fullSuiteChildParallel   = 8
+	fullSuiteChildProcs      = 4
 	fullSuiteChildTimeout    = 9*time.Minute + 30*time.Second
 	fullSuiteCommandTimeout  = 9*time.Minute + 45*time.Second
-	fullSuiteOverallTimeout  = 10*time.Minute + 30*time.Second
+	fullSuiteOverallTimeout  = 25 * time.Minute
 )
 
 type fullSuiteInvocation struct {
@@ -604,6 +604,7 @@ func fullSuiteSerialInventory() map[string]string {
 	return map[string]string{
 		"TestColonyStateWriteAllowlistOnlyShrinks": "fixed checked-in allowlist has an explicit regeneration path",
 		"TestCurrentVocabulary199":                 "live tracked checkout inventory is read through git ls-files",
+		"TestHeartbeatScanDetectsStale":            "fixed staleness clock thresholds are timing-sensitive under parallel load",
 		"TestNextActionNeverHardcoded":             "fixed checked-in allowlist has an explicit regeneration path",
 		"TestOrphanAllowlistOnlyShrinks":           "fixed checked-in allowlist has an explicit regeneration path",
 		"TestPackedNPMReleaseCandidateContract":    "real npm installs, a staged release server, and the shared npm cache are load-sensitive",

@@ -227,6 +227,7 @@ func TestFullSuiteRuntime200SerializesSharedResources(t *testing.T) {
 	want := map[string]string{
 		"TestColonyStateWriteAllowlistOnlyShrinks": "fixed checked-in allowlist",
 		"TestCurrentVocabulary199":                 "live tracked checkout inventory",
+		"TestHeartbeatScanDetectsStale":            "timing-sensitive",
 		"TestNextActionNeverHardcoded":             "fixed checked-in allowlist",
 		"TestOrphanAllowlistOnlyShrinks":           "fixed checked-in allowlist",
 		"TestPackedNPMReleaseCandidateContract":    "real npm installs",
