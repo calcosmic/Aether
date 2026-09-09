@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -316,58 +317,108 @@ func blockerAdvisoryFixturePhase() colony.Phase {
 	}
 }
 
+type blockerAdvisoryJSONProjection struct {
+	Signals          []buildBlockerSignal `json:"signals"`
+	Ask              bool                 `json:"ask"`
+	BoundaryQuestion bool                 `json:"boundary_question"`
+	Question         string               `json:"question,omitempty"`
+}
+
+func runAcceptedBlockerAdvisoryBuild(t *testing.T, phase colony.Phase, mode colony.ColonyMode, outputMode string, args ...string) string {
+	t.Helper()
+	saveGlobals(t)
+	resetRootCmd(t)
+	goal := phase.Name
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		ColonyMode:   mode,
+		CurrentPhase: 1,
+		Plan:         colony.Plan{Phases: []colony.Phase{phase}},
+	})
+	withWorkingDir(t, accepted.Root)
+	t.Setenv("AETHER_OUTPUT_MODE", outputMode)
+
+	var buf bytes.Buffer
+	stdout = &buf
+	rootCmd.SetArgs(args)
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("%s returned error: %v", strings.Join(args, " "), err)
+	}
+	rootCmd.SetArgs([]string{})
+	return buf.String()
+}
+
+func blockerAdvisoryProjectionFromJSON(t *testing.T, output string) blockerAdvisoryJSONProjection {
+	t.Helper()
+	envelope := parseEnvelope(t, output)
+	result, ok := envelope["result"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("JSON result has unexpected type %T", envelope["result"])
+	}
+	rawProjection, ok := result["build_advisory"]
+	if !ok {
+		t.Fatalf("JSON result has no typed build_advisory projection: %#v", result)
+	}
+	raw, err := json.Marshal(rawProjection)
+	if err != nil {
+		t.Fatalf("marshal build_advisory: %v", err)
+	}
+	var projection blockerAdvisoryJSONProjection
+	if err := json.Unmarshal(raw, &projection); err != nil {
+		t.Fatalf("decode build_advisory: %v", err)
+	}
+	return projection
+}
+
+func assertOneBlockerSignal(t *testing.T, projection blockerAdvisoryJSONProjection, wantName string, wantAsk bool) {
+	t.Helper()
+	if len(projection.Signals) != 1 || projection.Signals[0].Name != wantName {
+		t.Fatalf("build_advisory signals = %+v, want exactly %q", projection.Signals, wantName)
+	}
+	if projection.Ask != wantAsk {
+		t.Fatalf("build_advisory ask = %v, want %v", projection.Ask, wantAsk)
+	}
+	if wantAsk && projection.Question != buildBlockerAdvisoryQuestion {
+		t.Fatalf("build_advisory question = %q, want %q", projection.Question, buildBlockerAdvisoryQuestion)
+	}
+	if !wantAsk && projection.Question != "" {
+		t.Fatalf("non-interactive build_advisory must carry no question, got %q", projection.Question)
+	}
+}
+
 // TestBothBuildLanesEmitTheHeadsUp asserts the rendered bytes on the
 // plan-only lane and on the direct build lane -- not an intermediate record
 // -- both carry the D-08 heads-up for the same live forced-reviewer signal.
 // A guarantee that holds only on one lane is worth nothing (CLAUDE.md).
 func TestBothBuildLanesEmitTheHeadsUp(t *testing.T) {
-	t.Run("plan-only lane", func(t *testing.T) {
-		saveGlobals(t)
-		resetRootCmd(t)
-		dataDir := setupBuildFlowTest(t)
-		setUpCheckinFixtureColony(t, dataDir, blockerAdvisoryFixturePhase())
-		t.Setenv("AETHER_OUTPUT_MODE", "visual")
-
-		var buf bytes.Buffer
-		stdout = &buf
-		rootCmd.SetArgs([]string{"build", "1", "--plan-only", "--light"})
-		if err := rootCmd.Execute(); err != nil {
-			t.Fatalf("build --plan-only returned error: %v", err)
-		}
-		rootCmd.SetArgs([]string{})
-
-		out := buf.String()
-		if !strings.Contains(out, "a forced reviewer is still waiting for the owner's check-in decision") {
-			t.Fatalf("plan-only lane missing the blocker heads-up:\n%s", out)
-		}
-		if !strings.Contains(out, buildBlockerAdvisoryQuestion) {
-			t.Fatalf("plan-only lane missing the carry-on-or-stop question:\n%s", out)
-		}
-	})
-
-	t.Run("direct build lane", func(t *testing.T) {
-		saveGlobals(t)
-		resetRootCmd(t)
-		dataDir := setupBuildFlowTest(t)
-		setUpCheckinFixtureColony(t, dataDir, blockerAdvisoryFixturePhase())
-		t.Setenv("AETHER_OUTPUT_MODE", "visual")
-
-		var buf bytes.Buffer
-		stdout = &buf
-		rootCmd.SetArgs([]string{"build", "1", "--synthetic", "--light"})
-		if err := rootCmd.Execute(); err != nil {
-			t.Fatalf("build --synthetic returned error: %v", err)
-		}
-		rootCmd.SetArgs([]string{})
-
-		out := buf.String()
-		if !strings.Contains(out, "a forced reviewer is still waiting for the owner's check-in decision") {
-			t.Fatalf("direct build lane missing the blocker heads-up:\n%s", out)
-		}
-		if !strings.Contains(out, buildBlockerAdvisoryQuestion) {
-			t.Fatalf("direct build lane missing the carry-on-or-stop question:\n%s", out)
-		}
-	})
+	const wantReason = "a forced reviewer is still waiting for the owner's check-in decision"
+	lanes := []struct {
+		name string
+		args []string
+	}{
+		{name: "plan-only lane", args: []string{"build", "1", "--plan-only", "--light"}},
+		{name: "direct build lane", args: []string{"build", "1", "--synthetic", "--light"}},
+	}
+	for _, lane := range lanes {
+		lane := lane
+		t.Run(lane.name+" visual", func(t *testing.T) {
+			out := runAcceptedBlockerAdvisoryBuild(t, blockerAdvisoryFixturePhase(), "", "visual", lane.args...)
+			if got := strings.Count(out, wantReason); got != 1 {
+				t.Fatalf("%s blocker reason count = %d, want exactly 1:\n%s", lane.name, got, out)
+			}
+			if got := strings.Count(out, buildBlockerAdvisoryQuestion); got != 1 {
+				t.Fatalf("%s blocker question count = %d, want exactly 1:\n%s", lane.name, got, out)
+			}
+		})
+		t.Run(lane.name+" JSON", func(t *testing.T) {
+			out := runAcceptedBlockerAdvisoryBuild(t, blockerAdvisoryFixturePhase(), "", "json", lane.args...)
+			projection := blockerAdvisoryProjectionFromJSON(t, out)
+			assertOneBlockerSignal(t, projection, "forced-reviewer", true)
+		})
+	}
 }
 
 // boundaryQuestionFixturePhase mirrors blockerAdvisoryFixturePhase's pattern
@@ -386,25 +437,6 @@ func boundaryQuestionFixturePhase() colony.Phase {
 	}
 }
 
-// setUpOrchestratorFixtureColony is setUpCheckinFixtureColony's sibling for
-// an orchestrator-mode colony -- the only mode
-// materializeOrchestratorBoundaryQuestions (and its read-only sibling
-// checkOrchestratorBoundaryQuestions) ever raises a boundary question for
-// (colony.ColonyState.EffectiveColonyMode).
-func setUpOrchestratorFixtureColony(t *testing.T, dataDir string, phase colony.Phase) {
-	t.Helper()
-	goal := phase.Name
-	createTestColonyState(t, dataDir, colony.ColonyState{
-		Version:      "3.0",
-		Goal:         &goal,
-		State:        colony.StateREADY,
-		ColonyDepth:  "full",
-		ColonyMode:   colony.ColonyModeOrchestrator,
-		CurrentPhase: 0,
-		Plan:         colony.Plan{Phases: []colony.Phase{phase}},
-	})
-}
-
 // TestBothBuildLanesAgreeOnBoundaryQuestionSignal is
 // TestBothBuildLanesEmitTheHeadsUp's sibling for the unanswered-question
 // signal specifically (WR-01, 198-REVIEW.md): before the fix, the direct
@@ -416,48 +448,33 @@ func setUpOrchestratorFixtureColony(t *testing.T, dataDir string, phase colony.P
 // render the same unanswered-question reason.
 func TestBothBuildLanesAgreeOnBoundaryQuestionSignal(t *testing.T) {
 	const wantReason = "an unanswered planning question is still waiting for the owner"
-
-	t.Run("plan-only lane", func(t *testing.T) {
-		saveGlobals(t)
-		resetRootCmd(t)
-		dataDir := setupBuildFlowTest(t)
-		setUpOrchestratorFixtureColony(t, dataDir, boundaryQuestionFixturePhase())
-		t.Setenv("AETHER_OUTPUT_MODE", "visual")
-
-		var buf bytes.Buffer
-		stdout = &buf
-		rootCmd.SetArgs([]string{"build", "1", "--plan-only", "--light"})
-		if err := rootCmd.Execute(); err != nil {
-			t.Fatalf("build --plan-only returned error: %v", err)
-		}
-		rootCmd.SetArgs([]string{})
-
-		out := buf.String()
-		if !strings.Contains(out, wantReason) {
-			t.Fatalf("plan-only lane missing the unanswered-question signal:\n%s", out)
-		}
-	})
-
-	t.Run("direct build lane", func(t *testing.T) {
-		saveGlobals(t)
-		resetRootCmd(t)
-		dataDir := setupBuildFlowTest(t)
-		setUpOrchestratorFixtureColony(t, dataDir, boundaryQuestionFixturePhase())
-		t.Setenv("AETHER_OUTPUT_MODE", "visual")
-
-		var buf bytes.Buffer
-		stdout = &buf
-		rootCmd.SetArgs([]string{"build", "1", "--synthetic", "--light"})
-		if err := rootCmd.Execute(); err != nil {
-			t.Fatalf("build --synthetic returned error: %v", err)
-		}
-		rootCmd.SetArgs([]string{})
-
-		out := buf.String()
-		if !strings.Contains(out, wantReason) {
-			t.Fatalf("direct build lane missing the unanswered-question signal -- WR-01 regression (198-REVIEW.md):\n%s", out)
-		}
-	})
+	lanes := []struct {
+		name string
+		args []string
+	}{
+		{name: "plan-only lane", args: []string{"build", "1", "--plan-only", "--light"}},
+		{name: "direct build lane", args: []string{"build", "1", "--synthetic", "--light"}},
+	}
+	for _, lane := range lanes {
+		lane := lane
+		t.Run(lane.name+" visual", func(t *testing.T) {
+			out := runAcceptedBlockerAdvisoryBuild(t, boundaryQuestionFixturePhase(), colony.ColonyModeOrchestrator, "visual", lane.args...)
+			if got := strings.Count(out, wantReason); got != 1 {
+				t.Fatalf("%s unanswered-question reason count = %d, want exactly 1:\n%s", lane.name, got, out)
+			}
+			if got := strings.Count(out, buildBlockerAdvisoryQuestion); got != 1 {
+				t.Fatalf("%s blocker question count = %d, want exactly 1:\n%s", lane.name, got, out)
+			}
+		})
+		t.Run(lane.name+" JSON", func(t *testing.T) {
+			out := runAcceptedBlockerAdvisoryBuild(t, boundaryQuestionFixturePhase(), colony.ColonyModeOrchestrator, "json", lane.args...)
+			projection := blockerAdvisoryProjectionFromJSON(t, out)
+			assertOneBlockerSignal(t, projection, "unanswered-question", true)
+			if !projection.BoundaryQuestion {
+				t.Fatal("build_advisory must identify the shared boundary-question signal")
+			}
+		})
+	}
 }
 
 // TestNonInteractiveRunsStillPrintTheHeadsUp proves D-09's non-interactive
@@ -465,25 +482,29 @@ func TestBothBuildLanesAgreeOnBoundaryQuestionSignal(t *testing.T) {
 // live signal, but never adds the question -- printing is unconditional,
 // only asking is gated.
 func TestNonInteractiveRunsStillPrintTheHeadsUp(t *testing.T) {
-	saveGlobals(t)
-	resetRootCmd(t)
-	dataDir := setupBuildFlowTest(t)
-	setUpCheckinFixtureColony(t, dataDir, blockerAdvisoryFixturePhase())
-	t.Setenv("AETHER_OUTPUT_MODE", "visual")
-
-	var buf bytes.Buffer
-	stdout = &buf
-	rootCmd.SetArgs([]string{"build", "1", "--plan-only", "--light", "--no-checkin"})
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("build --plan-only --no-checkin returned error: %v", err)
+	const wantReason = "a forced reviewer is still waiting for the owner's check-in decision"
+	lanes := []struct {
+		name string
+		args []string
+	}{
+		{name: "plan-only lane", args: []string{"build", "1", "--plan-only", "--light", "--no-checkin"}},
+		{name: "direct build lane", args: []string{"build", "1", "--synthetic", "--light", "--no-checkin"}},
 	}
-	rootCmd.SetArgs([]string{})
-
-	out := buf.String()
-	if !strings.Contains(out, "a forced reviewer is still waiting for the owner's check-in decision") {
-		t.Fatalf("--no-checkin must still print the blocker heads-up:\n%s", out)
-	}
-	if strings.Contains(out, buildBlockerAdvisoryQuestion) {
-		t.Fatalf("--no-checkin must never add the carry-on-or-stop question:\n%s", out)
+	for _, lane := range lanes {
+		lane := lane
+		t.Run(lane.name+" visual", func(t *testing.T) {
+			out := runAcceptedBlockerAdvisoryBuild(t, blockerAdvisoryFixturePhase(), "", "visual", lane.args...)
+			if got := strings.Count(out, wantReason); got != 1 {
+				t.Fatalf("%s non-interactive blocker reason count = %d, want exactly 1:\n%s", lane.name, got, out)
+			}
+			if strings.Contains(out, buildBlockerAdvisoryQuestion) {
+				t.Fatalf("%s non-interactive run must never add the question:\n%s", lane.name, out)
+			}
+		})
+		t.Run(lane.name+" JSON", func(t *testing.T) {
+			out := runAcceptedBlockerAdvisoryBuild(t, blockerAdvisoryFixturePhase(), "", "json", lane.args...)
+			projection := blockerAdvisoryProjectionFromJSON(t, out)
+			assertOneBlockerSignal(t, projection, "forced-reviewer", false)
+		})
 	}
 }
