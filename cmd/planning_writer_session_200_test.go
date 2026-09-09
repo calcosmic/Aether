@@ -56,6 +56,7 @@ func TestPlanningWriterCoverage200(t *testing.T) {
 		{"plan/staged-scout-finalizer", "runCodexScoutStageFinalize", "withPlanningMutationSession"},
 		{"plan/staged-route-finalizer", "runCodexRouteStageFinalize", "withPlanningMutationSession"},
 		{"plan/intermediate-iteration", "persistIntermediatePlanningIteration", "withPlanningMutationSession"},
+		{"plan/finalizer-failure-record", "recordPlanFinalizeFailure", "withPlanningMutationSession"},
 		{"specification/draft", "createSpecificationDraft", "withPlanningMutationSession"},
 		{"specification/revise", "reviseSpecification", "withPlanningMutationSession"},
 		{"specification/approve", "approveSpecification", "withPlanningMutationSession"},
@@ -66,20 +67,28 @@ func TestPlanningWriterCoverage200(t *testing.T) {
 	for _, item := range required {
 		item := item
 		t.Run(item.branch, func(t *testing.T) {
-			function, ok := functions[item.function]
+			_, ok := functions[item.function]
 			if !ok {
 				t.Fatalf("inventory function %s is missing", item.function)
 			}
-			if function.calls[item.call] == 0 {
+			if !planningWriterCallsTransitively200(functions, item.function, item.call, nil) {
 				t.Errorf("%s does not contain an AST call to %s", item.function, item.call)
 			}
 		})
 	}
 
 	for _, functionName := range []string{
-		"runCodexPlanWithOptions", "persistPlanningScoutStage", "persistIntermediatePlanningIteration",
-		"runCodexPlanFinalize", "runCodexScoutStageFinalize", "runCodexRouteStageFinalize",
-		"createSpecificationDraft", "reviseSpecification", "approveSpecification", "createPhaseInsertCandidate",
+		"runCodexPlanWithOptions", "runCodexPlanWithOptionsInSession",
+		"persistPlanningScoutStage", "persistPlanningScoutStageInSession",
+		"persistIntermediatePlanningIteration", "persistIntermediatePlanningIterationInSession",
+		"runCodexPlanFinalize", "runCodexPlanFinalizeInSession", "recordPlanFinalizeFailure",
+		"runCodexScoutStageFinalize", "runCodexScoutStageFinalizeInSession",
+		"runCodexRouteStageFinalize", "runCodexRouteStageFinalizeInSession",
+		"createSpecificationDraft", "createSpecificationDraftInSession",
+		"reviseSpecification", "reviseSpecificationInSession",
+		"approveSpecification", "approveSpecificationInSession",
+		"createPhaseInsertCandidate", "createPhaseInsertCandidateInSession",
+		"runPhaseInsertCommand", "runPhaseInsertCommandInSession",
 	} {
 		function := functions[functionName]
 		for _, forbidden := range []string{"SaveJSON", "UpdateJSONAtomically", "os.Remove", "os.RemoveAll"} {
@@ -92,6 +101,30 @@ func TestPlanningWriterCoverage200(t *testing.T) {
 	if !planningWriterPhaseInsertHandlerUsesSession200(t, functions) {
 		t.Error("phaseInsertCmd RunE does not delegate to a named session-bound handler")
 	}
+}
+
+func planningWriterCallsTransitively200(functions map[string]planningWriterASTFunction200, functionName, wanted string, visiting map[string]bool) bool {
+	if visiting == nil {
+		visiting = make(map[string]bool)
+	}
+	if visiting[functionName] {
+		return false
+	}
+	visiting[functionName] = true
+	defer delete(visiting, functionName)
+	function, ok := functions[functionName]
+	if !ok {
+		return false
+	}
+	if function.calls[wanted] > 0 {
+		return true
+	}
+	for called := range function.calls {
+		if _, owned := functions[called]; owned && planningWriterCallsTransitively200(functions, called, wanted, visiting) {
+			return true
+		}
+	}
+	return false
 }
 
 func planningWriterParseFunctions200(t *testing.T, names ...string) map[string]planningWriterASTFunction200 {
@@ -165,11 +198,17 @@ func planningWriterPhaseInsertHandlerUsesSession200(t *testing.T, functions map[
 					continue
 				}
 				key, ok := pair.Key.(*ast.Ident)
-				body, okBody := pair.Value.(*ast.FuncLit)
-				if !ok || !okBody || key.Name != "RunE" {
+				if !ok || key.Name != "RunE" {
 					continue
 				}
-				for called := range planningWriterCallInventory200(body.Body) {
+				calls := map[string]int{}
+				switch value := pair.Value.(type) {
+				case *ast.FuncLit:
+					calls = planningWriterCallInventory200(value.Body)
+				case *ast.Ident:
+					calls[value.Name]++
+				}
+				for called := range calls {
 					if function, exists := functions[called]; exists && function.calls["withPlanningMutationSession"] > 0 {
 						return true
 					}
@@ -299,14 +338,14 @@ func TestPlanningNumericBoundaries200(t *testing.T) {
 	t.Run("PLAN-01/boundary-values", func(t *testing.T) {
 		for _, field := range []string{"knowledge", "requirements", "risks", "dependencies", "effort"} {
 			for _, value := range []int{0, 100} {
-				var score planScore
-				if err := json.Unmarshal([]byte(fmt.Sprintf("%d", value)), &score); err != nil || int(score) != value {
+				score, err := decodePlanningWholeScore(field, json.RawMessage(fmt.Sprintf("%d", value)))
+				if err != nil || score != value {
 					t.Errorf("%s endpoint %d: score=%d err=%v", field, value, score, err)
 				}
 			}
 			for _, value := range []string{"-1", "101"} {
-				var score planScore
-				if err := json.Unmarshal([]byte(value), &score); err == nil {
+				score, err := decodePlanningWholeScore(field, json.RawMessage(value))
+				if err == nil {
 					t.Errorf("%s accepted out-of-range score %s as %d", field, value, score)
 				}
 			}
@@ -315,8 +354,8 @@ func TestPlanningNumericBoundaries200(t *testing.T) {
 
 	t.Run("PLAN-01/precision-overflow", func(t *testing.T) {
 		for _, value := range []string{"0.5", "99.9", "1e2", "1e309", "9223372036854775808", "-9223372036854775809"} {
-			var score planScore
-			if err := json.Unmarshal([]byte(value), &score); err == nil {
+			score, err := decodePlanningWholeScore("knowledge", json.RawMessage(value))
+			if err == nil {
 				t.Errorf("accepted non-whole or overflowing confidence %s as %d", value, score)
 			}
 		}

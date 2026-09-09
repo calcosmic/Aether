@@ -281,9 +281,10 @@ var planFinalizeCmd = &cobra.Command{
 			}
 			return renderedErrorExit(1)
 		}
-		result, err := runCodexPlanFinalize(skillWorkspaceRoot(), completion)
+		root := skillWorkspaceRoot()
+		result, err := runCodexPlanFinalize(root, completion)
 		if err != nil {
-			recordPlanFinalizeFailure(err)
+			recordPlanFinalizeFailure(root, err)
 			outputError(1, err.Error(), nil)
 			return renderedErrorExit(1)
 		}
@@ -391,78 +392,96 @@ func (c codexExternalPlanCompletion) activeManifest() *codexPlanManifest {
 	return c.Manifest
 }
 
-func recordPlanFinalizeFailure(cause error) {
-	if store == nil || cause == nil {
+func recordPlanFinalizeFailure(root string, cause error) {
+	if store == nil || cause == nil || strings.TrimSpace(root) == "" {
 		return
 	}
-	flags := loadPlanFinalizeFlagsFile()
-	description := "Planning finalization failed: " + compactPlanFinalizeError(cause.Error())
-	now := time.Now().UTC().Format(time.RFC3339)
-	for i := range flags.Decisions {
-		flag := &flags.Decisions[i]
-		if flag.Source == planFinalizeFailureSource && !flag.Resolved {
+	_ = withPlanningMutationSession(root, "plan-finalize-failure", func(session *planningMutationSession) error {
+		now := time.Now().UTC()
+		description := "Planning finalization failed: " + compactPlanFinalizeError(cause.Error())
+		flags, err := loadPlanFinalizeFlagsInSession(session)
+		if err != nil {
+			return err
+		}
+		updated := false
+		for index := range flags.Decisions {
+			flag := &flags.Decisions[index]
+			if flag.Source != planFinalizeFailureSource || flag.Resolved {
+				continue
+			}
 			flag.Type = "blocker"
 			flag.Description = description
 			if flag.CreatedAt == "" {
-				flag.CreatedAt = now
+				flag.CreatedAt = now.Format(time.RFC3339)
 			}
-			_ = store.SaveJSON("pending-decisions.json", flags)
-			updateSessionSummary(planFinalizeFailureSource, "aether flags --status active", description)
-			return
+			updated = true
+			break
 		}
-	}
-	flags.Decisions = append(flags.Decisions, colony.FlagEntry{
-		ID:          generateFlagID(),
-		Type:        "blocker",
-		Description: description,
-		Source:      planFinalizeFailureSource,
-		CreatedAt:   now,
-		Resolved:    false,
+		if !updated {
+			flags.Decisions = append(flags.Decisions, colony.FlagEntry{
+				ID: generateFlagID(), Type: "blocker", Description: description,
+				Source: planFinalizeFailureSource, CreatedAt: now.Format(time.RFC3339), Resolved: false,
+			})
+		}
+		content, err := json.MarshalIndent(flags, "", "  ")
+		if err != nil {
+			return err
+		}
+		targets := []planningSessionTarget{{
+			Root: lifecycleTransactionRootData, Path: "pending-decisions.json", Content: append(content, '\n'),
+		}}
+		if state, stateErr := loadSpecificationColonyStateInSession(session); stateErr == nil {
+			summaryTargets, summaryErr := planningSessionSummaryTargets(session, state, planFinalizeFailureSource, "aether flags --status active", description, now)
+			if summaryErr != nil {
+				return summaryErr
+			}
+			targets = append(targets, summaryTargets...)
+		}
+		return commitPlanningSessionTargets(session, "plan-finalize-failure", "plan-finalize-failure", targets)
 	})
-	_ = store.SaveJSON("pending-decisions.json", flags)
-	updateSessionSummary(planFinalizeFailureSource, "aether flags --status active", description)
 }
 
-func resolvePlanFinalizeFailureFlags() {
-	if store == nil {
-		return
+func resolvedPlanFinalizeFailureFlagTargetsInSession(session *planningMutationSession, now time.Time) ([]planningSessionTarget, error) {
+	flags, err := loadPlanFinalizeFlagsInSession(session)
+	if err != nil {
+		return nil, err
 	}
-	flags := loadPlanFinalizeFlagsFile()
 	changed := false
-	now := time.Now().UTC().Format(time.RFC3339)
-	for i := range flags.Decisions {
-		flag := &flags.Decisions[i]
+	for index := range flags.Decisions {
+		flag := &flags.Decisions[index]
 		if flag.Source != planFinalizeFailureSource || flag.Resolved {
 			continue
 		}
 		flag.Resolved = true
-		flag.ResolvedAt = now
+		flag.ResolvedAt = now.UTC().Format(time.RFC3339)
 		flag.Resolution = "plan-finalize succeeded"
 		changed = true
 	}
-	if changed {
-		_ = store.SaveJSON("pending-decisions.json", flags)
+	if !changed {
+		return nil, nil
 	}
+	content, err := json.MarshalIndent(flags, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("marshal resolved plan-finalize flags: %w", err)
+	}
+	return []planningSessionTarget{{
+		Root: lifecycleTransactionRootData, Path: "pending-decisions.json", Content: append(content, '\n'),
+	}}, nil
 }
 
-func loadPlanFinalizeFlagsFile() colony.FlagsFile {
+func loadPlanFinalizeFlagsInSession(session *planningMutationSession) (colony.FlagsFile, error) {
 	flags := colony.FlagsFile{Version: "1.0", Decisions: []colony.FlagEntry{}}
-	if store == nil {
-		return flags
-	}
-	if err := store.LoadJSON("pending-decisions.json", &flags); err == nil {
-		if flags.Decisions == nil {
-			flags.Decisions = []colony.FlagEntry{}
+	if exists, err := session.LoadJSON(lifecycleTransactionRootData, "pending-decisions.json", &flags); err != nil {
+		return flags, err
+	} else if !exists {
+		if _, err := session.LoadJSON(lifecycleTransactionRootData, "flags.json", &flags); err != nil {
+			return flags, err
 		}
-		return flags
 	}
-	if err := store.LoadJSON("flags.json", &flags); err == nil {
-		if flags.Decisions == nil {
-			flags.Decisions = []colony.FlagEntry{}
-		}
-		return flags
+	if flags.Decisions == nil {
+		flags.Decisions = []colony.FlagEntry{}
 	}
-	return flags
+	return flags, nil
 }
 
 func activePlanFinalizeFailureFlag(s *storage.Store) (colony.FlagEntry, bool) {
@@ -502,6 +521,17 @@ func (c codexExternalPlanCompletion) workerResults() []codexPlanningDispatch {
 }
 
 func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (map[string]interface{}, error) {
+	var result map[string]interface{}
+	err := withPlanningMutationSession(root, "codex-plan-finalize", func(session *planningMutationSession) error {
+		var finalizeErr error
+		result, finalizeErr = runCodexPlanFinalizeInSession(session, completion)
+		return finalizeErr
+	})
+	return result, err
+}
+
+func runCodexPlanFinalizeInSession(session *planningMutationSession, completion codexExternalPlanCompletion) (map[string]interface{}, error) {
+	root := session.RepositoryRoot()
 	if store == nil {
 		return nil, fmt.Errorf("no store initialized")
 	}
@@ -511,9 +541,9 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 	}
 	if manifest.StageManifest != nil || len(bytes.TrimSpace(completion.ScoutResult)) > 0 || len(bytes.TrimSpace(completion.RouteResult)) > 0 {
 		if manifest.StageManifest != nil && manifest.StageManifest.ExpectedCaste == planningStageCasteRouteSetter || len(bytes.TrimSpace(completion.RouteResult)) > 0 {
-			return runCodexRouteStageFinalize(root, *manifest, completion)
+			return runCodexRouteStageFinalizeInSession(session, *manifest, completion)
 		}
-		return runCodexScoutStageFinalize(root, *manifest, completion)
+		return runCodexScoutStageFinalizeInSession(session, *manifest, completion)
 	}
 	if (manifest.DispatchMode != "plan-only" && manifest.DispatchMode != "agent-delegate") || !manifest.RequiresFinalizer {
 		return nil, fmt.Errorf("plan_manifest must come from `aether plan --plan-only` or an agent-delegate planning response")
@@ -533,7 +563,7 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 		}
 	}
 
-	state, granularity, err := validateExternalPlanState(manifest)
+	state, granularity, err := validateExternalPlanStateInSession(session, manifest)
 	if err != nil {
 		return nil, err
 	}
@@ -595,7 +625,7 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 	planningLoop := evaluatePlanningLoopIteration(*manifest, confidence, unresolvedGaps, evidenceHash)
 
 	if planningLoop.StopReason == planningLoopPendingStop {
-		result, err := persistIntermediatePlanningIteration(root, *manifest, dispatches, scoutReport, *phasePlan, confidence, unresolvedGaps, evidenceHash, planningLoop, provenance)
+		result, err := persistIntermediatePlanningIterationInSession(session, *manifest, dispatches, scoutReport, *phasePlan, confidence, unresolvedGaps, evidenceHash, planningLoop, provenance, &state, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -634,10 +664,16 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 	if err := os.MkdirAll(phaseResearchDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create phase research directory: %w", err)
 	}
-	prunePhaseResearchOrphans(phaseResearchDir, phases)
-	for _, name := range []string{"SCOUT.md", "ROUTE-SETTER.md", "phase-plan.json", ".fallback-marker"} {
-		_ = os.Remove(filepath.Join(planningDir, name))
+	cleanupTargets, err := phaseResearchOrphanRemovalTargetsInSession(session, phases)
+	if err != nil {
+		return nil, err
 	}
+	cleanupTargets = append(cleanupTargets, planningFallbackMarkerTarget("finalized", now))
+	backupTargets, err := planningBackupRemovalTargetsInSession(session)
+	if err != nil {
+		return nil, err
+	}
+	cleanupTargets = append(cleanupTargets, backupTargets...)
 
 	emptySnapshots := map[string]codexArtifactSnapshot{}
 	scoutDispatch, ok := planningDispatchByCaste(dispatches, "scout")
@@ -648,22 +684,15 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 	if !ok {
 		return nil, fmt.Errorf("plan_manifest missing route-setter dispatch")
 	}
-	scoutFile, _, err := writePlanningScoutArtifact(root, planningDir, manifest.Goal, granularity, manifest.Survey, scoutDispatch, scoutReport, emptySnapshots)
+	publication, err := preparePlanningArtifactPublication(session, manifest.Goal, granularity, manifest.Survey, scoutDispatch, scoutReport, routeSetterDispatch, confidence, unresolvedGaps, phases, planningLoop, emptySnapshots, dispatches, false, true)
 	if err != nil {
 		return nil, err
 	}
-	routeSetterFile, _, err := writeRouteSetterArtifact(root, planningDir, manifest.Goal, granularity, manifest.Survey, routeSetterDispatch, confidence, unresolvedGaps, phases, planningLoop, emptySnapshots)
-	if err != nil {
-		return nil, err
-	}
-	planArtifactFile, _, err := writeWorkerPlanArtifact(root, planningDir, confidence, unresolvedGaps, phases, planningLoop, emptySnapshots, nil)
-	if err != nil {
-		return nil, err
-	}
-	phaseResearchFiles, _, researchFailedPhases, err := writePhaseResearchArtifacts(root, phaseResearchDir, manifest.Survey, scoutReport, phases, emptySnapshots, dispatches)
-	if err != nil {
-		return nil, err
-	}
+	scoutFile := publication.ScoutFile
+	routeSetterFile := publication.RouteSetterFile
+	planArtifactFile := publication.PlanArtifactFile
+	phaseResearchFiles := publication.PhaseResearchFiles
+	researchFailedPhases := publication.ResearchFailedPhases
 
 	if provenance.RecordWorkers {
 		if err := recordExternalPlanSpawnTree(dispatches); err != nil {
@@ -672,51 +701,64 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 	}
 
 	planConfidence := float64(confidence.Overall) / 100.0
-	updatedState := state
+	updatedState := normalizeLegacyColonyState(state)
 	var revision colony.PlanRevision
-	if err := store.UpdateJSONAtomically("COLONY_STATE.json", &updatedState, func() error {
-		updatedState = normalizeLegacyColonyState(updatedState)
-		if updatedState.Goal == nil || strings.TrimSpace(*updatedState.Goal) != strings.TrimSpace(manifest.Goal) {
-			return fmt.Errorf("plan_manifest goal does not match active colony goal")
-		}
-		if err := validatePlanManifestBase(root, *manifest, updatedState); err != nil {
-			return err
-		}
-		acceptedPlan, acceptedRevision, err := activateGeneratedPlan(updatedState.Plan, phases, now, &planConfidence, colony.PlanEvidenceBoundV1, *manifest, evidenceHash)
-		if err != nil {
-			return err
-		}
-		updatedState.State = colony.StateREADY
-		updatedState.CurrentPhase = firstBuildablePhase(acceptedPlan.Phases)
-		updatedState.BuildStartedAt = nil
-		updatedState.PlanGranularity = granularity
-		if strings.TrimSpace(manifest.VerificationDepth) != "" {
-			updatedState.VerificationDepth = string(colony.NormalizeVerificationDepth(manifest.VerificationDepth))
-		}
-		updatedState.Plan = acceptedPlan
-		revision = acceptedRevision
-		updatedState.Events = append(trimmedEvents(updatedState.Events),
-			fmt.Sprintf("%s|planning_scout|plan-finalize|%s", now.Format(time.RFC3339), provenance.SourceSummary),
-			fmt.Sprintf("%s|plan_revision_activated|plan-finalize|Activated %s (%s): %s", now.Format(time.RFC3339), revision.ID, revision.ReasonType, revision.Reason),
-			fmt.Sprintf("%s|plan_generated|plan-finalize|Generated %d active phases with %d%% confidence from %s; planning loop stopped: %s", now.Format(time.RFC3339), len(acceptedPlan.Phases), confidence.Overall, provenance.SourceSummary, planningLoop.StopReason),
-		)
-		return nil
-	}); err != nil {
+	if updatedState.Goal == nil || strings.TrimSpace(*updatedState.Goal) != strings.TrimSpace(manifest.Goal) {
+		return nil, fmt.Errorf("plan_manifest goal does not match active colony goal")
+	}
+	if err := validatePlanManifestBase(root, *manifest, updatedState); err != nil {
+		return nil, err
+	}
+	acceptedPlan, acceptedRevision, err := activateGeneratedPlan(updatedState.Plan, phases, now, &planConfidence, colony.PlanEvidenceBoundV1, *manifest, evidenceHash)
+	if err != nil {
 		return nil, fmt.Errorf("failed to atomically activate plan revision: %w", err)
 	}
-	phases = updatedState.Plan.Phases
-	_ = os.Remove(filepath.Join(store.BasePath(), planningIterationStateRel))
-	resolvePlanFinalizeFailureFlags()
-	if provenance.RecordWorkers {
-		emitPlanCeremonyDispatchSequence("aether-plan-finalize", dispatches)
+	updatedState.State = colony.StateREADY
+	updatedState.CurrentPhase = firstBuildablePhase(acceptedPlan.Phases)
+	updatedState.BuildStartedAt = nil
+	updatedState.PlanGranularity = granularity
+	if strings.TrimSpace(manifest.VerificationDepth) != "" {
+		updatedState.VerificationDepth = string(colony.NormalizeVerificationDepth(manifest.VerificationDepth))
 	}
-
+	updatedState.Plan = acceptedPlan
+	revision = acceptedRevision
+	updatedState.Events = append(trimmedEvents(updatedState.Events),
+		fmt.Sprintf("%s|planning_scout|plan-finalize|%s", now.Format(time.RFC3339), provenance.SourceSummary),
+		fmt.Sprintf("%s|plan_revision_activated|plan-finalize|Activated %s (%s): %s", now.Format(time.RFC3339), revision.ID, revision.ReasonType, revision.Reason),
+		fmt.Sprintf("%s|plan_generated|plan-finalize|Generated %d active phases with %d%% confidence from %s; planning loop stopped: %s", now.Format(time.RFC3339), len(acceptedPlan.Phases), confidence.Overall, provenance.SourceSummary, planningLoop.StopReason),
+	)
+	stateBytes, err := marshalSpecificationState(updatedState)
+	if err != nil {
+		return nil, err
+	}
+	phases = updatedState.Plan.Phases
 	nextPhase := firstBuildablePhase(phases)
 	nextCommand := "aether build 1"
 	if nextPhase > 0 {
 		nextCommand = fmt.Sprintf("aether build %d", nextPhase)
 	}
-	updateSessionSummary("plan-finalize", nextCommand, fmt.Sprintf("Generated %d plan phases with %d%% confidence from %s", len(phases), confidence.Overall, provenance.SourceSummary))
+	summary := fmt.Sprintf("Generated %d plan phases with %d%% confidence from %s", len(phases), confidence.Overall, provenance.SourceSummary)
+	targets := []planningSessionTarget{
+		{Root: lifecycleTransactionRootData, Path: "COLONY_STATE.json", Content: stateBytes},
+		{Root: lifecycleTransactionRootData, Path: planningIterationStateRel, Remove: true},
+	}
+	sessionTargets, err := planningSessionSummaryTargets(session, updatedState, "plan-finalize", nextCommand, summary, now)
+	if err != nil {
+		return nil, err
+	}
+	targets = mergePlanningSessionTargets(cleanupTargets, publication.Targets, targets, sessionTargets)
+	flagTargets, err := resolvedPlanFinalizeFailureFlagTargetsInSession(session, now)
+	if err != nil {
+		return nil, err
+	}
+	targets = append(targets, flagTargets...)
+	if err := commitPlanningSessionTargets(session, "plan-finalize-activate", "plan-finalize-activate", targets); err != nil {
+		return nil, fmt.Errorf("failed to atomically activate plan revision: %w", err)
+	}
+	if provenance.RecordWorkers {
+		emitPlanCeremonyDispatchSequence("aether-plan-finalize", dispatches)
+	}
+
 	runStatus = "completed"
 
 	result := map[string]interface{}{
@@ -776,6 +818,17 @@ func runCodexPlanFinalize(root string, completion codexExternalPlanCompletion) (
 }
 
 func runCodexScoutStageFinalize(root string, manifest codexPlanManifest, completion codexExternalPlanCompletion) (map[string]interface{}, error) {
+	var result map[string]interface{}
+	err := withPlanningMutationSession(root, "codex-scout-stage-finalize", func(session *planningMutationSession) error {
+		var finalizeErr error
+		result, finalizeErr = runCodexScoutStageFinalizeInSession(session, manifest, completion)
+		return finalizeErr
+	})
+	return result, err
+}
+
+func runCodexScoutStageFinalizeInSession(session *planningMutationSession, manifest codexPlanManifest, completion codexExternalPlanCompletion) (map[string]interface{}, error) {
+	root := session.RepositoryRoot()
 	if manifest.StageManifest == nil {
 		return nil, fmt.Errorf("Scout completion requires the exact stage_manifest")
 	}
@@ -827,7 +880,7 @@ func runCodexScoutStageFinalize(root string, manifest codexPlanManifest, complet
 		}
 	}
 
-	coordinated, err := coordinatePlanningScoutStage(root, stageManifest, completion.ScoutResult)
+	coordinated, err := coordinatePlanningScoutStageInSession(session, stageManifest, completion.ScoutResult)
 	if err != nil {
 		return nil, err
 	}
@@ -836,7 +889,7 @@ func runCodexScoutStageFinalize(root string, manifest codexPlanManifest, complet
 		if resolvedAt.IsZero() {
 			resolvedAt = time.Now().UTC()
 		}
-		resumed, resumeErr := resumePlanningScoutDecision(root, stageManifest.RunID, *completion.DecisionResume, resolvedAt)
+		resumed, resumeErr := resumePlanningScoutDecisionInSession(session, stageManifest.RunID, *completion.DecisionResume, resolvedAt)
 		if resumeErr != nil {
 			return nil, resumeErr
 		}
@@ -847,7 +900,7 @@ func runCodexScoutStageFinalize(root string, manifest codexPlanManifest, complet
 	for _, record := range coordinated.Scout.Result.NewEvidence {
 		evidence = append(evidence, record.Reference)
 	}
-	state, err := loadPlanningStageState(root, stageManifest.RunID)
+	state, err := loadPlanningStageStateInSession(session, stageManifest.RunID)
 	if err != nil {
 		return nil, err
 	}
@@ -898,6 +951,17 @@ func runCodexScoutStageFinalize(root string, manifest codexPlanManifest, complet
 }
 
 func runCodexRouteStageFinalize(root string, manifest codexPlanManifest, completion codexExternalPlanCompletion) (map[string]interface{}, error) {
+	var result map[string]interface{}
+	err := withPlanningMutationSession(root, "codex-route-stage-finalize", func(session *planningMutationSession) error {
+		var finalizeErr error
+		result, finalizeErr = runCodexRouteStageFinalizeInSession(session, manifest, completion)
+		return finalizeErr
+	})
+	return result, err
+}
+
+func runCodexRouteStageFinalizeInSession(session *planningMutationSession, manifest codexPlanManifest, completion codexExternalPlanCompletion) (map[string]interface{}, error) {
+	root := session.RepositoryRoot()
 	if manifest.StageManifest == nil {
 		return nil, fmt.Errorf("Route-Setter completion requires the exact stage_manifest")
 	}
@@ -937,7 +1001,7 @@ func runCodexRouteStageFinalize(root string, manifest codexPlanManifest, complet
 		}
 	}
 
-	coordinated, err := coordinatePlanningRouteStage(root, stageManifest, completion.RouteResult)
+	coordinated, err := coordinatePlanningRouteStageInSession(session, stageManifest, completion.RouteResult)
 	if err != nil {
 		return nil, err
 	}
@@ -946,14 +1010,14 @@ func runCodexRouteStageFinalize(root string, manifest codexPlanManifest, complet
 		if resolvedAt.IsZero() {
 			resolvedAt = time.Now().UTC()
 		}
-		resumed, resumeErr := resumePlanningRouteDecision(root, stageManifest.RunID, *completion.DecisionResume, resolvedAt)
+		resumed, resumeErr := resumePlanningRouteDecisionInSession(session, stageManifest.RunID, *completion.DecisionResume, resolvedAt)
 		if resumeErr != nil {
 			return nil, resumeErr
 		}
 		resumed.Route = coordinated.Route
 		coordinated = resumed
 	}
-	state, err := loadPlanningStageState(root, stageManifest.RunID)
+	state, err := loadPlanningStageStateInSession(session, stageManifest.RunID)
 	if err != nil {
 		return nil, err
 	}
@@ -1013,13 +1077,26 @@ func runCodexRouteStageFinalize(root string, manifest codexPlanManifest, complet
 // resulting lifecycle state. Exact retries resolve to the same artifact and
 // receipt, while changed bytes conflict before the frontier can move.
 func finalizePlanningScoutStage(root string, manifest planningStageManifest, raw []byte) (planningScoutStageFinalization, error) {
+	var result planningScoutStageFinalization
+	err := withPlanningMutationSession(root, "finalize-planning-scout-stage", func(session *planningMutationSession) error {
+		var finalizeErr error
+		result, finalizeErr = finalizePlanningScoutStageInSession(session, manifest, raw)
+		return finalizeErr
+	})
+	return result, err
+}
+
+func finalizePlanningScoutStageInSession(session *planningMutationSession, manifest planningStageManifest, raw []byte) (planningScoutStageFinalization, error) {
 	empty := planningScoutStageFinalization{}
-	result, normalized, material, err := validatePlanningScoutStageResult(root, manifest, raw)
+	result, normalized, material, err := validatePlanningScoutStageResultInSession(session, manifest, raw)
 	if err != nil {
 		return empty, err
 	}
-	artifact, err := writePlanningStageOutput(root, manifest, normalized, planningStageWriteOptions{})
+	artifact, err := writePlanningStageOutputInSession(session, manifest, normalized, planningStageWriteOptions{})
 	if err != nil {
+		return empty, err
+	}
+	if err := refreshPlanningSessionBaseline(session, lifecycleTransactionRootData, planningStageDataRelativePath(artifact.Path)); err != nil {
 		return empty, err
 	}
 	next := planningStageRouteReady
@@ -1032,12 +1109,15 @@ func finalizePlanningScoutStage(root string, manifest planningStageManifest, raw
 	if err != nil {
 		return empty, err
 	}
-	receipt, err := finalizePlanningStage(root, manifest, planningStageFinalizeRequest{
+	receipt, err := finalizePlanningStageInSession(session, manifest, planningStageFinalizeRequest{
 		To:                    next,
 		CandidateSnapshotHash: candidateSnapshotHash,
 		DecisionResumeStage:   decisionResume,
 	})
 	if err != nil {
+		return empty, err
+	}
+	if err := refreshPlanningSessionBaseline(session, lifecycleTransactionRootData, planningStageDataRelativePath(planningStageStateRepositoryPath(manifest.RunID))); err != nil {
 		return empty, err
 	}
 	return planningScoutStageFinalization{Result: result, Artifact: artifact, Receipt: receipt}, nil
@@ -1048,34 +1128,44 @@ func finalizePlanningScoutStage(root string, manifest planningStageManifest, raw
 // or dispatches Route-Setter; later passes always dispatch Route-Setter and
 // carry their material discoveries with that exact authorization.
 func coordinatePlanningScoutStage(root string, manifest planningStageManifest, raw []byte) (planningScoutStageCoordination, error) {
+	var result planningScoutStageCoordination
+	err := withPlanningMutationSession(root, "coordinate-planning-scout-stage", func(session *planningMutationSession) error {
+		var coordinateErr error
+		result, coordinateErr = coordinatePlanningScoutStageInSession(session, manifest, raw)
+		return coordinateErr
+	})
+	return result, err
+}
+
+func coordinatePlanningScoutStageInSession(session *planningMutationSession, manifest planningStageManifest, raw []byte) (planningScoutStageCoordination, error) {
 	empty := planningScoutStageCoordination{}
-	completed, err := finalizePlanningScoutStage(root, manifest, raw)
+	completed, err := finalizePlanningScoutStageInSession(session, manifest, raw)
 	if err != nil {
 		return empty, err
 	}
 	result := planningScoutStageCoordination{Scout: completed}
-	state, err := loadPlanningStageState(root, manifest.RunID)
+	state, err := loadPlanningStageStateInSession(session, manifest.RunID)
 	if err != nil {
 		return empty, err
 	}
 
 	switch state.Stage {
 	case planningStageOwnerDecision:
-		checkpoint, checkpointErr := buildPlanningScoutDecisionCheckpoint(root, manifest, completed)
+		checkpoint, checkpointErr := buildPlanningScoutDecisionCheckpointInSession(session, manifest, completed)
 		if checkpointErr != nil {
 			return empty, checkpointErr
 		}
 		if checkpoint == nil {
 			return empty, fmt.Errorf("owner_decision has no material Scout decision batch")
 		}
-		if err := persistPlanningScoutDecisionCheckpoint(root, *checkpoint); err != nil {
+		if err := persistPlanningScoutDecisionCheckpointInSession(session, *checkpoint); err != nil {
 			return empty, err
 		}
 		result.DecisionCheckpoint = checkpoint
 		return result, nil
 
 	case planningStageRouteReady:
-		dispatch, dispatchErr := authorizePlanningScoutRoute(root, state, completed.Result.DecisionCandidates, nil)
+		dispatch, dispatchErr := authorizePlanningScoutRouteInSession(session, state, completed.Result.DecisionCandidates, nil)
 		if dispatchErr != nil {
 			return empty, dispatchErr
 		}
@@ -1083,7 +1173,7 @@ func coordinatePlanningScoutStage(root string, manifest planningStageManifest, r
 		return result, nil
 
 	case planningStageRouteRunning:
-		dispatch, dispatchErr := loadPlanningScoutRouteDispatch(root, manifest.RunID, manifest.Pass)
+		dispatch, dispatchErr := loadPlanningScoutRouteDispatchInSession(session, manifest.RunID, manifest.Pass)
 		if dispatchErr != nil {
 			return empty, dispatchErr
 		}
@@ -1091,7 +1181,7 @@ func coordinatePlanningScoutStage(root string, manifest planningStageManifest, r
 		return result, nil
 
 	case planningStageSpecApprovalRequired, planningStageReconciliationRequired:
-		checkpoint, checkpointErr := loadPlanningScoutDecisionCheckpoint(root, manifest.RunID)
+		checkpoint, checkpointErr := loadPlanningScoutDecisionCheckpointInSession(session, manifest.RunID)
 		if checkpointErr != nil {
 			return empty, checkpointErr
 		}
@@ -1104,7 +1194,17 @@ func coordinatePlanningScoutStage(root string, manifest planningStageManifest, r
 }
 
 func buildPlanningScoutDecisionCheckpoint(root string, manifest planningStageManifest, completed planningScoutStageFinalization) (*planningScoutDecisionCheckpoint, error) {
-	header, err := loadPlanningScoutRunHeader(root, manifest)
+	var checkpoint *planningScoutDecisionCheckpoint
+	err := withPlanningMutationSession(root, "build-planning-scout-decision", func(session *planningMutationSession) error {
+		var buildErr error
+		checkpoint, buildErr = buildPlanningScoutDecisionCheckpointInSession(session, manifest, completed)
+		return buildErr
+	})
+	return checkpoint, err
+}
+
+func buildPlanningScoutDecisionCheckpointInSession(session *planningMutationSession, manifest planningStageManifest, completed planningScoutStageFinalization) (*planningScoutDecisionCheckpoint, error) {
+	header, err := loadPlanningScoutRunHeaderInSession(session, manifest)
 	if err != nil {
 		return nil, err
 	}
@@ -1202,23 +1302,35 @@ func planningScoutDecisionCheckpointRepositoryPath(runID string) string {
 }
 
 func persistPlanningScoutDecisionCheckpoint(root string, checkpoint planningScoutDecisionCheckpoint) error {
+	return withPlanningMutationSession(root, "planning-scout-decision", func(session *planningMutationSession) error {
+		return persistPlanningScoutDecisionCheckpointInSession(session, checkpoint)
+	})
+}
+
+func persistPlanningScoutDecisionCheckpointInSession(session *planningMutationSession, checkpoint planningScoutDecisionCheckpoint) error {
 	content, err := marshalPlanningStageJSON(checkpoint)
 	if err != nil {
 		return fmt.Errorf("marshal Scout decision checkpoint: %w", err)
 	}
 	repositoryPath := planningScoutDecisionCheckpointRepositoryPath(checkpoint.RunID)
-	return persistPlanningScoutFiles(root, "planning-scout-decision-"+checkpoint.ContentHash[:24], "planning-scout-decision", checkpoint.ID, map[string][]byte{
+	return persistPlanningScoutFilesInSession(session, "planning-scout-decision-"+checkpoint.ContentHash[:24], "planning-scout-decision", checkpoint.ID, map[string][]byte{
 		repositoryPath: content,
 	}, nil)
 }
 
 func loadPlanningScoutDecisionCheckpoint(root, runID string) (planningScoutDecisionCheckpoint, error) {
 	var checkpoint planningScoutDecisionCheckpoint
-	repositoryRoot, _, err := planningStageRoots(root)
-	if err != nil {
-		return checkpoint, err
-	}
-	content, exists, err := readOptionalPlanningStageFile(repositoryRoot, planningScoutDecisionCheckpointRepositoryPath(runID))
+	err := withPlanningMutationSession(root, "load-planning-scout-decision", func(session *planningMutationSession) error {
+		var loadErr error
+		checkpoint, loadErr = loadPlanningScoutDecisionCheckpointInSession(session, runID)
+		return loadErr
+	})
+	return checkpoint, err
+}
+
+func loadPlanningScoutDecisionCheckpointInSession(session *planningMutationSession, runID string) (planningScoutDecisionCheckpoint, error) {
+	var checkpoint planningScoutDecisionCheckpoint
+	content, exists, err := readOptionalPlanningStageFileInSession(session, planningScoutDecisionCheckpointRepositoryPath(runID))
 	if err != nil {
 		return checkpoint, err
 	}
@@ -1239,9 +1351,19 @@ func loadPlanningScoutDecisionCheckpoint(root, runID string) (planningScoutDecis
 }
 
 func authorizePlanningScoutRoute(root string, state planningStageState, candidates []planningDecisionCandidate, token *planningDecisionResumeToken) (planningScoutRouteDispatch, error) {
+	var dispatch planningScoutRouteDispatch
+	err := withPlanningMutationSession(root, "authorize-planning-scout-route", func(session *planningMutationSession) error {
+		var authorizeErr error
+		dispatch, authorizeErr = authorizePlanningScoutRouteInSession(session, state, candidates, token)
+		return authorizeErr
+	})
+	return dispatch, err
+}
+
+func authorizePlanningScoutRouteInSession(session *planningMutationSession, state planningStageState, candidates []planningDecisionCandidate, token *planningDecisionResumeToken) (planningScoutRouteDispatch, error) {
 	empty := planningScoutRouteDispatch{}
 	if state.Stage == planningStageRouteRunning {
-		return loadPlanningScoutRouteDispatch(root, state.RunID, state.Pass)
+		return loadPlanningScoutRouteDispatchInSession(session, state.RunID, state.Pass)
 	}
 	if state.Stage != planningStageRouteReady || state.ScoutReceipt == nil {
 		return empty, fmt.Errorf("Route-Setter authorization requires route_ready with the exact Scout receipt")
@@ -1289,7 +1411,7 @@ func authorizePlanningScoutRoute(root string, state planningStageState, candidat
 	if err := addressPlanningScoutRouteDispatch(&dispatch); err != nil {
 		return empty, err
 	}
-	if err := persistPlanningScoutRouteDispatch(root, running, dispatch, token); err != nil {
+	if err := persistPlanningScoutRouteDispatchInSession(session, running, dispatch, token); err != nil {
 		return empty, err
 	}
 	return dispatch, nil
@@ -1329,6 +1451,12 @@ func planningScoutDecisionResumeRepositoryPath(runID string) string {
 }
 
 func persistPlanningScoutRouteDispatch(root string, running planningStageState, dispatch planningScoutRouteDispatch, token *planningDecisionResumeToken) error {
+	return withPlanningMutationSession(root, "planning-scout-route", func(session *planningMutationSession) error {
+		return persistPlanningScoutRouteDispatchInSession(session, running, dispatch, token)
+	})
+}
+
+func persistPlanningScoutRouteDispatchInSession(session *planningMutationSession, running planningStageState, dispatch planningScoutRouteDispatch, token *planningDecisionResumeToken) error {
 	if err := validatePlanningStageManifest(dispatch.Manifest); err != nil {
 		return err
 	}
@@ -1359,18 +1487,24 @@ func persistPlanningScoutRouteDispatch(root string, running planningStageState, 
 		}
 		files[planningScoutDecisionResumeRepositoryPath(dispatch.RunID)] = tokenBytes
 	}
-	return persistPlanningScoutFiles(root, "planning-scout-route-"+dispatch.ContentHash[:24], "planning-scout-route", dispatch.ID, files, map[string]bool{
+	return persistPlanningScoutFilesInSession(session, "planning-scout-route-"+dispatch.ContentHash[:24], "planning-scout-route", dispatch.ID, files, map[string]bool{
 		planningStageStateRepositoryPath(dispatch.RunID): true,
 	})
 }
 
 func loadPlanningScoutRouteDispatch(root, runID string, pass int) (planningScoutRouteDispatch, error) {
 	var dispatch planningScoutRouteDispatch
-	repositoryRoot, _, err := planningStageRoots(root)
-	if err != nil {
-		return dispatch, err
-	}
-	content, exists, err := readOptionalPlanningStageFile(repositoryRoot, planningScoutRouteDispatchRepositoryPath(runID, pass))
+	err := withPlanningMutationSession(root, "load-planning-scout-route", func(session *planningMutationSession) error {
+		var loadErr error
+		dispatch, loadErr = loadPlanningScoutRouteDispatchInSession(session, runID, pass)
+		return loadErr
+	})
+	return dispatch, err
+}
+
+func loadPlanningScoutRouteDispatchInSession(session *planningMutationSession, runID string, pass int) (planningScoutRouteDispatch, error) {
+	var dispatch planningScoutRouteDispatch
+	content, exists, err := readOptionalPlanningStageFileInSession(session, planningScoutRouteDispatchRepositoryPath(runID, pass))
 	if err != nil {
 		return dispatch, err
 	}
@@ -1391,13 +1525,15 @@ func loadPlanningScoutRouteDispatch(root, runID string, pass int) (planningScout
 }
 
 func persistPlanningScoutFiles(root, transactionID, command, identity string, files map[string][]byte, replacePaths map[string]bool) error {
-	repositoryRoot, dataRoot, err := planningStageRoots(root)
-	if err != nil {
-		return err
-	}
+	return withPlanningMutationSession(root, command, func(session *planningMutationSession) error {
+		return persistPlanningScoutFilesInSession(session, transactionID, command, identity, files, replacePaths)
+	})
+}
+
+func persistPlanningScoutFilesInSession(session *planningMutationSession, transactionID, command, identity string, files map[string][]byte, replacePaths map[string]bool) error {
 	allPresent := true
 	for repositoryPath, expected := range files {
-		current, exists, readErr := readOptionalPlanningStageFile(repositoryRoot, repositoryPath)
+		current, exists, readErr := readOptionalPlanningStageFileInSession(session, repositoryPath)
 		if readErr != nil {
 			return readErr
 		}
@@ -1409,7 +1545,7 @@ func persistPlanningScoutFiles(root, transactionID, command, identity string, fi
 	if allPresent {
 		return nil
 	}
-	config := planningStageWriteConfig(repositoryRoot, dataRoot, transactionID, command, planningStageWriteOptions{})
+	config := planningStageWriteConfigInSession(session, transactionID, command, planningStageWriteOptions{})
 	expected := make(map[string][]byte, len(files))
 	for repositoryPath, content := range files {
 		expected[planningStageDataRelativePath(repositoryPath)] = content
@@ -1417,6 +1553,11 @@ func persistPlanningScoutFiles(root, transactionID, command, identity string, fi
 	if resumed, resumeErr := resumePlanningStageWrite(config, expected, identity); resumeErr != nil {
 		return resumeErr
 	} else if resumed {
+		for repositoryPath := range files {
+			if err := refreshPlanningSessionBaseline(session, lifecycleTransactionRootData, planningStageDataRelativePath(repositoryPath)); err != nil {
+				return err
+			}
+		}
 		return nil
 	}
 	tx, err := beginLifecycleTransaction(config)
@@ -1436,8 +1577,15 @@ func persistPlanningScoutFiles(root, transactionID, command, identity string, fi
 	if err := tx.Validate(); err != nil {
 		return err
 	}
-	_, err = tx.Commit()
-	return err
+	if _, err = tx.Commit(); err != nil {
+		return err
+	}
+	for _, repositoryPath := range paths {
+		if err := refreshPlanningSessionBaseline(session, lifecycleTransactionRootData, planningStageDataRelativePath(repositoryPath)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func buildPlanningScoutDecisionResumeToken(checkpoint planningScoutDecisionCheckpoint, answers []planningScoutDecisionAnswer) (planningDecisionResumeToken, error) {
@@ -1529,8 +1677,18 @@ func buildPlanningScoutDecisionResumeToken(checkpoint planningScoutDecisionCheck
 }
 
 func resumePlanningScoutDecision(root, runID string, token planningDecisionResumeToken, resolvedAt time.Time) (planningScoutStageCoordination, error) {
+	var result planningScoutStageCoordination
+	err := withPlanningMutationSession(root, "resume-planning-scout-decision", func(session *planningMutationSession) error {
+		var resumeErr error
+		result, resumeErr = resumePlanningScoutDecisionInSession(session, runID, token, resolvedAt)
+		return resumeErr
+	})
+	return result, err
+}
+
+func resumePlanningScoutDecisionInSession(session *planningMutationSession, runID string, token planningDecisionResumeToken, resolvedAt time.Time) (planningScoutStageCoordination, error) {
 	empty := planningScoutStageCoordination{}
-	checkpoint, err := loadPlanningScoutDecisionCheckpoint(root, runID)
+	checkpoint, err := loadPlanningScoutDecisionCheckpointInSession(session, runID)
 	if err != nil {
 		return empty, err
 	}
@@ -1549,13 +1707,13 @@ func resumePlanningScoutDecision(root, runID string, token planningDecisionResum
 	if !validation.Accepted {
 		return empty, fmt.Errorf("Scout decision resume token is %s; recover with %s", validation.Status, validation.RecoveryCommand)
 	}
-	state, err := loadPlanningStageState(root, runID)
+	state, err := loadPlanningStageStateInSession(session, runID)
 	if err != nil {
 		return empty, err
 	}
 	result := planningScoutStageCoordination{DecisionCheckpoint: &checkpoint, ResumeToken: &expectedToken}
 	if state.Stage == planningStageRouteRunning {
-		dispatch, loadErr := loadPlanningScoutRouteDispatch(root, runID, state.Pass)
+		dispatch, loadErr := loadPlanningScoutRouteDispatchInSession(session, runID, state.Pass)
 		if loadErr != nil {
 			return empty, loadErr
 		}
@@ -1566,7 +1724,7 @@ func resumePlanningScoutDecision(root, runID string, token planningDecisionResum
 		return result, nil
 	}
 	if state.Stage == planningStageSpecApprovalRequired && expectedToken.Disposition == planningDecisionDispositionSuccessorSpecRequired {
-		colonyState, loadErr := loadSpecificationColonyState(root)
+		colonyState, loadErr := loadSpecificationColonyStateInSession(session)
 		if loadErr != nil {
 			return empty, loadErr
 		}
@@ -1589,7 +1747,7 @@ func resumePlanningScoutDecision(root, runID string, token planningDecisionResum
 		RevisionEvidence:    append([]planningDecisionRevisionEvidence(nil), expectedToken.RevisionEvidence...),
 	}
 	if resolution.Disposition == planningDecisionDispositionSuccessorSpecRequired {
-		return resumePlanningScoutContractDecision(root, state, checkpoint, expectedToken, resolution, resolvedAt)
+		return resumePlanningScoutContractDecisionInSession(session, state, checkpoint, expectedToken, resolution, resolvedAt)
 	}
 	ready, manifest, err := reducePlanningStage(state, planningStageTransition{
 		To:                 planningStageRouteReady,
@@ -1601,7 +1759,7 @@ func resumePlanningScoutDecision(root, runID string, token planningDecisionResum
 	if manifest != nil {
 		return empty, fmt.Errorf("direct owner answer unexpectedly dispatched a worker")
 	}
-	dispatch, err := authorizePlanningScoutRoute(root, ready, checkpoint.Batch.Decisions, &expectedToken)
+	dispatch, err := authorizePlanningScoutRouteInSession(session, ready, checkpoint.Batch.Decisions, &expectedToken)
 	if err != nil {
 		return empty, err
 	}
@@ -1610,11 +1768,21 @@ func resumePlanningScoutDecision(root, runID string, token planningDecisionResum
 }
 
 func resumePlanningScoutContractDecision(root string, state planningStageState, checkpoint planningScoutDecisionCheckpoint, token planningDecisionResumeToken, resolution planningDecisionResolution, resolvedAt time.Time) (planningScoutStageCoordination, error) {
+	var result planningScoutStageCoordination
+	err := withPlanningMutationSession(root, "resume-planning-scout-contract", func(session *planningMutationSession) error {
+		var resumeErr error
+		result, resumeErr = resumePlanningScoutContractDecisionInSession(session, state, checkpoint, token, resolution, resolvedAt)
+		return resumeErr
+	})
+	return result, err
+}
+
+func resumePlanningScoutContractDecisionInSession(session *planningMutationSession, state planningStageState, checkpoint planningScoutDecisionCheckpoint, token planningDecisionResumeToken, resolution planningDecisionResolution, resolvedAt time.Time) (planningScoutStageCoordination, error) {
 	empty := planningScoutStageCoordination{}
 	if resolvedAt.IsZero() {
 		return empty, fmt.Errorf("contract-affecting Scout answer requires resolved_at")
 	}
-	colonyState, err := loadSpecificationColonyState(root)
+	colonyState, err := loadSpecificationColonyStateInSession(session)
 	if err != nil {
 		return empty, err
 	}
@@ -1633,14 +1801,14 @@ func resumePlanningScoutContractDecision(root string, state planningStageState, 
 	if err != nil {
 		return empty, err
 	}
-	successor, err := reviseSpecification(root, specificationRevisionRequest{
+	successor, err := reviseSpecificationInSession(session, specificationRevisionRequest{
 		PredecessorRevisionID:  predecessor.ID,
 		PredecessorContentHash: predecessor.ContentHash,
 		Scope:                  predecessor.Scope,
 		Changes:                changes,
 		DecisionResolution:     &resolution,
 		CreatedAt:              resolvedAt.UTC(),
-	}, specificationMutationOptions{})
+	}, specificationMutationOptions{Session: session})
 	if err != nil {
 		return empty, fmt.Errorf("create successor specification for Scout decision: %w", err)
 	}
@@ -1669,7 +1837,7 @@ func resumePlanningScoutContractDecision(root string, state planningStageState, 
 	if err != nil {
 		return empty, err
 	}
-	if err := persistPlanningScoutFiles(root, "planning-scout-successor-"+successor.Revision.ContentHash[:24], "planning-scout-successor", successor.Revision.ID, map[string][]byte{
+	if err := persistPlanningScoutFilesInSession(session, "planning-scout-successor-"+successor.Revision.ContentHash[:24], "planning-scout-successor", successor.Revision.ID, map[string][]byte{
 		planningStageStateRepositoryPath(state.RunID):          stateBytes,
 		planningScoutDecisionResumeRepositoryPath(state.RunID): tokenBytes,
 	}, map[string]bool{planningStageStateRepositoryPath(state.RunID): true}); err != nil {
@@ -1762,6 +1930,14 @@ func planningScoutSpecificationItem(body specificationBodySnapshot, stableID str
 }
 
 func validatePlanningScoutStageResult(root string, manifest planningStageManifest, raw []byte) (planningScoutStageResult, []byte, bool, error) {
+	return validatePlanningScoutStageResultWithSession(root, nil, manifest, raw)
+}
+
+func validatePlanningScoutStageResultInSession(session *planningMutationSession, manifest planningStageManifest, raw []byte) (planningScoutStageResult, []byte, bool, error) {
+	return validatePlanningScoutStageResultWithSession(session.RepositoryRoot(), session, manifest, raw)
+}
+
+func validatePlanningScoutStageResultWithSession(root string, session *planningMutationSession, manifest planningStageManifest, raw []byte) (planningScoutStageResult, []byte, bool, error) {
 	empty := planningScoutStageResult{}
 	if err := validatePlanningStageManifest(manifest); err != nil {
 		return empty, nil, false, err
@@ -1798,7 +1974,12 @@ func validatePlanningScoutStageResult(root string, manifest planningStageManifes
 		return empty, nil, false, fmt.Errorf("Scout result frontier does not match the active manifest")
 	}
 
-	header, err := loadPlanningScoutRunHeader(root, manifest)
+	var header planningRunHeader
+	if session != nil {
+		header, err = loadPlanningScoutRunHeaderInSession(session, manifest)
+	} else {
+		header, err = loadPlanningScoutRunHeader(root, manifest)
+	}
 	if err != nil {
 		return empty, nil, false, err
 	}
@@ -1833,13 +2014,32 @@ func decodePlanningScoutStageResult(raw []byte) (planningScoutStageResult, error
 }
 
 func loadPlanningScoutRunHeader(root string, manifest planningStageManifest) (planningRunHeader, error) {
+	return loadPlanningScoutRunHeaderWithSession(root, nil, manifest)
+}
+
+func loadPlanningScoutRunHeaderInSession(session *planningMutationSession, manifest planningStageManifest) (planningRunHeader, error) {
+	return loadPlanningScoutRunHeaderWithSession(session.RepositoryRoot(), session, manifest)
+}
+
+func loadPlanningScoutRunHeaderWithSession(root string, session *planningMutationSession, manifest planningStageManifest) (planningRunHeader, error) {
 	var header planningRunHeader
-	repositoryRoot, err := canonicalPlanningTimelineRoot(root)
-	if err != nil {
-		return header, err
+	repositoryRoot := root
+	if session == nil {
+		var err error
+		repositoryRoot, err = canonicalPlanningTimelineRoot(root)
+		if err != nil {
+			return header, err
+		}
 	}
 	headerPath := filepath.ToSlash(filepath.Join(".aether", "data", "planning", manifest.RunID, "run-header.json"))
-	content, exists, err := readOptionalPlanningStageFile(repositoryRoot, headerPath)
+	var content []byte
+	var exists bool
+	var err error
+	if session != nil {
+		content, exists, err = readOptionalPlanningStageFileInSession(session, headerPath)
+	} else {
+		content, exists, err = readOptionalPlanningStageFile(repositoryRoot, headerPath)
+	}
 	if err != nil {
 		return header, err
 	}
@@ -2099,7 +2299,21 @@ func sameTerritoryDigestSet(left, right map[string]string) bool {
 }
 
 func validateExternalPlanState(manifest *codexPlanManifest) (colony.ColonyState, colony.PlanGranularity, error) {
-	state, err := loadActiveColonyState()
+	return validateExternalPlanStateWithSession(nil, manifest)
+}
+
+func validateExternalPlanStateInSession(session *planningMutationSession, manifest *codexPlanManifest) (colony.ColonyState, colony.PlanGranularity, error) {
+	return validateExternalPlanStateWithSession(session, manifest)
+}
+
+func validateExternalPlanStateWithSession(session *planningMutationSession, manifest *codexPlanManifest) (colony.ColonyState, colony.PlanGranularity, error) {
+	var state colony.ColonyState
+	var err error
+	if session != nil {
+		state, err = loadSpecificationColonyStateInSession(session)
+	} else {
+		state, err = loadActiveColonyState()
+	}
 	if err != nil {
 		return state, "", fmt.Errorf("%s", colonyStateLoadMessage(err))
 	}
@@ -2417,17 +2631,26 @@ func planningCompletionEvidenceSummary(confidence codexPlanConfidence, gaps []st
 }
 
 func persistIntermediatePlanningIteration(root string, manifest codexPlanManifest, dispatches []codexPlanningDispatch, scoutReport codexScoutReport, phasePlan codexWorkerPlanArtifact, confidence codexPlanConfidence, unresolvedGaps []string, evidenceHash string, planningLoop codexPlanningLoop, provenance codexPlanProvenance) (map[string]interface{}, error) {
+	var result map[string]interface{}
+	err := withPlanningMutationSession(root, "planning-intermediate-iteration", func(session *planningMutationSession) error {
+		var persistErr error
+		result, persistErr = persistIntermediatePlanningIterationInSession(session, manifest, dispatches, scoutReport, phasePlan, confidence, unresolvedGaps, evidenceHash, planningLoop, provenance, nil, nil)
+		return persistErr
+	})
+	return result, err
+}
+
+func persistIntermediatePlanningIterationInSession(session *planningMutationSession, manifest codexPlanManifest, dispatches []codexPlanningDispatch, scoutReport codexScoutReport, phasePlan codexWorkerPlanArtifact, confidence codexPlanConfidence, unresolvedGaps []string, evidenceHash string, planningLoop codexPlanningLoop, provenance codexPlanProvenance, authoritativeState *colony.ColonyState, extraTargets []planningSessionTarget) (map[string]interface{}, error) {
+	root := session.RepositoryRoot()
 	now := time.Now().UTC()
-	planningDir := filepath.Join(store.BasePath(), "planning")
-	iterationsDir := filepath.Join(planningDir, "iterations")
-	if err := os.MkdirAll(iterationsDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create planning iterations directory: %w", err)
-	}
+	planningDir := filepath.Join(session.DataRoot(), "planning")
 	iterPrefix := fmt.Sprintf("iteration-%02d", manifest.Iteration)
-	if err := writePlanningJSONFile(filepath.Join(iterationsDir, iterPrefix+"-scout.json"), scoutReport); err != nil {
+	scoutBytes, err := marshalPlanningStageJSON(scoutReport)
+	if err != nil {
 		return nil, err
 	}
-	if err := writePlanningJSONFile(filepath.Join(iterationsDir, iterPrefix+"-phase-plan.json"), phasePlan); err != nil {
+	phasePlanBytes, err := marshalPlanningStageJSON(phasePlan)
+	if err != nil {
 		return nil, err
 	}
 	selectedGaps := selectedPlanningGapsForNext(confidence, unresolvedGaps)
@@ -2451,7 +2674,42 @@ func persistIntermediatePlanningIteration(root string, manifest codexPlanManifes
 	if len(planningLoop.History) > 0 {
 		state.ConsecutiveStalls = planningLoop.History[len(planningLoop.History)-1].StallCount
 	}
-	if err := store.SaveJSON(planningIterationStateRel, state); err != nil {
+	stateBytes, err := marshalPlanningStageJSON(state)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal planning iteration state: %w", err)
+	}
+	nextCommand := fmt.Sprintf("aether host plan --depth %s --planning-depth %s --target %d --max-iterations %d", manifest.Depth, manifest.PlanningDepth, manifest.TargetConfidence, manifest.MaxIterations)
+	if revisionArgs := planRevisionCLIArgs(manifest.Revision); revisionArgs != "" {
+		nextCommand += " " + revisionArgs
+	}
+	summary := fmt.Sprintf("Planning iteration %d reached %d%% confidence; another iteration is required", manifest.Iteration, confidence.Overall)
+	var colonyState colony.ColonyState
+	if authoritativeState != nil {
+		colonyState = *authoritativeState
+	} else {
+		colonyState, err = loadSpecificationColonyStateInSession(session)
+		if err != nil {
+			return nil, err
+		}
+	}
+	targets := []planningSessionTarget{
+		{Root: lifecycleTransactionRootData, Path: filepath.ToSlash(filepath.Join("planning", "iterations", iterPrefix+"-scout.json")), Content: scoutBytes},
+		{Root: lifecycleTransactionRootData, Path: filepath.ToSlash(filepath.Join("planning", "iterations", iterPrefix+"-phase-plan.json")), Content: phasePlanBytes},
+		{Root: lifecycleTransactionRootData, Path: planningIterationStateRel, Content: stateBytes},
+	}
+	if authoritativeState != nil {
+		colonyStateBytes, marshalErr := marshalSpecificationState(colonyState)
+		if marshalErr != nil {
+			return nil, marshalErr
+		}
+		targets = append(targets, planningSessionTarget{Root: lifecycleTransactionRootData, Path: "COLONY_STATE.json", Content: colonyStateBytes})
+	}
+	sessionTargets, err := planningSessionSummaryTargets(session, colonyState, "plan-finalize", nextCommand, summary, now)
+	if err != nil {
+		return nil, err
+	}
+	targets = mergePlanningSessionTargets(extraTargets, targets, sessionTargets)
+	if err := commitPlanningSessionTargets(session, "planning-intermediate-"+fmt.Sprintf("%04d", manifest.Iteration), "planning-intermediate-iteration", targets); err != nil {
 		return nil, fmt.Errorf("failed to save planning iteration state: %w", err)
 	}
 	if provenance.RecordWorkers {
@@ -2459,11 +2717,6 @@ func persistIntermediatePlanningIteration(root string, manifest codexPlanManifes
 			return nil, err
 		}
 	}
-	nextCommand := fmt.Sprintf("aether host plan --depth %s --planning-depth %s --target %d --max-iterations %d", manifest.Depth, manifest.PlanningDepth, manifest.TargetConfidence, manifest.MaxIterations)
-	if revisionArgs := planRevisionCLIArgs(manifest.Revision); revisionArgs != "" {
-		nextCommand += " " + revisionArgs
-	}
-	updateSessionSummary("plan-finalize", nextCommand, fmt.Sprintf("Planning iteration %d reached %d%% confidence; another iteration is required", manifest.Iteration, confidence.Overall))
 	return map[string]interface{}{
 		"planned":                 false,
 		"iteration_completed":     true,
@@ -2797,6 +3050,14 @@ func recordExternalPlanSpawnTree(dispatches []codexPlanningDispatch) error {
 // proposal with the shared plan-contract kernel, and derives both confidence
 // and semantic delta from canonical inputs.
 func validatePlanningRouteStageResult(root string, manifest planningStageManifest, raw []byte) (planningRouteStageValidation, error) {
+	return validatePlanningRouteStageResultWithSession(root, nil, manifest, raw)
+}
+
+func validatePlanningRouteStageResultInSession(session *planningMutationSession, manifest planningStageManifest, raw []byte) (planningRouteStageValidation, error) {
+	return validatePlanningRouteStageResultWithSession(session.RepositoryRoot(), session, manifest, raw)
+}
+
+func validatePlanningRouteStageResultWithSession(root string, session *planningMutationSession, manifest planningStageManifest, raw []byte) (planningRouteStageValidation, error) {
 	empty := planningRouteStageValidation{}
 	if err := validatePlanningStageManifest(manifest); err != nil {
 		return empty, err
@@ -2804,10 +3065,21 @@ func validatePlanningRouteStageResult(root string, manifest planningStageManifes
 	if manifest.ExpectedCaste != planningStageCasteRouteSetter || manifest.ExpectedResultType != planningStageResultRouteSetter {
 		return empty, fmt.Errorf("active planning stage manifest is not a Route-Setter contract")
 	}
-	if err := validatePersistedPlanningStageManifest(root, manifest); err != nil {
+	var err error
+	if session != nil {
+		err = validatePersistedPlanningStageManifestInSession(session, manifest)
+	} else {
+		err = validatePersistedPlanningStageManifest(root, manifest)
+	}
+	if err != nil {
 		return empty, err
 	}
-	state, err := loadPlanningStageState(root, manifest.RunID)
+	var state planningStageState
+	if session != nil {
+		state, err = loadPlanningStageStateInSession(session, manifest.RunID)
+	} else {
+		state, err = loadPlanningStageState(root, manifest.RunID)
+	}
 	if err != nil {
 		return empty, err
 	}
@@ -2844,7 +3116,12 @@ func validatePlanningRouteStageResult(root string, manifest planningStageManifes
 		return empty, fmt.Errorf("Route-Setter result candidate snapshot does not match the active manifest")
 	}
 
-	dispatch, err := loadPlanningScoutRouteDispatch(root, manifest.RunID, manifest.Pass)
+	var dispatch planningScoutRouteDispatch
+	if session != nil {
+		dispatch, err = loadPlanningScoutRouteDispatchInSession(session, manifest.RunID, manifest.Pass)
+	} else {
+		dispatch, err = loadPlanningScoutRouteDispatch(root, manifest.RunID, manifest.Pass)
+	}
 	if err != nil {
 		return empty, err
 	}
@@ -2857,7 +3134,12 @@ func validatePlanningRouteStageResult(root string, manifest planningStageManifes
 		return empty, err
 	}
 
-	chain, err := readPlanningStageReceiptChain(root, manifest.RunID)
+	var chain planningStageReceiptChain
+	if session != nil {
+		chain, err = readPlanningStageReceiptChainInSession(session, manifest.RunID)
+	} else {
+		chain, err = readPlanningStageReceiptChain(root, manifest.RunID)
+	}
 	if err != nil {
 		return empty, err
 	}
@@ -2872,11 +3154,24 @@ func validatePlanningRouteStageResult(root string, manifest planningStageManifes
 	if err != nil {
 		return empty, err
 	}
-	scoutReceipt, scoutManifest, scoutResult, header, err := loadPlanningRouteScoutBoundary(root, manifest, chain)
+	var scoutReceipt StageReceipt
+	var scoutManifest planningStageManifest
+	var scoutResult planningScoutStageResult
+	var header planningRunHeader
+	if session != nil {
+		scoutReceipt, scoutManifest, scoutResult, header, err = loadPlanningRouteScoutBoundaryInSession(session, manifest, chain)
+	} else {
+		scoutReceipt, scoutManifest, scoutResult, header, err = loadPlanningRouteScoutBoundary(root, manifest, chain)
+	}
 	if err != nil {
 		return empty, err
 	}
-	colonyState, err := loadSpecificationColonyState(root)
+	var colonyState colony.ColonyState
+	if session != nil {
+		colonyState, err = loadSpecificationColonyStateInSession(session)
+	} else {
+		colonyState, err = loadSpecificationColonyState(root)
+	}
 	if err != nil {
 		return empty, err
 	}
@@ -2901,7 +3196,13 @@ func validatePlanningRouteStageResult(root string, manifest planningStageManifes
 		return empty, err
 	}
 
-	evidence, frontier, err := planningRouteEvidenceContext(root, header, priorCards, scoutManifest, scoutResult, dispatch.MaterialDecisionCandidates)
+	var evidence []colony.PlanningEvidenceRef
+	var frontier planningEvidenceFrontier
+	if session != nil {
+		evidence, frontier, err = planningRouteEvidenceContextInSession(session, header, priorCards, scoutManifest, scoutResult, dispatch.MaterialDecisionCandidates)
+	} else {
+		evidence, frontier, err = planningRouteEvidenceContext(root, header, priorCards, scoutManifest, scoutResult, dispatch.MaterialDecisionCandidates)
+	}
 	if err != nil {
 		return empty, err
 	}
@@ -2956,6 +3257,9 @@ func decodePlanningRouteStageResult(raw []byte) (planningRouteStageResult, error
 	if len(bytes.TrimSpace(raw)) == 0 {
 		return result, fmt.Errorf("Route-Setter result is empty")
 	}
+	if err := validatePlanningRouteScoreLiterals(raw); err != nil {
+		return result, err
+	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&result); err != nil {
@@ -2968,6 +3272,63 @@ func decodePlanningRouteStageResult(raw []byte) (planningRouteStageResult, error
 		return planningRouteStageResult{}, fmt.Errorf("decode trailing Route-Setter result data: %w", err)
 	}
 	return result, nil
+}
+
+// validatePlanningRouteScoreLiterals protects the staged five-dimension
+// contract before encoding/json converts values into implementation-sized
+// ints. The legacy whole-plan artifact intentionally accepts fractional 0-1
+// confidence values; iteration evidence does not, because its content
+// addresses and stop decisions require one canonical whole-number spelling.
+func validatePlanningRouteScoreLiterals(raw []byte) error {
+	var envelope struct {
+		DimensionAssessments []struct {
+			Dimension colony.PlanningDimension `json:"dimension"`
+			Before    json.RawMessage          `json:"before"`
+			After     json.RawMessage          `json:"after"`
+		} `json:"dimension_assessments"`
+		SuppliedOverall json.RawMessage `json:"supplied_overall"`
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	if err := decoder.Decode(&envelope); err != nil {
+		return fmt.Errorf("decode Route-Setter score literals: %w", err)
+	}
+	for index, assessment := range envelope.DimensionAssessments {
+		label := string(assessment.Dimension)
+		if strings.TrimSpace(label) == "" {
+			label = fmt.Sprintf("dimension_assessments[%d]", index)
+		}
+		if _, err := decodePlanningWholeScore(label+".before", assessment.Before); err != nil {
+			return err
+		}
+		if _, err := decodePlanningWholeScore(label+".after", assessment.After); err != nil {
+			return err
+		}
+	}
+	if len(bytes.TrimSpace(envelope.SuppliedOverall)) > 0 {
+		if _, err := decodePlanningWholeScore("supplied_overall", envelope.SuppliedOverall); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func decodePlanningWholeScore(field string, raw json.RawMessage) (int, error) {
+	text := strings.TrimSpace(string(raw))
+	if text == "" || strings.ContainsAny(text, ".eE") {
+		return 0, fmt.Errorf("%s must be a whole JSON integer between 0 and 100", field)
+	}
+	var number json.Number
+	if err := json.Unmarshal(raw, &number); err != nil {
+		return 0, fmt.Errorf("%s must be a whole JSON integer between 0 and 100: %w", field, err)
+	}
+	value, err := number.Int64()
+	if err != nil {
+		return 0, fmt.Errorf("%s must be a whole JSON integer between 0 and 100: %w", field, err)
+	}
+	if value < 0 || value > 100 {
+		return 0, fmt.Errorf("%s must be between 0 and 100", field)
+	}
+	return int(value), nil
 }
 
 func samePlanningStageReceiptReference(left, right planningStageReceiptRef) bool {
@@ -2999,6 +3360,14 @@ func validatePlanningRouteDecisionCandidates(pass int, got, want []planningDecis
 }
 
 func loadPlanningRouteScoutBoundary(root string, routeManifest planningStageManifest, chain planningStageReceiptChain) (StageReceipt, planningStageManifest, planningScoutStageResult, planningRunHeader, error) {
+	return loadPlanningRouteScoutBoundaryWithSession(root, nil, routeManifest, chain)
+}
+
+func loadPlanningRouteScoutBoundaryInSession(session *planningMutationSession, routeManifest planningStageManifest, chain planningStageReceiptChain) (StageReceipt, planningStageManifest, planningScoutStageResult, planningRunHeader, error) {
+	return loadPlanningRouteScoutBoundaryWithSession(session.RepositoryRoot(), session, routeManifest, chain)
+}
+
+func loadPlanningRouteScoutBoundaryWithSession(root string, session *planningMutationSession, routeManifest planningStageManifest, chain planningStageReceiptChain) (StageReceipt, planningStageManifest, planningScoutStageResult, planningRunHeader, error) {
 	emptyReceipt := StageReceipt{}
 	emptyManifest := planningStageManifest{}
 	emptyResult := planningScoutStageResult{}
@@ -3014,22 +3383,44 @@ func loadPlanningRouteScoutBoundary(root string, routeManifest planningStageMani
 	if receipt == nil || routeManifest.ScoutReceipt == nil || !samePlanningStageReceiptReference(receipt.reference(), *routeManifest.ScoutReceipt) {
 		return emptyReceipt, emptyManifest, emptyResult, emptyHeader, fmt.Errorf("Route-Setter manifest Scout receipt is absent from the verified receipt chain")
 	}
-	scoutManifest, err := loadPlanningStageManifest(root, routeManifest.RunID, receipt.ManifestID)
+	var scoutManifest planningStageManifest
+	var err error
+	if session != nil {
+		scoutManifest, err = loadPlanningStageManifestInSession(session, routeManifest.RunID, receipt.ManifestID)
+	} else {
+		scoutManifest, err = loadPlanningStageManifest(root, routeManifest.RunID, receipt.ManifestID)
+	}
 	if err != nil {
 		return emptyReceipt, emptyManifest, emptyResult, emptyHeader, err
 	}
-	_, raw, err := loadPlanningStageOutput(root, scoutManifest)
+	var raw []byte
+	if session != nil {
+		_, raw, err = loadPlanningStageOutputInSession(session, scoutManifest)
+	} else {
+		_, raw, err = loadPlanningStageOutput(root, scoutManifest)
+	}
 	if err != nil {
 		return emptyReceipt, emptyManifest, emptyResult, emptyHeader, err
 	}
-	scoutResult, normalized, _, err := validatePlanningScoutStageResult(root, scoutManifest, raw)
+	var scoutResult planningScoutStageResult
+	var normalized []byte
+	if session != nil {
+		scoutResult, normalized, _, err = validatePlanningScoutStageResultInSession(session, scoutManifest, raw)
+	} else {
+		scoutResult, normalized, _, err = validatePlanningScoutStageResult(root, scoutManifest, raw)
+	}
 	if err != nil {
 		return emptyReceipt, emptyManifest, emptyResult, emptyHeader, fmt.Errorf("revalidate Scout receipt output: %w", err)
 	}
 	if !bytes.Equal(raw, normalized) {
 		return emptyReceipt, emptyManifest, emptyResult, emptyHeader, fmt.Errorf("Scout receipt output is not the canonical normalized result")
 	}
-	header, err := loadPlanningScoutRunHeader(root, scoutManifest)
+	var header planningRunHeader
+	if session != nil {
+		header, err = loadPlanningScoutRunHeaderInSession(session, scoutManifest)
+	} else {
+		header, err = loadPlanningScoutRunHeader(root, scoutManifest)
+	}
 	if err != nil {
 		return emptyReceipt, emptyManifest, emptyResult, emptyHeader, err
 	}
@@ -3160,6 +3551,14 @@ func planningRoutePriorSnapshot(root string, state colony.ColonyState, manifest 
 }
 
 func planningRouteEvidenceContext(root string, header planningRunHeader, cards []colony.PlanningIterationCard, scoutManifest planningStageManifest, scout planningScoutStageResult, candidates []planningDecisionCandidate) ([]colony.PlanningEvidenceRef, planningEvidenceFrontier, error) {
+	return planningRouteEvidenceContextWithSession(root, nil, header, cards, scoutManifest, scout, candidates)
+}
+
+func planningRouteEvidenceContextInSession(session *planningMutationSession, header planningRunHeader, cards []colony.PlanningIterationCard, scoutManifest planningStageManifest, scout planningScoutStageResult, candidates []planningDecisionCandidate) ([]colony.PlanningEvidenceRef, planningEvidenceFrontier, error) {
+	return planningRouteEvidenceContextWithSession(session.RepositoryRoot(), session, header, cards, scoutManifest, scout, candidates)
+}
+
+func planningRouteEvidenceContextWithSession(root string, session *planningMutationSession, header planningRunHeader, cards []colony.PlanningIterationCard, scoutManifest planningStageManifest, scout planningScoutStageResult, candidates []planningDecisionCandidate) ([]colony.PlanningEvidenceRef, planningEvidenceFrontier, error) {
 	byID := make(map[string]colony.PlanningEvidenceRef)
 	ordered := make([]colony.PlanningEvidenceRef, 0, len(header.EvidenceCatalogue)+len(scout.NewEvidence))
 	add := func(reference colony.PlanningEvidenceRef) error {
@@ -3182,7 +3581,13 @@ func planningRouteEvidenceContext(root string, header planningRunHeader, cards [
 		}
 	}
 	if scoutManifest.Pass > 1 {
-		continuation, err := loadPlanningRouteScoutDispatch(root, scoutManifest.RunID, scoutManifest.Pass)
+		var continuation planningRouteScoutDispatch
+		var err error
+		if session != nil {
+			continuation, err = loadPlanningRouteScoutDispatchInSession(session, scoutManifest.RunID, scoutManifest.Pass)
+		} else {
+			continuation, err = loadPlanningRouteScoutDispatch(root, scoutManifest.RunID, scoutManifest.Pass)
+		}
 		if err != nil {
 			return nil, planningEvidenceFrontier{}, fmt.Errorf("load prior Route evidence frontier: %w", err)
 		}
@@ -3376,17 +3781,30 @@ func finalizePlanningRouteStage(root string, manifest planningStageManifest, raw
 }
 
 func finalizePlanningRouteStageWithOptions(root string, manifest planningStageManifest, raw []byte, opts planningRouteStageFinalizeOptions) (planningRouteStageFinalization, error) {
+	var result planningRouteStageFinalization
+	err := withPlanningMutationSession(root, "finalize-planning-route-stage", func(session *planningMutationSession) error {
+		var finalizeErr error
+		result, finalizeErr = finalizePlanningRouteStageInSession(session, manifest, raw, opts)
+		return finalizeErr
+	})
+	return result, err
+}
+
+func finalizePlanningRouteStageInSession(session *planningMutationSession, manifest planningStageManifest, raw []byte, opts planningRouteStageFinalizeOptions) (planningRouteStageFinalization, error) {
 	empty := planningRouteStageFinalization{}
-	validated, err := validatePlanningRouteStageResult(root, manifest, raw)
+	validated, err := validatePlanningRouteStageResultInSession(session, manifest, raw)
 	if err != nil {
 		return empty, err
 	}
-	artifact, err := writePlanningStageOutput(root, manifest, validated.Normalized, planningStageWriteOptions{})
+	artifact, err := writePlanningStageOutputInSession(session, manifest, validated.Normalized, planningStageWriteOptions{})
 	if err != nil {
+		return empty, err
+	}
+	if err := refreshPlanningSessionBaseline(session, lifecycleTransactionRootData, planningStageDataRelativePath(artifact.Path)); err != nil {
 		return empty, err
 	}
 
-	_, cards, _, err := readPlanningTimelineChain(root, manifest.RunID)
+	_, cards, _, err := readPlanningTimelineChainInSession(session, manifest.RunID)
 	if err != nil {
 		return empty, err
 	}
@@ -3427,20 +3845,26 @@ func finalizePlanningRouteStageWithOptions(root string, manifest planningStageMa
 		EvidenceThatWouldChange: stopPolicy.Decision.EvidenceThatWouldChange,
 		CreatedAt:               planningRouteCardCreatedAt(validated),
 	}
-	receipt, err := finalizePlanningStage(root, manifest, planningStageFinalizeRequest{
+	receipt, err := finalizePlanningStageInSession(session, manifest, planningStageFinalizeRequest{
 		To: next, DecisionResumeStage: decisionResume, RouteCard: &card, Fault: opts.Fault, Rename: opts.Rename,
 	})
 	if err != nil {
 		return empty, err
 	}
-	timeline, err := loadPlanningTimeline(root, manifest.RunID)
+	if err := refreshPlanningSessionBaseline(session, lifecycleTransactionRootData, planningStageDataRelativePath(planningStageStateRepositoryPath(manifest.RunID))); err != nil {
+		return empty, err
+	}
+	if err := refreshPlanningTimelineSessionBaselines(session, manifest.RunID); err != nil {
+		return empty, err
+	}
+	_, persistedCards, _, err := readPlanningTimelineChainInSession(session, manifest.RunID)
 	if err != nil {
 		return empty, err
 	}
 	var persisted *colony.PlanningIterationCard
-	for index := range timeline.Cards {
-		if timeline.Cards[index].Iteration == manifest.Pass && timeline.Cards[index].RouteSetterReceiptID == receipt.ID {
-			copy := timeline.Cards[index]
+	for index := range persistedCards {
+		if persistedCards[index].Iteration == manifest.Pass && persistedCards[index].RouteSetterReceiptID == receipt.ID {
+			copy := persistedCards[index]
 			persisted = &copy
 			break
 		}
@@ -3451,6 +3875,27 @@ func finalizePlanningRouteStageWithOptions(root string, manifest planningStageMa
 	return planningRouteStageFinalization{
 		Validation: validated, Artifact: artifact, Receipt: receipt, Card: *persisted, StopPolicy: stopPolicy,
 	}, nil
+}
+
+func refreshPlanningTimelineSessionBaselines(session *planningMutationSession, runID string) error {
+	indexPath := planningTimelineDataRelativePath(planningTimelineIndexRepositoryPath(runID))
+	if err := refreshPlanningSessionBaseline(session, lifecycleTransactionRootData, indexPath); err != nil {
+		return err
+	}
+	content, exists, err := session.ReadFile(lifecycleTransactionRootData, indexPath)
+	if err != nil || !exists {
+		return err
+	}
+	var index planningTimelineIndex
+	if err := decodePlanningTimelineJSON(content, &index); err != nil {
+		return err
+	}
+	for _, entry := range index.Entries {
+		if err := refreshPlanningSessionBaseline(session, lifecycleTransactionRootData, planningTimelineDataRelativePath(entry.CardPath)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func planningRouteConfidenceHistory(cards []colony.PlanningIterationCard, current planningRouteStageValidation) ([]planningConfidencePass, error) {
@@ -3513,20 +3958,30 @@ func planningRouteCardCreatedAt(validated planningRouteStageValidation) time.Tim
 // receipt, and iteration card have committed. The next effect is exactly one
 // of: a Scout dispatch, an owner checkpoint, or a non-active candidate.
 func coordinatePlanningRouteStage(root string, manifest planningStageManifest, raw []byte) (planningRouteStageCoordination, error) {
+	var result planningRouteStageCoordination
+	err := withPlanningMutationSession(root, "coordinate-planning-route-stage", func(session *planningMutationSession) error {
+		var coordinateErr error
+		result, coordinateErr = coordinatePlanningRouteStageInSession(session, manifest, raw)
+		return coordinateErr
+	})
+	return result, err
+}
+
+func coordinatePlanningRouteStageInSession(session *planningMutationSession, manifest planningStageManifest, raw []byte) (planningRouteStageCoordination, error) {
 	empty := planningRouteStageCoordination{}
-	completed, err := finalizePlanningRouteStage(root, manifest, raw)
+	completed, err := finalizePlanningRouteStageInSession(session, manifest, raw, planningRouteStageFinalizeOptions{})
 	if err != nil {
 		return empty, err
 	}
 	result := planningRouteStageCoordination{Route: completed}
-	state, err := loadPlanningStageState(root, manifest.RunID)
+	state, err := loadPlanningStageStateInSession(session, manifest.RunID)
 	if err != nil {
 		return empty, err
 	}
 
 	switch state.Stage {
 	case planningStageContinueReady:
-		dispatch, dispatchErr := authorizePlanningRouteScout(root, state, completed.Card, completed.Validation.ProposalHash, completed.Validation.Evidence, nil, false)
+		dispatch, dispatchErr := authorizePlanningRouteScoutInSession(session, state, completed.Card, completed.Validation.ProposalHash, completed.Validation.Evidence, nil, false)
 		if dispatchErr != nil {
 			return empty, dispatchErr
 		}
@@ -3534,7 +3989,7 @@ func coordinatePlanningRouteStage(root string, manifest planningStageManifest, r
 		return result, nil
 
 	case planningStageScoutRunning:
-		dispatch, dispatchErr := loadPlanningRouteScoutDispatch(root, state.RunID, state.Pass)
+		dispatch, dispatchErr := loadPlanningRouteScoutDispatchInSession(session, state.RunID, state.Pass)
 		if dispatchErr != nil {
 			return empty, dispatchErr
 		}
@@ -3545,11 +4000,11 @@ func coordinatePlanningRouteStage(root string, manifest planningStageManifest, r
 		return result, nil
 
 	case planningStageOwnerDecision:
-		checkpoint, checkpointErr := loadPlanningRouteDecisionCheckpoint(root, state.RunID, state.Pass)
+		checkpoint, checkpointErr := loadPlanningRouteDecisionCheckpointInSession(session, state.RunID, state.Pass)
 		if errors.Is(checkpointErr, os.ErrNotExist) {
-			checkpoint, checkpointErr = buildPlanningRouteDecisionCheckpoint(root, completed)
+			checkpoint, checkpointErr = buildPlanningRouteDecisionCheckpointInSession(session, completed)
 			if checkpointErr == nil {
-				checkpointErr = persistPlanningRouteDecisionCheckpoint(root, checkpoint)
+				checkpointErr = persistPlanningRouteDecisionCheckpointInSession(session, checkpoint)
 			}
 		}
 		if checkpointErr != nil {
@@ -3559,18 +4014,18 @@ func coordinatePlanningRouteStage(root string, manifest planningStageManifest, r
 		return result, nil
 
 	case planningStageCandidateReady:
-		candidate, candidateErr := buildPlanningRouteCandidate(root, completed)
+		candidate, candidateErr := buildPlanningRouteCandidateInSession(session, completed)
 		if candidateErr != nil {
 			return empty, candidateErr
 		}
-		if candidateErr = persistPlanningRouteCandidate(root, candidate); candidateErr != nil {
+		if candidateErr = persistPlanningRouteCandidateInSession(session, candidate); candidateErr != nil {
 			return empty, candidateErr
 		}
 		result.Candidate = &candidate
 		return result, nil
 
 	case planningStageSpecApprovalRequired, planningStageReconciliationRequired:
-		checkpoint, checkpointErr := loadPlanningRouteDecisionCheckpoint(root, state.RunID, state.Pass)
+		checkpoint, checkpointErr := loadPlanningRouteDecisionCheckpointInSession(session, state.RunID, state.Pass)
 		if checkpointErr != nil {
 			return empty, checkpointErr
 		}
@@ -3606,9 +4061,19 @@ func planningRouteEvidenceBindings(evidence []colony.PlanningEvidenceRef) ([]pla
 }
 
 func authorizePlanningRouteScout(root string, state planningStageState, card colony.PlanningIterationCard, proposalHash string, evidence []colony.PlanningEvidenceRef, token *planningDecisionResumeToken, afterOwnerDecision bool) (planningRouteScoutDispatch, error) {
+	var dispatch planningRouteScoutDispatch
+	err := withPlanningMutationSession(root, "authorize-planning-route-scout", func(session *planningMutationSession) error {
+		var authorizeErr error
+		dispatch, authorizeErr = authorizePlanningRouteScoutInSession(session, state, card, proposalHash, evidence, token, afterOwnerDecision)
+		return authorizeErr
+	})
+	return dispatch, err
+}
+
+func authorizePlanningRouteScoutInSession(session *planningMutationSession, state planningStageState, card colony.PlanningIterationCard, proposalHash string, evidence []colony.PlanningEvidenceRef, token *planningDecisionResumeToken, afterOwnerDecision bool) (planningRouteScoutDispatch, error) {
 	empty := planningRouteScoutDispatch{}
 	if state.Stage == planningStageScoutRunning {
-		return loadPlanningRouteScoutDispatch(root, state.RunID, state.Pass)
+		return loadPlanningRouteScoutDispatchInSession(session, state.RunID, state.Pass)
 	}
 	bindings, err := planningRouteEvidenceBindings(evidence)
 	if err != nil {
@@ -3685,7 +4150,7 @@ func authorizePlanningRouteScout(root string, state planningStageState, card col
 	if err := addressPlanningRouteScoutDispatch(&dispatch); err != nil {
 		return empty, err
 	}
-	if err := persistPlanningRouteScoutDispatch(root, running, dispatch, token); err != nil {
+	if err := persistPlanningRouteScoutDispatchInSession(session, running, dispatch, token); err != nil {
 		return empty, err
 	}
 	return dispatch, nil
@@ -3712,6 +4177,12 @@ func planningRouteScoutDispatchRepositoryPath(runID string, pass int) string {
 }
 
 func persistPlanningRouteScoutDispatch(root string, running planningStageState, dispatch planningRouteScoutDispatch, token *planningDecisionResumeToken) error {
+	return withPlanningMutationSession(root, "planning-route-scout", func(session *planningMutationSession) error {
+		return persistPlanningRouteScoutDispatchInSession(session, running, dispatch, token)
+	})
+}
+
+func persistPlanningRouteScoutDispatchInSession(session *planningMutationSession, running planningStageState, dispatch planningRouteScoutDispatch, token *planningDecisionResumeToken) error {
 	if err := validatePlanningStageManifest(dispatch.Manifest); err != nil {
 		return err
 	}
@@ -3742,18 +4213,24 @@ func persistPlanningRouteScoutDispatch(root string, running planningStageState, 
 		}
 		files[planningScoutDecisionResumeRepositoryPath(dispatch.RunID)] = tokenBytes
 	}
-	return persistPlanningScoutFiles(root, "planning-route-scout-"+dispatch.ContentHash[:24], "planning-route-scout", dispatch.ID, files, map[string]bool{
+	return persistPlanningScoutFilesInSession(session, "planning-route-scout-"+dispatch.ContentHash[:24], "planning-route-scout", dispatch.ID, files, map[string]bool{
 		planningStageStateRepositoryPath(dispatch.RunID): true,
 	})
 }
 
 func loadPlanningRouteScoutDispatch(root, runID string, pass int) (planningRouteScoutDispatch, error) {
 	var dispatch planningRouteScoutDispatch
-	repositoryRoot, _, err := planningStageRoots(root)
-	if err != nil {
-		return dispatch, err
-	}
-	content, exists, err := readOptionalPlanningStageFile(repositoryRoot, planningRouteScoutDispatchRepositoryPath(runID, pass))
+	err := withPlanningMutationSession(root, "load-planning-route-scout", func(session *planningMutationSession) error {
+		var loadErr error
+		dispatch, loadErr = loadPlanningRouteScoutDispatchInSession(session, runID, pass)
+		return loadErr
+	})
+	return dispatch, err
+}
+
+func loadPlanningRouteScoutDispatchInSession(session *planningMutationSession, runID string, pass int) (planningRouteScoutDispatch, error) {
+	var dispatch planningRouteScoutDispatch
+	content, exists, err := readOptionalPlanningStageFileInSession(session, planningRouteScoutDispatchRepositoryPath(runID, pass))
 	if err != nil {
 		return dispatch, err
 	}
@@ -3774,10 +4251,20 @@ func loadPlanningRouteScoutDispatch(root, runID string, pass int) (planningRoute
 }
 
 func buildPlanningRouteDecisionCheckpoint(root string, completed planningRouteStageFinalization) (planningScoutDecisionCheckpoint, error) {
+	var checkpoint planningScoutDecisionCheckpoint
+	err := withPlanningMutationSession(root, "build-planning-route-decision", func(session *planningMutationSession) error {
+		var buildErr error
+		checkpoint, buildErr = buildPlanningRouteDecisionCheckpointInSession(session, completed)
+		return buildErr
+	})
+	return checkpoint, err
+}
+
+func buildPlanningRouteDecisionCheckpointInSession(session *planningMutationSession, completed planningRouteStageFinalization) (planningScoutDecisionCheckpoint, error) {
 	empty := planningScoutDecisionCheckpoint{}
 	candidates := append([]planningDecisionCandidate(nil), completed.Validation.Result.MaterialDecisionCandidates...)
 	if len(candidates) == 0 {
-		candidate, err := planningRouteMaterialGapDecision(root, completed)
+		candidate, err := planningRouteMaterialGapDecisionInSession(session, completed)
 		if err != nil {
 			return empty, err
 		}
@@ -3847,11 +4334,21 @@ func buildPlanningRouteDecisionCheckpoint(root string, completed planningRouteSt
 }
 
 func planningRouteMaterialGapDecision(root string, completed planningRouteStageFinalization) (planningDecisionCandidate, error) {
+	var candidate planningDecisionCandidate
+	err := withPlanningMutationSession(root, "planning-route-material-gap-decision", func(session *planningMutationSession) error {
+		var buildErr error
+		candidate, buildErr = planningRouteMaterialGapDecisionInSession(session, completed)
+		return buildErr
+	})
+	return candidate, err
+}
+
+func planningRouteMaterialGapDecisionInSession(session *planningMutationSession, completed planningRouteStageFinalization) (planningDecisionCandidate, error) {
 	gap := completed.Card.WeakestGap
 	if gap.Materiality != colony.PlanningGapMaterial {
 		return planningDecisionCandidate{}, fmt.Errorf("owner decision has no carried candidate or material residual gap")
 	}
-	state, err := loadSpecificationColonyState(root)
+	state, err := loadSpecificationColonyStateInSession(session)
 	if err != nil {
 		return planningDecisionCandidate{}, err
 	}
@@ -3896,21 +4393,33 @@ func planningRouteDecisionCheckpointRepositoryPath(runID string, pass int) strin
 }
 
 func persistPlanningRouteDecisionCheckpoint(root string, checkpoint planningScoutDecisionCheckpoint) error {
+	return withPlanningMutationSession(root, "planning-route-decision", func(session *planningMutationSession) error {
+		return persistPlanningRouteDecisionCheckpointInSession(session, checkpoint)
+	})
+}
+
+func persistPlanningRouteDecisionCheckpointInSession(session *planningMutationSession, checkpoint planningScoutDecisionCheckpoint) error {
 	content, err := marshalPlanningStageJSON(checkpoint)
 	if err != nil {
 		return err
 	}
 	repositoryPath := planningRouteDecisionCheckpointRepositoryPath(checkpoint.RunID, checkpoint.Pass)
-	return persistPlanningScoutFiles(root, "planning-route-decision-"+checkpoint.ContentHash[:24], "planning-route-decision", checkpoint.ID, map[string][]byte{repositoryPath: content}, nil)
+	return persistPlanningScoutFilesInSession(session, "planning-route-decision-"+checkpoint.ContentHash[:24], "planning-route-decision", checkpoint.ID, map[string][]byte{repositoryPath: content}, nil)
 }
 
 func loadPlanningRouteDecisionCheckpoint(root, runID string, pass int) (planningScoutDecisionCheckpoint, error) {
 	var checkpoint planningScoutDecisionCheckpoint
-	repositoryRoot, _, err := planningStageRoots(root)
-	if err != nil {
-		return checkpoint, err
-	}
-	content, exists, err := readOptionalPlanningStageFile(repositoryRoot, planningRouteDecisionCheckpointRepositoryPath(runID, pass))
+	err := withPlanningMutationSession(root, "load-planning-route-decision", func(session *planningMutationSession) error {
+		var loadErr error
+		checkpoint, loadErr = loadPlanningRouteDecisionCheckpointInSession(session, runID, pass)
+		return loadErr
+	})
+	return checkpoint, err
+}
+
+func loadPlanningRouteDecisionCheckpointInSession(session *planningMutationSession, runID string, pass int) (planningScoutDecisionCheckpoint, error) {
+	var checkpoint planningScoutDecisionCheckpoint
+	content, exists, err := readOptionalPlanningStageFileInSession(session, planningRouteDecisionCheckpointRepositoryPath(runID, pass))
 	if err != nil {
 		return checkpoint, err
 	}
@@ -3931,12 +4440,22 @@ func loadPlanningRouteDecisionCheckpoint(root, runID string, pass int) (planning
 }
 
 func resumePlanningRouteDecision(root, runID string, token planningDecisionResumeToken, resolvedAt time.Time) (planningRouteStageCoordination, error) {
+	var coordinated planningRouteStageCoordination
+	err := withPlanningMutationSession(root, "resume-planning-route-decision", func(session *planningMutationSession) error {
+		var resumeErr error
+		coordinated, resumeErr = resumePlanningRouteDecisionInSession(session, runID, token, resolvedAt)
+		return resumeErr
+	})
+	return coordinated, err
+}
+
+func resumePlanningRouteDecisionInSession(session *planningMutationSession, runID string, token planningDecisionResumeToken, resolvedAt time.Time) (planningRouteStageCoordination, error) {
 	empty := planningRouteStageCoordination{}
-	state, err := loadPlanningStageState(root, runID)
+	state, err := loadPlanningStageStateInSession(session, runID)
 	if err != nil {
 		return empty, err
 	}
-	checkpoint, err := loadPlanningRouteDecisionCheckpoint(root, runID, state.Pass)
+	checkpoint, err := loadPlanningRouteDecisionCheckpointInSession(session, runID, state.Pass)
 	if err != nil {
 		return empty, err
 	}
@@ -3957,7 +4476,7 @@ func resumePlanningRouteDecision(root, runID string, token planningDecisionResum
 	}
 	result := planningRouteStageCoordination{DecisionCheckpoint: &checkpoint, ResumeToken: &expectedToken}
 	if state.Stage == planningStageScoutRunning {
-		dispatch, loadErr := loadPlanningRouteScoutDispatch(root, runID, state.Pass)
+		dispatch, loadErr := loadPlanningRouteScoutDispatchInSession(session, runID, state.Pass)
 		if loadErr != nil {
 			return empty, loadErr
 		}
@@ -3968,7 +4487,7 @@ func resumePlanningRouteDecision(root, runID string, token planningDecisionResum
 		return result, nil
 	}
 	if state.Stage == planningStageSpecApprovalRequired && expectedToken.Disposition == planningDecisionDispositionSuccessorSpecRequired {
-		colonyState, loadErr := loadSpecificationColonyState(root)
+		colonyState, loadErr := loadSpecificationColonyStateInSession(session)
 		if loadErr != nil {
 			return empty, loadErr
 		}
@@ -3990,7 +4509,7 @@ func resumePlanningRouteDecision(root, runID string, token planningDecisionResum
 		RevisionEvidence: append([]planningDecisionRevisionEvidence(nil), expectedToken.RevisionEvidence...),
 	}
 	if resolution.Disposition == planningDecisionDispositionSuccessorSpecRequired {
-		resumed, resumeErr := resumePlanningScoutContractDecision(root, state, checkpoint, expectedToken, resolution, resolvedAt)
+		resumed, resumeErr := resumePlanningScoutContractDecisionInSession(session, state, checkpoint, expectedToken, resolution, resolvedAt)
 		if resumeErr != nil {
 			return empty, resumeErr
 		}
@@ -4004,11 +4523,11 @@ func resumePlanningRouteDecision(root, runID string, token planningDecisionResum
 	if stageManifest != nil {
 		return empty, fmt.Errorf("completed-Route owner answer unexpectedly dispatched a worker")
 	}
-	card, err := planningRouteCheckpointCard(root, checkpoint)
+	card, err := planningRouteCheckpointCardInSession(session, checkpoint)
 	if err != nil {
 		return empty, err
 	}
-	dispatch, err := authorizePlanningRouteScout(root, ready, card, checkpoint.ProposalHash, checkpoint.Evidence, &expectedToken, true)
+	dispatch, err := authorizePlanningRouteScoutInSession(session, ready, card, checkpoint.ProposalHash, checkpoint.Evidence, &expectedToken, true)
 	if err != nil {
 		return empty, err
 	}
@@ -4017,7 +4536,17 @@ func resumePlanningRouteDecision(root, runID string, token planningDecisionResum
 }
 
 func planningRouteCheckpointCard(root string, checkpoint planningScoutDecisionCheckpoint) (colony.PlanningIterationCard, error) {
-	timeline, err := loadPlanningTimeline(root, checkpoint.RunID)
+	var card colony.PlanningIterationCard
+	err := withPlanningMutationSession(root, "planning-route-checkpoint-card", func(session *planningMutationSession) error {
+		var loadErr error
+		card, loadErr = planningRouteCheckpointCardInSession(session, checkpoint)
+		return loadErr
+	})
+	return card, err
+}
+
+func planningRouteCheckpointCardInSession(session *planningMutationSession, checkpoint planningScoutDecisionCheckpoint) (colony.PlanningIterationCard, error) {
+	timeline, err := loadPlanningTimelineInSession(session, checkpoint.RunID)
 	if err != nil {
 		return colony.PlanningIterationCard{}, err
 	}
@@ -4029,23 +4558,59 @@ func planningRouteCheckpointCard(root string, checkpoint planningScoutDecisionCh
 	return colony.PlanningIterationCard{}, fmt.Errorf("Route decision checkpoint completed card is absent from the verified timeline")
 }
 
+func loadPlanningTimelineInSession(session *planningMutationSession, runID string) (planningTimeline, error) {
+	empty := planningTimeline{}
+	if err := validatePlanningTimelineSegment("run_id", runID); err != nil {
+		return empty, err
+	}
+	index, cards, exists, err := readPlanningTimelineChainInSession(session, runID)
+	if err != nil {
+		return empty, err
+	}
+	if !exists {
+		return empty, fmt.Errorf("planning timeline %q: %w", runID, os.ErrNotExist)
+	}
+	binding, err := planningTimelineBindingFor(index, cards)
+	if err != nil {
+		return empty, err
+	}
+	indexCopy := index
+	return planningTimeline{
+		Classification: planningTimelineCandidateOnly,
+		RunID:          runID,
+		Index:          &indexCopy,
+		Cards:          cards,
+		Binding:        &binding,
+	}, nil
+}
+
 func planningRouteCandidateRepositoryPath(runID string) string {
 	return path.Join(".aether", "data", "planning", strings.TrimSpace(runID), "candidate.json")
 }
 
 func buildPlanningRouteCandidate(root string, completed planningRouteStageFinalization) (colony.PlanCandidate, error) {
+	var candidate colony.PlanCandidate
+	err := withPlanningMutationSession(root, "build-planning-route-candidate", func(session *planningMutationSession) error {
+		var buildErr error
+		candidate, buildErr = buildPlanningRouteCandidateInSession(session, completed)
+		return buildErr
+	})
+	return candidate, err
+}
+
+func buildPlanningRouteCandidateInSession(session *planningMutationSession, completed planningRouteStageFinalization) (colony.PlanCandidate, error) {
 	empty := colony.PlanCandidate{}
 	if completed.Card.Decision.Reason == colony.PlanningStopContinue || completed.Card.Decision.Reason == colony.PlanningStopOwnerDecision {
 		return empty, fmt.Errorf("planning stop %q is not candidate eligible", completed.Card.Decision.Reason)
 	}
-	timeline, err := loadPlanningTimeline(root, completed.Receipt.RunID)
+	timeline, err := loadPlanningTimelineInSession(session, completed.Receipt.RunID)
 	if err != nil {
 		return empty, err
 	}
 	if timeline.Binding == nil || timeline.Index == nil || timeline.Binding.LastCardHash != completed.Card.ContentHash {
 		return empty, fmt.Errorf("candidate requires the complete verified planning timeline")
 	}
-	state, err := loadSpecificationColonyState(root)
+	state, err := loadSpecificationColonyStateInSession(session)
 	if err != nil {
 		return empty, err
 	}
@@ -4237,10 +4802,16 @@ func planningRouteProposalProofLinks(phases []colony.Phase) ([]string, []string,
 }
 
 func persistPlanningRouteCandidate(root string, candidate colony.PlanCandidate) error {
+	return withPlanningMutationSession(root, "planning-route-candidate", func(session *planningMutationSession) error {
+		return persistPlanningRouteCandidateInSession(session, candidate)
+	})
+}
+
+func persistPlanningRouteCandidateInSession(session *planningMutationSession, candidate colony.PlanCandidate) error {
 	content, err := marshalPlanningStageJSON(candidate)
 	if err != nil {
 		return err
 	}
 	repositoryPath := planningRouteCandidateRepositoryPath(candidate.Timeline.RunID)
-	return persistPlanningScoutFiles(root, "planning-route-candidate-"+candidate.ContentHash[:24], "planning-route-candidate", candidate.ID, map[string][]byte{repositoryPath: content}, nil)
+	return persistPlanningScoutFilesInSession(session, "planning-route-candidate-"+candidate.ContentHash[:24], "planning-route-candidate", candidate.ID, map[string][]byte{repositoryPath: content}, nil)
 }

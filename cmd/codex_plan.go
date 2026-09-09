@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -85,12 +86,9 @@ type codexPlanConfidence struct {
 }
 
 // planScore is a 0-100 confidence value that also accepts the 0-1 fractional
-// scale models naturally produce. The 27 July 2026 M4L run lost a complete
-// 45KB phase-plan.json because the Route-Setter wrote "knowledge": 0.85 and
-// the plain int field hard-failed the whole decode — the same one-loose-field
-// failure class as the scout payload that morning. A value written with a
-// fractional form (a decimal point in the JSON literal) is treated as 0-1 and
-// rescaled; a bare integer is taken literally. Non-numeric input still errors.
+// scale emitted by the legacy whole-plan worker contract. The staged planning
+// contract has a separate strict whole-number decoder because changing this
+// compatibility type would reject already-supported phase-plan artifacts.
 type planScore int
 
 func (s *planScore) UnmarshalJSON(data []byte) error {
@@ -938,17 +936,228 @@ func preparePlanningScoutStage(root string, state colony.ColonyState, goal strin
 }
 
 func persistPlanningScoutStage(root string, header planningRunHeader, running planningStageState, manifest planningStageManifest) error {
-	if store == nil {
-		return fmt.Errorf("no store initialized")
+	return withPlanningMutationSession(root, "planning-scout-stage", func(session *planningMutationSession) error {
+		return persistPlanningScoutStageInSession(session, header, running, manifest)
+	})
+}
+
+func persistPlanningScoutStageInSession(session *planningMutationSession, header planningRunHeader, running planningStageState, manifest planningStageManifest) error {
+	return persistPlanningScoutStageAndStateInSession(session, header, running, manifest, nil)
+}
+
+func persistPlanningScoutStageAndStateInSession(session *planningMutationSession, header planningRunHeader, running planningStageState, manifest planningStageManifest, state *colony.ColonyState) error {
+	if err := validatePlanningStageManifest(manifest); err != nil {
+		return err
+	}
+	if err := validatePlanningStageRunningState(running, manifest); err != nil {
+		return err
+	}
+	headerBytes, err := marshalPlanningStageJSON(header)
+	if err != nil {
+		return fmt.Errorf("marshal planning run header: %w", err)
+	}
+	manifestBytes, err := marshalPlanningStageJSON(manifest)
+	if err != nil {
+		return fmt.Errorf("marshal planning stage manifest: %w", err)
+	}
+	stateBytes, err := marshalPlanningStageJSON(running)
+	if err != nil {
+		return fmt.Errorf("marshal planning stage state: %w", err)
 	}
 	headerPath := filepath.ToSlash(filepath.Join("planning", manifest.RunID, "run-header.json"))
-	if err := store.SaveJSON(headerPath, header); err != nil {
-		return fmt.Errorf("persist planning run header: %w", err)
+	targets := []planningSessionTarget{
+		{Root: lifecycleTransactionRootData, Path: headerPath, Content: headerBytes},
+		{Root: lifecycleTransactionRootData, Path: planningStageDataRelativePath(planningStageManifestRepositoryPath(manifest.RunID, manifest.ID)), Content: manifestBytes},
+		{Root: lifecycleTransactionRootData, Path: planningStageDataRelativePath(planningStageStateRepositoryPath(manifest.RunID)), Content: stateBytes},
 	}
-	if err := recordPlanningStageDispatch(root, running, manifest, planningStageWriteOptions{}); err != nil {
-		return fmt.Errorf("persist Scout stage dispatch: %w", err)
+	if state != nil {
+		colonyStateBytes, err := marshalSpecificationState(*state)
+		if err != nil {
+			return err
+		}
+		targets = append(targets, planningSessionTarget{Root: lifecycleTransactionRootData, Path: "COLONY_STATE.json", Content: colonyStateBytes})
+	}
+	if err := commitPlanningSessionTargets(session, "planning-scout-stage-"+manifest.ContentHash[:24], "planning-scout-stage", targets); err != nil {
+		return fmt.Errorf("persist Scout run header and stage dispatch: %w", err)
 	}
 	return nil
+}
+
+type planningSessionTarget struct {
+	Root    lifecycleTransactionRootKind
+	Path    string
+	Content []byte
+	Remove  bool
+}
+
+// commitPlanningSessionTargets is the small common boundary used by the
+// remaining planning writers in this file. It captures every target baseline
+// while the repository session is held, derives a baseline-and-output-bound
+// transaction identity, and publishes the complete target set together.
+func commitPlanningSessionTargets(session *planningMutationSession, transactionPrefix, command string, targets []planningSessionTarget) error {
+	if session == nil {
+		return fmt.Errorf("%s requires a planning mutation session", command)
+	}
+	if len(targets) == 0 {
+		return nil
+	}
+	sortedTargets := append([]planningSessionTarget(nil), targets...)
+	sort.Slice(sortedTargets, func(left, right int) bool {
+		if sortedTargets[left].Root != sortedTargets[right].Root {
+			return sortedTargets[left].Root < sortedTargets[right].Root
+		}
+		return sortedTargets[left].Path < sortedTargets[right].Path
+	})
+	digest := sha256.New()
+	allApplied := true
+	for _, target := range sortedTargets {
+		current, exists, err := session.ReadFile(target.Root, target.Path)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(digest, "%s\x00%s\x00%t\x00", target.Root, target.Path, exists)
+		digest.Write(current)
+		digest.Write([]byte{0})
+		fmt.Fprintf(digest, "%t\x00", target.Remove)
+		digest.Write(target.Content)
+		digest.Write([]byte{0})
+		if target.Remove {
+			allApplied = allApplied && !exists
+		} else {
+			allApplied = allApplied && exists && bytes.Equal(current, target.Content)
+		}
+	}
+	if allApplied {
+		return nil
+	}
+	prefix := strings.Trim(strings.TrimSpace(transactionPrefix), "-")
+	if prefix == "" {
+		prefix = "planning-session"
+	}
+	transactionID := prefix + "-" + hex.EncodeToString(digest.Sum(nil))[:20]
+	tx, err := beginLifecycleTransaction(lifecycleTransactionConfig{
+		TransactionID: transactionID,
+		Command:       command,
+		Allowlist: lifecycleTransactionAllowlist{
+			RepositoryRoot: session.RepositoryRoot(), LifecycleDataRoot: session.DataRoot(),
+		},
+		Session: session,
+	})
+	if err != nil {
+		return err
+	}
+	for _, target := range sortedTargets {
+		if target.Remove {
+			err = tx.DeclareRemoval(target.Root, target.Path)
+		} else {
+			err = tx.DeclareWrite(target.Root, target.Path, target.Content)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	if err := tx.Validate(); err != nil {
+		return err
+	}
+	if _, err = tx.Commit(); err != nil {
+		return err
+	}
+	for _, target := range sortedTargets {
+		if err := refreshPlanningSessionBaseline(session, target.Root, target.Path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func refreshPlanningSessionBaseline(session *planningMutationSession, root lifecycleTransactionRootKind, relativePath string) error {
+	state, err := session.currentFileState(root, relativePath)
+	if err != nil {
+		return err
+	}
+	return session.updateBaseline(root, relativePath, state)
+}
+
+func persistPlanningColonyStateInSession(session *planningMutationSession, operation string, state colony.ColonyState) error {
+	content, err := marshalSpecificationState(state)
+	if err != nil {
+		return err
+	}
+	return commitPlanningSessionTargets(session, operation, operation, []planningSessionTarget{{
+		Root: lifecycleTransactionRootData, Path: "COLONY_STATE.json", Content: content,
+	}})
+}
+
+func planningSessionSummaryTargets(session *planningMutationSession, state colony.ColonyState, commandName, suggestedNext, summary string, now time.Time) ([]planningSessionTarget, error) {
+	var sessionFile colony.SessionFile
+	exists, err := session.LoadJSON(lifecycleTransactionRootData, "session.json", &sessionFile)
+	if err != nil {
+		return nil, fmt.Errorf("load session summary: %w", err)
+	}
+	now = now.UTC()
+	nowText := now.Format(time.RFC3339)
+	goal := ""
+	if state.Goal != nil {
+		goal = strings.TrimSpace(*state.Goal)
+	}
+	if !exists {
+		sessionID := fmt.Sprintf("%d_%s", now.Unix(), randomHex(4))
+		if state.SessionID != nil && strings.TrimSpace(*state.SessionID) != "" {
+			sessionID = strings.TrimSpace(*state.SessionID)
+		}
+		startedAt := nowText
+		if state.InitializedAt != nil {
+			startedAt = state.InitializedAt.UTC().Format(time.RFC3339)
+		}
+		sessionFile = colony.SessionFile{
+			SessionID: sessionID, StartedAt: startedAt, ColonyGoal: goal,
+			ColonyMode: state.EffectiveColonyMode(), CurrentPhase: state.CurrentPhase,
+			CurrentMilestone: state.Milestone, SuggestedNext: "aether status",
+			ActiveTodos: []string{}, Summary: "Session initialized",
+		}
+	}
+	if strings.TrimSpace(sessionFile.SessionID) == "" {
+		sessionFile.SessionID = fmt.Sprintf("%d_%s", now.Unix(), randomHex(4))
+	}
+	if strings.TrimSpace(sessionFile.StartedAt) == "" {
+		sessionFile.StartedAt = nowText
+	}
+	sessionFile.ColonyGoal = goal
+	sessionFile.ColonyMode = state.EffectiveColonyMode()
+	sessionFile.CurrentPhase = state.CurrentPhase
+	sessionFile.CurrentMilestone = state.Milestone
+	sessionFile.ActiveTodos = mergeShelfTodos(sessionFile.ActiveTodos, sessionActiveTodosFromState(state))
+	if strings.TrimSpace(commandName) != "" {
+		sessionFile.LastCommand = commandName
+		sessionFile.LastCommandAt = nowText
+	}
+	if strings.TrimSpace(suggestedNext) != "" {
+		sessionFile.SuggestedNext = suggestedNext
+	} else if strings.TrimSpace(sessionFile.SuggestedNext) == "" {
+		sessionFile.SuggestedNext = nextCommandFromState(state)
+	}
+	if strings.TrimSpace(summary) != "" {
+		sessionFile.Summary = summary
+	}
+	if head := strings.TrimSpace(getGitHEAD()); head != "" {
+		sessionFile.BaselineCommit = head
+	}
+	sessionBytes, err := json.MarshalIndent(sessionFile, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("marshal session summary: %w", err)
+	}
+	sessionBytes = append(sessionBytes, '\n')
+	next := sessionFile.SuggestedNext
+	if strings.TrimSpace(next) == "" {
+		next = nextCommandFromState(state)
+	}
+	contextBytes := []byte(renderContextSnapshot(state, sessionFile, next, summary, defaultSafeToClear(state)))
+	handoffBytes := []byte(renderHandoffSnapshot(state, sessionFile, "Session Snapshot", next, summary))
+	return []planningSessionTarget{
+		{Root: lifecycleTransactionRootData, Path: "session.json", Content: sessionBytes},
+		{Root: lifecycleTransactionRootRepository, Path: filepath.ToSlash(filepath.Join(".aether", "CONTEXT.md")), Content: contextBytes},
+		{Root: lifecycleTransactionRootRepository, Path: filepath.ToSlash(filepath.Join(".aether", "HANDOFF.md")), Content: handoffBytes},
+	}, nil
 }
 
 func runCodexPlan(root string, refresh bool, synthetic bool) (map[string]interface{}, error) {
@@ -960,6 +1169,98 @@ func runCodexPlan(root string, refresh bool, synthetic bool) (map[string]interfa
 }
 
 func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]interface{}, error) {
+	var result map[string]interface{}
+	sessionRoot := root
+	if store != nil {
+		if authoritativeRoot := aetherRootFromDataPath(store.BasePath()); authoritativeRoot != "" && filepath.Clean(filepath.Join(root, ".aether", "data")) != filepath.Clean(store.BasePath()) {
+			sessionRoot = authoritativeRoot
+		}
+	}
+	// A standard-mode plan-only request that merely reports an existing plan is
+	// provably read-only. Avoid creating the session's durable lock sentinel so
+	// the long-standing --plan-only no-mutation contract remains byte exact.
+	if readOnly, handled, err := runCodexExistingPlanReadOnly(sessionRoot, opts); handled {
+		return readOnly, err
+	}
+	err := withPlanningMutationSession(sessionRoot, "codex-plan", func(session *planningMutationSession) error {
+		var runErr error
+		result, runErr = runCodexPlanWithOptionsInSession(session, opts)
+		return runErr
+	})
+	return result, err
+}
+
+func runCodexExistingPlanReadOnly(_ string, opts codexPlanOptions) (map[string]interface{}, bool, error) {
+	if !opts.PlanOnly || opts.Refresh || opts.RepairArtifact || opts.Accept || len(opts.ResearchDocs) != 0 || store == nil {
+		return nil, false, nil
+	}
+	state, err := loadActiveColonyState()
+	if err != nil || len(state.Plan.Phases) == 0 || state.EffectiveColonyMode() == colony.ColonyModeOrchestrator {
+		return nil, false, nil
+	}
+	if state.Goal == nil || strings.TrimSpace(*state.Goal) == "" {
+		return nil, true, fmt.Errorf("No active colony goal. Run `aether init \"goal\"` first.")
+	}
+	preset, err := resolvePlanningPreset(opts)
+	if err != nil {
+		return nil, true, err
+	}
+	if preset.PresetRequired {
+		return planningPresetRequiredResult(state, preset), true, nil
+	}
+	opts.Preset = string(preset.Policy.ID)
+	opts.Depth = string(preset.Policy.ID)
+	opts.TargetConfidence = preset.Policy.TargetConfidence
+	opts.MaxIterations = preset.Policy.PassCap
+	granularity, planDepth, err := resolvePlanGranularityDepth(state.PlanGranularity, opts.Depth)
+	if err != nil {
+		return nil, true, err
+	}
+	currentPhase := firstBuildablePhase(state.Plan.Phases)
+	planningPhase := state.Plan.Phases[0]
+	if currentPhase > 0 && currentPhase <= len(state.Plan.Phases) {
+		planningPhase = state.Plan.Phases[currentPhase-1]
+	}
+	planningDepth, err := resolvePlanningDepthSmart(opts.PlanningDepth, planningPhase, len(state.Plan.Phases))
+	if err != nil {
+		return nil, true, err
+	}
+	verificationDepth, err := resolveVerificationDepthSmart(opts.VerificationDepth, planningPhase, len(state.Plan.Phases))
+	if err != nil {
+		return nil, true, err
+	}
+	pending := loadPendingDecisionFile()
+	unresolvedClarifications := countPendingClarifications(pending)
+	clarificationWarning := ""
+	if unresolvedClarifications > 0 {
+		clarificationWarning = "Unresolved clarifications exist. Run `aether discuss` to resolve them before planning, or proceed with implicit assumptions."
+	}
+	nextPhase := firstBuildablePhase(state.Plan.Phases)
+	nextCommand := "aether build 1"
+	if nextPhase > 0 {
+		nextCommand = fmt.Sprintf("aether build %d", nextPhase)
+	}
+	result := map[string]interface{}{
+		"plan_only": true, "planned": true, "existing_plan": true,
+		"colony_mode": string(state.EffectiveColonyMode()), "goal": *state.Goal,
+		"phases": state.Plan.Phases, "plan_revision": planRevisionSummary(state.Plan), "count": len(state.Plan.Phases),
+		"depth": planDepth, "planning_depth": planningDepth, "verification_depth": verificationDepth,
+		"planning_loop": resolvePlanningLoopOptions(planDepth, opts), "preset_required": false,
+		"preset_options": preset.Options, "selected_preset": string(preset.Policy.ID), "selection_source": preset.SelectionSource,
+		"target_confidence": preset.Policy.TargetConfidence, "max_iterations": preset.Policy.PassCap,
+		"verification_smart_default": opts.VerificationDepth == "", "planning_smart_default": opts.PlanningDepth == "",
+		"planning_phase": planningPhase, "granularity": string(granularity),
+		"dispatch_contract": planningDispatchContractWithTimeout(opts.WorkerTimeout), "dispatch_mode": "plan-only",
+		"requires_finalizer": false, "unresolved_clarifications": unresolvedClarifications,
+		"clarification_warning": clarificationWarning, "next": nextCommand,
+	}
+	addBoundaryQuestionResultFields(result, emptyOrchestratorBoundaryQuestionsResult())
+	addOrchestratorBoundaryGuidance(result, "plan", state, nextCommand, nil)
+	return result, true, nil
+}
+
+func runCodexPlanWithOptionsInSession(session *planningMutationSession, opts codexPlanOptions) (map[string]interface{}, error) {
+	root := session.RepositoryRoot()
 	if opts.Accept {
 		return nil, fmt.Errorf("--accept no longer accepts or activates a plan. Review the pending candidate, then use `aether plan --accept-candidate <candidate-id>`")
 	}
@@ -971,7 +1272,7 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		return nil, fmt.Errorf("no store initialized")
 	}
 
-	state, err := loadActiveColonyState()
+	state, err := loadSpecificationColonyStateInSession(session)
 	if err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "specification") {
 			return nil, planningSpecificationRecoveryError("the current specification state is invalid: "+err.Error(), "aether spec")
@@ -1012,15 +1313,12 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	// run keeps the document. A bad path fails the run rather than being
 	// dropped -- a silently ignored research document is the failure this
 	// whole handoff exists to prevent.
-	merged, changed, researchErr := mergeColonyResearchDocs(root, state.ResearchDocs, opts.ResearchDocs)
+	merged, researchChanged, researchErr := mergeColonyResearchDocs(root, state.ResearchDocs, opts.ResearchDocs)
 	if researchErr != nil {
 		return nil, researchErr
 	}
-	if changed {
+	if researchChanged {
 		state.ResearchDocs = merged
-		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
-			return nil, fmt.Errorf("record research documents on colony state: %w", err)
-		}
 	}
 
 	revisionContext, err := buildPlanRevisionContext(root, state, opts)
@@ -1060,7 +1358,7 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	}
 
 	if opts.PlanOnly {
-		return runCodexPlanPlanOnly(root, state, granularity, planDepth, unresolvedClarifications, clarificationWarning, opts)
+		return runCodexPlanPlanOnlyInSession(session, state, granularity, planDepth, unresolvedClarifications, clarificationWarning, researchChanged, opts)
 	}
 	if opts.RepairArtifact {
 		return runCodexPlanRepairArtifact(root)
@@ -1069,15 +1367,25 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	if len(state.Plan.Phases) > 0 && !opts.Refresh {
 		// Persist resolved verification depth only for non-plan-only paths.
 		state.VerificationDepth = verificationDepth
-		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
-			return nil, fmt.Errorf("failed to persist verification depth: %w", err)
-		}
 		nextPhase := firstBuildablePhase(state.Plan.Phases)
 		nextCommand := "aether build 1"
 		if nextPhase > 0 {
 			nextCommand = fmt.Sprintf("aether build %d", nextPhase)
 		}
-		updateSessionSummary("plan", nextCommand, fmt.Sprintf("Loaded existing plan (%d phases)", len(state.Plan.Phases)))
+		summary := fmt.Sprintf("Loaded existing plan (%d phases)", len(state.Plan.Phases))
+		stateBytes, marshalErr := marshalSpecificationState(state)
+		if marshalErr != nil {
+			return nil, marshalErr
+		}
+		targets := []planningSessionTarget{{Root: lifecycleTransactionRootData, Path: "COLONY_STATE.json", Content: stateBytes}}
+		sessionTargets, summaryErr := planningSessionSummaryTargets(session, state, "plan", nextCommand, summary, time.Now().UTC())
+		if summaryErr != nil {
+			return nil, summaryErr
+		}
+		targets = append(targets, sessionTargets...)
+		if err := commitPlanningSessionTargets(session, "plan-existing", "plan-existing", targets); err != nil {
+			return nil, fmt.Errorf("persist existing plan metadata: %w", err)
+		}
 		return map[string]interface{}{
 			"planned":                    true,
 			"existing_plan":              true,
@@ -1108,7 +1416,7 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	}
 
 	if codex.ShouldUseAgentDelegatePath() {
-		return runCodexPlanAgentDelegate(root, state, granularity, planDepth, unresolvedClarifications, clarificationWarning, opts)
+		return runCodexPlanAgentDelegateInSession(session, state, granularity, planDepth, unresolvedClarifications, clarificationWarning, researchChanged, opts)
 	}
 
 	var invoker codex.WorkerInvoker
@@ -1119,14 +1427,16 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		}
 	}
 
-	// Persist resolved verification depth only once planning will finalize in this process.
+	// Resolve verification depth before dispatch, but publish it only with the
+	// selected final or intermediate branch transaction.
 	state.VerificationDepth = verificationDepth
-	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
-		return nil, fmt.Errorf("failed to persist verification depth: %w", err)
-	}
 
+	var refreshCleanupTargets []planningSessionTarget
 	if opts.Refresh {
-		clearFallbackPlanningArtifacts(root)
+		refreshCleanupTargets, err = fallbackPlanningArtifactRemovalTargetsInSession(session)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	runHandle, err := beginRuntimeSpawnRun("plan", time.Now().UTC())
@@ -1173,6 +1483,9 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	artifactSource := "local-synthesis"
 	planSource := "local-synthesis"
 	planningWarning := planningSyntheticWarningForMode(opts.Synthetic)
+	if err := ensurePlanningSpawnTreeInSession(session); err != nil {
+		return nil, err
+	}
 	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
 	for _, dispatch := range dispatches {
 		if err := spawnTree.RecordSpawn("Queen", dispatch.Caste, dispatch.Name, dispatch.Task, 1); err != nil {
@@ -1224,11 +1537,6 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	if !ok {
 		return nil, fmt.Errorf("planning dispatches missing route-setter worker")
 	}
-	scoutFile, preservedScoutArtifact, err := writePlanningScoutArtifact(root, planningDir, *state.Goal, granularity, survey, scoutDispatch, scoutReport, artifactSnapshots)
-	if err != nil {
-		return nil, err
-	}
-
 	phases, confidence, unresolvedGaps := synthesizeRouteSetterPlan(*state.Goal, granularity, survey, scoutReport)
 	if workerPlan, ok, note, err := loadWorkerPlanArtifact(root, artifactSnapshots, dispatches); err != nil {
 		return nil, err
@@ -1296,31 +1604,27 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		}
 		planningLoop = evaluatePlanningLoopIteration(manifest, confidence, unresolvedGaps, evidenceHash)
 	}
-	routeSetterFile, preservedRouteArtifact, err := writeRouteSetterArtifact(root, planningDir, *state.Goal, granularity, survey, routeSetterDispatch, confidence, unresolvedGaps, phases, planningLoop, artifactSnapshots)
+	publication, err := preparePlanningArtifactPublication(session, *state.Goal, granularity, survey, scoutDispatch, scoutReport, routeSetterDispatch, confidence, unresolvedGaps, phases, planningLoop, artifactSnapshots, dispatches, true, true)
 	if err != nil {
 		return nil, err
 	}
-	planArtifactFile, preservedPlanArtifact, err := writeWorkerPlanArtifact(root, planningDir, confidence, unresolvedGaps, phases, planningLoop, artifactSnapshots, dispatches)
-	if err != nil {
-		return nil, err
-	}
-	phaseResearchFiles, preservedResearchArtifacts, _, err := writePhaseResearchArtifacts(root, phaseResearchDir, survey, scoutReport, phases, artifactSnapshots, dispatches)
-	if err != nil {
-		return nil, err
-	}
-	if preservedScoutArtifact || preservedRouteArtifact || preservedPlanArtifact || preservedResearchArtifacts > 0 {
+	scoutFile := publication.ScoutFile
+	routeSetterFile := publication.RouteSetterFile
+	planArtifactFile := publication.PlanArtifactFile
+	phaseResearchFiles := publication.PhaseResearchFiles
+	if publication.PreservedScout || publication.PreservedRouteSetter || publication.PreservedPlan || publication.PreservedPhaseResearch > 0 {
 		artifactSource = "worker-written"
 	}
-
-	// Legacy fallback artifacts are cleared after real, simulated, or explicit synthetic planning.
-	if dispatchMode == "fallback" {
-		markerPath := filepath.Join(planningDir, ".fallback-marker")
-		os.WriteFile(markerPath, []byte(time.Now().UTC().Format(time.RFC3339)), 0644)
-	} else {
-		// Real or simulated dispatch succeeded — remove any stale marker.
-		os.Remove(filepath.Join(planningDir, ".fallback-marker"))
+	backupTargets, err := planningBackupRemovalTargetsInSession(session)
+	if err != nil {
+		return nil, err
 	}
-	clearPlanningBackupArtifacts(planningDir)
+	publicationTargets := mergePlanningSessionTargets(
+		refreshCleanupTargets,
+		[]planningSessionTarget{planningFallbackMarkerTarget(dispatchMode, time.Now().UTC())},
+		backupTargets,
+		publication.Targets,
+	)
 
 	for i := range dispatches {
 		status := dispatches[i].Status
@@ -1350,7 +1654,7 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	runStatus = summarizeRunStatus(statuses...)
 	if !opts.Synthetic && dispatchMode == "real" && planningLoop.StopReason == planningLoopPendingStop {
 		phasePlanDraft = workerPlanArtifactFromPhases(confidence, unresolvedGaps, phases, planningLoop)
-		result, err := persistIntermediatePlanningIteration(root, manifest, dispatches, scoutReport, phasePlanDraft, confidence, unresolvedGaps, evidenceHash, planningLoop, codexPlanProvenance{
+		result, err := persistIntermediatePlanningIterationInSession(session, manifest, dispatches, scoutReport, phasePlanDraft, confidence, unresolvedGaps, evidenceHash, planningLoop, codexPlanProvenance{
 			Dispatches:     dispatches,
 			ScoutReport:    scoutReport,
 			PhasePlan:      &phasePlanDraft,
@@ -1359,7 +1663,7 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 			PlanSource:     planSource,
 			SourceSummary:  "direct real planning workers",
 			RecordWorkers:  false,
-		})
+		}, &state, publicationTargets)
 		if err != nil {
 			return nil, err
 		}
@@ -1405,40 +1709,49 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	now := time.Now().UTC()
 	planConfidence := float64(confidence.Overall) / 100.0
 	var revision colony.PlanRevision
-	if err := store.UpdateJSONAtomically("COLONY_STATE.json", &state, func() error {
-		state = normalizeLegacyColonyState(state)
-		if err := validatePlanManifestBase(root, manifest, state); err != nil {
-			return err
-		}
-		acceptedPlan, acceptedRevision, err := activateGeneratedPlan(state.Plan, phases, now, &planConfidence, colony.PlanEvidenceBoundV1, manifest, evidenceHash)
-		if err != nil {
-			return err
-		}
-		state.State = colony.StateREADY
-		state.CurrentPhase = firstBuildablePhase(acceptedPlan.Phases)
-		state.BuildStartedAt = nil
-		state.PlanGranularity = granularity
-		state.VerificationDepth = verificationDepth
-		state.Plan = acceptedPlan
-		revision = acceptedRevision
-		state.Events = append(trimmedEvents(state.Events),
-			fmt.Sprintf("%s|planning_scout|plan|Scout summarized surveyed repo context", now.Format(time.RFC3339)),
-			fmt.Sprintf("%s|plan_revision_activated|plan|Activated %s (%s): %s", now.Format(time.RFC3339), revision.ID, revision.ReasonType, revision.Reason),
-			fmt.Sprintf("%s|plan_generated|plan|Generated %d active phases with %d%% confidence; planning loop stopped: %s", now.Format(time.RFC3339), len(acceptedPlan.Phases), confidence.Overall, planningLoop.StopReason),
-		)
-		return nil
-	}); err != nil {
+	state = normalizeLegacyColonyState(state)
+	if err := validatePlanManifestBase(root, manifest, state); err != nil {
 		return nil, fmt.Errorf("failed to atomically activate plan revision: %w", err)
 	}
+	acceptedPlan, acceptedRevision, err := activateGeneratedPlan(state.Plan, phases, now, &planConfidence, colony.PlanEvidenceBoundV1, manifest, evidenceHash)
+	if err != nil {
+		return nil, fmt.Errorf("failed to atomically activate plan revision: %w", err)
+	}
+	state.State = colony.StateREADY
+	state.CurrentPhase = firstBuildablePhase(acceptedPlan.Phases)
+	state.BuildStartedAt = nil
+	state.PlanGranularity = granularity
+	state.VerificationDepth = verificationDepth
+	state.Plan = acceptedPlan
+	revision = acceptedRevision
+	state.Events = append(trimmedEvents(state.Events),
+		fmt.Sprintf("%s|planning_scout|plan|Scout summarized surveyed repo context", now.Format(time.RFC3339)),
+		fmt.Sprintf("%s|plan_revision_activated|plan|Activated %s (%s): %s", now.Format(time.RFC3339), revision.ID, revision.ReasonType, revision.Reason),
+		fmt.Sprintf("%s|plan_generated|plan|Generated %d active phases with %d%% confidence; planning loop stopped: %s", now.Format(time.RFC3339), len(acceptedPlan.Phases), confidence.Overall, planningLoop.StopReason),
+	)
+	stateBytes, err := marshalSpecificationState(state)
+	if err != nil {
+		return nil, err
+	}
 	phases = state.Plan.Phases
-	_ = os.Remove(filepath.Join(store.BasePath(), planningIterationStateRel))
-
 	nextPhase := firstBuildablePhase(phases)
 	nextCommand := "aether build 1"
 	if nextPhase > 0 {
 		nextCommand = fmt.Sprintf("aether build %d", nextPhase)
 	}
-	updateSessionSummary("plan", nextCommand, fmt.Sprintf("Generated %d plan phases with %d%% confidence", len(phases), confidence.Overall))
+	summary := fmt.Sprintf("Generated %d plan phases with %d%% confidence", len(phases), confidence.Overall)
+	targets := []planningSessionTarget{
+		{Root: lifecycleTransactionRootData, Path: "COLONY_STATE.json", Content: stateBytes},
+		{Root: lifecycleTransactionRootData, Path: planningIterationStateRel, Remove: true},
+	}
+	sessionTargets, err := planningSessionSummaryTargets(session, state, "plan", nextCommand, summary, now)
+	if err != nil {
+		return nil, err
+	}
+	targets = mergePlanningSessionTargets(publicationTargets, targets, sessionTargets)
+	if err := commitPlanningSessionTargets(session, "plan-activate", "plan-activate", targets); err != nil {
+		return nil, fmt.Errorf("failed to atomically activate plan revision: %w", err)
+	}
 
 	dispatchMaps := make([]map[string]interface{}, 0, len(dispatches))
 	for _, dispatch := range dispatches {
@@ -1511,8 +1824,18 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	return result, nil
 }
 
-func runCodexPlanAgentDelegate(root string, state colony.ColonyState, granularity colony.PlanGranularity, planDepth string, unresolvedClarifications int, clarificationWarning string, opts codexPlanOptions) (map[string]interface{}, error) {
-	result, err := runCodexPlanPlanOnly(root, state, granularity, planDepth, unresolvedClarifications, clarificationWarning, opts)
+func ensurePlanningSpawnTreeInSession(session *planningMutationSession) error {
+	_, exists, err := session.ReadFile(lifecycleTransactionRootData, "spawn-tree.txt")
+	if err != nil || exists {
+		return err
+	}
+	return commitPlanningSessionTargets(session, "planning-spawn-tree-init", "planning-spawn-tree-init", []planningSessionTarget{{
+		Root: lifecycleTransactionRootData, Path: "spawn-tree.txt", Content: []byte{},
+	}})
+}
+
+func runCodexPlanAgentDelegateInSession(session *planningMutationSession, state colony.ColonyState, granularity colony.PlanGranularity, planDepth string, unresolvedClarifications int, clarificationWarning string, persistState bool, opts codexPlanOptions) (map[string]interface{}, error) {
+	result, err := runCodexPlanPlanOnlyInSession(session, state, granularity, planDepth, unresolvedClarifications, clarificationWarning, persistState, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -1594,7 +1917,8 @@ func renderRouteSetterResearchContent(root string, candidates []phaseResearchCan
 	return b.String()
 }
 
-func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity colony.PlanGranularity, planDepth string, unresolvedClarifications int, clarificationWarning string, opts codexPlanOptions) (map[string]interface{}, error) {
+func runCodexPlanPlanOnlyInSession(session *planningMutationSession, state colony.ColonyState, granularity colony.PlanGranularity, planDepth string, unresolvedClarifications int, clarificationWarning string, persistState bool, opts codexPlanOptions) (map[string]interface{}, error) {
+	root := session.RepositoryRoot()
 	if state.Goal == nil || strings.TrimSpace(*state.Goal) == "" {
 		return nil, fmt.Errorf("No active colony goal. Run `aether init \"goal\"` first.")
 	}
@@ -1621,6 +1945,11 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		return nil, err
 	}
 	if len(state.Plan.Phases) > 0 && !opts.Refresh {
+		if persistState {
+			if err := persistPlanningColonyStateInSession(session, "plan-only-research-documents", state); err != nil {
+				return nil, fmt.Errorf("record research documents on colony state: %w", err)
+			}
+		}
 		nextPhase := firstBuildablePhase(state.Plan.Phases)
 		nextCommand := "aether build 1"
 		if nextPhase > 0 {
@@ -1742,7 +2071,11 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 	for i := range dispatches {
 		dispatches[i].Brief += renderAutomaticPhaseResearchPolicy(header.ResearchPolicy)
 	}
-	if err := persistPlanningScoutStage(root, header, runningStage, stageManifest); err != nil {
+	var persistedState *colony.ColonyState
+	if persistState {
+		persistedState = &state
+	}
+	if err := persistPlanningScoutStageAndStateInSession(session, header, runningStage, stageManifest, persistedState); err != nil {
 		return nil, err
 	}
 	for i := range dispatches {
@@ -3925,45 +4258,210 @@ func writeWorkerPlanArtifact(root, planningDir string, confidence codexPlanConfi
 	return path, false, nil
 }
 
-func clearFallbackPlanningArtifacts(root string) {
-	planningDir := filepath.Join(root, ".aether", "data", "planning")
-	markerPath := filepath.Join(planningDir, ".fallback-marker")
-	_, markerErr := os.Stat(markerPath)
-	markerExists := markerErr == nil
-
-	fallbackArtifacts := []string{
-		filepath.ToSlash(filepath.Join(".aether", "data", "planning", "SCOUT.md")),
-		filepath.ToSlash(filepath.Join(".aether", "data", "planning", "ROUTE-SETTER.md")),
-		filepath.ToSlash(filepath.Join(".aether", "data", "planning", "phase-plan.json")),
-	}
-	for _, relPath := range fallbackArtifacts {
-		removeFallbackArtifact(root, relPath, markerExists)
-	}
-	clearPlanningBackupArtifacts(planningDir)
-	clearFallbackPhaseResearchArtifacts(root, markerExists)
-	os.Remove(markerPath)
+type planningArtifactPublication struct {
+	ScoutFile              string
+	RouteSetterFile        string
+	PlanArtifactFile       string
+	PhaseResearchFiles     []string
+	ResearchFailedPhases   []int
+	PreservedScout         bool
+	PreservedRouteSetter   bool
+	PreservedPlan          bool
+	PreservedPhaseResearch int
+	Targets                []planningSessionTarget
 }
 
-func removeFallbackArtifact(root, relPath string, markerExists bool) {
-	if markerExists && shouldPreserveWorkerArtifact(root, relPath, nil, nil) {
-		return
+// preparePlanningArtifactPublication renders fallback-owned artifacts in an
+// isolated temporary directory. Worker-authored files remain untouched and
+// are captured as session baselines; locally rendered bytes become declared
+// lifecycle targets that the caller can commit with state and projections.
+func preparePlanningArtifactPublication(
+	session *planningMutationSession,
+	goal string,
+	granularity colony.PlanGranularity,
+	survey codexSurveyContext,
+	scoutDispatch codexPlanningDispatch,
+	report codexScoutReport,
+	routeSetterDispatch codexPlanningDispatch,
+	confidence codexPlanConfidence,
+	unresolvedGaps []string,
+	phases []colony.Phase,
+	planningLoop codexPlanningLoop,
+	snapshots map[string]codexArtifactSnapshot,
+	dispatches []codexPlanningDispatch,
+	preservePlanningArtifacts bool,
+	preservePhaseResearch bool,
+) (planningArtifactPublication, error) {
+	publication := planningArtifactPublication{
+		ScoutFile:        filepath.Join(session.DataRoot(), "planning", "SCOUT.md"),
+		RouteSetterFile:  filepath.Join(session.DataRoot(), "planning", "ROUTE-SETTER.md"),
+		PlanArtifactFile: filepath.Join(session.DataRoot(), "planning", "phase-plan.json"),
 	}
-	os.Remove(filepath.Join(root, filepath.FromSlash(relPath)))
-}
-
-func clearFallbackPhaseResearchArtifacts(root string, markerExists bool) {
-	researchDir := filepath.Join(root, ".aether", "data", "phase-research")
-	entries, err := os.ReadDir(researchDir)
+	stagingRoot, err := os.MkdirTemp("", "aether-planning-artifacts-")
 	if err != nil {
-		return
+		return publication, fmt.Errorf("create planning artifact staging directory: %w", err)
 	}
-	for _, entry := range entries {
-		if entry.IsDir() {
+	defer os.RemoveAll(stagingRoot)
+	stagingPlanning := filepath.Join(stagingRoot, "planning")
+	stagingResearch := filepath.Join(stagingRoot, "phase-research")
+	if err := os.MkdirAll(stagingPlanning, 0o755); err != nil {
+		return publication, err
+	}
+	if err := os.MkdirAll(stagingResearch, 0o755); err != nil {
+		return publication, err
+	}
+	preservationRoot := session.RepositoryRoot()
+	if !preservePlanningArtifacts {
+		// Finalization receives validated completion content and deliberately
+		// re-renders its canonical projections. Point preservation checks at the
+		// empty staging root so an older visible projection cannot win merely by
+		// existing before this transaction commits.
+		preservationRoot = stagingRoot
+	}
+	researchPreservationRoot := session.RepositoryRoot()
+	if !preservePhaseResearch {
+		researchPreservationRoot = stagingRoot
+	}
+
+	_, publication.PreservedScout, err = writePlanningScoutArtifact(preservationRoot, stagingPlanning, goal, granularity, survey, scoutDispatch, report, snapshots)
+	if err != nil {
+		return publication, err
+	}
+	_, publication.PreservedRouteSetter, err = writeRouteSetterArtifact(preservationRoot, stagingPlanning, goal, granularity, survey, routeSetterDispatch, confidence, unresolvedGaps, phases, planningLoop, snapshots)
+	if err != nil {
+		return publication, err
+	}
+	_, publication.PreservedPlan, err = writeWorkerPlanArtifact(preservationRoot, stagingPlanning, confidence, unresolvedGaps, phases, planningLoop, snapshots, dispatches)
+	if err != nil {
+		return publication, err
+	}
+	publication.PhaseResearchFiles, publication.PreservedPhaseResearch, publication.ResearchFailedPhases, err = writePhaseResearchArtifacts(researchPreservationRoot, stagingResearch, survey, report, phases, snapshots, dispatches)
+	if err != nil {
+		return publication, err
+	}
+
+	artifacts := []struct {
+		name      string
+		staged    string
+		dataPath  string
+		preserved bool
+	}{
+		{name: "Scout", staged: filepath.Join(stagingPlanning, "SCOUT.md"), dataPath: filepath.ToSlash(filepath.Join("planning", "SCOUT.md")), preserved: publication.PreservedScout},
+		{name: "Route-Setter", staged: filepath.Join(stagingPlanning, "ROUTE-SETTER.md"), dataPath: filepath.ToSlash(filepath.Join("planning", "ROUTE-SETTER.md")), preserved: publication.PreservedRouteSetter},
+		{name: "phase plan", staged: filepath.Join(stagingPlanning, "phase-plan.json"), dataPath: filepath.ToSlash(filepath.Join("planning", "phase-plan.json")), preserved: publication.PreservedPlan},
+	}
+	for _, artifact := range artifacts {
+		if artifact.preserved {
+			content, exists, readErr := session.ReadFile(lifecycleTransactionRootData, artifact.dataPath)
+			if readErr != nil {
+				return publication, readErr
+			} else if !exists {
+				return publication, fmt.Errorf("preserved %s artifact is missing", artifact.name)
+			}
+			publication.Targets = append(publication.Targets, planningSessionTarget{Root: lifecycleTransactionRootData, Path: artifact.dataPath, Content: content})
 			continue
 		}
-		relPath := filepath.ToSlash(filepath.Join(".aether", "data", "phase-research", entry.Name()))
-		removeFallbackArtifact(root, relPath, markerExists)
+		content, readErr := os.ReadFile(artifact.staged)
+		if readErr != nil {
+			return publication, fmt.Errorf("read staged %s artifact: %w", artifact.name, readErr)
+		}
+		publication.Targets = append(publication.Targets, planningSessionTarget{Root: lifecycleTransactionRootData, Path: artifact.dataPath, Content: content})
 	}
+	for _, name := range publication.PhaseResearchFiles {
+		dataPath := filepath.ToSlash(filepath.Join("phase-research", name))
+		content, readErr := os.ReadFile(filepath.Join(stagingResearch, name))
+		if readErr == nil {
+			publication.Targets = append(publication.Targets, planningSessionTarget{Root: lifecycleTransactionRootData, Path: dataPath, Content: content})
+			continue
+		}
+		if !os.IsNotExist(readErr) {
+			return publication, fmt.Errorf("read staged phase research %s: %w", name, readErr)
+		}
+		content, exists, baselineErr := session.ReadFile(lifecycleTransactionRootData, dataPath)
+		if baselineErr != nil {
+			return publication, baselineErr
+		} else if !exists {
+			return publication, fmt.Errorf("preserved phase research %s is missing", name)
+		}
+		publication.Targets = append(publication.Targets, planningSessionTarget{Root: lifecycleTransactionRootData, Path: dataPath, Content: content})
+	}
+	return publication, nil
+}
+
+func mergePlanningSessionTargets(groups ...[]planningSessionTarget) []planningSessionTarget {
+	merged := make(map[string]planningSessionTarget)
+	for _, group := range groups {
+		for _, target := range group {
+			key := string(target.Root) + "\x00" + filepath.ToSlash(target.Path)
+			merged[key] = target
+		}
+	}
+	result := make([]planningSessionTarget, 0, len(merged))
+	for _, target := range merged {
+		result = append(result, target)
+	}
+	return result
+}
+
+func clearFallbackPlanningArtifacts(root string) error {
+	return withPlanningMutationSession(root, "planning-refresh-cleanup", func(session *planningMutationSession) error {
+		return clearFallbackPlanningArtifactsInSession(session)
+	})
+}
+
+func clearFallbackPlanningArtifactsInSession(session *planningMutationSession) error {
+	targets, err := fallbackPlanningArtifactRemovalTargetsInSession(session)
+	if err != nil {
+		return err
+	}
+	return commitPlanningSessionTargets(session, "planning-refresh-cleanup", "planning-refresh-cleanup", targets)
+}
+
+func fallbackPlanningArtifactRemovalTargetsInSession(session *planningMutationSession) ([]planningSessionTarget, error) {
+	root := session.RepositoryRoot()
+	markerRelative := filepath.ToSlash(filepath.Join("planning", ".fallback-marker"))
+	_, markerExists, err := session.ReadFile(lifecycleTransactionRootData, markerRelative)
+	if err != nil {
+		return nil, err
+	}
+	targets := make([]planningSessionTarget, 0, 8)
+	appendFallbackRemoval := func(dataRelative, repositoryRelative string) {
+		if markerExists && shouldPreserveWorkerArtifact(root, repositoryRelative, nil, nil) {
+			return
+		}
+		targets = append(targets, planningSessionTarget{Root: lifecycleTransactionRootData, Path: dataRelative, Remove: true})
+	}
+	for _, name := range []string{"SCOUT.md", "ROUTE-SETTER.md", "phase-plan.json"} {
+		appendFallbackRemoval(
+			filepath.ToSlash(filepath.Join("planning", name)),
+			filepath.ToSlash(filepath.Join(".aether", "data", "planning", name)),
+		)
+	}
+	planningDir := filepath.Join(session.DataRoot(), "planning")
+	if entries, readErr := os.ReadDir(planningDir); readErr == nil {
+		for _, entry := range entries {
+			if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".bak") {
+				targets = append(targets, planningSessionTarget{Root: lifecycleTransactionRootData, Path: filepath.ToSlash(filepath.Join("planning", entry.Name())), Remove: true})
+			}
+		}
+	} else if !os.IsNotExist(readErr) {
+		return nil, fmt.Errorf("inspect planning backup artifacts: %w", readErr)
+	}
+	researchDir := filepath.Join(session.DataRoot(), "phase-research")
+	if entries, readErr := os.ReadDir(researchDir); readErr == nil {
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			dataRelative := filepath.ToSlash(filepath.Join("phase-research", entry.Name()))
+			repositoryRelative := filepath.ToSlash(filepath.Join(".aether", "data", dataRelative))
+			appendFallbackRemoval(dataRelative, repositoryRelative)
+		}
+	} else if !os.IsNotExist(readErr) {
+		return nil, fmt.Errorf("inspect fallback phase research artifacts: %w", readErr)
+	}
+	targets = append(targets, planningSessionTarget{Root: lifecycleTransactionRootData, Path: markerRelative, Remove: true})
+	return targets, nil
 }
 
 func clearPlanningBackupArtifacts(planningDir string) {
@@ -3972,6 +4470,53 @@ func clearPlanningBackupArtifacts(planningDir string) {
 			os.Remove(f)
 		}
 	}
+}
+
+func persistPlanningFallbackMarkerInSession(session *planningMutationSession, dispatchMode string, now time.Time) error {
+	return commitPlanningSessionTargets(session, "planning-fallback-marker", "planning-fallback-marker", []planningSessionTarget{planningFallbackMarkerTarget(dispatchMode, now)})
+}
+
+func planningFallbackMarkerTarget(dispatchMode string, now time.Time) planningSessionTarget {
+	target := planningSessionTarget{
+		Root: lifecycleTransactionRootData,
+		Path: filepath.ToSlash(filepath.Join("planning", ".fallback-marker")),
+	}
+	if dispatchMode == "fallback" {
+		target.Content = []byte(now.UTC().Format(time.RFC3339))
+	} else {
+		target.Remove = true
+	}
+	return target
+}
+
+func clearPlanningBackupArtifactsInSession(session *planningMutationSession) error {
+	targets, err := planningBackupRemovalTargetsInSession(session)
+	if err != nil {
+		return err
+	}
+	return commitPlanningSessionTargets(session, "planning-backup-cleanup", "planning-backup-cleanup", targets)
+}
+
+func planningBackupRemovalTargetsInSession(session *planningMutationSession) ([]planningSessionTarget, error) {
+	planningDir := filepath.Join(session.DataRoot(), "planning")
+	entries, err := os.ReadDir(planningDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("inspect planning backup artifacts: %w", err)
+	}
+	targets := make([]planningSessionTarget, 0)
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".bak") {
+			targets = append(targets, planningSessionTarget{
+				Root:   lifecycleTransactionRootData,
+				Path:   filepath.ToSlash(filepath.Join("planning", entry.Name())),
+				Remove: true,
+			})
+		}
+	}
+	return targets, nil
 }
 
 // prunePhaseResearchOrphans removes phase-N-research.md files that no longer
@@ -3994,6 +4539,42 @@ func prunePhaseResearchOrphans(dir string, phases []colony.Phase) {
 			_ = os.Remove(filepath.Join(dir, name))
 		}
 	}
+}
+
+func prunePhaseResearchOrphansInSession(session *planningMutationSession, phases []colony.Phase) error {
+	targets, err := phaseResearchOrphanRemovalTargetsInSession(session, phases)
+	if err != nil {
+		return err
+	}
+	return commitPlanningSessionTargets(session, "planning-research-prune", "planning-research-prune", targets)
+}
+
+func phaseResearchOrphanRemovalTargetsInSession(session *planningMutationSession, phases []colony.Phase) ([]planningSessionTarget, error) {
+	live := make(map[string]bool, len(phases))
+	for _, phase := range phases {
+		live[fmt.Sprintf("phase-%d-research.md", phase.ID)] = true
+	}
+	dir := filepath.Join(session.DataRoot(), "phase-research")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("inspect phase research artifacts: %w", err)
+	}
+	targets := make([]planningSessionTarget, 0)
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasPrefix(name, "phase-") || !strings.HasSuffix(name, "-research.md") || live[name] {
+			continue
+		}
+		targets = append(targets, planningSessionTarget{
+			Root:   lifecycleTransactionRootData,
+			Path:   filepath.ToSlash(filepath.Join("phase-research", name)),
+			Remove: true,
+		})
+	}
+	return targets, nil
 }
 
 func writePhaseResearchArtifacts(root, dir string, survey codexSurveyContext, report codexScoutReport, phases []colony.Phase, snapshots map[string]codexArtifactSnapshot, dispatches []codexPlanningDispatch) ([]string, int, []int, error) {
