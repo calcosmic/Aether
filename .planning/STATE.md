@@ -2,19 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
-current_phase: 200
-current_phase_name: Iterative Planning
 status: executing
-stopped_at: Completed 200-32-PLAN.md
-last_updated: "2026-09-09T00:59:42.799Z"
+stopped_at: Completed 200-33-PLAN.md
+last_updated: "2026-09-09T01:34:01.821Z"
 last_activity: 2026-09-09
-state_head: 344029946cdd6c62416496dc6524e547b4ed0f04
 progress:
   total_phases: 7
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 74
-  completed_plans: 66
-  percent: 0
+  completed_plans: 67
+  percent: 14
 ---
 
 # Project State
@@ -32,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 33 of 40
+Plan: 34 of 40
 Status: Ready to execute
 Last activity: 2026-09-09
 
@@ -146,6 +143,7 @@ Last activity: 2026-09-09
 | Phase 200 P30 | 45 min | 3 tasks | 9 files |
 | Phase 200 P31 | 57min | 3 tasks | 6 files |
 | Phase 200 P32 | 1h 15min | 3 tasks | 6 files |
+| Phase 200 P33 | 30min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -448,6 +446,10 @@ Last activity: 2026-09-09
 - [Phase 200]: Locally generated planning artifacts are prepared off-tree and published with cleanup, colony state, session.json, CONTEXT.md, and HANDOFF.md in one declared target set. — No successful return can expose only part of the selected planning branch.
 - [Phase 200]: Validated worker-authored artifacts are represented as exact no-op write targets, so refresh cleanup cannot delete them and their baseline remains part of atomic publication. — Worker output preservation and cleanup now participate in the same all-or-none transaction.
 - [Phase 200]: Whole-integer JSON validation applies at the staged evidence boundary while legacy weighted confidence calculations retain their established fractional compatibility. — External evidence cannot round or overflow, and existing internal score aggregation remains backward compatible.
+- [Phase 200]: Every named build-start variant maps to one finite required/allowed effect rule; unsupported combinations fail before mutation. — A closed matrix prevents future callers from silently acquiring partial start effects.
+- [Phase 200]: Build start holds one repository session across authority reload, target derivation, baseline validation, commit, and rollback. — One lock prevents workers from starting against mixed planning authority.
+- [Phase 200]: The content-addressed build-start receipt is declared last and exact replay validates its semantic target contract without dispatching again. — Durability must precede worker authority while retries remain duplicate-free.
+- [Phase 200]: Attempt derivation accepts clock, process, run, platform, workspace, tasks, and provenance explicitly. — Pure derivation makes every build-start byte available before mutation and preserves the legacy adapter.
 
 ### Pending Todos
 
@@ -564,8 +566,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-09T00:59:42.771Z
-Stopped at: Completed 200-32-PLAN.md
+Last session: 2026-09-09T01:34:01.812Z
+Stopped at: Completed 200-33-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
