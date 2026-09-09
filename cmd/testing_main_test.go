@@ -265,8 +265,45 @@ func bindCommandTestRepositoryAt(t *testing.T, repositoryRoot string) commandTes
 	}
 }
 
-func selfRestoringAetherRootCleanupSites200(_ *token.FileSet, _ *ast.File) []string {
-	return nil
+func selfRestoringAetherRootCleanupSites200(fileSet *token.FileSet, file *ast.File) []string {
+	var sites []string
+	ast.Inspect(file, func(node ast.Node) bool {
+		deferred, ok := node.(*ast.DeferStmt)
+		if !ok || deferred.Call == nil || len(deferred.Call.Args) != 2 {
+			return true
+		}
+		setenv, ok := deferred.Call.Fun.(*ast.SelectorExpr)
+		if !ok || setenv.Sel.Name != "Setenv" {
+			return true
+		}
+		setenvPackage, ok := setenv.X.(*ast.Ident)
+		if !ok || setenvPackage.Name != "os" {
+			return true
+		}
+		name, ok := deferred.Call.Args[0].(*ast.BasicLit)
+		if !ok || name.Kind != token.STRING || name.Value != `"AETHER_ROOT"` {
+			return true
+		}
+		getenvCall, ok := deferred.Call.Args[1].(*ast.CallExpr)
+		if !ok || len(getenvCall.Args) != 1 {
+			return true
+		}
+		getenv, ok := getenvCall.Fun.(*ast.SelectorExpr)
+		if !ok || getenv.Sel.Name != "Getenv" {
+			return true
+		}
+		getenvPackage, ok := getenv.X.(*ast.Ident)
+		if !ok || getenvPackage.Name != "os" {
+			return true
+		}
+		getenvName, ok := getenvCall.Args[0].(*ast.BasicLit)
+		if !ok || getenvName.Kind != token.STRING || getenvName.Value != `"AETHER_ROOT"` {
+			return true
+		}
+		sites = append(sites, fileSet.Position(deferred.Pos()).String())
+		return true
+	})
+	return sites
 }
 
 func TestNoSelfRestoringAetherRootCleanup200(t *testing.T) {
