@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -58,6 +59,17 @@ func TestPartialFinalizeCanBeReplayedWithTheSamePacket(t *testing.T) {
 	if strings.TrimSpace(firstRecovery) == "" {
 		t.Fatal("a partial finalize handed the owner no recovery command")
 	}
+	childRel, child := partialRecoveryChild200(t, 1, manifest.AttemptID)
+	if child.RecoveryCommand != firstRecovery {
+		t.Fatalf("durable recovery command = %q, first finalize returned %q", child.RecoveryCommand, firstRecovery)
+	}
+	if !reflect.DeepEqual(child.SelectedTasks, pending) {
+		t.Fatalf("durable unfinished task IDs = %v, want %v", child.SelectedTasks, pending)
+	}
+	firstProjection := partialRecoveryProjection200(firstResult)
+	if firstProjection["retry_attempt_id"] != child.ID || firstProjection["retry_attempt_path"] != displayDataPath(childRel) {
+		t.Fatalf("first finalize recovery projection = %+v, want child %s at %s", firstProjection, child.ID, displayDataPath(childRel))
+	}
 
 	// The same packet, submitted again -- exactly what the runtime's own
 	// journal-failure message instructs.
@@ -71,9 +83,9 @@ func TestPartialFinalizeCanBeReplayedWithTheSamePacket(t *testing.T) {
 	if idempotent, _ := secondResult["idempotent"].(bool); !idempotent {
 		t.Errorf("replaying a partial packet must report itself as idempotent; got %#v", secondResult["idempotent"])
 	}
-	secondRecovery, _ := secondResult["recovery_command"].(string)
-	if secondRecovery != firstRecovery {
-		t.Errorf("replay handed a different recovery command: %q, first time %q", secondRecovery, firstRecovery)
+	secondProjection := partialRecoveryProjection200(secondResult)
+	if !reflect.DeepEqual(secondProjection, firstProjection) {
+		t.Errorf("replay recovery projection = %+v, first finalize = %+v", secondProjection, firstProjection)
 	}
 
 	statusByID := map[string]string{}
@@ -102,9 +114,6 @@ func TestPartialFinalizeCanBeReplayedWithTheSamePacket(t *testing.T) {
 // If writing that record had failed the first time -- a warning to the screen,
 // and the run continues -- the replay quietly created one, which is a write on
 // a path this project's rules say must never write.
-//
-// The lost record is simulated by deleting it, which is the same state the
-// runtime is left in when the first write fails.
 func TestPartialFinalizeReplayWritesNothing(t *testing.T) {
 	root, manifest, chain, ids := setupCoherentJobExternalFinalizeTest(t, "Replay writes nothing")
 
@@ -138,39 +147,168 @@ func TestPartialFinalizeReplayWritesNothing(t *testing.T) {
 		t.Fatal("a partial finalize handed the owner no recovery command")
 	}
 
-	// Simulate the first call's recovery-record write having failed.
-	removed := 0
-	for _, record := range listBuildAttemptsForPhase(1) {
-		if strings.TrimSpace(record.ParentAttemptID) == "" {
-			continue
-		}
-		path := filepath.Join(root, ".aether", "data", filepath.FromSlash(buildAttemptPathForID(1, record.ID)))
-		if err := os.Remove(path); err != nil {
-			t.Fatalf("remove recovery record: %v", err)
-		}
-		removed++
-	}
-	if removed == 0 {
-		t.Fatal("fixture produced no recovery record to remove")
-	}
-	before := len(listBuildAttemptsForPhase(1))
+	before := snapshotProjectDataTree(t, store.BasePath())
 
 	secondResult, _, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
 	if err != nil {
 		t.Fatalf("replaying the identical partial packet: %v", err)
 	}
 
-	after := listBuildAttemptsForPhase(1)
-	if len(after) != before {
-		t.Fatalf("re-submitting an already-finalized packet created %d new attempt record(s); this path is documented as writing nothing", len(after)-before)
-	}
-	for _, record := range after {
-		if strings.TrimSpace(record.ParentAttemptID) != "" {
-			t.Fatalf("the replay wrote a new recovery record %s for parent %s", record.ID, record.ParentAttemptID)
-		}
+	after := snapshotProjectDataTree(t, store.BasePath())
+	if !reflect.DeepEqual(before, after) {
+		t.Fatalf("identical partial replay mutated durable data\nbefore: %#v\nafter:  %#v", before, after)
 	}
 	secondRecovery, _ := secondResult["recovery_command"].(string)
 	if secondRecovery != firstRecovery {
 		t.Fatalf("the replay must still hand back the same recovery command; got %q, first time %q", secondRecovery, firstRecovery)
+	}
+}
+
+func TestPartialFinalizeRejectsDifferentPacket200(t *testing.T) {
+	root, manifest, chain, ids := setupCoherentJobExternalFinalizeTest(t, "Changed partial packet fails closed")
+	completion := partialCompletionPacket200(t, root, manifest, chain, ids[:4])
+
+	firstResult, _, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+	if err != nil {
+		t.Fatalf("first finalize of a genuine partial: %v", err)
+	}
+	recoveryCommand, _ := firstResult["recovery_command"].(string)
+	completion.Dispatches[0].Summary = "different packet with forged terminal prose"
+	before := snapshotProjectDataTree(t, store.BasePath())
+
+	result, _, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+	if err == nil {
+		t.Fatalf("changed partial packet was accepted: %+v", result)
+	}
+	if !strings.Contains(err.Error(), recoveryCommand) {
+		t.Fatalf("changed-packet refusal omitted exact durable recovery guidance %q: %v", recoveryCommand, err)
+	}
+	after := snapshotProjectDataTree(t, store.BasePath())
+	if !reflect.DeepEqual(before, after) {
+		t.Fatalf("changed-packet refusal mutated durable data\nbefore: %#v\nafter:  %#v", before, after)
+	}
+}
+
+func TestPartialFinalizeRejectsMissingRecoveryChild200(t *testing.T) {
+	root, manifest, chain, ids := setupCoherentJobExternalFinalizeTest(t, "Missing partial child fails closed")
+	completion := partialCompletionPacket200(t, root, manifest, chain, ids[:4])
+	firstResult, _, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+	if err != nil {
+		t.Fatalf("first finalize of a genuine partial: %v", err)
+	}
+	recoveryCommand, _ := firstResult["recovery_command"].(string)
+	childRel, child := partialRecoveryChild200(t, 1, manifest.AttemptID)
+	if err := os.Remove(filepath.Join(store.BasePath(), filepath.FromSlash(childRel))); err != nil {
+		t.Fatalf("remove recovery child to simulate missing durable evidence: %v", err)
+	}
+	if err := os.Remove(filepath.Join(store.BasePath(), filepath.FromSlash(buildStartReceiptPath(1, child.ID)))); err != nil {
+		t.Fatalf("remove recovery child receipt: %v", err)
+	}
+	before := snapshotProjectDataTree(t, store.BasePath())
+
+	result, _, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+	if err == nil {
+		t.Fatalf("partial replay accepted missing recovery evidence: %+v", result)
+	}
+	if !strings.Contains(err.Error(), "recovery") || !strings.Contains(err.Error(), recoveryCommand) {
+		t.Fatalf("missing-child refusal omitted exact recovery guidance %q: %v", recoveryCommand, err)
+	}
+	after := snapshotProjectDataTree(t, store.BasePath())
+	if !reflect.DeepEqual(before, after) {
+		t.Fatalf("missing-child refusal mutated durable data\nbefore: %#v\nafter:  %#v", before, after)
+	}
+}
+
+func TestPartialFinalizeRejectsForgedRecoveryChild200(t *testing.T) {
+	root, manifest, chain, ids := setupCoherentJobExternalFinalizeTest(t, "Forged partial child fails closed")
+	completion := partialCompletionPacket200(t, root, manifest, chain, ids[:4])
+	firstResult, _, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+	if err != nil {
+		t.Fatalf("first finalize of a genuine partial: %v", err)
+	}
+	recoveryCommand, _ := firstResult["recovery_command"].(string)
+	childRel, child := partialRecoveryChild200(t, 1, manifest.AttemptID)
+	child.SelectedTasks = []string{ids[0]}
+	child.RecoveryCommand = buildUnfinishedRetryRedispatchCommand(1, child.SelectedTasks)
+	if err := store.SaveJSON(childRel, child); err != nil {
+		t.Fatalf("forge recovery child: %v", err)
+	}
+	before := snapshotProjectDataTree(t, store.BasePath())
+
+	result, _, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+	if err == nil {
+		t.Fatalf("partial replay trusted forged recovery child: %+v", result)
+	}
+	if !strings.Contains(err.Error(), "recovery") || !strings.Contains(err.Error(), recoveryCommand) {
+		t.Fatalf("forged-child refusal omitted exact recovery guidance %q: %v", recoveryCommand, err)
+	}
+	after := snapshotProjectDataTree(t, store.BasePath())
+	if !reflect.DeepEqual(before, after) {
+		t.Fatalf("forged-child refusal mutated durable data\nbefore: %#v\nafter:  %#v", before, after)
+	}
+}
+
+func TestPartialFinalizeRejectsExhaustedRecoveryChild200(t *testing.T) {
+	root, manifest, chain, ids := setupCoherentJobExternalFinalizeTest(t, "Exhausted partial child fails closed")
+	completion := partialCompletionPacket200(t, root, manifest, chain, ids[:4])
+	firstResult, _, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+	if err != nil {
+		t.Fatalf("first finalize of a genuine partial: %v", err)
+	}
+	recoveryCommand, _ := firstResult["recovery_command"].(string)
+	childRel, child := partialRecoveryChild200(t, 1, manifest.AttemptID)
+	if err := transitionBuildAttempt(childRel, buildAttemptFailed, "recovery attempt exhausted", child.Dispatches, nil, child.ExecutionOwner, os.ErrDeadlineExceeded); err != nil {
+		t.Fatalf("exhaust recovery child: %v", err)
+	}
+	before := snapshotProjectDataTree(t, store.BasePath())
+
+	result, _, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+	if err == nil {
+		t.Fatalf("partial replay treated an exhausted recovery child as executable: %+v", result)
+	}
+	if !strings.Contains(err.Error(), "exhausted") || !strings.Contains(err.Error(), recoveryCommand) {
+		t.Fatalf("exhausted-child refusal omitted exact recovery guidance %q: %v", recoveryCommand, err)
+	}
+	after := snapshotProjectDataTree(t, store.BasePath())
+	if !reflect.DeepEqual(before, after) {
+		t.Fatalf("exhausted-child refusal mutated durable data\nbefore: %#v\nafter:  %#v", before, after)
+	}
+}
+
+func partialCompletionPacket200(t *testing.T, root string, manifest codexBuildManifest, chain codexBuildDispatch, proven []string) codexExternalBuildCompletion {
+	t.Helper()
+	receipts := make([]codex.TaskReceipt, 0, len(proven))
+	touchedFiles := make([]string, 0, len(proven))
+	for _, id := range proven {
+		receipts = append(receipts, receiptForTask(t, root, id))
+		touchedFiles = append(touchedFiles, taskFileName(id))
+	}
+	return codexExternalBuildCompletion{DispatchManifest: &manifest, Dispatches: []codexExternalBuildWorkerResult{{
+		Stage: chain.Stage, Wave: chain.Wave, ExecutionWave: normalizedDispatchWave(chain),
+		Caste: chain.Caste, Name: chain.Name, TaskID: chain.TaskID,
+		Status: "failed", Summary: "crashed after finishing four of six steps", FilesModified: touchedFiles,
+		Handoff:      codex.WorkerHandoff{VerificationStatus: "fail", CommandsRun: []string{"go test ./..."}},
+		TaskReceipts: receipts,
+	}}}
+}
+
+func partialRecoveryChild200(t *testing.T, phaseNum int, parentAttemptID string) (string, buildAttemptRecord) {
+	t.Helper()
+	rel, child, ok := findExistingBuildAttemptRetry(phaseNum, parentAttemptID)
+	if !ok {
+		t.Fatalf("no durable recovery child linked to parent %s", parentAttemptID)
+	}
+	return rel, child
+}
+
+func partialRecoveryProjection200(result map[string]interface{}) map[string]interface{} {
+	return map[string]interface{}{
+		"recovery_job":        result["recovery_job"],
+		"parent_attempt_id":   result["parent_attempt_id"],
+		"retry_attempt_id":    result["retry_attempt_id"],
+		"retry_attempt_path":  result["retry_attempt_path"],
+		"unfinished_task_ids": result["unfinished_task_ids"],
+		"recovery_command":    result["recovery_command"],
+		"next":                result["next"],
 	}
 }
