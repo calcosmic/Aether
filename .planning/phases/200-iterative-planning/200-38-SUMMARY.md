@@ -75,7 +75,7 @@ Each task followed a fail-first TDD boundary and was committed atomically:
 3. **Task 2 RED: Require captured standing in lifecycle guidance** - `a14f6848` (test)
 4. **Task 2 GREEN: Drive next action from captured candidate standing** - `2d542a61` (feat)
 
-**Plan metadata:** recorded in the scoped closeout commit.
+**Plan metadata:** `dcbf8939` (docs), followed by a scoped provenance-restoration commit.
 
 ## Files Created/Modified
 
@@ -144,6 +144,8 @@ The plan's literal Task 2 regex includes two failures that predate Plan 38 and a
 
 These are confirmed baseline failures, not Plan 38 regressions. A clean archive of pre-plan commit `94cada84` at `/private/tmp/aether-plan38-baseline.bqdAtp` reproduced both exact commands and assertions unchanged: each command reported 0 passed / 1 failed. The plan's full literal regex therefore reports **100 passed / 2 failed**, while the exact scoped regex shown under Verification reports **100 passed / 0 failed**. Fixing either baseline would require unowned production/test files or weakening physical containment, so both were left untouched for the owning plan.
 
+The installed GSD state synchronizer again removed Phase 200 provenance keys and treated the completed Phase 199 as current-milestone progress while recording this plan. The normal SDK update was committed first as `dcbf8939`; Phase 200 identity, the zero-complete-current-phase progress convention, and `state_head` were then restored using the same scoped follow-up pattern as Plans 34, 35, and 37. `state.advance-plan` was intentionally not called because numeric increment would select Plan 39, while declared wave order makes Plan 36 the next incomplete plan.
+
 No authentication, package, architectural, or external-service blocker occurred.
 
 ## Known Stubs
@@ -177,7 +179,7 @@ None - no packages, credentials, migrations, or external services were added.
 ## Self-Check: PASSED
 
 - All six declared source/test files and this summary exist.
-- Commits `feb16710`, `4258f6dc`, `a14f6848`, and `2d542a61` exist in repository history in RED/GREEN order.
+- Commits `feb16710`, `4258f6dc`, `a14f6848`, `2d542a61`, and metadata commit `dcbf8939` exist in repository history in RED/GREEN/closeout order.
 - Focused, repeated, race, vet, diff, ownership, deletion, and protected-state checks pass.
 - Protected `.planning/config.json`, `.gsd/`, and Phase 199 PATTERNS dirt remains present and unstaged; the two byte-hashed files exactly match their pre-execution hashes.
 
