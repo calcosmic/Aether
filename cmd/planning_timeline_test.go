@@ -72,11 +72,23 @@ func TestPlanningTimelineAppendRoundTripPreservesCausalDetails(t *testing.T) {
 	card.DimensionAssessments[0].After = 58
 	card.DimensionAssessments[0].FreshEvidenceIDs = []string{"evidence-scout"}
 	card.DimensionAssessments[0].ResolvedGapIDs = []string{"gap-old"}
+	if err := colony.AddressPlanningDimensionAssessment(&card.DimensionAssessments[0]); err != nil {
+		t.Fatalf("re-address changed knowledge assessment: %v", err)
+	}
 	card.WeakestGap = card.DimensionAssessments[2].RemainingGap
 	card.Decision.SelectedGapID = card.WeakestGap.ID
 	card.Decision.ResidualGapIDs = []string{card.WeakestGap.ID}
 	card.Decision.Reason = colony.PlanningStopContinue
+	if err := addressPlanningStopDecision(&card.Decision); err != nil {
+		t.Fatalf("re-address changed stop decision: %v", err)
+	}
 	card.SemanticDelta.AuthorityImpacts[0].AffectedSemanticIDs = []string{"phase-grounded", "task-grounded"}
+	if err := colony.AddressPlanningAuthorityImpact(&card.SemanticDelta.AuthorityImpacts[0]); err != nil {
+		t.Fatalf("re-address changed authority impact: %v", err)
+	}
+	if err := colony.AddressPlanningSemanticDelta(&card.SemanticDelta); err != nil {
+		t.Fatalf("re-address semantic delta after authority change: %v", err)
+	}
 
 	receipt, err := appendPlanningIterationCard(root, card, planningTimelineAppendOptions{ReceiptID: "route-pass-details"})
 	if err != nil {
@@ -239,6 +251,9 @@ func TestPlanningTimelineReplayExactIsNoOpAndDivergenceConflicts(t *testing.T) {
 
 	divergent := clonePlanningTimelineTestCard(t, card)
 	divergent.DimensionAssessments[0].Rationale = "different evidence interpretation"
+	if err := colony.AddressPlanningDimensionAssessment(&divergent.DimensionAssessments[0]); err != nil {
+		t.Fatalf("re-address divergent assessment: %v", err)
+	}
 	_, err = appendPlanningIterationCard(root, divergent, opts)
 	var conflict *planningTimelineConflictError
 	if !errors.As(err, &conflict) || !strings.Contains(err.Error(), "receipt") {

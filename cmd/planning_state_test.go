@@ -220,74 +220,100 @@ func validCurrentPlanningState(t *testing.T) (colony.ColonyState, []colony.Plann
 
 func validPlanningIterationCardForTest(t *testing.T, iteration int, createdAt time.Time) colony.PlanningIterationCard {
 	t.Helper()
-	cardHash := planningStateTestDigest("iteration-card-" + string(rune('0'+iteration)))
-	assessments := validPlanningAssessmentsForTest()
+	assessments := validPlanningAssessmentsForTest(t)
 	weakestGap := assessments[2].RemainingGap
-	decision := validPlanningStopForTest()
+	decision := validPlanningStopForTest(t)
 	decision.SelectedGapID = weakestGap.ID
 	decision.ResidualGapIDs = []string{weakestGap.ID}
-	return colony.PlanningIterationCard{
+	if err := addressPlanningStopDecision(&decision); err != nil {
+		t.Fatalf("address planning stop fixture: %v", err)
+	}
+	card := colony.PlanningIterationCard{
 		SchemaVersion: colony.PlanningIterationSchemaVersion,
-		ID:            planningStateTestAddress("planning-iteration", cardHash), ContentHash: cardHash,
-		RunID: "planning-run-200", Iteration: iteration,
+		RunID:         "planning-run-200", Iteration: iteration,
 		ScoutReceiptID: "scout-receipt-1", ScoutReceiptHash: planningStateTestDigest("scout-receipt-1"),
 		RouteSetterReceiptID: "route-receipt-1", RouteSetterReceiptHash: planningStateTestDigest("route-receipt-1"),
 		EvidenceIDs: []string{"evidence-1"}, DimensionAssessments: assessments,
 		WeakestGap:    weakestGap,
-		SemanticDelta: validPlanningSemanticDeltaForTest(), Decision: decision,
+		SemanticDelta: validPlanningSemanticDeltaForTest(t), Decision: decision,
 		EvidenceThatWouldChange: "A new material risk would reopen planning", CreatedAt: createdAt,
 	}
+	canonical, _, err := canonicalPlanningTimelineCard(card)
+	if err != nil {
+		t.Fatalf("address planning iteration fixture: %v", err)
+	}
+	return canonical
 }
 
-func validPlanningAssessmentsForTest() []colony.PlanningDimensionAssessment {
+func validPlanningAssessmentsForTest(t *testing.T) []colony.PlanningDimensionAssessment {
+	t.Helper()
 	dimensions := colony.PlanningDimensions()
 	result := make([]colony.PlanningDimensionAssessment, 0, len(dimensions))
 	for i, dimension := range dimensions {
-		hash := planningStateTestDigest("assessment-" + string(dimension))
-		result = append(result, colony.PlanningDimensionAssessment{
-			SchemaVersion: colony.PlanningSchemaVersion, ID: planningStateTestAddress("assessment", hash), ContentHash: hash,
-			Dimension: dimension, Before: 50 + i, After: 55 + i, FreshEvidenceIDs: []string{"evidence-1"},
-			RemainingGap: validPlanningGapForTest(dimension, "remaining-"+string(dimension)),
+		assessment := colony.PlanningDimensionAssessment{
+			SchemaVersion: colony.PlanningSchemaVersion,
+			Dimension:     dimension, Before: 50 + i, After: 55 + i, FreshEvidenceIDs: []string{"evidence-1"},
+			RemainingGap: validPlanningGapForTest(t, dimension, "remaining-"+string(dimension)),
 			Rationale:    "Fresh evidence changed readiness", ProducerReceiptID: "route-receipt-1",
-		})
+		}
+		if err := colony.AddressPlanningDimensionAssessment(&assessment); err != nil {
+			t.Fatalf("address %s planning assessment fixture: %v", dimension, err)
+		}
+		result = append(result, assessment)
 	}
 	return result
 }
 
-func validPlanningGapForTest(dimension colony.PlanningDimension, label string) colony.PlanningGap {
-	hash := planningStateTestDigest("gap-" + label)
-	return colony.PlanningGap{
-		SchemaVersion: colony.PlanningSchemaVersion, ID: planningStateTestAddress("planning-gap", hash), ContentHash: hash,
-		Dimension: dimension, Materiality: colony.PlanningGapNonMaterial, Severity: 1,
+func validPlanningGapForTest(t *testing.T, dimension colony.PlanningDimension, label string) colony.PlanningGap {
+	t.Helper()
+	gap := colony.PlanningGap{
+		SchemaVersion: colony.PlanningSchemaVersion,
+		Dimension:     dimension, Materiality: colony.PlanningGapNonMaterial, Severity: 1,
 		Description: "Remaining " + string(dimension) + " gap", EvidenceIDs: []string{"evidence-1"},
 		EvidenceThatWouldChange: "Fresh evidence resolves " + string(dimension),
 	}
+	if err := colony.AddressPlanningGap(&gap); err != nil {
+		t.Fatalf("address %s planning gap fixture %q: %v", dimension, label, err)
+	}
+	return gap
 }
 
-func validPlanningSemanticDeltaForTest() colony.PlanningSemanticDelta {
-	hash := planningStateTestDigest("semantic-delta")
-	impactHash := planningStateTestDigest("authority-impact")
-	return colony.PlanningSemanticDelta{
-		SchemaVersion: colony.PlanningSchemaVersion, ID: planningStateTestAddress("planning-delta", hash), ContentHash: hash,
+func validPlanningSemanticDeltaForTest(t *testing.T) colony.PlanningSemanticDelta {
+	t.Helper()
+	delta := colony.PlanningSemanticDelta{
+		SchemaVersion: colony.PlanningSchemaVersion,
 		Phases: []colony.PlanningSemanticChange{{
-			SemanticID: "phase-grounded", ContentHash: planningStateTestDigest("phase-change"), Kind: colony.PlanningSemanticChangeModified,
+			SemanticID: "phase-grounded", Kind: colony.PlanningSemanticChangeModified,
 			BeforeHash: planningStateTestDigest("phase-before"), AfterHash: planningStateTestDigest("phase-after"), EvidenceIDs: []string{"evidence-1"},
 		}},
 		AuthorityImpacts: []colony.PlanningAuthorityImpact{{
-			ID: planningStateTestAddress("authority-impact", impactHash), ContentHash: impactHash,
 			Kind: colony.PlanningAuthoritySpecApproval, SourceID: "spec-approval-1", AffectedSemanticIDs: []string{"phase-grounded"},
 			Rationale: "The exact specification is approved",
 		}},
 	}
+	if err := colony.AddressPlanningSemanticChange(colony.PlanningSemanticSectionPhases, &delta.Phases[0]); err != nil {
+		t.Fatalf("address planning semantic-change fixture: %v", err)
+	}
+	if err := colony.AddressPlanningAuthorityImpact(&delta.AuthorityImpacts[0]); err != nil {
+		t.Fatalf("address planning authority-impact fixture: %v", err)
+	}
+	if err := colony.AddressPlanningSemanticDelta(&delta); err != nil {
+		t.Fatalf("address planning semantic-delta fixture: %v", err)
+	}
+	return delta
 }
 
-func validPlanningStopForTest() colony.PlanningStopDecision {
-	hash := planningStateTestDigest("stop-decision")
-	return colony.PlanningStopDecision{
-		SchemaVersion: colony.PlanningSchemaVersion, ID: planningStateTestAddress("planning-stop", hash), ContentHash: hash,
-		Reason: colony.PlanningStopTargetMet, ResidualGapIDs: []string{"residual-risk"}, EvidenceIDs: []string{"evidence-1"},
+func validPlanningStopForTest(t *testing.T) colony.PlanningStopDecision {
+	t.Helper()
+	decision := colony.PlanningStopDecision{
+		SchemaVersion: colony.PlanningSchemaVersion,
+		Reason:        colony.PlanningStopTargetMet, ResidualGapIDs: []string{"residual-risk"}, EvidenceIDs: []string{"evidence-1"},
 		Rationale: "The target is sufficient", EvidenceThatWouldChange: "A new material risk would reopen planning",
 	}
+	if err := addressPlanningStopDecision(&decision); err != nil {
+		t.Fatalf("address planning stop fixture: %v", err)
+	}
+	return decision
 }
 
 func validPlanningTimelineBindingForTest(t *testing.T, cards []colony.PlanningIterationCard) colony.PlanningTimelineBinding {
