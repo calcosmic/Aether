@@ -28,6 +28,41 @@ func forceBuildJSONOutput(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
 }
 
+func TestCoreBuildFixturesUseAcceptedAuthority200(t *testing.T) {
+	content, err := os.ReadFile("codex_build_test.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(content)
+	for _, name := range []string{
+		"TestBuildWritesDispatchArtifactsAndUpdatesState",
+		"TestDispatchEntryCarriesBriefPath",
+		"TestBuildPlanOnlyCLIForwardsVerificationDepth",
+		"TestBuildPlanOnlyHeavyReviewAllowsPolicyMeasurerAndChaos",
+		"TestBuildPlanOnlyKeepsRoutineUIQueenSelectionLean",
+		"TestBuildCLIForwardsVerificationDepth",
+		"TestBuildFinalizeRecordsExternalTaskResultsForContinue",
+		"TestBuildSupportsTaskScopedRedispatch",
+		"TestBuildRepairsCompletedPriorPhaseTasksFromTrustedManifest",
+		"TestBuildJobProposalRoundTrip",
+	} {
+		start := strings.Index(source, "func "+name+"(")
+		if start < 0 {
+			t.Fatalf("owned core build fixture %s is missing", name)
+		}
+		body := source[start:]
+		if end := strings.Index(body[1:], "\nfunc "); end >= 0 {
+			body = body[:end+1]
+		}
+		if !strings.Contains(body, "createApprovedAcceptedBuildTestColony(") {
+			t.Errorf("%s does not seed explicit approved specification and accepted-plan authority", name)
+		}
+	}
+	if t.Failed() {
+		t.Fatal("core build fixtures must reach their named assertions through D-16 authority")
+	}
+}
+
 func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
