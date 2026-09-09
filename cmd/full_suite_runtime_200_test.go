@@ -130,10 +130,25 @@ func TestFullSuiteRuntime200UsesCurrentBinary(t *testing.T) {
 	if strings.Contains(strings.Join(observed.Args, " "), "go test") {
 		t.Fatalf("child recursively invoked go test: %v", observed.Args)
 	}
-	if !strings.Contains(strings.Join(observed.Args, " "), "-test.run=^(?:TestAlpha|TestBravo)$") {
+	if !strings.Contains(strings.Join(observed.Args, " "), "-test.run=^(TestAlpha|TestBravo)$") {
 		t.Fatalf("child args do not carry the exact anchored lane selector: %v", observed.Args)
 	}
 	if report.Discovered != 2 || report.Executed != 2 || !report.Passed {
 		t.Fatalf("current-binary report = %+v, want 2/2 passing", report)
+	}
+
+	realLane := []fullSuiteLane{{Name: "probe", Tests: []string{"TestFullSuiteRuntime200CurrentBinaryProbe"}}}
+	realReport, err := runFullSuiteLanes(context.Background(), executable, realLane, 1, runFullSuiteChildProcess)
+	if err != nil {
+		t.Fatalf("current test binary could not execute an exact focused child: %v", err)
+	}
+	if realReport.Discovered != 1 || realReport.Executed != 1 || !realReport.Passed {
+		t.Fatalf("real current-binary report = %+v, want 1/1 passing", realReport)
+	}
+}
+
+func TestFullSuiteRuntime200CurrentBinaryProbe(t *testing.T) {
+	if strings.TrimSpace(os.Getenv(fullSuiteShardEnv)) == "" {
+		return
 	}
 }
