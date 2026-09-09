@@ -52,7 +52,7 @@ func TestBuildAttemptPersistsTransitionsAndTerminalEvidence(t *testing.T) {
 	if record.Status != buildAttemptBuilt || record.Recoverable || record.RecoveryCommand != "" || record.OriginalStateSHA == "" {
 		t.Fatalf("attempt record = %+v", record)
 	}
-	if len(record.History) != 4 || record.History[0].Status != buildAttemptPrepared || record.History[1].Status != buildAttemptDispatching || record.History[2].Status != buildAttemptTerminal || record.History[3].Status != buildAttemptBuilt {
+	if len(record.History) != 5 || record.History[0].Status != buildAttemptPrepared || record.History[1].Status != buildAttemptAwaiting || record.History[2].Status != buildAttemptDispatching || record.History[3].Status != buildAttemptTerminal || record.History[4].Status != buildAttemptBuilt {
 		t.Fatalf("attempt history = %+v", record.History)
 	}
 }
