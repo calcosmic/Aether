@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -441,6 +442,84 @@ func TestPipeline_RunConsolidation_QueenPromotedTracksActualWrites(t *testing.T)
 			t.Fatalf("expected QueenPromoted to be empty when the QUEEN.md write failed (WR-01), got %v", result.QueenPromoted)
 		}
 	})
+}
+
+// TestPipelineInjectedQueenPromotion200 proves repository authority can be
+// injected without widening the data store's path authority. The deliberately
+// unusable QueenPath would fail if RunConsolidation fell back to the store.
+func TestPipelineInjectedQueenPromotion200(t *testing.T) {
+	p, cleanup := newTestPipeline(t)
+	defer cleanup()
+
+	p.config.QueenPath = filepath.Join(p.store.BasePath(), "queen-as-directory")
+	if err := os.MkdirAll(p.config.QueenPath, 0o755); err != nil {
+		t.Fatalf("create unusable default Queen path: %v", err)
+	}
+	instinct := queenEligibleInstinctFixture("inst_injected_writer")
+	if err := p.store.SaveJSON("instincts.json", colony.InstinctsFile{
+		Version: "1", Instincts: []colony.InstinctEntry{instinct},
+	}); err != nil {
+		t.Fatalf("save instincts: %v", err)
+	}
+
+	calls := 0
+	p.config.QueenInstinctPromoter = func(_ context.Context, got colony.InstinctEntry, colonyName string) error {
+		calls++
+		if got.ID != instinct.ID {
+			t.Fatalf("injected writer received instinct %q, want %q", got.ID, instinct.ID)
+		}
+		if colonyName != "test-colony" {
+			t.Fatalf("injected writer received colony %q, want test-colony", colonyName)
+		}
+		return nil
+	}
+
+	result, err := p.RunConsolidation(context.Background())
+	if err != nil {
+		t.Fatalf("run consolidation: %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("injected writer calls = %d, want exactly 1", calls)
+	}
+	if len(result.QueenPromoted) != 1 || result.QueenPromoted[0] != instinct.ID {
+		t.Fatalf("QueenPromoted = %v, want [%s]", result.QueenPromoted, instinct.ID)
+	}
+}
+
+// TestPipelineQueenPromotionFailureAccounting200 proves a failed injected
+// repository writer remains a pipeline failure and cannot become promotion
+// success merely because the instinct was eligible.
+func TestPipelineQueenPromotionFailureAccounting200(t *testing.T) {
+	p, cleanup := newTestPipeline(t)
+	defer cleanup()
+
+	instinct := queenEligibleInstinctFixture("inst_injected_failure")
+	if err := p.store.SaveJSON("instincts.json", colony.InstinctsFile{
+		Version: "1", Instincts: []colony.InstinctEntry{instinct},
+	}); err != nil {
+		t.Fatalf("save instincts: %v", err)
+	}
+
+	sentinel := errors.New("repository Queen write refused")
+	calls := 0
+	p.config.QueenInstinctPromoter = func(context.Context, colony.InstinctEntry, string) error {
+		calls++
+		return sentinel
+	}
+
+	result, err := p.RunConsolidation(context.Background())
+	if err != nil {
+		t.Fatalf("run consolidation: %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("injected writer calls = %d, want exactly 1", calls)
+	}
+	if len(result.QueenPromoted) != 0 {
+		t.Fatalf("QueenPromoted = %v, want empty after writer failure", result.QueenPromoted)
+	}
+	if len(result.Errors) != 1 || !errors.Is(result.Errors[0], sentinel) {
+		t.Fatalf("Errors = %v, want one error wrapping injected writer failure", result.Errors)
+	}
 }
 
 // TestPipeline_Stop verifies that Stop cancels the context and waits for goroutines
