@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"go/ast"
@@ -74,6 +75,13 @@ type testBuildStartFixture struct {
 	Manifest    *codexBuildManifest
 }
 
+type approvedAcceptedBuildTestColony struct {
+	Root      string
+	DataRoot  string
+	Candidate colony.PlanCandidate
+	State     colony.ColonyState
+}
+
 func testBuildStartBool(value bool) *bool {
 	return &value
 }
@@ -85,8 +93,16 @@ func testBuildStartBool(value bool) *bool {
 // 29/30 fixture builders; no build-start target is written directly here.
 func commitTestBuildStart(t *testing.T, options testBuildStartOptions) testBuildStartFixture {
 	t.Helper()
-	saveGlobals(t)
 	root, seed, _ := buildStartTransaction200CurrentAuthorityFixture(t)
+	return commitTestBuildStartAt(t, root, seed.Phase, seed.GeneratedAt, options)
+}
+
+// commitTestBuildStartAt commits a start against an already approved and
+// accepted repository. Callers must name the exact accepted phase and the
+// owner/mode pair so a convenient fixture cannot grant broader authority.
+func commitTestBuildStartAt(t *testing.T, root string, acceptedPhase int, defaultGeneratedAt time.Time, options testBuildStartOptions) testBuildStartFixture {
+	t.Helper()
+	saveGlobals(t)
 	dataRoot := filepath.Join(root, ".aether", "data")
 	t.Setenv("AETHER_ROOT", root)
 	t.Setenv("COLONY_DATA_DIR", dataRoot)
@@ -106,7 +122,7 @@ func commitTestBuildStart(t *testing.T, options testBuildStartOptions) testBuild
 	testBuildStartEnsureGoal(t, root)
 
 	state := mustReadSpecificationTestState(t, root)
-	phaseID := seed.Phase
+	phaseID := acceptedPhase
 	if err := validateTestBuildStartOptions(options, phaseID); err != nil {
 		t.Fatalf("canonical build-start fixture options: %v", err)
 	}
@@ -116,7 +132,10 @@ func commitTestBuildStart(t *testing.T, options testBuildStartOptions) testBuild
 	}
 	generatedAt := options.GeneratedAt
 	if generatedAt.IsZero() {
-		generatedAt = seed.GeneratedAt
+		generatedAt = defaultGeneratedAt
+	}
+	if generatedAt.IsZero() {
+		generatedAt = time.Now().UTC()
 	}
 	generatedAt = generatedAt.UTC()
 	processID := testBuildStartProcessID(t, options)
@@ -214,6 +233,140 @@ func commitTestBuildStart(t *testing.T, options testBuildStartOptions) testBuild
 		fixture.Manifest = &manifest
 	}
 	return fixture
+}
+
+// createApprovedAcceptedBuildTestColony runs the real draft -> approval ->
+// Route-Setter candidate -> owner acceptance path for an exact test plan. It
+// does not create a build attempt; the public command under test or
+// commitTestBuildStartAt owns that one canonical transition.
+func createApprovedAcceptedBuildTestColony(t *testing.T, desired colony.ColonyState) approvedAcceptedBuildTestColony {
+	t.Helper()
+	root, manifest, result := planningRouteStageTestFixture(t)
+	planningRouteStageSetPolicy(t, root, manifest.RunID, 99, 1)
+
+	if err := withPlanningMutationSession(root, "test-accepted-build-metadata", func(session *planningMutationSession) error {
+		state, err := loadSpecificationColonyStateInSession(session)
+		if err != nil {
+			return err
+		}
+		state.Version = desired.Version
+		state.Goal = desired.Goal
+		state.ColonyDepth = desired.ColonyDepth
+		state.ColonyMode = desired.ColonyMode
+		state.ParallelMode = desired.ParallelMode
+		state.VerificationDepth = desired.VerificationDepth
+		return persistPlanningColonyStateInSession(session, "test-accepted-build-metadata", state)
+	}); err != nil {
+		t.Fatalf("seed accepted build metadata: %v", err)
+	}
+
+	result.Proposal = acceptedBuildTestProposal(t, result.Proposal, desired.Plan.Phases)
+	coordinated, err := coordinatePlanningRouteStage(root, manifest, planningRouteStageTestBytes(t, result))
+	if err != nil {
+		t.Fatalf("create accepted build candidate: %v", err)
+	}
+	if coordinated.Candidate == nil {
+		t.Fatal("accepted build fixture did not reach a reviewable candidate")
+	}
+	candidate := *coordinated.Candidate
+	if _, err := acceptPlanCandidate(root, planCandidateTestAcceptanceRequest(candidate), planCandidateAcceptanceOptions{
+		AcceptedBy: "owner:plan-49-build-fixture",
+		AcceptedAt: candidate.CreatedAt.Add(time.Minute),
+	}); err != nil {
+		t.Fatalf("accept exact build fixture candidate: %v", err)
+	}
+
+	binding := bindCommandTestRepositoryAt(t, root)
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\n\nfunc main() {}\n"), 0o644); err != nil {
+		t.Fatalf("write accepted build fixture source: %v", err)
+	}
+	originalStdout, originalStderr := stdout, stderr
+	stdout, stderr = &bytes.Buffer{}, &bytes.Buffer{}
+	t.Cleanup(func() {
+		stdout, stderr = originalStdout, originalStderr
+	})
+	state := mustReadSpecificationTestState(t, root)
+	return approvedAcceptedBuildTestColony{Root: root, DataRoot: binding.DataDir, Candidate: candidate, State: state}
+}
+
+func acceptedBuildTestProposal(t *testing.T, template planningRoutePlanProposal, phases []colony.Phase) planningRoutePlanProposal {
+	t.Helper()
+	if len(phases) == 0 || len(template.Phases) == 0 {
+		t.Fatal("accepted build fixture requires at least one phase and one canonical proposal template")
+	}
+	binding := template.Phases[0]
+	proposal := planningRoutePlanProposal{SemanticID: "plan-build-fixture"}
+	for phaseIndex, sourcePhase := range phases {
+		phase := clonePhases([]colony.Phase{sourcePhase})[0]
+		if strings.TrimSpace(phase.Description) == "" {
+			phase.Description = phase.Name + " exercises accepted build authority"
+		}
+		if phase.Mode == "" {
+			phase.Mode = binding.Mode
+		}
+		if len(phase.SuccessCriteria) == 0 {
+			phase.SuccessCriteria = append([]string(nil), binding.SuccessCriteria...)
+		}
+		phase.SemanticID = fmt.Sprintf("phase-build-fixture-%d", phase.ID)
+		phase.Status = ""
+		phase.WatcherFailureCount = 0
+		phase.SpecificationRevisionID, phase.SpecificationRevisionHash = "", ""
+		phase.CandidateID, phase.CandidateContentHash = "", ""
+		phase.PlanningTimelineID, phase.PlanningTimelineDigest = "", ""
+		phase.AffectedSemanticIDs, phase.PreservedSemanticIDs = nil, nil
+		phase.RequirementProofLinks = append([]string(nil), binding.RequirementProofLinks...)
+		phase.AcceptanceProofLinks = append([]string(nil), binding.AcceptanceProofLinks...)
+		phase.NegativeProofLinks = append([]string(nil), binding.NegativeProofLinks...)
+		phase.RecoveryProofLinks = append([]string(nil), binding.RecoveryProofLinks...)
+		phase.PublicPathProofLinks = append([]string(nil), binding.PublicPathProofLinks...)
+		phase.EvidenceRequirements = acceptedBuildTestCriterionEvidence(phase.SuccessCriteria, phase.EvidenceRequirements)
+		proposal.UserFacingSemanticIDs = append(proposal.UserFacingSemanticIDs, phase.SemanticID)
+		for taskIndex := range phase.Tasks {
+			task := &phase.Tasks[taskIndex]
+			if len(task.SuccessCriteria) == 0 && len(binding.Tasks) > 0 {
+				task.SuccessCriteria = append([]string(nil), binding.Tasks[0].SuccessCriteria...)
+			}
+			task.SemanticID = fmt.Sprintf("task-build-fixture-%d-%d", phaseIndex+1, taskIndex+1)
+			task.Status = ""
+			task.SpecificationRevisionID, task.SpecificationRevisionHash = "", ""
+			task.CandidateID, task.CandidateContentHash = "", ""
+			task.PlanningTimelineID, task.PlanningTimelineDigest = "", ""
+			task.AffectedSemanticIDs, task.PreservedSemanticIDs = nil, nil
+			task.RequirementProofLinks = append([]string(nil), binding.RequirementProofLinks...)
+			task.AcceptanceProofLinks = append([]string(nil), binding.AcceptanceProofLinks...)
+			task.NegativeProofLinks = append([]string(nil), binding.NegativeProofLinks...)
+			task.RecoveryProofLinks = append([]string(nil), binding.RecoveryProofLinks...)
+			task.PublicPathProofLinks = append([]string(nil), binding.PublicPathProofLinks...)
+			task.EvidenceRequirements = acceptedBuildTestCriterionEvidence(task.SuccessCriteria, task.EvidenceRequirements)
+			proposal.TaskDeclarations = append(proposal.TaskDeclarations, planningRouteTaskDeclaration{
+				TaskSemanticID: task.SemanticID,
+				Files:          []string{"cmd/codex_build_test.go"},
+				UserFacing:     true,
+			})
+			proposal.UserFacingSemanticIDs = append(proposal.UserFacingSemanticIDs, task.SemanticID)
+		}
+		proposal.Phases = append(proposal.Phases, phase)
+	}
+	return proposal
+}
+
+func acceptedBuildTestCriterionEvidence(criteria []string, existing []colony.CriterionEvidenceRequirement) []colony.CriterionEvidenceRequirement {
+	if len(criteria) == 0 {
+		return nil
+	}
+	byCriterion := make(map[string]colony.CriterionEvidenceRequirement, len(existing))
+	for _, requirement := range existing {
+		byCriterion[requirement.Criterion] = requirement
+	}
+	result := make([]colony.CriterionEvidenceRequirement, 0, len(criteria))
+	for _, criterion := range criteria {
+		requirement, ok := byCriterion[criterion]
+		if !ok {
+			requirement = colony.CriterionEvidenceRequirement{Criterion: criterion, Checks: []string{"tests"}}
+		}
+		result = append(result, requirement)
+	}
+	return result
 }
 
 func validateTestBuildStartOptions(options testBuildStartOptions, acceptedPhase int) error {
@@ -480,7 +633,16 @@ func TestBuildAttemptFixtureUsesCanonicalTransaction(t *testing.T) {
 }
 
 func TestCanonicalBuildStartFixtureAuthority200(t *testing.T) {
-	fixture := commitTestBuildStart(t, testBuildStartOptions{
+	goal := "Prove explicit accepted build authority"
+	taskID := "1.1"
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
+		Version: "3.0", Goal: &goal, ColonyDepth: "standard",
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID: 1, Name: "Explicit authority", Status: colony.PhaseReady,
+			Tasks: []colony.Task{{ID: &taskID, Goal: "Cross the accepted boundary", Status: colony.TaskPending}},
+		}}},
+	})
+	fixture := commitTestBuildStartAt(t, accepted.Root, 1, accepted.Candidate.CreatedAt.Add(2*time.Minute), testBuildStartOptions{
 		Phase:          1,
 		Variant:        buildStartPlanOnly,
 		ExecutionOwner: "host-queen",
@@ -496,6 +658,9 @@ func TestCanonicalBuildStartFixtureAuthority200(t *testing.T) {
 	}
 	if fixture.Request.ExecutionOwner != "host-queen" || fixture.Request.DispatchMode != "plan-only" {
 		t.Fatalf("canonical fixture execution identity = %q/%q, want host-queen/plan-only", fixture.Request.ExecutionOwner, fixture.Request.DispatchMode)
+	}
+	if fixture.Phase.Name != "Explicit authority" {
+		t.Fatalf("canonical fixture phase = %q, want exact accepted custom phase", fixture.Phase.Name)
 	}
 	if fixture.Receipt.PlanAuthority.ActiveRevision.ID != fixture.Request.PlanAuthority.ActiveRevision.ID ||
 		fixture.Receipt.PlanAuthority.Specification.ID != fixture.Request.PlanAuthority.Specification.ID {
