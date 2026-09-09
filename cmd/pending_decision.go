@@ -20,6 +20,13 @@ type PendingDecision struct {
 	Resolved    bool   `json:"resolved"`
 	CreatedAt   string `json:"created_at"`
 	ResolvedAt  string `json:"resolved_at,omitempty"`
+	// Acknowledged, AcknowledgedAt, and RecoveryCommand belong to the
+	// blocker-flag entries (colony.FlagEntry) that share this file. Modeled
+	// so the strict lifecycle decoder accepts flag entries and rewrites
+	// never drop them.
+	Acknowledged    bool   `json:"acknowledged,omitempty"`
+	AcknowledgedAt  string `json:"acknowledged_at,omitempty"`
+	RecoveryCommand string `json:"recovery_command,omitempty"`
 	// AttemptID and WaiverCapabilitySHA256 bind an owner-only forced-reviewer
 	// decline to the exact build attempt whose check-in card created it. The
 	// raw single-use capability is shown only on that card and is never stored.
@@ -77,6 +84,10 @@ type PendingDecision struct {
 
 // PendingDecisionFile is the JSON structure for pending-decisions.json.
 type PendingDecisionFile struct {
+	// Version is written by the blocker-flag lifecycle, which shares this
+	// file (see colony.FlagsFile). Modeled here so the strict lifecycle
+	// decoder accepts the real on-disk shape and rewrites preserve it.
+	Version   string            `json:"version,omitempty"`
 	Decisions []PendingDecision `json:"decisions"`
 }
 

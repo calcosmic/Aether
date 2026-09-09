@@ -53,6 +53,10 @@ func TestRuntimeRecoveryRoutes199(t *testing.T) {
 func collectRuntimeRecoverySuggestions199(t *testing.T) map[string]string {
 	t.Helper()
 	saveGlobals(t)
+	// The canonical-route assertions check the raw `aether resume` form; on
+	// claude/opencode the visual layer would translate it to /ant-resume.
+	// Pin the platform so the check does not depend on the running terminal.
+	t.Setenv("AETHER_PLATFORM", "codex")
 
 	result := map[string]interface{}{
 		"next": "aether resume",

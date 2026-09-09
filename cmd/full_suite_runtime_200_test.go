@@ -404,6 +404,10 @@ func TestFullSuiteRuntime200ReportsCompleteAccounting(t *testing.T) {
 		{Name: "light-02", Tests: []string{"TestLightTwo"}},
 		{Name: "light-03", Tests: []string{"TestLightThree"}},
 	}
+	expectedHeavyWorkers := fullSuiteHeavyWorkers
+	if heavyLanes := 4; expectedHeavyWorkers > heavyLanes {
+		expectedHeavyWorkers = heavyLanes
+	}
 	var activeHeavy atomic.Int32
 	var maximumHeavy atomic.Int32
 	var lightRuns atomic.Int32
@@ -421,7 +425,7 @@ func TestFullSuiteRuntime200ReportsCompleteAccounting(t *testing.T) {
 					break
 				}
 			}
-			if active == fullSuiteHeavyWorkers {
+			if int(active) == expectedHeavyWorkers {
 				readyOnce.Do(func() { close(heavyReady) })
 			}
 			select {
@@ -454,8 +458,8 @@ func TestFullSuiteRuntime200ReportsCompleteAccounting(t *testing.T) {
 	if !scheduled.Passed || scheduled.Executed != len(lanes) {
 		t.Fatalf("scheduled accounting = %+v, want every heavy and light lane", scheduled)
 	}
-	if maximumHeavy.Load() != fullSuiteHeavyWorkers {
-		t.Fatalf("maximum concurrent heavy lanes = %d, want %d", maximumHeavy.Load(), fullSuiteHeavyWorkers)
+	if int(maximumHeavy.Load()) != expectedHeavyWorkers {
+		t.Fatalf("maximum concurrent heavy lanes = %d, want %d", maximumHeavy.Load(), expectedHeavyWorkers)
 	}
 	if lightRuns.Load() != 3 {
 		t.Fatalf("light lanes executed = %d, want 3 while heavy queue drains", lightRuns.Load())

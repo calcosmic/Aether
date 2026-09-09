@@ -389,6 +389,20 @@ func repairSpecificationProjection(root string, opts specificationMutationOption
 	if err != nil {
 		return specificationProjectionRepairResult{}, err
 	}
+	if opts.Session == nil {
+		// Callers without a held planning mutation session (the spec CLI
+		// --repair-projection path and discuss settlement) get one opened
+		// here, on the same canonical root the commit validates against.
+		var result specificationProjectionRepairResult
+		sessionErr := withPlanningMutationSession(repositoryRoot, "specification-projection-repair", func(session *planningMutationSession) error {
+			scoped := opts
+			scoped.Session = session
+			var repairErr error
+			result, repairErr = repairSpecificationProjection(repositoryRoot, scoped)
+			return repairErr
+		})
+		return result, sessionErr
+	}
 	state, err := loadSpecificationColonyState(repositoryRoot)
 	if err != nil {
 		return specificationProjectionRepairResult{}, err

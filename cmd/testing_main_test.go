@@ -138,18 +138,18 @@ func TestMain(m *testing.M) {
 }
 
 const (
-	fullSuiteShardEnv       = "AETHER_CMD_FULL_SUITE_SHARD"
-	fullSuiteSerialLaneName = "serial-shared-checkout"
-	fullSuiteLogicalShards  = 256
-	fullSuiteWorkers        = 5
-	fullSuiteHeavyLanes     = 4
-	fullSuiteHeavyWorkers   = 2
-	fullSuiteHeavyThreshold = 8 * time.Second
-	fullSuiteChildParallel  = 2
-	fullSuiteChildProcs     = 2
-	fullSuiteChildTimeout   = 9 * time.Minute
-	fullSuiteCommandTimeout = 9*time.Minute + 15*time.Second
-	fullSuiteOverallTimeout = 10 * time.Minute
+	fullSuiteShardEnv        = "AETHER_CMD_FULL_SUITE_SHARD"
+	fullSuiteSerialLaneName  = "serial-shared-checkout"
+	fullSuiteLogicalShards   = 256
+	fullSuiteWorkers         = 10
+	fullSuiteHeavyWorkers    = 6
+	fullSuiteHeavyLaneBudget = 3 * time.Minute
+	fullSuiteHeavyThreshold  = 8 * time.Second
+	fullSuiteChildParallel   = 2
+	fullSuiteChildProcs      = 2
+	fullSuiteChildTimeout    = 9 * time.Minute
+	fullSuiteCommandTimeout  = 9*time.Minute + 15*time.Second
+	fullSuiteOverallTimeout  = 10 * time.Minute
 )
 
 type fullSuiteInvocation struct {
@@ -352,23 +352,26 @@ func planFullSuiteLanes(discovered []string, serialTests map[string]struct{}, co
 	byDescendingCost(heavyTests)
 	byDescendingCost(parallelTests)
 
-	heavyLaneCount := fullSuiteHeavyLanes
-	if heavyLaneCount > len(heavyTests) {
-		heavyLaneCount = len(heavyTests)
-	}
-	heavy := make([]fullSuiteLane, heavyLaneCount)
-	for index := range heavy {
-		heavy[index] = fullSuiteLane{Name: fmt.Sprintf("heavy-io-%02d", index+1), Heavy: true}
-	}
+	// Heavy tests run serially inside their child (-test.parallel=1), so a
+	// lane's estimated cost is its serial wall clock. Cap each lane by a
+	// budget instead of a fixed lane count: the previous fixed split packed
+	// 8-minute lanes that blew the 9-minute child timeout. First-fit over
+	// descending costs; a single test above budget gets its own lane.
+	var heavy []fullSuiteLane
 	for _, testName := range heavyTests {
-		lightest := 0
-		for index := 1; index < len(heavy); index++ {
-			if heavy[index].EstimatedCost < heavy[lightest].EstimatedCost {
-				lightest = index
+		cost := costs[testName]
+		placed := false
+		for index := range heavy {
+			if heavy[index].EstimatedCost+cost <= fullSuiteHeavyLaneBudget {
+				heavy[index].Tests = append(heavy[index].Tests, testName)
+				heavy[index].EstimatedCost += cost
+				placed = true
+				break
 			}
 		}
-		heavy[lightest].Tests = append(heavy[lightest].Tests, testName)
-		heavy[lightest].EstimatedCost += costs[testName]
+		if !placed {
+			heavy = append(heavy, fullSuiteLane{Name: fmt.Sprintf("heavy-io-%02d", len(heavy)+1), Heavy: true, Tests: []string{testName}, EstimatedCost: cost})
+		}
 	}
 
 	if parallelLaneCount > len(parallelTests) && len(parallelTests) > 0 {
