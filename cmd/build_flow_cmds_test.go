@@ -55,6 +55,63 @@ func setupBuildFlowTest(t *testing.T) string {
 	return dataDir
 }
 
+func TestRepositoryTestBindingSequence200(t *testing.T) {
+	var deletedRoot string
+	t.Run("formerly contaminating temp store", func(t *testing.T) {
+		binding := bindCommandTestRepository(t)
+		deletedRoot = binding.Root
+		if store != binding.Store {
+			t.Fatalf("first command store = %p, want %p", store, binding.Store)
+		}
+	})
+	if _, err := os.Stat(deletedRoot); !os.IsNotExist(err) {
+		t.Fatalf("first temporary repository survived its test: %v", err)
+	}
+	if store != nil || tracer != nil {
+		t.Fatalf("first repository authority leaked: store=%p tracer=%p", store, tracer)
+	}
+
+	// Recreate the exact stale environment that used to poison the next test.
+	t.Setenv("AETHER_ROOT", deletedRoot)
+	t.Setenv("COLONY_DATA_DIR", filepath.Join(deletedRoot, ".aether", "data"))
+
+	t.Run("hook gets a fresh repository", func(t *testing.T) {
+		saveGlobalsCmd(t)
+		resetRootCmd(t)
+		var output bytes.Buffer
+		stdout = &output
+		stderr = &output
+		binding := bindCommandTestRepository(t)
+		setHookStdin(t, `{"hook_event_name":"PreToolUse","tool_name":"Write","tool_input":{"file_path":"`+filepath.Join(binding.DataDir, "COLONY_STATE.json")+`"}}`)
+		rootCmd.SetArgs([]string{"hook-pre-tool-use"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("hook command inherited stale repository authority: %v", err)
+		}
+	})
+
+	t.Run("patrol gets a fresh repository", func(t *testing.T) {
+		dataDir := setupPatrolData(t)
+		result := runPatrolCheck(t, dataDir)
+		if result == nil {
+			t.Fatal("patrol returned no result")
+		}
+	})
+
+	t.Run("build flow gets a fresh repository", func(t *testing.T) {
+		dataDir := setupBuildFlowTest(t)
+		root := os.Getenv("AETHER_ROOT")
+		if got := os.Getenv("COLONY_DATA_DIR"); filepath.Clean(got) != filepath.Clean(dataDir) {
+			t.Fatalf("build-flow data environment = %q, want %q", got, dataDir)
+		}
+		if got := filepath.Clean(store.BasePath()); got != filepath.Clean(dataDir) {
+			t.Fatalf("build-flow store = %q, want %q", got, dataDir)
+		}
+		if root == deletedRoot {
+			t.Fatalf("build flow reused deleted repository %q", root)
+		}
+	})
+}
+
 // createTestColonyState creates a minimal COLONY_STATE.json for testing.
 func createTestColonyState(t *testing.T, dataDir string, state colony.ColonyState) {
 	t.Helper()
