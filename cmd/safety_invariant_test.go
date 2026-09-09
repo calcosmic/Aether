@@ -613,6 +613,7 @@ func TestPlanOnlyUnchanged(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 	dataDir := setupBuildFlowTest(t)
+	repositoryRoot := filepath.Dir(filepath.Dir(dataDir))
 
 	goal := "plan-only safety test"
 	colName := "test-colony"
@@ -643,6 +644,12 @@ func TestPlanOnlyUnchanged(t *testing.T) {
 	t.Run("plan_plan_only", func(t *testing.T) {
 		saveGlobals(t)
 		resetRootCmd(t)
+		binding := bindCommandTestRepositoryAt(t, repositoryRoot)
+		if filepath.Clean(binding.DataDir) != filepath.Clean(dataDir) {
+			t.Fatalf("plan repository data root = %q, want %q", binding.DataDir, dataDir)
+		}
+		stdout = &bytes.Buffer{}
+		stderr = &bytes.Buffer{}
 
 		// Snapshot before
 		before := snapshotDataDir(t, dataDir)
@@ -650,6 +657,9 @@ func TestPlanOnlyUnchanged(t *testing.T) {
 		rootCmd.SetArgs([]string{"plan", "--plan-only", "--preset", "balanced"})
 		if err := rootCmd.Execute(); err != nil {
 			t.Fatalf("plan --plan-only returned error: %v", err)
+		}
+		if got := stderr.(*bytes.Buffer).String(); got != "" {
+			t.Fatalf("plan --plan-only rendered an error: %s", got)
 		}
 
 		// Verify output
@@ -675,6 +685,12 @@ func TestPlanOnlyUnchanged(t *testing.T) {
 	t.Run("build_plan_only", func(t *testing.T) {
 		saveGlobals(t)
 		resetRootCmd(t)
+		binding := bindCommandTestRepositoryAt(t, repositoryRoot)
+		if filepath.Clean(binding.DataDir) != filepath.Clean(dataDir) {
+			t.Fatalf("build repository data root = %q, want %q", binding.DataDir, dataDir)
+		}
+		stdout = &bytes.Buffer{}
+		stderr = &bytes.Buffer{}
 
 		// Snapshot before
 		before := snapshotDataDir(t, dataDir)
@@ -686,6 +702,9 @@ func TestPlanOnlyUnchanged(t *testing.T) {
 		rootCmd.SetArgs([]string{"build", "--plan-only", "1"})
 		if err := rootCmd.Execute(); err != nil {
 			t.Fatalf("build --plan-only 1 returned error: %v", err)
+		}
+		if got := stderr.(*bytes.Buffer).String(); got != "" {
+			t.Fatalf("build --plan-only rendered an error: %s", got)
 		}
 
 		// Verify output
