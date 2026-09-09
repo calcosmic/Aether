@@ -1015,12 +1015,23 @@ func TestPartialRetryFailureIsNeverSuccessful200(t *testing.T) {
 	}}
 	completion := codexExternalBuildCompletion{DispatchManifest: &manifest, Dispatches: results}
 
-	result, _, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
-	if err != nil {
-		return
+	injected := errors.New("injected partial recovery start failure")
+	result, state, _, _, err := runCodexBuildFinalize(root, 1, completion, false, buildStartOptions{
+		Fault: func(point string) error {
+			if point == buildStartBeforeCommitFaultPoint {
+				return injected
+			}
+			return nil
+		},
+	})
+	if err == nil {
+		t.Fatalf("partial finalize downgraded a recovery-start failure to success: %+v", result)
 	}
-	if recovery, _ := result["recovery_job"].(bool); !recovery {
-		t.Fatalf("partial finalize returned success without a durable recovery job: %+v", result)
+	if !errors.Is(err, injected) {
+		t.Fatalf("partial finalize error = %v, want injected recovery-start failure", err)
+	}
+	if result != nil {
+		t.Fatalf("failed partial finalize returned a success payload: %+v", result)
 	}
 	parentID := manifest.AttemptID
 	children := 0
@@ -1029,8 +1040,22 @@ func TestPartialRetryFailureIsNeverSuccessful200(t *testing.T) {
 			children++
 		}
 	}
-	if children != 1 {
-		t.Fatalf("partial finalize returned success with %d durable recovery children, want exactly one", children)
+	if children != 0 {
+		t.Fatalf("failed recovery start left %d partial recovery children, want zero", children)
+	}
+	statusByID := make(map[string]string, len(state.Plan.Phases[0].Tasks))
+	for _, task := range state.Plan.Phases[0].Tasks {
+		statusByID[*task.ID] = task.Status
+	}
+	for _, id := range proven {
+		if statusByID[id] != colony.TaskCompleted {
+			t.Fatalf("credited task %s = %q after explicit finalize failure, want durable %q", id, statusByID[id], colony.TaskCompleted)
+		}
+	}
+	for _, id := range ids[4:] {
+		if statusByID[id] == colony.TaskCompleted {
+			t.Fatalf("unfinished task %s was credited despite recovery-start failure", id)
+		}
 	}
 }
 
