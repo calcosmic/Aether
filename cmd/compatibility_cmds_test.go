@@ -1700,8 +1700,21 @@ func TestRunCompatibilityExecutesSinglePhase(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
+	goal := "Run one autopilot phase"
+	now := time.Now().UTC()
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
+		Version:       "3.0",
+		Goal:          &goal,
+		State:         colony.StateREADY,
+		CurrentPhase:  1,
+		InitializedAt: &now,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Phase 1", Status: colony.PhaseReady, Tasks: []colony.Task{{ID: ptrString("1.1"), Goal: "Implement it", Status: colony.TaskPending}}},
+			},
+		},
+	})
+	root := accepted.Root
 	withWorkingDir(t, root)
 
 	agentsDir := filepath.Join(root, ".codex", "agents")
@@ -1714,21 +1727,6 @@ func TestRunCompatibilityExecutesSinglePhase(t *testing.T) {
 			t.Fatalf("write %s: %v", agentName, err)
 		}
 	}
-
-	goal := "Run one autopilot phase"
-	now := time.Now().UTC()
-	createTestColonyState(t, dataDir, colony.ColonyState{
-		Version:       "3.0",
-		Goal:          &goal,
-		State:         colony.StateREADY,
-		CurrentPhase:  1,
-		InitializedAt: &now,
-		Plan: colony.Plan{
-			Phases: []colony.Phase{
-				{ID: 1, Name: "Phase 1", Status: colony.PhaseReady, Tasks: []colony.Task{{ID: ptrString("1.1"), Goal: "Implement it", Status: colony.TaskPending}}},
-			},
-		},
-	})
 
 	rootCmd.SetArgs([]string{"run", "--max-phases", "1"})
 	if err := rootCmd.Execute(); err != nil {
@@ -1767,13 +1765,9 @@ func TestRunCompatibilityPassesWorkerTimeoutToBuildAndContinue(t *testing.T) {
 		t.Fatal("expected run command to expose --worker-timeout")
 	}
 
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
-	withWorkingDir(t, root)
-
 	goal := "Run one autopilot phase with timeout override"
 	now := time.Now().UTC()
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
 		Version:       "3.0",
 		Goal:          &goal,
 		State:         colony.StateREADY,
@@ -1785,6 +1779,8 @@ func TestRunCompatibilityPassesWorkerTimeoutToBuildAndContinue(t *testing.T) {
 			},
 		},
 	})
+	root := accepted.Root
+	withWorkingDir(t, root)
 
 	recorder := &timeoutRecordingInvoker{}
 	originalInvoker := newCodexWorkerInvoker
