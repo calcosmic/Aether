@@ -846,14 +846,15 @@ func isCommittedPartialAttemptReplay(manifest codexBuildManifest, completionDige
 }
 
 func validateBuildAttemptManifestBinding(manifest codexBuildManifest, state colony.ColonyState, partialReplay bool) (buildAttemptManifestBinding, error) {
-	attemptID := strings.TrimSpace(manifest.AttemptID)
-	attemptPath := strings.TrimSpace(manifest.AttemptPath)
-	if attemptID == "" && attemptPath == "" {
+	classification, err := classifyBuildManifestBinding(manifest)
+	if err != nil {
+		return buildAttemptManifestBinding{}, err
+	}
+	if classification == buildManifestBindingLegacy {
 		return buildAttemptManifestBinding{Legacy: true}, nil
 	}
-	if attemptID == "" || attemptPath == "" {
-		return buildAttemptManifestBinding{}, fmt.Errorf("dispatch_manifest must include both attempt_id and attempt_path")
-	}
+	attemptID := strings.TrimSpace(manifest.AttemptID)
+	attemptPath := strings.TrimSpace(manifest.AttemptPath)
 	if !validBuildAttemptID(attemptID) {
 		return buildAttemptManifestBinding{}, fmt.Errorf("dispatch_manifest attempt_id %q is invalid", attemptID)
 	}

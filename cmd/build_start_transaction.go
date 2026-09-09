@@ -42,6 +42,54 @@ const (
 	buildStartReviewerClose  buildStartReviewerWindowEffect = "close"
 )
 
+type buildManifestBindingClass string
+
+const (
+	buildManifestBindingLegacy buildManifestBindingClass = "legacy-unbound"
+	buildManifestBindingModern buildManifestBindingClass = "modern-bound"
+)
+
+// classifyBuildManifestBinding separates the one documented pre-binding
+// artifact shape from modern manifests before either path is validated. The
+// historical shape predates plan-revision, attempt, and execution-binding
+// claims as one set. Any mixture is therefore ambiguous and fails closed;
+// removing two convenient fields from a modern manifest cannot select the
+// compatibility adapter.
+func classifyBuildManifestBinding(manifest codexBuildManifest) (buildManifestBindingClass, error) {
+	attemptID := strings.TrimSpace(manifest.AttemptID)
+	attemptPath := strings.TrimSpace(manifest.AttemptPath)
+	revisionID := strings.TrimSpace(manifest.PlanRevisionID)
+	planStateHash := strings.TrimSpace(manifest.PlanStateHash)
+	planAuthorityPresent := !reflect.DeepEqual(manifest.PlanAuthority, planAuthorityDecision{})
+
+	modernClaims := 0
+	for _, present := range []bool{
+		attemptID != "",
+		attemptPath != "",
+		manifest.ExecutionBinding != nil,
+		revisionID != "",
+		planStateHash != "",
+		planAuthorityPresent,
+	} {
+		if present {
+			modernClaims++
+		}
+	}
+	if modernClaims == 0 {
+		owner := strings.TrimSpace(manifest.ExecutionOwner)
+		mode := strings.TrimSpace(manifest.DispatchMode)
+		if owner != buildExecutionOwner(mode, true) || (mode != "plan-only" && mode != "queen-led") {
+			return "", fmt.Errorf("dispatch_manifest legacy execution owner/mode %q/%q is contradictory", owner, mode)
+		}
+		return buildManifestBindingLegacy, nil
+	}
+
+	if attemptID == "" || attemptPath == "" || manifest.ExecutionBinding == nil || revisionID == "" || planStateHash == "" {
+		return "", fmt.Errorf("dispatch_manifest contains partial or contradictory modern build-start claims")
+	}
+	return buildManifestBindingModern, nil
+}
+
 // buildStartRequest is the complete authorization input. Functions and fault
 // hooks deliberately live in buildStartOptions so this value has one stable
 // canonical JSON hash.
@@ -322,6 +370,17 @@ func prepareBuildStart(root string, request buildStartRequest, state colony.Colo
 	}
 	prepared.attemptPath, prepared.record, prepared.pointer = attemptPath, attempt, pointer
 
+	if request.Variant == buildStartExternalUnbound {
+		manifest := request.Effects.Completion.activeManifest()
+		if manifest == nil {
+			return buildStartPrepared{}, fmt.Errorf("build start: legacy completion requires a dispatch manifest")
+		}
+		_, boundAttempt, err := deriveLegacyBuildStartManifest(attemptPath, attempt, *manifest, request, state)
+		if err != nil {
+			return buildStartPrepared{}, err
+		}
+		prepared.record = boundAttempt
+	}
 	if request.Effects.Manifest != nil {
 		manifest, boundAttempt, err := deriveBuildStartManifest(attemptPath, attempt, *request.Effects.Manifest, request.GeneratedAt)
 		if err != nil {
@@ -598,6 +657,29 @@ func validateBuildStartManifest(root string, request buildStartRequest, state co
 	if manifest.Phase != request.Phase || filepath.Clean(manifest.Root) != filepath.Clean(root) {
 		return fmt.Errorf("manifest phase/root does not match request")
 	}
+	if request.Variant == buildStartExternalUnbound {
+		classification, classificationErr := classifyBuildManifestBinding(manifest)
+		if classificationErr == nil && classification == buildManifestBindingLegacy {
+			generatedAt, err := time.Parse(time.RFC3339, manifest.GeneratedAt)
+			if err != nil || !generatedAt.Equal(request.GeneratedAt.Truncate(time.Second)) {
+				return fmt.Errorf("manifest generated_at does not match request")
+			}
+			if !reflect.DeepEqual(manifest.SelectedTasks, request.SelectedTasks) || !reflect.DeepEqual(manifest.Dispatches, request.Dispatches) {
+				return fmt.Errorf("manifest tasks or dispatches do not match request")
+			}
+			return nil
+		}
+		// Canonical callers may present the already-normalized, still-unbound
+		// transaction shape. Unlike an inbound compatibility artifact, every
+		// one of its execution fields must match this trusted request. Any
+		// supplied attempt identity/binding remains an unconditional refusal.
+		if strings.TrimSpace(manifest.AttemptID) != "" || strings.TrimSpace(manifest.AttemptPath) != "" || manifest.ExecutionBinding != nil {
+			if classificationErr != nil {
+				return classificationErr
+			}
+			return fmt.Errorf("external unbound start cannot accept a supplied attempt binding")
+		}
+	}
 	if manifest.DispatchMode != request.DispatchMode || manifest.ExecutionOwner != request.ExecutionOwner {
 		return fmt.Errorf("manifest execution owner/mode does not match request")
 	}
@@ -744,6 +826,29 @@ func deriveBuildStartManifest(attemptPath string, attempt buildAttemptRecord, ma
 		Summary: "manifest persisted before worker dispatch",
 	})
 	return manifest, attempt, nil
+}
+
+// deriveLegacyBuildStartManifest is the only old-to-modern adapter. It does
+// not copy execution authority from the inbound artifact: the canonical
+// request supplies owner, mode, accepted plan authority, host identity, and
+// attempt identity, then deriveBuildStartManifest binds those values to the
+// journal before the transaction writes its receipt last.
+func deriveLegacyBuildStartManifest(attemptPath string, attempt buildAttemptRecord, legacy codexBuildManifest, request buildStartRequest, state colony.ColonyState) (codexBuildManifest, buildAttemptRecord, error) {
+	planSHA, err := planStateHash(state.Plan)
+	if err != nil {
+		return codexBuildManifest{}, buildAttemptRecord{}, fmt.Errorf("build start: hash accepted plan for legacy binding: %w", err)
+	}
+	legacy.DispatchMode = request.DispatchMode
+	legacy.ExecutionOwner = request.ExecutionOwner
+	legacy.HostPlatform = request.HostPlatform
+	legacy.WorkerDispatchOptIn = buildWorkerDispatchOptIn(request.DispatchMode)
+	legacy.PlanAuthority = request.PlanAuthority
+	legacy.PlanRevisionID = request.PlanAuthority.ActiveRevision.ID
+	legacy.PlanStateHash = planSHA
+	legacy.AttemptID = ""
+	legacy.AttemptPath = ""
+	legacy.ExecutionBinding = nil
+	return deriveBuildStartManifest(attemptPath, attempt, legacy, request.GeneratedAt)
 }
 
 func deriveBuildStartState(state colony.ColonyState, request buildStartRequest, phase colony.Phase) colony.ColonyState {

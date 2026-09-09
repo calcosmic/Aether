@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -466,17 +467,34 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("hash completion packet: %w", err)
 	}
-	// WR-02: is this the identical packet that already produced committed
-	// partial credit for this phase? Computed before the staleness guards
-	// because a committed partial legitimately changed the very state they
-	// compare against.
-	partialReplay := isCommittedPartialAttemptReplay(*manifest, completionDigest)
-	if err := validateBuildManifestPlanRevision(*manifest, state, partialReplay); err != nil {
-		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
-	}
-	binding, err := validateBuildAttemptManifestBinding(*manifest, state, partialReplay)
+	classification, err := classifyBuildManifestBinding(*manifest)
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
+	var binding buildAttemptManifestBinding
+	partialReplay := false
+	if classification == buildManifestBindingLegacy {
+		var replayed bool
+		binding, replayed, err = legacyBuildCompletionReplayBinding(*manifest, state, completionDigest)
+		if err != nil {
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+		}
+		if !replayed {
+			binding = buildAttemptManifestBinding{Legacy: true}
+		}
+	} else {
+		// WR-02: is this the identical packet that already produced committed
+		// partial credit for this phase? Computed before the staleness guards
+		// because a committed partial legitimately changed the very state they
+		// compare against.
+		partialReplay = isCommittedPartialAttemptReplay(*manifest, completionDigest)
+		if err := validateBuildManifestPlanRevision(*manifest, state, partialReplay); err != nil {
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+		}
+		binding, err = validateBuildAttemptManifestBinding(*manifest, state, partialReplay)
+		if err != nil {
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+		}
 	}
 	// T-188-09 (D-10, D-11): a completion packet with no attempt binding at
 	// all is still accepted -- this branch is deliberately kept, not
@@ -623,7 +641,7 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		if authorityErr != nil {
 			return nil, colony.ColonyState{}, colony.Phase{}, nil, authorityErr
 		}
-		request, requestErr := newBuildStartRequest(root, buildStartExternalUnbound, startState, authority, phaseNum, selectedTaskIDs, manifest.ExecutionOwner, manifest.DispatchMode, startedAt, manifest.Dispatches, buildStartEffects{
+		request, requestErr := newBuildStartRequest(root, buildStartExternalUnbound, startState, authority, phaseNum, selectedTaskIDs, buildExecutionOwner("external-task", false), "external-task", startedAt, manifest.Dispatches, buildStartEffects{
 			CheckpointPath: checkpointRel,
 			Completion:     &completion,
 			ClaimsPath:     claimsRel,
@@ -640,6 +658,12 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		}
 		state = startState
 		attemptRel = receipt.AttemptPath
+		loadedRel, loadedAttempt, ok := loadLatestBuildAttempt(phaseNum)
+		if !ok || loadedRel != attemptRel || loadedAttempt.ID != receipt.AttemptID || loadedAttempt.PlanManifest == nil {
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("external build start receipt does not resolve to its derived manifest binding")
+		}
+		binding = buildAttemptManifestBinding{Bound: true, Path: attemptRel, Record: loadedAttempt, Legacy: true}
+		manifest = loadedAttempt.PlanManifest
 	} else {
 		if err := store.SaveJSON(checkpointRel, state); err != nil {
 			return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to checkpoint colony state: %w", err)
@@ -737,8 +761,8 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 
 	finalManifest := buildCodexBuildManifest(root, updatedState, updatedPhase, checkpointRel, claimsRel, dispatches, startedAt, "external-task", selectedTaskIDs, manifest.WorkerBriefs, false, colony.NormalizeVerificationDepth(manifest.ReviewDepth))
 	finalManifest.GeneratedAt = completedAt.Format(time.RFC3339)
-	finalManifest.AttemptID = strings.TrimSpace(manifest.AttemptID)
-	finalManifest.AttemptPath = filepath.ToSlash(strings.TrimSpace(manifest.AttemptPath))
+	finalManifest.AttemptID = binding.Record.ID
+	finalManifest.AttemptPath = attemptDisplayPath
 	if err := store.SaveJSON(manifestRel, finalManifest); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to write build manifest: %w", err)
 	}
@@ -1138,6 +1162,80 @@ func collectPendingSuggestions(root string) (ran bool, count int) {
 		count = total
 	}
 	return true, count
+}
+
+// legacyBuildCompletionReplayBinding recognizes only the exact old packet
+// already committed through the canonical adapter. The raw packet digest is
+// retained on that attempt while its trusted, modern manifest lives in
+// PlanManifest; both the binding and the receipt must verify before replay can
+// take the ordinary idempotent path.
+func legacyBuildCompletionReplayBinding(manifest codexBuildManifest, state colony.ColonyState, completionDigest string) (buildAttemptManifestBinding, bool, error) {
+	attemptRel, attempt, ok := loadLatestBuildAttempt(manifest.Phase)
+	if !ok || strings.TrimSpace(attempt.CompletionSHA256) != strings.TrimSpace(completionDigest) {
+		return buildAttemptManifestBinding{}, false, nil
+	}
+	if attempt.ExecutionOwner != buildExecutionOwner("external-task", false) || attempt.DispatchMode != "external-task" || attempt.PlanManifest == nil {
+		return buildAttemptManifestBinding{}, false, fmt.Errorf("legacy completion matches an attempt without canonical external build-start identity")
+	}
+	receiptPath := buildStartReceiptPath(manifest.Phase, attempt.ID)
+	var receipt buildStartReceipt
+	if receiptPath == "" || store.LoadJSON(receiptPath, &receipt) != nil {
+		return buildAttemptManifestBinding{}, false, fmt.Errorf("legacy completion attempt %s is missing its canonical build-start receipt", attempt.ID)
+	}
+	if err := validateLegacyBuildStartReceiptEvidence(receipt, receiptPath, attemptRel, attempt); err != nil {
+		return buildAttemptManifestBinding{}, false, err
+	}
+	partialReplay := attempt.Status == buildAttemptPartial
+	if err := validateBuildManifestPlanRevision(*attempt.PlanManifest, state, partialReplay); err != nil {
+		return buildAttemptManifestBinding{}, false, err
+	}
+	binding, err := validateBuildAttemptManifestBinding(*attempt.PlanManifest, state, partialReplay)
+	if err != nil {
+		return buildAttemptManifestBinding{}, false, err
+	}
+	binding.Legacy = true
+	return binding, true, nil
+}
+
+func validateLegacyBuildStartReceiptEvidence(receipt buildStartReceipt, receiptPath, attemptRel string, attempt buildAttemptRecord) error {
+	if receipt.SchemaVersion != buildStartSchemaVersion || receipt.Path != receiptPath ||
+		receipt.Phase != attempt.Phase || receipt.AttemptID != attempt.ID || receipt.AttemptPath != attemptRel ||
+		attempt.PlanManifest == nil || !reflect.DeepEqual(receipt.PlanAuthority, attempt.PlanManifest.PlanAuthority) {
+		return fmt.Errorf("legacy completion attempt %s has conflicting canonical build-start receipt evidence", attempt.ID)
+	}
+	if len(receipt.RequestSHA256) != 64 || receipt.TransactionID != "build-start-"+receipt.RequestSHA256[:24] ||
+		receipt.ID != "build-start-receipt-"+receipt.RequestSHA256[:24] {
+		return fmt.Errorf("legacy completion attempt %s has conflicting canonical build-start receipt identity", attempt.ID)
+	}
+	payload := receipt
+	payload.ContentHash = ""
+	hash, err := jsonSHA256(payload)
+	if err != nil || hash != receipt.ContentHash {
+		return fmt.Errorf("legacy completion attempt %s has invalid canonical build-start receipt content", attempt.ID)
+	}
+	checkpointPath, err := canonicalBuildAttemptDataPath(attempt.Checkpoint)
+	if err != nil {
+		return fmt.Errorf("legacy completion attempt %s has invalid checkpoint evidence: %w", attempt.ID, err)
+	}
+	claimsPath, err := canonicalBuildAttemptDataPath(attempt.ClaimsPath)
+	if err != nil {
+		return fmt.Errorf("legacy completion attempt %s has invalid claims evidence: %w", attempt.ID, err)
+	}
+	requestShape := buildStartRequest{
+		Phase: attempt.Phase, AttemptID: attempt.ID,
+		Effects: buildStartEffects{
+			CheckpointPath: checkpointPath,
+			Completion:     &codexExternalBuildCompletion{},
+			ClaimsPath:     claimsPath,
+			Claims:         &codexBuildClaims{},
+			PromoteState:   true,
+			MakeLatest:     true,
+		},
+	}
+	if err := validateBuildStartReceiptTargets(receipt.Targets, requestShape); err != nil {
+		return fmt.Errorf("legacy completion attempt %s has invalid canonical build-start receipt targets: %w", attempt.ID, err)
+	}
+	return nil
 }
 
 func validateBuildManifestPlanRevision(manifest codexBuildManifest, state colony.ColonyState, partialReplay bool) error {
