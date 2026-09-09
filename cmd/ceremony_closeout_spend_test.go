@@ -3,7 +3,6 @@ package cmd
 import (
 	"bytes"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -36,6 +35,10 @@ func countCostLineBlocks(output string) int {
 // seedCostLineColonyForTest installs a store holding a colony at phase 1 with
 // recorded rows for it, so every lane below has something real to render.
 func seedCostLineColonyForTest(t *testing.T) string {
+	return seedCostLineColonyAtCurrentPhaseForTest(t, 1)
+}
+
+func seedCostLineColonyAtCurrentPhaseForTest(t *testing.T, currentPhase int) string {
 	t.Helper()
 	s, tmpDir := newTestStore(t)
 	t.Cleanup(func() { os.RemoveAll(tmpDir) })
@@ -46,7 +49,7 @@ func seedCostLineColonyForTest(t *testing.T) string {
 		Version:      "3.0",
 		Goal:         &goal,
 		State:        colony.StateBUILT,
-		CurrentPhase: 1,
+		CurrentPhase: currentPhase,
 		Plan: colony.Plan{Phases: []colony.Phase{
 			{ID: 1, Name: "See what it cost"},
 			{ID: 2, Name: "Next phase"},
@@ -68,14 +71,24 @@ func seedCostLineColonyForTest(t *testing.T) string {
 // to the closeout, naming phase 1.
 func costLineCompletionFileForTest(t *testing.T, workflow string) string {
 	t.Helper()
-	return writeCeremonyTestJSON(t, map[string]interface{}{
-		"phase":      1,
-		"phase_name": "See what it cost",
-		"workflow":   workflow,
+	manifestKey := "dispatch_manifest"
+	if workflow == "continue" {
+		manifestKey = "continue_manifest"
+	}
+	packet := map[string]interface{}{
+		"workflow": workflow,
 		"dispatches": []map[string]interface{}{
 			{"name": "Mason-67", "caste": "builder", "status": "completed", "summary": "wrote it"},
 		},
-	})
+	}
+	packet[manifestKey] = map[string]interface{}{
+		"phase":      1,
+		"phase_name": "See what it cost",
+		"dispatches": []map[string]interface{}{
+			{"name": "Mason-67", "caste": "builder"},
+		},
+	}
+	return writeCeremonyTestJSON(t, packet)
 }
 
 func TestBuildEndsWithOneCostLine(t *testing.T) {
@@ -135,7 +148,9 @@ func TestNoLaneRendersTwoCostLines(t *testing.T) {
 	t.Run("the wrapper lane: the finalizer stays silent and the ending screen speaks once", func(t *testing.T) {
 		saveGlobals(t)
 		resetRootCmd(t)
-		seedCostLineColonyForTest(t)
+		// The state has already advanced to phase 2. The completion manifest
+		// remains authoritative for the phase-1 run whose closeout is rendering.
+		seedCostLineColonyAtCurrentPhaseForTest(t, 2)
 
 		var lane bytes.Buffer
 
@@ -156,20 +171,17 @@ func TestNoLaneRendersTwoCostLines(t *testing.T) {
 		if got := countCostLineBlocks(lane.String()); got != 1 {
 			t.Fatalf("driving the wrapper lane yielded %d cost line block(s), want exactly 1:\n%s", got, lane.String())
 		}
+		if clean := stripANSI(lane.String()); !strings.Contains(clean, "1.4M") || strings.Contains(clean, "No token use was recorded") {
+			t.Fatalf("wrapper closeout did not use completion phase 1 after state advanced to phase 2:\n%s", lane.String())
+		}
 	})
 
 	t.Run("the direct lane: the build's own ending screen speaks once", func(t *testing.T) {
 		saveGlobals(t)
 		resetRootCmd(t)
-		dataDir := setupBuildFlowTest(t)
-		root := filepath.Dir(filepath.Dir(dataDir))
-		withTestWorkspace(t, root)
-		withWorkingDir(t, root)
-		t.Setenv("AETHER_OUTPUT_MODE", "visual")
-
 		goal := "See what the direct lane cost"
 		taskID := "1.1"
-		createTestColonyState(t, dataDir, colony.ColonyState{
+		accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
 			Version: "3.0",
 			Goal:    &goal,
 			State:   colony.StateREADY,
@@ -180,6 +192,8 @@ func TestNoLaneRendersTwoCostLines(t *testing.T) {
 				Tasks:  []colony.Task{{ID: &taskID, Goal: "Write the thing", Status: colony.TaskPending}},
 			}}},
 		})
+		withWorkingDir(t, accepted.Root)
+		t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
 		var buf bytes.Buffer
 		stdout = &buf
