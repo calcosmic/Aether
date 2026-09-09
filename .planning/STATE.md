@@ -5,15 +5,15 @@ milestone_name: Classic Colony Restoration
 current_phase: 200
 current_phase_name: Iterative Planning
 status: executing
-stopped_at: Completed 200-36-PLAN.md; next incomplete is 200-39
-last_updated: "2026-09-09T04:11:37.000Z"
+stopped_at: Completed 200-39-PLAN.md; next incomplete is 200-40
+last_updated: "2026-09-09T05:05:13.606Z"
 last_activity: 2026-09-09
 state_head: 6737c48e550497641d12cb6d70f4bffc6a255fc4
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 74
-  completed_plans: 72
+  completed_plans: 73
   percent: 0
 ---
 
@@ -32,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 39 of 40
+Plan: 40 of 40
 Status: Ready to execute
 Last activity: 2026-09-09
 
@@ -152,6 +152,7 @@ Last activity: 2026-09-09
 | Phase 200 P35 | 24min | 2 tasks | 6 files |
 | Phase 200 P38 | 31min | 2 tasks | 6 files |
 | Phase 200 P36 | 21min | 2 tasks | 6 files |
+| Phase 200 P39 | 50min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -475,6 +476,9 @@ Last activity: 2026-09-09
 - [Phase 200]: The existing lifecyclePlanningFromSnapshot signature remains as a compatibility adapter over the captured-time implementation, keeping production callers outside the six-file scope unchanged.
 - [Phase 200]: Plan 36 preserves six-task retry semantics through explicit legacy-unbound authority while every start effect uses the canonical transaction. — The compatibility fixture stays realistic without weakening production authority validation.
 - [Phase 200]: Plan 36 keeps child retries journal-visible but never latest, and repository AST enforcement rejects retired partial start writers. — Recovery records cannot impersonate dispatched work or reopen multi-write bypasses.
+- [Phase 200]: Integrated lifecycle claims must execute real Cobra or named causal test processes; source-text counters are not sufficient proof.
+- [Phase 200]: Managed wrappers remain read-only projections of Go authority; source-check drift requires a separately owned plan.
+- [Phase 200]: Only a current candidate exposes exact acceptance; stale and expired candidates expose only aether plan --refresh.
 
 ### Pending Todos
 
@@ -591,8 +595,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-09T04:11:13.185Z
-Stopped at: Completed 200-36-PLAN.md; next incomplete is 200-39
+Last session: 2026-09-09T05:05:13.597Z
+Stopped at: Completed 200-39-PLAN.md; next incomplete is 200-40
 Resume file: None
 
 ## Operator Next Steps

@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 38/40 plans executed
+**Plans:** 39/40 plans executed
 
 Plans:
 
@@ -297,7 +297,7 @@ Plans:
 
 **Wave 24** *(gap closure; blocked on Wave 23 completion)*
 
-- [ ] 200-39-PLAN.md — Prove all five original attacks, the full public journey, Classic corpus, source parity, and exact edge accounting.
+- [x] 200-39-PLAN.md — Prove all five original attacks, the full public journey, Classic corpus, source parity, and exact edge accounting.
 
 **Wave 25** *(gap closure; blocked on Wave 24 completion)*
 
