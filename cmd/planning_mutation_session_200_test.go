@@ -353,14 +353,9 @@ func TestPlanningTimelineConcurrentProcesses200(t *testing.T) {
 	outside := t.TempDir()
 	mustWritePlanningMutationFile(t, filepath.Join(outside, "sentinel.txt"), []byte("outside-timeline"))
 	outsideBefore := snapshotPlanningMutationTree(t, outside)
-	firstInput := validPlanningIterationCardForTest(t, 1, time.Date(2026, time.September, 8, 18, 0, 0, 0, time.UTC))
-	firstInput.RunID = "planning-session-process-race"
-	firstCanonical, _, err := canonicalPlanningTimelineCard(firstInput)
-	if err != nil {
-		t.Fatal(err)
-	}
-	secondInput := validPlanningIterationCardForTest(t, 2, time.Date(2026, time.September, 8, 18, 1, 0, 0, time.UTC))
-	secondInput.RunID = firstInput.RunID
+	firstInput := planningAdversarialCanonicalTimelineCard200(t, 1, "planning-session-process-race", time.Date(2026, time.September, 8, 18, 0, 0, 0, time.UTC))
+	firstCanonical := firstInput
+	secondInput := planningAdversarialCanonicalTimelineCard200(t, 2, firstInput.RunID, time.Date(2026, time.September, 8, 18, 1, 0, 0, time.UTC))
 	firstJSON, _ := json.Marshal(firstInput)
 	secondJSON, _ := json.Marshal(secondInput)
 
@@ -588,8 +583,7 @@ func startPlanningMutationChild(t *testing.T, mode, root, token, card string, ho
 		"AETHER_PLANNING_MUTATION_HOLD="+map[bool]string{false: "0", true: "1"}[hold],
 	)
 	if mode == "timeline-append" && strings.Contains(token, "two") {
-		first := validPlanningIterationCardForTest(t, 1, time.Date(2026, time.September, 8, 18, 0, 0, 0, time.UTC))
-		first.RunID = "planning-session-process-race"
+		first := planningAdversarialCanonicalTimelineCard200(t, 1, "planning-session-process-race", time.Date(2026, time.September, 8, 18, 0, 0, 0, time.UTC))
 		predecessor, _ := json.Marshal(first)
 		command.Env = append(command.Env, "AETHER_PLANNING_MUTATION_PREDECESSOR="+string(predecessor))
 	}
