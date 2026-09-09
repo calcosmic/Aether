@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -2712,7 +2715,9 @@ func TestClearFallbackPlanningArtifactsRemovesStaleFallbackArtifacts(t *testing.
 		writeTestFileAtTime(t, filepath.Join(root, ".aether", "data", rel), "stale fallback", markerTime.Add(-time.Minute))
 	}
 
-	clearFallbackPlanningArtifacts(root)
+	if err := clearFallbackPlanningArtifacts(root); err != nil {
+		t.Fatal(err)
+	}
 
 	for _, rel := range []string{
 		filepath.Join("planning", ".fallback-marker"),
@@ -2732,7 +2737,7 @@ func TestClearFallbackPlanningArtifactsRemovesStaleFallbackArtifacts(t *testing.
 	}
 }
 
-func TestClearFallbackPlanningArtifactsPreservesNewerWorkerArtifacts(t *testing.T) {
+func TestClearFallbackPlanningArtifactsPreservesNewerWorkerFiles(t *testing.T) {
 	root := t.TempDir()
 	planningDir := filepath.Join(root, ".aether", "data", "planning")
 	markerTime := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
@@ -2749,7 +2754,9 @@ func TestClearFallbackPlanningArtifactsPreservesNewerWorkerArtifacts(t *testing.
 	}
 	writeTestFileAtTime(t, filepath.Join(root, ".aether", "data", "phase-research", "phase-2-research.md"), "stale fallback", markerTime.Add(-time.Minute))
 
-	clearFallbackPlanningArtifacts(root)
+	if err := clearFallbackPlanningArtifacts(root); err != nil {
+		t.Fatal(err)
+	}
 
 	for _, rel := range []string{
 		filepath.Join("planning", "SCOUT.md"),
@@ -2771,6 +2778,111 @@ func TestClearFallbackPlanningArtifactsPreservesNewerWorkerArtifacts(t *testing.
 	if _, err := os.Stat(filepath.Join(planningDir, ".fallback-marker")); !os.IsNotExist(err) {
 		t.Fatalf("expected fallback marker to be removed, got %v", err)
 	}
+
+	t.Run("transaction rollback restores every captured cleanup baseline", func(t *testing.T) {
+		rollbackRoot := t.TempDir()
+		dataRoot := filepath.Join(rollbackRoot, ".aether", "data")
+		planningRoot := filepath.Join(dataRoot, "planning")
+		observedAt := time.Date(2026, 9, 9, 12, 0, 0, 0, time.UTC)
+
+		writeTestFileAtTime(t, filepath.Join(planningRoot, ".fallback-marker"), observedAt.Format(time.RFC3339), observedAt)
+		for rel, content := range map[string]string{
+			filepath.Join("planning", "ROUTE-SETTER.md"):           "stale route",
+			filepath.Join("planning", "phase-plan.json"):           `{"stale":true}`,
+			filepath.Join("planning", "phase-plan.json.bak"):       `{"backup":true}`,
+			filepath.Join("phase-research", "phase-1-research.md"): "stale research",
+		} {
+			writeTestFileAtTime(t, filepath.Join(dataRoot, rel), content, observedAt.Add(-time.Minute))
+		}
+		newerResearch := filepath.Join(dataRoot, "phase-research", "phase-2-research.md")
+		writeTestFileAtTime(t, newerResearch, "worker-authored research", observedAt.Add(time.Minute))
+
+		baselines := make(map[string]lifecycleFileState)
+		injected := errors.New("injected fallback cleanup failure")
+		err := withPlanningMutationSession(rollbackRoot, "test-fallback-cleanup-rollback", func(session *planningMutationSession) error {
+			targets, err := fallbackPlanningArtifactRemovalTargetsInSession(session)
+			if err != nil {
+				return err
+			}
+			expected := map[string]bool{
+				"phase-research/phase-1-research.md": true,
+				"planning/.fallback-marker":          true,
+				"planning/ROUTE-SETTER.md":           true,
+				"planning/SCOUT.md":                  true,
+				"planning/phase-plan.json":           true,
+				"planning/phase-plan.json.bak":       true,
+			}
+			for _, target := range targets {
+				if !expected[target.Path] {
+					return fmt.Errorf("unexpected fallback cleanup target %q", target.Path)
+				}
+				delete(expected, target.Path)
+				baseline, err := session.capturedBaseline(target.Root, target.Path)
+				if err != nil {
+					return fmt.Errorf("cleanup target %s was not captured before classification: %w", target.Path, err)
+				}
+				baselines[target.Path] = baseline
+			}
+			if len(expected) != 0 {
+				return fmt.Errorf("fallback cleanup omitted targets: %v", expected)
+			}
+
+			sort.Slice(targets, func(left, right int) bool {
+				if targets[left].Root != targets[right].Root {
+					return targets[left].Root < targets[right].Root
+				}
+				return targets[left].Path < targets[right].Path
+			})
+			tx, err := beginLifecycleTransaction(lifecycleTransactionConfig{
+				TransactionID: "planning-refresh-cleanup-rollback-test",
+				Command:       "planning-refresh-cleanup",
+				Allowlist: lifecycleTransactionAllowlist{
+					RepositoryRoot:    rollbackRoot,
+					LifecycleDataRoot: dataRoot,
+				},
+				Session: session,
+				Fault: func(point string) error {
+					if point == "after_target_commit:target-0003" {
+						return injected
+					}
+					return nil
+				},
+			})
+			if err != nil {
+				return err
+			}
+			for _, target := range targets {
+				if target.Remove {
+					err = tx.DeclareRemoval(target.Root, target.Path)
+				} else {
+					err = tx.DeclareWrite(target.Root, target.Path, target.Content)
+				}
+				if err != nil {
+					return err
+				}
+			}
+			if _, err := tx.Commit(); !errors.Is(err, injected) {
+				return fmt.Errorf("cleanup transaction error = %v, want injected fault", err)
+			}
+			tx.config.Fault = nil
+			return tx.Rollback()
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for rel, before := range baselines {
+			after, err := readLifecycleFileState(filepath.Join(dataRoot, filepath.FromSlash(rel)))
+			if err != nil {
+				t.Fatalf("read rolled-back target %s: %v", rel, err)
+			}
+			if before.Exists != after.Exists || before.Digest != after.Digest || before.Mode.Perm() != after.Mode.Perm() || !bytes.Equal(before.Bytes, after.Bytes) {
+				t.Fatalf("cleanup target %s did not return to its exact baseline\nbefore=%+v\nafter=%+v", rel, before, after)
+			}
+		}
+		if got, err := os.ReadFile(newerResearch); err != nil || string(got) != "worker-authored research" {
+			t.Fatalf("rollback changed newer worker research: %q err=%v", got, err)
+		}
+	})
 }
 
 func writeTestFileAtTime(t *testing.T, path, content string, modTime time.Time) {
@@ -2828,23 +2940,20 @@ func TestE2EForceReplanRecovery(t *testing.T) {
 	}
 	createApprovedCodexPlanTestColony(t, dataDir, root, state)
 
-	// Write fallback artifacts — simulating what happens when real dispatch fails.
+	// Write fallback artifacts from one observed instant, with every fallback
+	// projection older than its marker. This models the source classification
+	// used by force-replan instead of depending on filesystem write order.
+	observedAt := time.Now().UTC()
 	fallbackMarker := filepath.Join(planningDir, ".fallback-marker")
-	if err := os.WriteFile(fallbackMarker, []byte("2026-01-01T00:00:00Z"), 0644); err != nil {
-		t.Fatalf("failed to write fallback marker: %v", err)
-	}
+	writeTestFileAtTime(t, fallbackMarker, observedAt.Format(time.RFC3339), observedAt)
 	routeSetter := filepath.Join(planningDir, "ROUTE-SETTER.md")
-	if err := os.WriteFile(routeSetter, []byte("# Fallback route-setter\nThis was generated by fallback."), 0644); err != nil {
-		t.Fatalf("failed to write fallback route-setter: %v", err)
-	}
+	writeTestFileAtTime(t, routeSetter, "# Fallback route-setter\nThis was generated by fallback.", observedAt.Add(-time.Minute))
 	phasePlan := filepath.Join(planningDir, "phase-plan.json")
-	if err := os.WriteFile(phasePlan, []byte(`{"fallback": true}`), 0644); err != nil {
-		t.Fatalf("failed to write fallback phase-plan: %v", err)
-	}
+	writeTestFileAtTime(t, phasePlan, `{"fallback": true}`, observedAt.Add(-time.Minute))
 	phasePlanBackup := filepath.Join(planningDir, "phase-plan.json.bak")
-	if err := os.WriteFile(phasePlanBackup, []byte(`{"stale_backup": true}`), 0644); err != nil {
-		t.Fatalf("failed to write stale fallback backup: %v", err)
-	}
+	writeTestFileAtTime(t, phasePlanBackup, `{"stale_backup": true}`, observedAt.Add(-time.Minute))
+	staleResearch := filepath.Join(phaseResearchDir, "phase-99-research.md")
+	writeTestFileAtTime(t, staleResearch, "stale fallback research", observedAt.Add(-time.Minute))
 
 	// Verify fallback artifacts exist before force-replan.
 	if _, err := os.Stat(fallbackMarker); err != nil {
@@ -2867,7 +2976,7 @@ func TestE2EForceReplanRecovery(t *testing.T) {
 
 	// Verify fallback marker was cleared.
 	if _, err := os.Stat(fallbackMarker); !os.IsNotExist(err) {
-		t.Fatal("expected fallback marker to be removed after force-replan")
+		t.Fatalf("expected fallback marker to be removed after force-replan; stderr=%s", output)
 	}
 
 	// Verify the fallback route-setter was replaced (no longer contains "Fallback route-setter").
@@ -2885,6 +2994,9 @@ func TestE2EForceReplanRecovery(t *testing.T) {
 	}
 	if _, err := os.Stat(phasePlanBackup); !os.IsNotExist(err) {
 		t.Fatal("expected stale phase-plan backup to be removed after force-replan")
+	}
+	if _, err := os.Stat(staleResearch); !os.IsNotExist(err) {
+		t.Fatal("expected stale fallback phase research to be removed after force-replan")
 	}
 
 	// Verify colony state is no longer stuck at EXECUTING phase 1.
