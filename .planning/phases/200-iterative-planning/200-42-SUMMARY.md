@@ -75,6 +75,8 @@ Each task was committed atomically through its RED and GREEN test-only TDD gates
 4. **Task 2 GREEN: Isolate memory and phase fixtures** - `3c755dbe` (test)
 5. **Rule 3 verification repair: Contain memory-details command fixtures** - `c773b7e8` (test)
 
+**Plan metadata:** `b954fa75` (docs), followed by a scoped provenance-restoration commit.
+
 ## Files Created/Modified
 
 - `cmd/curation_cmds_test.go` - Seeds legacy fixture files inside the shared repository-authorized test binding.
@@ -134,7 +136,7 @@ None - no external service configuration required.
 ## Self-Check: PASSED
 
 - All six modified test files and this summary exist.
-- All four task RED/GREEN commits and the scoped Rule 3 repair commit are present in repository history.
+- All four task RED/GREEN commits, the scoped Rule 3 repair commit, and the plan metadata commit are present in repository history.
 - All declared plan verification commands pass on the current tree.
 
 ---
