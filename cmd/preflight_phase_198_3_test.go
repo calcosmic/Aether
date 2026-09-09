@@ -333,6 +333,25 @@ func readDirectBuildPreflightStateEvidence(t *testing.T) ([]byte, []string) {
 
 func setupDirectBuildPreflightFixture(t *testing.T, name string) directBuildPreflightFixture {
 	t.Helper()
+	if name == "force_active_attempt" {
+		startedAt := time.Now().UTC().Add(-time.Hour)
+		active := commitTestBuildStart(t, testBuildStartOptions{
+			GeneratedAt:    startedAt,
+			Dispatches:     []codexBuildDispatch{{Name: "Forge-active", Caste: "builder", TaskID: "1.1"}},
+			ExecutionOwner: "go-runtime",
+			MakeLatest:     testBuildStartBool(true),
+		})
+		withTestWorkspace(t, active.Root)
+		withWorkingDir(t, active.Root)
+		if err := transitionBuildAttempt(active.AttemptPath, buildAttemptDispatching, "fixture worker is active", nil, nil, "real", nil); err != nil {
+			t.Fatalf("mark fixture attempt dispatching: %v", err)
+		}
+		fixture := directBuildPreflightFixture{root: active.Root, phase: active.Request.Phase, attemptRel: active.AttemptPath}
+		fixture.options.Force = true
+		seedDirectBuildPreflightCleanupSentinels(t, fixture.phase)
+		return fixture
+	}
+
 	dataDir := setupBuildFlowTest(t)
 	root := filepath.Dir(filepath.Dir(dataDir))
 	withTestWorkspace(t, root)
@@ -343,32 +362,9 @@ func setupDirectBuildPreflightFixture(t *testing.T, name string) directBuildPref
 	fixture := directBuildPreflightFixture{root: root, phase: 1}
 
 	switch name {
-	case "ordinary", "force_active_attempt":
+	case "ordinary":
 		state := readyDirectBuildPreflightState(&goal, 1, &taskOneID)
-		if name == "force_active_attempt" {
-			startedAt := time.Now().UTC().Add(-time.Hour)
-			state.State = colony.StateEXECUTING
-			state.CurrentPhase = 1
-			state.BuildStartedAt = &startedAt
-			state.Plan.Phases[0].Status = colony.PhaseInProgress
-			state.Plan.Phases[0].Tasks[0].Status = colony.TaskInProgress
-			createTestColonyState(t, dataDir, state)
-			attemptRel, err := beginBuildAttempt(
-				state, 1, state.Plan.Phases[0], startedAt, nil,
-				"checkpoints/pre-build-phase-1.json", "build/phase-1/manifest.json", "last-build-claims.json",
-				"go-runtime", []codexBuildDispatch{{Name: "Forge-active", Caste: "builder", TaskID: taskOneID}},
-			)
-			if err != nil {
-				t.Fatalf("seed active build attempt: %v", err)
-			}
-			if err := transitionBuildAttempt(attemptRel, buildAttemptDispatching, "fixture worker is active", nil, nil, "real", nil); err != nil {
-				t.Fatalf("mark fixture attempt dispatching: %v", err)
-			}
-			fixture.options.Force = true
-			fixture.attemptRel = attemptRel
-		} else {
-			createTestColonyState(t, dataDir, state)
-		}
+		createTestColonyState(t, dataDir, state)
 
 	case "legacy_numeric_current_phase":
 		raw := []byte(`{

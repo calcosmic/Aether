@@ -2682,34 +2682,21 @@ func TestBuildAllocatesUniqueNamesWhenSpawnHistoryCollides(t *testing.T) {
 	}
 }
 
-// seedBuildAttemptRecord writes a minimal buildAttemptRecord and its
-// latest-attempt pointer directly to the store, bypassing beginBuildAttempt's
-// ColonyState/workspace-fingerprint requirements, so tests can construct an
-// attempt in an arbitrary status for a given phase.
+// seedBuildAttemptRecord creates a canonical latest attempt and then uses the
+// production transition to place it in the arbitrary status a collision test
+// needs. The accepted authority, attempt, receipt, manifest, and pointer are
+// all committed by commitTestBuildStart.
 func seedBuildAttemptRecord(t *testing.T, phaseNum int, status string, dispatches []codexBuildDispatch) {
 	t.Helper()
-	attemptID := fmt.Sprintf("attempt-test-phase-%d-%s", phaseNum, status)
-	attemptRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseNum), "attempts", attemptID+".json"))
-	now := time.Now().UTC().Format(time.RFC3339Nano)
-	record := buildAttemptRecord{
-		SchemaVersion: buildAttemptSchemaVersion,
-		ID:            attemptID,
-		Phase:         phaseNum,
-		Status:        status,
-		StartedAt:     now,
-		UpdatedAt:     now,
-		Dispatches:    dispatches,
+	fixture := commitTestBuildStart(t, testBuildStartOptions{
+		GeneratedAt: time.Now().UTC(), ExecutionOwner: "collision-test", Dispatches: dispatches,
+		MakeLatest: testBuildStartBool(true),
+	})
+	if fixture.Request.Phase != phaseNum {
+		t.Fatalf("canonical collision fixture phase = %d, want %d", fixture.Request.Phase, phaseNum)
 	}
-	if err := store.SaveJSON(attemptRel, record); err != nil {
-		t.Fatalf("failed to seed build attempt record: %v", err)
-	}
-	if err := store.SaveJSON(latestBuildAttemptPointerPath(phaseNum), latestBuildAttemptPointer{
-		SchemaVersion: buildAttemptSchemaVersion,
-		AttemptID:     attemptID,
-		Path:          displayDataPath(attemptRel),
-		UpdatedAt:     now,
-	}); err != nil {
-		t.Fatalf("failed to seed latest build attempt pointer: %v", err)
+	if err := transitionBuildAttempt(fixture.AttemptPath, status, "collision fixture status", dispatches, nil, "collision-test", nil); err != nil {
+		t.Fatalf("transition canonical collision fixture: %v", err)
 	}
 }
 
@@ -2796,15 +2783,7 @@ func TestEnsureUniqueBuildDispatchNamesStableAcrossRePlan(t *testing.T) {
 // not leak across phases (T-163.1-20).
 func TestEnsureUniqueBuildDispatchNamesSuffixesCollisionFromDifferentPhase(t *testing.T) {
 	saveGlobals(t)
-	dataDir := t.TempDir() + "/.aether/data"
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		t.Fatalf("failed to create data dir: %v", err)
-	}
-	s, err := storage.NewStore(dataDir)
-	if err != nil {
-		t.Fatalf("failed to create store: %v", err)
-	}
-	store = s
+	seedBuildAttemptRecord(t, 1, buildAttemptAwaiting, []codexBuildDispatch{{Name: "Hammer-44", Caste: "builder"}})
 
 	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
 	if err := spawnTree.RecordSpawn("Queen", "builder", "Hammer-44", "Phase 1 task", 1); err != nil {
@@ -2812,8 +2791,6 @@ func TestEnsureUniqueBuildDispatchNamesSuffixesCollisionFromDifferentPhase(t *te
 	}
 	// Phase 1 has its own active, unfinalized attempt that used this name --
 	// that exclusion must not apply when planning a DIFFERENT phase.
-	seedBuildAttemptRecord(t, 1, buildAttemptAwaiting, []codexBuildDispatch{{Name: "Hammer-44", Caste: "builder"}})
-
 	dispatches := []codexBuildDispatch{{Name: "Hammer-44", Caste: "builder"}}
 	allocated, err := ensureUniqueBuildDispatchNames(dispatches, 2)
 	if err != nil {
@@ -2833,22 +2810,12 @@ func TestEnsureUniqueBuildDispatchNamesSuffixesCollisionFromDifferentPhase(t *te
 // attempts only (T-163.1-20).
 func TestEnsureUniqueBuildDispatchNamesSuffixesCollisionFromSealedAttempt(t *testing.T) {
 	saveGlobals(t)
-	dataDir := t.TempDir() + "/.aether/data"
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		t.Fatalf("failed to create data dir: %v", err)
-	}
-	s, err := storage.NewStore(dataDir)
-	if err != nil {
-		t.Fatalf("failed to create store: %v", err)
-	}
-	store = s
+	seedBuildAttemptRecord(t, 1, buildAttemptBuilt, []codexBuildDispatch{{Name: "Hammer-44", Caste: "builder"}})
 
 	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
 	if err := spawnTree.RecordSpawn("Queen", "builder", "Hammer-44", "Phase 1 task", 1); err != nil {
 		t.Fatalf("failed to seed spawn tree: %v", err)
 	}
-	seedBuildAttemptRecord(t, 1, buildAttemptBuilt, []codexBuildDispatch{{Name: "Hammer-44", Caste: "builder"}})
-
 	dispatches := []codexBuildDispatch{{Name: "Hammer-44", Caste: "builder"}}
 	allocated, err := ensureUniqueBuildDispatchNames(dispatches, 1)
 	if err != nil {

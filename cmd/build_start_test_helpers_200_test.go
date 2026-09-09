@@ -93,6 +93,7 @@ func commitTestBuildStart(t *testing.T, options testBuildStartOptions) testBuild
 	if options.PrepareRoot != nil {
 		options.PrepareRoot(root)
 	}
+	testBuildStartEnsureGoal(t, root)
 
 	state := mustReadSpecificationTestState(t, root)
 	phaseID := seed.Phase
@@ -205,6 +206,33 @@ func commitTestBuildStart(t *testing.T, options testBuildStartOptions) testBuild
 	return fixture
 }
 
+// testBuildStartEnsureGoal makes the accepted planning fixture a complete
+// active colony through the same repository-session writer used by planning.
+// The canonical candidate fixture intentionally starts from a zero-value
+// colony state; public build callers require a goal before they can reach the
+// provider-preflight behavior these fixtures exercise.
+func testBuildStartEnsureGoal(t *testing.T, root string) {
+	t.Helper()
+	if err := withPlanningMutationSession(root, "test-build-start-goal", func(session *planningMutationSession) error {
+		var state colony.ColonyState
+		exists, err := session.LoadJSON(lifecycleTransactionRootData, "COLONY_STATE.json", &state)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return fmt.Errorf("canonical build-start fixture state is missing")
+		}
+		if state.Goal != nil && strings.TrimSpace(*state.Goal) != "" {
+			return nil
+		}
+		goal := "Exercise the canonical build-start transaction"
+		state.Goal = &goal
+		return persistPlanningColonyStateInSession(session, "test-build-start-goal", state)
+	}); err != nil {
+		t.Fatalf("seed canonical build-start goal: %v", err)
+	}
+}
+
 func testBuildStartOwnerAndMode(variant buildStartVariant) (string, string) {
 	switch variant {
 	case buildStartPlanOnly:
@@ -253,6 +281,7 @@ func testBuildStartEffects(t *testing.T, root string, state colony.ColonyState, 
 		Phase: request.Phase, PhaseName: phase.Name, Root: root,
 		PlanOnly:     request.Variant == buildStartPlanOnly || request.Variant == buildStartQueenLed,
 		DispatchMode: request.DispatchMode, ExecutionOwner: request.ExecutionOwner,
+		ClaimsPath:  displayDataPath(options.ClaimsPath),
 		GeneratedAt: request.GeneratedAt.Format(time.RFC3339), PlanAuthority: request.PlanAuthority,
 		PlanRevisionID: request.PlanAuthority.ActiveRevision.ID, PlanStateHash: planSHA,
 		State: string(state.State), Dispatches: append([]codexBuildDispatch(nil), request.Dispatches...),

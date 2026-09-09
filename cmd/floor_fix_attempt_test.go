@@ -189,19 +189,28 @@ func TestPlanCheckFixAttemptHonoursNonDefaultClaimsPath(t *testing.T) {
 	}
 }
 
+func canonicalFloorFixFixture(t *testing.T, dispatches []codexBuildDispatch) testBuildStartFixture {
+	t.Helper()
+	return commitTestBuildStart(t, testBuildStartOptions{
+		GeneratedAt: time.Now().UTC(), ExecutionOwner: "test-owner", Dispatches: dispatches,
+		MakeLatest: testBuildStartBool(true),
+		PrepareRoot: func(root string) {
+			writeAgentsVerificationCommands(t, root, "- build: true", "- types: true", "- lint: true", "- tests: false")
+		},
+	})
+}
+
 // TestFailedCheckSendsExactlyOneBuilderFixAttempt proves a failing check with
 // no reviewer dispatched produces exactly one builder dispatch whose reason
 // names the failing check, and no reviewer dispatch of any kind.
 func TestFailedCheckSendsExactlyOneBuilderFixAttempt(t *testing.T) {
 	saveGlobals(t)
-	s, root := newTestStore(t)
-	store = s
 	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &codex.FakeInvoker{} }
-	writeAgentsVerificationCommands(t, root, "- build: true", "- types: true", "- lint: true", "- tests: false")
-	phase := colony.Phase{ID: 1, Name: "One bounded fix attempt"}
+	fixture := canonicalFloorFixFixture(t, nil)
+	root, phase, state := fixture.Root, fixture.Phase, fixture.State
 	manifest := codexContinueManifest{}
 
-	verification, watcherFlow := runCodexContinueVerification(context.Background(), root, colony.ColonyState{}, phase, manifest, time.Second, 5*time.Second, true)
+	verification, watcherFlow := runCodexContinueVerification(context.Background(), root, state, phase, manifest, time.Second, 5*time.Second, true)
 
 	if watcherFlow != nil {
 		t.Fatalf("expected no reviewer dispatch of any kind, got watcherFlow=%+v", watcherFlow)
@@ -247,14 +256,12 @@ func TestFailedCheckSendsExactlyOneBuilderFixAttempt(t *testing.T) {
 // carries one exact command to re-run the builder by hand.
 func TestSecondFailureBlocksAndNamesTheCommand(t *testing.T) {
 	saveGlobals(t)
-	s, root := newTestStore(t)
-	store = s
 	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &codex.FakeInvoker{} }
-	writeAgentsVerificationCommands(t, root, "- build: true", "- types: true", "- lint: true", "- tests: false")
-	phase := colony.Phase{ID: 1, Name: "Still failing after the fix attempt"}
+	fixture := canonicalFloorFixFixture(t, nil)
+	root, phase, state := fixture.Root, fixture.Phase, fixture.State
 	manifest := codexContinueManifest{}
 
-	verification, _ := runCodexContinueVerification(context.Background(), root, colony.ColonyState{}, phase, manifest, time.Second, 5*time.Second, true)
+	verification, _ := runCodexContinueVerification(context.Background(), root, state, phase, manifest, time.Second, 5*time.Second, true)
 	if verification.ChecksPassed {
 		t.Fatalf("expected the phase to still be blocked after the fix attempt (FakeInvoker does not repair the repo), got %+v", verification)
 	}
@@ -305,19 +312,13 @@ func TestSecondFailureBlocksAndNamesTheCommand(t *testing.T) {
 // status are byte-identical to before.
 func TestFixAttemptNeverOverwritesTheFirstResult(t *testing.T) {
 	saveGlobals(t)
-	s, root := newTestStore(t)
-	store = s
 	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &codex.FakeInvoker{} }
-	writeAgentsVerificationCommands(t, root, "- build: true", "- types: true", "- lint: true", "- tests: false")
-	phase := colony.Phase{ID: 1, Name: "Original attempt preserved"}
 
 	originalDispatches := []codexBuildDispatch{
 		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-1", Task: "Original work", Status: "completed"},
 	}
-	attemptRel, err := beginBuildAttempt(colony.ColonyState{}, phase.ID, phase, time.Now().UTC(), nil, "", "", "", "test-owner", originalDispatches)
-	if err != nil {
-		t.Fatalf("begin original build attempt: %v", err)
-	}
+	fixture := canonicalFloorFixFixture(t, originalDispatches)
+	root, phase, state, attemptRel := fixture.Root, fixture.Phase, fixture.State, fixture.AttemptPath
 	claims := &codexBuildClaims{BuildPhase: phase.ID}
 	if err := transitionBuildAttempt(attemptRel, buildAttemptBuilt, "original build complete", originalDispatches, claims, "real", nil); err != nil {
 		t.Fatalf("transition original build attempt: %v", err)
@@ -328,7 +329,7 @@ func TestFixAttemptNeverOverwritesTheFirstResult(t *testing.T) {
 	}
 
 	manifest := codexContinueManifest{}
-	verification, _ := runCodexContinueVerification(context.Background(), root, colony.ColonyState{}, phase, manifest, time.Second, 5*time.Second, true)
+	verification, _ := runCodexContinueVerification(context.Background(), root, state, phase, manifest, time.Second, 5*time.Second, true)
 	if verification.CheckFixAttempt == nil {
 		t.Fatalf("expected a fix attempt to have run")
 	}
@@ -343,9 +344,14 @@ func TestFixAttemptNeverOverwritesTheFirstResult(t *testing.T) {
 		t.Fatalf("original attempt was mutated by the fix attempt:\nbefore=%s\nafter=%s", beforeJSON, afterJSON)
 	}
 
-	records := listBuildAttemptsForPhase(phase.ID)
+	var records []buildAttemptRecord
+	for _, record := range listBuildAttemptsForPhase(phase.ID) {
+		if validBuildAttemptID(record.ID) {
+			records = append(records, record)
+		}
+	}
 	if len(records) != 2 {
-		t.Fatalf("expected 2 separate attempt records (original + fix), got %d: %+v", len(records), records)
+		t.Fatalf("expected 2 separate attempt journals (original + fix), got %d: %+v", len(records), records)
 	}
 	fixCount := 0
 	for _, r := range records {
@@ -366,20 +372,18 @@ func TestFixAttemptNeverOverwritesTheFirstResult(t *testing.T) {
 // another builder automatically.
 func TestNoSecondAutomaticFixAttempt(t *testing.T) {
 	saveGlobals(t)
-	s, root := newTestStore(t)
-	store = s
 	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &codex.FakeInvoker{} }
-	writeAgentsVerificationCommands(t, root, "- build: true", "- types: true", "- lint: true", "- tests: false")
-	phase := colony.Phase{ID: 1, Name: "No second automatic attempt"}
+	fixture := canonicalFloorFixFixture(t, nil)
+	root, phase, state := fixture.Root, fixture.Phase, fixture.State
 	manifest := codexContinueManifest{}
 
-	first, _ := runCodexContinueVerification(context.Background(), root, colony.ColonyState{}, phase, manifest, time.Second, 5*time.Second, true)
+	first, _ := runCodexContinueVerification(context.Background(), root, state, phase, manifest, time.Second, 5*time.Second, true)
 	if first.CheckFixAttempt == nil {
 		t.Fatalf("expected the first run to draw a fix attempt")
 	}
 	recordsAfterFirst := listBuildAttemptsForPhase(phase.ID)
 
-	second, _ := runCodexContinueVerification(context.Background(), root, colony.ColonyState{}, phase, manifest, time.Second, 5*time.Second, true)
+	second, _ := runCodexContinueVerification(context.Background(), root, state, phase, manifest, time.Second, 5*time.Second, true)
 	if second.CheckFixAttempt != nil {
 		t.Fatalf("expected the second run to send no further automatic fix attempt, got %+v", second.CheckFixAttempt)
 	}
@@ -394,26 +398,20 @@ func TestNoSecondAutomaticFixAttempt(t *testing.T) {
 // original build's workers.
 func TestFixAttemptIsCountedSeparately(t *testing.T) {
 	saveGlobals(t)
-	s, root := newTestStore(t)
-	store = s
 	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &codex.FakeInvoker{} }
-	writeAgentsVerificationCommands(t, root, "- build: true", "- types: true", "- lint: true", "- tests: false")
-	phase := colony.Phase{ID: 1, Name: "Fix attempt counted separately"}
 
 	originalDispatches := []codexBuildDispatch{
 		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-1", Task: "Original work", Status: "completed"},
 		{Stage: "wave", Wave: 1, Caste: "watcher", Name: "Keen-1", Task: "Verify", Status: "completed"},
 	}
-	attemptRel, err := beginBuildAttempt(colony.ColonyState{}, phase.ID, phase, time.Now().UTC(), nil, "", "", "", "test-owner", originalDispatches)
-	if err != nil {
-		t.Fatalf("begin original build attempt: %v", err)
-	}
+	fixture := canonicalFloorFixFixture(t, originalDispatches)
+	root, phase, state, attemptRel := fixture.Root, fixture.Phase, fixture.State, fixture.AttemptPath
 	if err := transitionBuildAttempt(attemptRel, buildAttemptBuilt, "original build complete", originalDispatches, nil, "real", nil); err != nil {
 		t.Fatalf("transition original build attempt: %v", err)
 	}
 
 	manifest := codexContinueManifest{}
-	verification, _ := runCodexContinueVerification(context.Background(), root, colony.ColonyState{}, phase, manifest, time.Second, 5*time.Second, true)
+	verification, _ := runCodexContinueVerification(context.Background(), root, state, phase, manifest, time.Second, 5*time.Second, true)
 	if verification.CheckFixAttempt == nil {
 		t.Fatalf("expected a fix attempt to have run")
 	}
