@@ -168,10 +168,9 @@ func TestPheromoneCountEmpty(t *testing.T) {
 }
 
 func TestPheromoneFixtureRestoresRepositoryAuthority200(t *testing.T) {
+	saveGlobals(t)
 	originalRoot, hadRoot := os.LookupEnv("AETHER_ROOT")
 	originalDataDir, hadDataDir := os.LookupEnv("COLONY_DATA_DIR")
-	originalStore := store
-	originalTracer := tracer
 	t.Cleanup(func() {
 		if hadRoot {
 			_ = os.Setenv("AETHER_ROOT", originalRoot)
@@ -183,8 +182,6 @@ func TestPheromoneFixtureRestoresRepositoryAuthority200(t *testing.T) {
 		} else {
 			_ = os.Unsetenv("COLONY_DATA_DIR")
 		}
-		store = originalStore
-		tracer = originalTracer
 	})
 
 	_ = os.Unsetenv("AETHER_ROOT")
