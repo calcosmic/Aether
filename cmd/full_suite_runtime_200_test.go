@@ -184,3 +184,151 @@ func TestFullSuiteRuntime200CurrentBinaryProbe(t *testing.T) {
 		return
 	}
 }
+
+func TestFullSuiteRuntime200IsolatesChildEnvironment(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(isolatedProcessHubEnv, t.TempDir())
+	t.Setenv("AETHER_ROOT", "/stale/parent/repository")
+	t.Setenv("COLONY_DATA_DIR", "/stale/parent/repository/.aether/data")
+
+	lanes := []fullSuiteLane{
+		{Name: "isolation-alpha", Tests: []string{"TestFullSuiteRuntime200ChildEnvironmentProbeAlpha"}},
+		{Name: "isolation-beta", Tests: []string{"TestFullSuiteRuntime200ChildEnvironmentProbeBeta"}},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	report, err := runFullSuiteLanes(ctx, executable, lanes, 2, runFullSuiteChildProcess)
+	if err != nil {
+		t.Fatalf("isolated current-binary children failed: %v", err)
+	}
+
+	hubs := map[string]bool{}
+	for _, lane := range report.Lanes {
+		for _, line := range strings.Split(lane.Output, "\n") {
+			const marker = "FULL-SUITE-PROBE-HUB="
+			index := strings.Index(line, marker)
+			if index >= 0 {
+				hubs[strings.TrimSpace(line[index+len(marker):])] = true
+			}
+		}
+	}
+	if len(hubs) != len(lanes) {
+		t.Fatalf("child hubs = %v, want %d distinct private hubs", hubs, len(lanes))
+	}
+}
+
+func TestFullSuiteRuntime200SerializesSharedResources(t *testing.T) {
+	want := map[string]string{
+		"TestColonyStateWriteAllowlistOnlyShrinks": "fixed checked-in allowlist",
+		"TestCurrentVocabulary199":                 "live tracked checkout inventory",
+		"TestNextActionNeverHardcoded":             "fixed checked-in allowlist",
+		"TestOrphanAllowlistOnlyShrinks":           "fixed checked-in allowlist",
+		"TestPhase199GateReceipt":                  "live repository receipt",
+		"TestWorktreeAllocateAgentPhase":           "source checkout worktree registration",
+		"TestWorktreeAllocateAuditLog":             "source checkout worktree registration",
+		"TestWorktreeAllocateHumanBranch":          "source checkout worktree registration",
+		"TestWorktreeAllocateMergedBranchAllowed":  "source checkout worktree registration",
+	}
+	inventory := fullSuiteSerialInventory()
+	if len(inventory) != len(want) {
+		t.Fatalf("serial inventory = %v, want exactly %v", inventory, want)
+	}
+	for testName, evidence := range want {
+		reason, ok := inventory[testName]
+		if !ok {
+			t.Errorf("evidence-backed shared-resource test %s is not serialized", testName)
+			continue
+		}
+		if !strings.Contains(reason, evidence) {
+			t.Errorf("serial reason for %s = %q, want concrete evidence containing %q", testName, reason, evidence)
+		}
+	}
+
+	discovered := []string{"TestPatrolCheckAllHealthy"}
+	for testName := range want {
+		discovered = append(discovered, testName)
+	}
+	lanes, err := planFullSuiteLanes(discovered, fullSuiteSerialTests(inventory), nil, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lanes) < 2 || lanes[0].Name != fullSuiteSerialLaneName || !lanes[0].Serial {
+		t.Fatalf("serial lane missing or not first: %#v", lanes)
+	}
+	wantSerial := make([]string, 0, len(want))
+	for testName := range want {
+		wantSerial = append(wantSerial, testName)
+	}
+	for i := 0; i < len(wantSerial); i++ {
+		for j := i + 1; j < len(wantSerial); j++ {
+			if wantSerial[j] < wantSerial[i] {
+				wantSerial[i], wantSerial[j] = wantSerial[j], wantSerial[i]
+			}
+		}
+	}
+	if !reflect.DeepEqual(lanes[0].Tests, wantSerial) {
+		t.Fatalf("serialized tests = %v, want exact narrow inventory %v", lanes[0].Tests, wantSerial)
+	}
+	for _, testName := range lanes[0].Tests {
+		if testName == "TestPatrolCheckAllHealthy" {
+			t.Fatal("ordinary isolated test was broadened into the serial lane")
+		}
+	}
+}
+
+func TestFullSuiteRuntime200AdversarialOrder(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	probes := []string{
+		"TestRepositoryTestBinding200",
+		"TestWorktreeFixtureRestoresRepositoryAuthority200",
+		"TestHookPreToolUseBlocksProtectedPath",
+		"TestPatrolCheckAllHealthy",
+		"TestPlanningStateCurrentRoundTripIsStable",
+		"TestBoundaryBuildFixturesUseCanonicalAuthority200",
+	}
+	for _, seed := range []string{"20055", "-20055"} {
+		seed := seed
+		t.Run(seed, func(t *testing.T) {
+			lane := fullSuiteLane{Name: "adversarial-" + seed, Tests: append([]string(nil), probes...)}
+			request := fullSuiteChildRequestForLane(executable, lane)
+			request.Args = append(request.Args, "-test.shuffle="+seed)
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			defer cancel()
+			result := runFullSuiteChildProcess(ctx, request)
+			if result.Err != nil {
+				t.Fatalf("adversarial current-binary order failed: %v\n%s", result.Err, result.Output)
+			}
+			if err := validateFullSuiteExecution(probes, result.Executed); err != nil {
+				t.Fatalf("adversarial execution accounting: %v\n%s", err, result.Output)
+			}
+		})
+	}
+}
+
+func TestFullSuiteRuntime200ChildEnvironmentProbeAlpha(t *testing.T) {
+	fullSuiteRuntime200AssertChildEnvironment(t)
+}
+
+func TestFullSuiteRuntime200ChildEnvironmentProbeBeta(t *testing.T) {
+	fullSuiteRuntime200AssertChildEnvironment(t)
+}
+
+func fullSuiteRuntime200AssertChildEnvironment(t *testing.T) {
+	t.Helper()
+	if strings.TrimSpace(os.Getenv(fullSuiteShardEnv)) == "" {
+		return
+	}
+	for _, name := range []string{"AETHER_ROOT", "COLONY_DATA_DIR"} {
+		if value, ok := os.LookupEnv(name); ok {
+			t.Fatalf("isolated full-suite child inherited %s=%q", name, value)
+		}
+	}
+	assertIsolatedProcessChildHub(t)
+	t.Logf("FULL-SUITE-PROBE-HUB=%s", os.Getenv(isolatedProcessHubEnv))
+}
