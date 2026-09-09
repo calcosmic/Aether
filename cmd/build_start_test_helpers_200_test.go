@@ -21,13 +21,23 @@ import (
 // conditional transaction effect visible at the fixture boundary. Tests may
 // omit values that are immaterial to their assertion; defaults are derived
 // from the selected closed build-start variant, never from package globals.
+type testBuildProcessState string
+
+const (
+	testBuildProcessUnspecified testBuildProcessState = ""
+	testBuildProcessLive        testBuildProcessState = "live"
+	testBuildProcessDead        testBuildProcessState = "dead"
+)
+
 type testBuildStartOptions struct {
 	Variant         buildStartVariant
 	Authority       *planAuthorityDecision
+	Phase           int
 	GeneratedAt     time.Time
 	AttemptID       string
 	RunID           string
 	ProcessID       int
+	ProcessState    testBuildProcessState
 	HostPlatform    string
 	SelectedTasks   []string
 	Dispatches      []codexBuildDispatch
@@ -97,6 +107,9 @@ func commitTestBuildStart(t *testing.T, options testBuildStartOptions) testBuild
 
 	state := mustReadSpecificationTestState(t, root)
 	phaseID := seed.Phase
+	if err := validateTestBuildStartOptions(options, phaseID); err != nil {
+		t.Fatalf("canonical build-start fixture options: %v", err)
+	}
 	phase, ok := buildStartPhase(state, phaseID)
 	if !ok {
 		t.Fatalf("accepted build-start fixture has no phase %d", phaseID)
@@ -106,10 +119,7 @@ func commitTestBuildStart(t *testing.T, options testBuildStartOptions) testBuild
 		generatedAt = seed.GeneratedAt
 	}
 	generatedAt = generatedAt.UTC()
-	processID := options.ProcessID
-	if processID == 0 {
-		processID = 3500
-	}
+	processID := testBuildStartProcessID(t, options)
 	attemptID := options.AttemptID
 	if attemptID == "" {
 		attemptID = deriveBuildAttemptID(generatedAt, processID)
@@ -204,6 +214,45 @@ func commitTestBuildStart(t *testing.T, options testBuildStartOptions) testBuild
 		fixture.Manifest = &manifest
 	}
 	return fixture
+}
+
+func validateTestBuildStartOptions(options testBuildStartOptions, acceptedPhase int) error {
+	if options.Phase != 0 && options.Phase != acceptedPhase {
+		return fmt.Errorf("requested phase %d does not match accepted phase %d", options.Phase, acceptedPhase)
+	}
+	if options.Phase != 0 && ((strings.TrimSpace(options.ExecutionOwner) == "") != (strings.TrimSpace(options.DispatchMode) == "")) {
+		return fmt.Errorf("explicit phase %d requires execution owner and dispatch mode together", options.Phase)
+	}
+	if options.ProcessID != 0 && options.ProcessState != testBuildProcessUnspecified {
+		return fmt.Errorf("process_id and process_state are mutually exclusive; choose an explicit identity or liveness fixture")
+	}
+	switch options.ProcessState {
+	case testBuildProcessUnspecified, testBuildProcessLive, testBuildProcessDead:
+		return nil
+	default:
+		return fmt.Errorf("unsupported fixture process state %q", options.ProcessState)
+	}
+}
+
+func testBuildStartProcessID(t *testing.T, options testBuildStartOptions) int {
+	t.Helper()
+	if options.ProcessID != 0 {
+		return options.ProcessID
+	}
+	switch options.ProcessState {
+	case testBuildProcessLive:
+		return os.Getpid()
+	case testBuildProcessDead:
+		const deadProcessID = 3500
+		if processAlive(deadProcessID) {
+			t.Fatalf("fixed dead process fixture PID %d is unexpectedly live; supply an explicit dead ProcessID", deadProcessID)
+		}
+		return deadProcessID
+	default:
+		// Compatibility callers created before Plan 49 remain deterministic.
+		// New accepted-execution builders below require ProcessState explicitly.
+		return 3500
+	}
 }
 
 // testBuildStartEnsureGoal makes the accepted planning fixture a complete
