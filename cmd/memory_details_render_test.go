@@ -222,8 +222,7 @@ func TestMemoryDetailsRenderShowsTheSentencesNotTheCounts(t *testing.T) {
 }
 
 func TestMemoryDetailsJSONFlagStillReturnsTheEnvelope(t *testing.T) {
-	s, _ := newTestStore(t)
-	store = s
+	bindCommandTestRepository(t)
 	seedMemoryDetailsFixture(t)
 
 	t.Run("--json forces the machine envelope", func(t *testing.T) {
@@ -285,11 +284,10 @@ func TestMemoryDetailsIsNoLongerAnAliasOfMemoryMetrics(t *testing.T) {
 }
 
 func TestMemoryDetailsWritesNothing(t *testing.T) {
-	s, tmpDir := newTestStore(t)
-	store = s
+	binding := bindCommandTestRepository(t)
 	seedMemoryDetailsFixture(t)
 
-	before := snapshotDirFiles(t, tmpDir)
+	before := snapshotDirFiles(t, binding.Root)
 
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -302,7 +300,7 @@ func TestMemoryDetailsWritesNothing(t *testing.T) {
 		t.Fatalf("memory-details returned error: %v", err)
 	}
 
-	after := snapshotDirFiles(t, tmpDir)
+	after := snapshotDirFiles(t, binding.Root)
 
 	if len(before) != len(after) {
 		t.Fatalf("file count changed: before %d, after %d", len(before), len(after))
@@ -438,8 +436,8 @@ func TestStatusListsTheStrongestInstinctFirst(t *testing.T) {
 }
 
 func TestStatusInstinctHeadingMatchesTheRanking(t *testing.T) {
-	s, _ := newTestStore(t)
-	store = s
+	binding := bindCommandTestRepository(t)
+	s := binding.Store
 
 	file := colony.InstinctsFile{
 		Version: "1.0",
