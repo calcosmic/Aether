@@ -8,6 +8,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -192,6 +193,7 @@ type fullSuiteLaneReport struct {
 	Executed   int
 	Duration   time.Duration
 	Successful bool
+	Output     string
 }
 
 type fullSuiteRunReport struct {
@@ -592,6 +594,7 @@ func runFullSuiteLanes(ctx context.Context, executable string, lanes []fullSuite
 			Executed:   len(result.Executed),
 			Duration:   result.Duration,
 			Successful: result.Err == nil,
+			Output:     result.Output,
 		}
 		report.Lanes[index] = laneReport
 		report.Executed += len(result.Executed)
@@ -642,7 +645,7 @@ func validateFullSuiteExecution(planned, executed []string) error {
 	return nil
 }
 
-func writeFullSuiteReport(output *os.File, report fullSuiteRunReport) {
+func writeFullSuiteReport(output io.Writer, report fullSuiteRunReport) {
 	status := "PASS"
 	if !report.Passed {
 		status = "FAIL"
@@ -654,6 +657,14 @@ func writeFullSuiteReport(output *os.File, report fullSuiteRunReport) {
 			laneStatus = "FAIL"
 		}
 		fmt.Fprintf(output, "FULL-SUITE lane=%s status=%s planned=%d executed=%d duration=%s\n", lane.Name, laneStatus, lane.Planned, lane.Executed, lane.Duration.Round(time.Millisecond))
+		if lane.Output != "" {
+			fmt.Fprintf(output, "FULL-SUITE output-begin lane=%s\n", lane.Name)
+			_, _ = io.WriteString(output, lane.Output)
+			if !strings.HasSuffix(lane.Output, "\n") {
+				_, _ = io.WriteString(output, "\n")
+			}
+			fmt.Fprintf(output, "FULL-SUITE output-end lane=%s\n", lane.Name)
+		}
 	}
 }
 
