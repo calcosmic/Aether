@@ -862,18 +862,20 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	}
 	attemptFinished = true
 	updatedState = committedState
-	updateSessionSummary("build-finalize", "aether continue", fmt.Sprintf("Phase %d external Task workers recorded (%d dispatches)", phaseNum, len(dispatches)))
 
 	var partialRetryOutcome *partialBuildRetryOutcome
 	if !buildFullyCredited {
 		parentAttemptID := strings.TrimSuffix(filepath.Base(attemptRel), filepath.Ext(attemptRel))
 		outcome, retryErr := reconcilePartialBuildRetry(updatedState, phaseNum, updatedPhase, parentAttemptID, time.Now().UTC(), dispatches, partialRetryStartOptions...)
 		if retryErr != nil {
-			visualFprintf(stderr, "warning: could not create a D-10 recovery job for phase %d's partial credit: %v\n", phaseNum, retryErr)
-		} else {
-			partialRetryOutcome = outcome
+			return nil, updatedState, updatedPhase, dispatches, fmt.Errorf("phase %d partial credit was recorded but its recovery attempt was not committed; rerun build-finalize with the same completion packet after repairing the reported cause: %w", phaseNum, retryErr)
 		}
+		if outcome == nil {
+			return nil, updatedState, updatedPhase, dispatches, fmt.Errorf("phase %d partial credit did not produce the required durable recovery attempt; inspect the attempt journal before retrying build-finalize", phaseNum)
+		}
+		partialRetryOutcome = outcome
 	}
+	updateSessionSummary("build-finalize", "aether continue", fmt.Sprintf("Phase %d external Task workers recorded (%d dispatches)", phaseNum, len(dispatches)))
 
 	// Collect pheromone suggestions once the build is durably committed.
 	// Called exactly once per finalize (never inside the dispatch loop
