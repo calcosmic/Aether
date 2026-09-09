@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 40/55 plans executed
+**Plans:** 41/55 plans executed
 
 Plans:
 
@@ -305,7 +305,7 @@ Plans:
 
 **Wave 26** *(second gap closure; blocked on Wave 25 completion)*
 
-- [ ] 200-42-PLAN.md — Remove stale-root cleanup from curation, flag, history, memory, and phase tests.
+- [x] 200-42-PLAN.md — Remove stale-root cleanup from curation, flag, history, memory, and phase tests.
 - [ ] 200-43-PLAN.md — Remove stale-root cleanup from pheromone and shelf lifecycle tests.
 - [ ] 200-44-PLAN.md — Remove stale-root cleanup from shelf/worktree tests and ratchet out the anti-pattern.
 

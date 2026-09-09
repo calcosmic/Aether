@@ -5,15 +5,15 @@ milestone_name: Classic Colony Restoration
 current_phase: 200
 current_phase_name: Iterative Planning
 status: executing
-stopped_at: Completed 200-41-PLAN.md; next incomplete is 200-42
-last_updated: "2026-09-09T09:05:48.000Z"
+stopped_at: Completed 200-42-PLAN.md; next incomplete is 200-43
+last_updated: "2026-09-09T09:17:45.189Z"
 last_activity: 2026-09-09
 state_head: 17242c17108d96725c5928f62ce805deceddeb1b
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 89
-  completed_plans: 74
+  completed_plans: 75
   percent: 0
 ---
 
@@ -32,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 42 of 55
+Plan: 43 of 55
 Status: Ready to execute
 Last activity: 2026-09-09
 
@@ -154,6 +154,7 @@ Last activity: 2026-09-09
 | Phase 200 P36 | 21min | 2 tasks | 6 files |
 | Phase 200 P39 | 50min | 3 tasks | 6 files |
 | Phase 200 P41 | 7min | 3 tasks | 5 files |
+| Phase 200 P42 | 9min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -483,6 +484,9 @@ Last activity: 2026-09-09
 - [Phase 200]: [P41] Command fixtures bind AETHER_ROOT, COLONY_DATA_DIR, store, and tracer to one physical temporary repository.
 - [Phase 200]: [P41] Test cleanup clears repository-backed store and tracer globals rather than restoring deleted temporary authority.
 - [Phase 200]: [P41] Legacy recovery keeps non-default configured-data coverage inside the repository containment boundary.
+- [Phase 200]: [P42] Seeded command fixtures copy legacy data into one repository-authorized binding. — Root, data, store, and tracer now share physical authority.
+- [Phase 200]: [P42] Memory and phase fixture cleanup is proved in both execution orders. — A deleted temporary repository cannot survive through environment or package globals.
+- [Phase 200]: [P42] The memory-details verification collision was repaired only in its Cobra-backed fixtures. — The same test-only root/data mismatch blocked the declared gate; product assertions stayed unchanged.
 
 ### Pending Todos
 
@@ -599,11 +603,11 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-09T09:04:53.160Z
-Stopped at: Completed 200-41-PLAN.md; next incomplete is 200-42
+Last session: 2026-09-09T09:17:45.180Z
+Stopped at: Completed 200-42-PLAN.md; next incomplete is 200-43
 Resume file: None
 
 ## Operator Next Steps
 
-- Execute 200-42-PLAN.md, then follow Waves 27-34 before rerunning the unchanged final receipt Plan 200-40.
+- Execute 200-43-PLAN.md, then follow Waves 27-34 before rerunning the unchanged final receipt Plan 200-40.
 - Preserve the Phase 200 Scout/Route-Setter objective and do not waive normal or race gate failures.
