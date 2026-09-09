@@ -15,19 +15,17 @@ import (
 
 func TestBuildAttemptPersistsTransitionsAndTerminalEvidence(t *testing.T) {
 	saveGlobals(t)
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
-	if err := os.WriteFile(filepath.Join(root, "app.txt"), []byte("attempt evidence\n"), 0644); err != nil {
-		t.Fatalf("write attempt artifact: %v", err)
-	}
 	startedAt := time.Now().UTC()
-	phase := colony.Phase{ID: 1, Name: "Journal proof"}
-	state := colony.ColonyState{State: colony.StateREADY, Plan: colony.Plan{Phases: []colony.Phase{phase}}}
 	dispatches := []codexBuildDispatch{{Name: "Mason-1", Caste: "builder", TaskID: "1.1", Status: "spawned"}}
-	attemptRel, err := beginBuildAttempt(state, 1, phase, startedAt, []string{"1.1"}, "checkpoints/pre-build-phase-1.json", "build/phase-1/manifest.json", "last-build-claims.json", "go-runtime", dispatches)
-	if err != nil {
-		t.Fatalf("begin build attempt: %v", err)
-	}
+	fixture := commitTestBuildStart(t, testBuildStartOptions{
+		GeneratedAt: startedAt, SelectedTasks: []string{"1.1"}, ExecutionOwner: "go-runtime", Dispatches: dispatches,
+		PrepareRoot: func(root string) {
+			if err := os.WriteFile(filepath.Join(root, "app.txt"), []byte("attempt evidence\n"), 0644); err != nil {
+				t.Fatalf("write attempt artifact: %v", err)
+			}
+		},
+	})
+	root, attemptRel := fixture.Root, fixture.AttemptPath
 	if err := transitionBuildAttempt(attemptRel, buildAttemptDispatching, "dispatch started", dispatches, nil, "real", nil); err != nil {
 		t.Fatalf("mark dispatching: %v", err)
 	}
@@ -61,14 +59,9 @@ func TestBuildAttemptPersistsTransitionsAndTerminalEvidence(t *testing.T) {
 
 func TestForceRedispatchMarksActiveAttemptInterrupted(t *testing.T) {
 	saveGlobals(t)
-	setupBuildFlowTest(t)
 	startedAt := time.Now().UTC().Add(-time.Hour)
-	phase := colony.Phase{ID: 1, Name: "Interrupted journal"}
-	state := colony.ColonyState{State: colony.StateEXECUTING, CurrentPhase: 1, BuildStartedAt: &startedAt, Plan: colony.Plan{Phases: []colony.Phase{phase}}}
-	attemptRel, err := beginBuildAttempt(state, 1, phase, startedAt, nil, "checkpoints/pre-build-phase-1.json", "build/phase-1/manifest.json", "last-build-claims.json", "go-runtime", nil)
-	if err != nil {
-		t.Fatalf("begin active attempt: %v", err)
-	}
+	fixture := commitTestBuildStart(t, testBuildStartOptions{GeneratedAt: startedAt, ExecutionOwner: "go-runtime"})
+	attemptRel := fixture.AttemptPath
 	if err := transitionBuildAttempt(attemptRel, buildAttemptDispatching, "workers active", nil, nil, "real", nil); err != nil {
 		t.Fatalf("mark dispatching: %v", err)
 	}
@@ -83,14 +76,9 @@ func TestForceRedispatchMarksActiveAttemptInterrupted(t *testing.T) {
 
 func TestStatusSurfacesFailedAttemptAfterLifecycleRollback(t *testing.T) {
 	saveGlobals(t)
-	setupBuildFlowTest(t)
 	startedAt := time.Now().UTC()
-	phase := colony.Phase{ID: 1, Name: "Rolled back phase", Status: colony.PhaseReady}
-	state := colony.ColonyState{State: colony.StateREADY, CurrentPhase: 0, Plan: colony.Plan{Phases: []colony.Phase{phase}}}
-	attemptRel, err := beginBuildAttempt(state, 1, phase, startedAt, nil, "checkpoints/pre-build-phase-1.json", "build/phase-1/manifest.json", "last-build-claims.json", "go-runtime", nil)
-	if err != nil {
-		t.Fatalf("begin failed attempt: %v", err)
-	}
+	fixture := commitTestBuildStart(t, testBuildStartOptions{GeneratedAt: startedAt, ExecutionOwner: "go-runtime"})
+	attemptRel, state := fixture.AttemptPath, fixture.State
 	if err := transitionBuildAttempt(attemptRel, buildAttemptFailed, "dispatch failed", nil, nil, "real", os.ErrDeadlineExceeded); err != nil {
 		t.Fatalf("mark failed attempt: %v", err)
 	}
@@ -365,23 +353,8 @@ func TestBuildAttemptIdempotentResubmit(t *testing.T) {
 
 func TestResumeDashboardDoesNotRedispatchLiveBuildProcess(t *testing.T) {
 	saveGlobals(t)
-	setupBuildFlowTest(t)
-	goal := "Keep live work isolated"
 	startedAt := time.Now().UTC()
-	phase := colony.Phase{ID: 1, Name: "Live phase", Status: colony.PhaseInProgress}
-	state := colony.ColonyState{
-		Goal:           &goal,
-		State:          colony.StateEXECUTING,
-		CurrentPhase:   1,
-		BuildStartedAt: &startedAt,
-		Plan:           colony.Plan{Phases: []colony.Phase{phase}},
-	}
-	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
-		t.Fatalf("save live state: %v", err)
-	}
-	if _, err := beginBuildAttempt(state, 1, phase, startedAt, nil, "checkpoints/pre-build-phase-1.json", "build/phase-1/manifest.json", "last-build-claims.json", "go-runtime", nil); err != nil {
-		t.Fatalf("begin live attempt: %v", err)
-	}
+	commitTestBuildStart(t, testBuildStartOptions{GeneratedAt: startedAt, ExecutionOwner: "go-runtime"})
 	result := buildResumeDashboardResult()
 	recovery, ok := result["recovery"].(map[string]interface{})
 	if !ok || recovery["next"] != "aether watch" {
