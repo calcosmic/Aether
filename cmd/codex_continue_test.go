@@ -19,6 +19,33 @@ import (
 	"github.com/calcosmic/Aether/pkg/storage"
 )
 
+func TestContinueLifecycleFixturesUseAcceptedAuthority200(t *testing.T) {
+	content, err := os.ReadFile("codex_continue_test.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{
+		"TestContinueFinalizeRecordsExternalReviewAndAdvances",
+		"TestContinueEndToEndAfterAbandonedRecovery",
+		"TestContinueFinalizeWritesWorkerOutcomeReports",
+	} {
+		body := extractGoFunctionBody(t, string(content), "func "+name+"(")
+		for _, required := range []string{"createApprovedAcceptedBuildTestColony(", "commitTestBuildStartAt("} {
+			if !strings.Contains(body, required) {
+				t.Errorf("%s does not cross canonical continue authority via %s", name, required)
+			}
+		}
+		for _, forbidden := range []string{"createTestColonyState(", "seedContinueBuildPacket("} {
+			if strings.Contains(body, forbidden) {
+				t.Errorf("%s retains stale continue fixture writer %s", name, forbidden)
+			}
+		}
+	}
+	if t.Failed() {
+		t.Fatal("continue lifecycle fixtures must use accepted authority and receipt-backed build start")
+	}
+}
+
 func TestContinueConsumesBuildPacketAndAdvancesPhase(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
 	saveGlobals(t)
