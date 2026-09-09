@@ -19,6 +19,48 @@ import (
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
+func TestRunCompatibilityFixturesUseAcceptedAuthority200(t *testing.T) {
+	cases := []struct {
+		file      string
+		name      string
+		required  []string
+		forbidden []string
+	}{
+		{
+			file: "compatibility_cmds_test.go", name: "TestRunCompatibilityExecutesSinglePhase",
+			required: []string{"createApprovedAcceptedBuildTestColony("}, forbidden: []string{"createTestColonyState("},
+		},
+		{
+			file: "compatibility_cmds_test.go", name: "TestRunCompatibilityPassesWorkerTimeoutToBuildAndContinue",
+			required: []string{"createApprovedAcceptedBuildTestColony("}, forbidden: []string{"createTestColonyState("},
+		},
+		{
+			file: "phase_recovery_test.go", name: "TestBuildForceRedispatchesActiveExecutingPhase",
+			required: []string{"createApprovedAcceptedBuildTestColony(", "commitTestBuildStartAt("}, forbidden: []string{"createTestColonyState("},
+		},
+	}
+	for _, tc := range cases {
+		content, err := os.ReadFile(tc.file)
+		if err != nil {
+			t.Fatalf("read %s: %v", tc.file, err)
+		}
+		body := extractGoFunctionBody(t, string(content), "func "+tc.name+"(")
+		for _, required := range tc.required {
+			if !strings.Contains(body, required) {
+				t.Errorf("%s does not establish canonical authority via %s", tc.name, required)
+			}
+		}
+		for _, forbidden := range tc.forbidden {
+			if strings.Contains(body, forbidden) {
+				t.Errorf("%s retains stale lifecycle fixture writer %s", tc.name, forbidden)
+			}
+		}
+	}
+	if t.Failed() {
+		t.Fatal("run and force-redispatch fixtures must use accepted plan authority")
+	}
+}
+
 func TestQueenPromoteLegacyPositionalSanitizesContent(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
