@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -97,10 +98,11 @@ func runLifecycleSurface(t *testing.T, c lifecycleSurfaceCase, jsonMode bool) li
 	run := lifecycleRun{}
 	if jsonMode {
 		run.envelope = parseClosingEnvelope(t, buf.String())
+		run.answer = issuedNextActionFromEnvelope(t, c.name, run.envelope)
 	} else {
 		run.visual = stripANSI(buf.String())
+		run.answer = resolveNextAction(loadNextActionInputForCommand(c.command))
 	}
-	run.answer = resolveNextAction(loadNextActionInputForCommand(c.command))
 	run.card = stripANSI(renderNextActionCardForPlatform(run.answer, "codex"))
 	return run
 }
@@ -119,6 +121,47 @@ func parseClosingEnvelope(t *testing.T, output string) map[string]interface{} {
 		return result
 	}
 	return envelope
+}
+
+// issuedNextActionFromEnvelope reads the resolver-issued object carried by the
+// command result. JSON tests must render this exact object rather than resolve
+// a second answer after the command has returned: two equivalent-looking
+// decisions are still two authorities that can drift.
+func issuedNextActionFromEnvelope(t *testing.T, label string, envelope map[string]interface{}) nextAction {
+	t.Helper()
+	raw, ok := envelope[nextActionResultKey]
+	if !ok {
+		t.Fatalf("%s emits no resolver-issued %q object", label, nextActionResultKey)
+	}
+	data, err := json.Marshal(raw)
+	if err != nil {
+		t.Fatalf("%s marshal resolver-issued action: %v", label, err)
+	}
+	var answer nextAction
+	if err := json.Unmarshal(data, &answer); err != nil {
+		t.Fatalf("%s decode resolver-issued action: %v", label, err)
+	}
+	if answer.Projection == nil {
+		t.Fatalf("%s resolver-issued action carries no lifecycle projection", label)
+	}
+	return answer
+}
+
+func lifecycleProjectionFromEnvelope(t *testing.T, label string, envelope map[string]interface{}) LifecycleProjection {
+	t.Helper()
+	raw, ok := envelope[lifecycleProjectionKey]
+	if !ok {
+		t.Fatalf("%s emits no %q object", label, lifecycleProjectionKey)
+	}
+	data, err := json.Marshal(raw)
+	if err != nil {
+		t.Fatalf("%s marshal lifecycle projection: %v", label, err)
+	}
+	var projection LifecycleProjection
+	if err := json.Unmarshal(data, &projection); err != nil {
+		t.Fatalf("%s decode lifecycle projection: %v", label, err)
+	}
+	return projection
 }
 
 // startupStateWithGoal writes a saved project that has a goal and nothing else,
@@ -347,6 +390,20 @@ func assertPhase200DiscussEnvelope(t *testing.T, label string, envelope map[stri
 // a command's envelope against the ones its card shows.
 func assertEnvelopeMatchesCard(t *testing.T, label string, run lifecycleRun) {
 	t.Helper()
+	if run.answer.Projection == nil {
+		t.Fatalf("%s card was not fed a resolver-issued lifecycle projection", label)
+	}
+	envelopeProjection := lifecycleProjectionFromEnvelope(t, label, run.envelope)
+	if !reflect.DeepEqual(envelopeProjection.NextAction, run.answer.Projection.NextAction) {
+		t.Errorf("%s: envelope and card do not carry the same typed next action\n envelope: %+v\n card: %+v",
+			label, envelopeProjection.NextAction, run.answer.Projection.NextAction)
+	}
+	if len(envelopeProjection.Alternatives) != len(run.answer.Projection.Alternatives) ||
+		!reflect.DeepEqual(append([]LifecycleActionChoice(nil), envelopeProjection.Alternatives...),
+			append([]LifecycleActionChoice(nil), run.answer.Projection.Alternatives...)) {
+		t.Errorf("%s: envelope and card do not carry the same typed alternatives\n envelope: %+v\n card: %+v",
+			label, envelopeProjection.Alternatives, run.answer.Projection.Alternatives)
+	}
 	command, ok := run.envelope[nextActionCommandKey].(string)
 	if !ok {
 		t.Fatalf("%s emits no %q in its machine-readable answer; a wrapper cannot read the next step out of it",
@@ -367,6 +424,31 @@ func assertEnvelopeMatchesCard(t *testing.T, label string, run lifecycleRun) {
 	}
 	if _, ok := run.envelope[nextActionRecommendationKey]; !ok {
 		t.Errorf("%s carries no plain-English reason (%q) beside its command", label, nextActionRecommendationKey)
+	}
+}
+
+// TestStartupLifecycleProjectionUsesResolverIssuedActions is the structural
+// half of the shared-authority contract. lifecycleProjectionDecision chooses
+// candidate identities; only next_action.go may spell commands. A literal here
+// would create a second command catalogue behind every startup/work-loop card.
+func TestStartupLifecycleProjectionUsesResolverIssuedActions(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(repoRoot, "cmd", "lifecycle_projection.go"))
+	if err != nil {
+		t.Fatalf("read lifecycle_projection.go: %v", err)
+	}
+	source := string(data)
+	start := strings.Index(source, "func lifecycleProjectionDecision(")
+	end := strings.Index(source, "func lifecycleApplyPlatform(")
+	if start < 0 || end <= start {
+		t.Fatal("could not isolate lifecycleProjectionDecision for the command-authority check")
+	}
+	decision := source[start:end]
+	if strings.Contains(decision, `"aether `) || strings.Contains(decision, "`aether ") {
+		t.Fatal("lifecycleProjectionDecision still hand-types command advice; select resolver candidates and carry their issued action objects instead")
 	}
 }
 

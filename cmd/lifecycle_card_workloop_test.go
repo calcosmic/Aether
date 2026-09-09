@@ -221,16 +221,21 @@ func partlyFinishedBuildRun(t *testing.T) lifecycleRun {
 	if err != nil {
 		t.Fatalf("finalizing a genuine part-finished build: %v", err)
 	}
-	recovery := strings.TrimSpace(stringValue(result["recovery_command"]))
-	if recovery == "" {
-		t.Fatal("a part-finished build handed the owner no command for the work that is left")
+	recovery, ok := partialBuildRecoveryFromResult(result)
+	if !ok {
+		t.Fatal("a part-finished build handed the owner no typed durable recovery projection")
 	}
-	unfinished := stringSliceValue(result["unfinished_task_ids"])
 
 	run := lifecycleRun{envelope: result}
-	run.answer = lifecycleNextActionForState(state, "build", recovery, nextActionUnfinishedWorkWhy)
+	run.answer, ok = nextActionFromResult(result)
+	if !ok || run.answer.Projection == nil {
+		t.Fatal("a part-finished build did not carry the resolver-issued action used by its envelope")
+	}
+	if run.answer.Command != recovery.RedispatchCommand {
+		t.Fatalf("resolver-issued partial action = %q, want durable recovery command %q", run.answer.Command, recovery.RedispatchCommand)
+	}
 	run.card = stripANSI(renderNextActionCardForPlatform(run.answer, "codex"))
-	run.visual = stripANSI(renderBuildPartialCreditVisual(state, phase, unfinished, recovery))
+	run.visual = stripANSI(renderBuildPartialCreditResultVisual(state, phase, result))
 	return run
 }
 
@@ -363,25 +368,30 @@ func TestWorkLoopEnvelopesMatchTheirCards(t *testing.T) {
 func TestRedispatchOverrideReachesBothTheCardAndTheEnvelope(t *testing.T) {
 	run := partlyFinishedBuildRun(t)
 
-	recovery := strings.TrimSpace(stringValue(run.envelope["recovery_command"]))
-	if recovery == "" {
-		t.Fatal("this fixture was supposed to produce a command for the unfinished work")
+	recovery, ok := partialBuildRecoveryFromResult(run.envelope)
+	if !ok {
+		t.Fatal("this fixture was supposed to produce a typed command for the unfinished work")
 	}
-	if run.answer.Command != recovery {
+	if run.answer.Command != recovery.RedispatchCommand {
 		t.Errorf("the card recommends %q; the run's own command for the unfinished work is %q",
-			run.answer.Command, recovery)
+			run.answer.Command, recovery.RedispatchCommand)
 	}
-	if envelopeCommand := stringValue(run.envelope[nextActionCommandKey]); envelopeCommand != recovery {
+	if envelopeCommand := stringValue(run.envelope[nextActionCommandKey]); envelopeCommand != recovery.RedispatchCommand {
 		t.Errorf("the machine-readable answer says %q; the run's own command for the unfinished work is %q",
-			envelopeCommand, recovery)
+			envelopeCommand, recovery.RedispatchCommand)
 	}
-	if !strings.Contains(run.visual, recovery) {
-		t.Errorf("the screen never names %q at all:\n%s", recovery, run.visual)
+	if !strings.Contains(run.visual, recovery.RedispatchCommand) {
+		t.Errorf("the screen never names %q at all:\n%s", recovery.RedispatchCommand, run.visual)
 	}
-	if legacy := strings.TrimSpace(stringValue(run.envelope["next"])); legacy != recovery {
+	if legacy := strings.TrimSpace(stringValue(run.envelope["next"])); legacy != recovery.RedispatchCommand {
 		t.Errorf("the older `next` key says %q while the card says %q -- the two answers separated again",
-			legacy, recovery)
+			legacy, recovery.RedispatchCommand)
 	}
+	if legacy := strings.TrimSpace(stringValue(run.envelope["recovery_command"])); legacy != recovery.RedispatchCommand {
+		t.Errorf("legacy recovery_command %q is not a projection of typed partial_recovery %q",
+			legacy, recovery.RedispatchCommand)
+	}
+	assertEnvelopeMatchesCard(t, "partial redispatch", run)
 }
 
 // TestBlockedCheckStillExplainsItself -- the card says what to type. What went
