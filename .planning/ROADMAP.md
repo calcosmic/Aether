@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 31/40 plans executed
+**Plans:** 32/40 plans executed
 
 Plans:
 
@@ -278,7 +278,7 @@ Plans:
 
 **Wave 20** *(gap closure; blocked on Wave 19 completion)*
 
-- [ ] 200-32-PLAN.md — Move every named planning/specification/revision writer and refresh deletion into the shared session.
+- [x] 200-32-PLAN.md — Move every named planning/specification/revision writer and refresh deletion into the shared session.
 - [ ] 200-33-PLAN.md — Define the all-target, authority-bound build-start transaction.
 
 **Wave 21** *(gap closure; blocked on Wave 20 completion)*

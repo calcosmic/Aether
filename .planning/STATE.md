@@ -2,16 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
+current_phase: 200
+current_phase_name: Iterative Planning
 status: executing
-stopped_at: Completed 200-31-PLAN.md
-last_updated: "2026-09-08T23:40:55.177Z"
-last_activity: 2026-09-08
+stopped_at: Completed 200-32-PLAN.md
+last_updated: "2026-09-09T00:59:42.799Z"
+last_activity: 2026-09-09
+state_head: 344029946cdd6c62416496dc6524e547b4ed0f04
 progress:
   total_phases: 7
-  completed_phases: 1
+  completed_phases: 0
   total_plans: 74
-  completed_plans: 65
-  percent: 14
+  completed_plans: 66
+  percent: 0
 ---
 
 # Project State
@@ -29,9 +32,9 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 32 of 40
+Plan: 33 of 40
 Status: Ready to execute
-Last activity: 2026-09-08
+Last activity: 2026-09-09
 
 ## Performance Metrics
 
@@ -142,6 +145,7 @@ Last activity: 2026-09-08
 | Phase 200 P29 | 21 min | 3 tasks | 6 files |
 | Phase 200 P30 | 45 min | 3 tasks | 9 files |
 | Phase 200 P31 | 57min | 3 tasks | 6 files |
+| Phase 200 P32 | 1h 15min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -440,6 +444,10 @@ Last activity: 2026-09-08
 - [Phase 200]: Treat candidate semantic delta, authority impacts, and affected markers only as claims to compare with a pure base/specification/proposal derivation.
 - [Phase 200]: Use the verified final iteration only for evidence and generation-only classifications that cannot be reconstructed from PlanRevision, while requiring every stable semantic identity to exist in the independently derived tuple.
 - [Phase 200]: Preserve completed work using the independently verified activation scope, not the broader proof-reachability graph.
+- [Phase 200]: Every mutating public planning entry acquires the Plan 28 repository session before its first authoritative read; internal InSession helpers carry that authority through branch selection and commit. — This prevents both stale derivation and nested repository-lock deadlocks.
+- [Phase 200]: Locally generated planning artifacts are prepared off-tree and published with cleanup, colony state, session.json, CONTEXT.md, and HANDOFF.md in one declared target set. — No successful return can expose only part of the selected planning branch.
+- [Phase 200]: Validated worker-authored artifacts are represented as exact no-op write targets, so refresh cleanup cannot delete them and their baseline remains part of atomic publication. — Worker output preservation and cleanup now participate in the same all-or-none transaction.
+- [Phase 200]: Whole-integer JSON validation applies at the staged evidence boundary while legacy weighted confidence calculations retain their established fractional compatibility. — External evidence cannot round or overflow, and existing internal score aggregation remains backward compatible.
 
 ### Pending Todos
 
@@ -556,8 +564,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-08T23:40:55.167Z
-Stopped at: Completed 200-31-PLAN.md
+Last session: 2026-09-09T00:59:42.771Z
+Stopped at: Completed 200-32-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
