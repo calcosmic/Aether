@@ -5,15 +5,15 @@ milestone_name: Classic Colony Restoration
 current_phase: 200
 current_phase_name: Iterative Planning
 status: executing
-stopped_at: Completed 200-43-PLAN.md; next incomplete is 200-44
-last_updated: "2026-09-09T09:35:58.760Z"
+stopped_at: Completed 200-44-PLAN.md; next incomplete is 200-45
+last_updated: "2026-09-09T09:59:52.681Z"
 last_activity: 2026-09-09
 state_head: 0d82d39013d54cb1826811bcddb26bfee3dd1da3
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 89
-  completed_plans: 76
+  completed_plans: 77
   percent: 0
 ---
 
@@ -32,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 44 of 55
+Plan: 45 of 55
 Status: Ready to execute
 Last activity: 2026-09-09
 
@@ -156,6 +156,7 @@ Last activity: 2026-09-09
 | Phase 200 P41 | 7min | 3 tasks | 5 files |
 | Phase 200 P42 | 9min | 2 tasks | 6 files |
 | Phase 200 P43 | 13min | 2 tasks | 6 files |
+| Phase 200 P44 | 17min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -490,6 +491,9 @@ Last activity: 2026-09-09
 - [Phase 200]: [P42] The memory-details verification collision was repaired only in its Cobra-backed fixtures. — The same test-only root/data mismatch blocked the declared gate; product assertions stayed unchanged.
 - [Phase 200]: Pheromone and shelf fixtures pair AETHER_ROOT and COLONY_DATA_DIR with exact testing-owned cleanup. — Deleted temporary repositories cannot survive as process authority.
 - [Phase 200]: Plan 43 verification selectors name only owned fixture cases. — Unrelated integration failures remain visible and assigned to later plans.
+- [Phase 200]: Real Git fixtures reuse the shared command-test authority contract against their existing temporary repository root. — One physical root owns data, store, tracer, and cleanup.
+- [Phase 200]: The cleanup ratchet matches executable Go AST nodes rather than source text. — Comments and strings cannot trigger or evade the exact anti-pattern check.
+- [Phase 200]: Worktree cleanup and operator-destruction behavior remains unchanged. — Plan 44 changes only test-owned repository authority and teardown.
 
 ### Pending Todos
 
@@ -606,11 +610,11 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-09T09:35:58.750Z
-Stopped at: Completed 200-43-PLAN.md; next incomplete is 200-44
+Last session: 2026-09-09T09:59:52.671Z
+Stopped at: Completed 200-44-PLAN.md; next incomplete is 200-45
 Resume file: None
 
 ## Operator Next Steps
 
-- Execute 200-44-PLAN.md, then follow Waves 27-34 before rerunning the unchanged final receipt Plan 200-40.
+- Execute 200-45-PLAN.md, then follow Waves 27-34 before rerunning the unchanged final receipt Plan 200-40.
 - Preserve the Phase 200 Scout/Route-Setter objective and do not waive normal or race gate failures.
