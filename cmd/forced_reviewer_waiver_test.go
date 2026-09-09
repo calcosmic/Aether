@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -629,40 +630,64 @@ func TestSpawnLogFailsClosedWhenWaiverWindowCannotPersist(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 	forceJSONOutputModeForTest(t)
-	dataDir := setupBuildFlowTest(t)
-	root := dataDir[:len(dataDir)-len("/.aether/data")]
 
 	phase := checkinFixturePhase(
 		"Password reset",
 		"Let users reset their password via an emailed token",
 		colony.PhaseModePrototype,
 	)
-	setUpCheckinFixtureColony(t, dataDir, phase)
+	goal := phase.Name
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		CurrentPhase: 1,
+		Plan:         colony.Plan{Phases: []colony.Phase{phase}},
+	})
+	dataDir, root := accepted.DataRoot, accepted.Root
+	withWorkingDir(t, root)
 	manifestMap, dispatches := manifestMapFromBuild(t, root, 1)
 	if _, visual := renderCeremonyTeamCheckin("build", manifestMap, dispatches); !strings.Contains(visual, "To decline, run:") {
 		t.Fatalf("expected a live owner capability before testing dispatch persistence; visual:\n%s", visual)
 	}
 
-	// A directory at the marker's file path forces the storage layer's atomic
-	// rename to fail without changing permissions on the whole test store.
+	// Plan-only build start legitimately creates the reviewer-window target.
+	// Corrupt those exact bytes after start so spawn-log tests its named
+	// update boundary instead of colliding with target creation.
 	markerPath := filepath.Join(dataDir, phaseDispatchWindowFileName)
-	if err := os.Mkdir(markerPath, 0o755); err != nil {
-		t.Fatalf("obstruct dispatch marker path: %v", err)
+	legitimateMarker, err := os.ReadFile(markerPath)
+	if err != nil {
+		t.Fatalf("read canonical build-start reviewer target: %v", err)
+	}
+	var legitimateWindow phaseDispatchWindowFile
+	if err := json.Unmarshal(legitimateMarker, &legitimateWindow); err != nil || legitimateWindow.Phases == nil {
+		t.Fatalf("canonical build start did not create a valid reviewer target: %v; %s", err, legitimateMarker)
+	}
+	corruptMarker := []byte("not-json\n")
+	if err := os.WriteFile(markerPath, corruptMarker, 0o644); err != nil {
+		t.Fatalf("inject reviewer-window persistence fault: %v", err)
 	}
 
 	var outBuf, errBuf bytes.Buffer
 	stdout = &outBuf
 	stderr = &errBuf
 	rootCmd.SetArgs(spawnLogArgsForPhase(1))
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("spawn-log returned a Cobra error instead of a structured refusal: %v", err)
+	commandErr := Execute()
+	var renderedErr renderedCommandError
+	if !errors.As(commandErr, &renderedErr) || renderedErr.code != 2 {
+		t.Fatalf("spawn-log error = %v, want truthful rendered exit 2", commandErr)
 	}
 	if errBuf.Len() == 0 {
 		t.Fatalf("spawn-log succeeded even though the waiver-window marker was not durable: %s", outBuf.String())
 	}
 	envelope := parseEnvelope(t, errBuf.String())
-	if envelope["ok"] != false {
+	if envelope["ok"] != false || int(envelope["code"].(float64)) != 2 {
 		t.Fatalf("spawn-log did not fail closed: %v", envelope)
+	}
+	markerAfter, err := os.ReadFile(markerPath)
+	if err != nil || !bytes.Equal(markerAfter, corruptMarker) {
+		t.Fatalf("refused spawn mutated the obstructed reviewer target: err=%v before=%q after=%q", err, corruptMarker, markerAfter)
 	}
 
 	spawnData, err := os.ReadFile(filepath.Join(dataDir, "spawn-tree.txt"))
@@ -913,13 +938,11 @@ func TestSpawnLogWithNoCardRenderedIsANoOpAndReviewerStaysForced(t *testing.T) {
 func TestOneWorkerWithForcedReviewerWaiverStillPauses(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
-	dataDir := setupBuildFlowTest(t)
-	root := dataDir[:len(dataDir)-len("/.aether/data")]
 
 	// Phase ID 25 (25%10=5, not <3) keeps chaosShouldRunInLightMode
 	// (cmd/review_depth.go) from adding a second dispatch under --light, so
 	// this build stays at exactly one worker.
-	taskID := "1.1"
+	taskID := "25.1"
 	phase := colony.Phase{
 		ID:          25,
 		Name:        "Password reset",
@@ -928,9 +951,29 @@ func TestOneWorkerWithForcedReviewerWaiverStillPauses(t *testing.T) {
 		Status:      colony.PhaseReady,
 		Tasks:       []colony.Task{{ID: &taskID, Goal: "Do the work", Status: colony.TaskPending}},
 	}
-	setUpCheckinFixtureColony(t, dataDir, phase)
+	phases := make([]colony.Phase, 0, 25)
+	for priorPhaseID := 1; priorPhaseID < phase.ID; priorPhaseID++ {
+		priorTaskID := fmt.Sprintf("%d.1", priorPhaseID)
+		phases = append(phases, colony.Phase{
+			ID: priorPhaseID, Name: "Completed prerequisite", Description: "Keep phase 25 honestly reachable",
+			Mode: colony.PhaseModePrototype, Status: colony.PhaseCompleted,
+			Tasks: []colony.Task{{ID: &priorTaskID, Goal: "Complete prerequisite work", Status: colony.TaskCompleted}},
+		})
+	}
+	phases = append(phases, phase)
+	goal := phase.Name
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		CurrentPhase: 25,
+		Plan:         colony.Plan{Phases: phases},
+	})
+	root := accepted.Root
+	withWorkingDir(t, root)
 
-	result, _, _, dispatches, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{LightFlag: true})
+	result, _, _, dispatches, err := runCodexBuildPlanOnlyWithOptions(root, 25, nil, codexBuildOptions{LightFlag: true})
 	if err != nil {
 		t.Fatalf("runCodexBuildPlanOnlyWithOptions: %v", err)
 	}

@@ -268,20 +268,11 @@ func TestBuildSyntheticNarratorDoesNotPolluteJSONOutput(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
 	t.Setenv("AETHER_NARRATOR", "auto")
 
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
-	oldDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("get cwd: %v", err)
-	}
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("chdir test root: %v", err)
-	}
-	defer os.Chdir(oldDir)
-
 	goal := "JSON output remains machine readable"
 	taskID := "1.1"
-	createTestColonyState(t, dataDir, testBuildState(goal, taskID))
+	accepted := createApprovedAcceptedBuildTestColony(t, testBuildState(goal, taskID))
+	root := accepted.Root
+	withWorkingDir(t, root)
 
 	rootCmd.SetArgs([]string{"build", "1", "--synthetic"})
 	if err := rootCmd.Execute(); err != nil {
