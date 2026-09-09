@@ -7,6 +7,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -129,6 +130,104 @@ func TestBuildAttemptExternalUnboundStartReplayIsByteStable(t *testing.T) {
 	}
 	if !bytes.Equal(attemptBefore, attemptAfter) || !bytes.Equal(pointerBefore, pointerAfter) {
 		t.Fatal("already-bound external replay rewrote attempt or latest-pointer bytes")
+	}
+}
+
+func TestBuildAttemptExternalAttemptEnumerationExcludesStartReceipts200(t *testing.T) {
+	fixture := commitTestBuildStart(t, testBuildStartOptions{
+		GeneratedAt: time.Date(2026, time.September, 9, 10, 30, 0, 0, time.UTC),
+		MakeLatest:  testBuildStartBool(true),
+	})
+	records := listBuildAttemptsForPhase(fixture.Request.Phase)
+	if len(records) != 1 || records[0].ID != fixture.Attempt.ID {
+		t.Fatalf("attempt enumeration included non-attempt receipt siblings: records=%+v, want only %q", records, fixture.Attempt.ID)
+	}
+}
+
+// TestBuildStartLegacyHelpersRetired200 is the repository-wide compile-time
+// migration boundary. Pure derivation and post-start transitions remain
+// available, but no package may restore the old multi-write start adapters or
+// recreate their attempt-then-pointer sequence under a new name.
+func TestBuildStartLegacyHelpersRetired200(t *testing.T) {
+	root, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatalf("resolve repository root: %v", err)
+	}
+	retired := map[string]bool{
+		"beginBuildAttempt":                  true,
+		"beginBuildAttemptRecord":            true,
+		"beginChildBuildAttempt":             true,
+		"attachBuildAttemptParentLink":       true,
+		"prepareBuildAttemptManifestBinding": true,
+		"bindBuildAttemptManifest":           true,
+	}
+	var violations []string
+	err = filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			switch entry.Name() {
+			case ".git", ".gsd", "node_modules", "vendor", "worktrees":
+				if path != root {
+					return fs.SkipDir
+				}
+			}
+			return nil
+		}
+		if !strings.HasSuffix(entry.Name(), ".go") {
+			return nil
+		}
+		set := token.NewFileSet()
+		parsed, parseErr := parser.ParseFile(set, path, nil, 0)
+		if parseErr != nil {
+			return parseErr
+		}
+		for _, declaration := range parsed.Decls {
+			function, ok := declaration.(*ast.FuncDecl)
+			if !ok {
+				continue
+			}
+			if retired[function.Name.Name] {
+				violations = append(violations, set.Position(function.Pos()).String()+" declares retired "+function.Name.Name)
+			}
+			if function.Body == nil {
+				continue
+			}
+			writeCalls := 0
+			referencesLatestPointerPath := false
+			ast.Inspect(function.Body, func(node ast.Node) bool {
+				call, ok := node.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				switch called := call.Fun.(type) {
+				case *ast.Ident:
+					if retired[called.Name] {
+						violations = append(violations, set.Position(call.Pos()).String()+" calls retired "+called.Name)
+					}
+					if called.Name == "latestBuildAttemptPointerPath" {
+						referencesLatestPointerPath = true
+					}
+				case *ast.SelectorExpr:
+					switch called.Sel.Name {
+					case "SaveJSON", "AtomicWrite":
+						writeCalls++
+					}
+				}
+				return true
+			})
+			if referencesLatestPointerPath && writeCalls > 1 {
+				violations = append(violations, set.Position(function.Pos()).String()+" directly writes an attempt-plus-latest start sequence")
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("scan repository Go source: %v", err)
+	}
+	if len(violations) > 0 {
+		t.Fatalf("legacy build-start helpers or partial writers remain:\n%s", strings.Join(violations, "\n"))
 	}
 }
 
