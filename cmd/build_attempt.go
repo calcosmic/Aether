@@ -188,36 +188,40 @@ func buildFreeCheckReportFromFloor(phaseNum int, recordedAt time.Time, floor det
 }
 
 type buildAttemptRecord struct {
-	SchemaVersion    int                      `json:"schema_version"`
-	ID               string                   `json:"id"`
-	Phase            int                      `json:"phase"`
-	PhaseName        string                   `json:"phase_name,omitempty"`
-	Status           string                   `json:"status"`
-	StartedAt        string                   `json:"started_at"`
-	UpdatedAt        string                   `json:"updated_at"`
-	CompletedAt      string                   `json:"completed_at,omitempty"`
-	ProcessID        int                      `json:"process_id"`
-	HostPlatform     string                   `json:"host_platform,omitempty"`
-	ExecutionOwner   string                   `json:"execution_owner,omitempty"`
-	RunID            string                   `json:"run_id,omitempty"`
-	WorkspaceSHA256  string                   `json:"workspace_fingerprint,omitempty"`
-	SelectedTasks    []string                 `json:"selected_tasks,omitempty"`
-	Checkpoint       string                   `json:"checkpoint"`
-	Manifest         string                   `json:"manifest"`
-	PlanManifest     *codexBuildManifest      `json:"plan_manifest,omitempty"`
-	ClaimsPath       string                   `json:"claims_path"`
-	OriginalStateSHA string                   `json:"original_state_sha256"`
-	ManifestSHA256   string                   `json:"manifest_sha256,omitempty"`
-	CompletionSHA256 string                   `json:"completion_sha256,omitempty"`
-	CompletionPath   string                   `json:"completion_path,omitempty"`
-	Dispatches       []codexBuildDispatch     `json:"dispatches"`
-	WorkerRuns       []buildAttemptWorkerRun  `json:"worker_runs,omitempty"`
-	Claims           *codexBuildClaims        `json:"claims,omitempty"`
-	DispatchMode     string                   `json:"dispatch_mode,omitempty"`
-	Error            string                   `json:"error,omitempty"`
-	Recoverable      bool                     `json:"recoverable"`
-	RecoveryCommand  string                   `json:"recovery_command,omitempty"`
-	History          []buildAttemptTransition `json:"history"`
+	SchemaVersion    int                     `json:"schema_version"`
+	ID               string                  `json:"id"`
+	Phase            int                     `json:"phase"`
+	PhaseName        string                  `json:"phase_name,omitempty"`
+	Status           string                  `json:"status"`
+	StartedAt        string                  `json:"started_at"`
+	UpdatedAt        string                  `json:"updated_at"`
+	CompletedAt      string                  `json:"completed_at,omitempty"`
+	ProcessID        int                     `json:"process_id"`
+	HostPlatform     string                  `json:"host_platform,omitempty"`
+	ExecutionOwner   string                  `json:"execution_owner,omitempty"`
+	RunID            string                  `json:"run_id,omitempty"`
+	WorkspaceSHA256  string                  `json:"workspace_fingerprint,omitempty"`
+	SelectedTasks    []string                `json:"selected_tasks,omitempty"`
+	Checkpoint       string                  `json:"checkpoint"`
+	Manifest         string                  `json:"manifest"`
+	PlanManifest     *codexBuildManifest     `json:"plan_manifest,omitempty"`
+	ClaimsPath       string                  `json:"claims_path"`
+	OriginalStateSHA string                  `json:"original_state_sha256"`
+	ManifestSHA256   string                  `json:"manifest_sha256,omitempty"`
+	CompletionSHA256 string                  `json:"completion_sha256,omitempty"`
+	CompletionPath   string                  `json:"completion_path,omitempty"`
+	Dispatches       []codexBuildDispatch    `json:"dispatches"`
+	WorkerRuns       []buildAttemptWorkerRun `json:"worker_runs,omitempty"`
+	Claims           *codexBuildClaims       `json:"claims,omitempty"`
+	DispatchMode     string                  `json:"dispatch_mode,omitempty"`
+	Error            string                  `json:"error,omitempty"`
+	Recoverable      bool                    `json:"recoverable"`
+	RecoveryCommand  string                  `json:"recovery_command,omitempty"`
+	// RecoveryTaskIDs is the exact unfinished-only task set named by
+	// RecoveryCommand. Partial parents and their canonical child both persist
+	// it so replay never has to infer owner-facing authority from prose.
+	RecoveryTaskIDs []string                 `json:"recovery_task_ids,omitempty"`
+	History         []buildAttemptTransition `json:"history"`
 	// OutOfBandVerification is set ONLY by closeBuildAttemptOutOfBand, never
 	// by any worker dispatch or build-finalize path. Its presence marks this
 	// attempt as closed by the operator-invoked verify-out-of-band ceremony
@@ -341,6 +345,12 @@ func deriveBuildAttempt(input buildAttemptDerivation) (string, buildAttemptRecor
 		summary = "checkpoint recorded before lifecycle projection"
 	}
 	attemptRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", input.PhaseNumber), "attempts", attemptID+".json"))
+	recoveryCommand := buildForceRedispatchCommand(input.PhaseNumber)
+	var recoveryTaskIDs []string
+	if strings.TrimSpace(input.ParentAttemptID) != "" {
+		recoveryTaskIDs = uniqueSortedStrings(input.SelectedTaskIDs)
+		recoveryCommand = buildUnfinishedRetryRedispatchCommand(input.PhaseNumber, recoveryTaskIDs)
+	}
 	record := buildAttemptRecord{
 		SchemaVersion:    buildAttemptSchemaVersion,
 		ID:               attemptID,
@@ -362,7 +372,8 @@ func deriveBuildAttempt(input buildAttemptDerivation) (string, buildAttemptRecor
 		Dispatches:       append([]codexBuildDispatch{}, input.Dispatches...),
 		DispatchMode:     strings.TrimSpace(input.InitialDispatchMode),
 		Recoverable:      true,
-		RecoveryCommand:  buildForceRedispatchCommand(input.PhaseNumber),
+		RecoveryCommand:  recoveryCommand,
+		RecoveryTaskIDs:  recoveryTaskIDs,
 		ParentAttemptID:  strings.TrimSpace(input.ParentAttemptID),
 		ParentJobName:    strings.TrimSpace(input.ParentJobName),
 		History: []buildAttemptTransition{{
@@ -426,7 +437,12 @@ func transitionBuildAttempt(attemptRel, status, summary string, dispatches []cod
 		if status == buildAttemptBuilt {
 			record.Recoverable = false
 			record.RecoveryCommand = ""
+			record.RecoveryTaskIDs = nil
 			record.Error = ""
+		} else if status == buildAttemptPartial {
+			record.Recoverable = true
+			record.RecoveryTaskIDs = unfinishedBuildTaskIDs(record.SelectedTasks, record.Dispatches)
+			record.RecoveryCommand = buildUnfinishedRetryRedispatchCommand(record.Phase, record.RecoveryTaskIDs)
 		} else if status == buildAttemptFailed || status == buildAttemptInterrupted {
 			record.Recoverable = true
 			if strings.TrimSpace(record.CompletionPath) != "" && strings.TrimSpace(record.CompletionSHA256) != "" {
@@ -843,6 +859,20 @@ func isCommittedPartialAttemptReplay(manifest codexBuildManifest, completionDige
 	return latest.ID == attemptID &&
 		strings.TrimSpace(latest.Status) == buildAttemptPartial &&
 		strings.TrimSpace(latest.CompletionSHA256) == completionDigest
+}
+
+// isCommittedPartialAttempt reports only whether the manifest names the
+// current partial parent. Finalize uses this narrower fact to reach the
+// read-only partial-replay verifier even for a changed packet; manifest,
+// receipt, child, and completion digests are still validated there before a
+// result is returned, and no mutation is permitted on that route.
+func isCommittedPartialAttempt(manifest codexBuildManifest) bool {
+	attemptID := strings.TrimSpace(manifest.AttemptID)
+	if attemptID == "" {
+		return false
+	}
+	_, latest, ok := loadLatestBuildAttempt(manifest.Phase)
+	return ok && latest.ID == attemptID && strings.TrimSpace(latest.Status) == buildAttemptPartial
 }
 
 func validateBuildAttemptManifestBinding(manifest codexBuildManifest, state colony.ColonyState, partialReplay bool) (buildAttemptManifestBinding, error) {

@@ -483,11 +483,14 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 			binding = buildAttemptManifestBinding{Legacy: true}
 		}
 	} else {
-		// WR-02: is this the identical packet that already produced committed
-		// partial credit for this phase? Computed before the staleness guards
-		// because a committed partial legitimately changed the very state they
-		// compare against.
-		partialReplay = isCommittedPartialAttemptReplay(*manifest, completionDigest)
+		// WR-02: does this manifest name the current committed partial parent?
+		// Compute that before the staleness guards because partial credit
+		// legitimately changed the state they compare against. The read-only
+		// replay path below still verifies the exact completion digest and
+		// canonical recovery child before returning any result, so a changed
+		// packet reaches an exact fail-closed explanation rather than gaining a
+		// mutation path.
+		partialReplay = isCommittedPartialAttempt(*manifest)
 		if err := validateBuildManifestPlanRevision(*manifest, state, partialReplay); err != nil {
 			return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 		}
@@ -821,6 +824,21 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		}
 	}
 
+	// A partial parent cannot be committed honestly unless the unfinished-only
+	// recovery shape is already valid. Derive it before the lifecycle-state
+	// write; the child itself is still committed afterward through canonical
+	// build start, so it can never precede accepted credit.
+	var partialRetryPlan *partialBuildRetryPlan
+	if !buildFullyCredited {
+		partialRetryPlan, err = planPartialBuildRetry(phaseNum, updatedPhase, dispatches)
+		if err != nil {
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("phase %d partial recovery plan is invalid: %w", phaseNum, err)
+		}
+		if partialRetryPlan == nil {
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("phase %d incomplete build has no validated partial recovery plan", phaseNum)
+		}
+	}
+
 	// Atomically commit the colony state mutation (CR-02, 188-REVIEW.md).
 	committedState, err := commitBuildFinalizeState(buildFinalizeCommitParams{
 		PhaseNum:           phaseNum,
@@ -866,7 +884,7 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	var partialRetryOutcome *partialBuildRetryOutcome
 	if !buildFullyCredited {
 		parentAttemptID := strings.TrimSuffix(filepath.Base(attemptRel), filepath.Ext(attemptRel))
-		outcome, retryErr := reconcilePartialBuildRetry(updatedState, phaseNum, updatedPhase, parentAttemptID, time.Now().UTC(), dispatches, partialRetryStartOptions...)
+		outcome, retryErr := commitPartialBuildRetryPlan(updatedState, phaseNum, updatedPhase, parentAttemptID, time.Now().UTC(), partialRetryPlan, partialRetryStartOptions...)
 		if retryErr != nil {
 			return nil, updatedState, updatedPhase, dispatches, fmt.Errorf("phase %d partial credit was recorded but its recovery attempt was not committed; rerun build-finalize with the same completion packet after repairing the reported cause: %w", phaseNum, retryErr)
 		}
@@ -1378,22 +1396,26 @@ func updatedPhaseForPartialReplay(state colony.ColonyState, phaseNum int) colony
 // a committed partial from its own durable attempt record and mutates nothing:
 // no colony state write, no attempt transition, no new credit.
 //
-// The recovery command is re-derived through planPartialBuildRetry, the pure
-// half of the D-10 recovery planner, so a replay hands the owner the same
-// command as the first call without writing anything. The recovery record
-// itself is only ever LOOKED UP (findExistingBuildAttemptRetry); when the
-// first call's record write failed, the replay reports the command and omits
-// the record's id rather than creating one.
-//
-// NEW-05 (195-REVIEW.iter2.md): this used to call reconcilePartialBuildRetry,
-// whose writing half creates the record when none is found -- so the "mutates
-// nothing" promise above held only while the first call's record survived,
-// and the one case that breaks it (that write having failed) is exactly the
-// case a replay exists for.
+// The recovery projection comes only from the parent and canonical child's
+// verified durable fields. The pure planner is used as a tamper check, never
+// as a substitute command generator. A missing, forged, duplicate, or
+// exhausted child is a read-only refusal with the parent's exact persisted
+// recovery guidance; replay never creates a replacement.
 func idempotentExternalPartialFinalizeResult(state colony.ColonyState, phaseNum int, phase colony.Phase, binding buildAttemptManifestBinding, completionDigest string) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
 	record := binding.Record
+	plan, err := verifiedPartialBuildRetryPlanFromParent(phaseNum, phase, record)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
+	recovery, found, err := verifiedPartialBuildRetryOutcome(phaseNum, record.ID, plan)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("partial recovery evidence is not executable; repair the journal before using %s: %w", plan.RedispatchCommand, err)
+	}
+	if !found || recovery == nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("partial recovery child is missing; repair the journal before using %s", plan.RedispatchCommand)
+	}
 	if record.CompletionSHA256 == "" || record.CompletionSHA256 != completionDigest {
-		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s has no matching durable completion packet", record.ID)
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("completion packet does not match partial attempt %s; leave credited work unchanged and use %s", record.ID, recovery.RedispatchCommand)
 	}
 	dispatches := restatePartialCreditFromCommittedState(phase, record.Dispatches)
 	resultCollectionRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseNum), "result-collection.json"))
@@ -1436,23 +1458,13 @@ func idempotentExternalPartialFinalizeResult(state colony.ColonyState, phaseNum 
 		"idempotent":        true,
 		"next":              "aether continue",
 	}
-	if plan, err := planPartialBuildRetry(phaseNum, phase, dispatches); err != nil {
-		visualFprintf(stderr, "warning: could not restate phase %d's recovery job: %v\n", phaseNum, err)
-	} else if plan != nil {
-		result["recovery_job"] = true
-		result["parent_attempt_id"] = record.ID
-		result["unfinished_task_ids"] = append([]string{}, plan.UnfinishedTaskIDs...)
-		result["recovery_command"] = plan.RedispatchCommand
-		result["next"] = plan.RedispatchCommand
-		if existingRel, existing, ok := findExistingBuildAttemptRetry(phaseNum, record.ID); ok {
-			retryPath, pathErr := displayBuildAttemptDataPath(existingRel)
-			if pathErr != nil {
-				return nil, colony.ColonyState{}, colony.Phase{}, nil, pathErr
-			}
-			result["retry_attempt_id"] = existing.ID
-			result["retry_attempt_path"] = retryPath
-		}
-	}
+	result["recovery_job"] = true
+	result["parent_attempt_id"] = recovery.ParentAttemptID
+	result["retry_attempt_id"] = recovery.RetryAttemptID
+	result["retry_attempt_path"] = recovery.RetryAttemptPath
+	result["unfinished_task_ids"] = append([]string{}, recovery.UnfinishedTaskIDs...)
+	result["recovery_command"] = recovery.RedispatchCommand
+	result["next"] = recovery.RedispatchCommand
 	var boundaryQuestions []discussQuestion
 	if record.PlanManifest != nil {
 		boundaryQuestions = record.PlanManifest.BoundaryQuestions

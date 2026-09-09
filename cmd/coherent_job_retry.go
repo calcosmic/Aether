@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 
@@ -266,14 +268,8 @@ func commitPartialBuildRetryPlan(state colony.ColonyState, phaseNum int, phase c
 		return nil, nil
 	}
 
-	if existingRel, existing, ok := findExistingBuildAttemptRetry(phaseNum, parentAttemptID); ok {
-		return &partialBuildRetryOutcome{
-			ParentAttemptID:   parentAttemptID,
-			RetryAttemptID:    existing.ID,
-			RetryAttemptPath:  displayDataPath(existingRel),
-			UnfinishedTaskIDs: append([]string{}, plan.UnfinishedTaskIDs...),
-			RedispatchCommand: plan.RedispatchCommand,
-		}, nil
+	if existing, found, err := verifiedPartialBuildRetryOutcome(phaseNum, parentAttemptID, plan); found {
+		return existing, err
 	}
 
 	if len(startOptions) > 1 {
@@ -316,6 +312,140 @@ func commitPartialBuildRetryPlan(state colony.ColonyState, phaseNum int, phase c
 		UnfinishedTaskIDs: append([]string{}, plan.UnfinishedTaskIDs...),
 		RedispatchCommand: plan.RedispatchCommand,
 	}, nil
+}
+
+// verifiedPartialBuildRetryOutcome reads an existing child as untrusted
+// durable evidence. It accepts exactly one canonical, still-prepared child
+// whose receipt binds its current bytes, parent, unfinished task set,
+// dispatch plan, and exact redispatch command. found distinguishes "there is
+// no child yet" (the first commit may create one) from malformed or duplicate
+// children (fail closed; never mint a replacement beside suspicious state).
+func verifiedPartialBuildRetryOutcome(phaseNum int, parentAttemptID string, plan *partialBuildRetryPlan) (*partialBuildRetryOutcome, bool, error) {
+	parentAttemptID = strings.TrimSpace(parentAttemptID)
+	if parentAttemptID == "" || plan == nil {
+		return nil, false, fmt.Errorf("coherent job retry evidence requires a parent and recovery plan")
+	}
+	type childEvidence struct {
+		rel    string
+		record buildAttemptRecord
+	}
+	var matches []childEvidence
+	for _, record := range listBuildAttemptsForPhase(phaseNum) {
+		if strings.TrimSpace(record.ParentAttemptID) == parentAttemptID {
+			matches = append(matches, childEvidence{rel: buildAttemptPathForID(phaseNum, record.ID), record: record})
+		}
+	}
+	if len(matches) == 0 {
+		return nil, false, nil
+	}
+	if len(matches) != 1 {
+		return nil, true, fmt.Errorf("partial recovery for parent %s has %d child attempts; expected exactly one", parentAttemptID, len(matches))
+	}
+	child := matches[0]
+	record := child.record
+	if record.SchemaVersion != buildAttemptSchemaVersion || record.Phase != phaseNum || !validBuildAttemptID(record.ID) ||
+		strings.TrimSpace(record.ParentAttemptID) != parentAttemptID {
+		return nil, true, fmt.Errorf("partial recovery child for parent %s has conflicting identity", parentAttemptID)
+	}
+	if record.Status != buildAttemptPrepared {
+		return nil, true, fmt.Errorf("partial recovery attempt %s is exhausted with status %q", record.ID, record.Status)
+	}
+	if record.ExecutionOwner != buildExecutionOwner("real", false) || record.DispatchMode != "coherent-child-retry" {
+		return nil, true, fmt.Errorf("partial recovery attempt %s has conflicting execution identity", record.ID)
+	}
+	wantTasks := uniqueSortedStrings(plan.UnfinishedTaskIDs)
+	if !reflect.DeepEqual(record.SelectedTasks, wantTasks) || !reflect.DeepEqual(record.RecoveryTaskIDs, wantTasks) {
+		return nil, true, fmt.Errorf("partial recovery attempt %s has conflicting unfinished task evidence", record.ID)
+	}
+	if record.RecoveryCommand != plan.RedispatchCommand || strings.TrimSpace(record.RecoveryCommand) == "" {
+		return nil, true, fmt.Errorf("partial recovery attempt %s has conflicting redispatch command evidence", record.ID)
+	}
+	recordDispatchHash, recordDispatchErr := jsonSHA256(record.Dispatches)
+	planDispatchHash, planDispatchErr := jsonSHA256(plan.Dispatches)
+	if recordDispatchErr != nil || planDispatchErr != nil || recordDispatchHash != planDispatchHash {
+		return nil, true, fmt.Errorf("partial recovery attempt %s has conflicting dispatch evidence", record.ID)
+	}
+	wantParentJob := ""
+	if len(plan.Jobs) > 0 {
+		wantParentJob = plan.Jobs[0].Name
+	}
+	if record.ParentJobName != wantParentJob {
+		return nil, true, fmt.Errorf("partial recovery attempt %s has conflicting parent-job evidence", record.ID)
+	}
+
+	receiptRel := buildStartReceiptPath(phaseNum, record.ID)
+	var receipt buildStartReceipt
+	if receiptRel == "" || store.LoadJSON(receiptRel, &receipt) != nil {
+		return nil, true, fmt.Errorf("partial recovery attempt %s is missing its canonical build-start receipt", record.ID)
+	}
+	if receipt.SchemaVersion != buildStartSchemaVersion || receipt.Path != receiptRel || receipt.Phase != phaseNum ||
+		receipt.AttemptID != record.ID || receipt.AttemptPath != child.rel || receipt.GeneratedAt != record.StartedAt ||
+		len(receipt.RequestSHA256) != 64 || receipt.TransactionID != "build-start-"+receipt.RequestSHA256[:24] ||
+		receipt.ID != "build-start-receipt-"+receipt.RequestSHA256[:24] {
+		return nil, true, fmt.Errorf("partial recovery attempt %s has conflicting canonical build-start receipt identity", record.ID)
+	}
+	payload := receipt
+	payload.ContentHash = ""
+	hash, err := jsonSHA256(payload)
+	if err != nil || hash != receipt.ContentHash {
+		return nil, true, fmt.Errorf("partial recovery attempt %s has invalid canonical build-start receipt content", record.ID)
+	}
+	requestShape := buildStartRequest{
+		Phase: phaseNum, AttemptID: record.ID,
+		Effects: buildStartEffects{ParentAttemptID: parentAttemptID, ParentJobName: record.ParentJobName},
+	}
+	if err := validateBuildStartReceiptTargets(receipt.Targets, requestShape); err != nil {
+		return nil, true, fmt.Errorf("partial recovery attempt %s has invalid canonical build-start receipt targets: %w", record.ID, err)
+	}
+	childBytes, err := os.ReadFile(filepath.Join(store.BasePath(), filepath.FromSlash(child.rel)))
+	if err != nil {
+		return nil, true, fmt.Errorf("read partial recovery attempt %s: %w", record.ID, err)
+	}
+	wantDigest := lifecycleDigest(childBytes)
+	bound := false
+	for _, target := range receipt.Targets {
+		if target.Path == child.rel {
+			bound = target.Action == string(lifecycleTransactionWrite) && target.SHA256 == wantDigest
+		}
+	}
+	if !bound {
+		return nil, true, fmt.Errorf("partial recovery attempt %s bytes do not match its canonical build-start receipt", record.ID)
+	}
+
+	return &partialBuildRetryOutcome{
+		ParentAttemptID:   parentAttemptID,
+		RetryAttemptID:    record.ID,
+		RetryAttemptPath:  displayDataPath(child.rel),
+		UnfinishedTaskIDs: append([]string{}, record.RecoveryTaskIDs...),
+		RedispatchCommand: record.RecoveryCommand,
+	}, true, nil
+}
+
+// verifiedPartialBuildRetryPlanFromParent checks that the partial parent's
+// durable terminal evidence names the same unfinished-only plan and exact
+// command the pure planner derives. The returned command comes from the
+// journal; derivation is used only as a tamper check.
+func verifiedPartialBuildRetryPlanFromParent(phaseNum int, phase colony.Phase, parent buildAttemptRecord) (*partialBuildRetryPlan, error) {
+	if parent.Phase != phaseNum || parent.Status != buildAttemptPartial {
+		return nil, fmt.Errorf("build attempt %s is not a committed partial parent", parent.ID)
+	}
+	dispatches := restatePartialCreditFromCommittedState(phase, parent.Dispatches)
+	plan, err := planPartialBuildRetry(phaseNum, phase, dispatches)
+	if err != nil {
+		return nil, fmt.Errorf("reconstruct partial recovery plan: %w", err)
+	}
+	if plan == nil || len(plan.UnfinishedTaskIDs) == 0 || strings.TrimSpace(plan.RedispatchCommand) == "" {
+		return nil, fmt.Errorf("build attempt %s has no reconstructable partial recovery plan", parent.ID)
+	}
+	wantTasks := uniqueSortedStrings(plan.UnfinishedTaskIDs)
+	if !reflect.DeepEqual(parent.RecoveryTaskIDs, wantTasks) || parent.RecoveryCommand != plan.RedispatchCommand {
+		return nil, fmt.Errorf("build attempt %s has conflicting durable partial recovery evidence", parent.ID)
+	}
+	// Project the persisted values after validation. Replay callers must not
+	// synthesize an owner command from a changed phase or free-form summary.
+	plan.UnfinishedTaskIDs = append([]string{}, parent.RecoveryTaskIDs...)
+	plan.RedispatchCommand = parent.RecoveryCommand
+	return plan, nil
 }
 
 // findExistingBuildAttemptRetry scans this phase's attempt journal
