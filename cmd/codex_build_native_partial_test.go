@@ -3,9 +3,11 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -210,14 +212,30 @@ func TestNativePartialCreditCommitsBeforeCreatingTheRecoveryRecord(t *testing.T)
 func TestPartialBuildDoesNotShowTheOrdinaryBuildDoneScreen(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
-	setUpNativePartialBuild(t, "Partial builds do not look finished")
-	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	root, _, ids := setUpNativePartialBuild(t, "Partial builds do not look finished")
+	pending := ids[4:]
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
 
-	rootCmd.SetArgs([]string{"build", "1"})
-	if err := rootCmd.Execute(); err != nil {
+	result, err := runCodexBuildWithOptions(root, 1, nil, false, codexBuildOptions{})
+	if err != nil {
 		t.Fatalf("build returned error: %v", err)
 	}
-	rootCmd.SetArgs([]string{})
+	partial, ok := result["partial_recovery"].(partialBuildRetryOutcome)
+	if !ok {
+		t.Fatalf("native partial result has no typed partial_recovery projection: %#v", result["partial_recovery"])
+	}
+	wantCommand := buildUnfinishedRetryRedispatchCommand(1, pending)
+	if !reflect.DeepEqual(partial.UnfinishedTaskIDs, pending) || partial.RedispatchCommand != wantCommand {
+		t.Fatalf("typed native partial projection = %+v, want unfinished=%v command=%q", partial, pending, wantCommand)
+	}
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("load partial colony state: %v", err)
+	}
+	stdout = &bytes.Buffer{}
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	outputWorkflow(result, renderBuildPartialCreditVisual(state, state.Plan.Phases[0], partial.UnfinishedTaskIDs, partial.RedispatchCommand))
 
 	out := stdout.(*bytes.Buffer).String()
 	for _, claim := range []string{
@@ -229,9 +247,34 @@ func TestPartialBuildDoesNotShowTheOrdinaryBuildDoneScreen(t *testing.T) {
 			t.Errorf("a partially built phase still shows the ordinary finished-build line %q:\n%s", claim, out)
 		}
 	}
-	for _, want := range []string{"1.5", "1.6", "--task 1.5"} {
+	for _, want := range append([]string{wantCommand}, pending...) {
 		if !strings.Contains(out, want) {
 			t.Errorf("the partial-build screen never mentions %q, so the owner is not told what is left or how to finish it:\n%s", want, out)
 		}
+	}
+
+	stdout = &bytes.Buffer{}
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	outputWorkflow(result, "visual output must not leak into JSON")
+	var envelope struct {
+		OK     bool `json:"ok"`
+		Result struct {
+			RecoveryJob       bool                     `json:"recovery_job"`
+			UnfinishedTaskIDs []string                 `json:"unfinished_task_ids"`
+			RecoveryCommand   string                   `json:"recovery_command"`
+			PartialRecovery   partialBuildRetryOutcome `json:"partial_recovery"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(stdout.(*bytes.Buffer).Bytes(), &envelope); err != nil {
+		t.Fatalf("native partial JSON is invalid: %v\n%s", err, stdout.(*bytes.Buffer).String())
+	}
+	if !envelope.OK || !envelope.Result.RecoveryJob {
+		t.Fatalf("native partial JSON lost its machine outcome: %+v", envelope)
+	}
+	if !reflect.DeepEqual(envelope.Result.UnfinishedTaskIDs, pending) || envelope.Result.RecoveryCommand != wantCommand {
+		t.Fatalf("native partial JSON top-level facts = %+v, want unfinished=%v command=%q", envelope.Result, pending, wantCommand)
+	}
+	if !reflect.DeepEqual(envelope.Result.PartialRecovery.UnfinishedTaskIDs, pending) || envelope.Result.PartialRecovery.RedispatchCommand != wantCommand {
+		t.Fatalf("native partial JSON typed facts = %+v, want unfinished=%v command=%q", envelope.Result.PartialRecovery, pending, wantCommand)
 	}
 }

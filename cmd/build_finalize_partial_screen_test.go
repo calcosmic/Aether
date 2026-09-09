@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -23,7 +24,7 @@ import (
 // own guide documents as the primary one.
 func TestWrapperPartialFinalizeDoesNotShowTheFinishedBuildScreen(t *testing.T) {
 	root, manifest, chain, ids := setupCoherentJobExternalFinalizeTest(t, "Partial finalize does not look finished")
-	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
 
 	proven := ids[:4]
 	pending := ids[4:]
@@ -59,11 +60,22 @@ func TestWrapperPartialFinalizeDoesNotShowTheFinishedBuildScreen(t *testing.T) {
 		t.Fatalf("write completion: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"build-finalize", "1", "--completion-file", completionPath})
-	if err := rootCmd.Execute(); err != nil {
+	result, state, phase, _, err := runCodexBuildFinalize(root, 1, completion, false)
+	if err != nil {
 		t.Fatalf("build-finalize of a genuine partial returned an error: %v", err)
 	}
-	rootCmd.SetArgs([]string{})
+	partial, ok := result["partial_recovery"].(partialBuildRetryOutcome)
+	if !ok {
+		t.Fatalf("wrapper partial result has no typed partial_recovery projection: %#v", result["partial_recovery"])
+	}
+	wantCommand := buildUnfinishedRetryRedispatchCommand(1, pending)
+	if !reflect.DeepEqual(partial.UnfinishedTaskIDs, pending) || partial.RedispatchCommand != wantCommand {
+		t.Fatalf("typed wrapper partial projection = %+v, want unfinished=%v command=%q", partial, pending, wantCommand)
+	}
+
+	stdout = &bytes.Buffer{}
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	outputWorkflow(result, renderBuildPartialCreditVisual(state, phase, partial.UnfinishedTaskIDs, partial.RedispatchCommand))
 
 	out := stdout.(*bytes.Buffer).String()
 	for _, claim := range []string{
@@ -74,9 +86,34 @@ func TestWrapperPartialFinalizeDoesNotShowTheFinishedBuildScreen(t *testing.T) {
 			t.Errorf("a half-built phase still shows the ordinary finished-build line %q on the wrapper lane:\n%s", claim, out)
 		}
 	}
-	for _, want := range append([]string{"--task " + pending[0]}, pending...) {
+	for _, want := range append([]string{wantCommand}, pending...) {
 		if !strings.Contains(out, want) {
 			t.Errorf("the wrapper lane's screen never mentions %q, so the owner is not told what is left or how to finish it:\n%s", want, out)
 		}
+	}
+
+	stdout = &bytes.Buffer{}
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	outputWorkflow(result, "visual output must not leak into JSON")
+	var envelope struct {
+		OK     bool `json:"ok"`
+		Result struct {
+			RecoveryJob       bool                     `json:"recovery_job"`
+			UnfinishedTaskIDs []string                 `json:"unfinished_task_ids"`
+			RecoveryCommand   string                   `json:"recovery_command"`
+			PartialRecovery   partialBuildRetryOutcome `json:"partial_recovery"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(stdout.(*bytes.Buffer).Bytes(), &envelope); err != nil {
+		t.Fatalf("wrapper partial JSON is invalid: %v\n%s", err, stdout.(*bytes.Buffer).String())
+	}
+	if !envelope.OK || !envelope.Result.RecoveryJob {
+		t.Fatalf("wrapper partial JSON lost its machine outcome: %+v", envelope)
+	}
+	if !reflect.DeepEqual(envelope.Result.UnfinishedTaskIDs, pending) || envelope.Result.RecoveryCommand != wantCommand {
+		t.Fatalf("wrapper partial JSON top-level facts = %+v, want unfinished=%v command=%q", envelope.Result, pending, wantCommand)
+	}
+	if !reflect.DeepEqual(envelope.Result.PartialRecovery.UnfinishedTaskIDs, pending) || envelope.Result.PartialRecovery.RedispatchCommand != wantCommand {
+		t.Fatalf("wrapper partial JSON typed facts = %+v, want unfinished=%v command=%q", envelope.Result.PartialRecovery, pending, wantCommand)
 	}
 }
