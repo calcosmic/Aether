@@ -73,7 +73,7 @@ Each task was committed atomically through its RED and GREEN TDD gates:
 4. **Task 2 GREEN: Isolate shelf lifecycle fixtures** - `8bbf2548` (test)
 5. **Authority probe cleanup correction** - `6ae0090e` (test)
 
-**Plan metadata:** recorded in the scoped plan-completion commit.
+**Plan metadata:** `0d82d390` (docs), followed by a scoped provenance-restoration commit.
 
 ## Files Created/Modified
 
@@ -143,6 +143,7 @@ None - no external service configuration required.
 
 - All five modified test files, the corrected plan, and this summary exist.
 - All four RED/GREEN task commits and the authority cleanup correction are present in repository history.
+- The scoped plan metadata commit `0d82d390` is present and bound in `STATE.md`.
 
 ---
 *Phase: 200-iterative-planning*
