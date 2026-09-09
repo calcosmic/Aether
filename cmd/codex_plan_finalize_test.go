@@ -1008,7 +1008,7 @@ func TestPlanFinalizeStallsOnlyAfterTwoLowImprovements(t *testing.T) {
 
 func canonicalPlanningFinalizeStopHistoryFixture(t *testing.T, overalls []int, selectedGapLabels []string) []planningConfidencePass {
 	t.Helper()
-	history := planningConfidenceStopHistoryFixture(overalls, selectedGapLabels)
+	history := planningConfidenceStopHistoryFixture(t, overalls, selectedGapLabels)
 	stablePlanHash := planningConfidenceTestDigest("plan-finalize-stop-policy-preserved")
 	for passIndex := range history {
 		pass := &history[passIndex]

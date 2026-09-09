@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -61,6 +62,7 @@ func TestPlanningConfidenceScoreComputesLockedWeightedOverall(t *testing.T) {
 			for i := range proposal.Assessments {
 				proposal.Assessments[i].After = test.scores[proposal.Assessments[i].Dimension]
 			}
+			planningConfidenceAddressAssessments(t, proposal.Assessments)
 
 			result, err := evaluatePlanningConfidence(proposal)
 			if err != nil {
@@ -152,6 +154,9 @@ func TestPlanningConfidenceScoreRejectsIncompleteOrForgedProposals(t *testing.T)
 			t.Parallel()
 			proposal := planningConfidenceProposalFixture(t, 50)
 			test.edit(&proposal)
+			if test.name == "duplicate dimension" || test.name == "mismatched before frontier" {
+				planningConfidenceAddressAssessments(t, proposal.Assessments)
+			}
 			_, err := evaluatePlanningConfidence(proposal)
 			if err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("error = %v, want text %q", err, test.want)
@@ -213,6 +218,9 @@ func TestPlanningConfidenceScoreRequiresFreshApplicableEvidenceForEveryChange(t 
 			proposal := planningConfidenceProposalFixture(t, 50)
 			proposal.Assessments[0].After = 60
 			test.edit(&proposal)
+			if err := colony.AddressPlanningDimensionAssessment(&proposal.Assessments[0]); err != nil {
+				t.Fatalf("address evidence-validation assessment: %v", err)
+			}
 			_, err := evaluatePlanningConfidence(proposal)
 			if err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("error = %v, want text %q", err, test.want)
@@ -226,6 +234,9 @@ func TestPlanningConfidenceScoreAllowsEvidenceBackedDecrease(t *testing.T) {
 
 	proposal := planningConfidenceProposalFixture(t, 50)
 	proposal.Assessments[0].After = 40
+	if err := colony.AddressPlanningDimensionAssessment(&proposal.Assessments[0]); err != nil {
+		t.Fatalf("address evidence-backed decrease assessment: %v", err)
+	}
 	result, err := evaluatePlanningConfidence(proposal)
 	if err != nil {
 		t.Fatalf("evaluatePlanningConfidence returned error: %v", err)
@@ -252,6 +263,7 @@ func TestPlanningConfidenceGapRanksMaterialBeforeNumericDeficit(t *testing.T) {
 	proposal.Assessments[4].After = 5
 	proposal.Assessments[4].Before = 5
 	proposal.PriorScores.Set(colony.PlanningDimensionEffort, 5)
+	planningConfidenceAddressAssessments(t, proposal.Assessments)
 
 	result, err := evaluatePlanningConfidence(proposal)
 	if err != nil {
@@ -289,16 +301,19 @@ func TestPlanningConfidenceGapRanksDeficitSeverityThenStableID(t *testing.T) {
 	proposal.Assessments[4].Before = 80
 	proposal.PriorScores.Set(colony.PlanningDimensionEffort, 80)
 	proposal.Assessments[3].RemainingGap.Severity = 7
-	setPlanningConfidenceTestGapID(&proposal.Assessments[2].RemainingGap, "gap-z")
-	setPlanningConfidenceTestGapID(&proposal.Assessments[3].RemainingGap, "gap-a")
+	proposal.Assessments[2].RemainingGap.Description += " (stable tie z)"
+	proposal.Assessments[3].RemainingGap.Description += " (stable tie a)"
+	planningConfidenceAddressAssessments(t, proposal.Assessments)
 
 	result, err := evaluatePlanningConfidence(proposal)
 	if err != nil {
 		t.Fatalf("evaluatePlanningConfidence returned error: %v", err)
 	}
+	tied := []string{proposal.Assessments[2].RemainingGap.ID, proposal.Assessments[3].RemainingGap.ID}
+	sort.Strings(tied)
 	want := []string{
-		proposal.Assessments[3].RemainingGap.ID,
-		proposal.Assessments[2].RemainingGap.ID,
+		tied[0],
+		tied[1],
 		proposal.Assessments[1].RemainingGap.ID,
 		proposal.Assessments[0].RemainingGap.ID,
 	}
@@ -327,8 +342,8 @@ func TestPlanningConfidenceGapRanksDeficitSeverityThenStableID(t *testing.T) {
 func TestPlanningConfidenceStopTargetPrecedesCapAndMaterialOverride(t *testing.T) {
 	t.Parallel()
 
-	history := planningConfidenceStopHistoryFixture([]int{89, 90}, []string{"target-gap", "target-gap"})
-	planningConfidenceSetMaterialGap(&history[len(history)-1])
+	history := planningConfidenceStopHistoryFixture(t, []int{89, 90}, []string{"target-gap", "target-gap"})
+	planningConfidenceSetMaterialGap(t, &history[len(history)-1])
 	result, err := evaluatePlanningStopPolicy(planningStopPolicyInput{
 		Target: 90, PassCap: 2, History: history,
 	})
@@ -354,7 +369,7 @@ func TestPlanningConfidenceStopPassCapUsesConfiguredPresetExactly(t *testing.T) 
 				overalls[i] = 40 + i*2
 				gaps[i] = "cap-gap-" + string(rune('a'+i))
 			}
-			history := planningConfidenceStopHistoryFixture(overalls, gaps)
+			history := planningConfidenceStopHistoryFixture(t, overalls, gaps)
 			beforeCap, err := evaluatePlanningStopPolicy(planningStopPolicyInput{
 				Target: 99, PassCap: cap, History: history[:cap-1],
 			})
@@ -383,7 +398,7 @@ func TestPlanningConfidenceStopPassCapUsesConfiguredPresetExactly(t *testing.T) 
 func TestPlanningConfidenceStopPassCapPrecedesBelowTargetConvergence(t *testing.T) {
 	t.Parallel()
 
-	history := planningConfidenceStopHistoryFixture([]int{60, 60, 60, 60}, []string{"same-gap", "same-gap", "same-gap", "same-gap"})
+	history := planningConfidenceStopHistoryFixture(t, []int{60, 60, 60, 60}, []string{"same-gap", "same-gap", "same-gap", "same-gap"})
 	result, err := evaluatePlanningStopPolicy(planningStopPolicyInput{Target: 90, PassCap: 4, History: history})
 	if err != nil {
 		t.Fatalf("evaluatePlanningStopPolicy returned error: %v", err)
@@ -399,7 +414,7 @@ func TestPlanningConfidenceDiminishingRequiresTwoGroundedSubTwoMovements(t *test
 	tests := []struct {
 		name     string
 		overalls []int
-		edit     func([]planningConfidencePass)
+		edit     func(*testing.T, []planningConfidencePass)
 		want     colony.PlanningStopReason
 	}{
 		{
@@ -425,16 +440,16 @@ func TestPlanningConfidenceDiminishingRequiresTwoGroundedSubTwoMovements(t *test
 		{
 			name:     "latest pass is not grounded",
 			overalls: []int{70, 71, 71},
-			edit: func(history []planningConfidencePass) {
-				planningConfidenceSetPassGrounded(&history[2], false)
+			edit: func(t *testing.T, history []planningConfidencePass) {
+				planningConfidenceSetPassGrounded(t, &history[2], false)
 			},
 			want: colony.PlanningStopContinue,
 		},
 		{
 			name:     "material semantic change breaks convergence",
 			overalls: []int{70, 71, 72},
-			edit: func(history []planningConfidencePass) {
-				planningConfidenceSetSemanticChange(&history[1])
+			edit: func(t *testing.T, history []planningConfidencePass) {
+				planningConfidenceSetSemanticChange(t, &history[1])
 			},
 			want: colony.PlanningStopContinue,
 		},
@@ -448,9 +463,9 @@ func TestPlanningConfidenceDiminishingRequiresTwoGroundedSubTwoMovements(t *test
 			for i := range gaps {
 				gaps[i] = "diminishing-gap-" + string(rune('a'+i))
 			}
-			history := planningConfidenceStopHistoryFixture(test.overalls, gaps)
+			history := planningConfidenceStopHistoryFixture(t, test.overalls, gaps)
 			if test.edit != nil {
-				test.edit(history)
+				test.edit(t, history)
 			}
 			result, err := evaluatePlanningStopPolicy(planningStopPolicyInput{
 				Target: 90, PassCap: 12, History: history,
@@ -469,13 +484,17 @@ func TestPlanningConfidenceDiminishingRequiresTwoGroundedSubTwoMovements(t *test
 func TestPlanningConfidenceDiminishingDoesNotConfuseAuthorityImpactWithSemanticChange(t *testing.T) {
 	t.Parallel()
 
-	history := planningConfidenceStopHistoryFixture([]int{70, 71, 72}, []string{"gap-a", "gap-b", "gap-c"})
-	impactHash := planningConfidenceTestDigest("authority-impact-only")
+	history := planningConfidenceStopHistoryFixture(t, []int{70, 71, 72}, []string{"gap-a", "gap-b", "gap-c"})
 	history[1].SemanticDelta.AuthorityImpacts = []colony.PlanningAuthorityImpact{{
-		ID: "authority-impact-" + impactHash[:12], ContentHash: impactHash,
 		Kind: colony.PlanningAuthorityOwnerDecision, SourceID: "decision-200",
 		AffectedSemanticIDs: []string{"task-200"}, Rationale: "Authority remains separately visible",
 	}}
+	if err := colony.AddressPlanningAuthorityImpact(&history[1].SemanticDelta.AuthorityImpacts[0]); err != nil {
+		t.Fatalf("address authority-only impact: %v", err)
+	}
+	if err := colony.AddressPlanningSemanticDelta(&history[1].SemanticDelta); err != nil {
+		t.Fatalf("address authority-only semantic delta: %v", err)
+	}
 	result, err := evaluatePlanningStopPolicy(planningStopPolicyInput{Target: 90, PassCap: 12, History: history})
 	if err != nil {
 		t.Fatalf("evaluatePlanningStopPolicy returned error: %v", err)
@@ -519,7 +538,7 @@ func TestPlanningConfidenceStallRequiresTwoUnimprovedRepeats(t *testing.T) {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			history := planningConfidenceStopHistoryFixture(test.overalls, test.gaps)
+			history := planningConfidenceStopHistoryFixture(t, test.overalls, test.gaps)
 			result, err := evaluatePlanningStopPolicy(planningStopPolicyInput{
 				Target: 90, PassCap: 12, History: history,
 			})
@@ -537,6 +556,11 @@ func TestPlanningConfidenceStallRequiresTwoUnimprovedRepeats(t *testing.T) {
 func TestPlanningConfidenceStopMaterialGapConvertsBelowTargetStopsToOwnerDecision(t *testing.T) {
 	t.Parallel()
 
+	stalledHistory := planningConfidenceStopHistoryFixture(t, []int{60, 60, 60}, []string{"same-gap", "same-gap", "same-gap"})
+	for index := range stalledHistory {
+		planningConfidenceSetMaterialGap(t, &stalledHistory[index])
+	}
+
 	tests := []struct {
 		name    string
 		history []planningConfidencePass
@@ -545,17 +569,17 @@ func TestPlanningConfidenceStopMaterialGapConvertsBelowTargetStopsToOwnerDecisio
 	}{
 		{
 			name:    "diminishing returns",
-			history: planningConfidenceStopHistoryFixture([]int{70, 71, 72}, []string{"gap-a", "gap-b", "gap-c"}),
+			history: planningConfidenceStopHistoryFixture(t, []int{70, 71, 72}, []string{"gap-a", "gap-b", "gap-c"}),
 			cap:     12, trigger: colony.PlanningStopDiminishingReturns,
 		},
 		{
 			name:    "stalled gap",
-			history: planningConfidenceStopHistoryFixture([]int{60, 60, 60}, []string{"same-gap", "same-gap", "same-gap"}),
+			history: stalledHistory,
 			cap:     12, trigger: colony.PlanningStopStalledGap,
 		},
 		{
 			name:    "pass cap",
-			history: planningConfidenceStopHistoryFixture([]int{60, 62, 64, 66}, []string{"gap-a", "gap-b", "gap-c", "gap-d"}),
+			history: planningConfidenceStopHistoryFixture(t, []int{60, 62, 64, 66}, []string{"gap-a", "gap-b", "gap-c", "gap-d"}),
 			cap:     4, trigger: colony.PlanningStopPassCap,
 		},
 	}
@@ -564,7 +588,7 @@ func TestPlanningConfidenceStopMaterialGapConvertsBelowTargetStopsToOwnerDecisio
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			planningConfidenceSetMaterialGap(&test.history[len(test.history)-1])
+			planningConfidenceSetMaterialGap(t, &test.history[len(test.history)-1])
 			result, err := evaluatePlanningStopPolicy(planningStopPolicyInput{
 				Target: 90, PassCap: test.cap, History: test.history,
 			})
@@ -582,7 +606,7 @@ func TestPlanningConfidenceStopMaterialGapConvertsBelowTargetStopsToOwnerDecisio
 func TestPlanningConfidenceStopReplayIsDeterministic(t *testing.T) {
 	t.Parallel()
 
-	history := planningConfidenceStopHistoryFixture([]int{70, 71, 72}, []string{"gap-a", "gap-b", "gap-c"})
+	history := planningConfidenceStopHistoryFixture(t, []int{70, 71, 72}, []string{"gap-a", "gap-b", "gap-c"})
 	input := planningStopPolicyInput{Target: 90, PassCap: 12, History: history}
 	first, err := evaluatePlanningStopPolicy(input)
 	if err != nil {
@@ -603,7 +627,7 @@ func TestPlanningConfidenceStopReplayIsDeterministic(t *testing.T) {
 func TestPlanningConfidenceStopRejectsInvalidDiagnosticInput(t *testing.T) {
 	t.Parallel()
 
-	base := planningConfidenceStopHistoryFixture([]int{70, 72}, []string{"gap-a", "gap-b"})
+	base := planningConfidenceStopHistoryFixture(t, []int{70, 72}, []string{"gap-a", "gap-b"})
 	tests := []struct {
 		name  string
 		input planningStopPolicyInput
@@ -613,14 +637,14 @@ func TestPlanningConfidenceStopRejectsInvalidDiagnosticInput(t *testing.T) {
 		{name: "invalid cap", input: planningStopPolicyInput{Target: 90, PassCap: 0, History: base}, want: "pass cap"},
 		{name: "missing history", input: planningStopPolicyInput{Target: 90, PassCap: 4}, want: "history"},
 	}
-	wrongOrdinal := planningConfidenceStopHistoryFixture([]int{70, 72}, []string{"gap-a", "gap-b"})
+	wrongOrdinal := planningConfidenceStopHistoryFixture(t, []int{70, 72}, []string{"gap-a", "gap-b"})
 	wrongOrdinal[1].Iteration = 3
 	tests = append(tests, struct {
 		name  string
 		input planningStopPolicyInput
 		want  string
 	}{name: "skipped pass ordinal", input: planningStopPolicyInput{Target: 90, PassCap: 4, History: wrongOrdinal}, want: "iteration"})
-	forgedOverall := planningConfidenceStopHistoryFixture([]int{70, 72}, []string{"gap-a", "gap-b"})
+	forgedOverall := planningConfidenceStopHistoryFixture(t, []int{70, 72}, []string{"gap-a", "gap-b"})
 	forgedOverall[1].Evaluation.Scores.Overall++
 	tests = append(tests, struct {
 		name  string
@@ -659,9 +683,10 @@ func assertPlanningConfidenceDecisionExplained(t *testing.T, result planningStop
 	}
 }
 
-func planningConfidenceStopHistoryFixture(overalls []int, selectedGapLabels []string) []planningConfidencePass {
+func planningConfidenceStopHistoryFixture(t *testing.T, overalls []int, selectedGapLabels []string) []planningConfidencePass {
+	t.Helper()
 	if len(overalls) != len(selectedGapLabels) {
-		panic("planning confidence stop fixture requires one gap label per pass")
+		t.Fatal("planning confidence stop fixture requires one gap label per pass")
 	}
 	history := make([]planningConfidencePass, 0, len(overalls))
 	previous := 0
@@ -674,7 +699,7 @@ func planningConfidenceStopHistoryFixture(overalls []int, selectedGapLabels []st
 			Evaluation: planningConfidenceEvaluation{Scores: planningConfidenceScores{
 				Knowledge: overall, Requirements: overall, Risks: overall, Dependencies: overall, Effort: overall, Overall: overall,
 			}},
-			SemanticDelta: planningConfidenceStopDeltaFixture(index+1, false),
+			SemanticDelta: planningConfidenceStopDeltaFixture(t, index+1, false),
 		}
 		for dimensionIndex, dimension := range colony.PlanningDimensions() {
 			gapLabel := selectedGapLabels[index] + "-" + string(dimension)
@@ -683,18 +708,14 @@ func planningConfidenceStopHistoryFixture(overalls []int, selectedGapLabels []st
 				gapLabel = selectedGapLabels[index]
 				severity = 10
 			}
-			gapHash := planningConfidenceTestDigest("stop-gap-" + gapLabel)
-			assessmentHash := planningConfidenceTestDigest("stop-assessment-" + string(rune('0'+index)) + "-" + string(dimension))
-			evidenceID := "evidence-pass-" + string(rune('1'+index)) + "-" + string(dimension)
+			evidenceID := "evidence-gap-" + selectedGapLabels[index] + "-" + string(dimension)
 			assessment := colony.PlanningDimensionAssessment{
 				SchemaVersion: colony.PlanningSchemaVersion,
-				ID:            "assessment-" + assessmentHash[:12], ContentHash: assessmentHash,
-				Dimension: dimension, Before: previous, After: overall,
+				Dimension:     dimension, Before: previous, After: overall,
 				FreshEvidenceIDs: []string{evidenceID},
 				RemainingGap: colony.PlanningGap{
 					SchemaVersion: colony.PlanningSchemaVersion,
-					ID:            "planning-gap-" + gapHash[:12], ContentHash: gapHash,
-					Dimension: dimension, Materiality: colony.PlanningGapNonMaterial, Severity: severity,
+					Dimension:     dimension, Materiality: colony.PlanningGapNonMaterial, Severity: severity,
 					Description: "Unresolved " + gapLabel, EvidenceIDs: []string{evidenceID},
 					EvidenceThatWouldChange: "Obtain exact evidence for " + gapLabel,
 				},
@@ -703,6 +724,9 @@ func planningConfidenceStopHistoryFixture(overalls []int, selectedGapLabels []st
 			}
 			if dimensionIndex == 0 {
 				assessment.RemainingGap.Description = "Weakest gap " + selectedGapLabels[index]
+			}
+			if err := colony.AddressPlanningDimensionAssessment(&assessment); err != nil {
+				t.Fatalf("address stop-history pass %d %s assessment: %v", index+1, dimension, err)
 			}
 			pass.Evaluation.Assessments = append(pass.Evaluation.Assessments, assessment)
 		}
@@ -714,46 +738,69 @@ func planningConfidenceStopHistoryFixture(overalls []int, selectedGapLabels []st
 	return history
 }
 
-func planningConfidenceStopDeltaFixture(iteration int, material bool) colony.PlanningSemanticDelta {
-	deltaHash := planningConfidenceTestDigest("stop-delta-" + string(rune('0'+iteration)))
+func planningConfidenceStopDeltaFixture(t *testing.T, iteration int, material bool) colony.PlanningSemanticDelta {
+	t.Helper()
+	preservedHash := planningConfidenceTestDigest("planning-confidence-stop-preserved")
 	delta := colony.PlanningSemanticDelta{
 		SchemaVersion: colony.PlanningSchemaVersion,
-		ID:            "planning-delta-" + deltaHash[:12], ContentHash: deltaHash,
+		Phases: []colony.PlanningSemanticChange{{
+			SemanticID: "phase-confidence-stop-fixture",
+			Kind:       colony.PlanningSemanticChangePreserved,
+			BeforeHash: preservedHash,
+			AfterHash:  preservedHash,
+		}},
+	}
+	if err := colony.AddressPlanningSemanticChange(colony.PlanningSemanticSectionPhases, &delta.Phases[0]); err != nil {
+		t.Fatalf("address preserved stop-history semantic change for pass %d: %v", iteration, err)
 	}
 	if material {
-		changeHash := planningConfidenceTestDigest("stop-change-" + string(rune('0'+iteration)))
 		delta.Tasks = []colony.PlanningSemanticChange{{
-			SemanticID: "task-material-change", ContentHash: changeHash,
+			SemanticID:  "task-material-change",
 			Kind:        colony.PlanningSemanticChangeModified,
 			BeforeHash:  planningConfidenceTestDigest("before-material-change"),
 			AfterHash:   planningConfidenceTestDigest("after-material-change"),
 			EvidenceIDs: []string{"evidence-material-change"},
 		}}
+		if err := colony.AddressPlanningSemanticChange(colony.PlanningSemanticSectionTasks, &delta.Tasks[0]); err != nil {
+			t.Fatalf("address stop-history semantic change for pass %d: %v", iteration, err)
+		}
+	}
+	if err := colony.AddressPlanningSemanticDelta(&delta); err != nil {
+		t.Fatalf("address stop-history semantic delta for pass %d: %v", iteration, err)
 	}
 	return delta
 }
 
-func planningConfidenceSetMaterialGap(pass *planningConfidencePass) {
+func planningConfidenceSetMaterialGap(t *testing.T, pass *planningConfidencePass) {
+	t.Helper()
 	for i := range pass.Evaluation.Assessments {
 		if pass.Evaluation.Assessments[i].Dimension == colony.PlanningDimensionKnowledge {
 			pass.Evaluation.Assessments[i].RemainingGap.Materiality = colony.PlanningGapMaterial
+			if err := colony.AddressPlanningDimensionAssessment(&pass.Evaluation.Assessments[i]); err != nil {
+				t.Fatalf("address material stop-history gap: %v", err)
+			}
 		}
 	}
 	pass.Evaluation.RankedGaps = rankPlanningConfidenceGaps(pass.Evaluation.Assessments, pass.Evaluation.Scores)
 	pass.Evaluation.WeakestGap = clonePlanningConfidenceGap(pass.Evaluation.RankedGaps[0])
 }
 
-func planningConfidenceSetPassGrounded(pass *planningConfidencePass, grounded bool) {
+func planningConfidenceSetPassGrounded(t *testing.T, pass *planningConfidencePass, grounded bool) {
+	t.Helper()
 	if grounded {
 		return
 	}
 	for i := range pass.Evaluation.Assessments {
 		pass.Evaluation.Assessments[i].FreshEvidenceIDs = nil
+		if err := colony.AddressPlanningDimensionAssessment(&pass.Evaluation.Assessments[i]); err != nil {
+			t.Fatalf("address ungrounded stop-history assessment: %v", err)
+		}
 	}
 }
 
-func planningConfidenceSetSemanticChange(pass *planningConfidencePass) {
-	pass.SemanticDelta = planningConfidenceStopDeltaFixture(pass.Iteration, true)
+func planningConfidenceSetSemanticChange(t *testing.T, pass *planningConfidencePass) {
+	t.Helper()
+	pass.SemanticDelta = planningConfidenceStopDeltaFixture(t, pass.Iteration, true)
 }
 
 func planningConfidenceProposalFixture(t *testing.T, prior int) planningConfidenceProposal {
@@ -785,31 +832,34 @@ func planningConfidenceProposalFixture(t *testing.T, prior int) planningConfiden
 		proposal.EvidenceFrontier.CurrentSourceHashes[planningEvidenceSourceKey(record.Reference)] = record.Reference.ContentHash
 		proposal.EvidenceFrontier.SourceStates[planningEvidenceSourceKey(record.Reference)] = planningEvidenceSourceCurrent
 
-		gapHash := planningConfidenceTestDigest("gap-" + string(dimension))
-		assessmentHash := planningConfidenceTestDigest("assessment-" + string(dimension))
-		proposal.Assessments = append(proposal.Assessments, colony.PlanningDimensionAssessment{
+		assessment := colony.PlanningDimensionAssessment{
 			SchemaVersion: colony.PlanningSchemaVersion,
-			ID:            "assessment-" + assessmentHash[:12], ContentHash: assessmentHash,
-			Dimension: dimension, Before: prior, After: prior,
+			Dimension:     dimension, Before: prior, After: prior,
 			FreshEvidenceIDs: []string{record.Reference.ID},
 			RemainingGap: colony.PlanningGap{
 				SchemaVersion: colony.PlanningSchemaVersion,
-				ID:            "planning-gap-" + gapHash[:12], ContentHash: gapHash,
-				Dimension: dimension, Materiality: colony.PlanningGapNonMaterial, Severity: 1,
+				Dimension:     dimension, Materiality: colony.PlanningGapNonMaterial, Severity: 1,
 				Description: "Remaining " + string(dimension) + " uncertainty",
 				EvidenceIDs: []string{record.Reference.ID}, EvidenceThatWouldChange: "Fresh proof resolving " + string(dimension),
 			},
 			Rationale:         "Fresh evidence supports the proposed " + string(dimension) + " readiness",
 			ProducerReceiptID: "route-setter-receipt-200",
-		})
+		}
+		if err := colony.AddressPlanningDimensionAssessment(&assessment); err != nil {
+			t.Fatalf("address %s confidence proposal assessment: %v", dimension, err)
+		}
+		proposal.Assessments = append(proposal.Assessments, assessment)
 	}
 	return proposal
 }
 
-func setPlanningConfidenceTestGapID(gap *colony.PlanningGap, label string) {
-	digest := planningConfidenceTestDigest(label)
-	gap.ContentHash = digest
-	gap.ID = "planning-gap-" + digest[:12]
+func planningConfidenceAddressAssessments(t *testing.T, assessments []colony.PlanningDimensionAssessment) {
+	t.Helper()
+	for index := range assessments {
+		if err := colony.AddressPlanningDimensionAssessment(&assessments[index]); err != nil {
+			t.Fatalf("address %s confidence assessment: %v", assessments[index].Dimension, err)
+		}
+	}
 }
 
 func planningConfidenceTestDigest(label string) string {
