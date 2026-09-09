@@ -4425,23 +4425,37 @@ func fallbackPlanningArtifactRemovalTargetsInSession(session *planningMutationSe
 		return nil, err
 	}
 	targets := make([]planningSessionTarget, 0, 8)
-	appendFallbackRemoval := func(dataRelative, repositoryRelative string) {
+	appendFallbackRemoval := func(dataRelative, repositoryRelative string) error {
+		// Capture the exact present-or-absent Plan 28 baseline before the
+		// timestamp/source classifier performs its filesystem observation. The
+		// final transaction must consume this same repository moment rather
+		// than silently recapturing a cleanup target immediately before commit.
+		if _, _, err := session.ReadFile(lifecycleTransactionRootData, dataRelative); err != nil {
+			return err
+		}
 		if markerExists && shouldPreserveWorkerArtifact(root, repositoryRelative, nil, nil) {
-			return
+			return nil
 		}
 		targets = append(targets, planningSessionTarget{Root: lifecycleTransactionRootData, Path: dataRelative, Remove: true})
+		return nil
 	}
 	for _, name := range []string{"SCOUT.md", "ROUTE-SETTER.md", "phase-plan.json"} {
-		appendFallbackRemoval(
+		if err := appendFallbackRemoval(
 			filepath.ToSlash(filepath.Join("planning", name)),
 			filepath.ToSlash(filepath.Join(".aether", "data", "planning", name)),
-		)
+		); err != nil {
+			return nil, err
+		}
 	}
 	planningDir := filepath.Join(session.DataRoot(), "planning")
 	if entries, readErr := os.ReadDir(planningDir); readErr == nil {
 		for _, entry := range entries {
 			if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".bak") {
-				targets = append(targets, planningSessionTarget{Root: lifecycleTransactionRootData, Path: filepath.ToSlash(filepath.Join("planning", entry.Name())), Remove: true})
+				dataRelative := filepath.ToSlash(filepath.Join("planning", entry.Name()))
+				if _, _, err := session.ReadFile(lifecycleTransactionRootData, dataRelative); err != nil {
+					return nil, err
+				}
+				targets = append(targets, planningSessionTarget{Root: lifecycleTransactionRootData, Path: dataRelative, Remove: true})
 			}
 		}
 	} else if !os.IsNotExist(readErr) {
@@ -4455,7 +4469,9 @@ func fallbackPlanningArtifactRemovalTargetsInSession(session *planningMutationSe
 			}
 			dataRelative := filepath.ToSlash(filepath.Join("phase-research", entry.Name()))
 			repositoryRelative := filepath.ToSlash(filepath.Join(".aether", "data", dataRelative))
-			appendFallbackRemoval(dataRelative, repositoryRelative)
+			if err := appendFallbackRemoval(dataRelative, repositoryRelative); err != nil {
+				return nil, err
+			}
 		}
 	} else if !os.IsNotExist(readErr) {
 		return nil, fmt.Errorf("inspect fallback phase research artifacts: %w", readErr)
