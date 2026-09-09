@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 45/55 plans executed
+**Plans:** 46/55 plans executed
 
 Plans:
 
@@ -313,7 +313,7 @@ Plans:
 
 - [x] 200-45-PLAN.md — Restore missing-versus-corrupt semantics for repository-backed optional ledgers.
 - [x] 200-46-PLAN.md — Reconnect local Queen promotion through a contained repository writer boundary.
-- [ ] 200-47-PLAN.md — Canonicalize build-attempt paths and rebind legacy-unbound manifests safely.
+- [x] 200-47-PLAN.md — Canonicalize build-attempt paths and rebind legacy-unbound manifests safely.
 
 **Wave 28** *(second gap closure; blocked on Wave 27 completion)*
 

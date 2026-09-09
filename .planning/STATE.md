@@ -5,15 +5,15 @@ milestone_name: Classic Colony Restoration
 current_phase: 200
 current_phase_name: Iterative Planning
 status: executing
-stopped_at: Completed 200-46-PLAN.md; next incomplete is 200-47
-last_updated: "2026-09-09T10:56:53.221Z"
+stopped_at: Completed 200-47-PLAN.md; next incomplete is 200-48
+last_updated: "2026-09-09T11:44:10.672Z"
 last_activity: 2026-09-09
-state_head: 8c76e1b4ab05366eb662e102f7922f65306ee6f4
+state_head: dc553593970fc5c0d62a90bac630732b23c3d924
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 89
-  completed_plans: 79
+  completed_plans: 80
   percent: 14
 ---
 
@@ -32,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 47 of 55
+Plan: 48 of 55
 Status: Ready to execute
 Last activity: 2026-09-09
 
@@ -159,6 +159,7 @@ Last activity: 2026-09-09
 | Phase 200 P44 | 17min | 2 tasks | 5 files |
 | Phase 200 P45 | 10min | 2 tasks | 5 files |
 | Phase 200 P46 | 27min | 2 tasks | 6 files |
+| Phase 200 P47 | 39min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -501,6 +502,9 @@ Last activity: 2026-09-09
 - [Phase 200]: Memory retains eligibility policy while cmd owns the repository authority and persists only the typed, already-approved instinct.
 - [Phase 200]: The Queen callback captures the lifecycle data root when assembled so timed-out goroutines never consult mutable global store state.
 - [Phase 200]: A refused Queen write stays absent from QueenPromoted and visible in pipeline errors without turning best-effort consolidation into a lifecycle gate.
+- [Phase 200]: Build-attempt filesystem operations consume canonical data-root-relative paths; public output adds .aether/data exactly once. — This prevents doubled-root reconciliation and traversal ambiguity.
+- [Phase 200]: Only complete historical manifests enter the legacy adapter; partial modern claims fail closed. — Compatibility cannot bypass D-16 or supplied execution identity.
+- [Phase 200]: Exact legacy replay requires both the raw packet digest and valid canonical attempt/receipt evidence. — Replay remains idempotent without trusting the old artifact.
 
 ### Pending Todos
 
@@ -617,8 +621,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-09T10:56:53.211Z
-Stopped at: Completed 200-46-PLAN.md; next incomplete is 200-47
+Last session: 2026-09-09T11:44:10.663Z
+Stopped at: Completed 200-47-PLAN.md; next incomplete is 200-48
 Resume file: None
 
 ## Operator Next Steps
