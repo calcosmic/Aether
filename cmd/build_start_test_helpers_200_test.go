@@ -3,8 +3,12 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -305,6 +309,67 @@ func testBuildStartReadJSON(t *testing.T, path string, value any) {
 	}
 	if err := json.Unmarshal(content, value); err != nil {
 		t.Fatalf("decode canonical build-start target %s: %v", path, err)
+	}
+}
+
+func TestBuildAttemptFixtureMigration200(t *testing.T) {
+	owned := []string{
+		"build_start_test_helpers_200_test.go",
+		"build_attempt_test.go",
+		"preflight_phase_198_3_test.go",
+		"autopilot_checkpoints_test.go",
+		"floor_fix_attempt_test.go",
+		"codex_build_test.go",
+	}
+	forbiddenCalls := map[string]bool{
+		"beginBuildAttempt":       true,
+		"beginBuildAttemptRecord": true,
+	}
+	var violations []string
+	for _, name := range owned {
+		set := token.NewFileSet()
+		parsed, err := parser.ParseFile(set, name, nil, 0)
+		if err != nil {
+			t.Fatalf("parse owned build-start fixture file %s: %v", name, err)
+		}
+		ast.Inspect(parsed, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			identifier, ok := call.Fun.(*ast.Ident)
+			if ok && forbiddenCalls[identifier.Name] {
+				violations = append(violations, fmt.Sprintf("%s:%d calls legacy %s", name, set.Position(call.Pos()).Line, identifier.Name))
+			}
+			return true
+		})
+		for _, declaration := range parsed.Decls {
+			function, ok := declaration.(*ast.FuncDecl)
+			if !ok || function.Body == nil {
+				continue
+			}
+			hasAttemptRecord := false
+			hasLatestPointer := false
+			ast.Inspect(function.Body, func(node ast.Node) bool {
+				literal, ok := node.(*ast.CompositeLit)
+				if !ok {
+					return true
+				}
+				identifier, ok := literal.Type.(*ast.Ident)
+				if !ok {
+					return true
+				}
+				hasAttemptRecord = hasAttemptRecord || identifier.Name == "buildAttemptRecord"
+				hasLatestPointer = hasLatestPointer || identifier.Name == "latestBuildAttemptPointer"
+				return true
+			})
+			if hasAttemptRecord && hasLatestPointer {
+				violations = append(violations, fmt.Sprintf("%s:%d function %s reconstructs an attempt plus latest pointer", name, set.Position(function.Pos()).Line, function.Name.Name))
+			}
+		}
+	}
+	if len(violations) > 0 {
+		t.Fatalf("owned build-start fixtures bypass the canonical transaction:\n%s", strings.Join(violations, "\n"))
 	}
 }
 
