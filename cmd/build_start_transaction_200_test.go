@@ -97,7 +97,7 @@ func TestBuildStartTransaction200TargetMatrix(t *testing.T) {
 			if !reflect.DeepEqual(got, want) {
 				t.Fatalf("%s target matrix =\n%v\nwant\n%v", test.variant, got, want)
 			}
-			if receipt.RequestSHA256 == "" || receipt.PlanAuthority != request.PlanAuthority || receipt.AttemptID != request.AttemptID {
+			if receipt.RequestSHA256 == "" || !reflect.DeepEqual(receipt.PlanAuthority, request.PlanAuthority) || receipt.AttemptID != request.AttemptID {
 				t.Fatalf("receipt does not bind request authority/attempt: %+v", receipt)
 			}
 
@@ -478,6 +478,7 @@ func buildStartTransaction200State(t *testing.T) colony.ColonyState {
 		State: colony.StateREADY,
 		Plan: colony.Plan{
 			AcceptancePolicy: colony.PlanAcceptanceLegacyUnbound,
+			EvidencePolicy:   colony.PlanEvidenceNotRequired,
 			Phases: []colony.Phase{{
 				ID: 1, Name: "Atomic build start", Status: colony.PhaseReady,
 				Tasks: []colony.Task{{ID: &taskID, Goal: "Commit all effects", Status: colony.TaskPending}},

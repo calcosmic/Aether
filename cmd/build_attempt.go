@@ -200,6 +200,127 @@ type latestBuildAttemptPointer struct {
 	UpdatedAt     string `json:"updated_at"`
 }
 
+// buildAttemptDerivation contains every input that used to be discovered
+// while beginBuildAttemptRecord was already writing its journal. Keeping the
+// clock, random run ID, process identity, platform, and workspace fingerprint
+// outside the derivation lets build start calculate every byte before opening
+// a transaction while preserving the legacy writer as a thin adapter.
+type buildAttemptDerivation struct {
+	State               colony.ColonyState
+	Phase               colony.Phase
+	PhaseNumber         int
+	StartedAt           time.Time
+	AttemptID           string
+	RunID               string
+	ProcessID           int
+	HostPlatform        string
+	WorkspaceSHA256     string
+	SelectedTaskIDs     []string
+	CheckpointPath      string
+	ManifestPath        string
+	ClaimsPath          string
+	ExecutionOwner      string
+	Dispatches          []codexBuildDispatch
+	MakeLatest          bool
+	ParentAttemptID     string
+	ParentJobName       string
+	CheckFix            *checkFixAttemptRecord
+	InitialStatus       string
+	InitialSummary      string
+	InitialDispatchMode string
+}
+
+// deriveBuildAttemptID retains the historical attempt ID format without
+// consulting the process or clock itself. Callers decide which explicit
+// process identity and timestamp are part of their canonical request.
+func deriveBuildAttemptID(startedAt time.Time, processID int) string {
+	return fmt.Sprintf("attempt-%s-%d", startedAt.UTC().Format("20060102T150405.000000000Z"), processID)
+}
+
+// deriveBuildAttempt is the pure build-attempt constructor shared by the
+// legacy per-file writer and the canonical build-start transaction. It does
+// not read a store, inspect a workspace, generate randomness, or mutate its
+// inputs.
+func deriveBuildAttempt(input buildAttemptDerivation) (string, buildAttemptRecord, *latestBuildAttemptPointer, error) {
+	if input.PhaseNumber < 1 {
+		return "", buildAttemptRecord{}, nil, fmt.Errorf("build attempt phase must be positive")
+	}
+	if input.Phase.ID != 0 && input.Phase.ID != input.PhaseNumber {
+		return "", buildAttemptRecord{}, nil, fmt.Errorf("build attempt phase %d does not match phase record %d", input.PhaseNumber, input.Phase.ID)
+	}
+	attemptID := strings.TrimSpace(input.AttemptID)
+	if !validBuildAttemptID(attemptID) {
+		return "", buildAttemptRecord{}, nil, fmt.Errorf("build attempt id %q is invalid", attemptID)
+	}
+	if !strings.HasPrefix(strings.TrimSpace(input.RunID), "run-") {
+		return "", buildAttemptRecord{}, nil, fmt.Errorf("build attempt run id is invalid")
+	}
+	workspaceSHA := strings.TrimSpace(input.WorkspaceSHA256)
+	if len(workspaceSHA) != sha256.Size*2 {
+		return "", buildAttemptRecord{}, nil, fmt.Errorf("build attempt workspace fingerprint must be a SHA-256 digest")
+	}
+	if input.ProcessID < 1 {
+		return "", buildAttemptRecord{}, nil, fmt.Errorf("build attempt process id must be positive")
+	}
+	stateDigest, err := jsonSHA256(input.State)
+	if err != nil {
+		return "", buildAttemptRecord{}, nil, fmt.Errorf("marshal build attempt state: %w", err)
+	}
+	startedAt := input.StartedAt.UTC()
+	now := startedAt.Format(time.RFC3339Nano)
+	status := strings.TrimSpace(input.InitialStatus)
+	if status == "" {
+		status = buildAttemptPrepared
+	}
+	summary := strings.TrimSpace(input.InitialSummary)
+	if summary == "" {
+		summary = "checkpoint recorded before lifecycle projection"
+	}
+	attemptRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", input.PhaseNumber), "attempts", attemptID+".json"))
+	record := buildAttemptRecord{
+		SchemaVersion:    buildAttemptSchemaVersion,
+		ID:               attemptID,
+		Phase:            input.PhaseNumber,
+		PhaseName:        strings.TrimSpace(input.Phase.Name),
+		Status:           status,
+		StartedAt:        now,
+		UpdatedAt:        now,
+		ProcessID:        input.ProcessID,
+		HostPlatform:     strings.TrimSpace(input.HostPlatform),
+		ExecutionOwner:   strings.TrimSpace(input.ExecutionOwner),
+		RunID:            strings.TrimSpace(input.RunID),
+		WorkspaceSHA256:  workspaceSHA,
+		SelectedTasks:    append([]string{}, input.SelectedTaskIDs...),
+		Checkpoint:       displayDataPath(input.CheckpointPath),
+		Manifest:         displayDataPath(input.ManifestPath),
+		ClaimsPath:       displayDataPath(input.ClaimsPath),
+		OriginalStateSHA: stateDigest,
+		Dispatches:       append([]codexBuildDispatch{}, input.Dispatches...),
+		DispatchMode:     strings.TrimSpace(input.InitialDispatchMode),
+		Recoverable:      true,
+		RecoveryCommand:  buildForceRedispatchCommand(input.PhaseNumber),
+		ParentAttemptID:  strings.TrimSpace(input.ParentAttemptID),
+		ParentJobName:    strings.TrimSpace(input.ParentJobName),
+		History: []buildAttemptTransition{{
+			Status: status, Timestamp: now, Summary: summary,
+		}},
+	}
+	if input.CheckFix != nil {
+		copyRecord := *input.CheckFix
+		record.CheckFix = &copyRecord
+	}
+	var pointer *latestBuildAttemptPointer
+	if input.MakeLatest {
+		pointer = &latestBuildAttemptPointer{
+			SchemaVersion: buildAttemptSchemaVersion,
+			AttemptID:     attemptID,
+			Path:          displayDataPath(attemptRel),
+			UpdatedAt:     now,
+		}
+	}
+	return attemptRel, record, pointer, nil
+}
+
 func beginBuildAttempt(state colony.ColonyState, phaseNum int, phase colony.Phase, startedAt time.Time, selectedTaskIDs []string, checkpointRel, manifestRel, claimsRel, executionOwner string, dispatches []codexBuildDispatch) (string, error) {
 	return beginBuildAttemptRecord(state, phaseNum, phase, startedAt, selectedTaskIDs, checkpointRel, manifestRel, claimsRel, executionOwner, dispatches, true)
 }
@@ -226,10 +347,6 @@ func beginBuildAttemptRecord(state colony.ColonyState, phaseNum int, phase colon
 	if phaseNum < 1 {
 		return "", fmt.Errorf("build attempt phase must be positive")
 	}
-	stateDigest, err := jsonSHA256(state)
-	if err != nil {
-		return "", fmt.Errorf("marshal build attempt state: %w", err)
-	}
 	runID, err := codex.NewExecutionRunID()
 	if err != nil {
 		return "", err
@@ -238,45 +355,22 @@ func beginBuildAttemptRecord(state colony.ColonyState, phaseNum int, phase colon
 	if err != nil {
 		return "", fmt.Errorf("fingerprint build workspace: %w", err)
 	}
-	attemptID := fmt.Sprintf("attempt-%s-%d", startedAt.UTC().Format("20060102T150405.000000000Z"), os.Getpid())
-	attemptRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseNum), "attempts", attemptID+".json"))
-	now := startedAt.UTC().Format(time.RFC3339Nano)
-	record := buildAttemptRecord{
-		SchemaVersion:    buildAttemptSchemaVersion,
-		ID:               attemptID,
-		Phase:            phaseNum,
-		PhaseName:        strings.TrimSpace(phase.Name),
-		Status:           buildAttemptPrepared,
-		StartedAt:        now,
-		UpdatedAt:        now,
-		ProcessID:        os.Getpid(),
-		HostPlatform:     buildHostPlatform(),
-		ExecutionOwner:   strings.TrimSpace(executionOwner),
-		RunID:            runID,
-		WorkspaceSHA256:  workspaceFingerprint,
-		SelectedTasks:    append([]string{}, selectedTaskIDs...),
-		Checkpoint:       displayDataPath(checkpointRel),
-		Manifest:         displayDataPath(manifestRel),
-		ClaimsPath:       displayDataPath(claimsRel),
-		OriginalStateSHA: stateDigest,
-		Dispatches:       append([]codexBuildDispatch{}, dispatches...),
-		Recoverable:      true,
-		RecoveryCommand:  buildForceRedispatchCommand(phaseNum),
-		History: []buildAttemptTransition{
-			{Status: buildAttemptPrepared, Timestamp: now, Summary: "checkpoint recorded before lifecycle projection"},
-		},
+	attemptRel, record, pointer, err := deriveBuildAttempt(buildAttemptDerivation{
+		State: state, Phase: phase, PhaseNumber: phaseNum, StartedAt: startedAt,
+		AttemptID: deriveBuildAttemptID(startedAt, os.Getpid()), RunID: runID,
+		ProcessID: os.Getpid(), HostPlatform: buildHostPlatform(), WorkspaceSHA256: workspaceFingerprint,
+		SelectedTaskIDs: selectedTaskIDs, CheckpointPath: checkpointRel, ManifestPath: manifestRel,
+		ClaimsPath: claimsRel, ExecutionOwner: executionOwner, Dispatches: dispatches, MakeLatest: makeLatest,
+	})
+	if err != nil {
+		return "", err
 	}
 	if err := store.SaveJSON(attemptRel, record); err != nil {
 		return "", fmt.Errorf("save build attempt: %w", err)
 	}
-	if makeLatest {
+	if pointer != nil {
 		pointerRel := latestBuildAttemptPointerPath(phaseNum)
-		if err := store.SaveJSON(pointerRel, latestBuildAttemptPointer{
-			SchemaVersion: buildAttemptSchemaVersion,
-			AttemptID:     attemptID,
-			Path:          displayDataPath(attemptRel),
-			UpdatedAt:     now,
-		}); err != nil {
+		if err := store.SaveJSON(pointerRel, *pointer); err != nil {
 			return "", fmt.Errorf("save latest build attempt pointer: %w", err)
 		}
 	}
