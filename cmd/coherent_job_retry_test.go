@@ -147,20 +147,31 @@ func TestCoherentJobRetryRequiresCoveredTasks(t *testing.T) {
 // child correctly records ParentAttemptID/ParentJobName and starts its own
 // independent history.
 func TestBuildAttemptChildLinksParentWithoutMutation(t *testing.T) {
-	saveGlobals(t)
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
-	_ = root
-
 	phase := colony.Phase{ID: 1, Name: "Parent-child journal proof"}
-	state := colony.ColonyState{State: colony.StateREADY, Plan: colony.Plan{Phases: []colony.Phase{phase}}}
+	taskOne, taskTwo := "1.1", "1.2"
+	phase.Tasks = []colony.Task{
+		{ID: &taskOne, Goal: "Finish parent work", Status: colony.TaskPending},
+		{ID: &taskTwo, Goal: "Retry unfinished child work", Status: colony.TaskPending},
+	}
+	goal := "Prove canonical parent-child attempt linkage"
+	state := colony.ColonyState{Goal: &goal, State: colony.StateREADY, Plan: colony.Plan{
+		AcceptancePolicy: colony.PlanAcceptanceLegacyUnbound,
+		EvidencePolicy:   colony.PlanEvidenceNotRequired,
+		Phases:           []colony.Phase{phase},
+	}}
 
 	parentStartedAt := time.Now().UTC()
 	parentDispatches := []codexBuildDispatch{{Name: "Mason-1", Caste: "builder", TaskID: "1.1", CoveredTaskIDs: []string{"1.1", "1.2"}, Status: "failed"}}
-	parentRel, err := beginBuildAttempt(state, 1, phase, parentStartedAt, []string{"1.1", "1.2"}, "checkpoints/pre-build-phase-1.json", "build/phase-1/manifest.json", "last-build-claims.json", "go-runtime", parentDispatches)
-	if err != nil {
-		t.Fatalf("begin parent attempt: %v", err)
-	}
+	fixture := commitTestBuildStart(t, testBuildStartOptions{
+		Variant: buildStartDirect, GeneratedAt: parentStartedAt,
+		SelectedTasks: []string{"1.1", "1.2"}, Dispatches: parentDispatches,
+		ExecutionOwner: "go-runtime", DispatchMode: "direct", MakeLatest: testBuildStartBool(true),
+		PrepareRoot: func(root string) {
+			createTestColonyState(t, filepath.Join(root, ".aether", "data"), state)
+		},
+	})
+	root, dataDir := fixture.Root, fixture.DataRoot
+	state, phase, parentRel := fixture.State, fixture.Phase, fixture.AttemptPath
 	if err := transitionBuildAttempt(parentRel, buildAttemptFailed, "crashed after finishing 1.1", parentDispatches, nil, "real", fmt.Errorf("crashed after finishing 1.1")); err != nil {
 		t.Fatalf("transition parent to failed: %v", err)
 	}
@@ -178,10 +189,19 @@ func TestBuildAttemptChildLinksParentWithoutMutation(t *testing.T) {
 
 	childStartedAt := parentStartedAt.Add(time.Second)
 	retryDispatches := []codexBuildDispatch{{Name: "Mason-1-retry", Caste: "builder", TaskID: "1.2", CoveredTaskIDs: []string{"1.2"}, Status: "planned", JobName: "job-x-retry"}}
-	childRel, err := beginChildBuildAttempt(state, 1, phase, childStartedAt, parentBefore.ID, "job-x", []string{"1.2"}, "", "", "", "runtime-worker-dispatch", retryDispatches)
+	childRequest, err := newBuildStartRequest(
+		root, buildStartCoherentChildRetry, state, fixture.Request.PlanAuthority,
+		1, []string{"1.2"}, "runtime-worker-dispatch", "coherent-child-retry", childStartedAt,
+		retryDispatches, buildStartEffects{ParentAttemptID: parentBefore.ID, ParentJobName: "job-x"},
+	)
 	if err != nil {
-		t.Fatalf("begin child attempt: %v", err)
+		t.Fatalf("prepare canonical child attempt: %v", err)
 	}
+	childReceipt, err := commitBuildStart(root, childRequest, buildStartOptions{})
+	if err != nil {
+		t.Fatalf("commit canonical child attempt: %v", err)
+	}
+	childRel := childReceipt.AttemptPath
 	if childRel == parentRel {
 		t.Fatalf("child attempt reused the parent's own file %q", parentRel)
 	}
@@ -209,6 +229,10 @@ func TestBuildAttemptChildLinksParentWithoutMutation(t *testing.T) {
 	}
 	if len(child.History) != 1 || child.History[0].Status != buildAttemptPrepared {
 		t.Fatalf("child history = %+v, want a single fresh prepared entry (append-only from its own start)", child.History)
+	}
+	_, latest, ok := loadLatestBuildAttempt(1)
+	if !ok || latest.ID != parentBefore.ID {
+		t.Fatalf("canonical child start promoted retry to latest: latest=%+v present=%t, want parent %q", latest, ok, parentBefore.ID)
 	}
 
 	// Parent's own dispatches/status must be untouched by the child's

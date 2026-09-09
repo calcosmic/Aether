@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"go/ast"
@@ -88,6 +89,46 @@ func TestBuildAttemptExternalFixturesUseCanonicalTransaction200(t *testing.T) {
 	}
 	if len(violations) > 0 {
 		t.Fatalf("remaining build-start fixtures bypass the canonical transaction:\n%s", strings.Join(violations, "\n"))
+	}
+}
+
+func TestBuildAttemptExternalUnboundStartReplayIsByteStable(t *testing.T) {
+	generatedAt := time.Date(2026, time.September, 9, 10, 0, 0, 0, time.UTC)
+	dispatch := codexBuildDispatch{
+		Stage: "wave", Wave: 1, Caste: "builder", Name: "Mason-external-replay",
+		TaskID: "1.1", CoveredTaskIDs: []string{"1.1"}, Status: "completed",
+	}
+	fixture := commitTestBuildStart(t, testBuildStartOptions{
+		Variant: buildStartExternalUnbound, GeneratedAt: generatedAt,
+		SelectedTasks: []string{"1.1"}, Dispatches: []codexBuildDispatch{dispatch},
+		ExecutionOwner: "external-task", DispatchMode: "external-task", MakeLatest: testBuildStartBool(true),
+	})
+	attemptBefore, err := os.ReadFile(filepath.Join(fixture.DataRoot, filepath.FromSlash(fixture.AttemptPath)))
+	if err != nil {
+		t.Fatalf("read bound external attempt before replay: %v", err)
+	}
+	pointerBefore, err := os.ReadFile(filepath.Join(fixture.DataRoot, filepath.FromSlash(latestBuildAttemptPointerPath(fixture.Request.Phase))))
+	if err != nil {
+		t.Fatalf("read bound external pointer before replay: %v", err)
+	}
+
+	replayed, err := commitBuildStart(fixture.Root, fixture.Request, buildStartOptions{})
+	if err != nil {
+		t.Fatalf("replay already-bound external start: %v", err)
+	}
+	if replayed.ID != fixture.Receipt.ID || replayed.ContentHash != fixture.Receipt.ContentHash || replayed.TransactionID != fixture.Receipt.TransactionID {
+		t.Fatalf("bound replay minted new receipt identity: first=%+v replay=%+v", fixture.Receipt, replayed)
+	}
+	attemptAfter, err := os.ReadFile(filepath.Join(fixture.DataRoot, filepath.FromSlash(fixture.AttemptPath)))
+	if err != nil {
+		t.Fatalf("read bound external attempt after replay: %v", err)
+	}
+	pointerAfter, err := os.ReadFile(filepath.Join(fixture.DataRoot, filepath.FromSlash(latestBuildAttemptPointerPath(fixture.Request.Phase))))
+	if err != nil {
+		t.Fatalf("read bound external pointer after replay: %v", err)
+	}
+	if !bytes.Equal(attemptBefore, attemptAfter) || !bytes.Equal(pointerBefore, pointerAfter) {
+		t.Fatal("already-bound external replay rewrote attempt or latest-pointer bytes")
 	}
 }
 
@@ -761,12 +802,6 @@ func TestGroupedJobPartialRetryIsAppendOnlyExternal(t *testing.T) {
 // attempt, and the phase's attempt journal must end up with exactly one
 // child linked to that parent.
 func TestGroupedJobPartialRetryIsIdempotent(t *testing.T) {
-	saveGlobals(t)
-	resetRootCmd(t)
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
-	withWorkingDir(t, root)
-
 	goal := "reconcilePartialBuildRetry is idempotent per parent attempt"
 	tasks, ids := sixChainedTasks()
 	phase := colony.Phase{
@@ -775,17 +810,17 @@ func TestGroupedJobPartialRetryIsIdempotent(t *testing.T) {
 	}
 	state := colony.ColonyState{
 		Version: "3.0", Goal: &goal, State: colony.StateREADY, ColonyDepth: "standard", CurrentPhase: 0,
-		Plan: colony.Plan{Phases: []colony.Phase{phase}},
+		Plan: colony.Plan{
+			AcceptancePolicy: colony.PlanAcceptanceLegacyUnbound,
+			EvidencePolicy:   colony.PlanEvidenceNotRequired,
+			Phases:           []colony.Phase{phase},
+		},
 	}
-	createTestColonyState(t, dataDir, state)
 
 	proven := ids[:4]
 	touched := make([]string, 0, len(proven))
 	for _, id := range proven {
 		touched = append(touched, taskFileName(id))
-		if err := os.WriteFile(filepath.Join(root, taskFileName(id)), []byte("package fixture\n"), 0o644); err != nil {
-			t.Fatalf("write fixture file for task %s: %v", id, err)
-		}
 	}
 	dispatch := codexBuildDispatch{
 		Name: "Mason-1", Caste: "builder", TaskID: ids[0], CoveredTaskIDs: ids,
@@ -793,10 +828,20 @@ func TestGroupedJobPartialRetryIsIdempotent(t *testing.T) {
 	}
 
 	parentStartedAt := time.Now().UTC()
-	parentRel, err := beginBuildAttempt(state, 1, phase, parentStartedAt, ids, "checkpoints/pre-build-phase-1.json", "build/phase-1/manifest.json", "last-build-claims.json", "go-runtime", []codexBuildDispatch{dispatch})
-	if err != nil {
-		t.Fatalf("begin parent attempt: %v", err)
-	}
+	fixture := commitTestBuildStart(t, testBuildStartOptions{
+		Variant: buildStartDirect, GeneratedAt: parentStartedAt,
+		SelectedTasks: ids, Dispatches: []codexBuildDispatch{dispatch},
+		ExecutionOwner: "go-runtime", DispatchMode: "direct", MakeLatest: testBuildStartBool(true),
+		PrepareRoot: func(root string) {
+			createTestColonyState(t, filepath.Join(root, ".aether", "data"), state)
+			for _, id := range proven {
+				if err := os.WriteFile(filepath.Join(root, taskFileName(id)), []byte("package fixture\n"), 0o644); err != nil {
+					t.Fatalf("write fixture file for task %s: %v", id, err)
+				}
+			}
+		},
+	})
+	state, phase, parentRel := fixture.State, fixture.Phase, fixture.AttemptPath
 	if err := transitionBuildAttempt(parentRel, buildAttemptFailed, "crashed after finishing four of six", []codexBuildDispatch{dispatch}, nil, "real", nil); err != nil {
 		t.Fatalf("transition parent to failed: %v", err)
 	}

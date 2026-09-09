@@ -266,27 +266,43 @@ func testPauseResume199SafeBoundary(t *testing.T) {
 	}
 
 	t.Run("active_work_waits", func(t *testing.T) {
-		fixture := newPauseResume199Fixture(t)
-		state := load199State(t)
-		state.State = colony.StateEXECUTING
-		startedAt := fixture.now.Add(-time.Minute)
-		state.BuildStartedAt = &startedAt
+		now := time.Date(2026, time.September, 9, 9, 0, 0, 0, time.UTC)
+		startedAt := now.Add(-time.Minute)
+		build := commitTestBuildStart(t, testBuildStartOptions{
+			Variant: buildStartDirect, GeneratedAt: startedAt,
+			ProcessID: os.Getpid(), ExecutionOwner: "go-runtime", DispatchMode: "direct",
+			MakeLatest: testBuildStartBool(true),
+		})
+		fixture := pauseResume199Fixture{root: build.Root, dataDir: build.DataRoot, now: now}
+		state := build.State
+		sessionID := "session-199-active-work"
+		runID := "run-199-active-work"
+		state.SessionID = &sessionID
+		state.RunID = &runID
 		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
 			t.Fatalf("save executing state: %v", err)
 		}
-		attemptID := "attempt-live-199"
-		attemptRel := filepath.ToSlash(filepath.Join("build", "phase-1", "attempts", attemptID+".json"))
-		if err := store.SaveJSON(attemptRel, buildAttemptRecord{
-			SchemaVersion: buildAttemptSchemaVersion, ID: attemptID, Phase: 1,
-			Status: buildAttemptDispatching, ProcessID: os.Getpid(), UpdatedAt: fixture.now.Format(time.RFC3339),
-		}); err != nil {
-			t.Fatalf("save live attempt: %v", err)
+		goal := "Exercise active-work pause boundary"
+		if state.Goal != nil {
+			goal = *state.Goal
 		}
-		if err := store.SaveJSON(latestBuildAttemptPointerPath(1), latestBuildAttemptPointer{
-			SchemaVersion: buildAttemptSchemaVersion, AttemptID: attemptID, Path: attemptRel, UpdatedAt: fixture.now.Format(time.RFC3339),
+		if err := store.SaveJSON("session.json", colony.SessionFile{
+			SessionID: sessionID, StartedAt: now.Add(-time.Hour).Format(time.RFC3339),
+			LastCommand: "build", LastCommandAt: startedAt.Format(time.RFC3339),
+			ColonyGoal: goal, CurrentPhase: build.Request.Phase, SuggestedNext: "aether watch",
+			Summary: "A real process still owns the canonical build attempt.",
 		}); err != nil {
-			t.Fatalf("save latest attempt: %v", err)
+			t.Fatalf("save active-work session: %v", err)
 		}
+		write199File(t, filepath.Join(fixture.root, ".aether", "CONTEXT.md"), "# Context\n\nWait for the active canonical build.\n")
+		write199File(t, filepath.Join(fixture.dataDir, "spawn-tree.txt"), strings.Join([]string{
+			startedAt.Format(time.RFC3339), "queen", "builder", "builder-active", "1.1", "1", "working",
+		}, "|")+"\n")
+		if err := transitionBuildAttempt(build.AttemptPath, buildAttemptDispatching, "fixture worker is active", nil, nil, "real", nil); err != nil {
+			t.Fatalf("transition canonical attempt to dispatching: %v", err)
+		}
+		attemptID := build.Attempt.ID
+		receiptsBefore := transactionReceiptCount199(t, fixture.dataDir)
 		before := runnableFingerprint199(t, fixture.root, fixture.dataDir)
 		_, err := pauseColonyAt(fixture.now)
 		var pending pauseBoundaryPendingError
@@ -296,8 +312,8 @@ func testPauseResume199SafeBoundary(t *testing.T) {
 		if after := runnableFingerprint199(t, fixture.root, fixture.dataDir); after != before {
 			t.Fatalf("active pause mutated before safe boundary: before=%s after=%s", before, after)
 		}
-		if transactionReceiptCount199(t, fixture.dataDir) != 0 {
-			t.Fatal("active pause wrote a receipt before reaching its safe boundary")
+		if receiptsAfter := transactionReceiptCount199(t, fixture.dataDir); receiptsAfter != receiptsBefore {
+			t.Fatalf("active pause wrote a receipt before reaching its safe boundary: before=%d after=%d", receiptsBefore, receiptsAfter)
 		}
 	})
 }

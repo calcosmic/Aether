@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -16,9 +17,6 @@ import (
 // It returns the repository root and the parent attempt's ID.
 func setUpPartialCreditFixture(t *testing.T) (string, colony.Phase, colony.ColonyState, []string, string, codexBuildDispatch) {
 	t.Helper()
-	dataDir := setupBuildFlowTest(t)
-	root := dataDir[:len(dataDir)-len("/.aether/data")]
-
 	tasks, ids := sixChainedTasks()
 	credited := ids[:4]
 	for i := range tasks {
@@ -39,14 +37,11 @@ func setUpPartialCreditFixture(t *testing.T) (string, colony.Phase, colony.Colon
 		State:        colony.StateEXECUTING,
 		ColonyDepth:  "full",
 		CurrentPhase: 1,
-		Plan:         colony.Plan{Phases: []colony.Phase{phase}},
-	}
-	createTestColonyState(t, dataDir, state)
-
-	// A worker really was dispatched for this phase, so the runtime's
-	// dispatch-start marker is set. This is what the plan-only guard reads.
-	if err := closeForcedReviewerWaiverWindowForPhase(1, time.Now().UTC()); err != nil {
-		t.Fatalf("record dispatch-start marker: %v", err)
+		Plan: colony.Plan{
+			AcceptancePolicy: colony.PlanAcceptanceLegacyUnbound,
+			EvidencePolicy:   colony.PlanEvidenceNotRequired,
+			Phases:           []colony.Phase{phase},
+		},
 	}
 
 	startedAt := time.Now().UTC()
@@ -60,10 +55,15 @@ func setUpPartialCreditFixture(t *testing.T) (string, colony.Phase, colony.Colon
 		Status:           "failed",
 		CompletedTaskIDs: append([]string{}, credited...),
 	}
-	parentRel, err := beginBuildAttempt(state, 1, phase, startedAt, ids, "checkpoints/pre-build-phase-1.json", "build/phase-1/manifest.json", "last-build-claims.json", "go-runtime", []codexBuildDispatch{dispatch})
-	if err != nil {
-		t.Fatalf("begin parent attempt: %v", err)
-	}
+	fixture := commitTestBuildStart(t, testBuildStartOptions{
+		Variant: buildStartDirect, GeneratedAt: startedAt,
+		SelectedTasks: ids, Dispatches: []codexBuildDispatch{dispatch},
+		ExecutionOwner: "go-runtime", DispatchMode: "direct", MakeLatest: testBuildStartBool(true),
+		PrepareRoot: func(root string) {
+			createTestColonyState(t, filepath.Join(root, ".aether", "data"), state)
+		},
+	})
+	root, phase, state, parentRel := fixture.Root, fixture.Phase, fixture.State, fixture.AttemptPath
 	if err := transitionBuildAttempt(parentRel, buildAttemptPartial, "partial credit committed", []codexBuildDispatch{dispatch}, nil, "", nil); err != nil {
 		t.Fatalf("mark parent attempt partial: %v", err)
 	}

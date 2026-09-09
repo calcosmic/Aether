@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -50,9 +51,6 @@ func parseRedispatchTaskArgs(t *testing.T, command string) (phaseArg string, tas
 // those arguments through the real build planner, and fails if any credited
 // task appears in the resulting spawn list.
 func TestPartialRetryCommandNeverRedispatchesCreditedWork(t *testing.T) {
-	saveGlobals(t)
-	setupBuildFlowTest(t)
-
 	tasks, ids := sixChainedTasks()
 	credited := ids[:4]
 	unfinished := ids[4:]
@@ -62,10 +60,16 @@ func TestPartialRetryCommandNeverRedispatchesCreditedWork(t *testing.T) {
 		}
 	}
 	phase := colony.Phase{ID: 1, Name: "Six-task grouped job", Tasks: tasks}
+	goal := "Redispatch only unfinished grouped work"
 	state := colony.ColonyState{
+		Goal:         &goal,
 		State:        colony.StateEXECUTING,
 		CurrentPhase: 1,
-		Plan:         colony.Plan{Phases: []colony.Phase{phase}},
+		Plan: colony.Plan{
+			AcceptancePolicy: colony.PlanAcceptanceLegacyUnbound,
+			EvidencePolicy:   colony.PlanEvidenceNotRequired,
+			Phases:           []colony.Phase{phase},
+		},
 	}
 
 	startedAt := time.Now().UTC()
@@ -79,10 +83,15 @@ func TestPartialRetryCommandNeverRedispatchesCreditedWork(t *testing.T) {
 		Status:           "failed",
 		CompletedTaskIDs: append([]string{}, credited...),
 	}
-	parentRel, err := beginBuildAttempt(state, 1, phase, startedAt, ids, "checkpoints/pre-build-phase-1.json", "build/phase-1/manifest.json", "last-build-claims.json", "go-runtime", []codexBuildDispatch{dispatch})
-	if err != nil {
-		t.Fatalf("begin parent attempt: %v", err)
-	}
+	fixture := commitTestBuildStart(t, testBuildStartOptions{
+		Variant: buildStartDirect, GeneratedAt: startedAt,
+		SelectedTasks: ids, Dispatches: []codexBuildDispatch{dispatch},
+		ExecutionOwner: "go-runtime", DispatchMode: "direct", MakeLatest: testBuildStartBool(true),
+		PrepareRoot: func(root string) {
+			createTestColonyState(t, filepath.Join(root, ".aether", "data"), state)
+		},
+	})
+	state, phase, parentRel := fixture.State, fixture.Phase, fixture.AttemptPath
 	var parent buildAttemptRecord
 	if err := store.LoadJSON(parentRel, &parent); err != nil {
 		t.Fatalf("load parent attempt: %v", err)
