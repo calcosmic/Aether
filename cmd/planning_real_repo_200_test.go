@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -77,6 +78,21 @@ func TestPlanningRealRepo200(t *testing.T) {
 	if candidate.Status != colony.PlanCandidatePendingReview || candidate.Acceptance != nil {
 		t.Fatalf("reasoned stop activated the candidate: %+v", candidate)
 	}
+	pendingReview, err := reviewPlanCandidateAt(root, candidate.CreatedAt.Add(time.Nanosecond))
+	if err != nil {
+		t.Fatalf("review exact stopped candidate: %v", err)
+	}
+	if len(pendingReview.Iterations) != 2 || pendingReview.Iterations[0].Iteration != 1 || pendingReview.Iterations[1].Iteration != 2 {
+		t.Fatalf("candidate review does not expose the two visible planning passes: %+v", pendingReview.Iterations)
+	}
+	pendingProjection, err := json.Marshal(projectPlanningCandidate(pendingReview))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(pendingProjection, []byte("aether build")) || bytes.Contains(pendingProjection, []byte("aether run")) ||
+		!bytes.Contains(pendingProjection, []byte("--accept-candidate")) {
+		t.Fatalf("pending candidate exposed execution or hid exact D-16 acceptance: %s", pendingProjection)
+	}
 	for _, card := range []colony.PlanningIterationCard{first.Route.Card, second.Route.Card} {
 		if strings.TrimSpace(card.EvidenceThatWouldChange) == "" || strings.TrimSpace(card.WeakestGap.EvidenceThatWouldChange) == "" || strings.TrimSpace(card.Decision.EvidenceThatWouldChange) == "" {
 			t.Fatalf("card %d lacks causal evidence-that-would-change: %+v", card.Iteration, card)
@@ -118,11 +134,17 @@ func TestPlanningRealRepo200(t *testing.T) {
 	if err != nil || !buildAfter.Eligible {
 		t.Fatalf("accepted candidate did not grant build authority: %+v err=%v", buildAfter, err)
 	}
-	facts := lifecycleFactsFromStateSnapshot(acceptedState, false, time.Date(2026, time.September, 8, 2, 0, 0, 0, time.UTC))
+	facts := lifecycleFactsFromStateSnapshot(acceptedState, false, candidate.CreatedAt.Add(time.Minute))
 	facts.Root = root
 	runAfter := buildAutopilotPreflight(facts)
 	if !runAfter.Valid || !runAfter.PlanAuthority.Eligible || runAfter.FirstPhase != 1 {
 		t.Fatalf("build/run authority diverged: build=%+v run=%+v", buildAfter, runAfter)
+	}
+	if !reflect.DeepEqual(buildAfter.ActiveRevision, runAfter.PlanAuthority.ActiveRevision) ||
+		!reflect.DeepEqual(buildAfter.Specification, runAfter.PlanAuthority.Specification) ||
+		!reflect.DeepEqual(buildAfter.Candidate, runAfter.PlanAuthority.Candidate) ||
+		!reflect.DeepEqual(buildAfter.Acceptance, runAfter.PlanAuthority.Acceptance) {
+		t.Fatalf("build and run did not consume the same accepted authority: build=%+v run=%+v", buildAfter, runAfter.PlanAuthority)
 	}
 
 	t.Run("scoped successor preserves independent completed work and blocks execution", func(t *testing.T) {
