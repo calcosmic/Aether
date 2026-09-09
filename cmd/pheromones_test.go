@@ -19,8 +19,8 @@ func TestPheromoneRead(t *testing.T) {
 	s, tmpDir := setupTestStore(t)
 	defer os.RemoveAll(tmpDir)
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", tmpDir+"/.aether/data")
 
 	store = s
 	rootCmd.SetArgs([]string{"pheromone-read"})
@@ -68,8 +68,8 @@ func TestPheromoneReadEmpty(t *testing.T) {
 	dataDir := tmpDir + "/.aether/data"
 	os.MkdirAll(dataDir, 0755)
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", tmpDir+"/.aether/data")
 
 	s, _ := storage.NewStore(dataDir)
 	store = s
@@ -99,8 +99,8 @@ func TestPheromoneCount(t *testing.T) {
 	s, tmpDir := setupTestStore(t)
 	defer os.RemoveAll(tmpDir)
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", tmpDir+"/.aether/data")
 
 	store = s
 	rootCmd.SetArgs([]string{"pheromone-count"})
@@ -144,8 +144,8 @@ func TestPheromoneCountEmpty(t *testing.T) {
 	dataDir := tmpDir + "/.aether/data"
 	os.MkdirAll(dataDir, 0755)
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	s, _ := storage.NewStore(dataDir)
 	store = s
@@ -193,7 +193,7 @@ func TestPheromoneFixtureRestoresRepositoryAuthority200(t *testing.T) {
 	tracer = nil
 
 	var fixtureRoot string
-	t.Run("legacy pheromone fixture", func(t *testing.T) {
+	t.Run("isolated pheromone fixture", func(t *testing.T) {
 		saveGlobals(t)
 		fixtureRoot = t.TempDir()
 		dataDir := fixtureRoot + "/.aether/data"
@@ -205,8 +205,8 @@ func TestPheromoneFixtureRestoresRepositoryAuthority200(t *testing.T) {
 			t.Fatal(err)
 		}
 		store = fixtureStore
-		_ = os.Setenv("AETHER_ROOT", fixtureRoot)
-		defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+		t.Setenv("AETHER_ROOT", fixtureRoot)
+		t.Setenv("COLONY_DATA_DIR", dataDir)
 	})
 
 	if got, ok := os.LookupEnv("AETHER_ROOT"); ok {
