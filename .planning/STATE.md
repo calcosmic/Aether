@@ -5,15 +5,15 @@ milestone_name: Classic Colony Restoration
 current_phase: 200
 current_phase_name: Iterative Planning
 status: executing
-stopped_at: Completed 200-53-PLAN.md; next incomplete is 200-54
-last_updated: "2026-09-09T16:47:07.005Z"
+stopped_at: Completed 200-54-PLAN.md; next incomplete is 200-55
+last_updated: "2026-09-09T17:34:04.959Z"
 last_activity: 2026-09-09
-state_head: 9de67bb27f3c15edcdeef8347f4773fd2a005962
+state_head: 3e6196a32330356485bb248c8f87206f75958ae7
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 89
-  completed_plans: 86
+  completed_plans: 87
   percent: 14
 ---
 
@@ -32,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 54 of 55
+Plan: 55 of 55
 Status: Ready to execute
 Last activity: 2026-09-09
 
@@ -166,6 +166,7 @@ Last activity: 2026-09-09
 | Phase 200 P51 | 35min | 2 tasks | 7 files |
 | Phase 200 P52 | 83min | 3 tasks | 9 files |
 | Phase 200 P53 | 20min | 2 tasks | 3 files |
+| Phase 200 P54 | 38min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -533,6 +534,10 @@ Last activity: 2026-09-09
 - [Phase 200]: Visual parity rejects actual extra dispatches, not truthful not-called rationale. — Owner-visible explanations may name a caste precisely because the Queen did not send it.
 - [Phase 200]: Wrapper spend follows the completion manifest phase after state advances. — The cost block belongs to the run being closed, not the next durable current phase.
 - [Phase 200]: Keep the existing output-mode and shared spend renderer unchanged when real-lane proofs pass. — A stale test fixture does not justify production churn or duplicate rendering authority.
+- [Phase 200]: Lifecycle projections select canonical resolver candidates; renderers do not author command advice. — One typed action must govern cards, envelopes, and compatibility fields.
+- [Phase 200]: Partial build cards and envelopes consume typed partial_recovery authority. — Loose recovery fields are compatibility projections, not independent sources of truth.
+- [Phase 200]: Golden snapshots refresh only after canonical authority and semantic assertions pass. — Approved specifications, accepted plans, receipts, attempts, and claims prevent refusal output from masquerading as a valid golden.
+- [Phase 200]: Static debt inventories may only move one-for-one or shrink. — The live and frozen command-advice copies remain byte-identical, and no new writer waiver was accepted.
 
 ### Pending Todos
 
@@ -649,11 +654,11 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-09T16:47:06.995Z
-Stopped at: Completed 200-53-PLAN.md; next incomplete is 200-54
+Last session: 2026-09-09T17:34:04.930Z
+Stopped at: Completed 200-54-PLAN.md; next incomplete is 200-55
 Resume file: None
 
 ## Operator Next Steps
 
-- Execute 200-53-PLAN.md to start Wave 32, then follow Waves 33-34 before rerunning the unchanged final receipt Plan 200-40 in Wave 35.
+- Execute 200-55-PLAN.md to run the bounded normal/race suite in Wave 34, then rerun the unchanged final receipt Plan 200-40 in Wave 35.
 - Preserve the Phase 200 Scout/Route-Setter objective and do not waive normal or race gate failures.

@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 52/55 plans executed
+**Plans:** 53/55 plans executed
 
 Plans:
 
@@ -338,7 +338,7 @@ Plans:
 
 **Wave 33** *(second gap closure; blocked on Wave 32 completion)*
 
-- [ ] 200-54-PLAN.md — Reconcile lifecycle cards, reviewed goldens, and shrinking static baselines.
+- [x] 200-54-PLAN.md — Reconcile lifecycle cards, reviewed goldens, and shrinking static baselines.
 
 **Wave 34** *(second gap closure; blocked on Wave 33 completion)*
 
