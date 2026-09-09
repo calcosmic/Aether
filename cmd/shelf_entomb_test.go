@@ -18,8 +18,8 @@ func TestCopyShelfToChamber(t *testing.T) {
 	s, _ := storage.NewStore(dataDir)
 	store = s
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	sf := colony.NewShelfFile()
 	sf.Entries = []colony.ShelfEntry{
@@ -59,8 +59,8 @@ func TestCopyShelfToChamberMissing(t *testing.T) {
 	s, _ := storage.NewStore(dataDir)
 	store = s
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	chamberDir := tmpDir + "/chamber"
 	os.MkdirAll(chamberDir, 0755)
@@ -85,8 +85,8 @@ func TestShelfChamberSummary(t *testing.T) {
 	s, _ := storage.NewStore(dataDir)
 	store = s
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	sf := colony.NewShelfFile()
 	sf.Entries = []colony.ShelfEntry{
@@ -127,7 +127,7 @@ func TestShelfChamberSummaryEmpty(t *testing.T) {
 
 	var fixtureRoot string
 	var summary string
-	t.Run("legacy shelf fixture", func(t *testing.T) {
+	t.Run("isolated shelf fixture", func(t *testing.T) {
 		saveGlobals(t)
 		resetRootCmd(t)
 
@@ -142,8 +142,8 @@ func TestShelfChamberSummaryEmpty(t *testing.T) {
 		}
 		store = s
 
-		_ = os.Setenv("AETHER_ROOT", fixtureRoot)
-		defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+		t.Setenv("AETHER_ROOT", fixtureRoot)
+		t.Setenv("COLONY_DATA_DIR", dataDir)
 
 		summary = shelfChamberSummary(s)
 	})
@@ -179,8 +179,8 @@ func TestShelfChamberSummaryAllPromoted(t *testing.T) {
 	s, _ := storage.NewStore(dataDir)
 	store = s
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	sf := colony.NewShelfFile()
 	sf.Entries = []colony.ShelfEntry{
