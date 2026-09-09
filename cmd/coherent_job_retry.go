@@ -148,12 +148,12 @@ type partialBuildRetryOutcome struct {
 // attempt it already created (by scanning this phase's attempt journal for a
 // record whose ParentAttemptID matches) and returns that, rather than
 // creating a duplicate child or touching the existing one.
-func reconcilePartialBuildRetry(state colony.ColonyState, phaseNum int, phase colony.Phase, parentAttemptID string, retryStartedAt time.Time, dispatches []codexBuildDispatch) (*partialBuildRetryOutcome, error) {
+func reconcilePartialBuildRetry(state colony.ColonyState, phaseNum int, phase colony.Phase, parentAttemptID string, retryStartedAt time.Time, dispatches []codexBuildDispatch, startOptions ...buildStartOptions) (*partialBuildRetryOutcome, error) {
 	plan, err := planPartialBuildRetry(phaseNum, phase, dispatches)
 	if err != nil || plan == nil {
 		return nil, err
 	}
-	return commitPartialBuildRetryPlan(state, phaseNum, phase, parentAttemptID, retryStartedAt, plan)
+	return commitPartialBuildRetryPlan(state, phaseNum, phase, parentAttemptID, retryStartedAt, plan, startOptions...)
 }
 
 // partialBuildRetryPlan is the pure half of reconcilePartialBuildRetry: what
@@ -257,7 +257,7 @@ func planPartialBuildRetry(phaseNum int, phase colony.Phase, dispatches []codexB
 // attempt it already created (by scanning this phase's attempt journal for a
 // record whose ParentAttemptID matches) and returns that, rather than
 // creating a duplicate child or touching the existing one.
-func commitPartialBuildRetryPlan(state colony.ColonyState, phaseNum int, phase colony.Phase, parentAttemptID string, retryStartedAt time.Time, plan *partialBuildRetryPlan) (*partialBuildRetryOutcome, error) {
+func commitPartialBuildRetryPlan(state colony.ColonyState, phaseNum int, phase colony.Phase, parentAttemptID string, retryStartedAt time.Time, plan *partialBuildRetryPlan, startOptions ...buildStartOptions) (*partialBuildRetryOutcome, error) {
 	parentAttemptID = strings.TrimSpace(parentAttemptID)
 	if parentAttemptID == "" {
 		return nil, fmt.Errorf("coherent job retry requires a parent attempt id")
@@ -276,6 +276,19 @@ func commitPartialBuildRetryPlan(state colony.ColonyState, phaseNum int, phase c
 		}, nil
 	}
 
+	if len(startOptions) > 1 {
+		return nil, fmt.Errorf("coherent job retry accepts at most one build-start option set")
+	}
+	options := buildStartOptions{}
+	if len(startOptions) == 1 {
+		options = startOptions[0]
+	}
+
+	// Repository-session loading normalizes legacy-compatible execution facts
+	// before it checks request.StateSHA256. Match that canonical shape here so
+	// a legitimate partial-state projection does not manufacture a stale
+	// baseline solely because EvidencePolicy was omitted on disk.
+	state = normalizeLegacyColonyState(state)
 	state, authority, err := resolveCodexBuildPlanAuthority(buildAttemptWorkspaceRoot(), state)
 	if err != nil {
 		return nil, fmt.Errorf("coherent job retry: resolve plan authority: %w", err)
@@ -292,7 +305,7 @@ func commitPartialBuildRetryPlan(state colony.ColonyState, phaseNum int, phase c
 	if err != nil {
 		return nil, fmt.Errorf("coherent job retry: prepare recovery attempt: %w", err)
 	}
-	receipt, err := commitBuildStart(buildAttemptWorkspaceRoot(), request, buildStartOptions{})
+	receipt, err := commitBuildStart(buildAttemptWorkspaceRoot(), request, options)
 	if err != nil {
 		return nil, fmt.Errorf("coherent job retry: commit recovery attempt: %w", err)
 	}

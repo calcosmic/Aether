@@ -427,7 +427,7 @@ func (c codexExternalBuildCompletion) workerResults() []codexExternalBuildWorker
 	return results
 }
 
-func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBuildCompletion, skipVerify bool) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
+func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBuildCompletion, skipVerify bool, partialRetryStartOptions ...buildStartOptions) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
 	if store == nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("no store initialized")
 	}
@@ -867,7 +867,7 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	var partialRetryOutcome *partialBuildRetryOutcome
 	if !buildFullyCredited {
 		parentAttemptID := strings.TrimSuffix(filepath.Base(attemptRel), filepath.Ext(attemptRel))
-		outcome, retryErr := reconcilePartialBuildRetry(updatedState, phaseNum, updatedPhase, parentAttemptID, time.Now().UTC(), dispatches)
+		outcome, retryErr := reconcilePartialBuildRetry(updatedState, phaseNum, updatedPhase, parentAttemptID, time.Now().UTC(), dispatches, partialRetryStartOptions...)
 		if retryErr != nil {
 			visualFprintf(stderr, "warning: could not create a D-10 recovery job for phase %d's partial credit: %v\n", phaseNum, retryErr)
 		} else {
