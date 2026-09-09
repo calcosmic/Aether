@@ -700,7 +700,7 @@ func buildSettledDiscussDraftRequest(
 		question, _ := parseClarificationDescription(decision.Description)
 		answer := specificationProjectionText(decision.Resolution)
 		decisionText := specificationProjectionText(question + " — Owner decision: " + answer)
-		lineage := "owner-decision-" + emptyFallback(strings.TrimSpace(decision.ID), logicalDiscussSource(decision.Source))
+		lineage := discussSpecificationDecisionLineage(decision)
 		decisionEvidence := discussSpecificationEvidenceFallback(
 			discussSpecificationEvidenceIDs(frontier, string(colony.PlanningEvidenceDecision), "decision:"+decision.ID),
 			allEvidence,
@@ -768,6 +768,24 @@ func buildSettledDiscussDraftRequest(
 
 	_ = analyze // The inventory is already bound into current-context evidence.
 	return request, nil
+}
+
+// discussSpecificationDecisionLineage preserves established short decision
+// identities while bounding generated IDs for both the base specification item
+// and its optional "-hard" negative-expectation companion. The hash input is
+// domain-separated so the compact identity cannot be confused with another
+// digest use elsewhere in the planning lifecycle.
+func discussSpecificationDecisionLineage(decision PendingDecision) string {
+	identity := emptyFallback(strings.TrimSpace(decision.ID), logicalDiscussSource(decision.Source))
+	lineage := "owner-decision-" + identity
+	if _, err := colony.CanonicalSpecItemID(colony.SpecSectionBindingDecisions, lineage); err == nil {
+		if _, hardErr := colony.CanonicalSpecItemID(colony.SpecSectionNegativeExpectations, lineage+"-hard"); hardErr == nil {
+			return lineage
+		}
+	}
+
+	digest := sha256.Sum256([]byte("aether/discuss/specification-decision-lineage/v1\x00" + identity))
+	return "owner-decision-" + hex.EncodeToString(digest[:8])
 }
 
 func discussSpecificationEvidenceIDs(frontier discussEvidenceFrontier, kind, originPrefix string) []string {
