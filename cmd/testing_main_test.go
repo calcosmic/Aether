@@ -3,9 +3,13 @@ package cmd
 import (
 	"flag"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -258,6 +262,54 @@ func bindCommandTestRepositoryAt(t *testing.T, repositoryRoot string) commandTes
 		Root:    repositoryRoot,
 		DataDir: dataDir,
 		Store:   boundStore,
+	}
+}
+
+func selfRestoringAetherRootCleanupSites200(_ *token.FileSet, _ *ast.File) []string {
+	return nil
+}
+
+func TestNoSelfRestoringAetherRootCleanup200(t *testing.T) {
+	const sample = `package cmd
+
+import "os"
+
+// defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT")) is explanatory prose.
+const explanation = ` + "`" + `defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))` + "`" + `
+
+func brokenCleanup() {
+	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+}
+`
+
+	sampleSet := token.NewFileSet()
+	sampleFile, err := parser.ParseFile(sampleSet, "sample_test.go", sample, parser.ParseComments)
+	if err != nil {
+		t.Fatalf("parse in-memory cleanup sample: %v", err)
+	}
+	if sites := selfRestoringAetherRootCleanupSites200(sampleSet, sampleFile); len(sites) != 1 {
+		t.Fatalf("active cleanup sample sites = %v, want exactly one executable defer", sites)
+	}
+
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("read cmd test sources: %v", err)
+	}
+	var activeSites []string
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+		fileSet := token.NewFileSet()
+		parsed, parseErr := parser.ParseFile(fileSet, entry.Name(), nil, parser.ParseComments)
+		if parseErr != nil {
+			t.Fatalf("parse %s: %v", entry.Name(), parseErr)
+		}
+		activeSites = append(activeSites, selfRestoringAetherRootCleanupSites200(fileSet, parsed)...)
+	}
+	sort.Strings(activeSites)
+	if len(activeSites) != 0 {
+		t.Fatalf("self-restoring AETHER_ROOT cleanup returned after the 120-site migration:\n%s", strings.Join(activeSites, "\n"))
 	}
 }
 
