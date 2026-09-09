@@ -2,12 +2,151 @@ package storage
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func newRepositoryStore200(t *testing.T) (*Store, string) {
+	t.Helper()
+
+	repositoryRoot := t.TempDir()
+	dataPath := filepath.Join(repositoryRoot, ".aether", "data")
+	authority, err := OpenRepositoryRoot(repositoryRoot, dataPath)
+	if err != nil {
+		t.Fatalf("OpenRepositoryRoot() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := authority.Close(); err != nil {
+			t.Errorf("close repository authority: %v", err)
+		}
+	})
+	store, err := NewRepositoryStore(authority)
+	if err != nil {
+		t.Fatalf("NewRepositoryStore() error = %v", err)
+	}
+	return store, dataPath
+}
+
+func TestRepositoryStoreMissingErrorIdentity200(t *testing.T) {
+	store, _ := newRepositoryStore200(t)
+
+	readers := map[string]func() error{
+		"ReadFile missing file": func() error {
+			_, err := store.ReadFile("missing.txt")
+			return err
+		},
+		"ReadFile missing parent": func() error {
+			_, err := store.ReadFile(filepath.Join("missing-parent", "missing.txt"))
+			return err
+		},
+		"LoadRawJSON": func() error {
+			_, err := store.LoadRawJSON("missing.json")
+			return err
+		},
+		"LoadJSON": func() error {
+			var value map[string]interface{}
+			return store.LoadJSON("missing.json", &value)
+		},
+		"ReadJSONL": func() error {
+			_, err := store.ReadJSONL("missing.jsonl")
+			return err
+		},
+	}
+
+	for name, read := range readers {
+		t.Run(name, func(t *testing.T) {
+			err := read()
+			if err == nil {
+				t.Fatal("error = nil, want a missing-file error")
+			}
+			if !errors.Is(err, fs.ErrNotExist) {
+				t.Fatalf("errors.Is(err, fs.ErrNotExist) = false for %T: %v", err, err)
+			}
+		})
+	}
+
+	for _, path := range []string{"missing.txt", filepath.Join("missing-parent", "missing.txt")} {
+		exists, err := store.FileExists(path)
+		if err != nil {
+			t.Fatalf("FileExists(%q) error = %v, want nil", path, err)
+		}
+		if exists {
+			t.Fatalf("FileExists(%q) = true, want false", path)
+		}
+	}
+
+	if err := store.UpdateFile(filepath.Join("fresh", "ledger.txt"), func(existing []byte) ([]byte, error) {
+		if len(existing) != 0 {
+			t.Fatalf("fresh UpdateFile existing bytes = %q, want empty", existing)
+		}
+		return []byte("first\n"), nil
+	}); err != nil {
+		t.Fatalf("UpdateFile() first write error = %v", err)
+	}
+}
+
+func TestRepositoryStoreRefusesNonAbsentFailures200(t *testing.T) {
+	store, dataPath := newRepositoryStore200(t)
+
+	assertRefusedNotAbsent := func(t *testing.T, path string) {
+		t.Helper()
+		_, err := store.ReadFile(path)
+		if err == nil {
+			t.Fatalf("ReadFile(%q) error = nil, want refusal", path)
+		}
+		if errors.Is(err, fs.ErrNotExist) {
+			t.Fatalf("ReadFile(%q) misclassified refusal as absence: %v", path, err)
+		}
+	}
+
+	if err := os.Mkdir(filepath.Join(dataPath, "directory.txt"), 0755); err != nil {
+		t.Fatalf("create obstructing directory: %v", err)
+	}
+	assertRefusedNotAbsent(t, "directory.txt")
+
+	target := filepath.Join(dataPath, "target.txt")
+	if err := os.WriteFile(target, []byte("outside authority should not be followed"), 0644); err != nil {
+		t.Fatalf("write symlink target: %v", err)
+	}
+	if err := os.Symlink(target, filepath.Join(dataPath, "linked.txt")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	assertRefusedNotAbsent(t, "linked.txt")
+
+	corruptPath := filepath.Join(dataPath, "corrupt.json")
+	if err := os.WriteFile(corruptPath, []byte("not valid json"), 0644); err != nil {
+		t.Fatalf("write corrupt JSON: %v", err)
+	}
+	var value map[string]interface{}
+	err := store.LoadJSON("corrupt.json", &value)
+	if err == nil {
+		t.Fatal("LoadJSON(corrupt.json) error = nil, want malformed JSON error")
+	}
+	if errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("LoadJSON(corrupt.json) misclassified corruption as absence: %v", err)
+	}
+
+	unreadablePath := filepath.Join(dataPath, "unreadable.txt")
+	if err := os.WriteFile(unreadablePath, []byte("protected"), 0600); err != nil {
+		t.Fatalf("write unreadable fixture: %v", err)
+	}
+	if err := os.Chmod(unreadablePath, 0000); err != nil {
+		t.Fatalf("chmod unreadable fixture: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(unreadablePath, 0600) })
+	if _, err := store.ReadFile("unreadable.txt"); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			t.Fatalf("permission denial misclassified as absence: %v", err)
+		}
+	} else {
+		t.Log("permission denial could not be induced for this process; non-absence cases remain covered by directory, link, and corruption fixtures")
+	}
+}
 
 func TestReadJSONL_MalformedLineSkipped(t *testing.T) {
 	dir := t.TempDir()
