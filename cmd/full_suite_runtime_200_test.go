@@ -329,7 +329,11 @@ func fullSuiteRuntime200AssertChildEnvironment(t *testing.T) {
 		return
 	}
 	for _, name := range []string{"AETHER_ROOT", "COLONY_DATA_DIR"} {
-		if value, ok := os.LookupEnv(name); ok {
+		// Empty-but-set is tolerated: the runtime treats an empty value as
+		// absent, and dozens of older tests restore with os.Setenv(name,
+		// os.Getenv(name)) shapes that leave an empty entry behind. Only a
+		// non-empty value can actually redirect repository authority.
+		if value := os.Getenv(name); value != "" {
 			t.Fatalf("isolated full-suite child inherited %s=%q", name, value)
 		}
 	}

@@ -907,7 +907,20 @@ func acceptPlanCandidateInSession(session *planningMutationSession, request plan
 	// completed phase (for example, an inserted corrective phase), which must
 	// not erase already-earned execution credit.
 	activationImpact := derived.Impact
-	activationImpact.AffectedSemanticIDs = append([]string(nil), derivedAffected...)
+	// A node the card marks affected purely through its declaration wrapper
+	// (files/user-facing marking) while its repository-derived definition is
+	// byte-preserved must not erase earned completion credit -- exclude it
+	// from the activation set only; the immutable proposal markers above are
+	// untouched.
+	contentPreserved := derivedContentPreservedIDs(derived)
+	activationAffected := make([]string, 0, len(derivedAffected))
+	for _, id := range derivedAffected {
+		if _, keepCredit := contentPreserved[id]; keepCredit {
+			continue
+		}
+		activationAffected = append(activationAffected, id)
+	}
+	activationImpact.AffectedSemanticIDs = activationAffected
 	activatedPhases, preserved, err := preserveCompletedCandidateWorkForImpact(state.Plan.Phases, candidate.Proposal.Phases, activationImpact)
 	if err != nil {
 		return empty, err

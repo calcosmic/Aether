@@ -211,6 +211,15 @@ func validateDerivedPlanCandidateAuthority(candidate colony.PlanCandidate, final
 	}
 	for _, section := range derivedPlanSemanticSections(finalCard.SemanticDelta) {
 		for _, change := range section.changes {
+			// Root-level aggregate nodes ("<plan>::...") are generation
+			// conveniences: PlanRevision aggregates child proof links onto the
+			// root only after Route validation, so the iteration card and the
+			// repository-derived revision legitimately disagree about them.
+			// The derive loop below already excludes them from affected
+			// markers; exclude them from truth agreement the same way.
+			if strings.HasPrefix(change.SemanticID, candidate.Proposal.SemanticID+"::") {
+				continue
+			}
 			truth, ok := expected[string(section.name)+"\x00"+change.SemanticID]
 			if !ok {
 				return fmt.Errorf("derived %s has no semantic node %q", section.name, change.SemanticID)
@@ -230,7 +239,13 @@ func validateDerivedPlanCandidateAuthority(candidate colony.PlanCandidate, final
 			if truth.AfterHash == "" || (reproducibleHash && truth.AfterHash != change.AfterHash) {
 				return fmt.Errorf("derived %s after-hash for %q does not match proposal", section.name, change.SemanticID)
 			}
-			if truth.Kind == colony.PlanningSemanticChangePreserved && change.Kind != colony.PlanningSemanticChangePreserved {
+			// Phase/task card entries are declaration wrappers ({definition_hash,
+			// files, user_facing}), so a content-preserved node that carries a
+			// user-facing mark or file declarations legitimately shows as
+			// modified on the card while the repository-derived definition is
+			// preserved. The kind agreement rule therefore binds only the
+			// reproducible sections, matching the after-hash exemption above.
+			if reproducibleHash && truth.Kind == colony.PlanningSemanticChangePreserved && change.Kind != colony.PlanningSemanticChangePreserved {
 				return fmt.Errorf("derived %s semantic node %q is preserved, not changed", section.name, change.SemanticID)
 			}
 		}
@@ -470,11 +485,21 @@ func unresolvedPlanImpact(state colony.ColonyState) (planImpactClosure, bool, er
 			return planImpactClosure{}, false, fmt.Errorf("derive accepted plan impact: %w", err)
 		}
 		independentlyAffected := planImpactIDSet(derived.Impact.AffectedSemanticIDs)
+		// Markers can also record nodes the iteration card classified as
+		// affected purely through declaration wrappers (files/user-facing
+		// marking) while the repository-derived definition is byte-preserved.
+		// Those are presentation scope, not unreconciled specification work,
+		// and must not refuse build forever.
+		contentPreserved := derivedContentPreservedIDs(derived)
 		unexplained := make([]string, 0)
 		for _, marker := range markers {
-			if _, ok := independentlyAffected[marker]; !ok {
-				unexplained = append(unexplained, marker)
+			if _, ok := independentlyAffected[marker]; ok {
+				continue
 			}
+			if _, ok := contentPreserved[marker]; ok {
+				continue
+			}
+			unexplained = append(unexplained, marker)
 		}
 		if len(unexplained) == 0 {
 			return planImpactClosure{}, false, nil
@@ -808,4 +833,22 @@ func planImpactDifference(left, right []string) []string {
 		}
 	}
 	return result
+}
+
+// derivedContentPreservedIDs collects phase and task semantic IDs whose
+// repository-derived definition is byte-preserved against the base revision.
+// The iteration card may still classify these nodes as changed because its
+// entries are declaration wrappers (definition hash + files + user-facing
+// marking); completion credit follows repository content, not presentation
+// wrappers, so activation treats these nodes as unaffected.
+func derivedContentPreservedIDs(derived derivedPlanCandidateAuthority) map[string]struct{} {
+	preserved := make(map[string]struct{})
+	for _, section := range derivedPlanSemanticSections(derived.SemanticDelta) {
+		for _, change := range section.changes {
+			if change.Kind == colony.PlanningSemanticChangePreserved {
+				preserved[change.SemanticID] = struct{}{}
+			}
+		}
+	}
+	return preserved
 }

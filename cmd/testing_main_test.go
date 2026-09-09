@@ -148,13 +148,13 @@ func TestMain(m *testing.M) {
 const (
 	fullSuiteShardEnv        = "AETHER_CMD_FULL_SUITE_SHARD"
 	fullSuiteSerialLaneName  = "serial-shared-checkout"
-	fullSuiteLogicalShards   = 48
-	fullSuiteWorkers         = 12
+	fullSuiteLogicalShards   = 120
+	fullSuiteWorkers         = 24
 	fullSuiteHeavyWorkers    = 6
 	fullSuiteHeavyLaneBudget = 3 * time.Minute
 	fullSuiteHeavyThreshold  = 8 * time.Second
 	fullSuiteChildParallel   = 8
-	fullSuiteChildProcs      = 4
+	fullSuiteChildProcs      = 2
 	fullSuiteChildTimeout    = 9 * time.Minute
 	fullSuiteCommandTimeout  = 9*time.Minute + 15*time.Second
 	fullSuiteOverallTimeout  = 10 * time.Minute

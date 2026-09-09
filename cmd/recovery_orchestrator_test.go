@@ -615,7 +615,10 @@ func TestBuildFinalize_RecoveryForFailedDispatch(t *testing.T) {
 	// Create completion with one failed (timeout) dispatch
 	manifest := codexBuildManifest{
 		Phase:           1,
+		Root:            root,
 		PlanOnly:        true,
+		DispatchMode:    "plan-only",
+		ExecutionOwner:  "host-queen",
 		GeneratedAt:     time.Now().UTC().Format(time.RFC3339),
 		WorkerBriefs:    []string{},
 		Tasks:           []codexBuildTaskPlan{},
@@ -704,7 +707,10 @@ func TestBuildFinalize_RecoveryForBlockingDispatch(t *testing.T) {
 	// Provenance (SAFE-01, SAFE-02) rejects builds where no worker completed with file modifications.
 	manifest := codexBuildManifest{
 		Phase:           1,
+		Root:            root,
 		PlanOnly:        true,
+		DispatchMode:    "plan-only",
+		ExecutionOwner:  "host-queen",
 		GeneratedAt:     time.Now().UTC().Format(time.RFC3339),
 		WorkerBriefs:    []string{},
 		Tasks:           []codexBuildTaskPlan{},
@@ -773,7 +779,10 @@ func TestBuildFinalize_NoRecoveryForCompletedDispatches(t *testing.T) {
 
 	manifest := codexBuildManifest{
 		Phase:           1,
+		Root:            root,
 		PlanOnly:        true,
+		DispatchMode:    "plan-only",
+		ExecutionOwner:  "host-queen",
 		GeneratedAt:     time.Now().UTC().Format(time.RFC3339),
 		WorkerBriefs:    []string{},
 		Tasks:           []codexBuildTaskPlan{},
@@ -834,7 +843,10 @@ func TestBuildFinalize_BudgetPersisted(t *testing.T) {
 	// Need at least one completed worker with files to pass provenance validation.
 	manifest := codexBuildManifest{
 		Phase:           1,
+		Root:            root,
 		PlanOnly:        true,
+		DispatchMode:    "plan-only",
+		ExecutionOwner:  "host-queen",
 		GeneratedAt:     time.Now().UTC().Format(time.RFC3339),
 		WorkerBriefs:    []string{},
 		Tasks:           []codexBuildTaskPlan{},
@@ -901,7 +913,10 @@ func TestBuildFinalize_MultipleFailedDispatches(t *testing.T) {
 
 	manifest := codexBuildManifest{
 		Phase:           1,
+		Root:            root,
 		PlanOnly:        true,
+		DispatchMode:    "plan-only",
+		ExecutionOwner:  "host-queen",
 		GeneratedAt:     time.Now().UTC().Format(time.RFC3339),
 		WorkerBriefs:    []string{},
 		Tasks:           []codexBuildTaskPlan{},

@@ -832,7 +832,13 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		if err != nil {
 			return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("phase %d partial recovery plan is invalid: %w", phaseNum, err)
 		}
-		if partialRetryPlan == nil {
+		// D-10: retry follows ACCEPTED credit. A dispatch that credited SOME
+		// of its covered tasks must yield a validated unfinished-only plan;
+		// a dispatch that credited NONE is a whole failure with nothing to
+		// carry forward -- its recovery is the ordinary failed-dispatch
+		// instructions above, and demanding a partial plan there made every
+		// whole-failure finalize impossible to commit.
+		if partialRetryPlan == nil && buildHasPartiallyCreditedDispatch(dispatches) {
 			return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("phase %d incomplete build has no validated partial recovery plan", phaseNum)
 		}
 	}
@@ -886,7 +892,11 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		if retryErr != nil {
 			return nil, updatedState, updatedPhase, dispatches, fmt.Errorf("phase %d partial credit was recorded but its recovery attempt was not committed; rerun build-finalize with the same completion packet after repairing the reported cause: %w", phaseNum, retryErr)
 		}
-		if outcome == nil {
+		if outcome == nil && partialRetryPlan != nil {
+			// A validated unfinished-only plan must always yield a durable
+			// recovery attempt. Whole failures (no partial credit) have no
+			// plan and no child attempt -- their recovery is the ordinary
+			// failed-dispatch instructions (D-10).
 			return nil, updatedState, updatedPhase, dispatches, fmt.Errorf("phase %d partial credit did not produce the required durable recovery attempt; inspect the attempt journal before retrying build-finalize", phaseNum)
 		}
 		partialRetryOutcome = outcome
@@ -3064,4 +3074,23 @@ func bestMatchForClaimedPath(claimed string, candidates []string) string {
 		}
 	}
 	return best
+}
+
+// buildHasPartiallyCreditedDispatch reports whether any dispatch proved some
+// but not all of its covered tasks. Only that shape requires a validated
+// unfinished-only retry plan before a partial parent may commit; dispatches
+// with zero accepted credit are whole failures handled by ordinary recovery
+// instructions (D-10: retry follows accepted credit, never precedes it).
+func buildHasPartiallyCreditedDispatch(dispatches []codexBuildDispatch) bool {
+	for _, dispatch := range dispatches {
+		covered := dispatchCoveredTaskIDs(dispatch)
+		if len(covered) == 0 {
+			continue
+		}
+		credited := completedBuildTaskIDs([]codexBuildDispatch{dispatch})
+		if len(credited) > 0 && len(credited) < len(covered) {
+			return true
+		}
+	}
+	return false
 }

@@ -580,7 +580,12 @@ func TestDirectBuildPreflightSourceOrderRetainsLateDispatchDefense(t *testing.T)
 		"reconcilePriorCompletedPhaseTasksFromTrustedManifests(",
 		"interruptLatestBuildAttempt(",
 		"beginRuntimeSpawnRun(",
-		"cleanupStaleBuildAttemptArtifacts(",
+		// Stale-attempt cleanup moved inside the canonical build-start
+		// transaction (200-34): buildStartStaleArtifactPaths is applied by
+		// commitBuildStart, so the late-dispatch defense is now the atomic
+		// start commit itself.
+		"newBuildStartRequest(",
+		"commitBuildStart(",
 	}
 	last := -1
 	for _, call := range ordered {
