@@ -698,6 +698,18 @@ func writeFullSuiteReport(output io.Writer, report fullSuiteRunReport) {
 			laneStatus = "FAIL"
 		}
 		fmt.Fprintf(output, "FULL-SUITE lane=%s status=%s planned=%d executed=%d duration=%s\n", lane.Name, laneStatus, lane.Planned, lane.Executed, lane.Duration.Round(time.Millisecond))
+	}
+	ranked := append([]fullSuiteLaneReport(nil), report.Lanes...)
+	sort.SliceStable(ranked, func(i, j int) bool {
+		if ranked[i].Duration != ranked[j].Duration {
+			return ranked[i].Duration > ranked[j].Duration
+		}
+		return ranked[i].Name < ranked[j].Name
+	})
+	for index, lane := range ranked {
+		fmt.Fprintf(output, "FULL-SUITE slowest rank=%d lane=%s duration=%s\n", index+1, lane.Name, lane.Duration.Round(time.Millisecond))
+	}
+	for _, lane := range report.Lanes {
 		if lane.Output != "" {
 			fmt.Fprintf(output, "FULL-SUITE output-begin lane=%s\n", lane.Name)
 			_, _ = io.WriteString(output, lane.Output)
