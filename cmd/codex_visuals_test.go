@@ -407,13 +407,10 @@ func TestBuildVisualOutputShowsSpawnPlan(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
-	dataDir := setupBuildFlowTest(t)
-	t.Setenv("AETHER_OUTPUT_MODE", "visual")
-
 	goal := "Improve command visuals"
-	taskOneID := "task-1"
-	taskTwoID := "task-2"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	taskOneID := "1.1"
+	taskTwoID := "1.2"
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
 		Version: "3.0",
 		Goal:    &goal,
 		State:   colony.StateREADY,
@@ -432,6 +429,8 @@ func TestBuildVisualOutputShowsSpawnPlan(t *testing.T) {
 			},
 		},
 	})
+	withWorkingDir(t, accepted.Root)
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
 	rootCmd.SetArgs([]string{"build", "1"})
 	if err := rootCmd.Execute(); err != nil {
@@ -444,9 +443,9 @@ func TestBuildVisualOutputShowsSpawnPlan(t *testing.T) {
 	}
 	// Phase 193 (D-08): no watcher dispatch without an explicit Queen
 	// proposal, so the spawn plan no longer has a "Post-Wave: Watcher" step.
-	// Plan 194-02 (D-07): the Queen's Team card no longer names Watcher
-	// either -- it lists the required-castes floor, which shrank to the
-	// builder alone.
+	// Plan 194-02 (D-07): the Queen's Team card lists the required-castes
+	// floor, which shrank to the builder alone. The dispatch rationale may
+	// still name Watcher truthfully in its "not called" explanation.
 	// Plan 194-05 (D-06, D-11): this fixture is a single-phase plan, so
 	// position used to imply heavy review; that implicit escalation is gone,
 	// so review depth is standard, not heavy. D-11 also removed the
@@ -458,7 +457,7 @@ func TestBuildVisualOutputShowsSpawnPlan(t *testing.T) {
 			t.Errorf("build visual output missing %q\n%s", want, output)
 		}
 	}
-	for _, unwanted := range []string{"Post-Wave: Watcher", "Post-Wave: Probe", "Watcher"} {
+	for _, unwanted := range []string{"Post-Wave: Watcher", "Post-Wave: Probe"} {
 		if strings.Contains(output, unwanted) {
 			t.Errorf("build visual output unexpectedly contains %q with no explicit Queen proposal\n%s", unwanted, output)
 		}
@@ -469,12 +468,9 @@ func TestBuildVisualOutputShowsArtifactContract(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
-	dataDir := setupBuildFlowTest(t)
-	t.Setenv("AETHER_OUTPUT_MODE", "visual")
-
 	goal := "Lock the build packet contract"
 	taskID := "task-1"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
 		Version: "3.0",
 		Goal:    &goal,
 		State:   colony.StateREADY,
@@ -491,6 +487,8 @@ func TestBuildVisualOutputShowsArtifactContract(t *testing.T) {
 			},
 		},
 	})
+	withWorkingDir(t, accepted.Root)
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
 	rootCmd.SetArgs([]string{"build", "1"})
 	if err := rootCmd.Execute(); err != nil {
@@ -2708,12 +2706,9 @@ func TestCodexVisualParity(t *testing.T) {
 	t.Run("StageSeparators", func(t *testing.T) {
 		saveGlobals(t)
 		resetRootCmd(t)
-		dataDir := setupBuildFlowTest(t)
-		t.Setenv("AETHER_OUTPUT_MODE", "visual")
-
 		goal := "Codex parity check"
 		taskID := "task-parity"
-		createTestColonyState(t, dataDir, colony.ColonyState{
+		accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
 			Version: "3.0",
 			Goal:    &goal,
 			State:   colony.StateREADY,
@@ -2723,6 +2718,8 @@ func TestCodexVisualParity(t *testing.T) {
 				},
 			},
 		})
+		withWorkingDir(t, accepted.Root)
+		t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
 		rootCmd.SetArgs([]string{"build", "1"})
 		if err := rootCmd.Execute(); err != nil {
@@ -2762,12 +2759,9 @@ func TestCodexVisualParity(t *testing.T) {
 	t.Run("SpawnListParity", func(t *testing.T) {
 		saveGlobals(t)
 		resetRootCmd(t)
-		dataDir := setupBuildFlowTest(t)
-		t.Setenv("AETHER_OUTPUT_MODE", "visual")
-
 		goal := "Spawn parity"
 		taskID := "task-spawn"
-		createTestColonyState(t, dataDir, colony.ColonyState{
+		accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
 			Version: "3.0",
 			Goal:    &goal,
 			State:   colony.StateREADY,
@@ -2777,6 +2771,8 @@ func TestCodexVisualParity(t *testing.T) {
 				},
 			},
 		})
+		withWorkingDir(t, accepted.Root)
+		t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
 		rootCmd.SetArgs([]string{"build", "1"})
 		if err := rootCmd.Execute(); err != nil {
