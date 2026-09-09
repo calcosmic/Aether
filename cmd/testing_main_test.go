@@ -140,7 +140,13 @@ func TestMain(m *testing.M) {
 const (
 	fullSuiteShardEnv       = "AETHER_CMD_FULL_SUITE_SHARD"
 	fullSuiteSerialLaneName = "serial-shared-checkout"
-	fullSuiteParallelLanes  = 8
+	fullSuiteLogicalShards  = 256
+	fullSuiteWorkers        = 5
+	fullSuiteHeavyLanes     = 4
+	fullSuiteHeavyWorkers   = 2
+	fullSuiteHeavyThreshold = 8 * time.Second
+	fullSuiteChildParallel  = 2
+	fullSuiteChildProcs     = 2
 	fullSuiteChildTimeout   = 9 * time.Minute
 	fullSuiteCommandTimeout = 9*time.Minute + 15*time.Second
 	fullSuiteOverallTimeout = 10 * time.Minute
@@ -161,6 +167,8 @@ type fullSuiteInvocation struct {
 	Short         bool
 	FailFast      bool
 	CPU           string
+	Parallel      string
+	ParallelSet   bool
 	Shuffle       string
 	Profiled      bool
 	ShardMarker   string
@@ -169,6 +177,7 @@ type fullSuiteInvocation struct {
 type fullSuiteLane struct {
 	Name          string
 	Serial        bool
+	Heavy         bool
 	Tests         []string
 	EstimatedCost time.Duration
 }
@@ -225,6 +234,8 @@ func currentFullSuiteInvocation() fullSuiteInvocation {
 		Short:         testFlagBool("test.short"),
 		FailFast:      testFlagBool("test.failfast"),
 		CPU:           testFlagString("test.cpu"),
+		Parallel:      testFlagString("test.parallel"),
+		ParallelSet:   visited["test.parallel"],
 		Shuffle:       testFlagString("test.shuffle"),
 		Profiled:      fullSuiteProfileRequested(),
 		ShardMarker:   os.Getenv(fullSuiteShardEnv),
@@ -280,7 +291,7 @@ func shouldRunFullSuiteController(invocation fullSuiteInvocation) bool {
 	if invocation.Run != "" || invocation.List != "" || invocation.Bench != "" || invocation.Fuzz != "" || invocation.Skip != "" {
 		return false
 	}
-	if invocation.Short || invocation.FailFast || invocation.Profiled || strings.TrimSpace(invocation.CPU) != "" {
+	if invocation.Short || invocation.FailFast || invocation.Profiled || invocation.ParallelSet || strings.TrimSpace(invocation.CPU) != "" {
 		return false
 	}
 	return invocation.Shuffle == "" || invocation.Shuffle == "off"
@@ -309,6 +320,7 @@ func planFullSuiteLanes(discovered []string, serialTests map[string]struct{}, co
 	sort.Strings(ordered)
 
 	serialLane := fullSuiteLane{Name: fullSuiteSerialLaneName, Serial: true}
+	heavyTests := make([]string, 0, len(ordered))
 	parallelTests := make([]string, 0, len(ordered))
 	for _, testName := range ordered {
 		cost := costs[testName]
@@ -320,23 +332,51 @@ func planFullSuiteLanes(discovered []string, serialTests map[string]struct{}, co
 			serialLane.EstimatedCost += cost
 			continue
 		}
+		if cost >= fullSuiteHeavyThreshold {
+			heavyTests = append(heavyTests, testName)
+			continue
+		}
 		parallelTests = append(parallelTests, testName)
 	}
 
-	sort.SliceStable(parallelTests, func(i, j int) bool {
-		leftCost := costs[parallelTests[i]]
-		rightCost := costs[parallelTests[j]]
-		if leftCost != rightCost {
-			return leftCost > rightCost
+	byDescendingCost := func(tests []string) {
+		sort.SliceStable(tests, func(i, j int) bool {
+			leftCost := costs[tests[i]]
+			rightCost := costs[tests[j]]
+			if leftCost != rightCost {
+				return leftCost > rightCost
+			}
+			return tests[i] < tests[j]
+		})
+	}
+	byDescendingCost(heavyTests)
+	byDescendingCost(parallelTests)
+
+	heavyLaneCount := fullSuiteHeavyLanes
+	if heavyLaneCount > len(heavyTests) {
+		heavyLaneCount = len(heavyTests)
+	}
+	heavy := make([]fullSuiteLane, heavyLaneCount)
+	for index := range heavy {
+		heavy[index] = fullSuiteLane{Name: fmt.Sprintf("heavy-io-%02d", index+1), Heavy: true}
+	}
+	for _, testName := range heavyTests {
+		lightest := 0
+		for index := 1; index < len(heavy); index++ {
+			if heavy[index].EstimatedCost < heavy[lightest].EstimatedCost {
+				lightest = index
+			}
 		}
-		return parallelTests[i] < parallelTests[j]
-	})
+		heavy[lightest].Tests = append(heavy[lightest].Tests, testName)
+		heavy[lightest].EstimatedCost += costs[testName]
+	}
+
 	if parallelLaneCount > len(parallelTests) && len(parallelTests) > 0 {
 		parallelLaneCount = len(parallelTests)
 	}
 	parallel := make([]fullSuiteLane, parallelLaneCount)
 	for index := range parallel {
-		parallel[index].Name = fmt.Sprintf("parallel-%02d", index+1)
+		parallel[index].Name = fmt.Sprintf("parallel-%03d", index+1)
 	}
 	for _, testName := range parallelTests {
 		lightest := 0
@@ -353,9 +393,15 @@ func planFullSuiteLanes(discovered []string, serialTests map[string]struct{}, co
 		parallel[lightest].EstimatedCost += cost
 	}
 
-	lanes := make([]fullSuiteLane, 0, len(parallel)+1)
+	lanes := make([]fullSuiteLane, 0, len(heavy)+len(parallel)+1)
 	if len(serialLane.Tests) > 0 {
 		lanes = append(lanes, serialLane)
+	}
+	for _, lane := range heavy {
+		sort.Strings(lane.Tests)
+		if len(lane.Tests) > 0 {
+			lanes = append(lanes, lane)
+		}
 	}
 	for _, lane := range parallel {
 		sort.Strings(lane.Tests)
@@ -419,12 +465,12 @@ func runFullSuiteController() int {
 		return 1
 	}
 	serialInventory := fullSuiteSerialInventory()
-	lanes, err := planFullSuiteLanes(discovered, fullSuiteSerialTests(serialInventory), nil, fullSuiteParallelLanes)
+	lanes, err := planFullSuiteLanes(discovered, fullSuiteSerialTests(serialInventory), fullSuiteMeasuredCosts(), fullSuiteLogicalShards)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "full-suite controller: %v\n", err)
 		return 1
 	}
-	report, runErr := runFullSuiteLanes(ctx, executable, lanes, fullSuiteParallelLanes, runFullSuiteChildProcess)
+	report, runErr := runFullSuiteLanes(ctx, executable, lanes, fullSuiteWorkers, runFullSuiteChildProcess)
 	writeFullSuiteReport(os.Stdout, report)
 	if runErr != nil {
 		fmt.Fprintf(os.Stderr, "full-suite controller failed: %v\n", runErr)
@@ -473,9 +519,11 @@ func fullSuiteChildRequestForLane(executable string, lane fullSuiteLane) fullSui
 		"-test.timeout=" + fullSuiteChildTimeout.String(),
 		"-test.v=true",
 	}
-	if parallel := testFlagString("test.parallel"); strings.TrimSpace(parallel) != "" {
-		args = append(args, "-test.parallel="+parallel)
+	childParallel := fullSuiteChildParallel
+	if lane.Heavy {
+		childParallel = 1
 	}
+	args = append(args, fmt.Sprintf("-test.parallel=%d", childParallel))
 	if testFlagBool("test.fullpath") {
 		args = append(args, "-test.fullpath=true")
 	}
@@ -492,12 +540,13 @@ func fullSuiteChildEnvironment(parent []string, laneName, hubDir string) []strin
 	for _, entry := range parent {
 		key, _, _ := strings.Cut(entry, "=")
 		switch key {
-		case fullSuiteShardEnv, isolatedProcessHubEnv, "AETHER_ROOT", "COLONY_DATA_DIR":
+		case fullSuiteShardEnv, isolatedProcessHubEnv, "AETHER_ROOT", "COLONY_DATA_DIR", "GOMAXPROCS":
 			continue
 		}
 		environment = append(environment, entry)
 	}
 	environment = append(environment, fullSuiteShardEnv+"="+fmt.Sprintf("%d:%s", os.Getpid(), laneName))
+	environment = append(environment, fmt.Sprintf("GOMAXPROCS=%d", fullSuiteChildProcs))
 	if hubDir != "" {
 		environment = append(environment, isolatedProcessHubEnv+"="+hubDir)
 	}
@@ -550,6 +599,84 @@ func fullSuiteSerialTests(inventory map[string]string) map[string]struct{} {
 	return tests
 }
 
+// fullSuiteMeasuredCosts records the slowest top-level tests observed by the
+// first uncached Plan 200-55 diagnostic. Values are coarse weights rather than
+// deadlines: the greedy planner uses them only to keep expensive tests apart.
+func fullSuiteMeasuredCosts() map[string]time.Duration {
+	return map[string]time.Duration{
+		"TestClassicContractPhase200CausalExecution":                                 273 * time.Second,
+		"TestPlanningGapEdgeAccounting200":                                           260 * time.Second,
+		"TestPlanningNumericBoundaries200":                                           144 * time.Second,
+		"TestPlanningRealRepo200":                                                    106 * time.Second,
+		"TestPlanningRouteStageRejectsStaleBindingsAndForbiddenAuthority":            92 * time.Second,
+		"TestPlanningExpiryPresentation200":                                          46 * time.Second,
+		"TestBothBuildLanesEmitTheHeadsUp":                                           52 * time.Second,
+		"TestNonInteractiveRunsStillPrintTheHeadsUp":                                 52 * time.Second,
+		"TestBothBuildLanesAgreeOnBoundaryQuestionSignal":                            50 * time.Second,
+		"TestBuildStartTransaction200FaultsRollbackAndNeverDispatch":                 47 * time.Second,
+		"TestBuildStartTransaction200ReloadsCanonicalAcceptedAuthority":              35 * time.Second,
+		"TestBuildBufferedOutputBreaksJSONUnderVisualEnv":                            24 * time.Second,
+		"TestCodexVisualParity":                                                      21 * time.Second,
+		"TestBuildStartConcurrentProcesses200":                                       19 * time.Second,
+		"TestBuildAttemptExternalUnboundStartReplayIsByteStable":                     19 * time.Second,
+		"TestStatusSurfacesFailedAttemptAfterLifecycleRollback":                      19 * time.Second,
+		"TestGroupedJobPartialRetryIsIdempotent":                                     18 * time.Second,
+		"TestForceRedispatchMarksActiveAttemptInterrupted":                           18 * time.Second,
+		"TestResumeDashboardDoesNotRedispatchLiveBuildProcess":                       18 * time.Second,
+		"TestBuildAttemptPersistsTransitionsAndTerminalEvidence":                     18 * time.Second,
+		"TestBuildAttemptFixtureUsesCanonicalTransaction":                            18 * time.Second,
+		"TestNoLaneRendersTwoCostLines":                                              18 * time.Second,
+		"TestCanonicalBuildStartFixtureLiveProcess200":                               18 * time.Second,
+		"TestPartialRetryAttemptDoesNotBecomeTheLatestAttempt":                       18 * time.Second,
+		"TestBuildRepairsCompletedPriorPhaseTasksFromTrustedManifest":                17 * time.Second,
+		"TestBuildAttemptExternalAttemptEnumerationExcludesStartReceipts200":         17 * time.Second,
+		"TestBuildAttemptChildLinksParentWithoutMutation":                            17 * time.Second,
+		"TestEnsureUniqueBuildDispatchNamesSuffixesCollisionFromSealedAttempt":       17 * time.Second,
+		"TestFailedCheckSendsExactlyOneBuilderFixAttempt":                            17 * time.Second,
+		"TestSecondFailureBlocksAndNamesTheCommand":                                  16 * time.Second,
+		"TestPartialRetryCommandIsAcceptedOnThePlanOnlyPath":                         16 * time.Second,
+		"TestRuntimeCheckpointGenerationAcceptsJournalBoundDirectFinalProjection":    16 * time.Second,
+		"TestFixAttemptIsCountedSeparately":                                          16 * time.Second,
+		"TestContinueFinalizeRecordsExternalReviewAndAdvances":                       15 * time.Second,
+		"TestFixAttemptNeverOverwritesTheFirstResult":                                15 * time.Second,
+		"TestRunCompatibilityPassesWorkerTimeoutToBuildAndContinue":                  14 * time.Second,
+		"TestBuildSupportsTaskScopedRedispatch":                                      14 * time.Second,
+		"TestDispatchEntryCarriesBriefPath":                                          14 * time.Second,
+		"TestRunCompatibilityExecutesSinglePhase":                                    14 * time.Second,
+		"TestContinueEndToEndAfterAbandonedRecovery":                                 14 * time.Second,
+		"TestPendingDecisionStillRendersFullCheckinCard":                             14 * time.Second,
+		"TestContinueFinalizeWritesWorkerOutcomeReports":                             14 * time.Second,
+		"TestNoSecondAutomaticFixAttempt":                                            14 * time.Second,
+		"TestBuildPlanOnlyHeavyReviewAllowsPolicyMeasurerAndChaos":                   13 * time.Second,
+		"TestBuildPlanOnlyCLIForwardsVerificationDepth":                              13 * time.Second,
+		"TestBuildVisualOutputShowsSpawnPlan":                                        13 * time.Second,
+		"TestOneWorkerWithForcedReviewerWaiverStillPauses":                           13 * time.Second,
+		"TestPlanEmitsLifecycleCeremonyEvents":                                       13 * time.Second,
+		"TestCanonicalBuildStartFixtureAuthority200":                                 13 * time.Second,
+		"TestBuildJobProposalRoundTrip":                                              12 * time.Second,
+		"TestEnsureUniqueBuildDispatchNamesSuffixesCollisionFromDifferentPhase":      12 * time.Second,
+		"TestGoldenStateMutations":                                                   12 * time.Second,
+		"TestPartialRetryCommandNeverRedispatchesCreditedWork":                       11 * time.Second,
+		"TestPlanUsesSurveyAndRecordsPlanningDispatches":                             11 * time.Second,
+		"TestBuildFinalizeRecordsExternalTaskResultsForContinue":                     11 * time.Second,
+		"TestGoldenContinueVisualOutput":                                             11 * time.Second,
+		"TestBuildStartLegacyBinding200":                                             11 * time.Second,
+		"TestBuildCLIForwardsVerificationDepth":                                      11 * time.Second,
+		"TestGoldenBuildVisualOutput":                                                10 * time.Second,
+		"TestInstallUsesEmbeddedAssetsWithoutPackageDir":                             10 * time.Second,
+		"TestMigratedWorkLoopClosingsSayItOnce":                                      10 * time.Second,
+		"TestAutopilotPolicyPlanAuthorityRefusalIsZeroEffect":                        10 * time.Second,
+		"TestBuildStartTransaction200TargetMatrix":                                   10 * time.Second,
+		"TestCodexPlanFinalizeRouteExposesNextScoutBoundary":                         9 * time.Second,
+		"TestBuildWritesDispatchArtifactsAndUpdatesState":                            9 * time.Second,
+		"TestMaintenanceArchive199RepairRollback":                                    9 * time.Second,
+		"TestLifecycleTransactionFaultMatrix":                                        8 * time.Second,
+		"TestPlanFinalizePendingIterationDoesNotWriteFinalPlanAndDrivesNextManifest": 8 * time.Second,
+		"TestSpawnLogFailsClosedWhenWaiverWindowCannotPersist":                       8 * time.Second,
+		"TestMaintenanceArchive199ForcedMarker":                                      8 * time.Second,
+	}
+}
+
 func fullSuiteExecutedTopLevels(output []byte) []string {
 	const prefix = "=== RUN   "
 	var names []string
@@ -597,33 +724,63 @@ func runFullSuiteLanes(ctx context.Context, executable string, lanes []fullSuite
 			results[index] = runner(ctx, request)
 		}()
 	}
-	var parallelIndexes []int
+	var heavyIndexes []int
+	var lightIndexes []int
 	for index, lane := range lanes {
 		if lane.Serial {
 			runLane(index)
+			continue
+		}
+		if lane.Heavy {
+			heavyIndexes = append(heavyIndexes, index)
 		} else {
-			parallelIndexes = append(parallelIndexes, index)
+			lightIndexes = append(lightIndexes, index)
 		}
 	}
-	jobs := make(chan int)
+	heavyJobs := make(chan int, len(heavyIndexes))
+	lightJobs := make(chan int, len(lightIndexes))
+	for _, index := range heavyIndexes {
+		heavyJobs <- index
+	}
+	close(heavyJobs)
+	for _, index := range lightIndexes {
+		lightJobs <- index
+	}
+	close(lightJobs)
+
 	var workers sync.WaitGroup
 	workerCount := parallelism
-	if workerCount > len(parallelIndexes) {
-		workerCount = len(parallelIndexes)
+	if total := len(heavyIndexes) + len(lightIndexes); workerCount > total {
+		workerCount = total
 	}
-	for worker := 0; worker < workerCount; worker++ {
+	heavyWorkerCount := fullSuiteHeavyWorkers
+	if heavyWorkerCount > len(heavyIndexes) {
+		heavyWorkerCount = len(heavyIndexes)
+	}
+	if heavyWorkerCount > workerCount {
+		heavyWorkerCount = workerCount
+	}
+	for worker := 0; worker < heavyWorkerCount; worker++ {
 		workers.Add(1)
 		go func() {
 			defer workers.Done()
-			for index := range jobs {
+			for index := range heavyJobs {
+				runLane(index)
+			}
+			for index := range lightJobs {
 				runLane(index)
 			}
 		}()
 	}
-	for _, index := range parallelIndexes {
-		jobs <- index
+	for worker := heavyWorkerCount; worker < workerCount; worker++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for index := range lightJobs {
+				runLane(index)
+			}
+		}()
 	}
-	close(jobs)
 	workers.Wait()
 
 	var failures []string

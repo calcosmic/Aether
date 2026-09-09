@@ -6,6 +6,8 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -67,6 +69,7 @@ func TestFullSuiteRuntime200PreservesFocusedRun(t *testing.T) {
 		{name: "fuzzing", in: fullSuiteInvocation{Count: 1, Fuzz: "FuzzOne", FuzzExplicit: true}},
 		{name: "skip filter", in: fullSuiteInvocation{Count: 1, Skip: "Slow", SkipExplicit: true}},
 		{name: "profile output", in: fullSuiteInvocation{Count: 1, Profiled: true}},
+		{name: "explicit parallelism", in: fullSuiteInvocation{Count: 1, Parallel: "4", ParallelSet: true}},
 		{name: "caller requested repetitions", in: fullSuiteInvocation{Count: 2}},
 		{name: "child recursion marker", in: fullSuiteInvocation{Count: 1, ShardMarker: "123:parallel-01"}},
 	}
@@ -363,5 +366,101 @@ func TestFullSuiteRuntime200ReportsCompleteAccounting(t *testing.T) {
 	lastAccounting := strings.Index(output, "FULL-SUITE slowest rank=2")
 	if firstOutput < 0 || lastAccounting < 0 || firstOutput < lastAccounting {
 		t.Fatalf("child output obscured the complete accounting preamble:\n%s", output)
+	}
+
+	classified, err := planFullSuiteLanes(
+		[]string{"TestClassicContractPhase200CausalExecution", "TestPlanningGapEdgeAccounting200", "TestLight"},
+		nil,
+		fullSuiteMeasuredCosts(),
+		2,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	heavyNames := map[string]bool{}
+	for _, lane := range classified {
+		if !lane.Heavy {
+			continue
+		}
+		for _, testName := range lane.Tests {
+			heavyNames[testName] = true
+		}
+	}
+	for _, testName := range []string{"TestClassicContractPhase200CausalExecution", "TestPlanningGapEdgeAccounting200"} {
+		if !heavyNames[testName] {
+			t.Errorf("measured heavyweight %s was not assigned to a heavy affinity lane: %#v", testName, classified)
+		}
+	}
+	if heavyNames["TestLight"] {
+		t.Fatalf("unmeasured light test was put in a heavy affinity lane: %#v", classified)
+	}
+
+	lanes := []fullSuiteLane{
+		{Name: "heavy-01", Heavy: true, Tests: []string{"TestHeavyOne"}},
+		{Name: "heavy-02", Heavy: true, Tests: []string{"TestHeavyTwo"}},
+		{Name: "heavy-03", Heavy: true, Tests: []string{"TestHeavyThree"}},
+		{Name: "heavy-04", Heavy: true, Tests: []string{"TestHeavyFour"}},
+		{Name: "light-01", Tests: []string{"TestLightOne"}},
+		{Name: "light-02", Tests: []string{"TestLightTwo"}},
+		{Name: "light-03", Tests: []string{"TestLightThree"}},
+	}
+	var activeHeavy atomic.Int32
+	var maximumHeavy atomic.Int32
+	var lightRuns atomic.Int32
+	var lightOverlappedHeavy atomic.Bool
+	heavyReady := make(chan struct{})
+	releaseHeavy := make(chan struct{})
+	var readyOnce sync.Once
+	var releaseOnce sync.Once
+	runner := func(_ context.Context, request fullSuiteChildRequest) fullSuiteChildResult {
+		if request.Lane.Heavy {
+			active := activeHeavy.Add(1)
+			for {
+				maximum := maximumHeavy.Load()
+				if active <= maximum || maximumHeavy.CompareAndSwap(maximum, active) {
+					break
+				}
+			}
+			if active == fullSuiteHeavyWorkers {
+				readyOnce.Do(func() { close(heavyReady) })
+			}
+			select {
+			case <-releaseHeavy:
+			case <-time.After(time.Second):
+				return fullSuiteChildResult{Err: errors.New("light lane never overlapped the heavy queue")}
+			}
+			activeHeavy.Add(-1)
+			if !strings.Contains(strings.Join(request.Args, " "), "-test.parallel=1") {
+				return fullSuiteChildResult{Err: errors.New("heavy lane did not receive serial top-level scheduling")}
+			}
+		} else {
+			select {
+			case <-heavyReady:
+				if activeHeavy.Load() > 0 {
+					lightOverlappedHeavy.Store(true)
+				}
+				releaseOnce.Do(func() { close(releaseHeavy) })
+			case <-time.After(time.Second):
+				return fullSuiteChildResult{Err: errors.New("heavy workers did not start while light queue drained")}
+			}
+			lightRuns.Add(1)
+		}
+		return fullSuiteChildResult{Executed: append([]string(nil), request.Lane.Tests...)}
+	}
+	scheduled, err := runFullSuiteLanes(context.Background(), "/current/cmd.test", lanes, 5, runner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !scheduled.Passed || scheduled.Executed != len(lanes) {
+		t.Fatalf("scheduled accounting = %+v, want every heavy and light lane", scheduled)
+	}
+	if maximumHeavy.Load() != fullSuiteHeavyWorkers {
+		t.Fatalf("maximum concurrent heavy lanes = %d, want %d", maximumHeavy.Load(), fullSuiteHeavyWorkers)
+	}
+	if lightRuns.Load() != 3 {
+		t.Fatalf("light lanes executed = %d, want 3 while heavy queue drains", lightRuns.Load())
+	}
+	if !lightOverlappedHeavy.Load() {
+		t.Fatal("light work did not overlap the bounded heavy queue")
 	}
 }
