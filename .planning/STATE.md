@@ -5,15 +5,15 @@ milestone_name: Classic Colony Restoration
 current_phase: 200
 current_phase_name: Iterative Planning
 status: executing
-stopped_at: Completed 200-49-PLAN.md; next incomplete is 200-50
-last_updated: "2026-09-09T13:17:55.252Z"
+stopped_at: Completed 200-50-PLAN.md; next incomplete is 200-51
+last_updated: "2026-09-09T13:58:33.443Z"
 last_activity: 2026-09-09
-state_head: c423a02217631219b7dc06940dce153629864bf2
+state_head: e383e1b14cf334cca215a2fe5df6a5c27f3f53ff
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 89
-  completed_plans: 82
+  completed_plans: 83
   percent: 14
 ---
 
@@ -32,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 200 (Iterative Planning) — EXECUTING
-Plan: 50 of 55
+Plan: 51 of 55
 Status: Ready to execute
 Last activity: 2026-09-09
 
@@ -162,6 +162,7 @@ Last activity: 2026-09-09
 | Phase 200 P47 | 39min | 2 tasks | 5 files |
 | Phase 200 P48 | 31min | 2 tasks | 5 files |
 | Phase 200 P49 | 48min | 3 tasks | 5 files |
+| Phase 200 P50 | 32min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -514,6 +515,9 @@ Last activity: 2026-09-09
 - [Phase 200]: Plan 49 accepted build fixtures use real specification approval, candidate coordination, owner acceptance, and commitBuildStart; mutable execution status is synchronized without replacing immutable authority bindings.
 - [Phase 200]: Plan 49 execution fixtures name phase, owner, mode, and live or dead process state explicitly; live recovery uses the current test process.
 - [Phase 200]: Plan 49 trusted completed manifests are written by commitBuildStart with transaction-derived authority fields, never by direct fixture journal writes.
+- [Phase 200]: Plan 50 downstream continue, run, redispatch, reviewer-waiver, and narrator fixtures cross approved specification, accepted plan, and canonical build start before testing lifecycle behavior.
+- [Phase 200]: Plan 50 reviewer-window failure validates then corrupts the legitimate build-start target and requires preserved bytes plus parseable JSON with truthful exit code 2.
+- [Phase 200]: Plan 50 models the one-worker forced-reviewer policy at exact phase 25 with twenty-four honestly completed prerequisites.
 
 ### Pending Todos
 
@@ -630,11 +634,11 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-09T13:17:55.243Z
-Stopped at: Completed 200-49-PLAN.md; next incomplete is 200-50
+Last session: 2026-09-09T13:58:33.434Z
+Stopped at: Completed 200-50-PLAN.md; next incomplete is 200-51
 Resume file: None
 
 ## Operator Next Steps
 
-- Execute 200-50-PLAN.md and 200-51-PLAN.md in Wave 30, then follow Waves 31-34 before rerunning the unchanged final receipt Plan 200-40 in Wave 35.
+- Execute 200-51-PLAN.md to finish Wave 30, then follow Waves 31-34 before rerunning the unchanged final receipt Plan 200-40 in Wave 35.
 - Preserve the Phase 200 Scout/Route-Setter objective and do not waive normal or race gate failures.

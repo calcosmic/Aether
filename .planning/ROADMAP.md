@@ -184,7 +184,7 @@ Plans:
 
 **Requirements:** SYNTH-02, CEC-03, PLAN-01..06
 
-**Plans:** 48/55 plans executed
+**Plans:** 49/55 plans executed
 
 Plans:
 
@@ -325,7 +325,7 @@ Plans:
 
 **Wave 30** *(second gap closure; blocked on Wave 29 completion)*
 
-- [ ] 200-50-PLAN.md — Migrate downstream continue/run/recovery/reviewer/narrator fixtures.
+- [x] 200-50-PLAN.md — Migrate downstream continue/run/recovery/reviewer/narrator fixtures.
 - [ ] 200-51-PLAN.md — Restore truthful partial-build and shared blocker presentation.
 
 **Wave 31** *(second gap closure; blocked on Wave 30 completion)*
