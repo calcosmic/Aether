@@ -429,3 +429,60 @@ func TestBuildAttemptFixtureUsesCanonicalTransaction(t *testing.T) {
 		t.Fatalf("fixture latest pointer = %+v, want attempt %q", fixture.Latest, fixture.Attempt.ID)
 	}
 }
+
+func TestCanonicalBuildStartFixtureAuthority200(t *testing.T) {
+	fixture := commitTestBuildStart(t, testBuildStartOptions{
+		Phase:          1,
+		Variant:        buildStartPlanOnly,
+		ExecutionOwner: "host-queen",
+		DispatchMode:   "plan-only",
+		ProcessState:   testBuildProcessDead,
+	})
+
+	if fixture.Request.Phase != 1 || fixture.Attempt.Phase != 1 {
+		t.Fatalf("canonical fixture phase = request %d / attempt %d, want exact accepted phase 1", fixture.Request.Phase, fixture.Attempt.Phase)
+	}
+	if !fixture.Request.PlanAuthority.Eligible || fixture.Request.PlanAuthority.Classification != planAuthorityCurrentAccepted {
+		t.Fatalf("canonical fixture did not earn current accepted authority: %+v", fixture.Request.PlanAuthority)
+	}
+	if fixture.Request.ExecutionOwner != "host-queen" || fixture.Request.DispatchMode != "plan-only" {
+		t.Fatalf("canonical fixture execution identity = %q/%q, want host-queen/plan-only", fixture.Request.ExecutionOwner, fixture.Request.DispatchMode)
+	}
+	if fixture.Receipt.PlanAuthority.ActiveRevision.ID != fixture.Request.PlanAuthority.ActiveRevision.ID ||
+		fixture.Receipt.PlanAuthority.Specification.ID != fixture.Request.PlanAuthority.Specification.ID {
+		t.Fatalf("durable receipt lost exact plan/specification authority: receipt=%+v request=%+v", fixture.Receipt.PlanAuthority, fixture.Request.PlanAuthority)
+	}
+}
+
+func TestCanonicalBuildStartFixtureLiveProcess200(t *testing.T) {
+	fixture := commitTestBuildStart(t, testBuildStartOptions{
+		Phase:          1,
+		ExecutionOwner: "runtime-worker-dispatch",
+		DispatchMode:   "direct",
+		ProcessState:   testBuildProcessLive,
+	})
+
+	if fixture.Request.ProcessID != os.Getpid() || fixture.Attempt.ProcessID != os.Getpid() {
+		t.Fatalf("live fixture process = request %d / attempt %d, want current process %d", fixture.Request.ProcessID, fixture.Attempt.ProcessID, os.Getpid())
+	}
+	if !buildAttemptProcessAlive(fixture.Attempt) {
+		t.Fatalf("explicit live fixture was not live: %+v", fixture.Attempt)
+	}
+}
+
+func TestCanonicalBuildStartFixtureRefusesMismatch200(t *testing.T) {
+	err := validateTestBuildStartOptions(testBuildStartOptions{
+		Phase:          2,
+		ExecutionOwner: "host-queen",
+		DispatchMode:   "plan-only",
+		ProcessState:   testBuildProcessDead,
+	}, 1)
+	if err == nil || !strings.Contains(err.Error(), "requested phase 2") || !strings.Contains(err.Error(), "accepted phase 1") {
+		t.Fatalf("mismatched accepted phase error = %v, want exact requested/accepted phase refusal", err)
+	}
+
+	err = validateTestBuildStartOptions(testBuildStartOptions{Phase: 1, ExecutionOwner: "host-queen"}, 1)
+	if err == nil || !strings.Contains(err.Error(), "execution owner and dispatch mode") {
+		t.Fatalf("half-specified execution identity error = %v, want explicit owner/mode refusal", err)
+	}
+}
