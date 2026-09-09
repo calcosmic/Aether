@@ -268,21 +268,43 @@ func TestPlanAcceptWithExistingPlanFailsLoudly(t *testing.T) {
 			}},
 		},
 	})
+	statePath := filepath.Join(dataDir, "COLONY_STATE.json")
+	before, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	rootCmd.SetArgs([]string{"plan", "--accept"})
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("plan --accept returned unexpected execute error: %v", err)
+	commandErr := rootCmd.Execute()
+	var renderedErr renderedCommandError
+	if !errors.As(commandErr, &renderedErr) || renderedErr.code != 1 {
+		t.Fatalf("plan --accept command error = %#v, want rendered exit 1", commandErr)
 	}
 	out := stdout.(*bytes.Buffer).String()
 	errOut := stderr.(*bytes.Buffer).String()
-	if strings.Contains(out, `"existing_plan":true`) || strings.Contains(out, `"existing_plan": true`) {
-		t.Fatalf("plan --accept with an existing plan must fail loudly, not silently reprint the plan:\n%s", out)
+	if strings.TrimSpace(out) != "" {
+		t.Fatalf("plan --accept with an existing plan emitted success output:\n%s", out)
 	}
-	if !strings.Contains(errOut, `"ok":false`) {
-		t.Fatalf("expected error envelope on stderr, got:\nstdout=%s\nstderr=%s", out, errOut)
+	var envelope struct {
+		OK    bool   `json:"ok"`
+		Error string `json:"error"`
+		Code  int    `json:"code"`
 	}
-	if !strings.Contains(errOut, "--accept-candidate") || !strings.Contains(errOut, "candidate-id") {
-		t.Fatalf("error must direct the user to exact candidate acceptance, got: %s", errOut)
+	if err := json.Unmarshal([]byte(errOut), &envelope); err != nil {
+		t.Fatalf("parse plan --accept error envelope: %v\nstderr=%s", err, errOut)
+	}
+	if envelope.OK || envelope.Code != 1 {
+		t.Fatalf("plan --accept envelope = %+v, want ok:false code:1", envelope)
+	}
+	if !strings.Contains(envelope.Error, "aether plan --accept-candidate <candidate-id>") {
+		t.Fatalf("error must direct the user to exact candidate acceptance, got: %s", envelope.Error)
+	}
+	after, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("plan --accept refusal changed the active colony state")
 	}
 }
 
