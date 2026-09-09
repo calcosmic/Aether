@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -15,6 +16,59 @@ import (
 )
 
 const buildAttemptSchemaVersion = 1
+
+const buildAttemptPublicDataPrefix = ".aether/data/"
+
+// canonicalBuildAttemptDataPath converts either the internal data-root-
+// relative representation or the public repository-relative representation
+// into the one internal form. Persisted paths are untrusted input on replay:
+// reject ambiguity instead of cleaning traversal, duplicate prefixes, or
+// platform-specific absolute paths into a different target.
+func canonicalBuildAttemptDataPath(value string) (string, error) {
+	if value == "" {
+		return "", nil
+	}
+	if value != strings.TrimSpace(value) || strings.Contains(value, `\`) {
+		return "", fmt.Errorf("build attempt path %q is not canonical", value)
+	}
+	if filepath.IsAbs(value) || path.IsAbs(value) || filepath.VolumeName(value) != "" ||
+		(len(value) >= 2 && value[1] == ':') {
+		return "", fmt.Errorf("build attempt path %q must be relative to the lifecycle data root", value)
+	}
+
+	relative := value
+	if relative == strings.TrimSuffix(buildAttemptPublicDataPrefix, "/") {
+		return "", fmt.Errorf("build attempt path %q names the data root, not a file", value)
+	}
+	if strings.HasPrefix(relative, buildAttemptPublicDataPrefix) {
+		relative = strings.TrimPrefix(relative, buildAttemptPublicDataPrefix)
+	}
+	if relative == strings.TrimSuffix(buildAttemptPublicDataPrefix, "/") ||
+		strings.HasPrefix(relative, buildAttemptPublicDataPrefix) ||
+		relative == ".aether" || strings.HasPrefix(relative, ".aether/") {
+		return "", fmt.Errorf("build attempt path %q contains an ambiguous data-root prefix", value)
+	}
+	clean := path.Clean(relative)
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, "../") || clean != relative {
+		return "", fmt.Errorf("build attempt path %q must be a canonical contained data path", value)
+	}
+	return relative, nil
+}
+
+// displayBuildAttemptDataPath is the single conversion from an accepted
+// internal build-attempt path to its owner-facing repository path. It also
+// accepts one already displayed prefix for compatibility with durable older
+// records, normalizing it rather than adding a second prefix.
+func displayBuildAttemptDataPath(value string) (string, error) {
+	relative, err := canonicalBuildAttemptDataPath(value)
+	if err != nil {
+		return "", err
+	}
+	if relative == "" {
+		return "", nil
+	}
+	return buildAttemptPublicDataPrefix + relative, nil
+}
 
 const (
 	buildAttemptPrepared    = "prepared"
@@ -260,6 +314,18 @@ func deriveBuildAttempt(input buildAttemptDerivation) (string, buildAttemptRecor
 	if input.ProcessID < 1 {
 		return "", buildAttemptRecord{}, nil, fmt.Errorf("build attempt process id must be positive")
 	}
+	checkpointPath, err := displayBuildAttemptDataPath(input.CheckpointPath)
+	if err != nil {
+		return "", buildAttemptRecord{}, nil, fmt.Errorf("build attempt checkpoint: %w", err)
+	}
+	manifestPath, err := displayBuildAttemptDataPath(input.ManifestPath)
+	if err != nil {
+		return "", buildAttemptRecord{}, nil, fmt.Errorf("build attempt manifest: %w", err)
+	}
+	claimsPath, err := displayBuildAttemptDataPath(input.ClaimsPath)
+	if err != nil {
+		return "", buildAttemptRecord{}, nil, fmt.Errorf("build attempt claims: %w", err)
+	}
 	stateDigest, err := jsonSHA256(input.State)
 	if err != nil {
 		return "", buildAttemptRecord{}, nil, fmt.Errorf("marshal build attempt state: %w", err)
@@ -289,9 +355,9 @@ func deriveBuildAttempt(input buildAttemptDerivation) (string, buildAttemptRecor
 		RunID:            strings.TrimSpace(input.RunID),
 		WorkspaceSHA256:  workspaceSHA,
 		SelectedTasks:    append([]string{}, input.SelectedTaskIDs...),
-		Checkpoint:       displayDataPath(input.CheckpointPath),
-		Manifest:         displayDataPath(input.ManifestPath),
-		ClaimsPath:       displayDataPath(input.ClaimsPath),
+		Checkpoint:       checkpointPath,
+		Manifest:         manifestPath,
+		ClaimsPath:       claimsPath,
 		OriginalStateSHA: stateDigest,
 		Dispatches:       append([]codexBuildDispatch{}, input.Dispatches...),
 		DispatchMode:     strings.TrimSpace(input.InitialDispatchMode),
@@ -309,10 +375,14 @@ func deriveBuildAttempt(input buildAttemptDerivation) (string, buildAttemptRecor
 	}
 	var pointer *latestBuildAttemptPointer
 	if input.MakeLatest {
+		attemptDisplayPath, err := displayBuildAttemptDataPath(attemptRel)
+		if err != nil {
+			return "", buildAttemptRecord{}, nil, fmt.Errorf("build attempt journal: %w", err)
+		}
 		pointer = &latestBuildAttemptPointer{
 			SchemaVersion: buildAttemptSchemaVersion,
 			AttemptID:     attemptID,
-			Path:          displayDataPath(attemptRel),
+			Path:          attemptDisplayPath,
 			UpdatedAt:     now,
 		}
 	}
@@ -341,6 +411,11 @@ func transitionBuildAttempt(attemptRel, status, summary string, dispatches []cod
 		if claims != nil {
 			copyClaims := *claims
 			record.Claims = &copyClaims
+			claimsPath, pathErr := displayBuildAttemptDataPath("last-build-claims.json")
+			if pathErr != nil {
+				return pathErr
+			}
+			record.ClaimsPath = claimsPath
 		}
 		if strings.TrimSpace(dispatchMode) != "" {
 			record.DispatchMode = strings.TrimSpace(dispatchMode)
@@ -604,7 +679,10 @@ func stageBuildAttemptCompletion(attemptRel string, completion codexExternalBuil
 	if completionRel == "" {
 		return "", "", fmt.Errorf("cannot derive durable completion path from build manifest")
 	}
-	displayPath := displayDataPath(completionRel)
+	displayPath, err := displayBuildAttemptDataPath(completionRel)
+	if err != nil {
+		return "", "", fmt.Errorf("display durable build completion path: %w", err)
+	}
 	var existing buildAttemptRecord
 	if err := store.LoadJSON(attemptRel, &existing); err != nil {
 		return "", "", fmt.Errorf("load build attempt before staging completion: %w", err)
@@ -623,8 +701,14 @@ func stageBuildAttemptCompletion(attemptRel string, completion codexExternalBuil
 	if buildAttemptCompletionSealed(existing) && existing.CompletionSHA256 != "" && existing.CompletionSHA256 != digest {
 		return "", "", fmt.Errorf("completion packet does not match the result already bound to attempt %s", existing.ID)
 	}
-	if buildAttemptCompletionSealed(existing) && existing.CompletionPath != "" && filepath.ToSlash(existing.CompletionPath) != displayPath {
-		return "", "", fmt.Errorf("build attempt %s already points to another completion packet", existing.ID)
+	if existing.CompletionPath != "" {
+		existingDisplayPath, pathErr := displayBuildAttemptDataPath(existing.CompletionPath)
+		if pathErr != nil {
+			return "", "", fmt.Errorf("build attempt %s has an invalid completion path: %w", existing.ID, pathErr)
+		}
+		if buildAttemptCompletionSealed(existing) && existingDisplayPath != displayPath {
+			return "", "", fmt.Errorf("build attempt %s already points to another completion packet", existing.ID)
+		}
 	}
 	durableAbsolute := filepath.Join(store.BasePath(), filepath.FromSlash(completionRel))
 	_, durableAlreadyExists := os.Stat(durableAbsolute)
@@ -647,8 +731,14 @@ func stageBuildAttemptCompletion(attemptRel string, completion codexExternalBuil
 		if buildAttemptCompletionSealed(record) && record.CompletionSHA256 != "" && record.CompletionSHA256 != digest {
 			return fmt.Errorf("completion packet does not match the result already bound to attempt %s", record.ID)
 		}
-		if buildAttemptCompletionSealed(record) && record.CompletionPath != "" && filepath.ToSlash(record.CompletionPath) != displayPath {
-			return fmt.Errorf("build attempt %s already points to another completion packet", record.ID)
+		if record.CompletionPath != "" {
+			recordDisplayPath, pathErr := displayBuildAttemptDataPath(record.CompletionPath)
+			if pathErr != nil {
+				return fmt.Errorf("build attempt %s has an invalid completion path: %w", record.ID, pathErr)
+			}
+			if buildAttemptCompletionSealed(record) && recordDisplayPath != displayPath {
+				return fmt.Errorf("build attempt %s already points to another completion packet", record.ID)
+			}
 		}
 		previousCompletionPath = strings.TrimSpace(record.CompletionPath)
 		record.CompletionSHA256 = digest
@@ -676,9 +766,11 @@ func stageBuildAttemptCompletion(attemptRel string, completion codexExternalBuil
 	// nothing should be left on disk claiming to belong to this attempt once
 	// the record no longer points at it -- T-163.1-13).
 	if previousCompletionPath != "" && previousCompletionPath != displayPath {
-		if previousRel := strings.TrimPrefix(filepath.ToSlash(previousCompletionPath), ".aether/data/"); previousRel != "" {
-			_ = os.Remove(filepath.Join(store.BasePath(), filepath.FromSlash(previousRel)))
+		previousRel, pathErr := canonicalBuildAttemptDataPath(previousCompletionPath)
+		if pathErr != nil {
+			return "", "", fmt.Errorf("build attempt previous completion path: %w", pathErr)
 		}
+		_ = os.Remove(filepath.Join(store.BasePath(), filepath.FromSlash(previousRel)))
 	}
 	return displayPath, digest, nil
 }
@@ -755,7 +847,7 @@ func isCommittedPartialAttemptReplay(manifest codexBuildManifest, completionDige
 
 func validateBuildAttemptManifestBinding(manifest codexBuildManifest, state colony.ColonyState, partialReplay bool) (buildAttemptManifestBinding, error) {
 	attemptID := strings.TrimSpace(manifest.AttemptID)
-	attemptPath := filepath.ToSlash(strings.TrimSpace(manifest.AttemptPath))
+	attemptPath := strings.TrimSpace(manifest.AttemptPath)
 	if attemptID == "" && attemptPath == "" {
 		return buildAttemptManifestBinding{Legacy: true}, nil
 	}
@@ -766,7 +858,11 @@ func validateBuildAttemptManifestBinding(manifest codexBuildManifest, state colo
 		return buildAttemptManifestBinding{}, fmt.Errorf("dispatch_manifest attempt_id %q is invalid", attemptID)
 	}
 	expectedRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", manifest.Phase), "attempts", attemptID+".json"))
-	if attemptPath != displayDataPath(expectedRel) {
+	attemptRel, err := canonicalBuildAttemptDataPath(attemptPath)
+	if err != nil {
+		return buildAttemptManifestBinding{}, fmt.Errorf("dispatch_manifest attempt_path %q is invalid: %w", attemptPath, err)
+	}
+	if attemptRel != expectedRel {
 		return buildAttemptManifestBinding{}, fmt.Errorf("dispatch_manifest attempt_path %q does not match attempt_id %q", attemptPath, attemptID)
 	}
 	latestRel, latest, ok := loadLatestBuildAttempt(manifest.Phase)
@@ -869,8 +965,8 @@ func loadLatestBuildAttempt(phaseNum int) (string, buildAttemptRecord, bool) {
 	if err := store.LoadJSON(latestBuildAttemptPointerPath(phaseNum), &pointer); err != nil {
 		return "", buildAttemptRecord{}, false
 	}
-	attemptRel := strings.TrimPrefix(filepath.ToSlash(strings.TrimSpace(pointer.Path)), ".aether/data/")
-	if attemptRel == "" {
+	attemptRel, err := canonicalBuildAttemptDataPath(pointer.Path)
+	if err != nil || attemptRel == "" {
 		return "", buildAttemptRecord{}, false
 	}
 	var record buildAttemptRecord

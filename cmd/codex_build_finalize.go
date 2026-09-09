@@ -651,6 +651,26 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	if attemptRel == "" {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("external build start did not return an attempt path")
 	}
+	checkpointDisplayPath, err := displayBuildAttemptDataPath(checkpointRel)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
+	manifestDisplayPath, err := displayBuildAttemptDataPath(manifestRel)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
+	claimsDisplayPath, err := displayBuildAttemptDataPath(claimsRel)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
+	attemptDisplayPath, err := displayBuildAttemptDataPath(attemptRel)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
+	resultCollectionDisplayPath, err := displayBuildAttemptDataPath(resultCollectionRel)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
 	attemptFinished := false
 	finishAttempt := func(status, summary string, transitionErr error) {
 		if attemptFinished {
@@ -876,11 +896,11 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		"wave_count":               len(buildWaveExecutionPlans(dispatches, effectiveParallelMode(updatedState))),
 		"parallel_mode":            string(effectiveParallelMode(updatedState)),
 		"selected_tasks":           selectedTaskIDs,
-		"checkpoint":               displayDataPath(checkpointRel),
-		"manifest":                 displayDataPath(manifestRel),
-		"claims_path":              displayDataPath(claimsRel),
-		"attempt":                  displayDataPath(attemptRel),
-		"result_collection":        displayDataPath(resultCollectionRel),
+		"checkpoint":               checkpointDisplayPath,
+		"manifest":                 manifestDisplayPath,
+		"claims_path":              claimsDisplayPath,
+		"attempt":                  attemptDisplayPath,
+		"result_collection":        resultCollectionDisplayPath,
 		"idempotent":               false,
 		"next":                     "aether continue",
 		"suggest_analyze_ran":      suggestAnalyzeRan,
@@ -1164,6 +1184,26 @@ func idempotentExternalBuildFinalizeResult(state colony.ColonyState, phaseNum in
 	}
 	dispatches := append([]codexBuildDispatch{}, record.Dispatches...)
 	resultCollectionRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseNum), "result-collection.json"))
+	checkpointPath, err := displayBuildAttemptDataPath(record.Checkpoint)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s has an invalid checkpoint path: %w", record.ID, err)
+	}
+	manifestPath, err := displayBuildAttemptDataPath(record.Manifest)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s has an invalid manifest path: %w", record.ID, err)
+	}
+	claimsPath, err := displayBuildAttemptDataPath(record.ClaimsPath)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s has an invalid claims path: %w", record.ID, err)
+	}
+	attemptPath, err := displayBuildAttemptDataPath(binding.Path)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s has an invalid journal path: %w", record.ID, err)
+	}
+	resultCollectionPath, err := displayBuildAttemptDataPath(resultCollectionRel)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
 	result := map[string]interface{}{
 		"phase":             phaseNum,
 		"phase_name":        phase.Name,
@@ -1175,11 +1215,11 @@ func idempotentExternalBuildFinalizeResult(state colony.ColonyState, phaseNum in
 		"wave_count":        len(buildWaveExecutionPlans(dispatches, effectiveParallelMode(state))),
 		"parallel_mode":     string(effectiveParallelMode(state)),
 		"selected_tasks":    append([]string{}, record.SelectedTasks...),
-		"checkpoint":        record.Checkpoint,
-		"manifest":          record.Manifest,
-		"claims_path":       record.ClaimsPath,
-		"attempt":           displayDataPath(binding.Path),
-		"result_collection": displayDataPath(resultCollectionRel),
+		"checkpoint":        checkpointPath,
+		"manifest":          manifestPath,
+		"claims_path":       claimsPath,
+		"attempt":           attemptPath,
+		"result_collection": resultCollectionPath,
 		"idempotent":        true,
 		"next":              "aether continue",
 	}
@@ -1257,6 +1297,26 @@ func idempotentExternalPartialFinalizeResult(state colony.ColonyState, phaseNum 
 	}
 	dispatches := restatePartialCreditFromCommittedState(phase, record.Dispatches)
 	resultCollectionRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseNum), "result-collection.json"))
+	checkpointPath, err := displayBuildAttemptDataPath(record.Checkpoint)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s has an invalid checkpoint path: %w", record.ID, err)
+	}
+	manifestPath, err := displayBuildAttemptDataPath(record.Manifest)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s has an invalid manifest path: %w", record.ID, err)
+	}
+	claimsPath, err := displayBuildAttemptDataPath(record.ClaimsPath)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s has an invalid claims path: %w", record.ID, err)
+	}
+	attemptPath, err := displayBuildAttemptDataPath(binding.Path)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s has an invalid journal path: %w", record.ID, err)
+	}
+	resultCollectionPath, err := displayBuildAttemptDataPath(resultCollectionRel)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
 	result := map[string]interface{}{
 		"phase":             phaseNum,
 		"phase_name":        phase.Name,
@@ -1268,11 +1328,11 @@ func idempotentExternalPartialFinalizeResult(state colony.ColonyState, phaseNum 
 		"wave_count":        len(buildWaveExecutionPlans(dispatches, effectiveParallelMode(state))),
 		"parallel_mode":     string(effectiveParallelMode(state)),
 		"selected_tasks":    append([]string{}, record.SelectedTasks...),
-		"checkpoint":        record.Checkpoint,
-		"manifest":          record.Manifest,
-		"claims_path":       record.ClaimsPath,
-		"attempt":           displayDataPath(binding.Path),
-		"result_collection": displayDataPath(resultCollectionRel),
+		"checkpoint":        checkpointPath,
+		"manifest":          manifestPath,
+		"claims_path":       claimsPath,
+		"attempt":           attemptPath,
+		"result_collection": resultCollectionPath,
 		"idempotent":        true,
 		"next":              "aether continue",
 	}
@@ -1285,8 +1345,12 @@ func idempotentExternalPartialFinalizeResult(state colony.ColonyState, phaseNum 
 		result["recovery_command"] = plan.RedispatchCommand
 		result["next"] = plan.RedispatchCommand
 		if existingRel, existing, ok := findExistingBuildAttemptRetry(phaseNum, record.ID); ok {
+			retryPath, pathErr := displayBuildAttemptDataPath(existingRel)
+			if pathErr != nil {
+				return nil, colony.ColonyState{}, colony.Phase{}, nil, pathErr
+			}
 			result["retry_attempt_id"] = existing.ID
-			result["retry_attempt_path"] = displayDataPath(existingRel)
+			result["retry_attempt_path"] = retryPath
 		}
 	}
 	var boundaryQuestions []discussQuestion
@@ -1318,15 +1382,28 @@ func reconcileCommittedExternalBuildAttempt(state colony.ColonyState, phaseNum i
 				"run `aether continue`, which re-runs verification and accepts amended artifacts when it passes green",
 			record.ID)
 	}
-	manifestRel := strings.TrimPrefix(filepath.ToSlash(record.Manifest), ".aether/data/")
+	manifestRel, err := canonicalBuildAttemptDataPath(record.Manifest)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s has an invalid final manifest path: %w", record.ID, err)
+	}
+	if manifestRel == "" {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s has no final manifest path", record.ID)
+	}
 	var finalManifest codexBuildManifest
 	if err := store.LoadJSON(manifestRel, &finalManifest); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s cannot reconcile without its final manifest: %w", record.ID, err)
 	}
-	if finalManifest.PlanOnly || finalManifest.Phase != phaseNum || finalManifest.AttemptID != record.ID || finalManifest.AttemptPath != displayDataPath(binding.Path) {
+	finalAttemptRel, pathErr := canonicalBuildAttemptDataPath(finalManifest.AttemptPath)
+	if pathErr != nil || finalManifest.PlanOnly || finalManifest.Phase != phaseNum || finalManifest.AttemptID != record.ID || finalAttemptRel != binding.Path {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s final manifest does not prove the committed lifecycle state", record.ID)
 	}
-	claimsRel := strings.TrimPrefix(filepath.ToSlash(record.ClaimsPath), ".aether/data/")
+	claimsRel, err := canonicalBuildAttemptDataPath(record.ClaimsPath)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s has an invalid persisted claims path: %w", record.ID, err)
+	}
+	if claimsRel == "" {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s has no persisted claims path", record.ID)
+	}
 	var persistedClaims codexBuildClaims
 	if err := store.LoadJSON(claimsRel, &persistedClaims); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s cannot reconcile without persisted claims: %w", record.ID, err)

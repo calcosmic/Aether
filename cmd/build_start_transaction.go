@@ -338,8 +338,12 @@ func prepareBuildStart(root string, request buildStartRequest, state colony.Colo
 		}
 		prepared.completion = &completion
 		prepared.completionPath = durableBuildCompletionPath(request.Phase, request.AttemptID)
+		completionDisplayPath, pathErr := displayBuildAttemptDataPath(prepared.completionPath)
+		if pathErr != nil {
+			return prepared, fmt.Errorf("build start: completion path: %w", pathErr)
+		}
 		prepared.record.CompletionSHA256 = digest
-		prepared.record.CompletionPath = displayDataPath(prepared.completionPath)
+		prepared.record.CompletionPath = completionDisplayPath
 		prepared.record.Status = buildAttemptTerminal
 		prepared.record.UpdatedAt = request.GeneratedAt.UTC().Format(time.RFC3339Nano)
 		prepared.record.DispatchMode = request.DispatchMode
@@ -617,9 +621,12 @@ func validateBuildStartManifest(root string, request buildStartRequest, state co
 	if manifest.AttemptID != "" && manifest.AttemptID != request.AttemptID {
 		return fmt.Errorf("manifest attempt id conflicts with request")
 	}
-	wantPath := displayDataPath(buildStartAttemptPath(request.Phase, request.AttemptID))
-	if manifest.AttemptPath != "" && filepath.ToSlash(manifest.AttemptPath) != wantPath {
-		return fmt.Errorf("manifest attempt path conflicts with request")
+	wantPath := buildStartAttemptPath(request.Phase, request.AttemptID)
+	if manifest.AttemptPath != "" {
+		manifestAttemptPath, pathErr := canonicalBuildAttemptDataPath(manifest.AttemptPath)
+		if pathErr != nil || manifestAttemptPath != wantPath {
+			return fmt.Errorf("manifest attempt path conflicts with request")
+		}
 	}
 	if manifest.ExecutionBinding != nil {
 		return fmt.Errorf("manifest execution binding must be derived by build start")
@@ -693,9 +700,8 @@ func allowedBuildStartStalePath(phase int, target string) bool {
 }
 
 func validateBuildStartDataPath(target string) error {
-	clean := filepath.Clean(target)
-	if strings.TrimSpace(target) == "" || filepath.IsAbs(target) || filepath.ToSlash(clean) != target ||
-		clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+	clean, err := canonicalBuildAttemptDataPath(target)
+	if err != nil || clean == "" || clean != target {
 		return fmt.Errorf("build start: target %q must be a canonical contained data path", target)
 	}
 	if strings.HasPrefix(target, "transactions/") || strings.Contains(target, "/"+lifecycleTransactionDirectory+"/") {
@@ -705,8 +711,12 @@ func validateBuildStartDataPath(target string) error {
 }
 
 func deriveBuildStartManifest(attemptPath string, attempt buildAttemptRecord, manifest codexBuildManifest, at time.Time) (codexBuildManifest, buildAttemptRecord, error) {
+	attemptDisplayPath, err := displayBuildAttemptDataPath(attemptPath)
+	if err != nil {
+		return codexBuildManifest{}, buildAttemptRecord{}, fmt.Errorf("build start: manifest attempt path: %w", err)
+	}
 	manifest.AttemptID = attempt.ID
-	manifest.AttemptPath = displayDataPath(attemptPath)
+	manifest.AttemptPath = attemptDisplayPath
 	manifest.ExecutionBinding = &codex.ExecutionBinding{
 		SchemaVersion: codex.ExecutionBindingSchemaVersion,
 		RunID:         attempt.RunID, AttemptID: attempt.ID,
