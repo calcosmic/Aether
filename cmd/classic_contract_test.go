@@ -5,10 +5,15 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"sort"
 	"strings"
@@ -71,10 +76,58 @@ var (
 	classicContractPhase200Capabilities = []string{
 		"CAP-005", "CAP-010", "CAP-011", "CAP-012", "CAP-056", "CAP-061", "CAP-069",
 	}
-	classicContractCaseIDPattern   = regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`)
-	classicContractDecisionPattern = regexp.MustCompile(`^SYN-(?:199-(?:0[1-9]|10)|200-(?:0[1-9]|1[0-2]))$`)
-	classicContractCAPPattern      = regexp.MustCompile(`^CAP-[0-9]{3}$`)
+	classicContractCaseIDPattern          = regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`)
+	classicContractDecisionPattern        = regexp.MustCompile(`^SYN-(?:199-(?:0[1-9]|10)|200-(?:0[1-9]|1[0-2]))$`)
+	classicContractCAPPattern             = regexp.MustCompile(`^CAP-[0-9]{3}$`)
+	classicContractRoundVocabulary        = regexp.MustCompile(`(?i)\brounds?\b`)
+	classicContractPhase200PublicCommands = map[string]bool{
+		"/ant-discuss": true, "/ant-insert-phase": true, "/ant-plan": true, "/ant-spec": true,
+		"aether discuss": true, "aether spec": true, "aether spec --repair-projection": true,
+		"aether plan": true, "aether plan --candidate": true, "aether plan --refresh": true,
+		"aether plan --accept-candidate <candidate-id>": true, "aether build <phase>": true,
+		"aether run": true,
+	}
+	classicContractPhase200MechanismProofs = []classicPhase200MechanismProofExpectation{
+		{
+			CaseID: "phase200.mechanism.specification-canonical-recomputation", MechanismID: "SYN-200-07",
+			PublicCommand: "aether spec --repair-projection", RecoveryCommand: "aether spec --repair-projection",
+			GoTestSymbol: "TestSpecCommandRepairProjectionWithoutChangingAuthority",
+		},
+		{
+			CaseID: "phase200.mechanism.candidate-semantic-binding", MechanismID: "SYN-200-06",
+			PublicCommand: "aether plan --candidate", RecoveryCommand: "aether plan --refresh",
+			GoTestSymbol: "TestPlanCandidateSemanticIntegrity200CopiedHashesRejectEveryReviewMutation",
+		},
+		{
+			CaseID: "phase200.mechanism.physical-containment", MechanismID: "SYN-200-01",
+			PublicCommand: "aether plan", RecoveryCommand: "aether plan",
+			GoTestSymbol: "TestRepositoryBootstrapContainment200",
+		},
+		{
+			CaseID: "phase200.mechanism.repository-mutation-session", MechanismID: "SYN-200-01",
+			PublicCommand: "aether plan", RecoveryCommand: "aether plan --refresh",
+			GoTestSymbol: "TestPlanningMutationSession200",
+		},
+		{
+			CaseID: "phase200.mechanism.atomic-build-start", MechanismID: "SYN-200-01",
+			PublicCommand: "aether build <phase>", RecoveryCommand: "aether build <phase>",
+			GoTestSymbol: "TestBuildStartTransaction200ExactReplayIsReadOnly",
+		},
+		{
+			CaseID: "phase200.mechanism.candidate-expiry-recovery", MechanismID: "SYN-200-06",
+			PublicCommand: "aether plan --accept-candidate <candidate-id>", RecoveryCommand: "aether plan --refresh",
+			GoTestSymbol: "TestPlanCandidateExpiry200AcceptanceBoundaryIsAtomic",
+		},
+	}
 )
+
+type classicPhase200MechanismProofExpectation struct {
+	CaseID          string
+	MechanismID     string
+	PublicCommand   string
+	RecoveryCommand string
+	GoTestSymbol    string
+}
 
 type classicContractJSONSchema struct {
 	Draft                string                     `json:"$schema"`
@@ -453,7 +506,7 @@ func TestClassicContractPhase200SchemaMechanismsAndCausalCases(t *testing.T) {
 	t.Run("missing referenced case", func(t *testing.T) {
 		invalid := cloneClassicContractDocument(t, document)
 		invalid.Cases = classicContractWithoutExactCase(invalid.Cases, "phase200.confidence.fresh-evidence")
-		if err := validateClassicPhase200Corpus(invalid, registry); err == nil || !strings.Contains(err.Error(), "has 15 cases") {
+		if err := validateClassicPhase200Corpus(invalid, registry); err == nil || !strings.Contains(err.Error(), fmt.Sprintf("has %d cases", 15+len(classicContractPhase200MechanismProofs))) {
 			t.Fatalf("validation error = %v, want missing referenced case", err)
 		}
 	})
@@ -502,6 +555,62 @@ func TestClassicContractPhase200SchemaMechanismsAndCausalCases(t *testing.T) {
 	})
 }
 
+func TestClassicContractPhase200IntegratedMechanismProofs(t *testing.T) {
+	contractDir := classicContractFixtureDir(t)
+	document, err := loadClassicContractDocument(filepath.Join(contractDir, "cases.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry, err := loadClassicMechanismRegistry(filepath.Join(contractDir, "mechanisms.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateClassicPhase200Corpus(document, registry); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("missing executable proof", func(t *testing.T) {
+		invalid := cloneClassicContractDocument(t, document)
+		removeClassicPhase200MechanismProofField(t, &invalid, classicContractPhase200MechanismProofs[0].CaseID, "go_test_symbol")
+		if err := validateClassicPhase200Corpus(invalid, registry); err == nil || !strings.Contains(err.Error(), "go_test_symbol") {
+			t.Fatalf("validation error = %v, want missing executable proof refusal", err)
+		}
+	})
+
+	t.Run("stale public command vocabulary", func(t *testing.T) {
+		invalid := cloneClassicMechanismRegistry(t, registry)
+		for index := range invalid.Mechanisms {
+			if invalid.Mechanisms[index].ID == "SYN-200-07" {
+				invalid.Mechanisms[index].PublicCommands = append(invalid.Mechanisms[index].PublicCommands, "aether plan-finalize")
+			}
+		}
+		assertClassicMechanismError(t, invalid, `stale or non-public command "aether plan-finalize"`)
+	})
+
+	t.Run("noncausal source-only row", func(t *testing.T) {
+		invalid := cloneClassicContractDocument(t, document)
+		for index := range invalid.Cases {
+			if invalid.Cases[index].ID == classicContractPhase200MechanismProofs[0].CaseID {
+				invalid.Cases[index].SourceCitations = []string{"cmd/spec_cmd.go"}
+			}
+		}
+		if err := validateClassicPhase200Corpus(invalid, registry); err == nil || !strings.Contains(err.Error(), "resolvable Go test symbol") {
+			t.Fatalf("validation error = %v, want source-only refusal", err)
+		}
+	})
+
+	t.Run("duplicate Phase 200 mechanism ID", func(t *testing.T) {
+		invalid := cloneClassicMechanismRegistry(t, registry)
+		for _, mechanism := range invalid.Mechanisms {
+			if mechanism.ID == "SYN-200-07" {
+				invalid.Mechanisms = append(invalid.Mechanisms, mechanism)
+				break
+			}
+		}
+		assertClassicMechanismError(t, invalid, `duplicate synthesis decision "SYN-200-07"`)
+	})
+}
+
 func TestClassicContractPhase200CausalExecution(t *testing.T) {
 	document := loadClassicContractCorpus(t)
 	executed := 0
@@ -511,13 +620,35 @@ func TestClassicContractPhase200CausalExecution(t *testing.T) {
 		}
 		executed++
 		t.Run(testCase.ID, func(t *testing.T) {
+			if executeClassicPhase200GoTestProof(t, testCase) {
+				return
+			}
 			execution := executeClassicPhase200Scenario(t, testCase.Phase200Proof.Scenario)
 			assertClassicPhase200Execution(t, testCase, execution)
 		})
 	}
-	if executed != 16 {
-		t.Fatalf("executed %d Phase 200 cases, want 16", executed)
+	want := 16 + len(classicContractPhase200MechanismProofs)
+	if executed != want {
+		t.Fatalf("executed %d Phase 200 cases, want %d", executed, want)
 	}
+}
+
+func executeClassicPhase200GoTestProof(t *testing.T, testCase classicContractCase) bool {
+	t.Helper()
+	raw, ok := testCase.Expected.SemanticFields["go_test_symbol"]
+	if !ok {
+		return false
+	}
+	var symbol string
+	if err := json.Unmarshal(raw, &symbol); err != nil || strings.TrimSpace(symbol) == "" {
+		t.Fatalf("%s has invalid go_test_symbol: %v", testCase.ID, err)
+	}
+	command := exec.Command(os.Args[0], "-test.run=^"+regexp.QuoteMeta(symbol)+"$", "-test.count=1")
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("%s causal Go proof %s failed: %v\n%s", testCase.ID, symbol, err, output)
+	}
+	return true
 }
 
 type classicPhase200Snapshot struct {
@@ -1246,8 +1377,9 @@ func validateClassicPhase200Corpus(document classicContractDocument, registry cl
 			assertionCoverage[assertion] = true
 		}
 	}
-	if len(caseByID) != 16 {
-		return fmt.Errorf("Phase 200 corpus has %d cases, want exactly 16", len(caseByID))
+	wantCaseCount := 16 + len(classicContractPhase200MechanismProofs)
+	if len(caseByID) != wantCaseCount {
+		return fmt.Errorf("Phase 200 corpus has %d cases, want exactly %d", len(caseByID), wantCaseCount)
 	}
 	for _, group := range classicContractPhase200Groups {
 		if !groupClasses[group]["success"] || !groupClasses[group]["refusal"] {
@@ -1307,7 +1439,105 @@ func validateClassicPhase200Corpus(document classicContractDocument, registry cl
 			return fmt.Errorf("Phase 200 case %q is not referenced by a mechanism", caseID)
 		}
 	}
+	return validateClassicPhase200IntegratedMechanismProofs(caseByID, registry)
+}
+
+func validateClassicPhase200IntegratedMechanismProofs(caseByID map[string]classicContractCase, registry classicMechanismRegistry) error {
+	mechanismByID := make(map[string]classicMechanism, len(registry.Mechanisms))
+	for _, mechanism := range registry.Mechanisms {
+		mechanismByID[mechanism.ID] = mechanism
+	}
+	proofCaseCount := 0
+	for _, testCase := range caseByID {
+		if _, ok := testCase.Expected.SemanticFields["mechanism_id"]; ok {
+			proofCaseCount++
+		}
+	}
+	if proofCaseCount != len(classicContractPhase200MechanismProofs) {
+		return fmt.Errorf("Phase 200 corpus has %d integrated mechanism proof rows, want exactly %d", proofCaseCount, len(classicContractPhase200MechanismProofs))
+	}
+
+	for _, expectation := range classicContractPhase200MechanismProofs {
+		testCase, ok := caseByID[expectation.CaseID]
+		if !ok {
+			return fmt.Errorf("Phase 200 corpus missing integrated mechanism proof case %q", expectation.CaseID)
+		}
+		fields := make(map[string]string, 6)
+		for _, field := range []string{"mechanism_id", "public_command", "positive_behavior", "hostile_or_refusal_behavior", "recovery_command", "go_test_symbol"} {
+			value, err := classicPhase200SemanticString(testCase, field)
+			if err != nil {
+				return err
+			}
+			fields[field] = value
+		}
+		if fields["mechanism_id"] != expectation.MechanismID {
+			return fmt.Errorf("Phase 200 case %q mechanism_id = %q, want %q", testCase.ID, fields["mechanism_id"], expectation.MechanismID)
+		}
+		if fields["public_command"] != expectation.PublicCommand || !classicContractPhase200PublicCommands[fields["public_command"]] {
+			return fmt.Errorf("Phase 200 case %q public_command = %q, want current command %q", testCase.ID, fields["public_command"], expectation.PublicCommand)
+		}
+		if fields["recovery_command"] != expectation.RecoveryCommand || !classicContractPhase200PublicCommands[fields["recovery_command"]] {
+			return fmt.Errorf("Phase 200 case %q recovery_command = %q, want exact current recovery %q", testCase.ID, fields["recovery_command"], expectation.RecoveryCommand)
+		}
+		if fields["go_test_symbol"] != expectation.GoTestSymbol {
+			return fmt.Errorf("Phase 200 case %q go_test_symbol = %q, want %q", testCase.ID, fields["go_test_symbol"], expectation.GoTestSymbol)
+		}
+		if classicContractRoundVocabulary.MatchString(fields["positive_behavior"] + " " + fields["hostile_or_refusal_behavior"]) {
+			return fmt.Errorf("Phase 200 case %q uses retired round vocabulary instead of planning iteration/pass", testCase.ID)
+		}
+		if expectation.CaseID == "phase200.mechanism.specification-canonical-recomputation" && !strings.Contains(fields["positive_behavior"], "no-change") {
+			return fmt.Errorf("Phase 200 case %q must preserve the exact no-change decision", testCase.ID)
+		}
+		mechanism, ok := mechanismByID[expectation.MechanismID]
+		if !ok || !slices.Contains(mechanism.PositiveCaseIDs, testCase.ID) || !slices.Contains(mechanism.PublicCommands, expectation.PublicCommand) {
+			return fmt.Errorf("Phase 200 case %q is not causally linked to mechanism %q and public command %q", testCase.ID, expectation.MechanismID, expectation.PublicCommand)
+		}
+		resolves, err := classicPhase200GoTestSymbolResolves(testCase, expectation.GoTestSymbol)
+		if err != nil {
+			return err
+		}
+		if !resolves {
+			return fmt.Errorf("Phase 200 case %q requires a cited, resolvable Go test symbol %q; source-only rows are noncausal", testCase.ID, expectation.GoTestSymbol)
+		}
+	}
 	return nil
+}
+
+func classicPhase200SemanticString(testCase classicContractCase, field string) (string, error) {
+	raw, ok := testCase.Expected.SemanticFields[field]
+	if !ok {
+		return "", fmt.Errorf("Phase 200 case %q requires %s", testCase.ID, field)
+	}
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil || strings.TrimSpace(value) == "" {
+		return "", fmt.Errorf("Phase 200 case %q requires a nonblank string %s", testCase.ID, field)
+	}
+	return value, nil
+}
+
+func classicPhase200GoTestSymbolResolves(testCase classicContractCase, symbol string) (bool, error) {
+	_, sourceFile, _, ok := runtime.Caller(0)
+	if !ok {
+		return false, fmt.Errorf("locate Classic contract source root")
+	}
+	repoRoot := filepath.Dir(filepath.Dir(sourceFile))
+	for _, citation := range testCase.SourceCitations {
+		if !strings.HasPrefix(citation, "cmd/") || !strings.HasSuffix(citation, "_test.go") {
+			continue
+		}
+		path := filepath.Join(repoRoot, filepath.FromSlash(citation))
+		parsed, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+		if err != nil {
+			return false, fmt.Errorf("parse cited Go test %s for case %q: %w", citation, testCase.ID, err)
+		}
+		for _, declaration := range parsed.Decls {
+			function, ok := declaration.(*ast.FuncDecl)
+			if ok && function.Recv == nil && function.Name.Name == symbol {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
 
 func cloneClassicContractDocument(t *testing.T, document classicContractDocument) classicContractDocument {
@@ -1369,6 +1599,18 @@ func removeClassicPhase200StructuredAssertion(t *testing.T, document *classicCon
 			t.Fatal(err)
 		}
 		document.Cases[index].Expected.SemanticFields["structured_assertions"] = encoded
+		return
+	}
+	t.Fatalf("Phase 200 fixture has no case %q", caseID)
+}
+
+func removeClassicPhase200MechanismProofField(t *testing.T, document *classicContractDocument, caseID, field string) {
+	t.Helper()
+	for index := range document.Cases {
+		if document.Cases[index].ID != caseID {
+			continue
+		}
+		delete(document.Cases[index].Expected.SemanticFields, field)
 		return
 	}
 	t.Fatalf("Phase 200 fixture has no case %q", caseID)
@@ -1676,6 +1918,13 @@ func validateClassicMechanismRegistry(registry classicMechanismRegistry) error {
 		}
 		if len(mechanism.PublicCommands) == 0 || classicStringsContainBlank(mechanism.PublicCommands) {
 			return fmt.Errorf("mechanism %q requires public_commands", mechanism.ID)
+		}
+		if strings.HasPrefix(mechanism.ID, "SYN-200-") {
+			for _, command := range mechanism.PublicCommands {
+				if !classicContractPhase200PublicCommands[command] {
+					return fmt.Errorf("mechanism %q uses stale or non-public command %q", mechanism.ID, command)
+				}
+			}
 		}
 		if len(mechanism.SourceCitations) == 0 || classicStringsContainBlank(mechanism.SourceCitations) {
 			return fmt.Errorf("mechanism %q requires source_citations", mechanism.ID)
