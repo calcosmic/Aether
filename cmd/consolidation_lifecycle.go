@@ -29,6 +29,79 @@ import (
 // and storage.FileLocker's flock blocks with no deadline (WR-02).
 var consolidationLifecycleTimeout = 30 * time.Second
 
+const (
+	consolidationQueenStorePath      = "QUEEN.md"
+	consolidationQueenRepositoryPath = ".aether/QUEEN.md"
+)
+
+// promoteConsolidationQueenInstinct is the repository-authorized side of the
+// memory pipeline's typed Queen promotion boundary. Eligibility stays in
+// pkg/memory; cmd only turns the already-approved instinct into the existing
+// local Queen entry and commits that one repository-relative target through
+// the Plan 27-28 mutation session.
+func promoteConsolidationQueenInstinct(ctx context.Context, dataRoot string, instinct colony.InstinctEntry, colonyName string) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("promote local Queen instinct: %w", err)
+	}
+	if strings.TrimSpace(dataRoot) == "" {
+		return fmt.Errorf("promote local Queen instinct: no store initialized")
+	}
+	repositoryRoot, err := planningRepositoryRoot(dataRoot)
+	if err != nil {
+		return fmt.Errorf("promote local Queen instinct: %w", err)
+	}
+
+	return withPlanningMutationSession(repositoryRoot, "consolidation-queen-promotion", func(session *planningMutationSession) error {
+		current, exists, err := session.ReadFile(lifecycleTransactionRootRepository, consolidationQueenRepositoryPath)
+		if err != nil {
+			return fmt.Errorf("read local Queen: %w", err)
+		}
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("promote local Queen instinct: %w", err)
+		}
+
+		text := string(current)
+		if !exists {
+			text = queenDefaultContent
+		}
+		text = ensureConsolidationQueenInstinctsSectionText(text)
+		entry := fmt.Sprintf("- [instinct] **%s** (%.2f): When %s, then %s",
+			instinct.Domain, instinct.Confidence, instinct.Trigger, instinct.Action)
+		updated := appendEntryToQueenSection(text, "Instincts", entry)
+		if strings.TrimSpace(updated) == "" {
+			return fmt.Errorf("promote local Queen instinct: refusing empty Queen content")
+		}
+		if exists && updated == string(current) {
+			return nil
+		}
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("promote local Queen instinct: %w", err)
+		}
+		if err := commitPlanningSessionTargets(session, "consolidation-queen-promotion", "consolidation-queen-promotion", []planningSessionTarget{{
+			Root: lifecycleTransactionRootRepository, Path: consolidationQueenRepositoryPath, Content: []byte(updated),
+		}}); err != nil {
+			return fmt.Errorf("write local Queen: %w", err)
+		}
+		return nil
+	})
+}
+
+// ensureConsolidationQueenInstinctsSectionText is the mutation-free form of
+// ensureQueenInstinctsSection. Keeping the derivation in memory lets the
+// repository transaction own the only filesystem write, including the legacy
+// section self-heal.
+func ensureConsolidationQueenInstinctsSectionText(text string) string {
+	for _, line := range strings.Split(text, "\n") {
+		if strings.TrimSpace(line) == "## Instincts" {
+			return text
+		}
+	}
+	if !strings.HasSuffix(text, "\n") {
+		text += "\n"
+	}
+	return text + "\n## Instincts\n> Instincts promoted by the consolidation pipeline.\n"
+}
+
 // runConsolidationStageBounded runs fn on its own goroutine and waits for
 // either completion or ctx expiry, returning false when ctx expired first.
 // On expiry the goroutine is deliberately abandoned -- it may be parked
@@ -151,14 +224,6 @@ func runPhaseEndConsolidation(phaseID int) phaseEndConsolidationSummary {
 	bus := events.NewBus(store, events.DefaultConfig())
 	pipeline := learn.NewPipeline(store, bus, pipelineConfigForStore())
 
-	// Self-heal a legacy local QUEEN.md that predates the Instincts section
-	// before promoting into it. Non-fatal: mirrors consolidationPhaseEndCmd's
-	// real-path branch (cmd/graph_consolidation_cmds.go). A missing section
-	// degrades to pkg/memory's existing silent no-op, not a crash.
-	if healErr := ensureQueenInstinctsSection(); healErr != nil {
-		fmt.Fprintf(os.Stderr, "warning: failed to ensure QUEEN.md Instincts section: %v\n", healErr)
-	}
-
 	// Bounded timeout so a wedged consolidation can never hang a phase
 	// advance (T-162-12); the phase-advance record is already committed by
 	// the time this function is reached. The goroutine+select wrapper is
@@ -252,6 +317,13 @@ func realConsolidationErrors(errs []error) []error {
 	real := make([]error, 0, len(errs))
 	for _, e := range errs {
 		if errors.Is(e, fs.ErrNotExist) {
+			continue
+		}
+		// Queen callback failures are already reported by the pipeline and are
+		// excluded from QueenPromoted. Preserve consolidation's established
+		// enrichment-not-gate contract: the failed promotion stays failed, but
+		// it does not invalidate unrelated decay/archive work.
+		if strings.HasPrefix(e.Error(), "queen promote ") {
 			continue
 		}
 		real = append(real, e)
@@ -377,12 +449,6 @@ func runSealConsolidation() sealConsolidationSummary {
 		return sealConsolidationSummary{Ran: false, Reason: "no store initialized"}
 	}
 
-	// Self-heal a legacy local QUEEN.md that predates the Instincts section
-	// before promoting into it. Non-fatal, mirrors runPhaseEndConsolidation.
-	if healErr := ensureQueenInstinctsSection(); healErr != nil {
-		fmt.Fprintf(os.Stderr, "warning: failed to ensure QUEEN.md Instincts section: %v\n", healErr)
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), consolidationLifecycleTimeout)
 	defer cancel()
 
@@ -469,7 +535,9 @@ func runSealConsolidation() sealConsolidationSummary {
 		return summary
 	}
 	if consErr == nil && consResult != nil && len(consResult.Errors) > 0 {
-		consErr = errors.Join(consResult.Errors...)
+		if real := realConsolidationErrors(consResult.Errors); len(real) > 0 {
+			consErr = errors.Join(real...)
+		}
 	}
 
 	// Publish the seal consolidation event, matching consolidationSealCmd's
