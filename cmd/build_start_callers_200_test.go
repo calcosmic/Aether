@@ -264,9 +264,22 @@ func TestBuildStartConcurrentProcesses200(t *testing.T) {
 	}
 
 	root, _, _ := buildStartTransaction200CurrentAuthorityFixture(t)
+	s, err := storage.NewStore(filepath.Join(root, ".aether", "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	store = s
 	state, err := loadSpecificationColonyState(root)
 	if err != nil {
 		t.Fatal(err)
+	}
+	// The accepted-authority fixture is intentionally usable below the CLI
+	// layer and therefore does not need a colony goal. This race exercises the
+	// public build entry point, whose honest initialization gate does.
+	goal := "Serialize a public build against accepted living-plan revisions"
+	state.Goal = &goal
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("complete public build fixture: %v", err)
 	}
 	base, ok := activePlanRevision(state.Plan)
 	if !ok || state.Specification == nil {

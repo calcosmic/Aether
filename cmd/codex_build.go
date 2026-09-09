@@ -347,6 +347,12 @@ type codexBuildOptions struct {
 	// BuildStartOptions is a test seam for transaction faults and post-receipt
 	// observation. Production callers leave it empty.
 	BuildStartOptions buildStartOptions
+	// BuildStartBeforeCommit is a test-only scheduling seam. It runs after a
+	// public caller has prepared the complete authority-bound request but before
+	// commitBuildStart acquires the repository session, allowing process tests
+	// to deterministically prove that a newly accepted revision makes the
+	// prepared request stale. Production callers leave it nil.
+	BuildStartBeforeCommit func() error
 }
 
 // directCodexBuildPreparation is the read-only result of validating and
@@ -719,6 +725,11 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 		if err != nil {
 			return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 		}
+		if options.BuildStartBeforeCommit != nil {
+			if err := options.BuildStartBeforeCommit(); err != nil {
+				return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+			}
+		}
 		receipt, err := commitBuildStart(root, request, options.BuildStartOptions)
 		if err != nil {
 			return nil, colony.ColonyState{}, colony.Phase{}, nil, err
@@ -926,6 +937,11 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	})
 	if err != nil {
 		return nil, err
+	}
+	if options.BuildStartBeforeCommit != nil {
+		if err := options.BuildStartBeforeCommit(); err != nil {
+			return nil, err
+		}
 	}
 	receipt, err := commitBuildStart(root, request, options.BuildStartOptions)
 	if err != nil {
