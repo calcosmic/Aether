@@ -137,8 +137,9 @@ type specificationApprovalRequest struct {
 }
 
 type specificationMutationOptions struct {
-	Fault  lifecycleTransactionFaultHook
-	Rename func(oldPath, newPath string) error
+	Session *planningMutationSession
+	Fault   lifecycleTransactionFaultHook
+	Rename  func(oldPath, newPath string) error
 }
 
 // specificationAffectedScope is the immediate, non-transitive impact seed.
@@ -246,12 +247,20 @@ func buildSpecificationDraft(request specificationDraftRequest) (colony.Specific
 // shared lifecycle transaction. Exact settled-input replay returns the same
 // revision and durable receipt; an existing different lineage is never forked.
 func createSpecificationDraft(root string, request specificationDraftRequest, opts specificationMutationOptions) (specificationMutationResult, error) {
+	var result specificationMutationResult
+	err := withPlanningMutationSession(root, "specification-draft", func(session *planningMutationSession) error {
+		opts.Session = session
+		var mutationErr error
+		result, mutationErr = createSpecificationDraftInSession(session, request, opts)
+		return mutationErr
+	})
+	return result, err
+}
+
+func createSpecificationDraftInSession(session *planningMutationSession, request specificationDraftRequest, opts specificationMutationOptions) (specificationMutationResult, error) {
 	empty := specificationMutationResult{}
-	repositoryRoot, err := canonicalSpecificationRoot(root)
-	if err != nil {
-		return empty, err
-	}
-	state, err := loadSpecificationColonyState(repositoryRoot)
+	repositoryRoot := session.RepositoryRoot()
+	state, err := loadSpecificationColonyStateInSession(session)
 	if err != nil {
 		return empty, err
 	}
@@ -416,12 +425,20 @@ func buildSpecificationSuccessor(specification colony.Specification, plan colony
 // predecessor and operations; if that exact successor is already current its
 // original lifecycle receipt is returned without appending another revision.
 func reviseSpecification(root string, request specificationRevisionRequest, opts specificationMutationOptions) (specificationMutationResult, error) {
+	var result specificationMutationResult
+	err := withPlanningMutationSession(root, "specification-revise", func(session *planningMutationSession) error {
+		opts.Session = session
+		var mutationErr error
+		result, mutationErr = reviseSpecificationInSession(session, request, opts)
+		return mutationErr
+	})
+	return result, err
+}
+
+func reviseSpecificationInSession(session *planningMutationSession, request specificationRevisionRequest, opts specificationMutationOptions) (specificationMutationResult, error) {
 	empty := specificationMutationResult{}
-	repositoryRoot, err := canonicalSpecificationRoot(root)
-	if err != nil {
-		return empty, err
-	}
-	state, err := loadSpecificationColonyState(repositoryRoot)
+	repositoryRoot := session.RepositoryRoot()
+	state, err := loadSpecificationColonyStateInSession(session)
 	if err != nil {
 		return empty, err
 	}
@@ -508,12 +525,20 @@ func reviseSpecification(root string, request specificationRevisionRequest, opts
 // named the reviewed specification, revision, and content hash instead of
 // supplying a generic affirmative answer.
 func approveSpecification(root string, request specificationApprovalRequest, opts specificationMutationOptions) (specificationMutationResult, error) {
+	var result specificationMutationResult
+	err := withPlanningMutationSession(root, "specification-approve", func(session *planningMutationSession) error {
+		opts.Session = session
+		var mutationErr error
+		result, mutationErr = approveSpecificationInSession(session, request, opts)
+		return mutationErr
+	})
+	return result, err
+}
+
+func approveSpecificationInSession(session *planningMutationSession, request specificationApprovalRequest, opts specificationMutationOptions) (specificationMutationResult, error) {
 	empty := specificationMutationResult{}
-	repositoryRoot, err := canonicalSpecificationRoot(root)
-	if err != nil {
-		return empty, err
-	}
-	state, err := loadSpecificationColonyState(repositoryRoot)
+	repositoryRoot := session.RepositoryRoot()
+	state, err := loadSpecificationColonyStateInSession(session)
 	if err != nil {
 		return empty, err
 	}
@@ -1300,15 +1325,27 @@ func specificationTransactionID(operation, contentHash string) string {
 }
 
 func commitSpecificationTargets(root, transactionID, command string, targets []specificationTransactionTarget, opts specificationMutationOptions) (colony.LifecycleReceipt, error) {
+	if opts.Session == nil {
+		return colony.LifecycleReceipt{}, fmt.Errorf("%s requires an active planning mutation session", command)
+	}
+	if filepath.Clean(root) != opts.Session.RepositoryRoot() {
+		return colony.LifecycleReceipt{}, fmt.Errorf("%s repository root does not match the held planning mutation session", command)
+	}
 	config := lifecycleTransactionConfig{
 		TransactionID: transactionID,
 		Command:       command,
 		Allowlist: lifecycleTransactionAllowlist{
 			RepositoryRoot:    root,
-			LifecycleDataRoot: filepath.Join(root, ".aether", "data"),
+			LifecycleDataRoot: opts.Session.DataRoot(),
 		},
-		Fault:  opts.Fault,
-		Rename: opts.Rename,
+		Session: opts.Session,
+		Fault:   opts.Fault,
+		Rename:  opts.Rename,
+	}
+	for _, target := range targets {
+		if _, _, err := opts.Session.ReadFile(target.Root, target.Path); err != nil {
+			return colony.LifecycleReceipt{}, fmt.Errorf("capture specification target baseline %s:%s: %w", target.Root, target.Path, err)
+		}
 	}
 	selectedID, err := selectSpecificationTransactionAttempt(config, targets)
 	if err != nil {
@@ -1327,7 +1364,11 @@ func commitSpecificationTargets(root, transactionID, command string, targets []s
 		if !matches {
 			return colony.LifecycleReceipt{}, fmt.Errorf("specification transaction %q has divergent staged content", transactionID)
 		}
-		return resumeLifecycleTransaction(config)
+		receipt, resumeErr := resumeLifecycleTransaction(config)
+		if resumeErr == nil {
+			resumeErr = refreshSpecificationSessionTargets(opts.Session, targets)
+		}
+		return receipt, resumeErr
 	}
 	tx, err := beginLifecycleTransaction(config)
 	if err != nil {
@@ -1341,7 +1382,24 @@ func commitSpecificationTargets(root, transactionID, command string, targets []s
 	if err := tx.Validate(); err != nil {
 		return colony.LifecycleReceipt{}, err
 	}
-	return tx.Commit()
+	receipt, err := tx.Commit()
+	if err == nil {
+		err = refreshSpecificationSessionTargets(opts.Session, targets)
+	}
+	return receipt, err
+}
+
+func refreshSpecificationSessionTargets(session *planningMutationSession, targets []specificationTransactionTarget) error {
+	for _, target := range targets {
+		current, err := session.currentFileState(target.Root, target.Path)
+		if err != nil {
+			return fmt.Errorf("refresh specification target baseline %s:%s: %w", target.Root, target.Path, err)
+		}
+		if err := session.updateBaseline(target.Root, target.Path, current); err != nil {
+			return fmt.Errorf("refresh specification target baseline %s:%s: %w", target.Root, target.Path, err)
+		}
+	}
+	return nil
 }
 
 // selectSpecificationTransactionAttempt preserves a successful or interrupted

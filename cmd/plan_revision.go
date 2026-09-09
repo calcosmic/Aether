@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -77,17 +76,18 @@ func planningRouteAcceptanceRepositoryPath(runID string) string {
 // It deliberately leaves COLONY_STATE.json untouched: only exact later owner
 // acceptance may replace the active revision.
 func createPhaseInsertCandidate(root string, request phaseInsertCandidateRequest) (phaseInsertCandidateResult, error) {
+	var result phaseInsertCandidateResult
+	err := withPlanningMutationSession(root, "phase-insert-candidate", func(session *planningMutationSession) error {
+		var insertErr error
+		result, insertErr = createPhaseInsertCandidateInSession(session, request)
+		return insertErr
+	})
+	return result, err
+}
+
+func createPhaseInsertCandidateInSession(session *planningMutationSession, request phaseInsertCandidateRequest) (phaseInsertCandidateResult, error) {
 	empty := phaseInsertCandidateResult{}
-	root, err := canonicalPlanningTimelineRoot(root)
-	if err != nil {
-		return empty, err
-	}
-	statePath := filepath.Join(root, ".aether", "data", "COLONY_STATE.json")
-	stateBytes, err := os.ReadFile(statePath)
-	if err != nil {
-		return empty, fmt.Errorf("read current plan before phase insertion: %w", err)
-	}
-	state, err := loadSpecificationColonyState(root)
+	state, err := loadSpecificationColonyStateInSession(session)
 	if err != nil {
 		return empty, err
 	}
@@ -113,7 +113,7 @@ func createPhaseInsertCandidate(root string, request phaseInsertCandidateRequest
 	if strings.TrimSpace(state.Plan.PendingCandidateID) != "" {
 		return empty, fmt.Errorf("cannot insert a phase while candidate %s is already pending review", state.Plan.PendingCandidateID)
 	}
-	if artifact, loadErr := loadPlanCandidateArtifact(root, ""); loadErr == nil {
+	if artifact, loadErr := loadPlanCandidateArtifactInSession(session, ""); loadErr == nil {
 		return empty, fmt.Errorf("cannot insert a phase while candidate %s is already pending review", artifact.Candidate.ID)
 	} else if !strings.Contains(loadErr.Error(), "no reviewable plan candidate found") {
 		return empty, fmt.Errorf("inspect pending plan candidates: %w", loadErr)
@@ -308,21 +308,48 @@ func createPhaseInsertCandidate(root string, request phaseInsertCandidateRequest
 	if err != nil {
 		return empty, err
 	}
-	currentStateBytes, err := os.ReadFile(statePath)
-	if err != nil {
-		return empty, fmt.Errorf("re-read current plan before candidate persistence: %w", err)
-	}
-	if !bytes.Equal(currentStateBytes, stateBytes) {
-		return empty, fmt.Errorf("base plan revision became stale while preparing the insertion; state is unchanged")
-	}
-	appendReceipt, err := appendPlanningIterationCard(root, card, planningTimelineAppendOptions{ReceiptID: card.RouteSetterReceiptID})
+	cardPath := planningTimelineCardRepositoryPath(runID, card.Iteration, card.ID)
+	appendRequestDigest, err := planningTimelineAppendRequestDigest(card.RouteSetterReceiptID, card, "")
 	if err != nil {
 		return empty, err
 	}
-	if appendReceipt.TimelineDigest != timeline.TimelineDigest {
-		return empty, fmt.Errorf("phase insertion timeline diverged while persisting its candidate")
+	timelineTransactionID, err := planningTimelineTransactionID(runID, card.RouteSetterReceiptID)
+	if err != nil {
+		return empty, err
 	}
-	files := make(map[string][]byte, 4)
+	timelineIndex := planningTimelineIndex{
+		SchemaVersion: planningTimelineIndexSchemaVersion,
+		RunID:         runID,
+		Entries: []planningTimelineIndexEntry{{
+			Iteration: card.Iteration, CardID: card.ID, CardHash: card.ContentHash,
+			CardPath: cardPath, AppendReceiptID: card.RouteSetterReceiptID,
+			AppendRequestDigest: appendRequestDigest, TransactionID: timelineTransactionID,
+		}},
+	}
+	if err := addressPlanningTimelineIndex(&timelineIndex, []colony.PlanningIterationCard{card}); err != nil {
+		return empty, err
+	}
+	if timelineIndex.TimelineDigest != timeline.TimelineDigest {
+		return empty, fmt.Errorf("phase insertion timeline preview does not match its canonical index")
+	}
+	cardBytes, err := marshalPlanningTimelineJSON(card)
+	if err != nil {
+		return empty, err
+	}
+	indexBytes, err := marshalPlanningTimelineJSON(timelineIndex)
+	if err != nil {
+		return empty, err
+	}
+	if err := validatePlanningTimelineCardBytes(cardBytes, card); err != nil {
+		return empty, err
+	}
+	if err := validatePlanningTimelineIndexBytes(indexBytes, timelineIndex, []colony.PlanningIterationCard{card}); err != nil {
+		return empty, err
+	}
+	files := map[string][]byte{
+		cardPath: cardBytes,
+		planningTimelineIndexRepositoryPath(runID): indexBytes,
+	}
 	for path, value := range map[string]interface{}{
 		planningRouteCandidateRepositoryPath(runID):                                              candidate,
 		planningStageManifestRepositoryPath(runID, manifest.ID):                                  manifest,
@@ -335,7 +362,7 @@ func createPhaseInsertCandidate(root string, request phaseInsertCandidateRequest
 		}
 		files[path] = content
 	}
-	if err := persistPlanningScoutFiles(root, "phase-insert-candidate-"+candidate.ContentHash[:24], "phase-insert-candidate", candidate.ID, files, nil); err != nil {
+	if err := persistPlanningScoutFilesInSession(session, "phase-insert-candidate-"+candidate.ContentHash[:24], "phase-insert-candidate", candidate.ID, files, nil); err != nil {
 		return empty, err
 	}
 	acceptRequest := planCandidateAcceptanceRequest{

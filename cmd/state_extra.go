@@ -12,6 +12,7 @@ import (
 	"unicode"
 
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
 )
 
@@ -166,7 +167,37 @@ var phaseInsertPromptSessionFactory = func(cmd *cobra.Command) phaseInsertPrompt
 // persistCorrectiveSwarmRecovery is the durable write seam for the typed
 // recovery event. Keeping it injectable lets command tests prove that a failed
 // history write aborts the still-locked COLONY_STATE.json mutation.
-var persistCorrectiveSwarmRecovery = saveSwarmResultRecord
+var persistCorrectiveSwarmRecovery = func(s *storage.Store, record swarmResultRecord) error {
+	_, err := canonicalCorrectiveSwarmRecovery(s, record)
+	return err
+}
+
+func canonicalCorrectiveSwarmRecovery(s *storage.Store, record swarmResultRecord) (swarmResultRecord, error) {
+	if s == nil {
+		return record, fmt.Errorf("save swarm result: no store initialized")
+	}
+	record.SwarmID = strings.TrimSpace(record.SwarmID)
+	record.Target = strings.TrimSpace(record.Target)
+	record.Status = strings.ToLower(strings.TrimSpace(record.Status))
+	record.CompletedAt = strings.TrimSpace(record.CompletedAt)
+	if _, err := validateDurableSwarmID(s, record.SwarmID); err != nil {
+		return record, fmt.Errorf("save swarm result: %w", err)
+	}
+	record.TargetFingerprint = swarmTargetFingerprint(record.Target)
+	if record.TargetFingerprint == "" {
+		return record, fmt.Errorf("save swarm result: target is required")
+	}
+	if record.Status == "" {
+		return record, fmt.Errorf("save swarm result: status is required")
+	}
+	if err := validateSwarmRecoveryRecord(record, nil); err != nil {
+		return record, fmt.Errorf("save swarm result: %w", err)
+	}
+	if _, err := time.Parse(time.RFC3339Nano, record.CompletedAt); err != nil {
+		return record, fmt.Errorf("save swarm result: invalid completed_at: %w", err)
+	}
+	return record, nil
+}
 
 type phaseInsertResolveInput struct {
 	PositionalIssue                   string
@@ -370,206 +401,230 @@ var phaseInsertCmd = &cobra.Command{
 	Short:   "Insert a corrective phase into the active plan",
 	Args:    cobra.MaximumNArgs(1),
 	Aliases: []string{"insert-phase"},
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if store == nil {
-			outputErrorMessage("no store initialized")
+	RunE:    runPhaseInsertCommand,
+}
+
+func runPhaseInsertCommand(cmd *cobra.Command, args []string) error {
+	return withPlanningMutationSession(resolveAetherRootPath(), "phase-insert", func(session *planningMutationSession) error {
+		return runPhaseInsertCommandInSession(session, cmd, args)
+	})
+}
+
+func runPhaseInsertCommandInSession(session *planningMutationSession, cmd *cobra.Command, args []string) error {
+	if store == nil {
+		outputErrorMessage("no store initialized")
+		return nil
+	}
+
+	input := phaseInsertResolveInput{
+		PositionalIssue:                   optionalArg(args, 0),
+		ExplicitName:                      mustGetStringCompatOptional(cmd, "name"),
+		ExplicitDescription:               mustGetStringCompatOptional(cmd, "description"),
+		ExplicitConstraints:               mustGetStringCompatOptional(cmd, "constraints"),
+		ExplicitAfter:                     mustGetInt(cmd, "after"),
+		AfterWasExplicit:                  cmd.Flags().Changed("after"),
+		SpecificationItemID:               mustGetStringCompatOptional(cmd, "spec-item"),
+		SpecificationRevisionPrerequisite: mustGetStringCompatOptional(cmd, "spec-revision"),
+		ExpectedBasePlanRevisionID:        mustGetStringCompatOptional(cmd, "base-plan-revision"),
+	}
+
+	if !phaseInsertHasAnyInput(cmd, args) {
+		promptInput, ok := collectPhaseInsertPromptAnswers(phaseInsertPromptSessionFactory(cmd))
+		if !ok {
+			outputPhaseInsertInputRequired()
 			return nil
 		}
+		input.PromptIssue = promptInput.PromptIssue
+		input.PromptOutcome = promptInput.PromptOutcome
+		input.PromptConstraints = promptInput.PromptConstraints
+	}
 
-		input := phaseInsertResolveInput{
-			PositionalIssue:                   optionalArg(args, 0),
-			ExplicitName:                      mustGetStringCompatOptional(cmd, "name"),
-			ExplicitDescription:               mustGetStringCompatOptional(cmd, "description"),
-			ExplicitConstraints:               mustGetStringCompatOptional(cmd, "constraints"),
-			ExplicitAfter:                     mustGetInt(cmd, "after"),
-			AfterWasExplicit:                  cmd.Flags().Changed("after"),
-			SpecificationItemID:               mustGetStringCompatOptional(cmd, "spec-item"),
-			SpecificationRevisionPrerequisite: mustGetStringCompatOptional(cmd, "spec-revision"),
-			ExpectedBasePlanRevisionID:        mustGetStringCompatOptional(cmd, "base-plan-revision"),
-		}
-
-		if !phaseInsertHasAnyInput(cmd, args) {
-			promptInput, ok := collectPhaseInsertPromptAnswers(phaseInsertPromptSessionFactory(cmd))
-			if !ok {
-				outputPhaseInsertInputRequired()
-				return nil
-			}
-			input.PromptIssue = promptInput.PromptIssue
-			input.PromptOutcome = promptInput.PromptOutcome
-			input.PromptConstraints = promptInput.PromptConstraints
-		}
-
-		// Current-schema plans are immutable. A manual insertion becomes a
-		// reviewable candidate; the legacy direct mutation below remains only
-		// for explicitly legacy/unbound colonies that have no accepted revision.
-		var initialState colony.ColonyState
-		if err := store.LoadJSON("COLONY_STATE.json", &initialState); err != nil {
-			outputError(1, "COLONY_STATE.json not found", nil)
+	// Current-schema plans are immutable. A manual insertion becomes a
+	// reviewable candidate; the legacy direct mutation below remains only
+	// for explicitly legacy/unbound colonies that have no accepted revision.
+	initialState, err := loadSpecificationColonyStateInSession(session)
+	if err != nil {
+		outputError(1, "COLONY_STATE.json not found", nil)
+		return renderedErrorExit(1)
+	}
+	if initialState.Plan.AcceptancePolicy == colony.PlanAcceptanceExplicitOwner || planHasCurrentAuthority(initialState.Plan) {
+		request, err := resolvePhaseInsertRequest(input, initialState.CurrentPhase)
+		if err != nil {
+			outputError(1, err.Error(), nil)
 			return renderedErrorExit(1)
 		}
-		if initialState.Plan.AcceptancePolicy == colony.PlanAcceptanceExplicitOwner || planHasCurrentAuthority(initialState.Plan) {
-			request, err := resolvePhaseInsertRequest(input, initialState.CurrentPhase)
-			if err != nil {
-				outputError(1, err.Error(), nil)
-				return renderedErrorExit(1)
-			}
-			candidate, err := createPhaseInsertCandidate(resolveAetherRootPath(), phaseInsertCandidateRequest{
-				After: request.After, Name: request.Name, Description: request.Description, Constraints: request.Constraints,
-				SpecificationItemID:               input.SpecificationItemID,
-				SpecificationRevisionPrerequisite: input.SpecificationRevisionPrerequisite,
-				ExpectedBasePlanRevisionID:        input.ExpectedBasePlanRevisionID,
-			})
-			if err != nil {
-				outputError(1, err.Error(), nil)
-				return renderedErrorExit(1)
-			}
-			result := map[string]interface{}{
-				"inserted": false, "candidate_created": true,
-				"candidate_id": candidate.Candidate.ID, "candidate_status": candidate.Candidate.Status,
-				"phase_id": candidate.InsertedPhase.ID, "phase_semantic_id": candidate.InsertedPhase.SemanticID,
-				"after": request.After, "name": request.Name, "description": request.Description, "constraints": request.Constraints,
-				"base_plan_revision_id":     candidate.Candidate.BasePlanRevisionID,
-				"specification_revision_id": candidate.Candidate.SpecificationRevisionID,
-				"affected_semantic_ids":     append([]string(nil), candidate.Candidate.Proposal.AffectedSemanticIDs...),
-				"preserved_semantic_ids":    append([]string(nil), candidate.Candidate.Proposal.PreservedSemanticIDs...),
-				"review_command":            candidate.ReviewCommand, "acceptance_command": candidate.AcceptCommand,
-			}
-			outputWorkflow(result, renderPhaseInsertVisual(result))
-			return nil
+		candidate, err := createPhaseInsertCandidateInSession(session, phaseInsertCandidateRequest{
+			After: request.After, Name: request.Name, Description: request.Description, Constraints: request.Constraints,
+			SpecificationItemID:               input.SpecificationItemID,
+			SpecificationRevisionPrerequisite: input.SpecificationRevisionPrerequisite,
+			ExpectedBasePlanRevisionID:        input.ExpectedBasePlanRevisionID,
+		})
+		if err != nil {
+			outputError(1, err.Error(), nil)
+			return renderedErrorExit(1)
 		}
-
-		var (
-			state           *colony.ColonyState
-			request         resolvedPhaseInsertRequest
-			insertedID      int
-			recoveryEventID string
-			mutationErr     error
-		)
-		if err := store.UpdateJSONAtomically("COLONY_STATE.json", &state, func() error {
-			// A pointer target distinguishes a missing file (no bytes were
-			// decoded) from a legitimate, zero-valued state. More importantly,
-			// every default, validation, and mutation below uses the fresh value
-			// read while UpdateJSONAtomically holds the state-file lock.
-			if state == nil {
-				mutationErr = fmt.Errorf("COLONY_STATE.json not found")
-				return mutationErr
-			}
-
-			request, mutationErr = resolvePhaseInsertRequest(input, state.CurrentPhase)
-			if mutationErr != nil {
-				return mutationErr
-			}
-			if request.After < 0 || request.After > len(state.Plan.Phases) {
-				mutationErr = fmt.Errorf("invalid after index %d (plan has %d phases)", request.After, len(state.Plan.Phases))
-				return mutationErr
-			}
-
-			// Only the positional issue emitted by the swarm refusal can
-			// authorize recovery. Explicit descriptions, prompt answers, and
-			// arbitrary inserts continue to insert normally but never reset
-			// swarm history.
-			beforePlan := state.Plan
-			beforePlan.Phases = clonePhases(state.Plan.Phases)
-			var (
-				recoveryHistory    *swarmStrikeHistory
-				recoveryEscalation *colony.FlagEntry
-			)
-			if recoveryTarget := strings.TrimSpace(input.PositionalIssue); recoveryTarget != "" {
-				history, historyErr := evaluateSwarmStrikeHistoryAgainstPlan(store, recoveryTarget, &beforePlan)
-				if historyErr != nil {
-					mutationErr = fmt.Errorf("verify swarm recovery eligibility: %w", historyErr)
-					return mutationErr
-				}
-				if history.StrikeCount >= 3 && history.TargetFingerprint == swarmTargetFingerprint(recoveryTarget) {
-					escalation, ok := activeSwarmEscalationForTarget(store, recoveryTarget)
-					if !ok {
-						mutationErr = fmt.Errorf("stage swarm recovery: active same-target escalation flag is unavailable")
-						return mutationErr
-					}
-					recoveryHistory = &history
-					recoveryEscalation = &escalation
-				}
-			}
-
-			newPhase := colony.Phase{
-				Name:        request.Name,
-				Description: request.Description,
-				Status:      colony.PhasePending,
-				Tasks:       []colony.Task{},
-			}
-			previousPhaseCount := len(state.Plan.Phases)
-
-			// Insert after the specified index (0-based).
-			insertAt := request.After
-			state.Plan.Phases = append(state.Plan.Phases[:insertAt], append([]colony.Phase{newPhase}, state.Plan.Phases[insertAt:]...)...)
-
-			// Renumber so phase.ID == index+1 holds after every insert.
-			// Production call sites index phases by ordinal (phaseNum-1); a
-			// mid-slice insert carrying max+1 would leave orders like [1,3,2]
-			// and misroute build and continue after the insertion point.
-			oldToNew := make(map[int]int, previousPhaseCount)
-			for i := range state.Plan.Phases {
-				if state.Plan.Phases[i].ID > 0 {
-					oldToNew[state.Plan.Phases[i].ID] = i + 1
-				}
-				state.Plan.Phases[i].ID = i + 1
-			}
-			insertedID = insertAt + 1
-			if mapped, ok := oldToNew[state.CurrentPhase]; ok && state.CurrentPhase > 0 {
-				state.CurrentPhase = mapped
-			}
-
-			if shouldReopenInsertedPhase(*state, insertAt, previousPhaseCount) {
-				state.State = colony.StateREADY
-				state.CurrentPhase = insertedID
-				state.Plan.Phases[insertAt].Status = colony.PhaseReady
-			}
-
-			if recoveryHistory != nil && recoveryEscalation != nil {
-				record, recoveryErr := buildSwarmRecoveryRecord(
-					input.PositionalIssue,
-					*recoveryHistory,
-					*recoveryEscalation,
-					beforePlan,
-					state.Plan,
-					state.Plan.Phases[insertAt],
-					time.Now().UTC(),
-				)
-				if recoveryErr != nil {
-					mutationErr = fmt.Errorf("stage swarm recovery: %w", recoveryErr)
-					return mutationErr
-				}
-				if recoveryErr := persistCorrectiveSwarmRecovery(store, record); recoveryErr != nil {
-					mutationErr = fmt.Errorf("persist swarm recovery: %w", recoveryErr)
-					return mutationErr
-				}
-				recoveryEventID = record.SwarmID
-			}
-			return nil
-		}); err != nil {
-			if mutationErr != nil {
-				outputError(1, mutationErr.Error(), nil)
-				return renderedErrorExit(1)
-			} else {
-				outputError(2, fmt.Sprintf("failed to save state: %v", err), nil)
-				return renderedErrorExit(2)
-			}
-		}
-
 		result := map[string]interface{}{
-			"inserted":    true,
-			"phase_id":    insertedID,
-			"after":       request.After,
-			"name":        request.Name,
-			"description": request.Description,
-			"constraints": request.Constraints,
-		}
-		if recoveryEventID != "" {
-			result["swarm_recovery_event"] = recoveryEventID
+			"inserted": false, "candidate_created": true,
+			"candidate_id": candidate.Candidate.ID, "candidate_status": candidate.Candidate.Status,
+			"phase_id": candidate.InsertedPhase.ID, "phase_semantic_id": candidate.InsertedPhase.SemanticID,
+			"after": request.After, "name": request.Name, "description": request.Description, "constraints": request.Constraints,
+			"base_plan_revision_id":     candidate.Candidate.BasePlanRevisionID,
+			"specification_revision_id": candidate.Candidate.SpecificationRevisionID,
+			"affected_semantic_ids":     append([]string(nil), candidate.Candidate.Proposal.AffectedSemanticIDs...),
+			"preserved_semantic_ids":    append([]string(nil), candidate.Candidate.Proposal.PreservedSemanticIDs...),
+			"review_command":            candidate.ReviewCommand, "acceptance_command": candidate.AcceptCommand,
 		}
 		outputWorkflow(result, renderPhaseInsertVisual(result))
 		return nil
-	},
+	}
+
+	var (
+		request         resolvedPhaseInsertRequest
+		insertedID      int
+		recoveryEventID string
+		recoveryRecord  *swarmResultRecord
+		mutationErr     error
+	)
+	state := initialState
+	mutationErr = func() error {
+		request, mutationErr = resolvePhaseInsertRequest(input, state.CurrentPhase)
+		if mutationErr != nil {
+			return mutationErr
+		}
+		if request.After < 0 || request.After > len(state.Plan.Phases) {
+			mutationErr = fmt.Errorf("invalid after index %d (plan has %d phases)", request.After, len(state.Plan.Phases))
+			return mutationErr
+		}
+
+		// Only the positional issue emitted by the swarm refusal can
+		// authorize recovery. Explicit descriptions, prompt answers, and
+		// arbitrary inserts continue to insert normally but never reset
+		// swarm history.
+		beforePlan := state.Plan
+		beforePlan.Phases = clonePhases(state.Plan.Phases)
+		var (
+			recoveryHistory    *swarmStrikeHistory
+			recoveryEscalation *colony.FlagEntry
+		)
+		if recoveryTarget := strings.TrimSpace(input.PositionalIssue); recoveryTarget != "" {
+			history, historyErr := evaluateSwarmStrikeHistoryAgainstPlan(store, recoveryTarget, &beforePlan)
+			if historyErr != nil {
+				mutationErr = fmt.Errorf("verify swarm recovery eligibility: %w", historyErr)
+				return mutationErr
+			}
+			if history.StrikeCount >= 3 && history.TargetFingerprint == swarmTargetFingerprint(recoveryTarget) {
+				escalation, ok := activeSwarmEscalationForTarget(store, recoveryTarget)
+				if !ok {
+					mutationErr = fmt.Errorf("stage swarm recovery: active same-target escalation flag is unavailable")
+					return mutationErr
+				}
+				recoveryHistory = &history
+				recoveryEscalation = &escalation
+			}
+		}
+
+		newPhase := colony.Phase{
+			Name:        request.Name,
+			Description: request.Description,
+			Status:      colony.PhasePending,
+			Tasks:       []colony.Task{},
+		}
+		previousPhaseCount := len(state.Plan.Phases)
+
+		// Insert after the specified index (0-based).
+		insertAt := request.After
+		state.Plan.Phases = append(state.Plan.Phases[:insertAt], append([]colony.Phase{newPhase}, state.Plan.Phases[insertAt:]...)...)
+
+		// Renumber so phase.ID == index+1 holds after every insert.
+		// Production call sites index phases by ordinal (phaseNum-1); a
+		// mid-slice insert carrying max+1 would leave orders like [1,3,2]
+		// and misroute build and continue after the insertion point.
+		oldToNew := make(map[int]int, previousPhaseCount)
+		for i := range state.Plan.Phases {
+			if state.Plan.Phases[i].ID > 0 {
+				oldToNew[state.Plan.Phases[i].ID] = i + 1
+			}
+			state.Plan.Phases[i].ID = i + 1
+		}
+		insertedID = insertAt + 1
+		if mapped, ok := oldToNew[state.CurrentPhase]; ok && state.CurrentPhase > 0 {
+			state.CurrentPhase = mapped
+		}
+
+		if shouldReopenInsertedPhase(state, insertAt, previousPhaseCount) {
+			state.State = colony.StateREADY
+			state.CurrentPhase = insertedID
+			state.Plan.Phases[insertAt].Status = colony.PhaseReady
+		}
+
+		if recoveryHistory != nil && recoveryEscalation != nil {
+			record, recoveryErr := buildSwarmRecoveryRecord(
+				input.PositionalIssue,
+				*recoveryHistory,
+				*recoveryEscalation,
+				beforePlan,
+				state.Plan,
+				state.Plan.Phases[insertAt],
+				time.Now().UTC(),
+			)
+			if recoveryErr != nil {
+				mutationErr = fmt.Errorf("stage swarm recovery: %w", recoveryErr)
+				return mutationErr
+			}
+			if recoveryErr := persistCorrectiveSwarmRecovery(store, record); recoveryErr != nil {
+				mutationErr = fmt.Errorf("persist swarm recovery: %w", recoveryErr)
+				return mutationErr
+			}
+			canonicalRecord, recoveryErr := canonicalCorrectiveSwarmRecovery(store, record)
+			if recoveryErr != nil {
+				mutationErr = fmt.Errorf("persist swarm recovery: %w", recoveryErr)
+				return mutationErr
+			}
+			recoveryRecord = &canonicalRecord
+			recoveryEventID = record.SwarmID
+		}
+		return nil
+	}()
+	if mutationErr != nil {
+		outputError(1, mutationErr.Error(), nil)
+		return renderedErrorExit(1)
+	}
+	stateBytes, err := marshalSpecificationState(state)
+	if err != nil {
+		outputError(2, fmt.Sprintf("failed to save state: %v", err), nil)
+		return renderedErrorExit(2)
+	}
+	targets := []planningSessionTarget{{Root: lifecycleTransactionRootData, Path: "COLONY_STATE.json", Content: stateBytes}}
+	if recoveryRecord != nil {
+		recordBytes, marshalErr := json.MarshalIndent(*recoveryRecord, "", "  ")
+		if marshalErr != nil {
+			outputError(2, fmt.Sprintf("failed to save state: %v", marshalErr), nil)
+			return renderedErrorExit(2)
+		}
+		targets = append(targets, planningSessionTarget{
+			Root:    lifecycleTransactionRootData,
+			Path:    filepath.ToSlash(filepath.Join("swarms", recoveryRecord.SwarmID, "result.json")),
+			Content: append(recordBytes, '\n'),
+		})
+	}
+	if err := commitPlanningSessionTargets(session, "phase-insert-legacy", "phase-insert-legacy", targets); err != nil {
+		outputError(2, fmt.Sprintf("failed to save state: %v", err), nil)
+		return renderedErrorExit(2)
+	}
+
+	result := map[string]interface{}{
+		"inserted":    true,
+		"phase_id":    insertedID,
+		"after":       request.After,
+		"name":        request.Name,
+		"description": request.Description,
+		"constraints": request.Constraints,
+	}
+	if recoveryEventID != "" {
+		result["swarm_recovery_event"] = recoveryEventID
+	}
+	outputWorkflow(result, renderPhaseInsertVisual(result))
+	return nil
 }
 
 func shouldReopenInsertedPhase(state colony.ColonyState, insertAt, previousPhaseCount int) bool {
