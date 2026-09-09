@@ -10,49 +10,32 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
-	"github.com/calcosmic/Aether/pkg/storage"
 )
 
 // setupBuildFlowTest creates a temp directory with store initialized for testing.
 func setupBuildFlowTest(t *testing.T) string {
 	t.Helper()
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		t.Fatalf("failed to create temp data dir: %v", err)
-	}
-	origRoot := os.Getenv("AETHER_ROOT")
-	os.Setenv("AETHER_ROOT", tmpDir)
-	t.Cleanup(func() {
-		if origRoot == "" {
-			os.Unsetenv("AETHER_ROOT")
-			return
-		}
-		os.Setenv("AETHER_ROOT", origRoot)
-	})
+	binding := bindCommandTestRepository(t)
 
 	// These fixtures stand in for a software project, so they must contain
 	// software. Phase 182 made the test-coverage specialist conditional on the
 	// repository actually holding program code -- a repository of markdown notes
 	// gives it nothing to find -- and without this file every build-flow fixture
 	// would read as a notes vault and quietly lose a worker it should have.
-	if err := os.WriteFile(tmpDir+"/main.go", []byte("package main\n\nfunc main() {}\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(binding.Root, "main.go"), []byte("package main\n\nfunc main() {}\n"), 0644); err != nil {
 		t.Fatalf("failed to write fixture source file: %v", err)
 	}
 
-	s, err := storage.NewStore(dataDir)
-	if err != nil {
-		t.Fatalf("failed to create store: %v", err)
-	}
-	store = s
+	originalStdout := stdout
+	originalStderr := stderr
 	stdout = &bytes.Buffer{}
 	stderr = &bytes.Buffer{}
 	t.Cleanup(func() {
-		stdout = os.Stdout
-		stderr = os.Stderr
+		stdout = originalStdout
+		stderr = originalStderr
 	})
 
-	return dataDir
+	return binding.DataDir
 }
 
 func TestRepositoryTestBindingSequence200(t *testing.T) {
