@@ -268,3 +268,39 @@ func TestMemoryMetricsReportsApplicationAwareHealth(t *testing.T) {
 		t.Fatalf("review_candidates = %v, want 1", curation["review_candidates"])
 	}
 }
+
+func TestMemoryPhaseRestoreRepositoryAuthority200(t *testing.T) {
+	tests := []struct {
+		name string
+		run  func(*testing.T)
+	}{
+		{name: "memory", run: TestMemoryMetrics},
+		{name: "phase", run: TestPhaseJSON},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			originalRoot := t.TempDir()
+			originalDataDir := originalRoot + "/.aether/data"
+			if err := os.MkdirAll(originalDataDir, 0755); err != nil {
+				t.Fatalf("create original data directory: %v", err)
+			}
+			t.Setenv("AETHER_ROOT", originalRoot)
+			t.Setenv("COLONY_DATA_DIR", originalDataDir)
+			store = nil
+			tracer = nil
+
+			t.Run("command fixture", tt.run)
+
+			if got := os.Getenv("AETHER_ROOT"); got != originalRoot {
+				t.Errorf("AETHER_ROOT = %q after cleanup, want %q", got, originalRoot)
+			}
+			if got := os.Getenv("COLONY_DATA_DIR"); got != originalDataDir {
+				t.Errorf("COLONY_DATA_DIR = %q after cleanup, want %q", got, originalDataDir)
+			}
+			if store != nil || tracer != nil {
+				t.Errorf("repository authority leaked after cleanup: store=%p tracer=%p", store, tracer)
+			}
+		})
+	}
+}
