@@ -35,12 +35,13 @@ func newLegacyRecovery199Fixture(t *testing.T) legacyRecovery199Fixture {
 	saveGlobals(t)
 	resetRootCmd(t)
 
-	root := t.TempDir()
+	binding := bindCommandTestRepository(t)
+	root := binding.Root
 	home := t.TempDir()
-	// Keep lifecycle data outside the repository so the contract proves every
-	// reader follows the configured Store root instead of assuming the default
-	// .aether/data location.
-	dataDir := filepath.Join(home, "colony-data")
+	// Keep lifecycle data at a non-default path so the contract still proves
+	// every reader follows the configured Store root, while modern repository
+	// containment requires that writable path to remain inside the repository.
+	dataDir := filepath.Join(root, ".aether", "legacy-colony-data")
 	hub := filepath.Join(home, ".aether-hub")
 	relativeDataDir, err := filepath.Rel(root, dataDir)
 	if err != nil || relativeDataDir == ".." || strings.HasPrefix(relativeDataDir, ".."+string(filepath.Separator)) {
@@ -55,15 +56,19 @@ func newLegacyRecovery199Fixture(t *testing.T) legacyRecovery199Fixture {
 		}
 	}
 	t.Setenv("HOME", home)
-	t.Setenv("AETHER_ROOT", root)
 	t.Setenv("COLONY_DATA_DIR", dataDir)
 	t.Setenv("AETHER_HUB_DIR", hub)
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	t.Setenv("AETHER_PLATFORM", "codex")
 	t.Setenv("NO_COLOR", "1")
 
-	s, err := storage.NewStore(dataDir)
+	authority, err := storage.OpenRepositoryRoot(root, dataDir)
 	if err != nil {
+		t.Fatalf("open legacy repository authority: %v", err)
+	}
+	s, err := storage.NewRepositoryStore(authority)
+	if err != nil {
+		_ = authority.Close()
 		t.Fatalf("create store: %v", err)
 	}
 	store = s
