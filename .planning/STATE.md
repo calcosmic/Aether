@@ -2,16 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
+current_phase: 201
+current_phase_name: Queen-Led Work Cycle
 status: executing
-stopped_at: Completed 201-13-PLAN.md
-last_updated: "2026-09-10T18:48:02.680Z"
+stopped_at: Completed 201-14-PLAN.md
+last_updated: "2026-09-10T19:14:18.494Z"
 last_activity: 2026-09-10
+state_head: f78f578ea56471149a7a113d2d1102c1937e2178
 progress:
   total_phases: 7
-  completed_phases: 2
+  completed_phases: 0
   total_plans: 104
-  completed_plans: 102
-  percent: 29
+  completed_plans: 103
+  percent: 0
 ---
 
 # Project State
@@ -29,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 201 (Queen-Led Work Cycle) — EXECUTING
-Plan: 14 of 15
+Plan: 15 of 15
 Status: Ready to execute
 Last activity: 2026-09-10
 
@@ -177,6 +180,7 @@ Last activity: 2026-09-10
 | Phase 201 P11 | 40 min | 3 tasks | 5 files |
 | Phase 201 P12 | 55min | 3 tasks | 8 files |
 | Phase 201 P13 | 6min | 3 tasks | 3 files |
+| Phase 201 P14 | 55min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -569,6 +573,7 @@ Last activity: 2026-09-10
 - [Phase 201]: Attempt/job identity resolved via loadLatestBuildAttempt rather than threaded through codex.WorkerDispatch; worker-reported blockers become durable FlagEntry records reusing the existing pending-decisions.json store (no second blocker store); same-run repair signal delivered as an active pheromone REDIRECT signal so no changes to check_fix_attempt.go were needed
 - [Phase ?]: Job telemetry is attempt-bound and merges across build+continue writes rather than overwriting; only the direct/native build lane can measure queue/context/work today, so the wrapper-driven lane has no telemetry until a later plan adds capture there.
 - [Phase ?]: Owner ratified 4m30s turnaround target for small single-task jobs (down from measured 408s), applied only via slimmer briefs + proven suite speedups — Measured job was named lighter than owner's typical request; target is a floor-setting benchmark, not a claim about all job sizes
+- [Phase 201]: Model routing (D-15c) starts with exactly one routed caste (porter), justified by the existing quality-sensitivity evidence table rather than invented benchmarks; runDeterministicFloor's signature stayed unchanged, with a new sibling function carrying the loop/boundary cycle-point parameter to avoid touching 13 pre-existing test call sites.
 
 ### Pending Todos
 
@@ -685,8 +690,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-10T18:48:02.669Z
-Stopped at: Completed 201-13-PLAN.md
+Last session: 2026-09-10T19:14:18.437Z
+Stopped at: Completed 201-14-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

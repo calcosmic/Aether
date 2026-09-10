@@ -364,7 +364,7 @@ Plans:
 
 **Requirements:** SYNTH-03, CEC-06, WORK-01..08
 
-**Plans:** 13/15 plans executed
+**Plans:** 14/15 plans executed
 
 Plans:
 
@@ -413,7 +413,7 @@ Plans:
 
 **Wave 11** *(blocked on Wave 10 completion)*
 
-- [ ] 201-14-PLAN.md — Apply the three approved speed levers: loop test lanes, slimmer briefs, caste model routing.
+- [x] 201-14-PLAN.md — Apply the three approved speed levers: loop test lanes, slimmer briefs, caste model routing.
 
 **Wave 12** *(blocked on Wave 11 completion)*
 
