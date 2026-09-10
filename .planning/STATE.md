@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 201-11-PLAN.md
-last_updated: "2026-09-10T16:52:10.041Z"
+stopped_at: Completed 201-12-PLAN.md
+last_updated: "2026-09-10T17:23:14.684Z"
 last_activity: 2026-09-10
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 104
-  completed_plans: 100
+  completed_plans: 101
   percent: 29
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 201 (Queen-Led Work Cycle) — EXECUTING
-Plan: 12 of 15
+Plan: 13 of 15
 Status: Ready to execute
 Last activity: 2026-09-10
 
@@ -175,6 +175,7 @@ Last activity: 2026-09-10
 | Phase 201 P09 | 35min | 3 tasks | 5 files |
 | Phase 201 P10 | 55min | 3 tasks | 5 files |
 | Phase 201 P11 | 40 min | 3 tasks | 5 files |
+| Phase 201 P12 | 55min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -565,6 +566,7 @@ Last activity: 2026-09-10
 - [Phase 201]: Plan-only lane stamps its own returned dispatches with AttemptID but never resaves manifest.json — manifest.json's bytes are bound to attempt.ManifestSHA256; resaving a stamped copy broke the completion-packet digest check on the finalize lane (caught by go test ./cmd -run TestBuild).
 - [Phase ?]: 201-09: repair-checkpoint identity reuses the /ant-pause idempotency-key pattern (checkpoint ID -> receipt lookup -> replay) rather than the full PauseHandoff lifecycle-transaction machinery, per SYN-201-10.
 - [Phase 201]: Attempt/job identity resolved via loadLatestBuildAttempt rather than threaded through codex.WorkerDispatch; worker-reported blockers become durable FlagEntry records reusing the existing pending-decisions.json store (no second blocker store); same-run repair signal delivered as an active pheromone REDIRECT signal so no changes to check_fix_attempt.go were needed
+- [Phase ?]: Job telemetry is attempt-bound and merges across build+continue writes rather than overwriting; only the direct/native build lane can measure queue/context/work today, so the wrapper-driven lane has no telemetry until a later plan adds capture there.
 
 ### Pending Todos
 
@@ -681,8 +683,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-10T16:52:10.031Z
-Stopped at: Completed 201-11-PLAN.md
+Last session: 2026-09-10T17:23:14.674Z
+Stopped at: Completed 201-12-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

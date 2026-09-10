@@ -364,7 +364,7 @@ Plans:
 
 **Requirements:** SYNTH-03, CEC-06, WORK-01..08
 
-**Plans:** 11/15 plans executed
+**Plans:** 12/15 plans executed
 
 Plans:
 
@@ -405,7 +405,7 @@ Plans:
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
-- [ ] 201-12-PLAN.md — Record eight-segment per-job telemetry with honest unmeasured segments, report-only.
+- [x] 201-12-PLAN.md — Record eight-segment per-job telemetry with honest unmeasured segments, report-only.
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
