@@ -134,6 +134,72 @@ func TestNoCasteIsDispatchedAtBothBoundaries(t *testing.T) {
 			}
 		})
 	}
+
+	// Phase 201-05 (D-05): the loop above proves no double-dispatch under the
+	// UNRECORDED (check-step-default) boundary. Strengthen this test to walk
+	// the same phase fixtures against the REAL, explicitly recorded boundary
+	// -- both check_step and build_end -- so a future regression that makes
+	// either dispatcher stop reading the recorded decision (and fall back to
+	// re-deriving from phase content) is caught by this same guard, at every
+	// boundary value the runtime can actually produce.
+	s, _ := newTestStore(t)
+	store = s
+	for _, tc := range []struct {
+		name    string
+		phaseID int
+		choice  string
+	}{
+		{"recorded check-step boundary: no double dispatch, continue still reviews", 11, verificationBoundaryChoiceCheckStep},
+		{"recorded build-end boundary: no double dispatch, continue dispatches nothing", 12, verificationBoundaryChoiceBuildEnd},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			phase := boundaryDoubleDispatchPhase(tc.phaseID, "Password reset", "Let users reset their password via an emailed token")
+			attemptWithVerificationBoundaryRecorded(t, phase.ID, fmt.Sprintf("attempt-recorded-boundary-%d", phase.ID), tc.choice, "double-dispatch regression fixture")
+
+			buildDispatches := testPlannedBuildDispatchesWithJudgement(phase, state, nil, colony.VerificationDepthStandard, nil, "")
+			buildCastes := map[string]bool{}
+			for _, d := range buildDispatches {
+				buildCastes[d.Caste] = true
+			}
+
+			continueDispatches := plannedContinueReviewDispatches(
+				"/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{},
+				&codex.FakeInvoker{}, time.Minute, colony.VerificationDepthStandard, nil, "",
+			)
+			continueCastes := map[string]bool{}
+			for _, d := range continueDispatches {
+				continueCastes[d.Caste] = true
+			}
+
+			if tc.choice == verificationBoundaryChoiceBuildEnd {
+				// D-05: with judgement recorded to land at build-end, the
+				// check step dispatches NO reviewer of its own -- it reads
+				// the build-end findings back instead
+				// (continueReviewReportFromBuildEndFindings), proven
+				// separately by TestCheckStepReviewersGateOnTheRecordedBoundary.
+				if len(continueCastes) != 0 {
+					t.Fatalf("recorded build-end boundary: check step still dispatched %v, want none", continueCastes)
+				}
+			} else {
+				// D-01: the check-step default still forces its own
+				// reviewer for this phase's credentials signal -- a recorded
+				// check_step choice must not silently suppress it.
+				if len(continueCastes) == 0 {
+					t.Fatalf("recorded check-step boundary: no reviewer was forced at continue for phase %q", phase.Name)
+				}
+			}
+
+			intersection := map[string]bool{}
+			for caste := range buildCastes {
+				if continueCastes[caste] {
+					intersection[caste] = true
+				}
+			}
+			if len(intersection) != 0 {
+				t.Fatalf("caste(s) dispatched at BOTH the build and continue boundaries under a %q recorded decision: %v (build=%v continue=%v)", tc.choice, intersection, buildCastes, continueCastes)
+			}
+		})
+	}
 }
 
 // TestBuildEndReviewersGateOnTheRecordedBoundary is Task 1's own proof
@@ -292,4 +358,72 @@ func TestDeterministicChecksAreUnchangedByTheBoundary(t *testing.T) {
 	if got := resolveCodexVerificationCommands("/tmp"); got != resolveCodexVerificationCommands("/tmp") {
 		t.Fatalf("resolveCodexVerificationCommands is not stable across calls for the same root: %+v vs %+v", got, resolveCodexVerificationCommands("/tmp"))
 	}
+}
+
+// TestCheckStepReviewersGateOnTheRecordedBoundary is Task 2's own proof
+// (201-05-PLAN.md): the check-time reviewer dispatch path
+// (plannedContinueReviewDispatches, runCodexContinueReview) reads the same
+// stored boundary record and dispatches no reviewer of its own when the
+// recorded choice is build-end -- consuming the build-end reviewer findings
+// already bound to the attempt instead of re-running them.
+func TestCheckStepReviewersGateOnTheRecordedBoundary(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	t.Run("recorded build-end boundary: no check-step dispatch, build-end findings surface in the check result", func(t *testing.T) {
+		phase := boundaryDoubleDispatchPhase(231, "Password reset", "Let users reset their password via an emailed token")
+		attemptRel := attemptWithVerificationBoundaryRecorded(t, phase.ID, "attempt-checkstep-231", verificationBoundaryChoiceBuildEnd, "credentials handling")
+
+		// Bind a real reviewer worker run to the attempt -- the "already
+		// happened" finding the check step must read back instead of
+		// re-dispatching a second reviewer for the same phase.
+		var record buildAttemptRecord
+		if err := store.UpdateJSONAtomically(attemptRel, &record, func() error {
+			record.WorkerRuns = append(record.WorkerRuns, buildAttemptWorkerRun{
+				WorkerName: "Sentinel-9",
+				Caste:      "auditor",
+				Status:     buildWorkerCompleted,
+				Result:     &internalWorkerResult{Summary: "No quality issues found."},
+			})
+			return nil
+		}); err != nil {
+			t.Fatalf("bind build-end worker run: %v", err)
+		}
+
+		dispatches := plannedContinueReviewDispatches(
+			"/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{},
+			&codex.FakeInvoker{}, time.Minute, colony.VerificationDepthStandard, nil, "",
+		)
+		if len(dispatches) != 0 {
+			t.Fatalf("expected no check-step reviewer dispatches with a recorded build-end boundary, got %+v", dispatches)
+		}
+
+		report := runCodexContinueReview("/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, time.Minute, colony.VerificationDepthStandard, false, nil, "")
+		found := false
+		for _, w := range report.Workers {
+			if w.Caste == "auditor" && w.Summary == "No quality issues found." {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("expected the build-end auditor finding to appear in the check result, got %+v", report.Workers)
+		}
+		if !report.Passed {
+			t.Fatalf("expected the check result to pass on a clean build-end finding, got blockers=%v", report.BlockingIssues)
+		}
+	})
+
+	t.Run("recorded check-step boundary: check-step dispatches its own reviewer as before", func(t *testing.T) {
+		phase := boundaryDoubleDispatchPhase(232, "Password reset", "Let users reset their password via an emailed token")
+		attemptWithVerificationBoundaryRecorded(t, phase.ID, "attempt-checkstep-232", verificationBoundaryChoiceCheckStep, "default landing")
+
+		dispatches := plannedContinueReviewDispatches(
+			"/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{},
+			&codex.FakeInvoker{}, time.Minute, colony.VerificationDepthStandard, nil, "",
+		)
+		if len(dispatches) == 0 {
+			t.Fatalf("expected the check step to dispatch its own reviewer(s) with a recorded check-step boundary")
+		}
+	})
 }

@@ -1604,6 +1604,78 @@ func continueReviewSpecForCaste(caste string) (codexContinueReviewSpec, bool) {
 	return codexContinueReviewSpec{}, false
 }
 
+// reviewJudgementAlreadyLandedAtBuildEnd reads (never re-derives) the
+// verification-boundary decision recorded on the phase's current build
+// attempt. It reports true only when a decision was actually recorded AND
+// that decision names build-end -- an attempt with no recorded decision, or
+// no attempt at all, falls through to the check-step default (D-01).
+func reviewJudgementAlreadyLandedAtBuildEnd(phaseID int) bool {
+	attemptRel, _, hasAttempt := loadLatestBuildAttempt(phaseID)
+	if !hasAttempt {
+		return false
+	}
+	decision, hasDecision := verificationBoundaryForAttempt(attemptRel)
+	return hasDecision && decision.Choice == verificationBoundaryChoiceBuildEnd
+}
+
+// continueReviewCastes names every caste that can appear in a continue
+// review wave (the base specs plus continueReviewSpecForCaste's switch
+// cases) -- used to pick the build-end worker runs that were acting as
+// reviewers, not task implementers, out of a build attempt's full run list.
+var continueReviewCastes = map[string]bool{
+	"gatekeeper": true, "auditor": true, "probe": true, "watcher": true,
+	"measurer": true, "chaos": true, "includer": true, "keeper": true,
+	"sage": true, "medic": true, "fixer": true,
+}
+
+// continueReviewReportFromBuildEndFindings builds the check step's review
+// report from the SAME reviewer results already bound to the build attempt,
+// instead of re-dispatching a second review wave for judgement that already
+// happened once, at the boundary the Queen recorded (D-05). A build attempt
+// with no reviewer worker runs recorded (the boundary was set to build-end,
+// but no build-end reviewer actually ran -- e.g. the Queen's build-time team
+// selected none) reports as skipped, not as passed by default silence.
+func continueReviewReportFromBuildEndFindings(phase colony.Phase, record buildAttemptRecord, decision verificationBoundaryDecision) codexContinueReviewReport {
+	report := codexContinueReviewReport{
+		Phase:       phase.ID,
+		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
+		Workers:     []codexContinueWorkerFlowStep{},
+	}
+	var blockers []string
+	found := false
+	for _, run := range record.WorkerRuns {
+		caste := strings.ToLower(strings.TrimSpace(run.Caste))
+		if !continueReviewCastes[caste] {
+			continue
+		}
+		found = true
+		step := codexContinueWorkerFlowStep{
+			Stage:  "review",
+			Caste:  run.Caste,
+			Name:   run.WorkerName,
+			Task:   continueReviewTaskForCaste(run.Caste),
+			Status: normalizeRuntimeDispatchStatus(run.Status),
+		}
+		if run.Result != nil {
+			step.Blockers = uniqueSortedStrings(run.Result.Blockers)
+			step.Summary = strings.TrimSpace(run.Result.Summary)
+		}
+		if step.Summary == "" {
+			step.Summary = "Reviewed at build end -- " + decision.Summary()
+		}
+		blockers = append(blockers, step.Blockers...)
+		report.Workers = append(report.Workers, step)
+	}
+	if !found {
+		report.Workers = append(report.Workers, continueReviewSkippedFlowStep(
+			"review already happened at build end ("+decision.Summary()+"); no build-end reviewer findings were recorded on this attempt",
+		))
+	}
+	report.BlockingIssues = uniqueSortedStrings(blockers)
+	report.Passed = len(report.BlockingIssues) == 0
+	return report
+}
+
 func runCodexContinueReview(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration, reviewDepth colony.VerificationDepth, skipWatchers bool, queenCastes []string, queenCasteReason string, reasons ...map[string]string) codexContinueReviewReport {
 	report := codexContinueReviewReport{
 		Phase:       phase.ID,
@@ -1617,6 +1689,12 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 		report.Workers = append(report.Workers, continueReviewSkippedFlowStep("review wave skipped by --skip-watchers; no platform review agents were launched"))
 		report.Passed = true
 		return report
+	}
+
+	if attemptRel, record, hasAttempt := loadLatestBuildAttempt(phase.ID); hasAttempt {
+		if decision, hasDecision := verificationBoundaryForAttempt(attemptRel); hasDecision && decision.Choice == verificationBoundaryChoiceBuildEnd {
+			return continueReviewReportFromBuildEndFindings(phase, record, decision)
+		}
 	}
 
 	invoker := newCodexWorkerInvoker()
@@ -1735,7 +1813,18 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 	return report
 }
 
+// plannedContinueReviewDispatches is the check-step half of D-05's single
+// boundary: when the phase's current build attempt has a recorded
+// verification-boundary decision (verificationBoundaryForAttempt,
+// cmd/verification_boundary.go) naming build-end, reviewer judgement already
+// happened there, so the check step dispatches no reviewer of its own --
+// runCodexContinueReview reads the build-end findings back instead of
+// re-running them. Absent a recorded decision, or a recorded check-step
+// choice, this proceeds exactly as before (the check-step default, D-01).
 func plannedContinueReviewDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, invoker codex.WorkerInvoker, workerTimeout time.Duration, reviewDepth colony.VerificationDepth, queenCastes []string, queenCasteReason string, reasons ...map[string]string) []codex.WorkerDispatch {
+	if reviewJudgementAlreadyLandedAtBuildEnd(phase.ID) {
+		return nil
+	}
 	capsule := resolveCodexWorkerContext()
 	// PheromoneSection is deliberately left unset (D-190-03-A / 190-05): capsule
 	// already renders "## Pheromone Signals" unconditionally whenever a signal is
