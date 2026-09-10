@@ -1,7 +1,11 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +13,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/codex"
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
 )
 
@@ -270,6 +275,149 @@ func TestEvidenceStorageFailureNeverFailsTheRun(t *testing.T) {
 	gotErr := recordDispatchWorkerOutcome(dispatch, result)
 	if gotErr == nil || gotErr.Error() != wantErr.Error() {
 		t.Fatalf("recordDispatchWorkerOutcome error = %v, want %v (persistDispatchWorkerHandoff's own error, unchanged -- the blocker/midden writes must never add their own failure)", gotErr, wantErr)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Task 2: bounded recovery consumes flags and recurring failure classes.
+// ---------------------------------------------------------------------------
+
+func validAutopilotRepairFailureFixture(phase int, check string) autopilotRepairFailure {
+	return autopilotRepairFailure{
+		Phase: phase, Attempt: "attempt-repair-eval", Check: check,
+		Evidence: []string{"go test ./cmd failed"}, PlannedAction: "fix the failing test",
+		Baseline: "abc123", PermittedScope: []string{"cmd/example.go"},
+		ScopeSafe: true, SafetySafe: true, AuthoritySafe: true,
+	}
+}
+
+func seedUnresolvedBlockerFlag(t *testing.T, phase int, id string) {
+	t.Helper()
+	if store == nil {
+		t.Fatal("seedUnresolvedBlockerFlag: store is nil")
+	}
+	phasePtr := phase
+	ff := colony.FlagsFile{Decisions: []colony.FlagEntry{{
+		ID: id, Type: "blocker", Description: "a manually-flagged blocker", Source: "manual",
+		Phase: &phasePtr, CreatedAt: time.Now().UTC().Format(time.RFC3339), Resolved: false,
+	}}}
+	if err := store.SaveJSON("pending-decisions.json", ff); err != nil {
+		t.Fatalf("seed unresolved blocker flag: %v", err)
+	}
+}
+
+func seedRecurringFailureRedirectSignal(t *testing.T) {
+	t.Helper()
+	if store == nil {
+		t.Fatal("seedRecurringFailureRedirectSignal: store is nil")
+	}
+	content, _ := json.Marshal(map[string]string{"text": "this failure has recurred 3 or more times unacknowledged"})
+	pf := colony.PheromoneFile{Signals: []colony.PheromoneSignal{{
+		ID: "sig_recurring_1", Type: "REDIRECT", Priority: "high", Source: "aether continue",
+		CreatedAt: time.Now().UTC().Format(time.RFC3339), Active: true, Content: content,
+	}}}
+	if err := store.SaveJSON("pheromones.json", pf); err != nil {
+		t.Fatalf("seed recurring failure signal: %v", err)
+	}
+}
+
+func TestRepairEvaluationNamesItsDrivingInput(t *testing.T) {
+	cases := []struct {
+		name          string
+		withFlags     bool
+		withRecurring bool
+		wantContains  []string
+		wantAbsent    []string
+	}{
+		{name: "flags only", withFlags: true, wantContains: []string{"unresolved flag"}, wantAbsent: []string{"recurring"}},
+		{name: "recurring only", withRecurring: true, wantContains: []string{"recurring failure class"}, wantAbsent: []string{"unresolved flag"}},
+		{name: "both", withFlags: true, withRecurring: true, wantContains: []string{"unresolved flag", "recurring failure class"}},
+		{name: "neither", wantAbsent: []string{"unresolved flag", "recurring failure class"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s, tmpDir := newTestStore(t)
+			defer os.RemoveAll(tmpDir)
+			store = s
+
+			if tc.withFlags {
+				seedUnresolvedBlockerFlag(t, 13, "flag-driving-1")
+			}
+			if tc.withRecurring {
+				seedRecurringFailureRedirectSignal(t)
+			}
+
+			failure := validAutopilotRepairFailureFixture(13, "go test ./cmd")
+			evaluation := repairEligibilityEvaluation(failure, 3)
+			if !evaluation.Eligible {
+				t.Fatalf("evaluation = %+v, want Eligible=true for a valid, safe fixture", evaluation)
+			}
+			for _, want := range tc.wantContains {
+				if !strings.Contains(evaluation.Reason, want) {
+					t.Errorf("evaluation.Reason = %q, want it to contain %q", evaluation.Reason, want)
+				}
+			}
+			for _, absent := range tc.wantAbsent {
+				if strings.Contains(evaluation.Reason, absent) {
+					t.Errorf("evaluation.Reason = %q, want it to NOT contain %q", evaluation.Reason, absent)
+				}
+			}
+		})
+	}
+}
+
+func TestUnresolvedFlagsNeverEvaluateAsNothingToRepair(t *testing.T) {
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	seedUnresolvedBlockerFlag(t, 17, "flag-driving-2")
+
+	failure := validAutopilotRepairFailureFixture(17, "go vet ./cmd")
+	evaluation := repairEligibilityEvaluation(failure, 3)
+	if !strings.Contains(evaluation.Reason, "unresolved flag") {
+		t.Fatalf("a phase with unresolved flags must never be evaluated without naming them: reason = %q", evaluation.Reason)
+	}
+}
+
+// TestOneRecoveryModelConsumesFlagsAndFailures asserts, from the parsed
+// syntax tree of cmd/work_repair.go, that exactly one function in the file
+// calls the repair-ledger-mutating entry point (executeAutopilotRepair /
+// beginAutopilotRepair) -- runBoundedRepairRound. A second call site would
+// be exactly the second recovery path CAP-024 prohibits.
+func TestOneRecoveryModelConsumesFlagsAndFailures(t *testing.T) {
+	fset := token.NewFileSet()
+	path := filepath.Join(".", "work_repair.go")
+	file, err := parser.ParseFile(fset, path, nil, 0)
+	if err != nil {
+		t.Fatalf("parse %s: %v", path, err)
+	}
+
+	entryPoints := map[string]bool{"executeAutopilotRepair": true, "beginAutopilotRepair": true}
+	var callers []string
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Body == nil {
+			continue
+		}
+		ast.Inspect(fn.Body, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			ident, ok := call.Fun.(*ast.Ident)
+			if !ok {
+				return true
+			}
+			if entryPoints[ident.Name] {
+				callers = append(callers, fn.Name.Name)
+			}
+			return true
+		})
+	}
+	if len(callers) != 1 || callers[0] != "runBoundedRepairRound" {
+		t.Fatalf("expected exactly one call site (runBoundedRepairRound) into the repair-ledger entry point in cmd/work_repair.go, got %v", callers)
 	}
 }
 

@@ -112,7 +112,11 @@ func runBoundedRepairRound(
 		PermittedScope: input.PermittedScope, ScopeSafe: input.ScopeSafe,
 		SafetySafe: input.SafetySafe, AuthoritySafe: input.AuthoritySafe,
 	}
-	evaluation := classifyAutopilotRepairFailure(failure, ledger.Remaining)
+	// repairEligibilityEvaluation (CAP-024) wraps classifyAutopilotRepairFailure
+	// with the unresolved-flags and recurring-failure-class inputs -- the
+	// eligibility decision itself is unchanged, only the recorded reason is
+	// enriched to name which input drove it.
+	evaluation := repairEligibilityEvaluation(failure, ledger.Remaining)
 	if !evaluation.Eligible {
 		return repairRoundOutcome{Ran: false, CheckpointID: checkpointID, Reason: evaluation.Reason}, nil
 	}
@@ -167,6 +171,64 @@ func runBoundedRepairRound(
 	}
 
 	return outcome, nil
+}
+
+// repairEligibilityEvaluation (CAP-024) extends classifyAutopilotRepairFailure
+// (cmd/autopilot_policy.go) with the two further inputs bounded recovery
+// must consume alongside the failing check it already evaluates: unresolved
+// blocker flags (readBlockerSnapshot, the one blocker-truth store this
+// plan's Task 1 also writes into) and a recurring failure class. There is
+// still exactly one eligibility decision -- Eligible/Pause come from
+// classifyAutopilotRepairFailure alone, unchanged -- this function only
+// enriches the recorded Reason so it names exactly which of the three
+// inputs (unresolved flags, a recurring failure class, or the failing check
+// itself) drove it, and so a phase carrying unresolved flags is never
+// reported as though it had nothing left to repair.
+//
+// Recurring failure classes are read by consuming the existing REDIRECT
+// signal emitMiddenThresholdRedirect already writes once a midden.json
+// category crosses its three-unacknowledged-failure threshold
+// (cmd/phase_end_signals.go) -- never by recounting that threshold a second
+// time here (CAP-024: one recovery model, no second counting path).
+func repairEligibilityEvaluation(failure autopilotRepairFailure, remainingBudget int) autopilotRepairEvaluation {
+	evaluation := classifyAutopilotRepairFailure(failure, remainingBudget)
+
+	blockers, _ := readBlockerSnapshot(store)
+	hasFlags := blockers.Count > 0
+	_, hasRecurring := recurringFailureClassSignal()
+
+	switch {
+	case hasFlags && hasRecurring:
+		evaluation.Reason = fmt.Sprintf("%s (also driven by: %d unresolved flag(s) and a recurring failure class)", evaluation.Reason, blockers.Count)
+	case hasFlags:
+		evaluation.Reason = fmt.Sprintf("%s (also driven by: %d unresolved flag(s))", evaluation.Reason, blockers.Count)
+	case hasRecurring:
+		evaluation.Reason = fmt.Sprintf("%s (also driven by: a recurring failure class)", evaluation.Reason)
+	}
+
+	return evaluation
+}
+
+// recurringFailureClassSignal reports whether an active REDIRECT signal is
+// already recorded -- the exact signal emitMiddenThresholdRedirect writes
+// once a midden.json failure category crosses the three-unacknowledged
+// threshold (cmd/phase_end_signals.go, middenAutoRedirectThreshold). This
+// consumes that already-computed signal rather than re-scanning midden.json
+// and recounting the threshold a second time.
+func recurringFailureClassSignal() (colony.PheromoneSignal, bool) {
+	if store == nil {
+		return colony.PheromoneSignal{}, false
+	}
+	pf, err := loadPheromoneFileWithFallback(store)
+	if err != nil {
+		return colony.PheromoneSignal{}, false
+	}
+	for _, sig := range pf.Signals {
+		if sig.Type == "REDIRECT" && sig.Active {
+			return sig, true
+		}
+	}
+	return colony.PheromoneSignal{}, false
 }
 
 // repairCheckpointIdentity is D-09's idempotency key (SYN-201-10): a
@@ -403,7 +465,6 @@ func applyBoundedCheckFixRepair(ctx context.Context, root string, state colony.C
 	defer os.RemoveAll(checkpoint.BackupDir)
 
 	emitRepairCheckpointSaved(phase.ID, record.Check)
-
 	newFloor, fixed := applyAutomaticCheckFixAttempt(ctx, root, state, phase, manifest, floor, buildWatcher, workerTimeout, verificationTimeout, reviewerDispatched)
 
 	if fixed != nil && fixed.Outcome == "still_failing" {
