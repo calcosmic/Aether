@@ -364,7 +364,7 @@ Plans:
 
 **Requirements:** SYNTH-03, CEC-06, WORK-01..08
 
-**Plans:** 18/20 plans executed (15 executed, 5 gap-closure plans pending)
+**Plans:** 19/20 plans executed
 
 Plans:
 
@@ -430,7 +430,7 @@ Plans:
 
 **Gap closure — Wave 3** *(blocked on gap-closure Wave 2)*
 
-- [ ] 201-19-PLAN.md — Give every build closeout a real verdict, the honest unverified card, the next action and the file card.
+- [x] 201-19-PLAN.md — Give every build closeout a real verdict, the honest unverified card, the next action and the file card.
 
 **Gap closure — Wave 4** *(blocked on gap-closure Wave 3)*
 
