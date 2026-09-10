@@ -844,6 +844,13 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	// blocks BEFORE a reviewer is ever dispatched (preserving the existing
 	// cost-avoidance behavior), and again below once a review report exists.
 	preReviewDecision := runContinueAcceptVerifyAdvance(phase, assessment, gates, nil, state)
+	// D-05/D-06/D-07 (201-20): the check's own verdict, derived once right
+	// here from the decision this lane just obtained -- never recomputed at
+	// a render site. Only relevant if preReviewDecision itself is what a
+	// caller ends up rendering (the gate-blocked-before-review path below);
+	// finalDecision below supplies its own verdict for the paths that reach
+	// it.
+	preReviewWorkOutcome := checkWorkOutcome(preReviewDecision, verification)
 	if progress != nil {
 		progress.Advance("Verification")
 	}
@@ -959,27 +966,28 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		updateSessionSummary("continue", nextCommand, summary)
 
 		result := map[string]interface{}{
-			"advanced":            false,
-			"blocked":             true,
-			"partial_success":     assessment.PartialSuccess,
-			"current_phase":       blockedState.CurrentPhase,
-			"phase_name":          phase.Name,
-			"state":               blockedState.State,
-			"next":                nextCommand,
-			"verification":        verification,
-			"assessment":          assessment,
-			"task_evidence":       assessment.Tasks,
-			"gates":               gates,
-			"verification_report": displayDataPath(verificationReportRel),
-			"gate_report":         displayDataPath(gateReportRel),
-			"continue_report":     displayDataPath(continueReportRel),
-			"worker_flow":         workerFlow,
-			"autopilot_signals":   continueReviewAutopilotSignals(workerFlow, runtimeCheckpoints),
-			"operational_issues":  assessment.OperationalIssues,
-			"recovery":            assessment.Recovery,
-			"reconciled_tasks":    assessment.ReconciledTasks,
-			"blocking_issues":     blockers,
-			"review_depth":        string(reviewDepth),
+			"advanced":                false,
+			"blocked":                 true,
+			"partial_success":         assessment.PartialSuccess,
+			"current_phase":           blockedState.CurrentPhase,
+			"phase_name":              phase.Name,
+			"state":                   blockedState.State,
+			"next":                    nextCommand,
+			"verification":            verification,
+			checkWorkOutcomeResultKey: preReviewWorkOutcome,
+			"assessment":              assessment,
+			"task_evidence":           assessment.Tasks,
+			"gates":                   gates,
+			"verification_report":     displayDataPath(verificationReportRel),
+			"gate_report":             displayDataPath(gateReportRel),
+			"continue_report":         displayDataPath(continueReportRel),
+			"worker_flow":             workerFlow,
+			"autopilot_signals":       continueReviewAutopilotSignals(workerFlow, runtimeCheckpoints),
+			"operational_issues":      assessment.OperationalIssues,
+			"recovery":                assessment.Recovery,
+			"reconciled_tasks":        assessment.ReconciledTasks,
+			"blocking_issues":         blockers,
+			"review_depth":            string(reviewDepth),
 			"plan_revision_option": planRevisionRecommendation(
 				colony.PlanRevisionVerificationFailure,
 				fmt.Sprintf("Verification blocked phase %d: %s", phase.ID, summary),
@@ -1005,6 +1013,10 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	// ONLY source of a pass; this call can only ADD a block on top of it,
 	// never supply one.
 	finalDecision := runContinueAcceptVerifyAdvance(phase, assessment, gates, &review, state)
+	// D-05/D-06/D-07 (201-20): this decision's own verdict, derived once
+	// here and reused for both the review-blocked result below and the
+	// advancing result further down -- never recomputed twice.
+	finalWorkOutcome := checkWorkOutcome(finalDecision, verification)
 	if !finalDecision.Advances() {
 		// Critical findings retain the established Critics Bring Solutions
 		// bridge on the in-process lane as well as continue-finalize.
@@ -1052,29 +1064,30 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		}
 		updateSessionSummary("continue", nextCommand, summary)
 		result := map[string]interface{}{
-			"advanced":            false,
-			"blocked":             true,
-			"partial_success":     assessment.PartialSuccess,
-			"current_phase":       blockedState.CurrentPhase,
-			"phase_name":          phase.Name,
-			"state":               blockedState.State,
-			"next":                nextCommand,
-			"verification":        verification,
-			"assessment":          assessment,
-			"task_evidence":       assessment.Tasks,
-			"gates":               gates,
-			"review":              review,
-			"verification_report": displayDataPath(verificationReportRel),
-			"gate_report":         displayDataPath(gateReportRel),
-			"review_report":       displayDataPath(reviewReportRel),
-			"continue_report":     displayDataPath(continueReportRel),
-			"worker_flow":         workerFlow,
-			"autopilot_signals":   continueReviewAutopilotSignals(workerFlow, runtimeCheckpoints),
-			"operational_issues":  append(append([]string{}, assessment.OperationalIssues...), review.BlockingIssues...),
-			"recovery":            assessment.Recovery,
-			"reconciled_tasks":    assessment.ReconciledTasks,
-			"blocking_issues":     append([]string{}, review.BlockingIssues...),
-			"review_depth":        string(reviewDepth),
+			"advanced":                false,
+			"blocked":                 true,
+			"partial_success":         assessment.PartialSuccess,
+			"current_phase":           blockedState.CurrentPhase,
+			"phase_name":              phase.Name,
+			"state":                   blockedState.State,
+			"next":                    nextCommand,
+			"verification":            verification,
+			checkWorkOutcomeResultKey: finalWorkOutcome,
+			"assessment":              assessment,
+			"task_evidence":           assessment.Tasks,
+			"gates":                   gates,
+			"review":                  review,
+			"verification_report":     displayDataPath(verificationReportRel),
+			"gate_report":             displayDataPath(gateReportRel),
+			"review_report":           displayDataPath(reviewReportRel),
+			"continue_report":         displayDataPath(continueReportRel),
+			"worker_flow":             workerFlow,
+			"autopilot_signals":       continueReviewAutopilotSignals(workerFlow, runtimeCheckpoints),
+			"operational_issues":      append(append([]string{}, assessment.OperationalIssues...), review.BlockingIssues...),
+			"recovery":                assessment.Recovery,
+			"reconciled_tasks":        assessment.ReconciledTasks,
+			"blocking_issues":         append([]string{}, review.BlockingIssues...),
+			"review_depth":            string(reviewDepth),
 			"plan_revision_option": planRevisionRecommendation(
 				colony.PlanRevisionVerificationFailure,
 				fmt.Sprintf("Review blocked phase %d: %s", phase.ID, summary),
@@ -1223,29 +1236,30 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		progress.Finish()
 	}
 	result := map[string]interface{}{
-		"advanced":            true,
-		"completed":           final,
-		"partial_success":     assessment.PartialSuccess,
-		"current_phase":       updated.CurrentPhase,
-		"state":               updated.State,
-		"next":                nextCommand,
-		"verification":        verification,
-		"assessment":          assessment,
-		"task_evidence":       assessment.Tasks,
-		"gates":               gates,
-		"review":              review,
-		"verification_report": displayDataPath(verificationReportRel),
-		"gate_report":         displayDataPath(gateReportRel),
-		"review_report":       displayDataPath(reviewReportRel),
-		"continue_report":     displayDataPath(continueReportRel),
-		"closed_workers":      closedWorkers,
-		"worker_flow":         workerFlow,
-		"autopilot_signals":   continueReviewAutopilotSignals(workerFlow, runtimeCheckpoints),
-		"operational_issues":  assessment.OperationalIssues,
-		"recovery":            assessment.Recovery,
-		"reconciled_tasks":    assessment.ReconciledTasks,
-		"signal_housekeeping": housekeeping,
-		"review_depth":        string(reviewDepth),
+		"advanced":                true,
+		"completed":               final,
+		"partial_success":         assessment.PartialSuccess,
+		"current_phase":           updated.CurrentPhase,
+		"state":                   updated.State,
+		"next":                    nextCommand,
+		"verification":            verification,
+		checkWorkOutcomeResultKey: finalWorkOutcome,
+		"assessment":              assessment,
+		"task_evidence":           assessment.Tasks,
+		"gates":                   gates,
+		"review":                  review,
+		"verification_report":     displayDataPath(verificationReportRel),
+		"gate_report":             displayDataPath(gateReportRel),
+		"review_report":           displayDataPath(reviewReportRel),
+		"continue_report":         displayDataPath(continueReportRel),
+		"closed_workers":          closedWorkers,
+		"worker_flow":             workerFlow,
+		"autopilot_signals":       continueReviewAutopilotSignals(workerFlow, runtimeCheckpoints),
+		"operational_issues":      assessment.OperationalIssues,
+		"recovery":                assessment.Recovery,
+		"reconciled_tasks":        assessment.ReconciledTasks,
+		"signal_housekeeping":     housekeeping,
+		"review_depth":            string(reviewDepth),
 	}
 	if nextPhase != nil {
 		result["next_phase"] = nextPhase.ID

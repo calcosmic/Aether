@@ -632,3 +632,98 @@ func renderCeremonyCloseout(workflow, completionFile string) (map[string]interfa
 		t.Logf("guard correctly refused renderCeremonyCloseout (missing %s) at %s:%d", offenderTarget, pos.Filename, pos.Line)
 	})
 }
+
+// ---------------------------------------------------------------------------
+// TestCheckWorkOutcome (Plan 201-20, Task 1)
+// ---------------------------------------------------------------------------
+
+// TestCheckWorkOutcome proves checkWorkOutcome (cmd/work_closeout.go) is
+// total over continueAcceptVerifyAdvanceDecision's two declared verdict
+// values, that every one of the six declared work verdicts
+// (colony.AllWorkOutcomes()) is reachable from some genuinely constructible
+// decision-and-report pair, and that it never falls through to success by
+// default.
+func TestCheckWorkOutcome(t *testing.T) {
+	reached := map[colony.WorkOutcome]bool{}
+
+	cases := []struct {
+		name     string
+		decision continueAcceptVerifyAdvanceDecision
+		report   codexContinueVerificationReport
+		want     colony.WorkOutcome
+	}{
+		{
+			name:     "advancing with executed steps and no partial success is success",
+			decision: continueAcceptVerifyAdvanceDecision{Verdict: continueAdvanceVerdictAdvance},
+			report: codexContinueVerificationReport{
+				Steps: []codexVerificationStep{{Name: "tests", Passed: true}},
+			},
+			want: colony.WorkOutcomeSuccess,
+		},
+		{
+			name:     "advancing with the decision's own partial-success flag is partial",
+			decision: continueAcceptVerifyAdvanceDecision{Verdict: continueAdvanceVerdictAdvance, PartialSuccess: true},
+			report: codexContinueVerificationReport{
+				Steps: []codexVerificationStep{{Name: "tests", Passed: true}},
+			},
+			want: colony.WorkOutcomePartial,
+		},
+		{
+			name:     "advancing with no executed steps is no-change",
+			decision: continueAcceptVerifyAdvanceDecision{Verdict: continueAdvanceVerdictAdvance},
+			report:   codexContinueVerificationReport{},
+			want:     colony.WorkOutcomeNoChange,
+		},
+		{
+			name:     "blocked with a timed-out step is timeout, even when partial success is also set",
+			decision: continueAcceptVerifyAdvanceDecision{Verdict: continueAdvanceVerdictBlock, PartialSuccess: true},
+			report: codexContinueVerificationReport{
+				Steps: []codexVerificationStep{{Name: "tests", TimedOut: true}},
+			},
+			want: colony.WorkOutcomeTimeout,
+		},
+		{
+			name:     "blocked with no executed steps is interrupted",
+			decision: continueAcceptVerifyAdvanceDecision{Verdict: continueAdvanceVerdictBlock},
+			report:   codexContinueVerificationReport{},
+			want:     colony.WorkOutcomeInterrupted,
+		},
+		{
+			name:     "blocked with executed steps and no timeout is blocker",
+			decision: continueAcceptVerifyAdvanceDecision{Verdict: continueAdvanceVerdictBlock, BlockingReasons: []string{"tests failed"}},
+			report: codexContinueVerificationReport{
+				Steps: []codexVerificationStep{{Name: "tests", Passed: false}},
+			},
+			want: colony.WorkOutcomeBlocker,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := checkWorkOutcome(tc.decision, tc.report)
+			if got != tc.want {
+				t.Fatalf("checkWorkOutcome() = %q, want %q", got, tc.want)
+			}
+			if !got.Valid() {
+				t.Fatalf("checkWorkOutcome() returned an invalid verdict %q", got)
+			}
+			reached[got] = true
+		})
+	}
+
+	for _, verdict := range colony.AllWorkOutcomes() {
+		if !reached[verdict] {
+			t.Errorf("verdict %q is never reachable from checkWorkOutcome", verdict)
+		}
+	}
+
+	t.Run("an undeclared decision verdict never defaults to success", func(t *testing.T) {
+		got := checkWorkOutcome(continueAcceptVerifyAdvanceDecision{Verdict: continueAdvanceVerdict("bogus")}, codexContinueVerificationReport{})
+		if got == colony.WorkOutcomeSuccess {
+			t.Fatalf("an undeclared decision verdict resolved to success -- checkWorkOutcome must refuse by name, never default to success")
+		}
+		if got.Valid() {
+			t.Fatalf("an undeclared decision verdict resolved to a declared verdict %q -- want the invalid zero value", got)
+		}
+	})
+}

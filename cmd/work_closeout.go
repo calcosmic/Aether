@@ -22,6 +22,205 @@ import (
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
+// checkWorkOutcomeResultKey is the one new stable key codex_continue.go
+// stores its derived verdict under, alongside the existing "verification"
+// key, at every place it saves a continue result (201-20/D-05/D-06/D-07).
+// checkWorkCloseoutDetails reads this key back -- it never recomputes the
+// verdict itself.
+const checkWorkOutcomeResultKey = "check_work_outcome"
+
+// checkWorkOutcome is the check's single derivation of its own verdict
+// (D-05/D-06/D-07), called once per continueAcceptVerifyAdvanceDecision a
+// continue lane obtains (cmd/codex_continue.go). It maps from recorded facts
+// only -- the decision's own verdict and partial-success flag, the
+// verification report's executed-step count, and whether any step recorded
+// that it timed out -- and is total over continueAdvanceVerdict's exact two
+// values, so no branch silently returns the success verdict:
+//
+//   - advance, with nothing to verify (zero executed steps) -> no-change.
+//   - advance, with the shared decision's own PartialSuccess flag set ->
+//     partial (PartialSuccess already mirrors "operational issues were
+//     recorded" -- see continueAcceptVerifyAdvanceDecision's doc comment).
+//   - advance, otherwise -> success.
+//   - block, with a step that recorded TimedOut (continueVerificationTimedOut,
+//     the existing check) -> timeout.
+//   - block, with zero executed steps -> interrupted: nothing ever ran to
+//     produce a blocking reason, so the check itself never got underway.
+//   - block, otherwise -> blocker.
+func checkWorkOutcome(decision continueAcceptVerifyAdvanceDecision, verification codexContinueVerificationReport) colony.WorkOutcome {
+	switch decision.Verdict {
+	case continueAdvanceVerdictAdvance:
+		if len(verification.Steps) == 0 {
+			return colony.WorkOutcomeNoChange
+		}
+		if decision.PartialSuccess {
+			return colony.WorkOutcomePartial
+		}
+		return colony.WorkOutcomeSuccess
+	case continueAdvanceVerdictBlock:
+		if continueVerificationTimedOut(verification) {
+			return colony.WorkOutcomeTimeout
+		}
+		if len(verification.Steps) == 0 {
+			return colony.WorkOutcomeInterrupted
+		}
+		return colony.WorkOutcomeBlocker
+	default:
+		// Unreachable given continueAdvanceVerdict's exact two declared
+		// values, but refused by name -- the zero value -- rather than
+		// silently defaulting to success.
+		return ""
+	}
+}
+
+// checkWorkOutcomeFromResult reads the verdict checkWorkOutcome already
+// computed back off a continue result map, dual-typed: the in-process
+// colony.WorkOutcome codex_continue.go stores directly, or the plain JSON
+// string a completion file round-trips it through (WorkOutcome's own
+// MarshalJSON/UnmarshalJSON discipline, pkg/colony/work_outcome.go).
+func checkWorkOutcomeFromResult(result map[string]interface{}) (colony.WorkOutcome, bool) {
+	raw, present := result[checkWorkOutcomeResultKey]
+	if !present {
+		return "", false
+	}
+	switch v := raw.(type) {
+	case colony.WorkOutcome:
+		return v, v.Valid()
+	case string:
+		outcome := colony.WorkOutcome(strings.TrimSpace(v))
+		return outcome, outcome.Valid()
+	default:
+		return "", false
+	}
+}
+
+// checkVerificationEvidenceFromValue converts a continue result's own
+// verification steps into LifecycleVerification evidence, reusing the SAME
+// dual-type view extraction renderContinueVerificationDetail already uses
+// (verificationStepDetailViewsFromTyped/FromMap, cmd/codex_visuals.go) --
+// never a second, independently typed reader. A skipped step names nothing
+// to verify and is excluded, matching D-05's "the check closeout's evidence
+// names the verification steps that actually ran."
+func checkVerificationEvidenceFromValue(raw interface{}) []colony.LifecycleVerification {
+	var views []verificationStepDetailView
+	switch v := raw.(type) {
+	case codexContinueVerificationReport:
+		views = verificationStepDetailViewsFromTyped(v.Steps)
+	case map[string]interface{}:
+		steps, _ := v["steps"].([]interface{})
+		views = verificationStepDetailViewsFromMap(steps)
+	default:
+		return nil
+	}
+	if len(views) == 0 {
+		return nil
+	}
+	evidence := make([]colony.LifecycleVerification, 0, len(views))
+	for _, view := range views {
+		if view.Skipped {
+			continue
+		}
+		evidence = append(evidence, colony.LifecycleVerification{
+			Name:   emptyFallback(strings.TrimSpace(view.Name), "verification step"),
+			Passed: view.Passed,
+			Detail: strings.TrimSpace(view.Summary),
+		})
+	}
+	return evidence
+}
+
+// checkBlockersFromResult converts a blocked continue result's own recorded
+// blocking reasons (result["blocking_issues"], set on every blocked result
+// map codex_continue.go saves) into LifecycleIssue blockers -- never a
+// second, independent derivation of why the check blocked.
+func checkBlockersFromResult(result map[string]interface{}) []colony.LifecycleIssue {
+	reasons := stringSliceValue(result["blocking_issues"])
+	if len(reasons) == 0 {
+		return nil
+	}
+	blockers := make([]colony.LifecycleIssue, 0, len(reasons))
+	for i, reason := range reasons {
+		reason = strings.TrimSpace(reason)
+		if reason == "" {
+			continue
+		}
+		blockers = append(blockers, colony.LifecycleIssue{
+			ID:      fmt.Sprintf("check-blocker-%d", i+1),
+			Summary: reason,
+		})
+	}
+	return blockers
+}
+
+// checkWorkOutcomeSummary is the plain-English wording for each verdict this
+// check closeout can carry -- the single authority a caller reads rather
+// than re-deriving its own phrase per verdict. A blocker names the first
+// recorded blocking reason when one exists, matching
+// buildBlockerStatusCloseoutDetails' own precedent of naming what stopped
+// it whenever that is known.
+func checkWorkOutcomeSummary(verdict colony.WorkOutcome, blockers []colony.LifecycleIssue) string {
+	switch verdict {
+	case colony.WorkOutcomeSuccess:
+		return "The check passed cleanly and the phase advanced."
+	case colony.WorkOutcomeNoChange:
+		return "The check found nothing to verify -- the phase advanced with no checks to run."
+	case colony.WorkOutcomePartial:
+		return "The check advanced the phase, but recorded operational issues along the way."
+	case colony.WorkOutcomeTimeout:
+		return "A verification step ran out of time before the check could finish."
+	case colony.WorkOutcomeInterrupted:
+		return "The check stopped before any verification step ran."
+	case colony.WorkOutcomeBlocker:
+		if len(blockers) > 0 {
+			return fmt.Sprintf("The check found something it could not get past: %s.", blockers[0].Summary)
+		}
+		return "The check found something it could not get past."
+	default:
+		return ""
+	}
+}
+
+// checkWorkCloseoutDetails reads the already-stored verdict and the
+// already-stored verification report off a continue result map -- it never
+// recomputes checkWorkOutcome itself (D-05's "derive it once where the
+// decision is made" rule). It reports ok=false when the result carries no
+// stored verdict, so a caller holding an older result (from before this
+// plan, or from a lane this plan did not wire) renders exactly what it
+// rendered before this resolver existed.
+func checkWorkCloseoutDetails(result map[string]interface{}) (LifecycleCloseoutDetails, bool) {
+	if result == nil {
+		return LifecycleCloseoutDetails{}, false
+	}
+	verdict, ok := checkWorkOutcomeFromResult(result)
+	if !ok {
+		return LifecycleCloseoutDetails{}, false
+	}
+	blockers := checkBlockersFromResult(result)
+	return LifecycleCloseoutDetails{
+		WorkOutcome:  verdict,
+		Summary:      checkWorkOutcomeSummary(verdict, blockers),
+		Verification: checkVerificationEvidenceFromValue(result["verification"]),
+		Blockers:     blockers,
+	}, true
+}
+
+// applyCheckWorkCloseout is the one shared render-time fold used by every
+// check-screen call site (cmd/codex_workflow_cmds.go's continueCmd,
+// cmd/ceremony_cmd.go's wrapper closeout): when result carries a stored
+// verdict, fold it into result via applyLifecycleCloseout and append the
+// verdict-carrying closeout (recommendation, evidence, and the one
+// cost-and-time block) onto body. When no verdict resolves -- an older
+// result, or a lane this plan did not wire -- body renders exactly as it did
+// before this resolver existed, with its own plain cost line appended.
+func applyCheckWorkCloseout(result map[string]interface{}, phaseID int, body string) string {
+	if details, ok := checkWorkCloseoutDetails(result); ok {
+		if err := applyLifecycleCloseout(result, "continue", details); err == nil {
+			return appendLifecycleCloseoutVisual(body, result, detectPlatform())
+		}
+	}
+	return appendSpendCostLine(body, phaseID)
+}
+
 // buildEndReviewerCastes is derived from queenBuildPostWavePlans (the ONLY
 // route by which a post-wave reviewer becomes a build dispatch,
 // cmd/codex_build.go) rather than a second, independently typed caste list
