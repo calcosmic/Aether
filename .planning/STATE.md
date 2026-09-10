@@ -5,7 +5,7 @@ milestone_name: Classic Colony Restoration
 current_phase: 201
 current_phase_name: Queen-Led Work Cycle
 status: verifying
-stopped_at: Completed 201-15-PLAN.md
+stopped_at: Planned gap closure 201-16..201-20
 last_updated: "2026-09-10T19:42:36.031Z"
 last_activity: 2026-09-10
 state_head: 1c7bba35378c4e0af806c5f5eef2866e4ec9510e
@@ -33,7 +33,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 
 Phase: 201 (Queen-Led Work Cycle) — EXECUTING
 Plan: 15 of 15
-Status: Phase complete — ready for verification
+Status: Gap-closure plans ready — execute 201 --gaps-only
 Last activity: 2026-09-10
 
 ## Performance Metrics
