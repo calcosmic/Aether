@@ -831,6 +831,12 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	// user-raised blockers never auto-clear.
 	autoResolveVerificationBlockers(verification.ChecksPassed, phase.ID)
 	gates := runCodexContinueGatesWithAutopilotBaseline(phase, manifest, verification, assessment, now, priorGateResults, options.AutopilotBlockerBaseline)
+	// SYN-201-04: the direct lane reaches its advancement verdict only
+	// through runContinueAcceptVerifyAdvance (cmd/codex_verify_advance.go) --
+	// called here with review == nil so an already-failing gate report
+	// blocks BEFORE a reviewer is ever dispatched (preserving the existing
+	// cost-avoidance behavior), and again below once a review report exists.
+	preReviewDecision := runContinueAcceptVerifyAdvance(phase, assessment, gates, nil, state)
 	if progress != nil {
 		progress.Advance("Verification")
 	}
@@ -901,7 +907,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to write gate report: %w", err)
 	}
 
-	if !gates.Passed {
+	if !preReviewDecision.Advances() {
 		blockers := append([]string{}, gates.BlockingIssues...)
 		summary := "Continue blocked by verification or gate failures"
 		if len(blockers) > 0 {
@@ -987,7 +993,12 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	if err := store.SaveJSON(reviewReportRel, review); err != nil {
 		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to write review report: %w", err)
 	}
-	if !review.Passed {
+	// SYN-201-04: the second and final call into the shared decision body --
+	// runDeterministicFloor (folded into gates.Passed above) remains the
+	// ONLY source of a pass; this call can only ADD a block on top of it,
+	// never supply one.
+	finalDecision := runContinueAcceptVerifyAdvance(phase, assessment, gates, &review, state)
+	if !finalDecision.Advances() {
 		// Critical findings retain the established Critics Bring Solutions
 		// bridge on the in-process lane as well as continue-finalize.
 		appendReviewFindingsGateResult(phase.ID, review.Workers, now)
