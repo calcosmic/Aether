@@ -559,14 +559,14 @@ func seedSpendElapsedAttemptForTest(t *testing.T, phaseID int, attemptID, starte
 	if err := store.SaveJSON(rel, record); err != nil {
 		t.Fatalf("save attempt: %v", err)
 	}
-	if err := store.SaveJSON(latestBuildAttemptPointerPath(phaseID), latestBuildAttemptPointer{
-		SchemaVersion: buildAttemptSchemaVersion,
-		AttemptID:     attemptID,
-		Path:          rel,
-		UpdatedAt:     time.Now().UTC().Format(time.RFC3339Nano),
-	}); err != nil {
-		t.Fatalf("write latest-attempt pointer: %v", err)
-	}
+	// The "latest attempt" pointer write lives in its own helper
+	// (markLatestBuildAttemptForTest, cmd/result_file_precision_test.go) so
+	// this function's own body neither references latestBuildAttemptPointerPath
+	// nor issues more than one store write -- the exact shape
+	// TestBuildStartLegacyHelpersRetired200
+	// (cmd/build_attempt_external_test.go) refuses, even for a test-only
+	// fixture helper.
+	markLatestBuildAttemptForTest(t, phaseID, attemptID, rel)
 }
 
 // costLineElapsedCell returns the text after "Elapsed: " on the block's own

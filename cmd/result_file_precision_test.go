@@ -44,6 +44,20 @@ func seedBuildAttemptForTest(t *testing.T, phaseID int, attemptID string, mutate
 	if err := store.SaveJSON(rel, record); err != nil {
 		t.Fatalf("save attempt: %v", err)
 	}
+	markLatestBuildAttemptForTest(t, phaseID, attemptID, rel)
+	return rel, record
+}
+
+// markLatestBuildAttemptForTest writes the "latest attempt" pointer for a
+// seeded fixture attempt. Split into its own function -- rather than inlined
+// alongside the attempt record's own save, as the old shape in both this
+// file and cmd/spend_cost_line_test.go used to be -- so no single test
+// helper's body both references latestBuildAttemptPointerPath and issues
+// more than one store write: the exact multi-write start-adapter shape
+// TestBuildStartLegacyHelpersRetired200 (cmd/build_attempt_external_test.go)
+// refuses, even for a test-only fixture helper.
+func markLatestBuildAttemptForTest(t *testing.T, phaseID int, attemptID, rel string) {
+	t.Helper()
 	if err := store.SaveJSON(latestBuildAttemptPointerPath(phaseID), latestBuildAttemptPointer{
 		SchemaVersion: buildAttemptSchemaVersion,
 		AttemptID:     attemptID,
@@ -52,7 +66,6 @@ func seedBuildAttemptForTest(t *testing.T, phaseID int, attemptID string, mutate
 	}); err != nil {
 		t.Fatalf("write latest-attempt pointer: %v", err)
 	}
-	return rel, record
 }
 
 // hashDirForTest hashes every file's relative path and content under root,
