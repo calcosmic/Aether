@@ -153,8 +153,8 @@ const (
 	fullSuiteHeavyWorkers    = 6
 	fullSuiteHeavyLaneBudget = 3 * time.Minute
 	fullSuiteHeavyThreshold  = 8 * time.Second
-	fullSuiteChildParallel   = 8
-	fullSuiteChildProcs      = 4
+	fullSuiteChildParallel   = 3
+	fullSuiteChildProcs      = 3
 	// Fallback ceilings used only when the caller passed no readable
 	// -test.timeout. The live ceilings come from resolveFullSuiteCeilings,
 	// which tracks the outer go tool's deadline so the controller stops
@@ -670,6 +670,7 @@ func fullSuiteSerialInventory() map[string]string {
 		"TestGoldenPlanVisualOutput":                           "byte-identical golden visual output is perturbed by CPU contention under parallel load",
 		"TestNextActionNeverHardcoded":                         "fixed checked-in allowlist has an explicit regeneration path",
 		"TestOrphanAllowlistOnlyShrinks":                       "fixed checked-in allowlist has an explicit regeneration path",
+		"TestLoadNextActionInputDoesNotMutate":                 "asserts no-mutation on shared next-action inputs; ordering-sensitive under parallel load",
 		"TestPackedNPMReleaseCandidateContract":                "real npm installs, a staged release server, and the shared npm cache are load-sensitive",
 		"TestPhase199GateReceipt":                              "live repository receipt validates git identity and protected fingerprints",
 		"TestWorktreeAllocateAgentPhase":                       "source checkout worktree registration guards a legacy allocation path",

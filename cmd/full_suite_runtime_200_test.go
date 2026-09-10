@@ -239,6 +239,7 @@ func TestFullSuiteRuntime200SerializesSharedResources(t *testing.T) {
 		"TestGoldenPlanVisualOutput":                           "byte-identical golden visual output",
 		"TestNextActionNeverHardcoded":                         "fixed checked-in allowlist",
 		"TestOrphanAllowlistOnlyShrinks":                       "fixed checked-in allowlist",
+		"TestLoadNextActionInputDoesNotMutate":                 "no-mutation on shared next-action inputs",
 		"TestPackedNPMReleaseCandidateContract":                "real npm installs",
 		"TestPhase199GateReceipt":                              "live repository receipt",
 		"TestWorktreeAllocateAgentPhase":                       "source checkout worktree registration",
