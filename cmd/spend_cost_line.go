@@ -126,10 +126,14 @@ func spendCostLineFigure(row spendRow) string {
 func renderSpendCostLine(phase int) string {
 	ledgers, _ := loadSpendLedgersForPhase(phase)
 	elapsedFigure := ""
+	var telemetry *jobTelemetryRecord
 	if _, attempt, ok := loadLatestBuildAttempt(phase); ok {
 		elapsedFigure = spendElapsedFigure(attempt.StartedAt, attempt.CompletedAt)
+		if record, ok := readJobTelemetryRecord(attempt.ID); ok {
+			telemetry = &record
+		}
 	}
-	return renderSpendCostLineBlock(ledgers, elapsedFigure)
+	return renderSpendCostLineBlock(ledgers, elapsedFigure, telemetry)
 }
 
 // spendElapsedFigure is the elapsed-time figure for one attempt, parsed from
@@ -155,27 +159,47 @@ func spendElapsedFigure(startedAt, completedAt string) string {
 	return elapsed.Round(time.Second).String()
 }
 
+// renderJobTelemetryClosingLine renders the one timing line every closeout
+// ends with (Phase 201 plan 12, WORK-08, D-14): the attempt's total elapsed
+// time, plus the name and duration of the single largest measured segment
+// when one exists. elapsedFigure is already non-empty by the time this is
+// called -- see renderSpendCostLineBlock's own "no attempt at all" branch.
+// telemetry is nil both when no record was ever written for this attempt
+// (nothing was measured, so nothing was written -- see
+// writeJobTelemetryRecord) and when a record exists but every one of its
+// eight segments is unmeasured; both cases render identically here, because
+// a reader gains nothing from being told which of the two happened.
+func renderJobTelemetryClosingLine(elapsedFigure string, telemetry *jobTelemetryRecord) string {
+	if telemetry != nil {
+		if name, segment, ok := telemetry.largestMeasuredSegment(); ok {
+			return fmt.Sprintf("Elapsed: %s (largest measured piece: %s, %s)\n", elapsedFigure, jobTelemetrySegmentLabel(name), segment.Duration.Round(time.Second).String())
+		}
+	}
+	return fmt.Sprintf("Elapsed: %s (timing breakdown not measured)\n", elapsedFigure)
+}
+
 // renderSpendCostLineFromLedgers is the ledgers-only render: the shape every
 // existing caller and every existing test in this file uses, with no elapsed
 // line at all (elapsedFigure == ""). renderSpendCostLine(phase) is the only
 // caller that ever passes a non-empty elapsedFigure, because it is the only
 // one with an attempt record to read one from.
 func renderSpendCostLineFromLedgers(ledgers []spendLedger) string {
-	return renderSpendCostLineBlock(ledgers, "")
+	return renderSpendCostLineBlock(ledgers, "", nil)
 }
 
 // renderSpendCostLineBlock is the shared render body. elapsedFigure is the
 // already-computed elapsed-time figure for the one attempt this block
 // belongs to, or the empty string when the caller has no attempt to speak
 // of at all (as opposed to an attempt whose figure is the dash sentinel,
-// which is a non-empty string and DOES render a line). Leaves room for plan
-// 201-12 to append the largest timing segment onto this same "Elapsed: "
-// line without adding a second block.
-func renderSpendCostLineBlock(ledgers []spendLedger, elapsedFigure string) string {
+// which is a non-empty string and DOES render a line). telemetry is the
+// same attempt's job telemetry record when one was written (Phase 201 plan
+// 12, WORK-08), or nil when none exists -- renderJobTelemetryClosingLine
+// treats a nil record and a record with nothing measured identically.
+func renderSpendCostLineBlock(ledgers []spendLedger, elapsedFigure string, telemetry *jobTelemetryRecord) string {
 	var b strings.Builder
 	b.WriteString(renderStageMarker(spendCostLineHeading))
 	if elapsedFigure != "" {
-		fmt.Fprintf(&b, "Elapsed: %s\n", elapsedFigure)
+		b.WriteString(renderJobTelemetryClosingLine(elapsedFigure, telemetry))
 	}
 
 	rows := spendRowsAcross(ledgers)

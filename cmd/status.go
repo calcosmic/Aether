@@ -1302,6 +1302,30 @@ func renderBuildAttemptStatus(attempt buildAttemptRecord) string {
 	if attempt.RecoveryCommand != "" {
 		fmt.Fprintf(&b, "  Next: %s\n", attempt.RecoveryCommand)
 	}
+	b.WriteString(renderJobTelemetryDrillDown(attempt.ID))
+	return b.String()
+}
+
+// renderJobTelemetryDrillDown renders the full eight-segment timing
+// breakdown for one build attempt (Phase 201 plan 12, WORK-08), naming
+// unmeasured segments as such. It reads fresh from disk every call and
+// writes nothing -- status.go is a reader only, never a store initializer,
+// never a lock file, never a state mutation. Renders nothing at all when no
+// telemetry record exists for this attempt: a run that measured no segment
+// at all writes no record (writeJobTelemetryRecord), so "no record" and "a
+// record with nothing measured" are the same case here too, matching
+// renderJobTelemetryClosingLine's identical choice in
+// cmd/spend_cost_line.go.
+func renderJobTelemetryDrillDown(attemptID string) string {
+	record, ok := readJobTelemetryRecord(attemptID)
+	if !ok {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("  Timing breakdown:\n")
+	for _, named := range record.namedSegments() {
+		fmt.Fprintf(&b, "    %s: %s\n", jobTelemetrySegmentLabel(named.Name), named.Segment.RenderedDuration())
+	}
 	return b.String()
 }
 
