@@ -643,3 +643,95 @@ func TestNoAttemptMeansNoElapsedLineAtAll(t *testing.T) {
 		t.Errorf("a phase with no build attempt on disk still rendered an elapsed line:\n%s", block)
 	}
 }
+
+// Phase 201 plan 06 — Task 2. Every closeout carrying a work verdict (D-05)
+// ends with exactly one cost-and-time block, appended by the shared
+// appendLifecycleCloseoutVisual path via the one existing append helper
+// (appendSpendCostLine) -- not only for the success verdict, and never a
+// second placement rule alongside it.
+
+// lifecycleWorkVerdictCloseoutResultForTest builds a real closeout result
+// carrying verdict for phaseNum, reusing 201-04's own fixture helpers
+// (lifecycleCloseout199Projection/Result, cmd/lifecycle_closeout_199_test.go)
+// so every field but the verdict and the phase number is exactly what a real
+// closeout carries. Returns the result map itself, the shape
+// appendLifecycleCloseoutVisual consumes directly.
+func lifecycleWorkVerdictCloseoutResultForTest(t *testing.T, phaseNum int, verdict colony.WorkOutcome) map[string]interface{} {
+	t.Helper()
+	projection := lifecycleCloseout199Projection(colony.StateEXECUTING, "continue")
+	result := lifecycleCloseout199Result(projection, colony.OutcomeKindInProgress, colony.LifecycleStateEffectCommitted)
+	result["current_phase"] = phaseNum
+	if err := applyLifecycleCloseout(result, "continue", LifecycleCloseoutDetails{WorkOutcome: verdict}); err != nil {
+		t.Fatalf("apply closeout for verdict %q: %v", verdict, err)
+	}
+	return result
+}
+
+func TestEveryVerdictEndsWithOneCostAndTimeBlock(t *testing.T) {
+	for _, verdict := range colony.AllWorkOutcomes() {
+		t.Run(string(verdict), func(t *testing.T) {
+			setupSpendTestStore(t)
+			seedSpendLedgerForTest(t, 301, spendWorkflowContinue,
+				measuredSpendRowForTest("Keen-12", "watcher", 220_000),
+			)
+			result := lifecycleWorkVerdictCloseoutResultForTest(t, 301, verdict)
+
+			visual := appendLifecycleCloseoutVisual("", result, "claude")
+			clean := stripANSI(visual)
+
+			if got := strings.Count(clean, spendCostLineHeading); got != 1 {
+				t.Fatalf("verdict %q rendered %d cost-and-time block(s), want exactly 1:\n%s", verdict, got, visual)
+			}
+
+			// The block is the last non-empty content of the rendered card --
+			// asserted by comparing against the real render for this exact
+			// phase, never a hardcoded string, so wording changes to the block
+			// itself can never desync this assertion.
+			wantBlock := strings.TrimRight(stripANSI(renderSpendCostLine(301)), "\n")
+			gotTail := strings.TrimRight(clean, "\n")
+			if !strings.HasSuffix(gotTail, wantBlock) {
+				t.Fatalf("verdict %q does not end with the cost-and-time block:\nwant suffix:\n%s\ngot:\n%s", verdict, wantBlock, clean)
+			}
+		})
+	}
+}
+
+func TestBlockedRunStillReportsWhatItSpent(t *testing.T) {
+	setupSpendTestStore(t)
+	seedSpendLedgerForTest(t, 302, spendWorkflowBuild,
+		measuredSpendRowForTest("Mason-67", "builder", 1_200_000),
+	)
+	result := lifecycleWorkVerdictCloseoutResultForTest(t, 302, colony.WorkOutcomeBlocker)
+
+	visual := appendLifecycleCloseoutVisual("", result, "claude")
+	clean := stripANSI(visual)
+
+	if !strings.Contains(clean, "1.2M") {
+		t.Errorf("a blocked run's closeout does not show the figures it recorded before blocking:\n%s", visual)
+	}
+	if got := strings.Count(clean, spendCostLineHeading); got != 1 {
+		t.Fatalf("blocked run rendered %d cost-and-time block(s), want exactly 1:\n%s", got, visual)
+	}
+}
+
+// TestNoWorkVerdictMeansNoCostAndTimeBlock proves the gate the two tests
+// above depend on: a closeout with no work verdict at all (colonize, plan,
+// init, entomb, pause, resume, seal) never gains a cost-and-time block --
+// only a closeout that IS a work-cycle result does.
+func TestNoWorkVerdictMeansNoCostAndTimeBlock(t *testing.T) {
+	setupSpendTestStore(t)
+	seedSpendLedgerForTest(t, 303, spendWorkflowBuild,
+		measuredSpendRowForTest("Mason-67", "builder", 1_200_000),
+	)
+	projection := lifecycleCloseout199Projection(colony.StateEXECUTING, "plan")
+	result := lifecycleCloseout199Result(projection, colony.OutcomeKindInProgress, colony.LifecycleStateEffectCommitted)
+	result["current_phase"] = 303
+	if err := applyLifecycleCloseout(result, "plan", LifecycleCloseoutDetails{Summary: "Planned the phase."}); err != nil {
+		t.Fatalf("apply closeout without a verdict: %v", err)
+	}
+
+	visual := appendLifecycleCloseoutVisual("", result, "claude")
+	if strings.Contains(stripANSI(visual), spendCostLineHeading) {
+		t.Errorf("a closeout with no work verdict rendered a cost-and-time block:\n%s", visual)
+	}
+}
