@@ -257,7 +257,15 @@ func buildLifecycleCloseout(projection LifecycleProjection, command string, outc
 			return LifecycleCloseout{}, fmt.Errorf("lifecycle closeout recommended action: %w", actionErr)
 		}
 		recommendedAction = &action
-		knowledgeDeltaEvidence = lifecycleCloseoutKnowledgeDeltaEvidence(attempt)
+		// Deduplicated against details.Evidence by shared evidence ID
+		// (201-19/CAP-066): buildWorkCloseoutDetails (cmd/work_closeout.go)
+		// -- the one production resolver that supplies a real WorkOutcome --
+		// already attaches this attempt's own knowledge-delta evidence to
+		// details.Evidence itself, using this exact function and these exact
+		// IDs, so the SAME delta never renders twice once both are combined
+		// below. A caller whose details.Evidence carries no delta IDs is
+		// unaffected -- this only ever removes an entry already present.
+		knowledgeDeltaEvidence = excludeLifecycleEvidenceByID(lifecycleCloseoutKnowledgeDeltaEvidence(attempt), details.Evidence)
 	}
 
 	if !outcome.Valid() {
@@ -414,6 +422,28 @@ func lifecycleCloseoutKnowledgeDeltaEvidence(attempt buildAttemptRecord) []colon
 		})
 	}
 	return evidence
+}
+
+// excludeLifecycleEvidenceByID returns candidates with any entry whose ID
+// already appears in existing removed. Pure, order-preserving, and nil-safe
+// -- used to keep a caller-supplied evidence list and this function's own
+// downstream evidence list from ever rendering the same ID twice.
+func excludeLifecycleEvidenceByID(candidates []colony.LifecycleEvidence, existing []colony.LifecycleEvidence) []colony.LifecycleEvidence {
+	if len(candidates) == 0 {
+		return candidates
+	}
+	seen := make(map[string]bool, len(existing))
+	for _, entry := range existing {
+		seen[entry.ID] = true
+	}
+	filtered := make([]colony.LifecycleEvidence, 0, len(candidates))
+	for _, entry := range candidates {
+		if seen[entry.ID] {
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+	return filtered
 }
 
 // lifecycleCloseoutSlots decides which canonical slots render. A closeout
