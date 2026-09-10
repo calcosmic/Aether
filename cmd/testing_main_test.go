@@ -155,9 +155,21 @@ const (
 	fullSuiteHeavyThreshold  = 8 * time.Second
 	fullSuiteChildParallel   = 8
 	fullSuiteChildProcs      = 4
-	fullSuiteChildTimeout    = 12 * time.Minute
-	fullSuiteCommandTimeout  = 12*time.Minute + 15*time.Second
-	fullSuiteOverallTimeout  = 10*time.Minute + 15*time.Second
+	// Fallback ceilings used only when the caller passed no readable
+	// -test.timeout. The live ceilings come from resolveFullSuiteCeilings,
+	// which tracks the outer go tool's deadline so the controller stops
+	// ORDERLY (full per-lane accounting) just before the tool would SIGQUIT.
+	fullSuiteChildTimeoutFallback   = 9 * time.Minute
+	fullSuiteCommandTimeoutFallback = 9*time.Minute + 15*time.Second
+	fullSuiteOverallTimeoutFallback = 9*time.Minute + 30*time.Second
+)
+
+// Live per-lane ceilings, defaulted to the fallbacks and overwritten by
+// runFullSuiteController from resolveFullSuiteCeilings. Package-level so the
+// per-lane helpers (and direct-call tests) read a single source.
+var (
+	fullSuiteChildTimeout   = fullSuiteChildTimeoutFallback
+	fullSuiteCommandTimeout = fullSuiteCommandTimeoutFallback
 )
 
 type fullSuiteInvocation struct {
@@ -480,7 +492,10 @@ func runFullSuiteController() int {
 		fmt.Fprintf(os.Stderr, "full-suite controller: resolve current test binary: %v\n", err)
 		return 1
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), fullSuiteOverallTimeout)
+	overall, command, child := resolveFullSuiteCeilings()
+	fullSuiteCommandTimeout = command
+	fullSuiteChildTimeout = child
+	ctx, cancel := context.WithTimeout(context.Background(), overall)
 	defer cancel()
 	discovered, err := discoverFullSuiteTests(ctx, executable)
 	if err != nil {
@@ -500,6 +515,45 @@ func runFullSuiteController() int {
 		return 1
 	}
 	return 0
+}
+
+// resolveFullSuiteCeilings derives the controller's overall, per-lane, and
+// child ceilings from the -test.timeout the outer go tool passed to this
+// binary. The go tool SIGQUITs the whole process at that deadline, so the
+// controller reserves a grace margin and stops itself first with complete
+// accounting. A run given a generous explicit timeout (the receipt gates)
+// therefore executes the whole corpus; a bare command on go's 10m default
+// stops orderly at ~9m15s. Fallbacks apply only when the flag is unreadable.
+func resolveFullSuiteCeilings() (overall, command, child time.Duration) {
+	overall = fullSuiteOverallTimeoutFallback
+	command = fullSuiteCommandTimeoutFallback
+	child = fullSuiteChildTimeoutFallback
+	raw := strings.TrimSpace(testFlagString("test.timeout"))
+	if raw == "" {
+		return overall, command, child
+	}
+	deadline, err := time.ParseDuration(raw)
+	if err != nil || deadline <= 0 {
+		return overall, command, child
+	}
+	// Reserve a grace margin so the controller returns before the go tool
+	// kills the process; scale the margin with the deadline but keep it
+	// bounded. Very small deadlines fall back rather than starve.
+	grace := 45 * time.Second
+	if deadline > 20*time.Minute {
+		grace = 90 * time.Second
+	}
+	if deadline <= grace+time.Minute {
+		return overall, command, child
+	}
+	overall = deadline - grace
+	// A lane must be able to finish inside the overall ceiling; the slowest
+	// known single test approaches 9 minutes under load, so give lanes the
+	// whole overall window minus a small settle margin, capped so one stuck
+	// lane cannot consume the entire budget past reporting.
+	command = overall - 15*time.Second
+	child = command - 15*time.Second
+	return overall, command, child
 }
 
 func discoverFullSuiteTests(ctx context.Context, executable string) ([]string, error) {
@@ -602,17 +656,21 @@ func runFullSuiteChildProcess(ctx context.Context, request fullSuiteChildRequest
 // observe or register a resource belonging to the source checkout.
 func fullSuiteSerialInventory() map[string]string {
 	return map[string]string{
-		"TestColonyStateWriteAllowlistOnlyShrinks": "fixed checked-in allowlist has an explicit regeneration path",
-		"TestCurrentVocabulary199":                 "live tracked checkout inventory is read through git ls-files",
-		"TestHeartbeatScanDetectsStale":            "fixed staleness clock thresholds are timing-sensitive under parallel load",
-		"TestNextActionNeverHardcoded":             "fixed checked-in allowlist has an explicit regeneration path",
-		"TestOrphanAllowlistOnlyShrinks":           "fixed checked-in allowlist has an explicit regeneration path",
-		"TestPackedNPMReleaseCandidateContract":    "real npm installs, a staged release server, and the shared npm cache are load-sensitive",
-		"TestPhase199GateReceipt":                  "live repository receipt validates git identity and protected fingerprints",
-		"TestWorktreeAllocateAgentPhase":           "source checkout worktree registration guards a legacy allocation path",
-		"TestWorktreeAllocateAuditLog":             "source checkout worktree registration guards a legacy allocation path",
-		"TestWorktreeAllocateHumanBranch":          "source checkout worktree registration guards a legacy allocation path",
-		"TestWorktreeAllocateMergedBranchAllowed":  "source checkout worktree registration guards a legacy allocation path",
+		"TestColonyStateWriteAllowlistOnlyShrinks":             "fixed checked-in allowlist has an explicit regeneration path",
+		"TestCurrentVocabulary199":                             "live tracked checkout inventory is read through git ls-files",
+		"TestColonyPrimeMdDeletionProducesByteIdenticalOutput": "byte-identical golden output is perturbed by CPU contention under parallel load",
+		"TestEveryLifecycleCommandEndsWithNextAction":          "renders every command; timing-sensitive under parallel load",
+		"TestGoldenBuildVisualOutput":                          "byte-identical golden visual output is perturbed by CPU contention under parallel load",
+		"TestHeartbeatScanDetectsStale":                        "fixed staleness clock thresholds are timing-sensitive under parallel load",
+		"TestNewSubcommandFlags":                               "asserts exact command registry; ordering-sensitive under parallel load",
+		"TestNextActionNeverHardcoded":                         "fixed checked-in allowlist has an explicit regeneration path",
+		"TestOrphanAllowlistOnlyShrinks":                       "fixed checked-in allowlist has an explicit regeneration path",
+		"TestPackedNPMReleaseCandidateContract":                "real npm installs, a staged release server, and the shared npm cache are load-sensitive",
+		"TestPhase199GateReceipt":                              "live repository receipt validates git identity and protected fingerprints",
+		"TestWorktreeAllocateAgentPhase":                       "source checkout worktree registration guards a legacy allocation path",
+		"TestWorktreeAllocateAuditLog":                         "source checkout worktree registration guards a legacy allocation path",
+		"TestWorktreeAllocateHumanBranch":                      "source checkout worktree registration guards a legacy allocation path",
+		"TestWorktreeAllocateMergedBranchAllowed":              "source checkout worktree registration guards a legacy allocation path",
 	}
 }
 

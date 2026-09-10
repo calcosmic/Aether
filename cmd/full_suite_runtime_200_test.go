@@ -225,17 +225,21 @@ func TestFullSuiteRuntime200IsolatesChildEnvironment(t *testing.T) {
 
 func TestFullSuiteRuntime200SerializesSharedResources(t *testing.T) {
 	want := map[string]string{
-		"TestColonyStateWriteAllowlistOnlyShrinks": "fixed checked-in allowlist",
-		"TestCurrentVocabulary199":                 "live tracked checkout inventory",
-		"TestHeartbeatScanDetectsStale":            "timing-sensitive",
-		"TestNextActionNeverHardcoded":             "fixed checked-in allowlist",
-		"TestOrphanAllowlistOnlyShrinks":           "fixed checked-in allowlist",
-		"TestPackedNPMReleaseCandidateContract":    "real npm installs",
-		"TestPhase199GateReceipt":                  "live repository receipt",
-		"TestWorktreeAllocateAgentPhase":           "source checkout worktree registration",
-		"TestWorktreeAllocateAuditLog":             "source checkout worktree registration",
-		"TestWorktreeAllocateHumanBranch":          "source checkout worktree registration",
-		"TestWorktreeAllocateMergedBranchAllowed":  "source checkout worktree registration",
+		"TestColonyStateWriteAllowlistOnlyShrinks":             "fixed checked-in allowlist",
+		"TestCurrentVocabulary199":                             "live tracked checkout inventory",
+		"TestColonyPrimeMdDeletionProducesByteIdenticalOutput": "byte-identical golden output",
+		"TestEveryLifecycleCommandEndsWithNextAction":          "timing-sensitive under parallel load",
+		"TestGoldenBuildVisualOutput":                          "byte-identical golden visual output",
+		"TestHeartbeatScanDetectsStale":                        "timing-sensitive",
+		"TestNewSubcommandFlags":                               "command registry",
+		"TestNextActionNeverHardcoded":                         "fixed checked-in allowlist",
+		"TestOrphanAllowlistOnlyShrinks":                       "fixed checked-in allowlist",
+		"TestPackedNPMReleaseCandidateContract":                "real npm installs",
+		"TestPhase199GateReceipt":                              "live repository receipt",
+		"TestWorktreeAllocateAgentPhase":                       "source checkout worktree registration",
+		"TestWorktreeAllocateAuditLog":                         "source checkout worktree registration",
+		"TestWorktreeAllocateHumanBranch":                      "source checkout worktree registration",
+		"TestWorktreeAllocateMergedBranchAllowed":              "source checkout worktree registration",
 	}
 	inventory := fullSuiteSerialInventory()
 	if len(inventory) != len(want) {
