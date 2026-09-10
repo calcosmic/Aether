@@ -5,15 +5,15 @@ milestone_name: Classic Colony Restoration
 current_phase: 201
 current_phase_name: Queen-Led Work Cycle
 status: verifying
-stopped_at: "Completed 201-17-PLAN.md (gap closure D-11); next: 201-18"
-last_updated: "2026-09-10T21:21:59.764Z"
+stopped_at: "Completed 201-18-PLAN.md (gap closure D-08 native-lane + CAP-066); next: 201-19"
+last_updated: "2026-09-10T21:38:42.832Z"
 last_activity: 2026-09-10
-state_head: bb928455c98768e50206fe71f828fd06b1a8a60e
+state_head: b5abe2faff30732963bf5a3a963f4d66ac65d45b
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 109
-  completed_plans: 106
+  completed_plans: 107
   percent: 0
 ---
 
@@ -32,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 201 (Queen-Led Work Cycle) — EXECUTING GAP CLOSURE
-Plan: 18 of 20 (gap-closure plans 16-20; D-01 closed by 201-16, D-11 closed by 201-17)
+Plan: 19 of 20 (gap-closure plans 16-20; D-01 closed by 201-16, D-11 closed by 201-17)
 Status: Gap-closure plan 201-17 complete — next: 201-18
 Last activity: 2026-09-10
 
@@ -184,6 +184,7 @@ Last activity: 2026-09-10
 | Phase 201 P15 | 75min | 3 tasks | 4 files |
 | Phase 201 P16 | 16min | 3 tasks | 3 files |
 | Phase 201 P17 | 27min | 3 tasks | 4 files |
+| Phase 201 P18 | 45min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -581,6 +582,7 @@ Last activity: 2026-09-10
 - [Phase 201]: Fixed a pre-existing bug in cmd/lifecycle_closeout.go where the interrupted-verdict recovery text borrowed the success label's 'finished' token — Needed as the real causal proof for the required negative case: a non-success outcome never renders as success
 - [Phase 201]: 201-16: wired the Queen's verification-boundary write side (queenApplyVerificationBoundary/attachVerificationBoundary) into both build lanes, closing the D-01 gap from 201-VERIFICATION.md
 - [Phase 201]: 201-17: Closed D-11 — applyBoundedCheckFixRepair now returns a real four-part failed-repair handback (diagnosis, attempted action, restored position, owner action), rendered on the blocked check screen both continue lanes share; fixed a latent restored-position bug along the way.
+- [Phase 201]: [Phase 201] 201-18: native/in-repo build lane now attaches the credited/uncredited file split (D-08) and both lanes attach knowledge deltas (CAP-066) to the exact sealed attempt, warn-never-fail, proven by AST call-graph guard and real end-to-end builds.
 
 ### Pending Todos
 
@@ -697,8 +699,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-10T21:21:59.709Z
-Stopped at: Completed 201-17-PLAN.md (gap closure D-11); next: 201-18
+Last session: 2026-09-10T21:38:42.770Z
+Stopped at: Completed 201-18-PLAN.md (gap closure D-08 native-lane + CAP-066); next: 201-19
 Resume file: None
 
 ## Operator Next Steps

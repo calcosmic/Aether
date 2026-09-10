@@ -364,7 +364,7 @@ Plans:
 
 **Requirements:** SYNTH-03, CEC-06, WORK-01..08
 
-**Plans:** 17/20 plans executed (15 executed, 5 gap-closure plans pending)
+**Plans:** 18/20 plans executed (15 executed, 5 gap-closure plans pending)
 
 Plans:
 
@@ -426,7 +426,7 @@ Plans:
 
 **Gap closure — Wave 2** *(blocked on gap-closure Wave 1)*
 
-- [ ] 201-18-PLAN.md — Attach the credited/uncredited split and the attempt's knowledge deltas on both build lanes.
+- [x] 201-18-PLAN.md — Attach the credited/uncredited split and the attempt's knowledge deltas on both build lanes.
 
 **Gap closure — Wave 3** *(blocked on gap-closure Wave 2)*
 
