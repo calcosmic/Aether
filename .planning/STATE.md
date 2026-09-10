@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
-status: executing
-stopped_at: "Completed 201-19-PLAN.md (verdict-carrying build closeout wired into both lanes); next: 201-20"
-last_updated: "2026-09-10T22:05:03.259Z"
+status: verifying
+stopped_at: Completed 201-20-PLAN.md (check-lane and autopilot verdict/cost-block wiring); phase 201 gap-closure plans 16-20 all complete, ready for re-verification
+last_updated: "2026-09-10T22:33:43.995Z"
 last_activity: 2026-09-10
 progress:
   total_phases: 7
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 109
-  completed_plans: 108
-  percent: 29
+  completed_plans: 109
+  percent: 43
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 
 Phase: 201 (Queen-Led Work Cycle) — EXECUTING GAP CLOSURE
 Plan: 20 of 20 (gap-closure plans 16-20; D-01 closed by 201-16, D-11 closed by 201-17)
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-09-10
 
 ## Performance Metrics
@@ -183,6 +183,7 @@ Last activity: 2026-09-10
 | Phase 201 P17 | 27min | 3 tasks | 4 files |
 | Phase 201 P18 | 45min | 3 tasks | 5 files |
 | Phase 201 P19 | 55min | 3 tasks | 5 files |
+| Phase 201 P20 | 70min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -583,6 +584,9 @@ Last activity: 2026-09-10
 - [Phase 201]: [Phase 201] 201-18: native/in-repo build lane now attaches the credited/uncredited file split (D-08) and both lanes attach knowledge deltas (CAP-066) to the exact sealed attempt, warn-never-fail, proven by AST call-graph guard and real end-to-end builds.
 - [Phase ?]: Added a dedup guard (excludeLifecycleEvidenceByID) to buildLifecycleCloseout so a knowledge delta never renders twice now that a real work verdict reaches production for the first time
 - [Phase ?]: buildEndReviewerCastes is derived from queenBuildPostWavePlans at init time rather than a hand-typed caste list
+- [Phase ?]: [Phase 201] checkWorkOutcome derives the check's verdict once per continueAcceptVerifyAdvanceDecision and codex_continue.go stores it on the result at all three save sites; checkWorkCloseoutDetails reads it back, never recomputes
+- [Phase ?]: [Phase 201] The check screen (both continueCmd's direct lane and the wrapper's chat-path closeout) and both autopilot closeout sites (per-phase build card, terminal run screen) now carry a verdict, a recommended next action, and exactly one cost-and-time block
+- [Phase ?]: [Phase 201] cmd/codex_continue_finalize.go (the --classic-ceremony external lane) is deliberately left without check-verdict wiring -- not in this plan's declared files, its pre-review blocked path never reaches the shared decision body, and it falls back safely; the default/fast aether continue path and autopilot's own checks (same direct lane) are fully wired
 
 ### Pending Todos
 
@@ -699,8 +703,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-10T22:05:03.250Z
-Stopped at: Completed 201-19-PLAN.md (verdict-carrying build closeout wired into both lanes); next: 201-20
+Last session: 2026-09-10T22:33:43.985Z
+Stopped at: Completed 201-20-PLAN.md (check-lane and autopilot verdict/cost-block wiring); phase 201 gap-closure plans 16-20 all complete, ready for re-verification
 Resume file: None
 
 ## Operator Next Steps

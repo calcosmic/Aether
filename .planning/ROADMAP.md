@@ -61,7 +61,7 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 
 - [x] **Phase 199 — Front Door and Classic Contract** (completed 2026-09-07)
 - [x] **Phase 200 — Iterative Planning**
-- [ ] **Phase 201 — Queen-Led Work Cycle**
+- [x] **Phase 201 — Queen-Led Work Cycle** (completed 2026-09-10)
 - [ ] **Phase 202 — Swarm, Oracle, and Live Colony**
 - [ ] **Phase 203 — Biological Runtime**
 - [ ] **Phase 204 — Learning Governor**
@@ -364,7 +364,7 @@ Plans:
 
 **Requirements:** SYNTH-03, CEC-06, WORK-01..08
 
-**Plans:** 19/20 plans executed
+**Plans:** 20/20 plans complete
 
 Plans:
 
@@ -434,7 +434,7 @@ Plans:
 
 **Gap closure — Wave 4** *(blocked on gap-closure Wave 3)*
 
-- [ ] 201-20-PLAN.md — Give the check step and autopilot the same verdict-carrying closeout, with cost and elapsed time.
+- [x] 201-20-PLAN.md — Give the check step and autopilot the same verdict-carrying closeout, with cost and elapsed time.
 
 **Success criteria:**
 
