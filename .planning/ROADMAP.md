@@ -364,7 +364,7 @@ Plans:
 
 **Requirements:** SYNTH-03, CEC-06, WORK-01..08
 
-**Plans:** 8/15 plans executed
+**Plans:** 9/15 plans executed
 
 Plans:
 
@@ -393,7 +393,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 201-09-PLAN.md — Run one bounded checkpointed repair round with announced save, restore and handback.
+- [x] 201-09-PLAN.md — Run one bounded checkpointed repair round with announced save, restore and handback.
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
