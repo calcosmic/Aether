@@ -64,6 +64,21 @@ type continueAcceptVerifyAdvanceDecision struct {
 	// advisory decisions, persisted gate results, blocked-result rendering)
 	// does not have to re-derive it -- it is exactly the report passed in.
 	Gates codexContinueGateReport
+	// Waves is this phase's most recently recorded build attempt's own
+	// job-wave order (SYN-201-02, WORK-03): job names grouped by their
+	// already-assigned Wave field, read verbatim from
+	// buildAttemptRecord.Dispatches via attemptCoherentJobWaves
+	// (cmd/coherent_jobs.go) -- the SAME per-dispatch facts the Queen
+	// card, workspace leases, receipts, findings and fan-in surfaces read
+	// (cmd/work_identity_test.go). Empty when no build attempt exists yet
+	// for this phase. Never re-derived by grouping phase.Tasks again --
+	// this decision body performs no second planCoherentJobs-style pass.
+	Waves []coherentJobWaveOrder
+	// JobDependencies mirrors each job-owning dispatch's own recorded
+	// DependsOn edges (job name -> the job names it depends on), read
+	// verbatim from the same attempt's Dispatches via
+	// attemptCoherentJobDependencies.
+	JobDependencies map[string][]string
 }
 
 // Advances reports whether this decision allows the phase to advance.
@@ -127,6 +142,14 @@ func runContinueAcceptVerifyAdvance(
 		PartialSuccess:         assessment.PartialSuccess,
 		Gates:                  gates,
 		Warnings:               append([]string{}, gates.Warnings...),
+	}
+	// Read this phase's recorded job/wave identity verbatim from its build
+	// attempt -- never re-derived (SYN-201-02). Populated before either
+	// early return below so both the blocked and the advancing verdict
+	// carry the same recorded job/wave facts.
+	if _, record, ok := loadLatestBuildAttempt(phase.ID); ok {
+		decision.Waves = attemptCoherentJobWaves(record.Dispatches)
+		decision.JobDependencies = attemptCoherentJobDependencies(record.Dispatches)
 	}
 
 	if !gates.Passed {

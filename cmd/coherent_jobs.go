@@ -921,6 +921,82 @@ func coherentJobDependenciesSatisfied(dependencies []string, completed map[strin
 	return true
 }
 
+// coherentJobWaveOrder is the recorded job-name order for one wave, read
+// verbatim from a build attempt's own persisted dispatches -- the exact
+// per-dispatch Wave/JobName fields planCoherentJobs's caller
+// (plannedBuildDispatchesWithJobProposals, cmd/codex_build.go) already
+// assigned at build-planning time. It performs no grouping, caste-matching,
+// or path comparison of its own: a dispatch's Wave and JobName are already
+// decided facts, not inputs to a second decision.
+type coherentJobWaveOrder struct {
+	Wave int      `json:"wave"`
+	Jobs []string `json:"jobs"`
+}
+
+// attemptCoherentJobWaves reports the recorded wave order for a build
+// attempt's dispatches: job names grouped by their own already-assigned
+// Wave field, in the exact order plannedBuildDispatchesWithJobProposals
+// appended them -- itself coherentJobPlan.Jobs' own deterministic plan
+// order (sortCoherentJobsByPlanOrder). This is the ONE read path every
+// downstream consumer of "which waves ran, and which jobs were in them"
+// must use (SYN-201-02); nothing may re-derive this by grouping
+// phase.Tasks or re-running planCoherentJobs a second time. Dispatches
+// with no JobName (pre-wave/review dispatches that own no job) are
+// excluded -- they never belonged to a coherent job in the first place.
+//
+// Two calls against the same dispatch slice produce byte-identical output
+// (TestJobRenderOrderIsDeterministic): the function does no map-order-
+// dependent work that isn't immediately resorted into the stable,
+// dispatch-order-preserving result below.
+func attemptCoherentJobWaves(dispatches []codexBuildDispatch) []coherentJobWaveOrder {
+	byWave := map[int][]string{}
+	var waveOrder []int
+	seenWave := map[int]bool{}
+	seenJob := map[string]bool{}
+	for _, dispatch := range dispatches {
+		name := strings.TrimSpace(dispatch.JobName)
+		if name == "" || seenJob[name] {
+			continue
+		}
+		seenJob[name] = true
+		if !seenWave[dispatch.Wave] {
+			seenWave[dispatch.Wave] = true
+			waveOrder = append(waveOrder, dispatch.Wave)
+		}
+		byWave[dispatch.Wave] = append(byWave[dispatch.Wave], name)
+	}
+	// Wave numbers are already monotonically increasing plan order
+	// (taskWaveBase + the job DAG's own wave index) by construction --
+	// this sort is a defensive, deterministic tie-break on the wave
+	// NUMBER only, never a re-derivation of which jobs belong to it or
+	// what order they run in within it.
+	sort.Ints(waveOrder)
+	result := make([]coherentJobWaveOrder, 0, len(waveOrder))
+	for _, wave := range waveOrder {
+		result = append(result, coherentJobWaveOrder{Wave: wave, Jobs: byWave[wave]})
+	}
+	return result
+}
+
+// attemptCoherentJobDependencies reports each job-owning dispatch's own
+// recorded DependsOn edges (job name -> the job names it depends on), read
+// verbatim from the same attempt's dispatches. Mirrors
+// attemptCoherentJobWaves's read-only, no-re-derivation discipline.
+func attemptCoherentJobDependencies(dispatches []codexBuildDispatch) map[string][]string {
+	dependencies := map[string][]string{}
+	for _, dispatch := range dispatches {
+		name := strings.TrimSpace(dispatch.JobName)
+		if name == "" {
+			continue
+		}
+		if _, exists := dependencies[name]; exists {
+			continue
+		}
+		dependencies[name] = append([]string{}, dispatch.DependsOn...)
+	}
+	return dependencies
+}
+
 func attachCoherentJobReplacementNames(plan *coherentJobPlan, refusedMembers map[string][]string) {
 	for decisionIndex := range plan.Decisions {
 		decision := &plan.Decisions[decisionIndex]
