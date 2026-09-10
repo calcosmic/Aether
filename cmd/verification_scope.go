@@ -112,6 +112,52 @@ func deriveVerificationScope(root string, phase colony.Phase, isFinalPhase bool,
 	}, scopedCommands
 }
 
+// verificationCyclePoint identifies WHERE in the work cycle a verification
+// pass runs (D-15a, Phase 201 plan 14): the working loop (fast, potentially
+// scoped feedback while work continues -- today, the build-time free-check
+// report) or the phase boundary (the one pass whose result decides whether
+// the phase advances -- today, both continue lanes and the check-fix repair
+// re-run). Only the working loop may ever narrow the tests command; the
+// phase boundary always runs the full suite, regardless of how narrow a
+// loop-scoped pass would have been.
+const (
+	verificationCyclePointLoop     = "loop"
+	verificationCyclePointBoundary = "boundary"
+)
+
+// deriveVerificationScopeAtCyclePoint layers D-15a's point-in-the-cycle rule
+// on top of deriveVerificationScope, which it leaves entirely unchanged --
+// deriveVerificationScope's own tests, and every caller that predates this
+// function, keep working exactly as before (unmodified).
+//
+// Inside the working loop, the scope is whatever deriveVerificationScope
+// would honestly derive: targeted when the changed files confidently narrow
+// to a package set, full whenever they cannot be honestly attributed, and
+// full on the plan's final phase regardless -- deriveVerificationScope's own
+// rules, untouched.
+//
+// At the phase boundary, the full suite always runs -- the phase's
+// advancement decision never rests on a scope a loop pass happened to
+// narrow -- except when there is no tests command at all, in which case
+// there is nothing to run either way (mode "none", the same case
+// deriveVerificationScope itself carves out). Only the tests command is
+// ever affected by either branch: build, type-check and lint commands pass
+// through commands unchanged in both cases, exactly as
+// deriveVerificationScope's own doc comment requires.
+func deriveVerificationScopeAtCyclePoint(root string, phase colony.Phase, isFinalPhase bool, cyclePoint string, claims codexBuildClaims, commands codexVerificationCommands) (verificationScope, codexVerificationCommands) {
+	if cyclePoint != verificationCyclePointBoundary {
+		return deriveVerificationScope(root, phase, isFinalPhase, claims, commands)
+	}
+	testCommand := strings.TrimSpace(commands.Test)
+	if testCommand == "" {
+		return verificationScope{Mode: verificationScopeNone, Reason: "there are no tests to run in this project"}, commands
+	}
+	return verificationScope{
+		Mode:   verificationScopeFull,
+		Reason: "this is the phase boundary, so the full suite runs regardless of how narrow a working-loop pass would have been",
+	}, commands
+}
+
 // loadRawBuildClaimsForScope loads the phase's build claims file (the same
 // file verifyCodexBuildClaims reads) purely to learn which files changed --
 // deriveVerificationScope's only use for it. A missing or unreadable claims

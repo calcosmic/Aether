@@ -778,7 +778,13 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	if !skipVerify {
 		contManifest := codexContinueManifest{Present: true, Path: manifestRel, Data: finalManifest}
 		watcher := evaluateContinueWatcherVerification(contManifest)
-		floor := runDeterministicFloor(context.Background(), root, updatedPhase, contManifest, watcher, 0)
+		// D-15a (Phase 201 plan 14): this report never gates advancement --
+		// the comment two lines below says so, and always has. That is
+		// exactly the working loop, not the phase boundary: the tests
+		// command may be scoped to what this phase touched, while the
+		// phase's real advancement decision (continue, below) always pays
+		// for the full suite.
+		floor := runDeterministicFloorAtCyclePoint(context.Background(), root, updatedPhase, contManifest, watcher, 0, verificationCyclePointLoop)
 		report := buildFreeCheckReportFromFloor(phaseNum, completedAt, floor)
 		if err := attachBuildFreeCheckReport(attemptRel, report); err != nil {
 			// A report the runtime failed to write is not a reason to fail a
