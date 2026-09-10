@@ -4542,3 +4542,78 @@ func resolvePheromoneSection() string {
 	return strings.TrimSpace(b.String())
 }
 
+// buildDeterministicCheckEvidence turns the exact deterministic check
+// commands that ran for a build (in the order they ran) into the closeout's
+// evidence list. Every entry here is reported as passed -- a caller must
+// never reach an unverified-build closeout with a failed check; a build
+// whose own checks failed is a failure, not an honest "not verified yet"
+// result.
+func buildDeterministicCheckEvidence(checkCommands []string) []colony.LifecycleEvidence {
+	evidence := make([]colony.LifecycleEvidence, 0, len(checkCommands))
+	for i, command := range checkCommands {
+		command = strings.TrimSpace(command)
+		if command == "" {
+			continue
+		}
+		evidence = append(evidence, colony.LifecycleEvidence{
+			ID:      fmt.Sprintf("build-check-%d", i+1),
+			Kind:    "command",
+			Source:  command,
+			Summary: fmt.Sprintf("`%s` passed", command),
+		})
+	}
+	return evidence
+}
+
+// buildUnverifiedCloseoutDetails builds the LifecycleCloseoutDetails for a
+// build finishing under the check-step verification boundary (D-01, the
+// default landing -- and equally the outcome when no boundary decision was
+// recorded at all, verificationBoundaryForAttempt): the program's own
+// deterministic checks ran and passed, but no reviewer has judged this work
+// yet. The verdict is colony.WorkOutcomePartial (work genuinely done, not
+// yet confirmed) -- never colony.WorkOutcomeSuccess, which the equal-
+// ceremony guarantee (pkg/colony/work_outcome.go, plan 201-04) reserves for
+// a result that has actually been verified. The rendered card still gets
+// the identical full ceremony a success card gets (every canonical slot,
+// D-05) -- it just tells the truth in that slot instead of a passing one.
+//
+// checkCommands names the exact commands that ran, in the order they ran.
+// The projection's own Next Up slot (owned by the ONE lifecycle projection,
+// never by an individual command -- see this file's own doc comment)
+// supplies the single command the owner runs next; this function never
+// invents one.
+func buildUnverifiedCloseoutDetails(checkCommands []string) LifecycleCloseoutDetails {
+	return LifecycleCloseoutDetails{
+		WorkOutcome: colony.WorkOutcomePartial,
+		Summary:     "The work is built and the program's own checks passed. It has not been verified yet.",
+		Evidence:    buildDeterministicCheckEvidence(checkCommands),
+	}
+}
+
+// buildVerifiedCloseoutDetails builds the LifecycleCloseoutDetails for a
+// build whose recorded verification-boundary decision named build-end AND
+// whose build-end reviewers actually passed -- the only case in which a
+// build closeout may carry the success verdict. reviewerNames lists which
+// reviewers ran, purely for the evidence trail; their pass/fail decision
+// itself is the caller's to have already checked before reaching here.
+func buildVerifiedCloseoutDetails(checkCommands []string, reviewerNames []string) LifecycleCloseoutDetails {
+	summary := "The work is built, the program's own checks passed, and it has been reviewed."
+	evidence := buildDeterministicCheckEvidence(checkCommands)
+	for i, name := range reviewerNames {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		evidence = append(evidence, colony.LifecycleEvidence{
+			ID:      fmt.Sprintf("build-review-%d", i+1),
+			Kind:    "review",
+			Source:  name,
+			Summary: fmt.Sprintf("%s reviewed and passed", name),
+		})
+	}
+	return LifecycleCloseoutDetails{
+		WorkOutcome: colony.WorkOutcomeSuccess,
+		Summary:     summary,
+		Evidence:    evidence,
+	}
+}
