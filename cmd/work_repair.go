@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -10,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/calcosmic/Aether/pkg/colony"
 )
 
 // runBoundedRepairRound (D-09) is the one bounded, checkpointed repair path
@@ -347,4 +350,97 @@ func repairCheckpointDirectoryDigest(root string, paths []string) (string, error
 		h.Write([]byte{0})
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// emitRepairCheckpointSaved and emitRepairCheckpointRestored are D-10's flow
+// announcements: rendered through the exact same visual-mode-gated flow
+// every other continue narration uses (emitContinueVerificationStart's own
+// pattern, cmd/codex_continue.go), never only in a log or a result envelope.
+// Plain English throughout, no repository-invented vocabulary (CLAUDE.md).
+func emitRepairCheckpointSaved(phase int, check string) {
+	if !shouldRenderVisualOutput(stdout) {
+		return
+	}
+	writeVisualOutput(stdout, fmt.Sprintf(
+		"Saving your project's current state for phase %d before trying one automatic fix for the %s check, so it can be put back exactly if the fix does not work.\n",
+		phase, check,
+	))
+}
+
+func emitRepairCheckpointRestored(phase int, check string) {
+	if !shouldRenderVisualOutput(stdout) {
+		return
+	}
+	writeVisualOutput(stdout, fmt.Sprintf(
+		"The automatic fix for the %s check did not work, so your project has been put back exactly to the state it was saved in for phase %d.\n",
+		check, phase,
+	))
+}
+
+// applyBoundedCheckFixRepair wraps applyAutomaticCheckFixAttempt (D-02's
+// existing single bounded builder fix attempt, cmd/check_fix_attempt.go)
+// with D-09's checkpoint/restore discipline and D-10's flow announcements,
+// without altering the fix attempt's own eligibility or dispatch logic.
+// Eligibility is checked read-only via planCheckFixAttempt before anything
+// is saved, so a call with nothing to fix takes no checkpoint and announces
+// nothing -- matching the pre-existing no-op behavior exactly.
+//
+// This is the direct check lane's production wiring (cmd/codex_continue.go).
+func applyBoundedCheckFixRepair(ctx context.Context, root string, state colony.ColonyState, phase colony.Phase, manifest codexContinueManifest, floor deterministicFloorResult, buildWatcher codexWatcherVerification, workerTimeout, verificationTimeout time.Duration, reviewerDispatched bool) (deterministicFloorResult, *checkFixAttemptRecord) {
+	record, eligible := planCheckFixAttempt(state, phase, manifest, floor, reviewerDispatched)
+	if !eligible {
+		return floor, nil
+	}
+
+	scopePaths := repairScopePathsForCheckFix(record, manifest, phase)
+	checkpoint, err := saveRepairCheckpoint(root, repairCheckpointIdentity(phase.ID, record.Check), scopePaths)
+	if err != nil {
+		// A checkpoint that cannot be saved must never silently block the
+		// existing D-02 fix attempt -- fall back to the pre-201-09
+		// behavior (no checkpoint, no restore) rather than refuse to try.
+		return applyAutomaticCheckFixAttempt(ctx, root, state, phase, manifest, floor, buildWatcher, workerTimeout, verificationTimeout, reviewerDispatched)
+	}
+	defer os.RemoveAll(checkpoint.BackupDir)
+
+	emitRepairCheckpointSaved(phase.ID, record.Check)
+
+	newFloor, fixed := applyAutomaticCheckFixAttempt(ctx, root, state, phase, manifest, floor, buildWatcher, workerTimeout, verificationTimeout, reviewerDispatched)
+
+	if fixed != nil && fixed.Outcome == "still_failing" {
+		if restoreErr := restoreRepairCheckpoint(checkpoint); restoreErr == nil {
+			emitRepairCheckpointRestored(phase.ID, record.Check)
+		}
+	}
+	return newFloor, fixed
+}
+
+// repairScopePathsForCheckFix derives the checkpoint scope for a D-02 check
+// fix attempt from the same claimed-files data the failure index itself was
+// built from (buildCheckFailureIndex, cmd/check_fix_attempt.go) -- the files
+// the implicated task(s) already claimed, never a fresh guess.
+func repairScopePathsForCheckFix(record checkFixAttemptRecord, manifest codexContinueManifest, phase colony.Phase) []string {
+	claims := loadRawBuildClaimsForScope(manifest)
+	sets := criterionClaimSets(claims)
+
+	implicated := map[string]bool{}
+	for taskID := range sets {
+		if taskID == "" {
+			continue
+		}
+		for _, id := range record.FailureIndex.ImplicatedTaskIDs {
+			if id == taskID {
+				for path := range sets[taskID] {
+					implicated[path] = true
+				}
+			}
+		}
+	}
+	if len(implicated) == 0 {
+		return nil
+	}
+	paths := make([]string, 0, len(implicated))
+	for path := range implicated {
+		paths = append(paths, path)
+	}
+	return paths
 }

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -228,5 +229,110 @@ func TestRepairNeverOverwritesTheOriginalResult(t *testing.T) {
 	}
 	if !reflect.DeepEqual(ledger.Receipts[0], before) {
 		t.Fatalf("first receipt was mutated by a later, independent repair round:\nbefore=%+v\nafter=%+v", before, ledger.Receipts[0])
+	}
+}
+
+// TestCheckpointSaveAndRestoreAreAnnouncedOnBothLanes proves the save
+// announcement precedes the repair dispatch and the restore announcement
+// follows a failed re-verification, on both the direct check lane and the
+// plan-only-plus-finalize lane -- both reach runBoundedRepairRound, the one
+// bounded repair path build and check both use, so the same proof applies
+// to either caller shape.
+func TestCheckpointSaveAndRestoreAreAnnouncedOnBothLanes(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	original := stdout
+	defer func() { stdout = original }()
+
+	lanes := []struct {
+		name  string
+		phase int
+		check string
+	}{
+		{"direct check lane", 21, "go test ./cmd"},
+		{"plan-only-plus-finalize lane", 22, "go vet ./cmd"},
+	}
+	for _, lane := range lanes {
+		t.Run(lane.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			stdout = &buf
+
+			root := workRepairFixtureRoot(t)
+			ledger := newAutopilotRepairLedger("run-201-09-"+lane.check, 1)
+			input := workRepairFixtureInput(root, lane.phase, lane.check)
+
+			var order []string
+			outcome, err := runBoundedRepairRound(&ledger, input, nil, noopPersist,
+				func() error { order = append(order, "repair"); return nil },
+				func() (bool, []string, error) { order = append(order, "verify"); return false, []string{"still failing"}, nil },
+				func(id string) { order = append(order, "save:"+id); emitRepairCheckpointSaved(lane.phase, lane.check) },
+				func(id string) { order = append(order, "restore:"+id); emitRepairCheckpointRestored(lane.phase, lane.check) },
+			)
+			if err != nil {
+				t.Fatalf("round: %v", err)
+			}
+			if !outcome.Restored {
+				t.Fatalf("expected a restored round: %+v", outcome)
+			}
+
+			wantOrder := []string{"save:" + outcome.CheckpointID, "repair", "verify", "restore:" + outcome.CheckpointID}
+			if strings.Join(order, ",") != strings.Join(wantOrder, ",") {
+				t.Fatalf("%s: announcement/repair ordering = %v, want %v", lane.name, order, wantOrder)
+			}
+
+			visual := buf.String()
+			if !strings.Contains(visual, "Saving your project's current state") {
+				t.Fatalf("%s: save announcement missing from the rendered flow:\n%s", lane.name, visual)
+			}
+			if !strings.Contains(visual, "put back exactly to the state it was saved in") {
+				t.Fatalf("%s: restore announcement missing from the rendered flow:\n%s", lane.name, visual)
+			}
+			savedAt := strings.Index(visual, "Saving your project's current state")
+			restoredAt := strings.Index(visual, "put back exactly to the state it was saved in")
+			if savedAt < 0 || restoredAt < 0 || savedAt > restoredAt {
+				t.Fatalf("%s: save announcement must precede restore in the rendered flow:\n%s", lane.name, visual)
+			}
+
+			lowered := strings.ToLower(visual)
+			for _, jargon := range []string{"verification boundary", "the queen", "post-wave", "deterministic floor", "caste"} {
+				if strings.Contains(lowered, jargon) {
+					t.Errorf("%s: rendered announcement contains repository-invented vocabulary %q:\n%s", lane.name, jargon, visual)
+				}
+			}
+		})
+	}
+}
+
+// TestPassedRepairAnnouncesNoRestore proves a passed repair still announces
+// the save but never announces a restore.
+func TestPassedRepairAnnouncesNoRestore(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	original := stdout
+	defer func() { stdout = original }()
+	var buf bytes.Buffer
+	stdout = &buf
+
+	root := workRepairFixtureRoot(t)
+	ledger := newAutopilotRepairLedger("run-201-09-pass-announce", 1)
+	input := workRepairFixtureInput(root, 23, "go build ./cmd")
+
+	outcome, err := runBoundedRepairRound(&ledger, input, nil, noopPersist,
+		func() error { return nil },
+		func() (bool, []string, error) { return true, nil, nil },
+		func(string) { emitRepairCheckpointSaved(input.Phase, input.Check) },
+		func(string) { emitRepairCheckpointRestored(input.Phase, input.Check) },
+	)
+	if err != nil {
+		t.Fatalf("round: %v", err)
+	}
+	if !outcome.Passed || outcome.Restored {
+		t.Fatalf("expected a passed, non-restored round: %+v", outcome)
+	}
+
+	visual := buf.String()
+	if !strings.Contains(visual, "Saving your project's current state") {
+		t.Fatalf("save announcement missing: %s", visual)
+	}
+	if strings.Contains(visual, "put back exactly to the state it was saved in") {
+		t.Fatalf("a passed repair unexpectedly announced a restore:\n%s", visual)
 	}
 }

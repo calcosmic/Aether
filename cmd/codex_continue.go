@@ -2017,15 +2017,16 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 		watcher = buildWatcher
 	}
 
-	// D-02/D-03: when a free check failed and no reviewer was dispatched,
-	// attempt exactly one bounded automatic builder fix and use its result
-	// as the effective floor for the rest of this function.
-	// applyAutomaticCheckFixAttempt itself decides eligibility (the floor
-	// already passing, a reviewer having been dispatched, no failing shell
-	// step, or a fix attempt already recorded for this phase and check all
-	// return the floor unchanged) -- this call site never re-derives that
-	// decision, so there is exactly one place it is made.
-	floor, checkFixAttempt := applyAutomaticCheckFixAttempt(ctx, root, state, phase, manifest, floor, buildWatcher, workerTimeout, verificationTimeout, dispatchReviewer)
+	// D-02/D-03/D-09/D-10: when a free check failed and no reviewer was
+	// dispatched, attempt exactly one bounded automatic builder fix,
+	// wrapped in D-09's checkpoint/restore discipline (applyBoundedCheckFixRepair,
+	// cmd/work_repair.go), and use its result as the effective floor for
+	// the rest of this function. Eligibility (the floor already passing, a
+	// reviewer having been dispatched, no failing shell step, or a fix
+	// attempt already recorded for this phase and check) is still decided
+	// in exactly one place, inside planCheckFixAttempt -- this call site
+	// never re-derives that decision.
+	floor, checkFixAttempt := applyBoundedCheckFixRepair(ctx, root, state, phase, manifest, floor, buildWatcher, workerTimeout, verificationTimeout, dispatchReviewer)
 
 	checksPassed := floor.ChecksPassed
 	blockers := append([]string{}, floor.BlockingIssues...)
