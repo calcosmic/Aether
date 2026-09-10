@@ -359,6 +359,18 @@ type codexBuildOptions struct {
 	// and not required by the phase, is refused by name rather than sent
 	// unexplained (parseAndMergeCasteWhy, queenApplyJudgement).
 	QueenCasteWhy []string
+	// QueenVerificationBoundary is the Queen's proposed choice for where
+	// reviewer judgement lands: "check_step" or "build_end". Empty means no
+	// judgement was offered and the check-step default applies (D-01, D-02)
+	// -- the behaviour of every caller before this field existed.
+	// queenApplyVerificationBoundary is the only function permitted to judge
+	// this value; it is carried verbatim from the CLI flag layer.
+	QueenVerificationBoundary string
+	// QueenVerificationBoundaryWhy is the plain-English reason a build-end
+	// proposal requires (D-02). A build-end proposal with no reason is
+	// refused by name inside queenApplyVerificationBoundary and falls back
+	// to the check-step default -- this field is never validated here.
+	QueenVerificationBoundaryWhy string
 	// JobProposals are structured Queen suggestions. The coherent-job planner
 	// validates them before any attempt, checkpoint, worktree, or lifecycle
 	// mutation is allowed to begin.

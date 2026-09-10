@@ -316,6 +316,8 @@ var buildCmd = &cobra.Command{
 		queenCastes, _ := cmd.Flags().GetStringArray("castes")
 		queenCasteReason, _ := cmd.Flags().GetString("caste-reason")
 		queenCasteWhy, _ := cmd.Flags().GetStringArray("caste-why")
+		queenVerificationBoundary, _ := cmd.Flags().GetString("verification-boundary")
+		queenVerificationBoundaryWhy, _ := cmd.Flags().GetString("boundary-why")
 		jobProposals, err := parseCoherentJobProposals(mustGetStringArray(cmd, "job-proposal"))
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -341,16 +343,18 @@ var buildCmd = &cobra.Command{
 		planOnly, _ := cmd.Flags().GetBool("plan-only")
 		if planOnly {
 			result, state, phase, dispatches, err := runCodexBuildPlanOnlyWithOptions(skillWorkspaceRoot(), phaseNum, selectedTasks, codexBuildOptions{
-				WorkerTimeout:     workerTimeout,
-				Force:             forceBuild,
-				LightFlag:         lightFlag,
-				HeavyFlag:         heavyFlag,
-				VerificationDepth: verificationDepth,
-				QueenCastes:       queenCastes,
-				QueenCasteReason:  queenCasteReason,
-				QueenCasteWhy:     queenCasteWhy,
-				JobProposals:      jobProposals,
-				NonInteractive:    noCheckinFlag,
+				WorkerTimeout:                workerTimeout,
+				Force:                        forceBuild,
+				LightFlag:                    lightFlag,
+				HeavyFlag:                    heavyFlag,
+				VerificationDepth:            verificationDepth,
+				QueenCastes:                  queenCastes,
+				QueenCasteReason:             queenCasteReason,
+				QueenCasteWhy:                queenCasteWhy,
+				QueenVerificationBoundary:    queenVerificationBoundary,
+				QueenVerificationBoundaryWhy: queenVerificationBoundaryWhy,
+				JobProposals:                 jobProposals,
+				NonInteractive:               noCheckinFlag,
 			})
 			if err != nil {
 				outputError(1, err.Error(), nil)
@@ -398,18 +402,20 @@ var buildCmd = &cobra.Command{
 		cbThreshold, _ := cmd.Flags().GetInt("circuit-breaker-threshold")
 		verboseFlag, _ := cmd.Flags().GetBool("verbose")
 		result, err := runCodexBuildWithOptions(skillWorkspaceRoot(), phaseNum, selectedTasks, syntheticBuild, codexBuildOptions{
-			WorkerTimeout:           workerTimeout,
-			Force:                   forceBuild,
-			LightFlag:               lightFlag,
-			HeavyFlag:               heavyFlag,
-			VerificationDepth:       verificationDepth,
-			CircuitBreakerThreshold: cbThreshold,
-			Verbose:                 verboseFlag,
-			QueenCastes:             queenCastes,
-			QueenCasteReason:        queenCasteReason,
-			QueenCasteWhy:           queenCasteWhy,
-			JobProposals:            jobProposals,
-			NonInteractive:          noCheckinFlag,
+			WorkerTimeout:                workerTimeout,
+			Force:                        forceBuild,
+			LightFlag:                    lightFlag,
+			HeavyFlag:                    heavyFlag,
+			VerificationDepth:            verificationDepth,
+			CircuitBreakerThreshold:      cbThreshold,
+			Verbose:                      verboseFlag,
+			QueenCastes:                  queenCastes,
+			QueenCasteReason:             queenCasteReason,
+			QueenCasteWhy:                queenCasteWhy,
+			QueenVerificationBoundary:    queenVerificationBoundary,
+			QueenVerificationBoundaryWhy: queenVerificationBoundaryWhy,
+			JobProposals:                 jobProposals,
+			NonInteractive:               noCheckinFlag,
 		})
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -2511,6 +2517,8 @@ func init() {
 	buildCmd.Flags().StringArray("castes", nil, "Queen's proposed worker castes for this phase (repeatable or comma-separated). Safety castes the phase requires are added back automatically; the worker budget still applies")
 	buildCmd.Flags().String("caste-reason", "", "One line summarising the whole team's choice, shown to the operator alongside the roster. This is NOT a per-worker reason -- a worker named in --castes with no matching --caste-why entry is refused by name even if --caste-reason is set. Use --caste-why for that.")
 	buildCmd.Flags().StringArray("caste-why", nil, "One reason per proposed worker, as caste=reason (repeatable; the reason may itself contain '='). A worker named in --castes with no entry here, and not required by the phase, is refused by name rather than sent unexplained")
+	buildCmd.Flags().String("verification-boundary", "", "Where the reviewer's judgement should land: 'check step' (the default, at aether continue) or 'build end' (during this build itself). Moving it to build end requires --boundary-why; leaving this unset makes no request and the default applies")
+	buildCmd.Flags().String("boundary-why", "", "The plain-English reason review should happen at build end instead of the check step. Required whenever --verification-boundary asks for build end")
 	buildCmd.Flags().StringArray("job-proposal", nil, "Queen coherent-job proposal as one JSON object (repeatable; fields: name, task_ids, owner_caste, relationship, benefit, owner_reason)")
 	buildCmd.Flags().Int("circuit-breaker-threshold", 3, "Consecutive failures before circuit breaker trips for a worker (default: 3)")
 	buildCmd.Flags().Bool("no-suggest", false, "Skip pheromone suggestion analysis during build")
