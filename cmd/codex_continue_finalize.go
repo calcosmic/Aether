@@ -378,7 +378,19 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 		if plan.ReviewDepth != "" {
 			resolveDepth = plan.ReviewDepth
 		}
-		gates, autoResolved := autoResolveSoftBlockGates(phase.ID, gates, resolveDepth, phase.Mode)
+		// [Rule 1 - Bug] `gates, autoResolved := ...` previously shadowed the
+		// outer `gates` inside this if-block: a soft_block gate that got
+		// auto-resolved here was invisible everywhere below this block
+		// (review dispatch, advanceExternalContinue, the persisted report) --
+		// the outer `gates.Passed` stayed stuck at its stale pre-resolution
+		// value. `advanceExternalContinue` never re-checks `.Passed` itself,
+		// so this went unnoticed as a functional block, but
+		// runContinueAcceptVerifyAdvance (cmd/codex_verify_advance.go) DOES
+		// gate on `gates.Passed` -- assigning to the outer variable with `=`
+		// is required for the shared decision body to see the resolution
+		// this lane already performed.
+		var autoResolved []string
+		gates, autoResolved = autoResolveSoftBlockGates(phase.ID, gates, resolveDepth, phase.Mode)
 
 		if len(autoResolved) > 0 {
 			// Re-persist gate results with auto-resolved annotations
@@ -570,7 +582,14 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	if err := store.SaveJSON(reviewReportRel, review); err != nil {
 		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to write review report: %w", err)
 	}
-	if !review.Passed {
+	// SYN-201-04: the external finalize lane reaches its advancement verdict
+	// only through the same shared decision body every other lane uses.
+	// `gates` here is whatever this lane's own pre-review gate handling
+	// (including its soft_block auto-resolve pass above) left it as --
+	// runContinueAcceptVerifyAdvance does not re-evaluate gates, it folds
+	// the already-decided report with this now-available review report.
+	finalDecision := runContinueAcceptVerifyAdvance(phase, assessment, gates, &review, state)
+	if !finalDecision.Advances() {
 		// Hand the blocking findings to the Fixer's intake: `aether unblock
 		// --dispatch` reads gate-results-<N>.json, so a review_findings gate
 		// entry with each finding's suggestion as recovery options is what

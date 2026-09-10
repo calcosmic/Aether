@@ -149,11 +149,19 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 		priorGateResults = []GateCheckResult{}
 	}
 	planGates := runCodexContinueGates(phase, manifest, verification, assessment, now, priorGateResults)
+	// SYN-201-04: the snapshot/plan-only lane reaches for its own (advisory,
+	// pre-dispatch) verdict through the same shared decision body every
+	// other lane uses -- review is nil here because no reviewer has been
+	// dispatched yet at plan-only time; the real advancement decision is
+	// made later by the finalize lane once wrapper-dispatched review
+	// results exist. planPreviewDecision.Gates is exactly planGates, so
+	// this call is a structural fold, not a second, divergent evaluation.
+	planPreviewDecision := runContinueAcceptVerifyAdvance(phase, assessment, planGates, nil, state)
 	budget := budgetFromRecoveryLog(phase.ID, 1)
 	if budget == nil {
 		budget = newRecoveryBudget(1)
 	}
-	queenDecisions := queenDecide(planGates, budget, circuitBreaker, phase.ID, string(reviewDepth))
+	queenDecisions := queenDecide(planPreviewDecision.Gates, budget, circuitBreaker, phase.ID, string(reviewDepth))
 
 	mergedExternalQueenCastes, externalQueenCasteWhyReasons := parseAndMergeCasteWhy(options.QueenCastes, options.QueenCasteWhy)
 	dispatches := plannedExternalContinueDispatches(root, phase, manifest, verification, assessment, options.WorkerTimeout, reviewDepth, effectiveSkipWatchers, mergedExternalQueenCastes, options.QueenCasteReason, externalQueenCasteWhyReasons)
