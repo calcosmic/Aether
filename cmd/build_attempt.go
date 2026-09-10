@@ -248,6 +248,14 @@ type buildAttemptRecord struct {
 	// attempt's retry job was derived from -- the original grouped job whose
 	// partial credit created this recovery attempt.
 	ParentJobName string `json:"parent_job_name,omitempty"`
+	// VerificationBoundary is set ONLY by attachVerificationBoundary, and by
+	// nothing else -- see verificationBoundaryDecision's own doc comment
+	// (cmd/verification_boundary.go) for how its value is derived. An
+	// attempt record written before this field existed decodes cleanly with
+	// this left nil, not a fabricated default; readers use
+	// verificationBoundaryForAttempt, which reports ok=false rather than
+	// inventing one.
+	VerificationBoundary *verificationBoundaryDecision `json:"verification_boundary,omitempty"`
 }
 
 type latestBuildAttemptPointer struct {
@@ -587,6 +595,38 @@ func attachCheckFixAttempt(attemptRel string, record checkFixAttemptRecord) erro
 		}
 		recordCopy := record
 		existing.CheckFix = &recordCopy
+		return nil
+	})
+}
+
+// attachVerificationBoundary attaches the Queen's reconciled verification-
+// boundary decision (queenApplyVerificationBoundary) to the exact build
+// attempt it was made for, and touches nothing else on the record: not
+// Status, not Dispatches, not Claims, not History. Mirrors
+// attachBuildFreeCheckReport's and attachCheckFixAttempt's narrow-setter
+// discipline.
+//
+// Re-attaching the identical decision is accepted as a no-op success -- an
+// idempotent retry after a partial write must not be mistaken for a rewrite
+// attempt. Attaching a DIFFERENT decision to an attempt that already carries
+// one is refused, naming both the stored and the offered choice: once
+// dispatch has begun against a recorded boundary choice, that choice cannot
+// be silently rewritten out from under it.
+func attachVerificationBoundary(attemptRel string, decision verificationBoundaryDecision) error {
+	if store == nil || strings.TrimSpace(attemptRel) == "" {
+		return fmt.Errorf("build attempt is not initialized")
+	}
+	var existing buildAttemptRecord
+	return store.UpdateJSONAtomically(attemptRel, &existing, func() error {
+		if existing.SchemaVersion != buildAttemptSchemaVersion || strings.TrimSpace(existing.ID) == "" {
+			return fmt.Errorf("invalid build attempt record")
+		}
+		if existing.VerificationBoundary != nil && *existing.VerificationBoundary != decision {
+			return fmt.Errorf("verification boundary for attempt %q is already recorded as %q -- refusing to silently rewrite it to %q",
+				existing.ID, existing.VerificationBoundary.Choice, decision.Choice)
+		}
+		decisionCopy := decision
+		existing.VerificationBoundary = &decisionCopy
 		return nil
 	})
 }

@@ -141,3 +141,23 @@ func queenApplyVerificationBoundary(proposed string, reason string, phase colony
 		}
 	}
 }
+
+// verificationBoundaryForAttempt is the single read path every consumer of a
+// recorded verification-boundary decision uses. It reads the stored decision
+// for the exact attempt and returns ok=false when none has been recorded yet
+// (including for an attempt written before this field existed) -- it never
+// calls queenApplyVerificationBoundary to recompute one. Consumers read;
+// they never derive (TestOneFunctionDerivesTheVerificationBoundary).
+func verificationBoundaryForAttempt(attemptRel string) (verificationBoundaryDecision, bool) {
+	if store == nil || strings.TrimSpace(attemptRel) == "" {
+		return verificationBoundaryDecision{}, false
+	}
+	var record buildAttemptRecord
+	if err := store.LoadJSON(attemptRel, &record); err != nil {
+		return verificationBoundaryDecision{}, false
+	}
+	if record.VerificationBoundary == nil {
+		return verificationBoundaryDecision{}, false
+	}
+	return *record.VerificationBoundary, true
+}
