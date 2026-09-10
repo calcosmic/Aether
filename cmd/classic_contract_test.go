@@ -1306,6 +1306,84 @@ var classicContractRequiredJourneyIDs = []string{
 	"maintenance.migration", "maintenance.update", "maintenance.cleanup", "maintenance.integrity",
 }
 
+// classicContractPhase201RequiredNegativeCaseIDs are the four rejected
+// shortcuts Task 1 of 201-15 requires: a second automatic repair attempt, a
+// caste dispatched at both the build and check boundaries, a timing segment
+// with no instrumentation source, and a non-success card borrowing the
+// success verdict's own wording. Each ID must exist as a case in the corpus.
+var classicContractPhase201RequiredNegativeCaseIDs = []string{
+	"work-cycle.repair.no-second-automatic-attempt",
+	"work-cycle.boundary.no-double-caste-dispatch",
+	"work-cycle.telemetry.no-segment-without-source",
+	"work-cycle.outcome.no-success-token-on-non-success",
+}
+
+// TestClassicContractPhase201Cases is Task 1's own structural proof: every
+// registered SYN-201 decision has at least one case, every Phase 201 group
+// has at least one case, every added case carries a causal (state or
+// forbidden-artifact) assertion in addition to its semantic assertions, the
+// four required negative cases are present by name, and a case asserting
+// only rendered text fails schema validation. It never mutates the corpus
+// or mechanism files it reads (proved by a before-and-after hash snapshot).
+func TestClassicContractPhase201Cases(t *testing.T) {
+	contractDir := classicContractFixtureDir(t)
+	before := snapshotStoreFileHashesForTest(t, contractDir)
+
+	document := loadClassicContractCorpus(t)
+
+	decisionCounts := make(map[string]int, len(classicContractPhase201Decisions))
+	groupCounts := make(map[string]int, len(classicContractPhase201Groups))
+	present := make(map[string]bool)
+	var phase201Cases []classicContractCase
+	for _, testCase := range document.Cases {
+		if !strings.HasPrefix(testCase.SynthesisDecision, "SYN-201-") {
+			continue
+		}
+		phase201Cases = append(phase201Cases, testCase)
+		present[testCase.ID] = true
+		decisionCounts[testCase.SynthesisDecision]++
+		groupCounts[testCase.Group]++
+		if !slices.Contains(classicContractPhase201Groups, testCase.Group) {
+			t.Errorf("case %q has group %q, want one of the six Phase 201 groups", testCase.ID, testCase.Group)
+		}
+		if len(testCase.Expected.StateAssertions) == 0 && len(testCase.Expected.ForbiddenArtifacts) == 0 {
+			t.Errorf("case %q lacks a causal state or forbidden-artifact assertion", testCase.ID)
+		}
+	}
+
+	if len(phase201Cases) == 0 {
+		t.Fatal("no Phase 201 cases were added to the corpus")
+	}
+	for _, id := range classicContractPhase201Decisions {
+		if decisionCounts[id] == 0 {
+			t.Errorf("SYN-201 decision %q has no case", id)
+		}
+	}
+	for _, group := range classicContractPhase201Groups {
+		if groupCounts[group] == 0 {
+			t.Errorf("Phase 201 group %q has no case", group)
+		}
+	}
+	for _, id := range classicContractPhase201RequiredNegativeCaseIDs {
+		if !present[id] {
+			t.Errorf("required negative case %q is missing", id)
+		}
+	}
+
+	t.Run("a case asserting only rendered text fails schema validation", func(t *testing.T) {
+		textOnly := phase201Cases[0]
+		textOnly.Expected.StateAssertions = nil
+		textOnly.Expected.ForbiddenArtifacts = nil
+		invalidDoc := classicContractDocument{SchemaVersion: classicContractSchemaVersion, Cases: []classicContractCase{textOnly}}
+		if err := validateClassicContractDocument(invalidDoc); err == nil || !strings.Contains(err.Error(), "missing causal state_assertions or forbidden_artifacts") {
+			t.Fatalf("validation error = %v, want a text-only refusal", err)
+		}
+	})
+
+	after := snapshotStoreFileHashesForTest(t, contractDir)
+	assertHashSnapshotsEqualForTest(t, "Classic Phase 201 case validation", before, after)
+}
+
 func TestClassicContractCorpusRequiredCategories(t *testing.T) {
 	document := loadClassicContractCorpus(t)
 	assertClassicContractJourneyMatrix(t, document)
@@ -1379,7 +1457,7 @@ func validateClassicContractCorpus(document classicContractDocument) error {
 	platforms := make(map[string]map[string]bool, len(required))
 	phase199Cases := 0
 	for _, testCase := range document.Cases {
-		if strings.HasPrefix(testCase.SynthesisDecision, "SYN-200-") {
+		if strings.HasPrefix(testCase.SynthesisDecision, "SYN-200-") || strings.HasPrefix(testCase.SynthesisDecision, "SYN-201-") {
 			continue
 		}
 		phase199Cases++
