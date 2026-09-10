@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/calcosmic/Aether/pkg/colony"
 )
 
 // workRepairFixtureRoot builds a tiny, self-contained working tree with one
@@ -334,5 +336,81 @@ func TestPassedRepairAnnouncesNoRestore(t *testing.T) {
 	}
 	if strings.Contains(visual, "put back exactly to the state it was saved in") {
 		t.Fatalf("a passed repair unexpectedly announced a restore:\n%s", visual)
+	}
+}
+
+func workRepairFixtureFailedOutcome(phase int, check string) repairRoundOutcome {
+	return repairRoundOutcome{
+		Ran: true, Passed: false, Restored: true,
+		CheckpointID: repairCheckpointIdentity(phase, check),
+		Receipt: autopilotRepairReceipt{
+			ID: "repair-run-201-09-handback-001", Phase: phase, Attempt: "attempt-handback-1",
+			Check: check, PlannedAction: "patch cmd/handback_fixture.go",
+			Status: autopilotRepairFailed,
+		},
+	}
+}
+
+// TestFailedRepairHandbackCarriesAllFourElements proves all four D-11
+// elements are present and non-empty on a failed-repair fixture, the
+// diagnosis is derived from the failing check's own captured output, and
+// the handback renders the identical full closeout ceremony a success card
+// renders.
+func TestFailedRepairHandbackCarriesAllFourElements(t *testing.T) {
+	outcome := workRepairFixtureFailedOutcome(24, "go test ./cmd")
+	failingOutput := "--- FAIL: TestHandbackFixture (0.00s)\n    handback_fixture_test.go:12: want 2 got 1\nFAIL\n"
+
+	handback, details, err := buildFailedRepairHandback(outcome, "go test ./cmd", failingOutput, 24)
+	if err != nil {
+		t.Fatalf("build handback: %v", err)
+	}
+
+	if strings.TrimSpace(handback.Diagnosis) == "" {
+		t.Fatalf("diagnosis is empty")
+	}
+	if !strings.Contains(handback.Diagnosis, "handback_fixture_test.go:12") {
+		t.Fatalf("diagnosis is not derived from the failing check's captured output: %q", handback.Diagnosis)
+	}
+	if strings.TrimSpace(handback.AttemptedAndWhy) == "" || !strings.Contains(handback.AttemptedAndWhy, "patch cmd/handback_fixture.go") {
+		t.Fatalf("attempted-and-why does not name what the repair attempted: %q", handback.AttemptedAndWhy)
+	}
+	if strings.TrimSpace(handback.RestoredPosition) == "" {
+		t.Fatalf("restored position is empty")
+	}
+	if strings.TrimSpace(handback.OwnerAction.Command) == "" || strings.TrimSpace(handback.OwnerAction.Reason) == "" {
+		t.Fatalf("owner action is empty: %+v", handback.OwnerAction)
+	}
+
+	if details.WorkOutcome != colony.WorkOutcomeBlocker {
+		t.Fatalf("handback details work outcome = %v, want blocker", details.WorkOutcome)
+	}
+
+	closeout := buildCloseoutFixture(t, details)
+	success := buildCloseoutFixture(t, buildVerifiedCloseoutDetails([]string{"go build ./..."}, nil))
+	if !reflect.DeepEqual(closeout.Slots, success.Slots) {
+		t.Fatalf("failed-repair handback slot set = %v, want the same as a success card: %v", closeout.Slots, success.Slots)
+	}
+}
+
+// TestHandbackOffersExactlyOneOwnerAction proves the failed-repair handback
+// offers exactly one recommended owner action, with a non-empty reason and
+// the alternatives listed beneath it -- reusing
+// recommendedActionForWorkOutcome (201-07) rather than a second
+// recommendation path.
+func TestHandbackOffersExactlyOneOwnerAction(t *testing.T) {
+	outcome := workRepairFixtureFailedOutcome(25, "go vet ./cmd")
+
+	handback, _, err := buildFailedRepairHandback(outcome, "go vet ./cmd", "cmd/handback_fixture.go:5: unreachable code", 25)
+	if err != nil {
+		t.Fatalf("build handback: %v", err)
+	}
+	if strings.TrimSpace(handback.OwnerAction.Command) == "" {
+		t.Fatalf("no owner action offered")
+	}
+	if strings.TrimSpace(handback.OwnerAction.Reason) == "" {
+		t.Fatalf("owner action has no reason")
+	}
+	if len(handback.OwnerAction.Alternatives) == 0 {
+		t.Fatalf("expected alternatives listed beneath the one recommended action")
 	}
 }

@@ -444,3 +444,63 @@ func repairScopePathsForCheckFix(record checkFixAttemptRecord, manifest codexCon
 	}
 	return paths
 }
+
+// repairHandback is D-11's four-element failed-repair handback: a
+// plain-language diagnosis of what is failing, what the repair attempted
+// and why it did not take, the restored safe position, and exactly one
+// concrete action for the owner. Named fields, not one prose blob, so each
+// element can be checked independently.
+type repairHandback struct {
+	Diagnosis        string
+	AttemptedAndWhy  string
+	RestoredPosition string
+	OwnerAction      LifecycleCloseoutRecommendedAction
+}
+
+// buildFailedRepairHandback assembles D-11's handback from a failed repair
+// round's own outcome and the failing check's captured output -- never a
+// summary string. The diagnosis reuses compactFailureExcerpts
+// (cmd/check_fix_attempt.go, D-02's own bounded-index precedent) rather
+// than a second truncation implementation. It renders through the same
+// closeout ceremony every other outcome uses (colony.WorkOutcomeBlocker,
+// plan 201-04), and its one owner action reuses recommendedActionForWorkOutcome
+// (plan 201-07) rather than adding a second recommendation path.
+func buildFailedRepairHandback(outcome repairRoundOutcome, failingCheck, failingOutput string, phaseNum int) (repairHandback, LifecycleCloseoutDetails, error) {
+	excerpts, _ := compactFailureExcerpts(failingOutput, "")
+	diagnosis := strings.TrimSpace(strings.Join(excerpts, " "))
+	if diagnosis == "" {
+		diagnosis = fmt.Sprintf("the %s check is still failing", failingCheck)
+	}
+
+	plannedAction := strings.TrimSpace(outcome.Receipt.PlannedAction)
+	if plannedAction == "" {
+		plannedAction = "an automatic fix"
+	}
+	attempted := fmt.Sprintf("Tried: %s. It did not fix the %s check -- verification failed again after the fix ran.", plannedAction, failingCheck)
+
+	restored := fmt.Sprintf("Your project has been put back exactly to the state it was saved in, just before the automatic fix ran (checkpoint %s).", outcome.CheckpointID)
+
+	_, attempt, _ := loadLatestBuildAttempt(phaseNum)
+	if strings.TrimSpace(attempt.Error) == "" {
+		attempt.Error = diagnosis
+	}
+	action, err := recommendedActionForWorkOutcome(colony.WorkOutcomeBlocker, attempt)
+	if err != nil {
+		return repairHandback{}, LifecycleCloseoutDetails{}, err
+	}
+
+	handback := repairHandback{
+		Diagnosis: diagnosis, AttemptedAndWhy: attempted, RestoredPosition: restored, OwnerAction: action,
+	}
+
+	details := LifecycleCloseoutDetails{
+		WorkOutcome: colony.WorkOutcomeBlocker,
+		Summary:     diagnosis,
+		Blockers: []colony.LifecycleIssue{
+			{ID: fmt.Sprintf("%s-diagnosis", outcome.CheckpointID), Summary: diagnosis},
+			{ID: fmt.Sprintf("%s-attempted", outcome.CheckpointID), Summary: attempted},
+		},
+		StandingInstructions: []string{restored},
+	}
+	return handback, details, nil
+}
