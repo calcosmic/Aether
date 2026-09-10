@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 // The one cost line every build and every check ends with (Phase 196, COST-01,
@@ -105,20 +106,77 @@ func spendCostLineFigure(row spendRow) string {
 }
 
 // renderSpendCostLine is the whole block for one phase, read from that phase's
-// recorded rows across both the build and the check.
+// recorded rows across both the build and the check, plus the elapsed time
+// for the exact attempt this closeout belongs to (Phase 201, D-06).
 //
-// It is a pure read: loadSpendLedgersForPhase and computeSpendTotals both only
-// read, and nothing here saves anything. The total it prints is
-// computeSpendTotals' own MeasuredTokens; this function performs no arithmetic
-// on token counts of its own beyond choosing a magnitude to display.
+// It is a pure read: loadSpendLedgersForPhase, loadLatestBuildAttempt and
+// computeSpendTotals all only read, and nothing here saves anything. The
+// total it prints is computeSpendTotals' own MeasuredTokens; this function
+// performs no arithmetic on token counts of its own beyond choosing a
+// magnitude to display, and the elapsed figure is spendElapsedFigure's own
+// subtraction of the attempt's two recorded timestamps -- never a
+// recomputation from anything already rendered.
+//
+// When no build attempt exists at all for this phase, no elapsed line is
+// rendered -- not even the sentinel. That is a different fact from an
+// attempt existing with an incomplete timestamp, which DOES render the
+// sentinel: "nothing recorded about this attempt" and "this attempt did not
+// finish measuring" are not the same claim, and only the second one is what
+// the sentinel means.
 func renderSpendCostLine(phase int) string {
 	ledgers, _ := loadSpendLedgersForPhase(phase)
-	return renderSpendCostLineFromLedgers(ledgers)
+	elapsedFigure := ""
+	if _, attempt, ok := loadLatestBuildAttempt(phase); ok {
+		elapsedFigure = spendElapsedFigure(attempt.StartedAt, attempt.CompletedAt)
+	}
+	return renderSpendCostLineBlock(ledgers, elapsedFigure)
 }
 
+// spendElapsedFigure is the elapsed-time figure for one attempt, parsed from
+// its own StartedAt and CompletedAt fields (RFC3339Nano, the format every
+// production writer of buildAttemptRecord uses) and from nothing else.
+// Either timestamp being absent, unparseable, or CompletedAt preceding
+// StartedAt renders the identical dash sentinel the unreported cost figure
+// uses -- an inferred or defaulted duration is exactly what D-06 forbids,
+// and zero is a measurement, not an admission that nothing was measured.
+func spendElapsedFigure(startedAt, completedAt string) string {
+	start, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(startedAt))
+	if err != nil {
+		return spendNotReportedFigure
+	}
+	end, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(completedAt))
+	if err != nil {
+		return spendNotReportedFigure
+	}
+	elapsed := end.Sub(start)
+	if elapsed < 0 {
+		return spendNotReportedFigure
+	}
+	return elapsed.Round(time.Second).String()
+}
+
+// renderSpendCostLineFromLedgers is the ledgers-only render: the shape every
+// existing caller and every existing test in this file uses, with no elapsed
+// line at all (elapsedFigure == ""). renderSpendCostLine(phase) is the only
+// caller that ever passes a non-empty elapsedFigure, because it is the only
+// one with an attempt record to read one from.
 func renderSpendCostLineFromLedgers(ledgers []spendLedger) string {
+	return renderSpendCostLineBlock(ledgers, "")
+}
+
+// renderSpendCostLineBlock is the shared render body. elapsedFigure is the
+// already-computed elapsed-time figure for the one attempt this block
+// belongs to, or the empty string when the caller has no attempt to speak
+// of at all (as opposed to an attempt whose figure is the dash sentinel,
+// which is a non-empty string and DOES render a line). Leaves room for plan
+// 201-12 to append the largest timing segment onto this same "Elapsed: "
+// line without adding a second block.
+func renderSpendCostLineBlock(ledgers []spendLedger, elapsedFigure string) string {
 	var b strings.Builder
 	b.WriteString(renderStageMarker(spendCostLineHeading))
+	if elapsedFigure != "" {
+		fmt.Fprintf(&b, "Elapsed: %s\n", elapsedFigure)
+	}
 
 	rows := spendRowsAcross(ledgers)
 	if len(rows) == 0 {
