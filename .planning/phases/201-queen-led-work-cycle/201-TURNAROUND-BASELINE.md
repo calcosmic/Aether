@@ -158,8 +158,43 @@ repository. Also recorded here, not fixed, for the same reason as above.
 
 ## Owner ratification
 
-**Pending.** The next step in this plan (Task 2, a `checkpoint:decision`) asks the owner two
-questions before any target is ratified: whether this measured job (a real single-task bug fix,
-delegated to the orchestrator, run through a real but partially-blocked Aether work cycle) is
-representative of the work he actually runs, and whether the proposed target above is the right
-bar. Nothing below this line is ratified; the figures above are the proposed baseline only.
+**Ratified 2026-09-10.** The owner was asked two questions before any target was ratified:
+whether the measured job (a real single-task bug fix, delegated to the orchestrator, run through
+a real but partially-blocked Aether work cycle) is representative of the work he actually runs,
+and whether the proposed target above is the right bar. Both answers are recorded verbatim below,
+and were also recorded through the runtime's own owner-decision path
+(`aether decision-answer`, decision id `pd_1789065675116599000`, `.aether/data/pending-decisions.json`)
+so the ratification is a durable fact rather than a note in a transcript.
+
+**Question 1 — is the measured job representative?**
+
+> The measured job is LIGHTER than my typical request — I usually ask for bigger pieces of work,
+> so this is a floor-setting benchmark for small single-task jobs, not the typical case.
+
+**Question 2 — is the proposed target the right bar?**
+
+> The target is right as proposed: 4 minutes 30 seconds for a small single-task job (down from
+> the measured 6m48s), reached via the approved levers (a slimmer starting packet/brief, and the
+> suite speedups already proven) — never by cutting testing or adding parallel helpers.
+
+**What this means for the number below:** because the measured job is explicitly lighter than
+the owner's typical request, the ratified target is a **floor-setting benchmark for small,
+single-task jobs** — not a claim that every job the owner runs should complete in 4m30s. Larger,
+multi-task jobs are expected to take longer than this figure; this baseline and target apply only
+to the class of job actually measured (a single-task fix).
+
+### Ratified target
+
+**Ratified target: 4 minutes 30 seconds (270s) for a small, single-task job**, down from the
+measured 408s (6m48s) — a cut of roughly one third (408s × (1 − 1/3) ≈ 272s, rounded to 270s =
+4m30s), primarily attacking the **work** segment (worker dispatch/execution — the one segment
+this baseline directly measured, and the segment the project's own prior evidence already names
+as the dominant cost).
+
+**Approved lever expected to deliver it:** trimming the dispatched worker brief (stop re-sending
+the whole planning corpus to every worker — both workers in the measured run already carried
+85%+ of their context budget before any work began) and the project's own `cmd` test-suite
+speedups already partially landed (shared-binary test execution, previously measured at a 41%
+package-build-time cut). **Explicitly excluded:** no part of this target is met by reducing test
+coverage, skipping deterministic checks, or adding parallel workers — none of those are approved
+levers, and none were used to derive this number.
