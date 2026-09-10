@@ -59,7 +59,7 @@ For dummies: keep the reliable modern engine and brakes, then restore the dashbo
 
 ### Queen-Led Work Cycle
 
-- [ ] **WORK-01 — Queen chooses and explains:** The Queen selects the smallest capable team from the work and its risks, names every worker and job, records the reason, and remains subject to deterministic safety floors and declared caps.
+- [x] **WORK-01 — Queen chooses and explains:** The Queen selects the smallest capable team from the work and its risks, names every worker and job, records the reason, and remains subject to deterministic safety floors and declared caps.
 - [x] **WORK-02 — Proportionate ordinary work:** A one-task low-risk change uses one Builder plus free program checks; optional castes appear only for named evidence or risk, and explicit heavy review still exercises the independent-review pipeline.
 - [ ] **WORK-03 — Coherent jobs and waves:** Related tasks form dependency-safe jobs with exact workspace leases, receipts, result lineage, and visible waves; disjoint work may run in parallel without shared-root overwrite or lost fan-in.
 - [ ] **WORK-04 — One build/continue/run story:** Build, continue, and autopilot consume the same accepted result model, perform verification once at the authoritative boundary, and render one coherent narrative rather than three competing lifecycle interpretations.

@@ -2,16 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
+current_phase: 201
+current_phase_name: Queen-Led Work Cycle
 status: executing
-stopped_at: Completed 201-07-PLAN.md
-last_updated: "2026-09-10T14:54:13.399Z"
+stopped_at: Completed 201-08-PLAN.md
+last_updated: "2026-09-10T15:29:23.443Z"
 last_activity: 2026-09-10
+state_head: bba3363961f281119821c8f9c78cca2bc0197927
 progress:
   total_phases: 7
-  completed_phases: 2
+  completed_phases: 0
   total_plans: 104
   completed_plans: 96
-  percent: 29
+  percent: 0
 ---
 
 # Project State
@@ -29,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 201 (Queen-Led Work Cycle) — EXECUTING
-Plan: 8 of 15
+Plan: 9 of 15
 Status: Ready to execute
 Last activity: 2026-09-10
 
@@ -171,6 +174,7 @@ Last activity: 2026-09-10
 | Phase 201 P05 | 50min | 3 tasks | 6 files |
 | Phase 201 P06 | 45min | 3 tasks | 5 files |
 | Phase 201 P07 | 40min | 3 tasks | 5 files |
+| Phase 201 P08 | 50 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -557,6 +561,8 @@ Last activity: 2026-09-10
 - [Phase ?]: [Phase 201]: CAP-022's absent-declared-artifact credit block is enforced at the new result-card precision layer (deriveResultFilePrecision's blockedTasks), not by rewriting the core phase-advancement crediting engine (completedBuildTaskIDs/dispatch.Status) other paths depend on.
 - [Phase ?]: [Phase 201]: recommendedActionForWorkOutcome invents no new command vocabulary -- partial reuses the attempt's own buildUnfinishedRetryRedispatchCommand, blocker points at the locked aether unblock --dispatch, interrupted points at the sole aether resume recovery door, timeout follows the attempt's recorded recovery command, success/no_change point at aether continue.
 - [Phase ?]: [Phase 201]: CAP-066's knowledge-delta storage/rendering (attachBuildKnowledgeDeltas, lifecycleCloseoutKnowledgeDeltaEvidence) is built and tested but has no live production writer -- no existing pipeline in this repo yet produces a structured decision/learning delta payload; a later plan must wire a real source.
+- [Phase 201]: Read waves/job ownership from stored dispatches, not a new parallel jobPlan field — Dispatches already carry Wave/JobName/JobReason/JobSource/DependsOn from the pure planner; adding a second stored representation risked exactly the divergence this task exists to close.
+- [Phase 201]: Plan-only lane stamps its own returned dispatches with AttemptID but never resaves manifest.json — manifest.json's bytes are bound to attempt.ManifestSHA256; resaving a stamped copy broke the completion-packet digest check on the finalize lane (caught by go test ./cmd -run TestBuild).
 
 ### Pending Todos
 
@@ -673,8 +679,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-10T14:54:13.384Z
-Stopped at: Completed 201-07-PLAN.md
+Last session: 2026-09-10T15:29:23.390Z
+Stopped at: Completed 201-08-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
