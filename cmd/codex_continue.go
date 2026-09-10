@@ -95,6 +95,13 @@ type codexContinueVerificationReport struct {
 	// nothing was eligible) -- see applyAutomaticCheckFixAttempt
 	// (cmd/check_fix_attempt.go).
 	CheckFixAttempt *checkFixAttemptRecord `json:"check_fix_attempt,omitempty"`
+	// RepairHandback is D-11's four-part failed-repair handback (plain-
+	// language diagnosis, what was tried and why it did not take, the
+	// restored safe position, and one owner action). Set only by the
+	// check-repair path (applyBoundedCheckFixRepair, cmd/work_repair.go)
+	// and only when that round's fix attempt still failed -- nil on every
+	// other outcome, including a passing fix or no attempt at all.
+	RepairHandback *repairHandback `json:"repair_handback,omitempty"`
 }
 
 type codexWatcherVerification struct {
@@ -2106,7 +2113,7 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 	// attempt already recorded for this phase and check) is still decided
 	// in exactly one place, inside planCheckFixAttempt -- this call site
 	// never re-derives that decision.
-	floor, checkFixAttempt := applyBoundedCheckFixRepair(ctx, root, state, phase, manifest, floor, buildWatcher, workerTimeout, verificationTimeout, dispatchReviewer)
+	floor, checkFixAttempt, checkFixHandback := applyBoundedCheckFixRepair(ctx, root, state, phase, manifest, floor, buildWatcher, workerTimeout, verificationTimeout, dispatchReviewer)
 
 	checksPassed := floor.ChecksPassed
 	blockers := append([]string{}, floor.BlockingIssues...)
@@ -2153,6 +2160,7 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 		BlockingIssues:             blockers,
 		Warnings:                   warnings,
 		CheckFixAttempt:            checkFixAttempt,
+		RepairHandback:             checkFixHandback,
 	}, watcherFlow
 }
 

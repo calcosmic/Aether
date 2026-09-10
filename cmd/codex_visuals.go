@@ -2412,6 +2412,16 @@ func renderContinueBlockedVisual(state colony.ColonyState, phase colony.Phase, r
 		b.WriteString(renderIndentedList(blockers))
 		b.WriteString(renderBlockedWayForward(continueTypedResultMapValue(result["gates"])))
 	}
+	// D-11: a still-failing automatic repair's four-part handback -- what is
+	// failing, what was tried and why it did not take, where the project
+	// stands now, and the one thing to do next -- read before the closing
+	// next-step line so the owner sees what happened before what to do.
+	// Additive only: repairHandbackFromVerificationValue returns nil for
+	// every outcome except a still-failing check-fix repair, so a blocked
+	// screen with nothing to hand back is unchanged.
+	if handback := repairHandbackFromVerificationValue(result["verification"]); handback != nil {
+		b.WriteString(renderFailedRepairHandback(*handback))
+	}
 	b.WriteString(renderLifecycleClosingForState(result, state, "continue"))
 	return b.String()
 }
@@ -2752,6 +2762,43 @@ func renderContinueVerificationDetail(b *strings.Builder, raw interface{}) {
 	case map[string]interface{}:
 		steps, _ := v["steps"].([]interface{})
 		renderVerificationStepDetailLines(b, verificationStepDetailViewsFromMap(steps))
+	}
+}
+
+// repairHandbackFromVerificationValue is D-11's dual-type reader for the
+// verification report's RepairHandback field -- raw is result["verification"],
+// either the in-process typed codexContinueVerificationReport or the
+// JSON-round-tripped map[string]interface{} a completion file produces
+// (renderContinueVerificationDetail's own precedent, just above). Returns
+// nil whenever no handback is present, so a blocked screen with nothing to
+// hand back renders no section at all.
+func repairHandbackFromVerificationValue(raw interface{}) *repairHandback {
+	switch v := raw.(type) {
+	case codexContinueVerificationReport:
+		return v.RepairHandback
+	case map[string]interface{}:
+		hbRaw, ok := v["repair_handback"]
+		if !ok || hbRaw == nil {
+			return nil
+		}
+		hbMap, ok := hbRaw.(map[string]interface{})
+		if !ok {
+			return nil
+		}
+		actionMap, _ := hbMap["owner_action"].(map[string]interface{})
+		handback := repairHandback{
+			Diagnosis:        stringValue(hbMap["diagnosis"]),
+			AttemptedAndWhy:  stringValue(hbMap["attempted_and_why"]),
+			RestoredPosition: stringValue(hbMap["restored_position"]),
+			OwnerAction: LifecycleCloseoutRecommendedAction{
+				Command:      stringValue(actionMap["command"]),
+				Reason:       stringValue(actionMap["reason"]),
+				Alternatives: stringSliceValue(actionMap["alternatives"]),
+			},
+		}
+		return &handback
+	default:
+		return nil
 	}
 }
 
