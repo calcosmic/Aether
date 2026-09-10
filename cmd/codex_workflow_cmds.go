@@ -568,19 +568,22 @@ var continueCmd = &cobra.Command{
 
 		// A check that blocked still spent what it spent, so its ending
 		// screen carries the cost line exactly as a passing one does.
+		// D-05/D-06/D-07 (201-20): applyCheckWorkCloseout resolves the
+		// verdict codex_continue.go already stored on result and, when one
+		// is present, folds it into result and appends the verdict, the
+		// recommended next action, and the ONE cost-and-time block --
+		// dropping the plain appendSpendCostLine call so exactly one cost
+		// block remains. Falls back to today's exact rendering (including
+		// its own appendSpendCostLine) when no verdict resolves.
 		if blocked, _ := result["blocked"].(bool); blocked {
-			outputWorkflow(result, appendSpendCostLine(
-				renderContinueBlockedVisual(state, phase, result, reviewDepthFromResult(result)),
-				phase.ID,
-			))
+			body := renderContinueBlockedVisual(state, phase, result, reviewDepthFromResult(result))
+			outputWorkflow(result, applyCheckWorkCloseout(result, phase.ID, body))
 			return nil
 		}
 
 		reviewDepthContinue := reviewDepthFromResult(result)
-		outputWorkflow(result, appendSpendCostLine(
-			renderContinueVisual(state, phase, housekeeping, final, nextPhase, result, reviewDepthContinue),
-			phase.ID,
-		))
+		body := renderContinueVisual(state, phase, housekeeping, final, nextPhase, result, reviewDepthContinue)
+		outputWorkflow(result, applyCheckWorkCloseout(result, phase.ID, body))
 		return nil
 	},
 }

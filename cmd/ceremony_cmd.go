@@ -311,12 +311,55 @@ func renderCeremonyCloseout(workflow, completionFile string) (map[string]interfa
 				if phaseID == 0 {
 					phaseID = intValue(result["current_phase"])
 				}
+				// D-05/D-06/D-07 (201-20): the check workflow's own chat-path
+				// closeout gets the same verdict-carrying treatment plan
+				// 201-19 gave the build workflow's above. checkWorkCloseoutDetails
+				// reads the verdict codex_continue.go already stored on the
+				// SAME raw completion map closeoutContinueDirectVisual just
+				// rendered `visual` from -- never a second derivation here --
+				// so the verdict and the rendered body always agree. Falls
+				// through to the plain appendSpendCostLine below when no
+				// verdict resolves (an older completion file, or a lane this
+				// plan did not wire), so exactly one cost block ever renders
+				// either way.
+				if workflow == "continue" {
+					if raw := ceremonyContinueRawResult(result); len(raw) > 0 {
+						if details, ok := checkWorkCloseoutDetails(raw); ok {
+							if err := applyLifecycleCloseout(raw, workflow, details); err == nil {
+								return result, appendLifecycleCloseoutVisual(visual, raw, detectPlatform())
+							}
+						}
+					}
+				}
 				visual = appendSpendCostLine(visual, phaseID)
 			}
 			return result, visual
 		}
 	}
 	return result, renderCeremonyCloseoutVisual(result)
+}
+
+// ceremonyContinueRawResult resolves the same completion map
+// closeoutContinueDirectVisual (cmd/closeout_direct_render.go) renders its
+// visual body from: result["completion_raw"] when present, falling back to
+// result itself, then unwrapping one more {"result": {...}} envelope level
+// when the outer map does not already look like a continue result (mirrors
+// closeoutContinueDirectVisual's own documented double-envelope-unwrap
+// precedent). Kept local to this file (201-20) rather than exported from
+// closeout_direct_render.go, since this is the only other call site that
+// needs the same raw map, resolved read-only for a verdict lookup rather
+// than for rendering.
+func ceremonyContinueRawResult(result map[string]interface{}) map[string]interface{} {
+	raw := mapValue(result["completion_raw"])
+	if len(raw) == 0 {
+		raw = result
+	}
+	if _, hasContinuedPhase := raw["continued_phase"]; !hasContinuedPhase {
+		if nested := mapValue(raw["result"]); len(nested) > 0 {
+			raw = nested
+		}
+	}
+	return raw
 }
 
 func renderCeremonySpawnPlan(workflow string, manifest map[string]interface{}, dispatches []ceremonyDispatch, plans []ceremonyExecutionPlan) string {

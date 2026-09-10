@@ -327,13 +327,7 @@ var runCompatibilityCmd = &cobra.Command{
 				result["state_effect"] = colony.LifecycleStateEffectNone
 			}
 		}
-		if err := applyLifecycleCloseout(result, "run", LifecycleCloseoutDetails{
-			Summary: "Autopilot stopped at its declared bounded lifecycle decision.",
-			Evidence: []colony.LifecycleEvidence{{
-				ID: "autopilot-terminal-report", Kind: "report", Source: autopilotStatePath,
-				Summary: "Bounded autopilot terminal report",
-			}},
-		}); err != nil {
+		if err := applyAutopilotTerminalCloseout(result); err != nil {
 			outputError(1, err.Error(), result)
 			return nil
 		}
@@ -803,6 +797,96 @@ func legacyRunStoppedReason(code autopilotTriggerCode) string {
 	return string(code)
 }
 
+// autopilotTriggerCodeFromResult reads result["trigger_code"] dual-typed:
+// the in-process autopilotTriggerCode finishAutopilotInvocation stores
+// directly, or the JSON-round-tripped string a persisted report produces.
+// Empty when the key is absent or empty -- never guessed from another field.
+func autopilotTriggerCodeFromResult(result map[string]interface{}) autopilotTriggerCode {
+	switch v := result["trigger_code"].(type) {
+	case autopilotTriggerCode:
+		return v
+	case string:
+		return autopilotTriggerCode(strings.TrimSpace(v))
+	default:
+		return ""
+	}
+}
+
+// autopilotTerminalWorkOutcome derives the terminal run closeout's verdict
+// (D-06) from ONLY the run's own recorded outcome -- never from rendered
+// text. A dry-run invocation always resolves to the no-change verdict
+// (nothing was actually attempted). Otherwise the verdict follows the run's
+// own recorded trigger code (result["trigger_code"], set by
+// finishAutopilotInvocation on every real terminal decision):
+//
+//   - the four declared stop boundaries (autopilotStopBoundaryForTriggerCode
+//     / autopilotStopBoundaryWorkOutcome, 201-11) all resolve to the blocker
+//     verdict -- reused verbatim so a stop card and this closeout can never
+//     disagree about what a trigger code means.
+//   - autopilotTriggerColonyNotRunnable is the one Stop-disposition trigger
+//     outside that four-boundary catalogue; it is itself a "something the
+//     run could not get past" condition, so it also resolves to blocker.
+//   - autopilotTriggerReplanDue is a queued checkpoint, not a blocker -- the
+//     run got partway through and is pausing at a natural boundary, so it
+//     resolves to partial, the same verdict autopilotTriggerMaxPhasesReached
+//     carries.
+//   - the three remaining NormalStop endings carry their own distinct
+//     meaning: cancelled -> interrupted, worker_timeout -> timeout,
+//     colony_complete -> success.
+//
+// Total over every declared trigger code
+// (TestAutopilotTerminalVerdictCoversEveryStopCode, iterating
+// autopilotTriggerSpecs() rather than a hand-typed list); an undeclared code
+// -- or no code at all -- reports ok=false rather than a silently-wrong
+// default.
+func autopilotTerminalWorkOutcome(result map[string]interface{}) (colony.WorkOutcome, bool) {
+	if boolValue(result["dry_run"]) {
+		return colony.WorkOutcomeNoChange, true
+	}
+	code := autopilotTriggerCodeFromResult(result)
+	if code == "" {
+		return "", false
+	}
+	if boundary, ok := autopilotStopBoundaryForTriggerCode(code); ok {
+		return autopilotStopBoundaryWorkOutcome(boundary), true
+	}
+	switch code {
+	case autopilotTriggerColonyNotRunnable:
+		return colony.WorkOutcomeBlocker, true
+	case autopilotTriggerReplanDue, autopilotTriggerMaxPhasesReached:
+		return colony.WorkOutcomePartial, true
+	case autopilotTriggerCancelled:
+		return colony.WorkOutcomeInterrupted, true
+	case autopilotTriggerWorkerTimeout:
+		return colony.WorkOutcomeTimeout, true
+	case autopilotTriggerColonyComplete:
+		return colony.WorkOutcomeSuccess, true
+	default:
+		return "", false
+	}
+}
+
+// applyAutopilotTerminalCloseout folds autopilotTerminalWorkOutcome's
+// verdict (when one resolves) into the terminal run result via
+// applyLifecycleCloseout, leaving the summary and evidence
+// runCompatibilityCmd's RunE already built otherwise unchanged. Named
+// (rather than inlined into the RunE closure) so the terminal closeout site
+// is reachable by the same direct-call-graph guard every other resolver in
+// this plan is proven with (TestEveryWorkLaneCloseoutHasProductionCallers).
+func applyAutopilotTerminalCloseout(result map[string]interface{}) error {
+	details := LifecycleCloseoutDetails{
+		Summary: "Autopilot stopped at its declared bounded lifecycle decision.",
+		Evidence: []colony.LifecycleEvidence{{
+			ID: "autopilot-terminal-report", Kind: "report", Source: autopilotStatePath,
+			Summary: "Bounded autopilot terminal report",
+		}},
+	}
+	if verdict, ok := autopilotTerminalWorkOutcome(result); ok {
+		details.WorkOutcome = verdict
+	}
+	return applyLifecycleCloseout(result, "run", details)
+}
+
 func finishAutopilotInvocation(invocation *autopilotInvocation, state colony.ColonyState, opts runCompatibilityOptions, steps []map[string]interface{}, phasesCompleted int, decision autopilotRunDecision, cause error) map[string]interface{} {
 	blockersAfter := captureAutopilotBlockerSnapshot(store)
 	if !blockersAfter.Available {
@@ -1031,9 +1115,19 @@ func runCompatibilityAutopilot(root string, opts runCompatibilityOptions) (map[s
 				return finish(state, decision, err), nil
 			}
 			if _, ok := lifecycleCloseoutProjectionFromValue(buildResult[lifecycleProjectionKey]); ok {
-				if err := applyLifecycleCloseout(buildResult, "build", LifecycleCloseoutDetails{
-					Summary: "The selected phase dispatch reached its declared build boundary.",
-				}); err != nil {
+				// D-05 (201-20): the autopilot's per-phase card reuses the
+				// SAME resolver the build lane's own closeout reads
+				// (buildWorkCloseoutDetails, cmd/work_closeout.go) so the two
+				// can never disagree about this phase's verdict. Falls back
+				// to the pre-existing generic summary only when no verdict
+				// resolves (an attempt this resolver cannot yet read).
+				closeoutDetails, hasVerdict := buildWorkCloseoutDetails(phase.ID)
+				if !hasVerdict {
+					closeoutDetails = LifecycleCloseoutDetails{
+						Summary: "The selected phase dispatch reached its declared build boundary.",
+					}
+				}
+				if err := applyLifecycleCloseout(buildResult, "build", closeoutDetails); err != nil {
 					decision := autopilotRunDecisionForCode(autopilotTriggerColonyNotRunnable, opts.Headless, map[string]interface{}{"phase": phase.ID, "stage": "build_closeout"})
 					return finish(state, decision, err), nil
 				}
@@ -1302,14 +1396,19 @@ func buildRunDryRunResult(state colony.ColonyState, opts runCompatibilityOptions
 	}
 	finish := func(reason, next string) map[string]interface{} {
 		return map[string]interface{}{
-			"mode":              "dry-run",
-			"dry_run":           true,
-			"headless":          opts.Headless,
-			"steps":             steps,
-			"phases_planned":    phasesPlanned,
-			"stopped_reason":    reason,
-			"next":              next,
-			"current_state":     working.State,
+			"mode":           "dry-run",
+			"dry_run":        true,
+			"headless":       opts.Headless,
+			"steps":          steps,
+			"phases_planned": phasesPlanned,
+			"stopped_reason": reason,
+			"next":           next,
+			"current_state":  working.State,
+			// current_phase (201-20/D-06): the terminal closeout's cost-and-
+			// time block reads this key when completion_phase is absent --
+			// without it, a dry-run's no-change verdict would resolve a
+			// phase of 0 and the block would silently render empty.
+			"current_phase":     working.CurrentPhase,
 			"continue_armed":    opts.ContinueWithoutReplan,
 			"replan_interval":   opts.ReplanInterval,
 			"trigger_catalogue": autopilotTriggerSpecs(),
