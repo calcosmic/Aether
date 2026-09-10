@@ -30,9 +30,17 @@ const (
 // root-level filename colonies written before attempt-bound paths existed.
 // A legacy colony's evidence must remain readable -- see
 // readAttemptBoundArtifact.
+//
+// attemptArtifactKindTelemetry (cmd/job_telemetry.go, plan 201-12) is
+// registered here too, even though it has no genuine legacy colony-wide
+// file -- job timing never existed before this plan. Its "legacy" name is
+// simply a root-level filename that will never be found on a real colony,
+// which lets it reuse this exact validation path rather than a second one
+// (CLAUDE.md: "Two copies of a security boundary is one copy too many").
 var legacyAttemptArtifactNames = map[string]string{
 	attemptArtifactKindClaims:       "last-build-claims.json",
 	attemptArtifactKindVerification: "verification.json",
+	attemptArtifactKindTelemetry:    "job-telemetry.json",
 }
 
 // attemptBoundArtifactPath derives the one canonical store-relative path for
