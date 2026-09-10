@@ -966,6 +966,12 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	jobDecisions := prepared.JobDecisions
 	casteDecision := prepared.CasteDecision
 	authority := prepared.PlanAuthority
+	// Phase 201 plan 12 (WORK-08, CEC-06): job planning is complete the
+	// instant prepareDirectCodexBuild returns dispatches -- this is the
+	// queue segment's start boundary (job planning complete to worker
+	// dispatch). See the queue/context/work capture block near this
+	// function's success return for where this is used.
+	jobTelemetryPlanningDoneAt := time.Now()
 	// Compute the direct lane's blocker fact while the accepted pre-build
 	// state is still current. The previous command-layer check ran only after
 	// dispatch had transitioned the phase, which made this lane depend on a
@@ -1047,7 +1053,15 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		plannedDispatchMode = "simulated"
 	}
 
+	// Phase 201 plan 12 (WORK-08): context segment -- brief assembly is
+	// fully synchronous and inside this process, so it is genuinely
+	// measurable, unlike almost everything else in this function (worker
+	// dispatch and execution happen outside this process on the plan-only/
+	// wrapper-driven lane, and even on this direct lane the actual work
+	// segment is captured separately below, around executeCodexBuildDispatches).
+	jobTelemetryContextStartedAt := time.Now()
 	briefPaths, dispatches, preparedBriefs := prepareBuildWorkerBriefFiles(root, phase, buildDirRel, dispatches, startedAt, false)
+	jobTelemetryContextEndedAt := time.Now()
 	for i := range dispatches {
 		if dispatches[i].BriefPath != "" {
 			dispatches[i].Outputs = []string{dispatches[i].BriefPath}
@@ -1141,7 +1155,13 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	if progress != nil {
 		progress.Advance("Dispatch")
 	}
+	// Phase 201 plan 12 (WORK-08): work segment -- this call IS the worker's
+	// own execution on the direct/native build lane (queenWaveLifecycle
+	// dispatches every wave and blocks until they all resolve), so wrapping
+	// it with real timestamps is a genuine measurement, not an estimate.
+	jobTelemetryWorkStartedAt := time.Now()
 	dispatches, claims, mode, err := executeCodexBuildDispatches(ctx, root, updatedPhase, dispatches, startedAt, buildInvoker, parallelMode, options.WorkerTimeout, options.CircuitBreakerThreshold, options.Verbose, dispatchManifest.ExecutionBinding)
+	jobTelemetryWorkEndedAt := time.Now()
 	terminalClaims, attemptErr := recordBuildAttemptTerminal(root, attemptRel, phaseNum, startedAt, dispatches, claims, mode, err)
 	if attemptErr != nil {
 		finishAttempt(buildAttemptFailed, "failed to persist terminal worker results", attemptErr)
@@ -1345,6 +1365,33 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		visualFprintf(stderr, "warning: %s\n", directSpendNote)
 	} else if len(directSpendOutcome.Notes) > 0 {
 		directSpendNote = strings.Join(directSpendOutcome.Notes, "; ")
+	}
+
+	// Phase 201 plan 12 (WORK-08, CEC-06): record this build's own timing
+	// segments, bound to the same attempt identifier the evidence and cost
+	// figures above already use. Genuinely observable within one direct/
+	// native build invocation: how long job planning sat before brief
+	// assembly began (queue), how long brief assembly itself took
+	// (context), and how long the synchronous worker dispatch loop
+	// actually ran (work). Everything else this record names -- preflight
+	// (dispatch to a worker's first response), model/tool-call duration
+	// (the platform reports total tokens per worker but never a call
+	// duration), and wait (an interval blocked on something outside this
+	// run) -- is not observable from inside this process today, and is
+	// recorded as such rather than guessed at (D-13). Like the spend-row
+	// write just above, this is accounting OF the build, never a gate ON
+	// it: a failure to write is reported and swallowed.
+	jobTelemetryCapture := newJobTelemetryCapture()
+	jobTelemetryCapture.measure(jobTelemetrySegmentQueue, jobTelemetryContextStartedAt.Sub(jobTelemetryPlanningDoneAt), "codex_build.go: job planning complete to brief assembly start")
+	jobTelemetryCapture.measure(jobTelemetrySegmentContext, jobTelemetryContextEndedAt.Sub(jobTelemetryContextStartedAt), "codex_build.go: prepareBuildWorkerBriefFiles")
+	jobTelemetryCapture.measure(jobTelemetrySegmentWork, jobTelemetryWorkEndedAt.Sub(jobTelemetryWorkStartedAt), "codex_build.go: executeCodexBuildDispatches")
+	jobTelemetryCapture.markUnmeasured(jobTelemetrySegmentPreflight, "this build lane observes no first-response boundary distinct from a worker's own completion")
+	jobTelemetryCapture.markUnmeasured(jobTelemetrySegmentModel, "the platform reports total tokens per worker but no per-call duration")
+	jobTelemetryCapture.markUnmeasured(jobTelemetrySegmentToolCall, "the platform reports total tokens per worker but no per-call duration")
+	jobTelemetryCapture.markUnmeasured(jobTelemetrySegmentWait, "this run recorded no interval blocked on something outside itself")
+	jobTelemetryRecordForRun := newJobTelemetryRecord(receipt.AttemptID, jobTelemetryOneJobName(dispatches), jobTelemetryCapture, time.Now())
+	if err := writeJobTelemetryRecord(jobTelemetryRecordForRun); err != nil {
+		visualFprintf(stderr, "note: could not record job timing for build attempt %s: %v\n", receipt.AttemptID, err)
 	}
 
 	result := map[string]interface{}{
@@ -1616,6 +1663,29 @@ func stampDispatchAttemptIdentity(dispatches []codexBuildDispatch, attemptID str
 		stamped[i].AttemptID = attemptID
 	}
 	return stamped
+}
+
+// jobTelemetryOneJobName names the job this build's telemetry record
+// belongs to. jobTelemetryRecord is written once per attempt (not once per
+// job) -- see cmd/job_telemetry.go's own doc comment -- so a build with
+// exactly one distinct job name uses it; a build with zero or more than one
+// (an ungrouped fixture, or several independent jobs in one wave plan)
+// leaves JobName empty rather than guessing which job the recorded
+// build-level segments belong to.
+func jobTelemetryOneJobName(dispatches []codexBuildDispatch) string {
+	names := map[string]bool{}
+	for _, dispatch := range dispatches {
+		if name := strings.TrimSpace(dispatch.JobName); name != "" {
+			names[name] = true
+		}
+	}
+	if len(names) != 1 {
+		return ""
+	}
+	for name := range names {
+		return name
+	}
+	return ""
 }
 
 func plannedBuildDispatches(phase colony.Phase, depth string) ([]codexBuildDispatch, error) {

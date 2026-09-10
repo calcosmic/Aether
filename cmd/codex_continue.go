@@ -1982,6 +1982,78 @@ func isCodexWorkerAvailable() bool {
 	return invoker.IsAvailable(context.Background())
 }
 
+// recordCodexContinueVerificationTelemetry records the verification segment
+// for this phase's latest build attempt (Phase 201 plan 12, WORK-08,
+// CEC-06) -- the deterministic floor run runCodexContinueVerification just
+// timed, and nothing else. It merges into whatever the build lane already
+// recorded for the same attempt (queue/context/work, cmd/codex_build.go)
+// rather than overwriting it: build and continue are separate process
+// invocations writing to the same attempt-bound file, and a naive
+// overwrite here would silently erase the build's own measurements. A
+// phase with no recorded build attempt at all (a fixture, an out-of-band
+// verification path) records nothing -- there is no attempt identifier to
+// bind to. Like every other telemetry write, this is never a gate: a
+// failure is reported and swallowed.
+func recordCodexContinueVerificationTelemetry(phase colony.Phase, startedAt, endedAt time.Time) {
+	// loadLatestBuildAttempt's first return is the attempt's STORE-RELATIVE
+	// FILE PATH, not its bare identifier -- the bare identifier this record
+	// is keyed by (matching cmd/spend_cost_line.go's own attempt.ID usage)
+	// is the loaded record's own ID field.
+	_, attempt, ok := loadLatestBuildAttempt(phase.ID)
+	attemptID := strings.TrimSpace(attempt.ID)
+	if !ok || attemptID == "" {
+		return
+	}
+	capture := newJobTelemetryCapture()
+	capture.measure(jobTelemetrySegmentVerification, endedAt.Sub(startedAt), "codex_continue.go: runDeterministicFloor")
+	incoming := newJobTelemetryRecord(attemptID, "", capture, time.Now())
+	if existing, ok := readJobTelemetryRecord(attemptID); ok {
+		incoming = jobTelemetryMergeRecords(existing, incoming)
+	}
+	if err := writeJobTelemetryRecord(incoming); err != nil {
+		visualFprintf(stderr, "note: could not record verification timing for build attempt %s: %v\n", attemptID, err)
+	}
+}
+
+// jobTelemetryMergeSegment picks the more informative of two independently
+// captured facts about the SAME segment: a measured value always wins over
+// an unmeasured one, and between two measured values the incoming (freshly
+// captured) one wins as the newer measurement. This is a selection between
+// two real facts, never an average and never a subtraction -- the record's
+// own no-derived-segment discipline (cmd/job_telemetry.go) is unaffected by
+// merging two writes of the same attempt.
+func jobTelemetryMergeSegment(existing, incoming jobTelemetrySegment) jobTelemetrySegment {
+	if incoming.Measured {
+		return incoming
+	}
+	if existing.Measured {
+		return existing
+	}
+	if strings.TrimSpace(incoming.Source) != "" {
+		return incoming
+	}
+	return existing
+}
+
+// jobTelemetryMergeRecords merges incoming (a fresh, partial write) on top
+// of existing (whatever was already on disk for this attempt), segment by
+// segment.
+func jobTelemetryMergeRecords(existing, incoming jobTelemetryRecord) jobTelemetryRecord {
+	merged := incoming
+	merged.Queue = jobTelemetryMergeSegment(existing.Queue, incoming.Queue)
+	merged.Preflight = jobTelemetryMergeSegment(existing.Preflight, incoming.Preflight)
+	merged.Model = jobTelemetryMergeSegment(existing.Model, incoming.Model)
+	merged.ToolCall = jobTelemetryMergeSegment(existing.ToolCall, incoming.ToolCall)
+	merged.Context = jobTelemetryMergeSegment(existing.Context, incoming.Context)
+	merged.Work = jobTelemetryMergeSegment(existing.Work, incoming.Work)
+	merged.Verification = jobTelemetryMergeSegment(existing.Verification, incoming.Verification)
+	merged.Wait = jobTelemetryMergeSegment(existing.Wait, incoming.Wait)
+	if strings.TrimSpace(merged.JobName) == "" {
+		merged.JobName = existing.JobName
+	}
+	return merged
+}
+
 func runCodexContinueVerification(ctx context.Context, root string, state colony.ColonyState, phase colony.Phase, manifest codexContinueManifest, workerTimeout time.Duration, verificationTimeout time.Duration, skipWatchers bool) (codexContinueVerificationReport, *codexContinueWorkerFlowStep) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -1995,7 +2067,15 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 	// It is what sets checksPassed (ruling D11 rule 2): a reviewer dispatched
 	// afterward can only ever ADD a block on top of this result, never
 	// supply the pass (TestDeterministicFloorIsTheOnlySourceOfAPass).
+	//
+	// Phase 201 plan 12 (WORK-08): these two timestamps bound exactly this
+	// call and nothing else -- the verification segment covers the
+	// deterministic check run, never a reviewer dispatch that might happen
+	// afterward.
+	jobTelemetryVerificationStartedAt := time.Now()
 	floor := runDeterministicFloor(ctx, root, phase, manifest, buildWatcher, verificationTimeout)
+	jobTelemetryVerificationEndedAt := time.Now()
+	recordCodexContinueVerificationTelemetry(phase, jobTelemetryVerificationStartedAt, jobTelemetryVerificationEndedAt)
 
 	// continueWatcherDecision resolves only whether a reviewer is dispatched
 	// at all -- it never consults the floor's result, so the deterministic
