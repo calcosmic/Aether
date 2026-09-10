@@ -364,7 +364,7 @@ Plans:
 
 **Requirements:** SYNTH-03, CEC-06, WORK-01..08
 
-**Plans:** 15/15 plans executed
+**Plans:** 20 plans (15 executed, 5 gap-closure plans pending)
 
 Plans:
 
@@ -418,6 +418,23 @@ Plans:
 **Wave 12** *(blocked on Wave 11 completion)*
 
 - [x] 201-15-PLAN.md — Execute the Phase 201 Classic corpus cases and record exact coverage.
+
+**Gap closure — Wave 1** *(from 201-VERIFICATION.md: nine failed truths, all wiring gaps)*
+
+- [ ] 201-16-PLAN.md — Record the Queen's verification-boundary choice on the exact attempt, on both build lanes.
+- [ ] 201-17-PLAN.md — Assemble and render the four-part failed-repair handback on the blocked check screen.
+
+**Gap closure — Wave 2** *(blocked on gap-closure Wave 1)*
+
+- [ ] 201-18-PLAN.md — Attach the credited/uncredited split and the attempt's knowledge deltas on both build lanes.
+
+**Gap closure — Wave 3** *(blocked on gap-closure Wave 2)*
+
+- [ ] 201-19-PLAN.md — Give every build closeout a real verdict, the honest unverified card, the next action and the file card.
+
+**Gap closure — Wave 4** *(blocked on gap-closure Wave 3)*
+
+- [ ] 201-20-PLAN.md — Give the check step and autopilot the same verdict-carrying closeout, with cost and elapsed time.
 
 **Success criteria:**
 
