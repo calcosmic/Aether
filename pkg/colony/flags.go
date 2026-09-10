@@ -24,6 +24,17 @@ type FlagEntry struct {
 	// ordinary persisted flags, which keep the ordinary `flag-resolve`
 	// recovery path (WR-01, 193-REVIEW.md).
 	RecoveryCommand string `json:"recovery_command,omitempty"`
+	// AttemptID binds a worker-reported blocker to the exact build attempt
+	// that produced it (cmd/memory_feed.go's recordDispatchWorkerOutcome,
+	// CAP-003/CAP-004/CAP-051). Empty for every flag not originated by a
+	// worker outcome -- ordinary manual flags, swarm escalations, and
+	// autopilot checkpoints never set it. This is the ONLY place attempt
+	// binding lives for a blocker: advancement (checkUnresolvedBlockerFlags),
+	// status (readBlockerSnapshot), and closure (LifecycleFacts.Blockers)
+	// all read pending-decisions.json directly, so a flag written here is
+	// automatically visible to all three without any change to those
+	// readers.
+	AttemptID string `json:"attempt_id,omitempty"`
 }
 
 // FlagsFile represents the top-level pending-decisions.json file.
