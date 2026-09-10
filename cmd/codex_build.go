@@ -1350,6 +1350,22 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	attemptFinished = true
 	updatedState = committedState
 	updatedPhase = updatedState.Plan.Phases[phaseNum-1]
+	// D-08/CAP-066: computed and attached AFTER the attempt is durably
+	// sealed immediately above, from the exact same fully-resolved
+	// `dispatches` the sealing transition just wrote -- never a second,
+	// separate decision about what counts as done. Both are reporting-only:
+	// a failure to record either is warned, never fatal to a build that
+	// otherwise completed. Mirrors the external/wrapper finalize lane's own
+	// attachResultFilePrecision/attachBuildKnowledgeDeltas discipline
+	// (cmd/codex_build_finalize.go), which this lane never used to share.
+	nativePlanRealityEntries := buildPlanRealityForDispatches(root, updatedPhase, dispatches)
+	nativeCreditedFiles, nativeUncreditedFiles := deriveResultFilePrecision(dispatches, updatedState.Worktrees, blockedPlanRealityTasks(nativePlanRealityEntries))
+	if err := attachResultFilePrecision(attemptRel, nativeCreditedFiles, nativeUncreditedFiles); err != nil {
+		visualFprintf(stderr, "warning: could not record the credited/uncredited file split for phase %d: %v\n", phaseNum, err)
+	}
+	if err := attachBuildKnowledgeDeltas(attemptRel, deriveBuildKnowledgeDeltas(phaseNum, dispatches)); err != nil {
+		visualFprintf(stderr, "warning: could not record the decision/learning knowledge deltas for phase %d: %v\n", phaseNum, err)
+	}
 	policy = enrichQueenExecutionPolicyWithSpawnBudget(policy, updatedState, updatedPhase, "build", reviewDepth, dispatches)
 	if progress != nil {
 		progress.Advance("Verify")

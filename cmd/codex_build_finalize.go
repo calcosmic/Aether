@@ -911,6 +911,13 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	}); err != nil {
 		visualFprintf(stderr, "warning: could not record the plan-versus-reality evidence for phase %d: %v\n", phaseNum, err)
 	}
+	// CAP-066: same reporting-only, warn-never-fail discipline as the two
+	// calls immediately above -- computed from the exact same fully-resolved
+	// `dispatches` this attempt just sealed, never a second decision about
+	// what a worker actually left behind.
+	if err := attachBuildKnowledgeDeltas(attemptRel, deriveBuildKnowledgeDeltas(phaseNum, dispatches)); err != nil {
+		visualFprintf(stderr, "warning: could not record the decision/learning knowledge deltas for phase %d: %v\n", phaseNum, err)
+	}
 
 	var partialRetryOutcome *partialBuildRetryOutcome
 	if !buildFullyCredited {
