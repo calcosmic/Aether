@@ -364,7 +364,7 @@ Plans:
 
 **Requirements:** SYNTH-03, CEC-06, WORK-01..08
 
-**Plans:** 9/15 plans executed
+**Plans:** 11/15 plans executed
 
 Plans:
 
@@ -397,11 +397,11 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 201-10-PLAN.md — Bind failure evidence and blocker truth to the attempt and steer repair with same-run signals.
+- [x] 201-10-PLAN.md — Bind failure evidence and blocker truth to the attempt and steer repair with same-run signals.
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 201-11-PLAN.md — Drive goal-level autopilot from the shared result model and put quick work on it.
+- [x] 201-11-PLAN.md — Drive goal-level autopilot from the shared result model and put quick work on it.
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
