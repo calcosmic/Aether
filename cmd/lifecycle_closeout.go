@@ -616,20 +616,46 @@ func appendLifecycleCloseoutVisual(body string, result map[string]interface{}, p
 		return body
 	}
 	legacy := renderBanner(commandEmoji("status"), "What Next")
+	var out string
 	if index := strings.LastIndex(body, legacy); index >= 0 {
 		prefix := strings.TrimRight(body[:index], "\n")
 		card := strings.TrimLeft(body[index:], "\n")
 		if prefix != "" {
 			prefix += "\n"
 		}
-		return prefix + renderLifecycleCloseout(closeout, platform) + card
+		out = prefix + renderLifecycleCloseout(closeout, platform) + card
+	} else {
+		if body != "" && !strings.HasSuffix(body, "\n") {
+			body += "\n"
+		}
+		out = body + renderLifecycleCloseout(closeout, platform)
+		if answer, ok := nextActionFromResult(result); ok {
+			out = out + "\n" + renderNextActionCardForPlatform(answer, platform)
+		}
 	}
-	if body != "" && !strings.HasSuffix(body, "\n") {
-		body += "\n"
+	return appendLifecycleCloseoutSpendLine(out, closeout, result)
+}
+
+// appendLifecycleCloseoutSpendLine puts the one cost-and-time block
+// (cmd/spend_cost_line.go) as the FINAL element of a rendered closeout, for
+// every one of the six work verdicts (D-05) -- not only the success verdict.
+// It reuses appendSpendCostLine, the one existing append helper, rather than
+// inventing a second placement rule: the placement being one rule instead of
+// two is what makes exactly-one-per-lane structural (Phase 201, D-06).
+//
+// Gated on closeout.WorkOutcome != nil: a closeout with no work verdict --
+// colonize, plan, init, entomb, pause, resume, seal -- is not a work-cycle
+// result in the sense this block reports, so appending an empty "What The
+// Helpers Cost" heading over those screens would be a heading over an answer
+// nobody asked for. Only a closeout that carries a verdict (build, check, or
+// autopilot) gets this block.
+func appendLifecycleCloseoutSpendLine(body string, closeout LifecycleCloseout, result map[string]interface{}) string {
+	if closeout.WorkOutcome == nil {
+		return body
 	}
-	body += renderLifecycleCloseout(closeout, platform)
-	if answer, ok := nextActionFromResult(result); ok {
-		return body + "\n" + renderNextActionCardForPlatform(answer, platform)
+	phaseID := intValue(result["completion_phase"])
+	if phaseID == 0 {
+		phaseID = intValue(result["current_phase"])
 	}
-	return body
+	return appendSpendCostLine(body, phaseID)
 }
