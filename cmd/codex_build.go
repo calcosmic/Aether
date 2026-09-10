@@ -25,16 +25,25 @@ type codexBuildDispatch struct {
 	ExecutionWave int    `json:"execution_wave,omitempty"`
 	Caste         string `json:"caste"`
 	AgentName     string `json:"agent_name,omitempty"`
-	// Model is the DISPLAY name of the model this caste's agent runs on
-	// (resolved from agent frontmatter slot + ANTHROPIC_DEFAULT_*_MODEL env),
-	// so wrapper-rendered spawn descriptions can show it. Nothing reads it
-	// to choose a model — routing stays with the platform's agent
-	// frontmatter, and automatic model selection stays rejected.
-	Model   string `json:"model,omitempty"`
-	Name    string `json:"name"`
-	Task    string `json:"task"`
-	Status  string `json:"status"`
-	Summary string `json:"summary,omitempty"`
+	// Model is the DISPLAY name of the model this caste's agent runs on.
+	// Phase 201 plan 14 (D-15c, owner-ratified after the per-worker cost
+	// line shipped): a stated routing policy (resolveCasteModelRoute,
+	// cmd/caste_model_routing.go) chooses the model for the castes it names
+	// -- every choice carries a stated reason (ModelRoutingReason below) --
+	// and every other caste keeps the platform's agent-frontmatter
+	// resolution (resolveCasteModel, cmd/codex_visuals.go), exactly as
+	// before. The cost line (cmd/spend_cost_line.go) shows what each
+	// worker actually cost regardless of which path resolved its model.
+	Model string `json:"model,omitempty"`
+	// ModelRoutingReason is the stated reason resolveCasteModelRoute
+	// recorded for routing this dispatch's caste to a faster model. Empty
+	// for every dispatch whose caste has no routing entry -- there is
+	// nothing to justify when nothing was routed.
+	ModelRoutingReason string `json:"model_routing_reason,omitempty"`
+	Name               string `json:"name"`
+	Task               string `json:"task"`
+	Status             string `json:"status"`
+	Summary            string `json:"summary,omitempty"`
 	// Disposition qualifies a completed_no_change status: "verified_existing"
 	// means the worker proved the required behavior already exists (ruling
 	// D6). Empty for every other status.
@@ -4446,7 +4455,18 @@ func attachBuildDispatchContext(root string, phase colony.Phase, dispatches []co
 		// type; the TS host used to enrich this and the direct plan-only
 		// path must carry it too.
 		dispatches[i].AgentName = codexAgentNameForCaste(dispatches[i].Caste)
-		dispatches[i].Model = resolveCasteModel(dispatches[i].Caste)
+		// D-15c: the routing policy resolves the model FIRST, and only
+		// falls back to the platform's own agent-frontmatter resolution
+		// when the caste carries no routing entry -- see
+		// resolveCasteModelRoute's own doc comment (cmd/caste_model_routing.go)
+		// for why a quality-sensitive caste can never reach the routed
+		// branch.
+		if routedModel, reason, routed := resolveCasteModelRoute(dispatches[i].Caste); routed {
+			dispatches[i].Model = routedModel
+			dispatches[i].ModelRoutingReason = reason
+		} else {
+			dispatches[i].Model = resolveCasteModel(dispatches[i].Caste)
+		}
 		dispatches[i].PermissionProfile = codex.PermissionProfileForCaste(dispatches[i].Caste)
 		assignment := resolveWorkerSkillAssignmentForWorkflow("build", dispatches[i].Caste, dispatches[i].Task)
 		dispatches[i].SkillSection = assignment.Section

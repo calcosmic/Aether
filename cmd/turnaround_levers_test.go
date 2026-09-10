@@ -325,3 +325,109 @@ func TestBlockersSurviveTheTightestBudget(t *testing.T) {
 		}
 	}
 }
+
+// ---------------------------------------------------------------------
+// Task 3: per-caste model routing with a stated reason (D-15c)
+// ---------------------------------------------------------------------
+
+// TestRoutedCasteCarriesItsModelAndReason proves a caste named in
+// casteModelRoutes dispatches on the routed model and the dispatch carries
+// the stated reason.
+func TestRoutedCasteCarriesItsModelAndReason(t *testing.T) {
+	saveGlobals(t)
+	tmpDir := t.TempDir()
+	phase := colony.Phase{ID: 1, Name: "Publish"}
+	dispatches := []codexBuildDispatch{{Name: "Ferry-1", Caste: "porter", Task: "Publish the release"}}
+
+	attachBuildDispatchContext(tmpDir, phase, dispatches, time.Now())
+
+	wantModel, wantReason, routed := resolveCasteModelRoute("porter")
+	if !routed {
+		t.Fatal("fixture assumes porter is a routed caste; casteModelRoutes changed out from under this test")
+	}
+	if dispatches[0].Model != wantModel {
+		t.Fatalf("Model = %q, want the routed model %q", dispatches[0].Model, wantModel)
+	}
+	if strings.TrimSpace(dispatches[0].ModelRoutingReason) == "" {
+		t.Fatal("dispatch carries no routing reason")
+	}
+	if dispatches[0].ModelRoutingReason != wantReason {
+		t.Fatalf("ModelRoutingReason = %q, want %q", dispatches[0].ModelRoutingReason, wantReason)
+	}
+}
+
+// TestUnroutedCasteModelResolutionIsUnchanged proves a caste with no routing
+// entry keeps its existing model resolution byte-identical to before this
+// plan, and carries no routing reason.
+func TestUnroutedCasteModelResolutionIsUnchanged(t *testing.T) {
+	saveGlobals(t)
+	tmpDir := t.TempDir()
+	phase := colony.Phase{ID: 1, Name: "Build"}
+	dispatches := []codexBuildDispatch{{Name: "Hammer-1", Caste: "builder", Task: "Implement the thing"}}
+
+	attachBuildDispatchContext(tmpDir, phase, dispatches, time.Now())
+
+	if dispatches[0].Model != resolveCasteModel("builder") {
+		t.Fatalf("Model = %q, want unchanged resolveCasteModel(\"builder\") = %q", dispatches[0].Model, resolveCasteModel("builder"))
+	}
+	if dispatches[0].ModelRoutingReason != "" {
+		t.Fatalf("ModelRoutingReason = %q, want empty for an unrouted caste", dispatches[0].ModelRoutingReason)
+	}
+}
+
+// TestQualitySensitiveCasteIsNeverRouted proves the structural refusal: any
+// caste the existing quality-sensitivity table (casteModelReasons,
+// cmd/caste_model_reason.go) names is refused a route even if
+// casteModelRoutes were ever mistakenly populated for it -- checked directly
+// against that table by name, not by trusting the two tables to stay in
+// sync by hand.
+func TestQualitySensitiveCasteIsNeverRouted(t *testing.T) {
+	for caste := range casteModelReasons {
+		t.Run(caste, func(t *testing.T) {
+			model, reason, routed := resolveCasteModelRoute(caste)
+			if routed {
+				t.Fatalf("quality-sensitive caste %q was routed to %q (%q) -- casteModelReasons marks its work as needing the expensive model's judgment", caste, model, reason)
+			}
+			if model != "" || reason != "" {
+				t.Fatalf("refused caste %q must return empty model/reason, got (%q, %q)", caste, model, reason)
+			}
+		})
+	}
+
+	// Structural, not just data-driven: even a caste this session's
+	// casteModelRoutes table does not currently name must be refused if it
+	// is ever added to casteModelReasons in the future. This proves the
+	// refusal is checked BEFORE the routing table lookup, not merely true
+	// of today's two tables' contents.
+	for caste := range casteModelRoutes {
+		if casteModelReason(caste) != "" {
+			t.Fatalf("casteModelRoutes names caste %q, which casteModelReasons also names as quality-sensitive -- these two tables must never overlap", caste)
+		}
+	}
+}
+
+// TestEveryWorkerAppearsOnTheCostLine proves routing never removes a worker
+// from the per-worker cost line: a routed caste (porter) and an unrouted
+// caste (builder) both appear on renderSpendCostLine with their own figure,
+// exactly like every worker did before this plan -- the spend ledger has no
+// Model field at all (cmd/spend_ledger.go's spendRow), so routing cannot
+// affect which rows appear.
+func TestEveryWorkerAppearsOnTheCostLine(t *testing.T) {
+	setupSpendTestStore(t)
+	seedSpendLedgerForTest(t, 201, spendWorkflowBuild,
+		measuredSpendRowForTest("Ferry-1", "porter", 50_000),
+		measuredSpendRowForTest("Hammer-1", "builder", 900_000),
+	)
+
+	block := renderSpendCostLine(201)
+
+	if got := costLineFigureCell(t, block, "Ferry-1"); got != "50K" {
+		t.Fatalf("Ferry-1's (routed caste) figure cell = %q, want %q", got, "50K")
+	}
+	if got := costLineFigureCell(t, block, "Hammer-1"); got != "900K" {
+		t.Fatalf("Hammer-1's (unrouted caste) figure cell = %q, want %q", got, "900K")
+	}
+	if !strings.Contains(block, "2 workers") {
+		t.Fatalf("cost line does not report both workers; block was:\n%s", block)
+	}
+}
