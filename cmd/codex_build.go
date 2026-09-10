@@ -1905,7 +1905,21 @@ func queenBuildPreWaveDispatches(phase colony.Phase, queenCastes map[string]bool
 	return dispatches
 }
 
+// queenBuildPostWaveDispatches is the build-time half of D-05's single
+// boundary: it reads (never re-derives) the verification-boundary decision
+// recorded on the phase's current build attempt (verificationBoundaryForAttempt,
+// cmd/verification_boundary.go) and dispatches a post-wave reviewer only when
+// that recorded decision names build-end. Absent a recorded decision -- the
+// common case until a caller actually proposes and records one -- or a
+// recorded check-step choice, the check-step default applies (D-01) and this
+// function dispatches nothing: judgement lands at `aether continue` instead,
+// closing the doubled build-plus-check review CONCERNS.md named.
 func queenBuildPostWaveDispatches(phase colony.Phase, queenCastes map[string]bool, startExecutionWave int) []codexBuildDispatch {
+	attemptRel, _, hasAttempt := loadLatestBuildAttempt(phase.ID)
+	decision, hasDecision := verificationBoundaryForAttempt(attemptRel)
+	if !hasAttempt || !hasDecision || decision.Choice != verificationBoundaryChoiceBuildEnd {
+		return nil
+	}
 	// All post-wave reviewers examine the same finished code and share no
 	// inputs, so they occupy one wave. Each previously took its own
 	// incrementing wave, which serialised the review phase for no reason: an
@@ -4527,3 +4541,4 @@ func resolvePheromoneSection() string {
 	}
 	return strings.TrimSpace(b.String())
 }
+

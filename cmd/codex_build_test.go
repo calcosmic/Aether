@@ -1149,32 +1149,32 @@ func TestBuildPlanOnlyExecutionPlanRunsWatcherAfterSpecialists(t *testing.T) {
 			t.Fatalf("execution step %+v has no workers", step)
 		}
 	}
-	// The reviewers (probe, measurer, chaos) previously took a wave each. They
-	// examine the same finished code and share no inputs, so they now collapse
-	// into one "mixed" step.
+	// The reviewers (probe, measurer, chaos) previously took a wave each, then
+	// collapsed into one "mixed" step (Phase 194). Phase 201-05 (D-05) changed
+	// this again: reviewer judgement now lands at build-end only when a
+	// verification-boundary decision was actually recorded for this attempt
+	// naming build-end (verificationBoundaryForAttempt). No such decision was
+	// recorded for this plan-only preview -- --heavy alone is a worker-count
+	// policy, not a boundary proposal -- so the check-step default applies
+	// (D-01) and no post-wave reviewer wave is planned here at all; review
+	// happens at `aether continue` instead.
 	// Phase 193 (D-08): the build side no longer dispatches a watcher into a
 	// trailing verification stage without an explicit Queen proposal (none was
 	// made here) -- the program's free checks are the floor, and agent review
 	// lives in `continue`. So the property this test now guards is the
 	// opposite of its old name: no verification stage is planned at all.
-	wantStages := []string{"wave", "mixed"}
+	wantStages := []string{"wave"}
 	if strings.Join(gotStages, ",") != strings.Join(wantStages, ",") {
 		t.Fatalf("execution stages = %v, want %v", gotStages, wantStages)
 	}
 
-	// Guard the collapse itself, not just the stage names: the reviewers must
-	// actually share one wave rather than having been dropped.
-	// Plan 194-02 (D-07): probe is no longer unconditionally required, and
-	// this fixture's wording does not score it above the relevance
-	// threshold, so it is legitimately absent -- only measurer and chaos
-	// (from this fixture's --heavy flag) remain to guard.
+	// Guard the absence directly: with no verification-boundary decision
+	// recorded, measurer and chaos never appear in ANY step -- there is no
+	// "mixed" review-wave step to lose them from.
 	for _, step := range manifest.ExecutionPlan {
-		if step.Stage != "mixed" {
-			continue
-		}
 		for _, caste := range []string{"measurer", "chaos"} {
-			if !containsString(step.Castes, caste) {
-				t.Errorf("review wave lost %s: %+v", caste, step)
+			if containsString(step.Castes, caste) {
+				t.Errorf("post-wave reviewer %s dispatched at build end with no recorded verification-boundary decision: %+v", caste, step)
 			}
 		}
 	}
@@ -1380,6 +1380,24 @@ func TestCodexBuildPlanOnlySpawnBudgetSeparatesCasteBudgetFromWorkerCount(t *tes
 			}},
 		},
 	})
+
+	// Phase 201-05 (D-05): chaos and measurer only ride along at build end
+	// when a verification-boundary decision naming build-end was actually
+	// recorded for this attempt (queenBuildPostWaveDispatches) -- record one
+	// here so this fixture still proves worker_count can exceed
+	// max_selected_castes via the policy-added specialists it names above.
+	// Marked terminal (built) immediately after so runCodexBuildPlanOnlyWithOptions'
+	// own "already has an active build attempt" guard (buildAttemptStatusActive)
+	// does not see it as in-flight work this fresh plan-only request would
+	// clobber -- loadLatestBuildAttempt still resolves it either way.
+	spawnBudgetAttemptRel := attemptWithVerificationBoundaryRecorded(t, 1, "attempt-spawn-budget", "build_end", "heavy full-depth budget fixture")
+	var spawnBudgetAttempt buildAttemptRecord
+	if err := store.UpdateJSONAtomically(spawnBudgetAttemptRel, &spawnBudgetAttempt, func() error {
+		spawnBudgetAttempt.Status = buildAttemptBuilt
+		return nil
+	}); err != nil {
+		t.Fatalf("mark fixture attempt terminal: %v", err)
+	}
 
 	result, _, _, _, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{HeavyFlag: true})
 	if err != nil {
@@ -1787,9 +1805,15 @@ func TestBuildPlanOnlyHeavyReviewAllowsPolicyMeasurerAndChaos(t *testing.T) {
 		t.Fatalf("runCodexBuildPlanOnlyWithOptions returned error: %v", err)
 	}
 	manifest := result["dispatch_manifest"].(codexBuildManifest)
+	// Phase 201-05 (D-05): heavy full-depth policy still SELECTS measurer and
+	// chaos for the team (applyBuildDispatchPolicyCastes, unchanged), but
+	// queenBuildPostWaveDispatches now dispatches a post-wave reviewer only
+	// when a verification-boundary decision was actually recorded naming
+	// build-end -- none was recorded for this plan-only preview, so the
+	// check-step default applies (D-01) and neither caste is dispatched here.
 	for _, caste := range []string{"measurer", "chaos"} {
-		if !buildManifestHasCaste(manifest, caste) {
-			t.Fatalf("heavy full-depth review should allow policy %s, got %v", caste, buildManifestCastes(manifest))
+		if buildManifestHasCaste(manifest, caste) {
+			t.Fatalf("with no recorded verification-boundary decision, %s should not be dispatched at build end, got %v", caste, buildManifestCastes(manifest))
 		}
 	}
 }
@@ -1833,9 +1857,13 @@ func TestBuildPlanOnlyCLIForwardsVerificationDepth(t *testing.T) {
 	if result["review_depth"].(string) != string(colony.VerificationDepthHeavy) {
 		t.Fatalf("review_depth = %q, want %q", result["review_depth"], colony.VerificationDepthHeavy)
 	}
+	// Phase 201-05 (D-05): with no verification-boundary decision recorded,
+	// build-end dispatches no post-wave reviewer regardless of depth -- the
+	// heavy flag is forwarded (review_depth above) but judgement lands at
+	// `aether continue` by default (D-01).
 	for _, caste := range []string{"measurer", "chaos"} {
-		if !buildEnvelopeHasCaste(result, caste) {
-			t.Fatalf("expected CLI plan-only to forward heavy depth and include %s, got %v", caste, buildEnvelopeCastes(result))
+		if buildEnvelopeHasCaste(result, caste) {
+			t.Fatalf("with no recorded verification-boundary decision, CLI plan-only should not dispatch %s at build end, got %v", caste, buildEnvelopeCastes(result))
 		}
 	}
 }
@@ -1883,9 +1911,13 @@ func TestBuildCLIForwardsVerificationDepth(t *testing.T) {
 	if result["review_depth"].(string) != string(colony.VerificationDepthHeavy) {
 		t.Fatalf("review_depth = %q, want %q", result["review_depth"], colony.VerificationDepthHeavy)
 	}
+	// Phase 201-05 (D-05): with no verification-boundary decision recorded,
+	// build-end dispatches no post-wave reviewer regardless of depth -- the
+	// heavy flag is forwarded (review_depth above) but judgement lands at
+	// `aether continue` by default (D-01).
 	for _, caste := range []string{"measurer", "chaos"} {
-		if !buildEnvelopeHasCaste(result, caste) {
-			t.Fatalf("expected CLI build to forward heavy depth and include %s, got %v", caste, buildEnvelopeCastes(result))
+		if buildEnvelopeHasCaste(result, caste) {
+			t.Fatalf("with no recorded verification-boundary decision, CLI build should not dispatch %s at build end, got %v", caste, buildEnvelopeCastes(result))
 		}
 	}
 
@@ -1942,14 +1974,18 @@ func TestBuildCLINormalPathForwardsQueenTeamFlags(t *testing.T) {
 	if err := store.LoadJSON("build/phase-1/manifest.json", &manifest); err != nil {
 		t.Fatalf("load build manifest: %v", err)
 	}
-	found := false
+	// Phase 201-05 (D-05): proposing "measurer" via --castes still reaches the
+	// Queen's team judgement (proven below via caste_decision's rationale
+	// text -- the assertion --castes/--caste-why was built to guard), but
+	// queenBuildPostWaveDispatches now gates the ACTUAL build-end dispatch on
+	// a separately recorded verification-boundary decision naming build-end.
+	// No such decision was proposed here, so measurer is judged but not
+	// dispatched at build end -- it would be judged again, and can dispatch,
+	// at the check step (`aether continue`) instead.
 	for _, dispatch := range manifest.Dispatches {
 		if dispatch.Caste == "measurer" {
-			found = true
+			t.Fatalf("with no recorded verification-boundary decision, measurer should not be dispatched at build end; dispatches=%+v", manifest.Dispatches)
 		}
-	}
-	if !found {
-		t.Fatalf("normal build discarded --castes/--caste-why; dispatches=%+v", manifest.Dispatches)
 	}
 	decisionJSON, err := json.Marshal(manifest.CasteDecision)
 	if err != nil {
@@ -4708,6 +4744,17 @@ func TestBuildDispatchStartsHeartbeatMonitor(t *testing.T) {
 // executed one worker at a time no matter how many castes share its wave. Both
 // halves are asserted here because either alone is a no-op.
 func TestIndependentSpecialistsShareAWave(t *testing.T) {
+	// Phase 201-05 (D-05): queenBuildPostWaveDispatches now gates on the
+	// recorded verification-boundary decision for the phase's current build
+	// attempt. This test's own subject is wave collapsing, not the boundary
+	// itself -- record a build-end decision so the pre-existing "3 reviewers
+	// collapse into one wave" assertion still exercises real dispatches
+	// (TestBuildEndReviewersGateOnTheRecordedBoundary in
+	// boundary_double_dispatch_test.go covers the boundary gating itself).
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
 	phase := colony.Phase{
 		ID:          1,
 		Name:        "Integration and security review",
@@ -4717,6 +4764,25 @@ func TestIndependentSpecialistsShareAWave(t *testing.T) {
 	queenCastes := map[string]bool{
 		"architect": true, "gatekeeper": true, "includer": true,
 		"tracker": true, "sage": true, "archaeologist": true, "oracle": true,
+	}
+
+	attemptID := "attempt-shared-wave"
+	attemptRel := newTestVerificationBoundaryAttempt(t, phase.ID, attemptID)
+	decision := queenApplyVerificationBoundary("build_end", "release sign-off", colony.Phase{}, colony.ColonyState{})
+	if err := attachVerificationBoundary(attemptRel, decision); err != nil {
+		t.Fatalf("attach verification boundary: %v", err)
+	}
+	// loadLatestBuildAttempt (queenBuildPostWaveDispatches' own read path)
+	// resolves via the latest-attempt pointer, not the raw attempt path --
+	// newTestVerificationBoundaryAttempt derives without MakeLatest, so write
+	// the pointer directly, mirroring deriveBuildAttempt's own pointer shape.
+	if err := store.SaveJSON(latestBuildAttemptPointerPath(phase.ID), latestBuildAttemptPointer{
+		SchemaVersion: buildAttemptSchemaVersion,
+		AttemptID:     attemptID,
+		Path:          attemptRel,
+		UpdatedAt:     time.Now().UTC().Format(time.RFC3339Nano),
+	}); err != nil {
+		t.Fatalf("write latest-attempt pointer: %v", err)
 	}
 
 	pre := queenBuildPreWaveDispatches(phase, queenCastes)

@@ -233,6 +233,27 @@ func TestBuildDispatch_LightMode_SkipsMeasurerAndChaos(t *testing.T) {
 	}
 }
 
+// Phase 201-05 (D-05): queenBuildPostWaveDispatches now dispatches a
+// post-wave reviewer (measurer, chaos, auditor) only when a
+// verification-boundary decision naming build-end was actually recorded for
+// the phase's current build attempt (verificationBoundaryForAttempt) -- the
+// policy/sampling SELECTION logic these three tests guard
+// (applyBuildDispatchPolicyCastes, chaosShouldRunInLightMode) is unchanged,
+// but proving it now requires a recorded build-end decision as the given, or
+// every phase would land the check-step default (no build-end dispatch,
+// D-01) regardless of what the policy selected. buildDispatchWithRecordedBoundary
+// gives each subtest that decision as a fixture, isolating "did policy SELECT
+// this caste" from "does build-end dispatch AT ALL" (queenBuildPostWaveDispatches's
+// own gate, proven separately by TestBuildEndReviewersGateOnTheRecordedBoundary).
+func buildDispatchWithRecordedBoundary(t *testing.T, phase colony.Phase, depth string, reviewDepth colony.VerificationDepth) []codexBuildDispatch {
+	t.Helper()
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+	attemptWithVerificationBoundaryRecorded(t, phase.ID, fmt.Sprintf("attempt-review-depth-%d", phase.ID), "build_end", "review depth policy fixture")
+	return testPlannedBuildDispatchesForSelection(phase, depth, nil, reviewDepth)
+}
+
 func TestBuildDispatch_LightMode_Chaos30Percent(t *testing.T) {
 	// chaosShouldRunInLightMode returns true for phase IDs where phaseID % 10 < 3
 	// Phase IDs 1, 2, 10, 11, 12, 20, 21, 22 should include chaos in light mode
@@ -242,7 +263,7 @@ func TestBuildDispatch_LightMode_Chaos30Percent(t *testing.T) {
 	for _, pid := range chaosPhases {
 		t.Run(fmt.Sprintf("phase_%d_includes_chaos", pid), func(t *testing.T) {
 			phase := colony.Phase{ID: pid, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
-			dispatches := testPlannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthLight)
+			dispatches := buildDispatchWithRecordedBoundary(t, phase, "full", colony.VerificationDepthLight)
 			found := false
 			for _, d := range dispatches {
 				if d.Caste == "chaos" {
@@ -258,7 +279,7 @@ func TestBuildDispatch_LightMode_Chaos30Percent(t *testing.T) {
 	for _, pid := range noChaosPhases {
 		t.Run(fmt.Sprintf("phase_%d_skips_chaos", pid), func(t *testing.T) {
 			phase := colony.Phase{ID: pid, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
-			dispatches := testPlannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthLight)
+			dispatches := buildDispatchWithRecordedBoundary(t, phase, "full", colony.VerificationDepthLight)
 			for _, d := range dispatches {
 				if d.Caste == "chaos" {
 					t.Errorf("light mode phase %d should skip chaos", pid)
@@ -270,7 +291,7 @@ func TestBuildDispatch_LightMode_Chaos30Percent(t *testing.T) {
 
 func TestBuildDispatch_HeavyMode_IncludesChaosAndMeasurer(t *testing.T) {
 	phase := colony.Phase{ID: 3, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
-	dispatches := testPlannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthHeavy)
+	dispatches := buildDispatchWithRecordedBoundary(t, phase, "full", colony.VerificationDepthHeavy)
 	hasMeasurer := false
 	hasChaos := false
 	for _, d := range dispatches {
@@ -294,7 +315,7 @@ func TestBuildDispatch_FinalPhase_HeavyRegardlessOfLight(t *testing.T) {
 	// This test verifies the build dispatch path, not the resolveReviewDepth logic
 	phase := colony.Phase{ID: 5, Name: "Final polish", Tasks: []colony.Task{{Goal: "Polish", Status: "pending"}}}
 	// When resolveReviewDepth returns heavy (final phase), dispatches should include both
-	dispatches := testPlannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthHeavy)
+	dispatches := buildDispatchWithRecordedBoundary(t, phase, "full", colony.VerificationDepthHeavy)
 	hasMeasurer := false
 	hasChaos := false
 	for _, d := range dispatches {

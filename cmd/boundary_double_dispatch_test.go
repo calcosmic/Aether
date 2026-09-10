@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,6 +22,32 @@ func boundaryDoubleDispatchPhase(id int, name, description string) colony.Phase 
 		Status:      colony.PhaseReady,
 		Tasks:       []colony.Task{{Goal: description}},
 	}
+}
+
+// attemptWithVerificationBoundaryRecorded derives, saves, and marks latest a
+// minimal real build attempt for phaseID (via newTestVerificationBoundaryAttempt,
+// cmd/verification_boundary_test.go's own production-constructor fixture),
+// then reconciles and attaches the requested boundary choice to it, and
+// finally writes the latest-attempt pointer so loadLatestBuildAttempt(phaseID)
+// -- the exact read path queenBuildPostWaveDispatches and
+// plannedContinueReviewDispatches now use -- resolves it. Requires a store to
+// already be installed (saveGlobals(t) + newTestStore(t) + store assignment).
+func attemptWithVerificationBoundaryRecorded(t *testing.T, phaseID int, attemptID string, choice string, reason string) string {
+	t.Helper()
+	attemptRel := newTestVerificationBoundaryAttempt(t, phaseID, attemptID)
+	decision := queenApplyVerificationBoundary(choice, reason, colony.Phase{}, colony.ColonyState{})
+	if err := attachVerificationBoundary(attemptRel, decision); err != nil {
+		t.Fatalf("attach verification boundary: %v", err)
+	}
+	if err := store.SaveJSON(latestBuildAttemptPointerPath(phaseID), latestBuildAttemptPointer{
+		SchemaVersion: buildAttemptSchemaVersion,
+		AttemptID:     attemptID,
+		Path:          attemptRel,
+		UpdatedAt:     time.Now().UTC().Format(time.RFC3339Nano),
+	}); err != nil {
+		t.Fatalf("write latest-attempt pointer: %v", err)
+	}
+	return attemptRel
 }
 
 // TestNoCasteIsDispatchedAtBothBoundaries closes .planning/WINDOWS.md #1.
@@ -105,5 +133,163 @@ func TestNoCasteIsDispatchedAtBothBoundaries(t *testing.T) {
 				t.Fatalf("countWorkersAcrossBothBoundaries: total dispatch count %d != distinct caste count %d (%v) -- a caste is being dispatched more than once across the build and continue boundaries", total, len(union), union)
 			}
 		})
+	}
+}
+
+// TestBuildEndReviewersGateOnTheRecordedBoundary is Task 1's own proof
+// (201-05-PLAN.md): queenBuildPostWaveDispatches reads (never re-derives)
+// the verification-boundary decision recorded on the phase's current build
+// attempt, and dispatches a post-wave reviewer only when that record names
+// build-end.
+func TestBuildEndReviewersGateOnTheRecordedBoundary(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	queenCastes := map[string]bool{"auditor": true, "measurer": true, "chaos": true}
+
+	t.Run("no recorded boundary dispatches nothing", func(t *testing.T) {
+		phase := boundaryDoubleDispatchPhase(201, "Release hardening", "Harden the release signoff path")
+		post := queenBuildPostWaveDispatches(phase, queenCastes, 9)
+		if len(post) != 0 {
+			t.Fatalf("expected no post-wave dispatches with no recorded boundary, got %+v", post)
+		}
+	})
+
+	t.Run("recorded check-step boundary dispatches nothing", func(t *testing.T) {
+		phase := boundaryDoubleDispatchPhase(202, "Release hardening", "Harden the release signoff path")
+		attemptWithVerificationBoundaryRecorded(t, phase.ID, "attempt-gate-check-step-202", verificationBoundaryChoiceCheckStep, "low risk, review at continue")
+		post := queenBuildPostWaveDispatches(phase, queenCastes, 9)
+		if len(post) != 0 {
+			t.Fatalf("expected no post-wave dispatches with a recorded check-step boundary, got %+v", post)
+		}
+	})
+
+	t.Run("recorded build-end boundary dispatches exactly the justified reviewers, each with a reason", func(t *testing.T) {
+		phase := boundaryDoubleDispatchPhase(203, "Release hardening", "Harden the release signoff path")
+		attemptWithVerificationBoundaryRecorded(t, phase.ID, "attempt-gate-build-end-203", verificationBoundaryChoiceBuildEnd, "release sign-off")
+		post := queenBuildPostWaveDispatches(phase, queenCastes, 9)
+		if len(post) != 3 {
+			t.Fatalf("expected exactly 3 post-wave reviewers (auditor, measurer, chaos), got %d: %+v", len(post), post)
+		}
+		gotCastes := map[string]bool{}
+		for _, d := range post {
+			gotCastes[d.Caste] = true
+			if strings.TrimSpace(d.Task) == "" {
+				t.Errorf("dispatch %s carries no task/reason: %+v", d.Caste, d)
+			}
+			if d.ExecutionWave != 9 {
+				t.Errorf("dispatch %s is on wave %d, want the requested review wave 9", d.Caste, d.ExecutionWave)
+			}
+		}
+		for _, want := range []string{"auditor", "measurer", "chaos"} {
+			if !gotCastes[want] {
+				t.Errorf("expected %s among the build-end reviewers, got %v", want, gotCastes)
+			}
+		}
+	})
+
+	t.Run("a caste the Queen never selected is never dispatched, even under a build-end boundary", func(t *testing.T) {
+		phase := boundaryDoubleDispatchPhase(204, "Release hardening", "Harden the release signoff path")
+		attemptWithVerificationBoundaryRecorded(t, phase.ID, "attempt-gate-build-end-204", verificationBoundaryChoiceBuildEnd, "release sign-off")
+		post := queenBuildPostWaveDispatches(phase, map[string]bool{"auditor": true}, 9)
+		if len(post) != 1 || post[0].Caste != "auditor" {
+			t.Fatalf("expected exactly [auditor], got %+v", post)
+		}
+	})
+}
+
+// TestReviewerCountAtZeroOneAndCeiling proves the three threshold cases
+// Task 1 calls out explicitly: zero forced reviewers dispatches none, one
+// forced reviewer dispatches exactly that one, and the configured depth
+// ceiling (queenBuildPostWavePlans' own full set -- auditor, measurer,
+// chaos) dispatches the ceiling and no more. Every count below is read as an
+// exact integer off the real dispatch list, never rounded or estimated.
+func TestReviewerCountAtZeroOneAndCeiling(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	for _, tc := range []struct {
+		name        string
+		phaseID     int
+		queenCastes map[string]bool
+		want        int
+	}{
+		{"zero forced reviewers dispatches none", 211, map[string]bool{}, 0},
+		{"exactly one forced reviewer dispatches exactly that one", 212, map[string]bool{"auditor": true}, 1},
+		{"at the configured ceiling dispatches the ceiling and no more", 213, map[string]bool{"auditor": true, "measurer": true, "chaos": true}, 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			phase := boundaryDoubleDispatchPhase(tc.phaseID, "Reviewer count fixture", "Prove the reviewer count matches the selected team exactly")
+			attemptWithVerificationBoundaryRecorded(t, phase.ID, fmt.Sprintf("attempt-reviewer-count-%d", phase.ID), verificationBoundaryChoiceBuildEnd, "reviewer count fixture")
+			post := queenBuildPostWaveDispatches(phase, tc.queenCastes, 9)
+			if got := len(post); got != tc.want {
+				t.Fatalf("post-wave reviewer count = %d, want exactly %d (dispatches=%+v)", got, tc.want, post)
+			}
+		})
+	}
+}
+
+// TestDeterministicChecksAreUnchangedByTheBoundary proves the boundary
+// mechanism is scoped strictly to reviewer judgement: every non-reviewer
+// build-time dispatch (the coherent-job task workers, the pre-wave
+// specialists) is byte-identical for the same phase fixture regardless of
+// which verification-boundary decision is recorded for the attempt --
+// nothing about the program's own free checks, or the workers that write
+// and structure the code those checks run against, ever depends on where
+// reviewer judgement lands.
+func TestDeterministicChecksAreUnchangedByTheBoundary(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	state := colony.ColonyState{VerificationDepth: string(colony.VerificationDepthStandard)}
+	reviewCastes := map[string]bool{"auditor": true, "measurer": true, "chaos": true}
+	nonReviewerDispatches := func(dispatches []codexBuildDispatch) []codexBuildDispatch {
+		kept := make([]codexBuildDispatch, 0, len(dispatches))
+		for _, d := range dispatches {
+			if reviewCastes[d.Caste] {
+				continue
+			}
+			kept = append(kept, d)
+		}
+		return kept
+	}
+
+	phaseNoBoundary := boundaryDoubleDispatchPhase(221, "Ordinary feature", "Add a small UI affordance")
+	noBoundary := nonReviewerDispatches(testPlannedBuildDispatchesWithJudgement(phaseNoBoundary, state, nil, colony.VerificationDepthStandard, nil, ""))
+
+	phaseCheckStep := boundaryDoubleDispatchPhase(222, "Ordinary feature", "Add a small UI affordance")
+	attemptWithVerificationBoundaryRecorded(t, phaseCheckStep.ID, "attempt-deterministic-checkstep-222", verificationBoundaryChoiceCheckStep, "default landing")
+	withCheckStep := nonReviewerDispatches(testPlannedBuildDispatchesWithJudgement(phaseCheckStep, state, nil, colony.VerificationDepthStandard, nil, ""))
+
+	phaseBuildEnd := boundaryDoubleDispatchPhase(223, "Ordinary feature", "Add a small UI affordance")
+	attemptWithVerificationBoundaryRecorded(t, phaseBuildEnd.ID, "attempt-deterministic-buildend-223", verificationBoundaryChoiceBuildEnd, "release sign-off")
+	withBuildEnd := nonReviewerDispatches(testPlannedBuildDispatchesWithJudgement(phaseBuildEnd, state, nil, colony.VerificationDepthStandard, nil, ""))
+
+	sameShape := func(t *testing.T, label string, got []codexBuildDispatch) {
+		t.Helper()
+		if len(got) != len(noBoundary) {
+			t.Fatalf("%s: non-reviewer dispatch count = %d, want %d (matching the no-boundary baseline)", label, len(got), len(noBoundary))
+		}
+		for i := range noBoundary {
+			a, b := noBoundary[i], got[i]
+			if a.Caste != b.Caste || a.Stage != b.Stage || a.Task != b.Task || a.ExecutionWave != b.ExecutionWave {
+				t.Fatalf("%s: non-reviewer dispatch %d differs from the no-boundary baseline:\n  baseline: %+v\n  got:      %+v", label, i, a, b)
+			}
+		}
+	}
+	sameShape(t, "recorded check-step boundary", withCheckStep)
+	sameShape(t, "recorded build-end boundary", withBuildEnd)
+
+	// The literal deterministic check commands (build/types/lint/test) live
+	// entirely in the continue-side floor and never even see a boundary
+	// value or a phase's dispatch list -- resolveCodexVerificationCommands
+	// takes only a root path. Lock that independence down explicitly so a
+	// future change cannot thread the boundary into check-command
+	// resolution without this test naming it.
+	if got := resolveCodexVerificationCommands("/tmp"); got != resolveCodexVerificationCommands("/tmp") {
+		t.Fatalf("resolveCodexVerificationCommands is not stable across calls for the same root: %+v vs %+v", got, resolveCodexVerificationCommands("/tmp"))
 	}
 }
