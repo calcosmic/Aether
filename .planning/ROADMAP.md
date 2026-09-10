@@ -364,7 +364,7 @@ Plans:
 
 **Requirements:** SYNTH-03, CEC-06, WORK-01..08
 
-**Plans:** 12/15 plans executed
+**Plans:** 13/15 plans executed
 
 Plans:
 
@@ -409,7 +409,7 @@ Plans:
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
-- [ ] 201-13-PLAN.md — Measure a real one-plan job and ratify the turnaround target with the owner.
+- [x] 201-13-PLAN.md — Measure a real one-plan job and ratify the turnaround target with the owner.
 
 **Wave 11** *(blocked on Wave 10 completion)*
 
