@@ -59,7 +59,13 @@
             "V-200-ACCEPT",
             "V-200-REVISION",
             "V-200-REPLAY",
-            "V-200-PLATFORM"
+            "V-200-PLATFORM",
+            "V-201-BOUNDARY",
+            "V-201-OUTCOME",
+            "V-201-IDENTITY",
+            "V-201-REPAIR",
+            "V-201-AUTOPILOT",
+            "V-201-TELEMETRY"
           ]
         },
         "kind": {
@@ -76,7 +82,7 @@
         },
         "synthesis_decision": {
           "type": "string",
-          "pattern": "^SYN-(?:199-(?:0[1-9]|10)|200-(?:0[1-9]|1[0-2]))$"
+          "pattern": "^SYN-(?:199-(?:0[1-9]|10)|200-(?:0[1-9]|1[0-2])|201-(?:0[1-9]|1[0-4]))$"
         },
         "cap_ids": {
           "type": "array",
@@ -284,7 +290,7 @@
       "properties": {
         "id": {
           "type": "string",
-          "pattern": "^SYN-(?:199-(?:0[1-9]|10)|200-(?:0[1-9]|1[0-2]))$"
+          "pattern": "^SYN-(?:199-(?:0[1-9]|10)|200-(?:0[1-9]|1[0-2])|201-(?:0[1-9]|1[0-4]))$"
         },
         "title": {
           "type": "string",
