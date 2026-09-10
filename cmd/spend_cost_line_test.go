@@ -592,8 +592,15 @@ func TestElapsedTimeComesFromTheAttemptTimestamps(t *testing.T) {
 
 	block := renderSpendCostLine(196)
 
-	if got := costLineElapsedCell(t, block); got != "23m4s" {
-		t.Errorf("elapsed cell = %q, want %q, derived only from the attempt's own two timestamps", got, "23m4s")
+	// Phase 201 plan 12 (WORK-08): no job telemetry record exists for this
+	// fixture's attempt (seedSpendElapsedAttemptForTest seeds only the
+	// attempt's timestamps, never a jobTelemetryRecord), so the line states
+	// the elapsed figure AND says the breakdown was not measured -- see
+	// TestCloseoutRendersOneTimingLine (cmd/job_telemetry_test.go) for the
+	// measured-breakdown counterpart of this same line.
+	want := "23m4s (timing breakdown not measured)"
+	if got := costLineElapsedCell(t, block); got != want {
+		t.Errorf("elapsed cell = %q, want %q, derived only from the attempt's own two timestamps", got, want)
 	}
 }
 
@@ -617,9 +624,16 @@ func TestMissingTimestampRendersTheUnmeasuredSentinel(t *testing.T) {
 
 			block := renderSpendCostLine(196)
 
+			// Phase 201 plan 12 (WORK-08): the dash sentinel itself is
+			// unchanged -- byte-identical to the unreported-cost sentinel,
+			// as this test's own name asserts -- but the full line also
+			// carries the same "breakdown not measured" suffix
+			// TestElapsedTimeComesFromTheAttemptTimestamps now expects,
+			// since no job telemetry record exists for this fixture either.
+			want := spendNotReportedFigure + " (timing breakdown not measured)"
 			got := costLineElapsedCell(t, block)
-			if got != spendNotReportedFigure {
-				t.Errorf("elapsed cell = %q, want the dash sentinel %q — byte-identical to the unreported-cost sentinel, not a second sentinel of its own", got, spendNotReportedFigure)
+			if got != want {
+				t.Errorf("elapsed cell = %q, want %q — the dash sentinel is byte-identical to the unreported-cost sentinel, not a second sentinel of its own", got, want)
 			}
 		})
 	}

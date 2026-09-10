@@ -374,3 +374,248 @@ func TestInstrumentationAddsNoDispatchOrPause(t *testing.T) {
 		t.Fatalf("expected both work and verification segments measured across build+continue, got Work=%+v Verification=%+v", record.Work, record.Verification)
 	}
 }
+
+// ---------------------------------------------------------------------
+// Task 3: one timing line, a drill-down, and a report-only guard.
+// ---------------------------------------------------------------------
+
+// TestCloseoutRendersOneTimingLine proves the closeout's "Elapsed: " line
+// (cmd/spend_cost_line.go) names the largest measured segment when a
+// telemetry record exists, and plainly says the breakdown was not measured
+// when it does not -- in both cases, exactly one block and one timing line.
+func TestCloseoutRendersOneTimingLine(t *testing.T) {
+	t.Run("names the largest measured segment", func(t *testing.T) {
+		setupSpendTestStore(t)
+		seedSpendLedgerForTest(t, 197, spendWorkflowBuild,
+			measuredSpendRowForTest("Mason-67", "builder", 1_200_000),
+		)
+		seedSpendElapsedAttemptForTest(t, 197, "attempt-timing-line", "2026-01-01T00:00:00Z", "2026-01-01T00:10:00Z")
+
+		capture := newJobTelemetryCapture()
+		capture.measure(jobTelemetrySegmentWork, 7*time.Minute, "worker execution")
+		capture.measure(jobTelemetrySegmentVerification, 2*time.Minute, "deterministic floor run")
+		record := newJobTelemetryRecord("attempt-timing-line", "job-x", capture, time.Now())
+		if err := writeJobTelemetryRecord(record); err != nil {
+			t.Fatalf("seed telemetry record: %v", err)
+		}
+
+		block := renderSpendCostLine(197)
+		cell := costLineElapsedCell(t, block)
+		want := "10m0s (largest measured piece: worker execution, 7m0s)"
+		if cell != want {
+			t.Fatalf("elapsed cell = %q, want %q\nfull block:\n%s", cell, want, block)
+		}
+		if n := strings.Count(block, spendCostLineHeading); n != 1 {
+			t.Fatalf("expected exactly one %q block, found %d:\n%s", spendCostLineHeading, n, block)
+		}
+		if n := strings.Count(block, "Elapsed:"); n != 1 {
+			t.Fatalf("expected exactly one timing line, found %d:\n%s", n, block)
+		}
+	})
+
+	t.Run("states the breakdown is unmeasured when no segment was measured", func(t *testing.T) {
+		setupSpendTestStore(t)
+		seedSpendLedgerForTest(t, 198, spendWorkflowBuild,
+			measuredSpendRowForTest("Mason-67", "builder", 1_200_000),
+		)
+		seedSpendElapsedAttemptForTest(t, 198, "attempt-timing-unmeasured", "2026-01-01T00:00:00Z", "2026-01-01T00:05:00Z")
+		// No telemetry record written for this attempt at all.
+
+		block := renderSpendCostLine(198)
+		cell := costLineElapsedCell(t, block)
+		want := "5m0s (timing breakdown not measured)"
+		if cell != want {
+			t.Fatalf("elapsed cell = %q, want %q\nfull block:\n%s", cell, want, block)
+		}
+	})
+}
+
+// TestStatusDrillDownRendersAllEightSegments proves renderJobTelemetryDrillDown
+// (cmd/status.go) renders all eight named segments for a selected attempt,
+// naming unmeasured ones as such, and that calling it never writes to the
+// data directory -- status.go is a reader only.
+func TestStatusDrillDownRendersAllEightSegments(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	capture := newJobTelemetryCapture()
+	capture.measure(jobTelemetrySegmentContext, 900*time.Millisecond, "brief assembly")
+	capture.measure(jobTelemetrySegmentVerification, 12*time.Second, "deterministic floor run")
+	capture.markUnmeasured(jobTelemetrySegmentPreflight, "no first-response boundary is observable today")
+	record := newJobTelemetryRecord("attempt-drilldown", "job-drilldown", capture, time.Now())
+	if err := writeJobTelemetryRecord(record); err != nil {
+		t.Fatalf("seed telemetry record: %v", err)
+	}
+
+	before := hashDirForTest(t, store.BasePath())
+	rendered := renderJobTelemetryDrillDown("attempt-drilldown")
+	after := hashDirForTest(t, store.BasePath())
+	if before != after {
+		t.Fatalf("renderJobTelemetryDrillDown wrote to the data directory: before=%s after=%s", before, after)
+	}
+
+	for _, name := range jobTelemetrySegmentOrder {
+		label := jobTelemetrySegmentLabel(name)
+		if !strings.Contains(rendered, label) {
+			t.Fatalf("drill-down is missing segment %q (label %q):\n%s", name, label, rendered)
+		}
+	}
+	if !strings.Contains(rendered, "900ms") {
+		t.Fatalf("drill-down does not render the measured context duration:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, jobTelemetryUnmeasuredFigure) {
+		t.Fatalf("drill-down does not name any unmeasured segment as such:\n%s", rendered)
+	}
+
+	// A selected attempt with no telemetry record at all renders nothing --
+	// distinct from a record existing with every segment unmeasured (which
+	// still renders the eight lines above), matching
+	// renderJobTelemetryClosingLine's identical choice in
+	// cmd/spend_cost_line.go.
+	if got := renderJobTelemetryDrillDown("attempt-never-recorded"); got != "" {
+		t.Fatalf("expected no drill-down output for an attempt with no telemetry record, got:\n%s", got)
+	}
+}
+
+// ---------------------------------------------------------------------
+// The report-only guard (D-16): no selection function ever reads telemetry.
+// ---------------------------------------------------------------------
+
+// jobTelemetrySelectionEntryPoints names the four kinds of decision D-16
+// (WORK-08's own must_have) forbids from ever reading a timing record:
+// model selection, team selection, test-scope selection, and brief
+// assembly.
+var jobTelemetrySelectionEntryPoints = []string{
+	"resolveCasteModel",
+	"queenApplyJudgement",
+	"deriveVerificationScope",
+	"composeBuildManifestBrief",
+}
+
+// jobTelemetryReadFunctionNames are the functions this guard treats as "a
+// telemetry read" -- currently just readJobTelemetryRecord, the one
+// function that loads a written jobTelemetryRecord back off disk.
+var jobTelemetryReadFunctionNames = map[string]bool{
+	"readJobTelemetryRecord": true,
+}
+
+// jobTelemetryReportOnlyViolation is what jobTelemetryEntryPointReachesTelemetryRead
+// returns when an entry point's call graph reaches a telemetry read: the
+// exact function that made the offending call, and where.
+type jobTelemetryReportOnlyViolation struct {
+	Function string
+	Position token.Position
+}
+
+// jobTelemetryCalleeCallPositions returns, for one function body, every
+// plain top-level identifier call it makes, mapped to the position of its
+// first occurrence -- both a name set (for recursion) and a position (for
+// reporting exactly where an offending call sits).
+func jobTelemetryCalleeCallPositions(fn *ast.FuncDecl) map[string]token.Pos {
+	calls := map[string]token.Pos{}
+	if fn == nil || fn.Body == nil {
+		return calls
+	}
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		if ident, ok := call.Fun.(*ast.Ident); ok {
+			if _, seen := calls[ident.Name]; !seen {
+				calls[ident.Name] = call.Pos()
+			}
+		}
+		return true
+	})
+	return calls
+}
+
+// jobTelemetryEntryPointReachesTelemetryRead walks the call graph from
+// entry -- resolving package-level function-value aliases the same way
+// autopilotCallGraphReaches (cmd/autopilot_goal_level_test.go) does -- and
+// returns the first function whose body directly calls a name in
+// jobTelemetryReadFunctionNames, or nil when entry's call graph never
+// reaches one.
+func jobTelemetryEntryPointReachesTelemetryRead(fset *token.FileSet, funcs map[string]*ast.FuncDecl, aliases map[string]string, entry string) *jobTelemetryReportOnlyViolation {
+	visited := map[string]bool{}
+	var walk func(name string) *jobTelemetryReportOnlyViolation
+	walk = func(name string) *jobTelemetryReportOnlyViolation {
+		if visited[name] {
+			return nil
+		}
+		visited[name] = true
+		resolvedName := name
+		if resolved, ok := aliases[name]; ok {
+			resolvedName = resolved
+		}
+		fn, ok := funcs[resolvedName]
+		if !ok {
+			return nil
+		}
+		calls := jobTelemetryCalleeCallPositions(fn)
+		for callee, pos := range calls {
+			if jobTelemetryReadFunctionNames[callee] {
+				return &jobTelemetryReportOnlyViolation{Function: resolvedName, Position: fset.Position(pos)}
+			}
+		}
+		for callee := range calls {
+			if v := walk(callee); v != nil {
+				return v
+			}
+		}
+		return nil
+	}
+	return walk(entry)
+}
+
+// TestTelemetryIsReportOnly proves D-16: none of the four selection entry
+// points reaches a telemetry read in the real package, and the guard
+// itself is proven to bite against a temporary fixture call path that
+// does.
+func TestTelemetryIsReportOnly(t *testing.T) {
+	fset := token.NewFileSet()
+	funcs := continueDecisionPackageFuncs(t, fset)
+	aliases := autopilotDispatchAliasMap(t, fset)
+
+	t.Run("the report-only guard passes against the real package", func(t *testing.T) {
+		for _, entry := range jobTelemetrySelectionEntryPoints {
+			if _, ok := funcs[entry]; !ok {
+				t.Fatalf("expected selection entry point %q to be declared in the cmd package", entry)
+			}
+			if v := jobTelemetryEntryPointReachesTelemetryRead(fset, funcs, aliases, entry); v != nil {
+				t.Fatalf("%s reaches a telemetry read via %s at %s -- a selection function must never read timing data (D-16)", entry, v.Function, v.Position)
+			}
+		}
+	})
+
+	t.Run("the guard fails, naming the function and position, against a temporary fixture call path", func(t *testing.T) {
+		src := `package cmd
+
+func jobTelemetryGuardFixtureSelection() {
+	jobTelemetryGuardFixtureIntermediate()
+}
+
+func jobTelemetryGuardFixtureIntermediate() {
+	readJobTelemetryRecord("fixture-attempt")
+}
+`
+		fixtureFset := token.NewFileSet()
+		fixtureFile, err := parser.ParseFile(fixtureFset, "job_telemetry_guard_fixture.go", src, 0)
+		if err != nil {
+			t.Fatalf("parse fixture source: %v", err)
+		}
+		fixtureFuncs := continueDecisionPackageFuncs(t, fixtureFset, fixtureFile)
+		v := jobTelemetryEntryPointReachesTelemetryRead(fixtureFset, fixtureFuncs, aliases, "jobTelemetryGuardFixtureSelection")
+		if v == nil {
+			t.Fatal("expected the guard to catch the fixture's call path to a telemetry read, but it did not fire")
+		}
+		if v.Function != "jobTelemetryGuardFixtureIntermediate" {
+			t.Fatalf("expected the guard to name jobTelemetryGuardFixtureIntermediate as the offending function, got %q", v.Function)
+		}
+		if v.Position.Line == 0 {
+			t.Fatal("expected the guard to report a real file position for the offending call")
+		}
+	})
+}
