@@ -831,6 +831,15 @@ func finishAutopilotInvocation(invocation *autopilotInvocation, state colony.Col
 	result := buildRunExecutionResult(state, opts, steps, phasesCompleted, legacyRunStoppedReason(decision.Code), report.Next)
 	result["trigger_code"] = decision.Code
 	result["disposition"] = decision.Disposition
+	// WORK-07 (201-11): name which of the four declared stop boundaries this
+	// was, additively -- a NormalStop ending (cancelled, worker timeout, max
+	// phases, colony complete) and any code outside the four-boundary
+	// catalogue leave stop_boundary unset, matching "stops only at a
+	// declared owner, authority, physical, or unrecoverable boundary."
+	if boundary, ok := autopilotStopBoundaryForTriggerCode(decision.Code); ok &&
+		(decision.Disposition == autopilotDispositionStop || decision.Disposition == autopilotDispositionPause) {
+		result["stop_boundary"] = boundary
+	}
 	result["last_report"] = &report
 	if persistErr != nil {
 		result["report_persist_error"] = persistErr.Error()

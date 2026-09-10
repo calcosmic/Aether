@@ -270,6 +270,12 @@ type AutopilotPreflight struct {
 	StateEffect        colony.LifecycleStateEffect `json:"state_effect"`
 	PlanAuthority      planAuthorityDecision       `json:"plan_authority"`
 	Projection         LifecycleProjection         `json:"projection"`
+	// NextTransition is WORK-07's goal-level selection (201-11): the next
+	// transition the controller would pick from these exact recorded facts,
+	// without the owner naming a phase number. Computed once, additively, by
+	// buildAutopilotPreflightCore -- it never changes any other field's
+	// value or any existing return path's behavior.
+	NextTransition autopilotGoalTransitionDecision `json:"next_transition,omitempty"`
 }
 
 // buildAutopilotPreflight verifies repository-backed authority read-only before
@@ -304,7 +310,17 @@ func buildAutopilotPreflightWithAuthority(facts LifecycleFacts, bindings planAut
 	return buildAutopilotPreflightCore(facts, &decision)
 }
 
+// buildAutopilotPreflightCore builds the preflight and then attaches WORK-07's
+// goal-level transition selection (201-11), computed once from the exact same
+// facts and the preflight just built -- additive only, and it never changes
+// which branch buildAutopilotPreflightCoreValue takes.
 func buildAutopilotPreflightCore(facts LifecycleFacts, authority *planAuthorityDecision) AutopilotPreflight {
+	preflight := buildAutopilotPreflightCoreValue(facts, authority)
+	preflight.NextTransition = selectAutopilotGoalTransition(autopilotGoalLevelFactsFromLifecycle(facts, preflight))
+	return preflight
+}
+
+func buildAutopilotPreflightCoreValue(facts LifecycleFacts, authority *planAuthorityDecision) AutopilotPreflight {
 	projection := projectLifecycle(facts, LifecycleViewFocused, detectPlatform())
 	projection.Command = "run"
 	preflight := AutopilotPreflight{
@@ -746,4 +762,239 @@ func autopilotRepairReportFields(ledger autopilotRepairLedger) autopilotRepairRe
 		Debt: append([]colony.LifecycleIssue(nil), ledger.Debt...), Blockers: append([]colony.LifecycleIssue(nil), ledger.Blockers...),
 		ContinuedPaths: append([]string(nil), ledger.ContinuedPaths...), SkippedPaths: append([]string(nil), ledger.SkippedPaths...),
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Goal-level transition selection (201-11, WORK-07).
+//
+// From one accepted goal the controller selects the next transition itself,
+// without the owner naming a phase number. selectAutopilotGoalTransition is
+// the pure decision core; autopilotGoalLevelFactsFromLifecycle is the one
+// bridge from the read-only LifecycleFacts snapshot (plus the already
+// computed preflight) into the selector's narrow input shape. Every input
+// field is an exact recorded fact -- never a rounded score or a derived
+// percentage (must_haves backstop truth).
+// ---------------------------------------------------------------------------
+
+// autopilotGoalTransition is a durable named transition. These values may be
+// persisted and rendered, so changing one is a compatibility change --
+// mirroring autopilotTriggerCode's own discipline.
+type autopilotGoalTransition string
+
+const (
+	autopilotTransitionSurvey        autopilotGoalTransition = "survey"
+	autopilotTransitionPlanning      autopilotGoalTransition = "planning"
+	autopilotTransitionWork          autopilotGoalTransition = "work"
+	autopilotTransitionVerification  autopilotGoalTransition = "verification"
+	autopilotTransitionBoundedRepair autopilotGoalTransition = "bounded_repair"
+	autopilotTransitionReplan        autopilotGoalTransition = "replan"
+	autopilotTransitionReadyToSeal   autopilotGoalTransition = "ready_to_seal"
+)
+
+// autopilotGoalLevelFacts is the narrow, exact set of recorded facts the
+// goal-level selector reads. RemainingPhaseIDs is the ordered, ascending set
+// of phases not yet completed -- the selector never picks a phase index past
+// its last element, because it only ever reads RemainingPhaseIDs[0].
+type autopilotGoalLevelFacts struct {
+	AcceptedGoal       string
+	HasSurveyEvidence  bool
+	HasAcceptedPlan    bool
+	RemainingPhaseIDs  []int
+	ReplanDue          bool
+	WorkBuilt          bool
+	VerificationFailed bool
+}
+
+// autopilotGoalTransitionDecision is the selector's typed result: the named
+// transition, the exact recorded fact that drove it (never empty when a
+// transition was selected), and -- when the transition is phase-specific --
+// which phase. The zero value (empty Transition) means "no accepted goal is
+// recorded," which callers must treat as a zero-write entry.
+type autopilotGoalTransitionDecision struct {
+	Transition autopilotGoalTransition `json:"transition,omitempty"`
+	Reason     string                  `json:"reason,omitempty"`
+	PhaseID    int                     `json:"phase_id,omitempty"`
+}
+
+// selectAutopilotGoalTransition is the pure goal-level transition selector
+// (WORK-07): given one accepted goal and the immutable recorded lifecycle
+// facts, it names the next transition without the caller supplying a phase
+// number. It covers survey, planning, work, verification, bounded repair,
+// replan, and ready-to-seal -- and, at the boundary where no phase remains,
+// selects ready-to-seal, naming that nothing remains to run.
+func selectAutopilotGoalTransition(facts autopilotGoalLevelFacts) autopilotGoalTransitionDecision {
+	if strings.TrimSpace(facts.AcceptedGoal) == "" {
+		return autopilotGoalTransitionDecision{Reason: "no accepted goal is recorded"}
+	}
+	if !facts.HasSurveyEvidence {
+		return autopilotGoalTransitionDecision{
+			Transition: autopilotTransitionSurvey,
+			Reason:     "no survey evidence is recorded for the accepted goal",
+		}
+	}
+	if !facts.HasAcceptedPlan {
+		return autopilotGoalTransitionDecision{
+			Transition: autopilotTransitionPlanning,
+			Reason:     "survey evidence is recorded but no plan has been accepted",
+		}
+	}
+	if len(facts.RemainingPhaseIDs) == 0 {
+		return autopilotGoalTransitionDecision{
+			Transition: autopilotTransitionReadyToSeal,
+			Reason:     "the accepted plan has no phase remaining -- nothing remaining to run",
+		}
+	}
+	// facts.RemainingPhaseIDs[0] is the only phase this selector ever names --
+	// it is, by construction, always a member of the caller's own recorded
+	// remaining set, so a phase past the last remaining one is never selected.
+	phase := facts.RemainingPhaseIDs[0]
+	if facts.ReplanDue {
+		return autopilotGoalTransitionDecision{
+			Transition: autopilotTransitionReplan,
+			Reason:     "the configured replan cadence is due",
+			PhaseID:    phase,
+		}
+	}
+	switch {
+	case facts.VerificationFailed:
+		return autopilotGoalTransitionDecision{
+			Transition: autopilotTransitionBoundedRepair,
+			Reason:     fmt.Sprintf("phase %d verification failed and bounded repair is available", phase),
+			PhaseID:    phase,
+		}
+	case facts.WorkBuilt:
+		return autopilotGoalTransitionDecision{
+			Transition: autopilotTransitionVerification,
+			Reason:     fmt.Sprintf("phase %d has built, unverified work", phase),
+			PhaseID:    phase,
+		}
+	default:
+		return autopilotGoalTransitionDecision{
+			Transition: autopilotTransitionWork,
+			Reason:     fmt.Sprintf("phase %d has an accepted plan and unbuilt work", phase),
+			PhaseID:    phase,
+		}
+	}
+}
+
+// autopilotGoalLevelFactsFromLifecycle bridges the read-only LifecycleFacts
+// snapshot and the already-computed preflight into the selector's narrow
+// input shape -- the only place these two are translated into the exact
+// facts selectAutopilotGoalTransition reads. HasAcceptedPlan and
+// RemainingPhaseIDs are read from the preflight (which already validated
+// plan authority and ordering), never re-derived here. Survey evidence is
+// read from the recorded territory survey artifacts (facts.Research.Value.
+// Territory, .aether/data/survey/) -- the one durable record colonize
+// already writes.
+func autopilotGoalLevelFactsFromLifecycle(facts LifecycleFacts, preflight AutopilotPreflight) autopilotGoalLevelFacts {
+	goalLevel := autopilotGoalLevelFacts{
+		AcceptedGoal:      preflight.Goal,
+		HasSurveyEvidence: len(facts.Research.Value.Territory) > 0,
+		HasAcceptedPlan:   preflight.Valid || preflight.Completed,
+		RemainingPhaseIDs: append([]int(nil), preflight.RemainingPhases...),
+	}
+	switch facts.State.Value.State {
+	case colony.StateEXECUTING, colony.StateBUILT:
+		goalLevel.WorkBuilt = true
+	}
+	for _, gate := range facts.Verification.Value.Gates {
+		if !gate.Passed {
+			goalLevel.VerificationFailed = true
+			break
+		}
+	}
+	return goalLevel
+}
+
+// ---------------------------------------------------------------------------
+// Stop boundaries (201-11, WORK-07): the closed, four-member set naming
+// which kind of person-required condition ended a run. Autopilot stops only
+// at a declared owner, authority, physical, or unrecoverable boundary, and
+// the stop names which of the four it was.
+// ---------------------------------------------------------------------------
+
+// autopilotStopBoundary is a durable named boundary. These values may be
+// persisted and rendered on a stop card, so changing one is a compatibility
+// change.
+type autopilotStopBoundary string
+
+const (
+	// autopilotStopBoundaryOwner: an unanswered owner decision, or a
+	// reviewer forced by one of the five named risk signals that the owner
+	// has not waived.
+	autopilotStopBoundaryOwner autopilotStopBoundary = "owner"
+	// autopilotStopBoundaryAuthority: a typed owner-authority proposal is
+	// pending -- a change outside the displayed implementation authority.
+	autopilotStopBoundaryAuthority autopilotStopBoundary = "authority"
+	// autopilotStopBoundaryPhysical: a missing external prerequisite (a
+	// required worker provider is unavailable).
+	autopilotStopBoundaryPhysical autopilotStopBoundary = "physical"
+	// autopilotStopBoundaryUnrecoverable: a bounded repair failed and its
+	// checkpoint was restored -- D-09's one bounded, checkpointed repair
+	// path found nothing further it could safely try.
+	autopilotStopBoundaryUnrecoverable autopilotStopBoundary = "unrecoverable"
+)
+
+// autopilotStopBoundaries is the closed, total set this run loop may name on
+// a stop card. Tests iterate this slice rather than re-typing the four
+// values, so a fifth boundary added later is caught by name.
+func autopilotStopBoundaries() []autopilotStopBoundary {
+	return []autopilotStopBoundary{
+		autopilotStopBoundaryOwner,
+		autopilotStopBoundaryAuthority,
+		autopilotStopBoundaryPhysical,
+		autopilotStopBoundaryUnrecoverable,
+	}
+}
+
+func validAutopilotStopBoundary(boundary autopilotStopBoundary) bool {
+	for _, candidate := range autopilotStopBoundaries() {
+		if candidate == boundary {
+			return true
+		}
+	}
+	return false
+}
+
+// autopilotStopBoundaryForTriggerCode names which of the four declared
+// boundaries a trigger code represents, if any. This is the ONLY place that
+// maps the existing, already-recorded trigger-code catalogue
+// (autopilotTriggerSpecs) onto the closed boundary set --
+// finishAutopilotInvocation calls it to name the boundary on every stop
+// card, additively, without altering any existing field or disposition.
+//
+// A NormalStop code (cancelled, worker_timeout, max_phases_reached,
+// colony_complete) is an ordinary ending, never a person-required boundary,
+// and replan_due is a queued checkpoint, not a stop -- neither appears here,
+// so autopilotStopBoundaryForTriggerCode reports ok=false for them: "any
+// other condition does not stop the run" (as a named boundary).
+func autopilotStopBoundaryForTriggerCode(code autopilotTriggerCode) (autopilotStopBoundary, bool) {
+	switch code {
+	case autopilotTriggerRuntimeVerificationNeeded, autopilotTriggerVisualCheckpointNeeded,
+		autopilotTriggerBlockerCountIncreased, autopilotTriggerBlockerEscalated:
+		return autopilotStopBoundaryOwner, true
+	case autopilotTriggerMissingAuthority:
+		return autopilotStopBoundaryAuthority, true
+	case autopilotTriggerProviderUnavailable:
+		return autopilotStopBoundaryPhysical, true
+	case autopilotTriggerDeterministicVerificationFailed, autopilotTriggerAuditorScoreBelowFloor, autopilotTriggerCriticalReviewFinding:
+		return autopilotStopBoundaryUnrecoverable, true
+	default:
+		return "", false
+	}
+}
+
+// autopilotStopBoundaryWorkOutcome maps every declared boundary onto the
+// six-verdict work-outcome vocabulary (colony.WorkOutcome, D-05) so a stop
+// card renders through the exact same full-ceremony closeout
+// (buildLifecycleCloseout / lifecycleCloseoutSlots) a success card renders
+// through: lifecycleCloseoutSlots's only ceremony gate is "was a work
+// verdict supplied," never which one, so every declared boundary -- carrying
+// a non-nil verdict -- gets the identical canonical slot set and the same
+// cost-and-time block a success card gets. All four boundaries map to
+// colony.WorkOutcomeBlocker: each is "something the run could not get past"
+// without an owner, matching that verdict's own recommended action (aether
+// unblock --dispatch).
+func autopilotStopBoundaryWorkOutcome(autopilotStopBoundary) colony.WorkOutcome {
+	return colony.WorkOutcomeBlocker
 }
