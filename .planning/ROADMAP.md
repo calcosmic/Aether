@@ -364,6 +364,61 @@ Plans:
 
 **Requirements:** SYNTH-03, CEC-06, WORK-01..08
 
+**Plans:** 15 plans
+
+Plans:
+
+**Wave 1**
+
+- [ ] 201-01-PLAN.md — Publish the cited work-cycle mechanism synthesis and register its decisions in the Classic corpus.
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 201-02-PLAN.md — Tracer: collapse the three continue lanes onto one accept/verify/advance decision body.
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 201-03-PLAN.md — Record the Queen's per-phase verification-boundary choice as one durable fact.
+- [ ] 201-04-PLAN.md — Define the six-verdict work-outcome vocabulary and give every outcome the same closeout ceremony.
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 201-05-PLAN.md — Eliminate double verification and render the honest unverified build card.
+- [ ] 201-06-PLAN.md — Add elapsed time to the cost block and the running colony total to status.
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 201-07-PLAN.md — Name credited and orphaned files, recommend one next action, bind plan-versus-reality evidence.
+- [ ] 201-08-PLAN.md — Carry one job and attempt identity everywhere; move claims artifacts onto attempt-bound paths.
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 201-09-PLAN.md — Run one bounded checkpointed repair round with announced save, restore and handback.
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 201-10-PLAN.md — Bind failure evidence and blocker truth to the attempt and steer repair with same-run signals.
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [ ] 201-11-PLAN.md — Drive goal-level autopilot from the shared result model and put quick work on it.
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
+- [ ] 201-12-PLAN.md — Record eight-segment per-job telemetry with honest unmeasured segments, report-only.
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
+- [ ] 201-13-PLAN.md — Measure a real one-plan job and ratify the turnaround target with the owner.
+
+**Wave 11** *(blocked on Wave 10 completion)*
+
+- [ ] 201-14-PLAN.md — Apply the three approved speed levers: loop test lanes, slimmer briefs, caste model routing.
+
+**Wave 12** *(blocked on Wave 11 completion)*
+
+- [ ] 201-15-PLAN.md — Execute the Phase 201 Classic corpus cases and record exact coverage.
+
 **Success criteria:**
 
 1. A cited mechanism study reconstructs how Classic Queen, team, wave, build, continue, run, and recovery behavior actually operated and compares it with current Go attempts, manifests, receipts, and verification before choosing changes.
