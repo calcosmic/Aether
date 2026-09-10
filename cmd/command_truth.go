@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -371,8 +372,107 @@ func colorLifecycleHealth(output string) string {
 	return strings.Join(lines, "\n") + "\n"
 }
 
+// ---------------------------------------------------------------------------
+// CAP-029: the quick one-question path on the same attempt, deterministic-
+// check, and evidence model the rest of the work cycle uses.
+// ---------------------------------------------------------------------------
+
+// quickAttemptDispatch is the one dispatch record a quick request carries.
+// Proportionality (CAP-029): a quick, one-question request draws exactly one
+// worker unless one of the five named risk signals applies -- quick's own
+// task brief already forbids file mutation of colony state and pheromones,
+// so no named risk signal (credentials/auth, payments, release sign-off,
+// data deletion, database migration) is ever detectable from a quick
+// question, and this dispatch list stays at exactly one entry.
+type quickAttemptDispatch struct {
+	WorkerName string `json:"worker_name"`
+	Caste      string `json:"caste"`
+	Status     string `json:"status"`
+}
+
+// quickAttemptRecord is the one attempt a quick request opens. It carries
+// its own dispatches and its own recorded verdict -- proportionate to a
+// one-question request, on the same six-verdict work-outcome vocabulary
+// (colony.WorkOutcome, D-05) the rest of the work cycle reports through.
+type quickAttemptRecord struct {
+	ID         string                 `json:"id"`
+	Question   string                 `json:"question"`
+	StartedAt  string                 `json:"started_at"`
+	Dispatches []quickAttemptDispatch `json:"dispatches"`
+	Verdict    colony.WorkOutcome     `json:"verdict,omitempty"`
+	Summary    string                 `json:"summary,omitempty"`
+	Evidence   []string               `json:"evidence,omitempty"`
+}
+
+// newQuickAttempt opens one attempt for a quick request. The ID is a plain,
+// process-and-time-derived identifier -- unique enough to bind this
+// request's dispatch and failure evidence to itself, without adopting the
+// phase-keyed buildAttemptRecord model (cmd/build_attempt.go), which is
+// keyed on a phase number a quick question never has.
+func newQuickAttempt(question string, now time.Time) quickAttemptRecord {
+	return quickAttemptRecord{
+		ID:        fmt.Sprintf("quick-%s-%d", now.UTC().Format("20060102T150405.000000000Z"), os.Getpid()),
+		Question:  strings.TrimSpace(question),
+		StartedAt: now.UTC().Format(time.RFC3339Nano),
+	}
+}
+
+// recordDispatch appends one dispatch record to the attempt. Quick's own
+// production call site (runQuickScout) calls this exactly once per request,
+// satisfying CAP-029's one-worker proportionality by construction.
+func (a *quickAttemptRecord) recordDispatch(workerName, caste, status string) {
+	a.Dispatches = append(a.Dispatches, quickAttemptDispatch{WorkerName: workerName, Caste: caste, Status: status})
+}
+
+// quickWorkVerdict derives CAP-029's verdict for a quick request: no_change
+// when the request touched no files (the common, read-only case), success
+// when it changed files and the deterministic checks over the changed area
+// passed, and blocker when those checks failed. Never success or no_change
+// on a failed check -- a changed-but-unverified file is never reported as
+// though nothing needed changing.
+func quickWorkVerdict(filesChanged []string, checksPassed bool) colony.WorkOutcome {
+	if len(filesChanged) == 0 {
+		return colony.WorkOutcomeNoChange
+	}
+	if checksPassed {
+		return colony.WorkOutcomeSuccess
+	}
+	return colony.WorkOutcomeBlocker
+}
+
+// runQuickDeterministicChecks runs the deterministic check command set over
+// the repository when a quick request changed files, mirroring the
+// build/vet floor the rest of the work cycle already enforces
+// (cmd/deterministic_floor.go). Zero files changed is the common,
+// read-only case and is treated as passing without invoking a process. A
+// package-level seam (mirroring newQuickWorkerInvoker) so tests can
+// substitute a fake without shelling out.
+var runQuickDeterministicChecks = func(root string, files []string) (bool, []string, error) {
+	if len(files) == 0 {
+		return true, nil, nil
+	}
+	steps := [][]string{{"go", "build", "./..."}, {"go", "vet", "./..."}}
+	evidence := make([]string, 0, len(steps))
+	for _, args := range steps {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = root
+		out, err := cmd.CombinedOutput()
+		trimmed := strings.TrimSpace(string(out))
+		if err != nil {
+			if trimmed == "" {
+				trimmed = err.Error()
+			}
+			evidence = append(evidence, fmt.Sprintf("%s: FAILED: %s", strings.Join(args, " "), trimmed))
+			return false, evidence, nil
+		}
+		evidence = append(evidence, fmt.Sprintf("%s: passed", strings.Join(args, " ")))
+	}
+	return true, evidence, nil
+}
+
 func runQuickScout(question string, timeout time.Duration) (map[string]interface{}, error) {
 	root := skillWorkspaceRoot()
+	attempt := newQuickAttempt(question, time.Now().UTC())
 	invoker := newQuickWorkerInvoker()
 	if invoker == nil {
 		invoker = &codex.FakeInvoker{}
@@ -386,6 +486,10 @@ func runQuickScout(question string, timeout time.Duration) (map[string]interface
 		return nil, fmt.Errorf("scout agent unavailable: %w", err)
 	}
 	workerName := deterministicAntName("scout", question)
+	// CAP-029 proportionality: exactly one worker, recorded against this
+	// request's own attempt, before dispatch -- no check-in pause is ever
+	// added for a single worker with nothing pending.
+	attempt.recordDispatch(workerName, "scout", "dispatched")
 	taskBrief := codex.RenderTaskBrief(codex.TaskBriefData{
 		TaskID: "quick.scout",
 		Goal:   "Answer a lightweight user question about the current repository or Aether context.",
@@ -417,19 +521,44 @@ func runQuickScout(question string, timeout time.Duration) (map[string]interface
 		PheromoneSection: resolvePheromoneSection(),
 	})
 	if err != nil {
-		recordQuickFailureToMidden(question, err)
+		attempt.Dispatches[0].Status = "failed"
+		attempt.Verdict = colony.WorkOutcomeBlocker
+		recordQuickFailureToMidden(question, attempt.ID, err)
 		return nil, err
 	}
+	attempt.Dispatches[0].Status = emptyFallback(workerResult.Status, "completed")
+
+	filesChanged := append(append([]string(nil), workerResult.FilesCreated...), workerResult.FilesModified...)
+	checksPassed := true
+	var checkEvidence []string
+	if len(filesChanged) > 0 {
+		var checkErr error
+		checksPassed, checkEvidence, checkErr = runQuickDeterministicChecks(root, filesChanged)
+		if checkErr != nil {
+			checksPassed = false
+			checkEvidence = append(checkEvidence, checkErr.Error())
+		}
+	}
+	attempt.Verdict = quickWorkVerdict(filesChanged, checksPassed)
+	attempt.Summary = strings.TrimSpace(workerResult.Summary)
+	attempt.Evidence = checkEvidence
+	if attempt.Verdict == colony.WorkOutcomeBlocker {
+		recordQuickFailureToMidden(question, attempt.ID, fmt.Errorf("quick deterministic checks failed for %s: %s", question, strings.Join(checkEvidence, "; ")))
+	}
+
 	return map[string]interface{}{
-		"mode":        "quick",
-		"question":    question,
-		"worker_name": workerResult.WorkerName,
-		"status":      emptyFallback(workerResult.Status, "completed"),
-		"summary":     strings.TrimSpace(workerResult.Summary),
-		"raw_output":  codex.SanitizeWorkerDiagnosticOutput(workerResult.RawOutput),
-		"duration_ms": workerResult.Duration.Milliseconds(),
-		"files":       workerResult.FilesModified,
-		"next":        "aether status",
+		"mode":           "quick",
+		"question":       question,
+		"worker_name":    workerResult.WorkerName,
+		"status":         emptyFallback(workerResult.Status, "completed"),
+		"summary":        strings.TrimSpace(workerResult.Summary),
+		"raw_output":     codex.SanitizeWorkerDiagnosticOutput(workerResult.RawOutput),
+		"duration_ms":    workerResult.Duration.Milliseconds(),
+		"files":          workerResult.FilesModified,
+		"next":           "aether status",
+		"attempt_id":     attempt.ID,
+		"work_outcome":   attempt.Verdict,
+		"check_evidence": checkEvidence,
 	}, nil
 }
 
@@ -458,6 +587,16 @@ func renderQuickVisual(result map[string]interface{}) string {
 		b.WriteString("Scout: ")
 		b.WriteString(worker)
 		b.WriteString("\n")
+	}
+	if verdict, ok := result["work_outcome"].(colony.WorkOutcome); ok && verdict.Valid() {
+		if label := colony.WorkOutcomeLabels()[verdict]; label != "" {
+			b.WriteString("Verdict: ")
+			b.WriteString(label)
+			b.WriteString("\n")
+		}
+	}
+	if durationMS, ok := result["duration_ms"].(int64); ok && durationMS > 0 {
+		b.WriteString(fmt.Sprintf("Time: %.1fs\n", float64(durationMS)/1000))
 	}
 	if summary := strings.TrimSpace(stringValue(result["summary"])); summary != "" {
 		b.WriteString("\n")

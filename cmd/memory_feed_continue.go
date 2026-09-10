@@ -157,11 +157,19 @@ func recordFailedChecksToMidden(phase colony.Phase, result deterministicFloorRes
 }
 
 // recordQuickFailureToMidden records a /ant-quick dispatch failure. Only the
-// invoker error path (runQuickScout's final return) is recorded: the two
-// pre-flight availability returns (missing dispatcher, unavailable scout
-// agent) are environment conditions, not colony failures, and are
-// deliberately not recorded here.
-func recordQuickFailureToMidden(question string, err error) {
+// invoker error path and the deterministic-check failure path
+// (runQuickScout's two failure returns) are recorded: the two pre-flight
+// availability returns (missing dispatcher, unavailable scout agent) are
+// environment conditions, not colony failures, and are deliberately not
+// recorded here.
+//
+// attemptID binds this failure record to the exact quick attempt that
+// produced it (CAP-029, 201-11), mirroring the attempt: tag convention
+// 201-10 established for build/check failures (cmd/memory_feed.go's
+// middenTagsForFacts) -- the same recordWorkerFailureToMidden boundary,
+// never a second recording path. An empty attemptID (a caller predating
+// this field) omits the tag rather than writing an empty one.
+func recordQuickFailureToMidden(question, attemptID string, err error) {
 	if err == nil {
 		return
 	}
@@ -174,7 +182,11 @@ func recordQuickFailureToMidden(question string, err error) {
 		sanitized = "a quick query failure could not be safely recorded"
 	}
 	message := fmt.Sprintf("%s — quick query %q failed", sanitized, strings.TrimSpace(question))
-	if middenErr := recordWorkerFailureToMidden(middenCategoryQuickFailed, "aether quick", message, []string{"quick"}); middenErr != nil {
+	tags := []string{"quick"}
+	if trimmedAttempt := strings.TrimSpace(attemptID); trimmedAttempt != "" {
+		tags = append(tags, "attempt:"+trimmedAttempt)
+	}
+	if middenErr := recordWorkerFailureToMidden(middenCategoryQuickFailed, "aether quick", message, tags); middenErr != nil {
 		fmt.Fprintf(os.Stderr, "warning: could not record quick failure to memory: %v\n", middenErr)
 	}
 }
