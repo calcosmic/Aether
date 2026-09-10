@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -256,6 +257,44 @@ type buildAttemptRecord struct {
 	// verificationBoundaryForAttempt, which reports ok=false rather than
 	// inventing one.
 	VerificationBoundary *verificationBoundaryDecision `json:"verification_boundary,omitempty"`
+	// CreditedFiles is the union of files the two-stage receipt trust
+	// boundary (admitCoherentJobTaskReceipts / finalizeCoherentJobTaskReceiptEvidence)
+	// actually finalised for this attempt's completed tasks (D-08): a whole-
+	// success dispatch's own reported outputs, or a grouped job's root-
+	// evidenced per-task claims -- never a file merely touched. Set ONLY by
+	// attachResultFilePrecision, and never overwrites Status, Dispatches, or
+	// Claims. An attempt record written before this field existed decodes
+	// cleanly with this left nil.
+	CreditedFiles []string `json:"credited_files,omitempty"`
+	// UncreditedFiles names every file this attempt touched that no admitted
+	// receipt claimed for a completed task, together with where that file
+	// currently lives. Set ONLY by attachResultFilePrecision. An uncredited
+	// file is never removed from disk and never folded into CreditedFiles --
+	// see deriveResultFilePrecision.
+	UncreditedFiles []buildAttemptUncreditedFile `json:"uncredited_files,omitempty"`
+	// PlanReality is CAP-022's per-task plan-versus-reality comparison: what
+	// the plan declared each finalised task's artifacts to be, and whether
+	// each was actually present in the repository at finalisation time. Set
+	// ONLY by attachBuildPlanRealityReport, and touches nothing else on the
+	// record -- mirrors attachBuildFreeCheckReport's narrow-setter
+	// discipline.
+	PlanReality *buildPlanRealityReport `json:"plan_reality,omitempty"`
+	// KnowledgeDeltas is CAP-066's content-level decision and learning
+	// deltas this attempt produced, bound to this attempt's own ID. Set
+	// ONLY by attachBuildKnowledgeDeltas. Rendering
+	// (cmd/lifecycle_closeout.go's lifecycleCloseoutKnowledgeDeltaEvidence)
+	// is read-only: it displays these, it never writes or promotes them.
+	KnowledgeDeltas []buildAttemptKnowledgeDelta `json:"knowledge_deltas,omitempty"`
+}
+
+// buildAttemptUncreditedFile names one file a build attempt touched that no
+// admitted receipt claimed for any completed task (D-08), together with
+// where it currently lives -- the repository root in shared-checkout mode,
+// or the exact isolated workspace path and branch in worktree mode. An
+// uncredited file is never deleted and never folded into CreditedFiles.
+type buildAttemptUncreditedFile struct {
+	Path     string `json:"path"`
+	Location string `json:"location"`
 }
 
 type latestBuildAttemptPointer struct {
@@ -629,6 +668,213 @@ func attachVerificationBoundary(attemptRel string, decision verificationBoundary
 		existing.VerificationBoundary = &decisionCopy
 		return nil
 	})
+}
+
+// attachResultFilePrecision attaches the credited/uncredited file split
+// (D-08) to a build attempt record, and touches nothing else on the record:
+// not Status, not Dispatches, not Claims, not History. Mirrors
+// attachBuildFreeCheckReport's and attachCheckFixAttempt's narrow-setter
+// discipline. Called only from build-finalize, at the point the
+// finalisation stage already knows the completed task set.
+func attachResultFilePrecision(attemptRel string, credited []string, uncredited []buildAttemptUncreditedFile) error {
+	if store == nil || strings.TrimSpace(attemptRel) == "" {
+		return fmt.Errorf("build attempt is not initialized")
+	}
+	var existing buildAttemptRecord
+	return store.UpdateJSONAtomically(attemptRel, &existing, func() error {
+		if existing.SchemaVersion != buildAttemptSchemaVersion || strings.TrimSpace(existing.ID) == "" {
+			return fmt.Errorf("invalid build attempt record")
+		}
+		existing.CreditedFiles = append([]string{}, credited...)
+		existing.UncreditedFiles = append([]buildAttemptUncreditedFile{}, uncredited...)
+		return nil
+	})
+}
+
+// attachBuildPlanRealityReport attaches CAP-022's per-task plan-versus-
+// reality comparison to a build attempt record, and touches nothing else on
+// the record. Mirrors attachResultFilePrecision's and
+// attachBuildFreeCheckReport's narrow-setter discipline.
+func attachBuildPlanRealityReport(attemptRel string, report buildPlanRealityReport) error {
+	if store == nil || strings.TrimSpace(attemptRel) == "" {
+		return fmt.Errorf("build attempt is not initialized")
+	}
+	var existing buildAttemptRecord
+	return store.UpdateJSONAtomically(attemptRel, &existing, func() error {
+		if existing.SchemaVersion != buildAttemptSchemaVersion || strings.TrimSpace(existing.ID) == "" {
+			return fmt.Errorf("invalid build attempt record")
+		}
+		reportCopy := report
+		existing.PlanReality = &reportCopy
+		return nil
+	})
+}
+
+// attachBuildKnowledgeDeltas attaches CAP-066's content-level decision and
+// learning deltas to the exact attempt that produced them, and touches
+// nothing else on the record. Mirrors attachResultFilePrecision's narrow-
+// setter discipline. Rendering these (cmd/lifecycle_closeout.go) is
+// read-only -- this setter is the only writer.
+func attachBuildKnowledgeDeltas(attemptRel string, deltas []buildAttemptKnowledgeDelta) error {
+	if store == nil || strings.TrimSpace(attemptRel) == "" {
+		return fmt.Errorf("build attempt is not initialized")
+	}
+	var existing buildAttemptRecord
+	return store.UpdateJSONAtomically(attemptRel, &existing, func() error {
+		if existing.SchemaVersion != buildAttemptSchemaVersion || strings.TrimSpace(existing.ID) == "" {
+			return fmt.Errorf("invalid build attempt record")
+		}
+		existing.KnowledgeDeltas = append([]buildAttemptKnowledgeDelta{}, deltas...)
+		return nil
+	})
+}
+
+// buildAttemptWorktreeLocation resolves the owner-facing location for a
+// dispatch's worker: the exact isolated workspace path and branch it lives
+// on (colony.WorktreeEntry), matched by worker name, in worktree mode --
+// or "the repository" when no worktree entry matches (shared-checkout mode,
+// or a worktree already merged and removed).
+func buildAttemptWorktreeLocation(workerName string, worktrees []colony.WorktreeEntry) string {
+	workerName = strings.TrimSpace(workerName)
+	if workerName == "" {
+		return "the repository"
+	}
+	for _, entry := range worktrees {
+		if strings.TrimSpace(entry.Agent) == workerName {
+			return fmt.Sprintf("workspace %s on branch %s", strings.TrimSpace(entry.Path), strings.TrimSpace(entry.Branch))
+		}
+	}
+	return "the repository"
+}
+
+// deriveResultFilePrecision computes the credited/uncredited file split for
+// an attempt from its resolved dispatches (D-08). Credited files are every
+// path the two-stage receipt trust boundary
+// (admitCoherentJobTaskReceipts/finalizeCoherentJobTaskReceiptEvidence)
+// actually finalised for a completed task -- either a whole-success
+// dispatch's own reported outputs, or a grouped job's root-evidenced
+// per-task TaskClaims (keyed off dispatch.CompletedTaskIDs). Uncredited
+// files are every other path the attempt touched, together with where it
+// lives. blockedTasks additionally withholds credit from a task CAP-022's
+// plan-reality comparison (buildPlanRealityForDispatches) found missing a
+// declared artifact for -- pass nil when that gate does not apply.
+//
+// This is a pure, read-only computation over already-resolved dispatches:
+// it never deletes a file, never moves one into the credited set, and never
+// makes its own decision about what counts as done -- that decision was
+// already made by the two-stage boundary (or, for a plan-reality block, by
+// buildPlanRealityForDispatches). It only reports the result honestly.
+func deriveResultFilePrecision(dispatches []codexBuildDispatch, worktrees []colony.WorktreeEntry, blockedTasks map[string]struct{}) ([]string, []buildAttemptUncreditedFile) {
+	credited := map[string]struct{}{}
+	touched := map[string]struct{}{}
+	location := map[string]string{}
+
+	blockedReason := func(taskIDs []string) (string, bool) {
+		for _, id := range taskIDs {
+			if _, ok := blockedTasks[id]; ok {
+				return fmt.Sprintf("credit blocked: task %s's plan-declared artifact is missing from the repository", id), true
+			}
+		}
+		return "", false
+	}
+
+	for _, dispatch := range dispatches {
+		status := strings.TrimSpace(dispatch.Status)
+		wholeSuccess := status == "completed" || isNoChangeExternalBuildStatus(status)
+		loc := buildAttemptWorktreeLocation(dispatch.Name, worktrees)
+		covered := dispatchCoveredTaskIDs(dispatch)
+
+		for _, path := range dispatch.Outputs {
+			path = strings.TrimSpace(path)
+			if path == "" {
+				continue
+			}
+			touched[path] = struct{}{}
+			if _, ok := location[path]; !ok {
+				location[path] = loc
+			}
+		}
+
+		if wholeSuccess {
+			if reason, blocked := blockedReason(covered); blocked {
+				// A flat whole-success result cannot be attributed to
+				// individual covered tasks, so every output this dispatch
+				// reported is conservatively withheld from credit rather
+				// than guessing which belongs to the blocked task.
+				for _, path := range dispatch.Outputs {
+					if path = strings.TrimSpace(path); path != "" {
+						location[path] = reason
+					}
+				}
+				continue
+			}
+			for _, path := range dispatch.Outputs {
+				if path = strings.TrimSpace(path); path != "" {
+					credited[path] = struct{}{}
+				}
+			}
+			continue
+		}
+
+		for _, claim := range dispatch.TaskClaims {
+			paths := claimedPaths(claim)
+			if _, ok := blockedTasks[claim.TaskID]; ok {
+				reason := fmt.Sprintf("credit blocked: task %s's plan-declared artifact is missing from the repository", claim.TaskID)
+				for _, path := range paths {
+					touched[path] = struct{}{}
+					location[path] = reason
+				}
+				continue
+			}
+			for _, path := range paths {
+				credited[path] = struct{}{}
+				touched[path] = struct{}{}
+				if _, ok := location[path]; !ok {
+					location[path] = loc
+				}
+			}
+		}
+	}
+
+	creditedList := make([]string, 0, len(credited))
+	for path := range credited {
+		creditedList = append(creditedList, path)
+	}
+	sort.Strings(creditedList)
+
+	var uncredited []buildAttemptUncreditedFile
+	for path := range touched {
+		if _, ok := credited[path]; ok {
+			continue
+		}
+		uncredited = append(uncredited, buildAttemptUncreditedFile{Path: path, Location: location[path]})
+	}
+	sort.Slice(uncredited, func(i, j int) bool { return uncredited[i].Path < uncredited[j].Path })
+	return creditedList, uncredited
+}
+
+// renderResultFilePrecisionCard renders the credited/uncredited file split
+// already attached to a build attempt record. It is pure presentation over
+// already-loaded, already-decided fields -- it reads nothing from disk and
+// writes nothing, so rendering the same attempt twice is byte-identical by
+// construction (D-08's idempotent-rendering guarantee).
+func renderResultFilePrecisionCard(record buildAttemptRecord) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Credited files (%d):\n", len(record.CreditedFiles))
+	if len(record.CreditedFiles) == 0 {
+		b.WriteString("  none\n")
+	}
+	for _, path := range record.CreditedFiles {
+		fmt.Fprintf(&b, "  - %s\n", path)
+	}
+	fmt.Fprintf(&b, "Uncredited files (%d):\n", len(record.UncreditedFiles))
+	if len(record.UncreditedFiles) == 0 {
+		b.WriteString("  none\n")
+	}
+	for _, file := range record.UncreditedFiles {
+		fmt.Fprintf(&b, "  - %s (%s)\n", file.Path, file.Location)
+	}
+	return b.String()
 }
 
 // listBuildAttemptsForPhase loads every attempt record recorded for a phase

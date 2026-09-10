@@ -64,6 +64,19 @@ type LifecycleCloseoutEvent struct {
 	Verdict string `json:"verdict,omitempty"`
 }
 
+// LifecycleCloseoutRecommendedAction is the closeout's own next-action
+// recommendation (D-07): exactly one command, a one-sentence reason for
+// preferring it over the alternatives, and the ordered alternatives beneath
+// it. Selected from the recorded colony.WorkOutcome and the build attempt
+// record it was made against -- never from the rendered closeout text and
+// never from a keyword scan of a summary string. See
+// recommendedActionForWorkOutcome.
+type LifecycleCloseoutRecommendedAction struct {
+	Command      string   `json:"command"`
+	Reason       string   `json:"reason"`
+	Alternatives []string `json:"alternatives,omitempty"`
+}
+
 type LifecycleCloseoutStateChangeSet struct {
 	Effect  colony.LifecycleStateEffect `json:"effect"`
 	Changes []colony.LifecycleChange    `json:"changes,omitempty"`
@@ -99,7 +112,12 @@ type LifecycleCloseout struct {
 	Unresolved           LifecycleCloseoutOpenItems      `json:"unresolved"`
 	NextUp               LifecycleProjectedAction        `json:"next_up"`
 	Alternatives         []LifecycleActionChoice         `json:"alternatives,omitempty"`
-	Slots                []LifecycleCloseoutSlot         `json:"slots"`
+	// RecommendedAction is D-07's one derived next action for a non-success
+	// (or success) work verdict, distinct from NextUp/Alternatives above
+	// (the projection's own general lifecycle next-action policy). Nil when
+	// no work verdict was supplied for this closeout.
+	RecommendedAction *LifecycleCloseoutRecommendedAction `json:"recommended_action,omitempty"`
+	Slots             []LifecycleCloseoutSlot             `json:"slots"`
 }
 
 // LifecycleCloseoutDetails contains facts known only by the command that just
@@ -213,6 +231,8 @@ func buildLifecycleCloseout(projection LifecycleProjection, command string, outc
 	// exactly as it did before this field existed.
 	var workOutcome *colony.WorkOutcome
 	var verdictLabel string
+	var recommendedAction *LifecycleCloseoutRecommendedAction
+	var knowledgeDeltaEvidence []colony.LifecycleEvidence
 	if details.WorkOutcome.Valid() {
 		derived, err := details.WorkOutcome.LifecycleOutcome()
 		if err != nil {
@@ -222,6 +242,22 @@ func buildLifecycleCloseout(projection LifecycleProjection, command string, outc
 		verdict := details.WorkOutcome
 		workOutcome = &verdict
 		verdictLabel = colony.WorkOutcomeLabels()[details.WorkOutcome]
+
+		// D-07/CAP-066: the attempt this verdict was recorded against, read
+		// ONCE and reused for both the recommended next action and the
+		// knowledge-delta evidence below -- never a second, independent
+		// lookup, and never derived from the rendered text. A phase with no
+		// recorded attempt (loadLatestBuildAttempt returns ok=false) yields
+		// the zero-value record; recommendedActionForWorkOutcome still
+		// returns a total, non-empty answer for every declared verdict.
+		phaseNum := projection.Phase.Value.CurrentNumber
+		_, attempt, _ := loadLatestBuildAttempt(phaseNum)
+		action, actionErr := recommendedActionForWorkOutcome(details.WorkOutcome, attempt)
+		if actionErr != nil {
+			return LifecycleCloseout{}, fmt.Errorf("lifecycle closeout recommended action: %w", actionErr)
+		}
+		recommendedAction = &action
+		knowledgeDeltaEvidence = lifecycleCloseoutKnowledgeDeltaEvidence(attempt)
 	}
 
 	if !outcome.Valid() {
@@ -262,7 +298,7 @@ func buildLifecycleCloseout(projection LifecycleProjection, command string, outc
 		},
 		Participants: participants,
 		WhatHappened: LifecycleCloseoutEvent{Summary: summary, Outcome: outcome, Verdict: verdictLabel},
-		Evidence:     append(append([]colony.LifecycleEvidence(nil), projection.Evidence...), details.Evidence...),
+		Evidence:     append(append(append([]colony.LifecycleEvidence(nil), projection.Evidence...), details.Evidence...), knowledgeDeltaEvidence...),
 		Verification: append(append([]colony.LifecycleVerification(nil), projection.Verification...), details.Verification...),
 		StateChanges: LifecycleCloseoutStateChangeSet{
 			Effect:  effect,
@@ -275,11 +311,109 @@ func buildLifecycleCloseout(projection LifecycleProjection, command string, outc
 			Blockers:  append(append([]colony.LifecycleIssue(nil), projection.Blockers...), details.Blockers...),
 			Decisions: append(append([]colony.LifecycleDecision(nil), projection.OwnerDecisions...), details.Decisions...),
 		},
-		NextUp:       projection.NextAction,
-		Alternatives: append([]LifecycleActionChoice(nil), projection.Alternatives...),
+		NextUp:            projection.NextAction,
+		Alternatives:      append([]LifecycleActionChoice(nil), projection.Alternatives...),
+		RecommendedAction: recommendedAction,
 	}
 	closeout.Slots = lifecycleCloseoutSlots(closeout)
 	return closeout, nil
+}
+
+// recommendedActionForWorkOutcome derives the ONE recommended next action
+// for a work verdict (D-07), total across colony.AllWorkOutcomes(): every
+// declared verdict returns a non-empty command and a non-empty one-sentence
+// reason, and an undeclared verdict is refused by name rather than falling
+// through to a shared default. It is a pure function of the verdict and the
+// attempt evidence already recorded on the attempt -- never the rendered
+// closeout text, and never a keyword scan of a summary string. Command
+// vocabulary is the owner-facing spelling this repository already locked
+// elsewhere (`aether resume` -- Phase 199's sole recovery door;
+// `aether unblock --dispatch` -- the Fixer's existing intake; the
+// `aether build <phase> --force --task <id>...` recovery family
+// buildUnfinishedRetryRedispatchCommand already produces) -- no new
+// spelling is invented here.
+func recommendedActionForWorkOutcome(verdict colony.WorkOutcome, attempt buildAttemptRecord) (LifecycleCloseoutRecommendedAction, error) {
+	const statusAlternative = "aether status"
+	switch verdict {
+	case colony.WorkOutcomeSuccess:
+		return LifecycleCloseoutRecommendedAction{
+			Command:      "aether continue",
+			Reason:       "the work finished cleanly, so the next step is the program's own check and advance.",
+			Alternatives: []string{statusAlternative},
+		}, nil
+	case colony.WorkOutcomeNoChange:
+		return LifecycleCloseoutRecommendedAction{
+			Command:      "aether continue",
+			Reason:       "nothing needed changing, so the next step is the same check and advance a clean success would take.",
+			Alternatives: []string{statusAlternative},
+		}, nil
+	case colony.WorkOutcomePartial:
+		unfinished := uniqueSortedStrings(attempt.RecoveryTaskIDs)
+		command := buildUnfinishedRetryRedispatchCommand(attempt.Phase, unfinished)
+		reason := "only the unfinished tasks need to run again -- everything else already has credited evidence."
+		if len(unfinished) > 0 {
+			reason = fmt.Sprintf("only the unfinished tasks (%s) need to run again -- everything else already has credited evidence.", strings.Join(unfinished, ", "))
+		}
+		return LifecycleCloseoutRecommendedAction{
+			Command:      command,
+			Reason:       reason,
+			Alternatives: []string{statusAlternative},
+		}, nil
+	case colony.WorkOutcomeBlocker:
+		reason := "a blocker is stopping the work and needs an owner answer before anything else can run."
+		if blocker := strings.TrimSpace(attempt.Error); blocker != "" {
+			reason = fmt.Sprintf("the blocker (%s) needs an owner answer before anything else can run.", blocker)
+		}
+		return LifecycleCloseoutRecommendedAction{
+			Command:      "aether unblock --dispatch",
+			Reason:       reason,
+			Alternatives: []string{statusAlternative},
+		}, nil
+	case colony.WorkOutcomeTimeout:
+		command := strings.TrimSpace(attempt.RecoveryCommand)
+		reason := "no completion evidence was recorded before the timeout, so the phase needs a fresh dispatch."
+		if strings.TrimSpace(attempt.CompletionPath) != "" && strings.TrimSpace(attempt.CompletionSHA256) != "" {
+			reason = "a completion packet was already staged before the timeout, so finalizing that staged evidence is the recorded evidence's own recommended path."
+		}
+		if command == "" {
+			command = buildForceRedispatchCommand(attempt.Phase)
+		}
+		return LifecycleCloseoutRecommendedAction{
+			Command:      command,
+			Reason:       reason,
+			Alternatives: []string{statusAlternative},
+		}, nil
+	case colony.WorkOutcomeInterrupted:
+		return LifecycleCloseoutRecommendedAction{
+			Command:      "aether resume",
+			Reason:       "the attempt was stopped before it finished, and aether resume is the one recovery door back into it.",
+			Alternatives: []string{statusAlternative},
+		}, nil
+	default:
+		return LifecycleCloseoutRecommendedAction{}, fmt.Errorf("work outcome %q has no recommended next action", verdict)
+	}
+}
+
+// lifecycleCloseoutKnowledgeDeltaEvidence converts an attempt's own CAP-066
+// decision/learning deltas into LifecycleEvidence entries, read straight off
+// the attempt record already loaded for this closeout's own phase -- never
+// a second lookup, and never a write. Two different attempts' deltas can
+// never appear on the same card because each closeout only ever reads the
+// one attempt bound to its own phase (loadLatestBuildAttempt).
+func lifecycleCloseoutKnowledgeDeltaEvidence(attempt buildAttemptRecord) []colony.LifecycleEvidence {
+	if len(attempt.KnowledgeDeltas) == 0 {
+		return nil
+	}
+	evidence := make([]colony.LifecycleEvidence, 0, len(attempt.KnowledgeDeltas))
+	for i, delta := range attempt.KnowledgeDeltas {
+		evidence = append(evidence, colony.LifecycleEvidence{
+			ID:      fmt.Sprintf("%s-knowledge-delta-%d", attempt.ID, i),
+			Kind:    strings.TrimSpace(delta.Kind),
+			Source:  attempt.ID,
+			Summary: strings.TrimSpace(delta.Summary),
+		})
+	}
+	return evidence
 }
 
 // lifecycleCloseoutSlots decides which canonical slots render. A closeout
@@ -467,6 +601,12 @@ func renderLifecycleCloseout(closeout LifecycleCloseout, platform string) string
 			fmt.Fprintf(&b, "%s\nOutcome: %s\n", closeout.WhatHappened.Summary, closeout.WhatHappened.Outcome)
 			if closeout.WhatHappened.Verdict != "" {
 				fmt.Fprintf(&b, "Verdict: %s\n", closeout.WhatHappened.Verdict)
+			}
+			if closeout.RecommendedAction != nil {
+				fmt.Fprintf(&b, "Recommended: %s — %s\n", closeout.RecommendedAction.Command, closeout.RecommendedAction.Reason)
+				for _, alt := range closeout.RecommendedAction.Alternatives {
+					fmt.Fprintf(&b, "Alternative: %s\n", alt)
+				}
 			}
 		case LifecycleCloseoutEvidence:
 			lifecycleCloseoutRenderEvidence(&b, closeout.Evidence, closeout.Verification)

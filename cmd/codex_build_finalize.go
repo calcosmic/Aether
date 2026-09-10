@@ -885,6 +885,27 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	attemptFinished = true
 	updatedState = committedState
 
+	// D-08/CAP-022: computed and attached AFTER the attempt is durably
+	// sealed above, from the exact same fully-resolved `dispatches` the
+	// two-stage receipt boundary just finalised -- never a second, separate
+	// decision about what counts as done. Both are reporting-only:
+	// attachResultFilePrecision/attachBuildPlanRealityReport touch nothing
+	// but their own fields, and a failure to record either is warned, never
+	// fatal to a build that otherwise completed (mirrors
+	// attachBuildFreeCheckReport's own non-fatal discipline below).
+	planRealityEntries := buildPlanRealityForDispatches(root, updatedPhase, dispatches)
+	creditedFiles, uncreditedFiles := deriveResultFilePrecision(dispatches, updatedState.Worktrees, blockedPlanRealityTasks(planRealityEntries))
+	if err := attachResultFilePrecision(attemptRel, creditedFiles, uncreditedFiles); err != nil {
+		visualFprintf(stderr, "warning: could not record the credited/uncredited file split for phase %d: %v\n", phaseNum, err)
+	}
+	if err := attachBuildPlanRealityReport(attemptRel, buildPlanRealityReport{
+		RecordedAt: completedAt.Format(time.RFC3339),
+		Phase:      phaseNum,
+		Tasks:      planRealityEntries,
+	}); err != nil {
+		visualFprintf(stderr, "warning: could not record the plan-versus-reality evidence for phase %d: %v\n", phaseNum, err)
+	}
+
 	var partialRetryOutcome *partialBuildRetryOutcome
 	if !buildFullyCredited {
 		parentAttemptID := strings.TrimSuffix(filepath.Base(attemptRel), filepath.Ext(attemptRel))
@@ -1049,6 +1070,100 @@ func commitBuildFinalizeState(params buildFinalizeCommitParams) (colony.ColonySt
 		return nil
 	})
 	return committedState, err
+}
+
+// buildTaskPlanRealityEntry is CAP-022's per-task plan-versus-reality
+// comparison: what the plan declared this task's artifacts to be
+// (declaredPathsForTask, cmd/codex_build_worktree.go), compared against
+// whether each was actually present in the repository at finalisation time
+// (rootBackedArtifactEvidence -- the same root-backed checker the two-stage
+// receipt boundary already uses). A task the plan declares no artifact for
+// reports an empty DeclaredArtifacts and is never treated as missing
+// anything: absence of a declaration is not evidence of an absent file.
+type buildTaskPlanRealityEntry struct {
+	TaskID            string   `json:"task_id"`
+	DeclaredArtifacts []string `json:"declared_artifacts,omitempty"`
+	MissingArtifacts  []string `json:"missing_artifacts,omitempty"`
+}
+
+// buildPlanRealityReport is CAP-022's per-attempt evidence, attached ONLY by
+// attachBuildPlanRealityReport (cmd/build_attempt.go): every finalised
+// task's plan-declared artifacts compared against what finalisation found
+// actually present in the repository, at the exact moment finalisation ran.
+type buildPlanRealityReport struct {
+	RecordedAt string                      `json:"recorded_at"`
+	Phase      int                         `json:"phase"`
+	Tasks      []buildTaskPlanRealityEntry `json:"tasks,omitempty"`
+}
+
+// buildAttemptKnowledgeDelta is CAP-066's content-level decision or learning
+// delta an attempt produced, bound to that attempt's own ID by
+// attachBuildKnowledgeDeltas (cmd/build_attempt.go). Kind is a short label
+// ("decision" or "learning"); Summary is the plain-English content of the
+// delta itself. Rendering (lifecycleCloseoutKnowledgeDeltaEvidence,
+// cmd/lifecycle_closeout.go) is read-only.
+type buildAttemptKnowledgeDelta struct {
+	Kind    string `json:"kind"`
+	Summary string `json:"summary"`
+}
+
+// buildPlanRealityForDispatches computes CAP-022's plan-versus-reality
+// comparison for every task any dispatch in this attempt covers
+// (dispatchCoveredTaskIDs). It is read-only: it stats the repository, it
+// never mutates it and never itself decides credit -- planRealityBlocksCredit
+// and deriveResultFilePrecision's blockedTasks parameter are what a caller
+// uses to turn a missing declared artifact into withheld credit.
+func buildPlanRealityForDispatches(root string, phase colony.Phase, dispatches []codexBuildDispatch) []buildTaskPlanRealityEntry {
+	tasksByID := make(map[string]colony.Task, len(phase.Tasks))
+	for idx := range phase.Tasks {
+		tasksByID[buildTaskID(phase.Tasks[idx], idx)] = phase.Tasks[idx]
+	}
+	seen := map[string]struct{}{}
+	var entries []buildTaskPlanRealityEntry
+	for _, dispatch := range dispatches {
+		for _, taskID := range dispatchCoveredTaskIDs(dispatch) {
+			if _, ok := seen[taskID]; ok {
+				continue
+			}
+			seen[taskID] = struct{}{}
+			task, ok := tasksByID[taskID]
+			if !ok {
+				continue
+			}
+			declared := declaredPathsForTask(task)
+			var missing []string
+			if len(declared) > 0 {
+				_, missing = rootBackedArtifactEvidence(root, declared)
+			}
+			entries = append(entries, buildTaskPlanRealityEntry{
+				TaskID:            taskID,
+				DeclaredArtifacts: declared,
+				MissingArtifacts:  missing,
+			})
+		}
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].TaskID < entries[j].TaskID })
+	return entries
+}
+
+// planRealityBlocksCredit reports whether entry names at least one declared
+// artifact that finalisation could not find in the repository -- CAP-022's
+// own credit gate: an absent declared artifact blocks credit rather than
+// being noted and ignored.
+func planRealityBlocksCredit(entry buildTaskPlanRealityEntry) bool {
+	return len(entry.MissingArtifacts) > 0
+}
+
+// blockedPlanRealityTasks reduces a plan-reality report to the set of task
+// IDs deriveResultFilePrecision must withhold credit from.
+func blockedPlanRealityTasks(entries []buildTaskPlanRealityEntry) map[string]struct{} {
+	blocked := map[string]struct{}{}
+	for _, entry := range entries {
+		if planRealityBlocksCredit(entry) {
+			blocked[entry.TaskID] = struct{}{}
+		}
+	}
+	return blocked
 }
 
 // buildFullBuildTaskIDSet resolves the full set of task IDs this build
