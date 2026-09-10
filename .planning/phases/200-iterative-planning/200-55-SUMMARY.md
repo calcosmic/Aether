@@ -116,18 +116,31 @@ per-lane accounting of exactly what ran and what could not, discovered vs
 executed counts printed, failures replayed — instead of a signal-killed
 corpse with no accounting.
 
-With an explicit `-timeout=25m`, the same command runs the ENTIRE suite —
-nothing skipped, nothing hidden, exact-once accounting. The complete-run
-proof (2026-09-10) executed **all 4,794 discovered tests in 20:29** — the
-first complete execution of this suite in the project's recorded history.
-It was not fully green: four tests
-(`TestColonyPrimeMdDeletionProducesByteIdenticalOutput`,
-`TestEveryLifecycleCommandEndsWithNextAction`, `TestGoldenBuildVisualOutput`,
-`TestNewSubcommandFlags`) failed under peak 20-minute contention and all
-four pass focused — load-sensitive flakes in the same corpus-cost family as
-the known-flaky heartbeat scan — and the slowest single test exceeded its
-lane ceiling under that same load. **Zero deterministic test failures
-remain in the whole corpus.**
+Given an explicit generous `-timeout`, the same command runs the ENTIRE
+suite — nothing skipped, nothing hidden, exact-once accounting. After the
+work below, the definitive consolidated receipt run (2026-09-10, revision
+`68a6fd16`) executed **all 4,794 discovered tests GREEN, both normal
+(18:56) and under the race detector (19:00), zero failures, zero data
+races** — the first complete, green, race-clean execution of this suite in
+the project's recorded history.
+
+Reaching a *reliable* green took two further pieces beyond the raw
+scheduler. First, the controller now derives its overall ceiling from the
+caller's `-test.timeout` and stops orderly (full per-lane accounting) just
+under the go tool's SIGQUIT deadline, so a bare command fails tidily at
+~9m15s while a generous explicit budget runs the whole corpus. Second, a
+family of timing/ordering-sensitive tests (byte-identical golden output,
+live heartbeat intervals, exact registries) failed only under peak CPU
+contention. Rather than chase them one per 19-minute run, the root cause was
+removed: light-child parallelism dropped from 8-wide to 3-wide (GOMAXPROCS
+3), halving peak concurrency on a 10-core machine, which calmed the whole
+class at once while the heavy lanes (~9m) stayed the wall-time pole so total
+time was unchanged. A handful of confirmed load-flakes also joined the
+serial lane, and three `pkg/codex` preflight retry tests (outside the cmd
+controller) were made load-robust by widening a 500ms-1.5s probe budget to
+8s — proving the identical retry semantics (the hang path is `sleep 30`)
+while surviving a starved CPU. **Zero deterministic test failures remain in
+the whole corpus.**
 
 Plan 40's receipt rerun cannot truthfully record a sub-11-minute full/race
 gate on this machine; the phase carries this as an open item for the

@@ -1,147 +1,149 @@
 ---
 phase: 200-iterative-planning
-plan: 23
-generated_at: 2026-09-08T05:26:48Z
-repository_revision: c431f0d3dd2c8daed55fac3e94e082c8d4937b4c
+plan: 40
+generated_at: 2026-09-10T09:51:51Z
+repository_revision: 68a6fd169eb5551ba39e6d365921ed5a340fbb2d
+repository_tree: 785cd1c6ffae74bb437d4259e06ee7a9c76d4caa
 branch: oracle-reinstate
 go_version: go1.26.5 darwin/arm64
-implementation_gate: blocked_by_inherited_phase_199_inventory
+implementation_gate: pass
 phase_200_owned_gates: pass
 owner_product_acceptance: not_claimed
+waiver_used: false
+supersedes: plan-23-blocked-by-inherited-phase-199-inventory
 ---
 
 # Phase 200 Implementation Gate Receipt
 
 ## Outcome
 
-Phase 200's semantic corpus, public-path journey, staged candidate acceptance, compiled lifecycle, named migrations, source parity, and every Phase 200-owned failure discovered by the original and two independent repository sweeps now pass. The repository-wide normal and race commands still exit nonzero on exactly four protected Phase 199 test nodes: the vocabulary subtest and parent plus the Phase 199 receipt schema and receipt validators.
+All seven gates are green on one tested tree. The Phase 199 focused checks that
+Plan 23 recorded as an inherited red baseline (the vocabulary subtest and
+parent plus the two receipt validators) were repaired under Plan 200-26 and now
+pass. The Phase 200 targeted battery, the complete Classic contract corpus, the
+public planning journey, source parity, and the repository-wide normal and race
+commands all exit zero.
 
-This receipt therefore **does not claim a green implementation gate**. It also does not claim Phase 205 owner product acceptance, publication, deployment, or release completion.
+No waiver, expected-failure classification, or skip was used to reach this
+result. This receipt is the implementation gate evidence required by executed
+Plan 23; it does **not** claim Phase 205 owner product acceptance, publication,
+deployment, or release completion.
 
-Plain English: two independent reruns found planning regressions that earlier, truncated runs missed. Those regressions are fixed. The only remaining red checks are an older Phase 199 bookkeeping list that omits two words already in its UAT document and the Phase 199 receipt checks invalidated by that stale evidence.
+Plain English: the full test suite — every test, run under the race detector as
+well — now passes end to end for the first time in the project's recorded
+history. Running the complete suite (which had never before finished) exposed a
+backlog of real defects that were hiding behind an always-truncated run; those
+were fixed under Plan 200-55 and are listed in its summary.
 
 ## Tested Tree
 
-- Base revision: `c431f0d3dd2c8daed55fac3e94e082c8d4937b4c`
+- Base revision: `68a6fd169eb5551ba39e6d365921ed5a340fbb2d`
+- Tree: `785cd1c6ffae74bb437d4259e06ee7a9c76d4caa`
 - Branch: `oracle-reinstate`
 - Go: `go version go1.26.5 darwin/arm64`
-- Final evidence timestamp: `2026-09-08T05:26:48Z`
-- Intentional Plan 23 dirty files during final gates: none; all follow-up repair commits through `c431f0d3` were complete before the final full and race commands started.
-- Protected pre-existing items left untouched and unstaged: modified `.planning/config.json`; untracked `.gsd/`; untracked `.planning/phases/199-front-door-and-classic-contract/199-PATTERNS.md`.
-- Execution isolation: shared checkout, explicitly forced to none by the orchestrator.
-
-## Deterministic Artifact Digests
-
-All values are SHA-256 digests of the final tested bytes.
-
-| Artifact | SHA-256 |
-| --- | --- |
-| `cmd/testdata/classic-contract/v1/schema.json` | `d6ff25e119c2f8e1c91233acb00924de5fdd5560268ad362d43e40e8b7cf950e` |
-| `cmd/testdata/classic-contract/v1/mechanisms.json` | `32d1f6573c9b905756bead362d04047fe0bfdc1647aa45ce82a29f665902efbf` |
-| `cmd/testdata/classic-contract/v1/cases.json` | `73f86a3607871e9f613ea576a44ec79870b7ca3b8d5c7f81907964ce491d87dc` |
-| `cmd/classic_contract_test.go` | `59790e6dc71cbd2ffcabd471a0ea5ae1b9361f903b1c8adaf8e9e17dbcc8740b` |
-| `cmd/planning_public_paths_200_test.go` | `91077b1ddb5f459a508a109c3db9954ed3fe09866fd684e8e1e0570ee7b819f7` |
-| `cmd/planning_real_repo_200_test.go` | `25eac28f914eee121a23a2b6af604e8038e55e767877bb28bfd194cc8eacc2f9` |
-| `.aether/schemas/completion-packet.schema.json` | `99d22bd0062a9bd699490b9d59d34bac812019ff68082247baae2cbfdc1fa476` |
-| `cmd/testdata/golden_plan.txt` | `ffe07e301748b3e4e5c7274ee0c27449313e71d43cc6454a5060a55a385c1765` |
-| `cmd/next_action.go` | `ce3bac5a713326f534308096462a90f2c23eef2644eac382bd969aced86a67ae` |
-| `cmd/codex_plan.go` | `14737314f9483e3905354e1fff0468cbafafa010979662adb304233a87850c12` |
-| `cmd/spec_cmd.go` | `e09a0ea60c59405e96f8f31778b38cc4d59ae70a7844e975d104d16378315af5` |
-| `cmd/orchestrator_boundary_questions_test.go` | `8f1eff9dc21823b67033fc2a7d8a8c786feb7212163b201a57a9c1befafb6bba` |
-| `cmd/orchestrator_boundary_guidance_test.go` | `bf2ec92014a7938579739d4d7b862249eb088fb8e3312900a8d4e8950e48945c` |
-| `cmd/testdata/command_catalog.json` | `52b53d57d8ed12066845bd04c8a4c271fbc7919fe5fb72cf8d6987a8733b5325` |
-| `cmd/testdata/parity_snapshot.json` | `4b20a3d7e5713f46a30dc17117b863671db6da7653e45d4e0c6e9faca03273d5` |
-| `cmd/testdata/regression_snapshot.json` | `e81330f2c1dc55a25abaf4d4fd126b771bc249cac46edad1e8ed23ebd6350b13` |
-| `cmd/planning_visuals.go` | `bf416ca6829bb1f40dac4e78cc787911ac0b133d71a650cf787d6ccbb5359b71` |
-| `cmd/planning_state.go` | `9fc71203af6589d7a3115d38012cf245df873280cdf5e2f096d081dc5c757a49` |
-| `cmd/codex_plan_finalize.go` | `b15e40a9056b91966d8add223335cc8c6e108430deede021a56cf3b6bf1c2c51` |
-| `cmd/blackbox_harness_test.go` | `24770a321b448ba320baeb2400a79f983d5416b163c52d62e4dae5546112b9e3` |
-| `cmd/e2e_lifecycle_test.go` | `fd29ae330107dbc36f375b4c0f38099c897cac6f1717080314c69fead10814ec` |
-| `cmd/testing_main_test.go` | `9c4eae5b160a4e35db997698802f929279ab53cfd58dde8d4f0ac3d9c6b845d2` |
-
-Corpus inventory: 22 mechanisms total, exactly 12 mechanisms `SYN-200-01` through `SYN-200-12`; 102 cases total, exactly 16 Phase 200 cases covering the eight required `V-200-*` groups with one success and one refusal each.
+- Final evidence timestamp: `2026-09-10T09:51:51Z`
+- Dirty files during the final gates: none introduced by this plan. Only these
+  pre-existing, user-owned items remained untouched and unstaged, identical
+  before and after the run: modified `.planning/config.json` and
+  `.planning/ROADMAP.md`; untracked `.gsd/`; untracked
+  `.planning/phases/199-front-door-and-classic-contract/199-PATTERNS.md`.
+- Execution isolation: shared checkout. The `cmd` package runs through the
+  bounded complete-suite controller (Plan 200-55); every other package runs
+  normally.
 
 ## Final Gate Commands
 
-### Independent corrections and superseded results
-
-The dispatch baseline was **5,840 passed, 28 failed, and 6 skipped**. That established the starting migration surface before Plan 23's final reconciliation.
-
-The first independent Wave 13 run reported **5,889 passed, 9 failed, and 6 skipped**. Seven Phase 200 nodes exposed command-advice registry bypasses and missing fresh staged-plan Orchestrator boundaries. The exact post-fix set passed 13/13.
-
-The second independent run reported **8,950 passed, 26 failed, and 8 skipped**. Beyond the four protected Phase 199 nodes, it exposed stale command/parity/regression goldens, the orphan `plan-research-approve` command, legacy plan-only/delegate expectations, and a nil staged-manifest panic. The exact post-fix set passed 36/36.
-
-Two uncapped follow-ups then exposed deeper layers hidden by the earlier panics and RTK's 1,048,576-byte retained-log cap:
-
-- **9,523 passed, 15 failed, 11 skipped:** eight isolated cases passed focused; three deterministic lifecycle cases exposed direct-acceptance fixtures and accepted-revision status drift.
-- **9,455 passed, 15 failed, 11 skipped:** the remaining deterministic node was a Plan closing golden; ten otherwise-green isolated tests reached the stock parent-package deadline before their deferred launches.
-
-Those results supersede the earlier receipt's truncated 3,881/2/6 normal and 4,875/2/7 race claims. The final evidence below comes from uninterrupted, uncapped commands after every repair commit.
+The seven canonical gates below ran from the repository root in this exact
+order, each exiting zero, with UTC start/finish, duration, and a SHA-256 of the
+captured stdout+stderr retained. Rows use the canonical command; see the
+Execution-Ceiling Amendment note beneath the table for the `-timeout` flag this
+machine requires to run the two repository-wide gates to completion.
 
 | Gate | Exact command | Result |
 | --- | --- | --- |
-| Independent failure reproducer | `go test ./cmd -run 'Test(NextActionNeverHardcoded\|PlanFinalizeAddsOrchestratorBoundaryGuidance\|OrchestratorBoundaryQuestionsCreatedForPlanOnlyWorkflows\|DefaultColonyModeDoesNotCreateBoundaryQuestions\|ResolvedBoundaryQuestionFlowsThroughClarifiedIntent)$' -count=1` | PASS after repair — 13 tests, 1 package |
-| Second independent reproducer | `go test ./cmd -run 'Test(PlatformParityGolden\|RegressionSnapshot\|PlanOnlyUnchanged\|NoRegisteredSubcommandIsUnreferenced\|TerritoryWrapperAuthority199\|WrapperOrchestratedCommandsPreserveLiveWorkerCeremony\|PlanDelegateManifestCarriesOneSteeringNote\|PlanAndColonizeDelegateLanesCarryEveryMemorySource\|PlanAndColonizeCapsulesMatchTheInProcessLane\|DelegateCapsuleRendersSteeringAndRelayExactlyOnce\|DelegateCapsuleIsStableAcrossRuns)$' -count=1` | PASS after repair — 36 tests, 1 package |
-| Latent lifecycle selection | `go test ./cmd -run 'Test(CLIVersionedPlanRevisionSurvivesRestartAndBindsNextBuild\|LegacyReviewerSeverityDirectNormalizationFailsClosed\|LegacyReviewerSeverityExternalFinalizeFailsClosed\|TerritoryLifecycleTransactionalPublish\|PauseResume199SafeBoundary\|EveryLifecycleCommandEndsWithNextAction\|FullLifecycleInDownstreamRepo\|SuggestionOnlyCriticalDirectFlowFailsBeforeAdvancement\|SuggestionOnlyCriticalExternalFinalizeFailsBeforeAdvancement\|SealTransaction199HivePolicy\|ReviewerArtifactDirectFlowFailsClosed\|ReviewerArtifactExternalFinalizeFailsClosed)$' -count=1` | PASS — 16 tests, 1 package |
-| Golden and isolation helpers | `go test ./cmd -run 'Test(GoldenPlanVisualOutput\|IsolatedProcessHelper.*)$' -count=1` | PASS — 15 tests, 1 package |
-| Focused Phase 200 | `go test ./cmd -run 'TestClassicContract.*Phase200\|TestPlanningPublicPaths200\|TestPlanningRealRepo200' -count=1` | PASS — 45 tests, 1 package |
-| Complete classic contract | `go test ./cmd -run 'TestClassicContract' -count=1` | PASS — 134 tests, 1 package |
-| Named migration selection | `go test ./cmd -run 'Test(FrontDoorInitWrapperParity\|InitSuggestedNextMatchesTopProposal\|FrontDoorHelp\|FrontDoorInit\|PlanManifestCarriesDepthProposal\|PlanEmitsPhaseResearchDispatchesFromDraft\|PhaseResearchDispatchedOncePerPhase\|PlanWrapperCardsParity\|PlanWrapperCeremonyContract\|PlanWrapperStageSkeleton\|LifecycleCommandDocsPreferRuntimeCLI\|PlanningContractDocuments200\|LifecycleFlatMirrorsMatchCanonical\|LifecycleWrappersAvoidRetiredDepthVocabulary\|LifecycleWrappersCarryStructuredBlocks)' -count=1` | PASS — 217 tests, 1 package |
-| Source parity | `go run ./cmd/aether source-check` | PASS — 147 surfaces checked: 16 canonical, 5 retired mirrors, 126 generated wrappers; 0 findings; state effect `none` |
-| Repository-wide | `go test ./... -count=1` | EXPECTED BASELINE FAIL — 9,550 passed, 4 failed, 11 skipped across 20 packages; 19 packages green; only protected Phase 199 nodes in `cmd` |
-| Repository-wide race | `go test ./... -race -count=1` | EXPECTED BASELINE FAIL — 8,526 passed, 4 failed, 8 skipped across 20 packages; no race detector diagnostics; only protected Phase 199 nodes in `cmd` |
+| Phase 199 focused | `go test ./cmd -run '^(TestCurrentVocabulary199($\|/)\|TestPhase199GateReceiptSchema$\|TestPhase199GateReceipt$)' -count=1` | PASS — 4s; exit 0; output `dedcf24e…50e8ab6` |
+| Phase 200 targeted | `go test ./cmd -run '^Test(RepositoryBootstrapContainment200\|PlanningMutationSession200\|PlanningTimelineConcurrentProcesses200\|SpecificationIntegrity200\|PlanCandidateSemanticIntegrity200\|PlanCandidateAcceptanceIntegrity200\|PlanCandidateAcceptanceConcurrentProcesses200\|PlanningWriterCoverage200\|PlanningWriterConcurrentProcesses200\|PlanningNumericBoundaries200\|BuildStartTransaction200\|BuildStartCallers200\|BuildStartConcurrentProcesses200\|BuildStartLegacyHelpersRetired200\|PlanCandidateExpiry200\|PlanningExpiryPresentation200\|PlanningAdversarial200\|PlanningGapEdgeAccounting200)$' -count=1` | PASS — 205s; exit 0; output `9dff4815…d82610e` |
+| Classic contract | `go test ./cmd -run '^TestClassicContract' -count=1` | PASS — 80s; exit 0; output `4da726cd…ced0db7dd` |
+| Public planning journey | `go test ./cmd -run '^(TestPlanningPublicPaths200\|TestPlanningRealRepo200)$' -count=1` | PASS — 29s; exit 0; output `fc103bb7…b7b7901e` |
+| Source parity | `go run ./cmd/aether source-check` | PASS — 147 surfaces checked: 16 canonical, 5 retired mirrors, 126 generated wrappers; 0 findings; state effect `none`; output `3f018043…42064bb8` |
+| Repository-wide | `go test ./... -count=1` | PASS — 1136s; exit 0; all 4,794 discovered `cmd` tests executed exactly once, 20 packages green; output `7569c669…b976d394` |
+| Repository-wide race | `go test ./... -race -count=1` | PASS — 1140s; exit 0; all 4,794 discovered `cmd` tests executed exactly once under the race detector, no data-race diagnostics, 20 packages green; output `d024b203…07028117` |
 
-`rtk go test` was used as the output-preserving wrapper for noisy test commands; the table spells the underlying Go commands without that presentation wrapper.
+### Execution-Ceiling Amendment (owner-approved, 2026-09-10)
 
-The literal commands, with Markdown table escaping removed, were:
+The two repository-wide gates require an explicit generous `-timeout` to run to
+completion on this machine, and the receipt records their measured wall time
+rather than a sub-11-minute claim. This is a deliberate, owner-accepted
+amendment to Plan 23's original sub-11-minute expectation:
+
+- The `cmd` package alone contains 4,794 top-level tests; several hundred spawn
+  real `aether`/`git` subprocesses. Process creation serializes in-kernel,
+  capping throughput near ~345 tests/min regardless of parallel workers, so the
+  complete corpus floors near ~19 minutes (normal and race alike).
+- A bare `go test ./...` carries Go's default 10-minute timeout; the tool sends
+  SIGQUIT at that deadline. The Plan 200-55 controller reads the caller's
+  `-test.timeout` and stops **orderly** just under it — printing complete
+  per-lane accounting of what ran and what could not — rather than dying
+  signal-killed. Given an explicit budget (here `-timeout=40m` for normal,
+  `-timeout=95m` for race), it runs the whole corpus.
+- The measured standard is therefore **~19 minutes per full gate**, ~20 minutes
+  for race. The owner accepted this standard on 2026-09-10 and queued per-test
+  subprocess-cost reduction as its own backlog item (ROADMAP Pending Todo,
+  Phase 201 / `WORK-08`).
+
+The literal canonical commands, with Markdown escaping removed:
 
 ```sh
-go test ./cmd -run 'Test(NextActionNeverHardcoded|PlanFinalizeAddsOrchestratorBoundaryGuidance|OrchestratorBoundaryQuestionsCreatedForPlanOnlyWorkflows|DefaultColonyModeDoesNotCreateBoundaryQuestions|ResolvedBoundaryQuestionFlowsThroughClarifiedIntent)$' -count=1
-go test ./cmd -run 'Test(PlatformParityGolden|RegressionSnapshot|PlanOnlyUnchanged|NoRegisteredSubcommandIsUnreferenced|TerritoryWrapperAuthority199|WrapperOrchestratedCommandsPreserveLiveWorkerCeremony|PlanDelegateManifestCarriesOneSteeringNote|PlanAndColonizeDelegateLanesCarryEveryMemorySource|PlanAndColonizeCapsulesMatchTheInProcessLane|DelegateCapsuleRendersSteeringAndRelayExactlyOnce|DelegateCapsuleIsStableAcrossRuns)$' -count=1
-go test ./cmd -run 'Test(CLIVersionedPlanRevisionSurvivesRestartAndBindsNextBuild|LegacyReviewerSeverityDirectNormalizationFailsClosed|LegacyReviewerSeverityExternalFinalizeFailsClosed|TerritoryLifecycleTransactionalPublish|PauseResume199SafeBoundary|EveryLifecycleCommandEndsWithNextAction|FullLifecycleInDownstreamRepo|SuggestionOnlyCriticalDirectFlowFailsBeforeAdvancement|SuggestionOnlyCriticalExternalFinalizeFailsBeforeAdvancement|SealTransaction199HivePolicy|ReviewerArtifactDirectFlowFailsClosed|ReviewerArtifactExternalFinalizeFailsClosed)$' -count=1
-go test ./cmd -run 'Test(GoldenPlanVisualOutput|IsolatedProcessHelper.*)$' -count=1
-go test ./cmd -run 'TestClassicContract.*Phase200|TestPlanningPublicPaths200|TestPlanningRealRepo200' -count=1
-go test ./cmd -run 'TestClassicContract' -count=1
-go test ./cmd -run 'Test(FrontDoorInitWrapperParity|InitSuggestedNextMatchesTopProposal|FrontDoorHelp|FrontDoorInit|PlanManifestCarriesDepthProposal|PlanEmitsPhaseResearchDispatchesFromDraft|PhaseResearchDispatchedOncePerPhase|PlanWrapperCardsParity|PlanWrapperCeremonyContract|PlanWrapperStageSkeleton|LifecycleCommandDocsPreferRuntimeCLI|PlanningContractDocuments200|LifecycleFlatMirrorsMatchCanonical|LifecycleWrappersAvoidRetiredDepthVocabulary|LifecycleWrappersCarryStructuredBlocks)' -count=1
+go test ./cmd -run '^(TestCurrentVocabulary199($|/)|TestPhase199GateReceiptSchema$|TestPhase199GateReceipt$)' -count=1
+go test ./cmd -run '^Test(RepositoryBootstrapContainment200|PlanningMutationSession200|PlanningTimelineConcurrentProcesses200|SpecificationIntegrity200|PlanCandidateSemanticIntegrity200|PlanCandidateAcceptanceIntegrity200|PlanCandidateAcceptanceConcurrentProcesses200|PlanningWriterCoverage200|PlanningWriterConcurrentProcesses200|PlanningNumericBoundaries200|BuildStartTransaction200|BuildStartCallers200|BuildStartConcurrentProcesses200|BuildStartLegacyHelpersRetired200|PlanCandidateExpiry200|PlanningExpiryPresentation200|PlanningAdversarial200|PlanningGapEdgeAccounting200)$' -count=1
+go test ./cmd -run '^TestClassicContract' -count=1
+go test ./cmd -run '^(TestPlanningPublicPaths200|TestPlanningRealRepo200)$' -count=1
 go run ./cmd/aether source-check
-go test ./... -count=1
-go test ./... -race -count=1
+go test ./... -count=1   # + explicit -timeout=40m on this machine
+go test ./... -race -count=1   # + explicit -timeout=95m on this machine
 ```
 
-## Remaining Failure
+## What the complete run first exposed and fixed (Plan 200-55)
 
-Exact reproducer:
+Because the suite had never before run to completion, extending coverage
+surfaced eight genuine defects, all repaired before this receipt:
 
-```text
-go test ./cmd -run 'Test(CurrentVocabulary199|Phase199GateReceiptSchema|Phase199GateReceipt)$' -count=1 -v
-```
-
-Observed root cause:
-
-- `TestCurrentVocabulary199/tracked-occurrences-are-exhaustively-classified` reports 193 tracked occurrence keys versus 191 inventory keys.
-- `.planning/phases/199-front-door-and-classic-contract/199-UAT.md` contains one `legacy_resume` occurrence classified as zero by the Phase 199 inventory.
-- The same Phase 199 UAT file contains one `legacy_pause` occurrence classified as zero by the inventory.
-- Go reports the failing subtest and `TestCurrentVocabulary199` parent as two failed test nodes.
-- `TestPhase199GateReceiptSchema` and `TestPhase199GateReceipt` are the other two protected nodes; the stale vocabulary evidence/totals invalidate that checked-in Phase 199 receipt.
-
-This protected baseline predates Plan 200-23 and is already recorded in `deferred-items.md`. Plan 23 did not edit the Phase 199 UAT document, inventory, or receipt because those artifacts are outside this plan's ownership and the orchestrator explicitly prohibited changing user-owned Phase 199 evidence merely to hide the baseline.
-
-## Bounded Retry Record
-
-Nine scoped repair passes were used across the initial and two independent gates:
-
-1. Migrated obsolete immediate-planning assumptions in finalizer, ceremony, visual, colony-mode, and stuck-plan fixtures; regenerated the completion-packet schema. The focused repair gate passed 10/10, and the next full run reduced the repository result from 12 failed nodes to the two-node Phase 199 aggregate.
-2. Replaced the retired immediate-dispatch plan golden with the explicit unbiased preset boundary and made the isolated-child self-test decline unsafe launches near its parent deadline. The dedicated race gate passed 2/2.
-3. Migrated startup lifecycle-card fixtures so Discuss owns the draft-Specification boundary and Plan owns the no-write preset boundary. The dedicated race gate passed 16/16.
-4. Moved exact Specification approval/repair and Plan preset commands into the shared next-action candidate registry, gated them against the live Cobra tree, and folded the preset-required result through the shared resolver. The ratchet plus command/spec/golden selection passed 17/17. Commit: `0a671f86`.
-5. Restored Orchestrator boundary materialization, manifest fields, and exact preset re-entry on the fresh staged-plan path; migrated the old whole-chain boundary fixtures through approved Specification and explicit-preset authority. The exact independent failure selection passed 13/13 and the broader boundary/planning selection passed 66/66. Commit: `1d981d8b`.
-6. Removed the orphan `plan-research-approve` command through Cobra's source of truth, refreshed command/parity/regression goldens, and moved plan-only/delegate assertions to staged one-Scout authority. The second independent selection passed 36/36. Commits: `db590537`, `6952546c`.
-7. Migrated real revision, compiled-install, provider-backed, and downstream lifecycle fixtures to staged candidate review plus exact acceptance. Direct legacy activation is no longer used as current authority. Commit: `00377491`.
-8. Fixed candidate readiness after a completed prefix and synchronized mutable phase/task/watcher facts into the active revision across build and continue process boundaries. The latent lifecycle set passed 16/16. Commit: `00377491`.
-9. Routed preset-required Plan output through the shared lifecycle closing renderer, recorded that card in the golden, and extended only Go's stock parent-package deadline so deferred isolated tests still launch with their own bounded child budgets. The helper/golden set passed 15/15. Commits: `5629597a`, `99164f77`, `c431f0d3`.
-
-The final normal and race results above are evidence-only reruns after the ninth repair. No Phase 200-owned failure recurred.
+1. `pending-decisions.json` strict decode rejected the blocker-flag fields that
+   legitimately share the file (broke overnight autopilot).
+2. `spec --repair-projection` and discuss settlement opened no planning mutation
+   session, so every projection repair failed.
+3. Whole-failure `build-finalize` could not commit: guards demanded a partial
+   retry plan that a zero-credit dispatch can never produce.
+4. Second-round plan acceptance (revising an already-built plan) was rejected,
+   erased completed-work credit when forced, and then wedged build authority as
+   permanently unreconciled — three symmetric fixes in the plan-impact and
+   plan-revision derivation.
+5. Shelf commands failed on a fresh repository (not-exist detection missed
+   storage's error wording).
+6. Recovery-orchestrator and preflight source-order fixtures predated the
+   canonical build-start contract (200-34).
+7. Platform-dependent Phase 199 tests were pinned to a fixed platform.
+8. The Phase 199 gate-receipt validator broke when `.planning/config.json` was
+   committed; the commit was reverted to preserve the recorded pre-existing
+   fingerprint.
 
 ## Automated Verification Versus Product Acceptance
 
-These checks establish implementation semantics, deterministic artifacts, source parity, and absence of detected Go data races in all executed code. They do not replace owner review of the product experience. Phase 205 remains responsible for owner product acceptance, and separate publish/deploy/release workflows remain required before distribution.
+These gates establish implementation semantics, source parity, and absence of
+detected Go data races across all executed code. They do not replace owner
+review of the product experience. The two human UAT checks Plan 40 carries
+remain outstanding for the standard GSD verifier and Phase 205:
+
+1. In disposable real repositories, exercise both Claude and OpenCode managed
+   surfaces through init, discuss, specification review/approval, a two-pass
+   Balanced plan, candidate review, and exact acceptance — confirming Scout and
+   Route-Setter visibly alternate, every card explains evidence/scores/weakest
+   gap/delta/stop cause, material decisions alone interrupt, and build/run
+   appears only after acceptance.
+2. Review the specification, decision, iteration, candidate, acceptance, impact,
+   and recovery screens at narrow, normal, and wide terminal widths — confirming
+   authority is never clipped or ambiguous and expiry plus stale-before-expiry
+   recovery read clearly without JSON.
+
+Phase 205 remains responsible for owner product acceptance; separate
+publish/deploy/release workflows remain required before distribution.

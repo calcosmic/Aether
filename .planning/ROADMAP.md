@@ -60,7 +60,7 @@ The phase names below identify areas to investigate, not predetermined implement
 Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase research artifact using `.planning/research/v1.28-classic-synthesis-template.md`. This is targeted engineering archaeology within the implementation phase, not a standalone pre-restoration phase and not another owner questionnaire. The comprehensive report is the starting map; it does not substitute for examining the relevant old and current implementations.
 
 - [x] **Phase 199 — Front Door and Classic Contract** (completed 2026-09-07)
-- [ ] **Phase 200 — Iterative Planning**
+- [x] **Phase 200 — Iterative Planning**
 - [ ] **Phase 201 — Queen-Led Work Cycle**
 - [ ] **Phase 202 — Swarm, Oracle, and Live Colony**
 - [ ] **Phase 203 — Biological Runtime**
@@ -342,11 +342,11 @@ Plans:
 
 **Wave 34** *(second gap closure; blocked on Wave 33 completion)*
 
-- [ ] 200-55-PLAN.md — Run every cmd test exactly once and bring normal/race suites under the fixed 11-minute harness.
+- [x] 200-55-PLAN.md — Run every cmd test exactly once; bounded exact-once/isolated/race-clean harness delivered. The fixed 11-minute ceiling was measured infeasible on this machine (owner-accepted ~19-20m standard, 2026-09-10); see 200-55-SUMMARY.md.
 
 **Wave 35** *(final receipt; blocked on Wave 34 completion)*
 
-- [ ] 200-40-PLAN.md — Run the unchanged focused, source, full, and race gates and update the existing Phase 200 gate receipt.
+- [x] 200-40-PLAN.md — Ran the seven focused/source/full/race gates all green on one tree; 200-GATE-RECEIPT.md updated with exact all-green evidence, no waiver (rev 68a6fd16, 2026-09-10).
 
 **Success criteria:**
 
@@ -455,7 +455,7 @@ Plans:
 |---|---|---|
 | TS-host preflight hardcoded timeout and repo working directory | Phase 203 / `BIO-03` | Make probes configurable, bounded, process-tree-safe, and isolated as part of honest platform dispatch; use the proven Go probe behavior as the contract. |
 | Owner-readable spec builder | Phase 200 / `PLAN-05` | Make the plain-language specification an output of intent capture and iterative planning before work begins. |
-| Worker turnaround is too slow | Phase 201 / `WORK-08` (test-tier dependency in `LEARN-05`) | Measure the latency stack, compact briefs/handoffs, tune model/routing, and align test tiers without dropping TDD or safety coverage. |
+| Worker turnaround is too slow | Phase 201 / `WORK-08` (test-tier dependency in `LEARN-05`) | Measure the latency stack, compact briefs/handoffs, tune model/routing, and align test tiers without dropping TDD or safety coverage. Measured 2026-09-10 (200-55): the complete 4,794-test cmd suite floors near 20 minutes because ~700 tests serially spawn real subprocesses and the machine serializes process creation; the owner accepted the ~20-minute full-gate standard and queued per-test subprocess-cost reduction here. Evidence: `phases/200-iterative-planning/200-55-SUMMARY.md`. |
 
 ## Guardrails and exclusions
 
