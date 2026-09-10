@@ -2,18 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
-current_phase: 201
-current_phase_name: Queen-Led Work Cycle
 status: executing
-stopped_at: Completed 201-03-PLAN.md
-last_updated: "2026-09-10T12:55:25.239Z"
+stopped_at: Completed 201-04-PLAN.md
+last_updated: "2026-09-10T13:11:07.170Z"
 last_activity: 2026-09-10
-state_head: 58780831ca6c6c515472df1a99a714c96a607d31
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 104
-  completed_plans: 92
+  completed_plans: 93
   percent: 29
 ---
 
@@ -32,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 201 (Queen-Led Work Cycle) — EXECUTING
-Plan: 4 of 15
+Plan: 5 of 15
 Status: Ready to execute
 Last activity: 2026-09-10
 
@@ -170,6 +167,7 @@ Last activity: 2026-09-10
 | Phase 201 P01 | 55min | 2 tasks | 4 files |
 | Phase 201 P02 | 110min | 3 tasks | 5 files |
 | Phase 201 P03 | 50min | 3 tasks | 3 files |
+| Phase 201 P04 | 45min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -546,6 +544,8 @@ Last activity: 2026-09-10
 - [Phase 201]: Continue lanes' shared accept/verify/advance body takes an already-evaluated gate report as input rather than recomputing gates internally — The finalize lane's soft_block auto-resolve pass mutates its own gates value before the decision is made; recomputing gates inside the shared body would silently discard that resolution. Each lane still funnels through the one shared gate evaluator; it is each lane's own responsibility to call it before reaching the decision body.
 - [Phase 201]: 201-03: Verification-boundary normalisation is trim-plus-ASCII-lowercase with EXACT comparison -- no fuzzy matching or separator-substitution fallback, unlike caste-name resolution elsewhere in the package.
 - [Phase 201]: 201-03: attachVerificationBoundary refuses to silently rewrite an already-recorded decision, naming both the stored and offered choice -- mirrors attachCheckFixAttempt/attachBuildFreeCheckReport's narrow-setter discipline.
+- [Phase ?]: WorkOutcome is never folded into OutcomeKind; a total LifecycleOutcome() mapping is used instead so old binaries keep decoding new records. — OutcomeKind is a closed durable wire vocabulary validated strictly by validateLifecycleHeader; widening it would break backward decoding.
+- [Phase ?]: The closeout's generic default summary now reads from WorkOutcomeLabels() when a verdict is present, fixing a real word collision with the success label. — The generic fallback text shared the word finished with the success verdict's label, which would have borrowed success-shaped language onto every non-success card.
 
 ### Pending Todos
 
@@ -662,8 +662,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-10T12:55:12.636Z
-Stopped at: Completed 201-03-PLAN.md
+Last session: 2026-09-10T13:11:07.160Z
+Stopped at: Completed 201-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

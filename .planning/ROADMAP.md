@@ -364,7 +364,7 @@ Plans:
 
 **Requirements:** SYNTH-03, CEC-06, WORK-01..08
 
-**Plans:** 3/15 plans executed
+**Plans:** 4/15 plans executed
 
 Plans:
 
@@ -379,7 +379,7 @@ Plans:
 **Wave 3** *(blocked on Wave 2 completion)*
 
 - [x] 201-03-PLAN.md — Record the Queen's per-phase verification-boundary choice as one durable fact.
-- [ ] 201-04-PLAN.md — Define the six-verdict work-outcome vocabulary and give every outcome the same closeout ceremony.
+- [x] 201-04-PLAN.md — Define the six-verdict work-outcome vocabulary and give every outcome the same closeout ceremony.
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
