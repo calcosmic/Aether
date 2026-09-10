@@ -47,6 +47,18 @@ type codexBuildDispatch struct {
 	JobName   string `json:"job_name,omitempty"`
 	JobReason string `json:"job_reason,omitempty"`
 	JobSource string `json:"job_source,omitempty"`
+	// AttemptID is the build attempt this dispatch belongs to, stamped onto
+	// every dispatch once a real attempt exists (stampDispatchAttemptIdentity,
+	// called right after commitBuildStart's receipt makes the attempt
+	// identifier known). Empty on a dispatch that was only ever planned --
+	// never dispatched against a persisted attempt (a --plan-only preview
+	// halted by an orchestrator boundary, for example). Carrying the attempt
+	// identifier on the dispatch itself, not only on the enclosing manifest,
+	// is what lets the Queen card, workspace leases, task receipts, reviewer
+	// findings and fan-in rows each be verified in isolation as naming the
+	// same job in the same attempt (SYN-201-02, WORK-01/WORK-03,
+	// cmd/work_identity_test.go).
+	AttemptID string `json:"attempt_id,omitempty"`
 	// CoveredTaskIDs lists every task this one worker took on. It holds more
 	// than one entry when a chain of dependent steps was grouped into a single
 	// dispatch (see planCoherentJobs). TaskID stays the first of
@@ -834,6 +846,17 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 		if err := store.LoadJSON(manifestRel, &manifest); err != nil {
 			return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to reload committed %s build manifest: %w", dispatchMode, err)
 		}
+		// SYN-201-02/WORK-01/WORK-03: the attempt now exists (commitBuildStart
+		// succeeded), so this lane's OWN returned dispatches can carry the
+		// attempt identifier. Deliberately NOT written back onto manifest.json
+		// or result["dispatch_manifest"]: that manifest's bytes are already
+		// bound to attempt.ManifestSHA256 (validateBuildAttemptManifestBinding),
+		// and a wrapper resubmitting a completion packet built from an
+		// attempt-stamped copy of it would fail that digest check. The
+		// attempt-bound identity for this lane reaches its surfaces once real
+		// dispatches are recorded against the attempt (recordCodexBuildDispatches /
+		// transitionBuildAttempt), not through this plan-only preview.
+		dispatches = stampDispatchAttemptIdentity(manifest.Dispatches, receipt.AttemptID)
 		result["dispatch_manifest"] = manifest
 		result["attempt"] = displayDataPath(receipt.AttemptPath)
 	}
@@ -1058,6 +1081,13 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		return nil, err
 	}
 	attemptRel := receipt.AttemptPath
+	// SYN-201-02/WORK-01/WORK-03: the attempt now exists, so every dispatch
+	// this direct build lane carries from here on names the same attempt
+	// identifier as the job identity it already carries (JobName) -- the
+	// Queen card, task receipts, and reviewer findings this pipeline
+	// produces are each verifiable in isolation as belonging to this one
+	// attempt (cmd/work_identity_test.go).
+	dispatches = stampDispatchAttemptIdentity(dispatches, receipt.AttemptID)
 	attemptFinished := false
 	finishAttempt := func(status, summary string, transitionErr error) {
 		if attemptFinished {
@@ -1558,6 +1588,26 @@ func applyBuildTaskStatuses(phase *colony.Phase, selectedTaskIDs []string) {
 			phase.Tasks[i].Status = colony.TaskPending
 		}
 	}
+}
+
+// stampDispatchAttemptIdentity returns a copy of dispatches with AttemptID
+// set to attemptID on every entry. It is a pure projection -- it never
+// touches JobName, Wave, TaskReceipts, or any other field -- called exactly
+// once per build lane, right after commitBuildStart's receipt makes the
+// attempt identifier known (SYN-201-02, WORK-01/WORK-03). A blank attemptID
+// is a no-op copy: nothing downstream should ever see an attempt identifier
+// fabricated for a dispatch that was never actually bound to one.
+func stampDispatchAttemptIdentity(dispatches []codexBuildDispatch, attemptID string) []codexBuildDispatch {
+	attemptID = strings.TrimSpace(attemptID)
+	stamped := make([]codexBuildDispatch, len(dispatches))
+	copy(stamped, dispatches)
+	if attemptID == "" {
+		return stamped
+	}
+	for i := range stamped {
+		stamped[i].AttemptID = attemptID
+	}
+	return stamped
 }
 
 func plannedBuildDispatches(phase colony.Phase, depth string) ([]codexBuildDispatch, error) {
