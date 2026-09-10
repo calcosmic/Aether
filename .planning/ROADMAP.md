@@ -364,7 +364,7 @@ Plans:
 
 **Requirements:** SYNTH-03, CEC-06, WORK-01..08
 
-**Plans:** 16/20 plans executed (15 executed, 5 gap-closure plans pending)
+**Plans:** 17/20 plans executed (15 executed, 5 gap-closure plans pending)
 
 Plans:
 
@@ -422,7 +422,7 @@ Plans:
 **Gap closure — Wave 1** *(from 201-VERIFICATION.md: nine failed truths, all wiring gaps)*
 
 - [x] 201-16-PLAN.md — Record the Queen's verification-boundary choice on the exact attempt, on both build lanes.
-- [ ] 201-17-PLAN.md — Assemble and render the four-part failed-repair handback on the blocked check screen.
+- [x] 201-17-PLAN.md — Assemble and render the four-part failed-repair handback on the blocked check screen.
 
 **Gap closure — Wave 2** *(blocked on gap-closure Wave 1)*
 
