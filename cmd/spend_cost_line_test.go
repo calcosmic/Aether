@@ -9,8 +9,10 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/codex"
+	"github.com/calcosmic/Aether/pkg/colony"
 )
 
 // Phase 196 plan 07 — D-01 as amended (owner, 2026-08-27).
@@ -517,5 +519,127 @@ func TestRepeatedWorkerIsCountedAsRunsNotWorkers(t *testing.T) {
 	}
 	if strings.Contains(plain, "worker runs") {
 		t.Errorf("a phase with no repeated worker should not mention runs at all:\n%s", plain)
+	}
+}
+
+// Phase 201 plan 06 — D-06. Elapsed time joins the cost line for the exact
+// attempt this closeout belongs to, read from that attempt's own StartedAt
+// and CompletedAt fields and nothing else.
+//
+// The line lives under renderSpendCostLine(phase), the phase-scoped entry
+// appendSpendCostLine calls in production, NOT under renderSpendCostLineFromLedgers,
+// which every test above this comment calls directly against a store with no
+// build attempt saved at all. That split is deliberate and load-bearing: a
+// phase with genuinely no attempt on disk says nothing about elapsed time
+// (the tests above assert no dash sentinel appears anywhere in that case),
+// while a phase with an attempt on disk -- even one missing a timestamp --
+// says so plainly with the same sentinel the unreported cost figure uses.
+
+// seedSpendElapsedAttemptForTest derives a minimal, valid build attempt for
+// phaseID through the real production constructor (so every other field is
+// exactly what a real attempt would carry), then overrides only StartedAt
+// and CompletedAt to the caller's exact test values before saving -- the two
+// fields spendElapsedFigure reads and the only two fields this test cares
+// about. Marks the attempt latest so loadLatestBuildAttempt(phaseID), the
+// same read path renderSpendCostLine now uses, resolves it.
+func seedSpendElapsedAttemptForTest(t *testing.T, phaseID int, attemptID, startedAt, completedAt string) {
+	t.Helper()
+	rel, record, _, err := deriveBuildAttempt(buildAttemptDerivation{
+		Phase: colony.Phase{ID: phaseID}, PhaseNumber: phaseID,
+		StartedAt: time.Now().UTC(), AttemptID: attemptID,
+		RunID: "run-" + attemptID, ProcessID: 4400, WorkspaceSHA256: strings.Repeat("c", 64),
+		ExecutionOwner: "spend-cost-line-test", Dispatches: nil,
+		InitialStatus: buildAttemptPrepared, InitialDispatchMode: "direct",
+	})
+	if err != nil {
+		t.Fatalf("derive attempt: %v", err)
+	}
+	record.StartedAt = startedAt
+	record.CompletedAt = completedAt
+	if err := store.SaveJSON(rel, record); err != nil {
+		t.Fatalf("save attempt: %v", err)
+	}
+	if err := store.SaveJSON(latestBuildAttemptPointerPath(phaseID), latestBuildAttemptPointer{
+		SchemaVersion: buildAttemptSchemaVersion,
+		AttemptID:     attemptID,
+		Path:          rel,
+		UpdatedAt:     time.Now().UTC().Format(time.RFC3339Nano),
+	}); err != nil {
+		t.Fatalf("write latest-attempt pointer: %v", err)
+	}
+}
+
+// costLineElapsedCell returns the text after "Elapsed: " on the block's own
+// elapsed line, failing the test if no such line exists.
+func costLineElapsedCell(t *testing.T, block string) string {
+	t.Helper()
+	for _, line := range strings.Split(stripANSI(block), "\n") {
+		if strings.HasPrefix(line, "Elapsed: ") {
+			return strings.TrimPrefix(line, "Elapsed: ")
+		}
+	}
+	t.Fatalf("no line begins \"Elapsed: \" in block:\n%s", block)
+	return ""
+}
+
+func TestElapsedTimeComesFromTheAttemptTimestamps(t *testing.T) {
+	setupSpendTestStore(t)
+	seedSpendLedgerForTest(t, 196, spendWorkflowBuild,
+		measuredSpendRowForTest("Mason-67", "builder", 1_200_000),
+	)
+	seedSpendElapsedAttemptForTest(t, 196, "attempt-elapsed-fully-timestamped",
+		"2026-01-01T00:00:00Z", "2026-01-01T00:23:04Z")
+
+	block := renderSpendCostLine(196)
+
+	if got := costLineElapsedCell(t, block); got != "23m4s" {
+		t.Errorf("elapsed cell = %q, want %q, derived only from the attempt's own two timestamps", got, "23m4s")
+	}
+}
+
+func TestMissingTimestampRendersTheUnmeasuredSentinel(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		startedAt   string
+		completedAt string
+		attemptID   string
+	}{
+		{"missing end timestamp", "2026-01-01T00:00:00Z", "", "attempt-elapsed-missing-end"},
+		{"missing both timestamps", "", "", "attempt-elapsed-missing-both"},
+		{"unparseable start timestamp", "not-a-timestamp", "2026-01-01T00:00:00Z", "attempt-elapsed-unparseable"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			setupSpendTestStore(t)
+			seedSpendLedgerForTest(t, 196, spendWorkflowBuild,
+				measuredSpendRowForTest("Mason-67", "builder", 1_200_000),
+			)
+			seedSpendElapsedAttemptForTest(t, 196, tc.attemptID, tc.startedAt, tc.completedAt)
+
+			block := renderSpendCostLine(196)
+
+			got := costLineElapsedCell(t, block)
+			if got != spendNotReportedFigure {
+				t.Errorf("elapsed cell = %q, want the dash sentinel %q — byte-identical to the unreported-cost sentinel, not a second sentinel of its own", got, spendNotReportedFigure)
+			}
+		})
+	}
+}
+
+// TestNoAttemptMeansNoElapsedLineAtAll proves the split described above: a
+// phase with rows but genuinely no build attempt on disk (every test above
+// this section) renders no "Elapsed: " line whatsoever -- not a sentinel,
+// nothing -- because there is no attempt to say anything about, and every
+// test above this comment already asserts no dash sentinel reaches the
+// block in that situation.
+func TestNoAttemptMeansNoElapsedLineAtAll(t *testing.T) {
+	setupSpendTestStore(t)
+	seedSpendLedgerForTest(t, 196, spendWorkflowBuild,
+		measuredSpendRowForTest("Mason-67", "builder", 1_200_000),
+	)
+
+	block := renderSpendCostLine(196)
+
+	if strings.Contains(stripANSI(block), "Elapsed: ") {
+		t.Errorf("a phase with no build attempt on disk still rendered an elapsed line:\n%s", block)
 	}
 }
