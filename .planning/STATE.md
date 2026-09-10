@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 201-06-PLAN.md
-last_updated: "2026-09-10T14:24:11.791Z"
+stopped_at: Completed 201-07-PLAN.md
+last_updated: "2026-09-10T14:54:13.399Z"
 last_activity: 2026-09-10
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 104
-  completed_plans: 95
+  completed_plans: 96
   percent: 29
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 201 (Queen-Led Work Cycle) — EXECUTING
-Plan: 7 of 15
+Plan: 8 of 15
 Status: Ready to execute
 Last activity: 2026-09-10
 
@@ -170,6 +170,7 @@ Last activity: 2026-09-10
 | Phase 201 P04 | 45min | 3 tasks | 4 files |
 | Phase 201 P05 | 50min | 3 tasks | 6 files |
 | Phase 201 P06 | 45min | 3 tasks | 5 files |
+| Phase 201 P07 | 40min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -553,6 +554,9 @@ Last activity: 2026-09-10
 - [Phase ?]: Elapsed time is attempt-bound (renderSpendCostLine(phase) only); an absent attempt renders no line at all, distinct from an incomplete one which renders the dash sentinel.
 - [Phase ?]: Cost-and-time block in lifecycle_closeout.go is gated strictly on WorkOutcome != nil, reusing appendSpendCostLine as the single placement rule rather than a workflow allowlist.
 - [Phase ?]: Colony-wide running total sums cost across every attempt via loadSpendLedgersForPhase but elapsed from only each phase's latest build attempt via loadLatestBuildAttempt.
+- [Phase ?]: [Phase 201]: CAP-022's absent-declared-artifact credit block is enforced at the new result-card precision layer (deriveResultFilePrecision's blockedTasks), not by rewriting the core phase-advancement crediting engine (completedBuildTaskIDs/dispatch.Status) other paths depend on.
+- [Phase ?]: [Phase 201]: recommendedActionForWorkOutcome invents no new command vocabulary -- partial reuses the attempt's own buildUnfinishedRetryRedispatchCommand, blocker points at the locked aether unblock --dispatch, interrupted points at the sole aether resume recovery door, timeout follows the attempt's recorded recovery command, success/no_change point at aether continue.
+- [Phase ?]: [Phase 201]: CAP-066's knowledge-delta storage/rendering (attachBuildKnowledgeDeltas, lifecycleCloseoutKnowledgeDeltaEvidence) is built and tested but has no live production writer -- no existing pipeline in this repo yet produces a structured decision/learning delta payload; a later plan must wire a real source.
 
 ### Pending Todos
 
@@ -669,8 +673,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-10T14:24:11.781Z
-Stopped at: Completed 201-06-PLAN.md
+Last session: 2026-09-10T14:54:13.384Z
+Stopped at: Completed 201-07-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
