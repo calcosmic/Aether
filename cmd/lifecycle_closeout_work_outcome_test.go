@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"unicode"
@@ -164,4 +166,146 @@ func TestCloseoutWithoutAVerdictIsUnchanged(t *testing.T) {
 	if strings.Contains(string(firstJSON), `"verdict"`) {
 		t.Fatalf("closeout without a verdict serialised a verdict key:\n%s", firstJSON)
 	}
+}
+
+// lifecycleCeremonySlotViolations is the pure comparison at the heart of the
+// equal-ceremony invariant: given the slot set recorded for each verdict, it
+// reports -- by slot and by the exact verdicts missing it -- any canonical
+// slot present for at least one verdict and absent for at least one other.
+// It has no dependency on *testing.T so it can be exercised directly against
+// both real production output and a synthetic broken fixture.
+func lifecycleCeremonySlotViolations(bySlot map[colony.WorkOutcome][]LifecycleCloseoutSlot, canonical []LifecycleCloseoutSlot) []string {
+	verdicts := make([]colony.WorkOutcome, 0, len(bySlot))
+	for verdict := range bySlot {
+		verdicts = append(verdicts, verdict)
+	}
+	sort.Slice(verdicts, func(i, j int) bool { return verdicts[i] < verdicts[j] })
+
+	var violations []string
+	for _, slot := range canonical {
+		var present, missing []colony.WorkOutcome
+		for _, verdict := range verdicts {
+			has := false
+			for _, s := range bySlot[verdict] {
+				if s == slot {
+					has = true
+					break
+				}
+			}
+			if has {
+				present = append(present, verdict)
+			} else {
+				missing = append(missing, verdict)
+			}
+		}
+		if len(present) > 0 && len(missing) > 0 {
+			violations = append(violations, fmt.Sprintf("slot %q is present for %v but missing for %v", slot, present, missing))
+		}
+	}
+	return violations
+}
+
+// lifecycleWorkOutcomeLabelCoverageViolations reports, by name, any declared
+// verdict with no entry in labels, and any label entry whose key is not a
+// declared verdict -- so a seventh verdict can never ship silently
+// unlabelled, and a stray label entry can never silently orphan itself.
+func lifecycleWorkOutcomeLabelCoverageViolations(labels map[colony.WorkOutcome]string, verdicts []colony.WorkOutcome) []string {
+	declared := make(map[colony.WorkOutcome]bool, len(verdicts))
+	for _, verdict := range verdicts {
+		declared[verdict] = true
+	}
+	var violations []string
+	for _, verdict := range verdicts {
+		if strings.TrimSpace(labels[verdict]) == "" {
+			violations = append(violations, fmt.Sprintf("declared verdict %q has no entry in WorkOutcomeLabels()", verdict))
+		}
+	}
+	for verdict := range labels {
+		if !declared[verdict] {
+			violations = append(violations, fmt.Sprintf("WorkOutcomeLabels() carries %q, which is not a declared verdict", verdict))
+		}
+	}
+	sort.Strings(violations)
+	return violations
+}
+
+// TestCloseoutCeremonyIsEqualAcrossVerdicts is the invariant Task 2's
+// equality proof cannot hold on its own against a FUTURE regression: it
+// enumerates every declared WorkOutcome (colony.AllWorkOutcomes()) and every
+// declared LifecycleCloseoutSlot (lifecycleCloseoutCanonicalSlots) from the
+// runtime's own vocabularies -- never a list this test maintains -- builds a
+// closeout for each verdict from one shared fixture, and fails, naming the
+// slot and the verdicts missing it, the moment a future slot is added for
+// only some of them. It also proves a declared verdict can never ship
+// without a label, and a label entry can never silently point at an
+// undeclared verdict.
+func TestCloseoutCeremonyIsEqualAcrossVerdicts(t *testing.T) {
+	canonical := append([]LifecycleCloseoutSlot(nil), lifecycleCloseoutCanonicalSlots[:]...)
+	verdicts := colony.AllWorkOutcomes()
+
+	t.Run("real package holds the invariant", func(t *testing.T) {
+		bySlot := make(map[colony.WorkOutcome][]LifecycleCloseoutSlot, len(verdicts))
+		for _, verdict := range verdicts {
+			bySlot[verdict] = lifecycleWorkOutcomeFixtureCloseout(t, verdict).Slots
+		}
+		if violations := lifecycleCeremonySlotViolations(bySlot, canonical); len(violations) > 0 {
+			t.Fatalf("equal-ceremony invariant violated:\n%s", strings.Join(violations, "\n"))
+		}
+
+		if violations := lifecycleWorkOutcomeLabelCoverageViolations(colony.WorkOutcomeLabels(), verdicts); len(violations) > 0 {
+			t.Fatalf("label coverage invariant violated:\n%s", strings.Join(violations, "\n"))
+		}
+	})
+
+	t.Run("a slot populated for one verdict only fails by name", func(t *testing.T) {
+		bySlot := make(map[colony.WorkOutcome][]LifecycleCloseoutSlot, len(verdicts))
+		for _, verdict := range verdicts {
+			bySlot[verdict] = append([]LifecycleCloseoutSlot(nil), canonical...)
+		}
+		// Break the invariant: strip LifecycleCloseoutNextUp from every
+		// verdict except the first, simulating a future slot a later change
+		// only wires up for one verdict.
+		broken := verdicts[0]
+		for _, verdict := range verdicts[1:] {
+			var without []LifecycleCloseoutSlot
+			for _, slot := range bySlot[verdict] {
+				if slot != LifecycleCloseoutNextUp {
+					without = append(without, slot)
+				}
+			}
+			bySlot[verdict] = without
+		}
+
+		violations := lifecycleCeremonySlotViolations(bySlot, canonical)
+		if len(violations) == 0 {
+			t.Fatalf("expected the invariant to fail against a fixture where %q is present for %q only", LifecycleCloseoutNextUp, broken)
+		}
+		var found bool
+		for _, violation := range violations {
+			if strings.Contains(violation, string(LifecycleCloseoutNextUp)) && strings.Contains(violation, string(broken)) {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("violations do not name both the slot %q and the verdict %q: %v", LifecycleCloseoutNextUp, broken, violations)
+		}
+	})
+
+	t.Run("a verdict with no label fails by name", func(t *testing.T) {
+		labels := colony.WorkOutcomeLabels()
+		delete(labels, colony.WorkOutcomeTimeout)
+		violations := lifecycleWorkOutcomeLabelCoverageViolations(labels, verdicts)
+		if len(violations) == 0 {
+			t.Fatalf("expected the invariant to fail when %q has no label", colony.WorkOutcomeTimeout)
+		}
+		var found bool
+		for _, violation := range violations {
+			if strings.Contains(violation, string(colony.WorkOutcomeTimeout)) {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("violations do not name the unlabelled verdict %q: %v", colony.WorkOutcomeTimeout, violations)
+		}
+	})
 }
