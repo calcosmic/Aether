@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -125,6 +126,13 @@ func printWorkerBriefs(root string, phaseNum int, selectedTaskIDs []string, work
 		assembled := capsule + "\n" + brief + "\n" + single[0].SkillSection + "\n" + single[0].HandoffSection
 		if duplicated := duplicatedBriefSections(assembled); len(duplicated) > 0 {
 			return fmt.Errorf("dispatch %s delivers duplicated context: %s (each owned section and the handoff schema must appear exactly once in the assembled worker context)", dispatch.Name, strings.Join(duplicated, ", "))
+		}
+		// D-15b: the compact handoff a worker's brief states must never
+		// silently drop a field codex.WorkerHandoff still carries -- checked
+		// here, on the exact text a worker would receive, not only in a
+		// standalone test.
+		if missing := missingCompactHandoffFields(assembled); len(missing) > 0 {
+			return fmt.Errorf("dispatch %s does not state the full handoff schema: missing field(s) %s (a worker's compact handoff must name every field codex.WorkerHandoff declares)", dispatch.Name, strings.Join(missing, ", "))
 		}
 
 		out.WriteString(strings.Repeat("━", 72))
@@ -312,6 +320,45 @@ func handoffSectionDuplicationAnchor() string {
 		return codex.HandoffFieldsSummary
 	}
 	return codex.HandoffFieldsSummary[:handoffSectionDuplicationAnchorChars]
+}
+
+// compactHandoffFieldNames reflects codex.WorkerHandoff's own JSON field
+// names (pkg/codex/handoff.go) directly off the type -- so "the compact
+// handoff" a worker's brief states can only ever enumerate fields the type
+// actually carries, and can never omit one it does (D-15b, Phase 201 plan
+// 14: "no second schema is introduced"). There is exactly one place in this
+// codebase that knows the handoff schema's field list; this function reads
+// it rather than hand-typing a second copy that could drift from the one
+// ValidateWorkerHandoff (pkg/codex/handoff.go) actually enforces.
+func compactHandoffFieldNames() []string {
+	t := reflect.TypeOf(codex.WorkerHandoff{})
+	names := make([]string, 0, t.NumField())
+	for i := 0; i < t.NumField(); i++ {
+		tag := t.Field(i).Tag.Get("json")
+		name := strings.Split(tag, ",")[0]
+		if name == "" || name == "-" {
+			continue
+		}
+		names = append(names, name)
+	}
+	return names
+}
+
+// missingCompactHandoffFields reports any codex.WorkerHandoff field whose
+// JSON name does not appear anywhere in text. composeBuildManifestBrief
+// (cmd/codex_build.go) already states every worker's output-schema
+// obligation via codex.HandoffFieldsSummary; this is the structural proof
+// that statement can never silently drop a field the type still carries --
+// a real, wired check, not merely a hand-maintained comment promising the
+// two stay in sync.
+func missingCompactHandoffFields(text string) []string {
+	var missing []string
+	for _, name := range compactHandoffFieldNames() {
+		if !strings.Contains(text, name) {
+			missing = append(missing, name)
+		}
+	}
+	return missing
 }
 
 // duplicatedBriefSectionHandoffLabel is the name duplicatedBriefSections
