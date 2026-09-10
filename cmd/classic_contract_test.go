@@ -1384,6 +1384,90 @@ func TestClassicContractPhase201Cases(t *testing.T) {
 	assertHashSnapshotsEqualForTest(t, "Classic Phase 201 case validation", before, after)
 }
 
+// classicPhase201ProbeFailEnv is set by the broken-case subtest below on the
+// spawned subprocess only, so TestClassicContractPhase201IntentionallyFailingProof
+// stays a no-op (skipped) on every ordinary `go test` invocation and can
+// never fail the package on its own.
+const classicPhase201ProbeFailEnv = "AETHER_CLASSIC_PHASE201_PROBE_FAIL"
+
+// TestClassicContractPhase201IntentionallyFailingProof exists solely so
+// TestClassicContractPhase201CausalExecution's broken-case subtest has a
+// real, deterministically-failing Go test symbol to spawn and observe --
+// without it, the causal-execution harness's "surfaces the command, exit
+// code, and captured output" behavior would go unproven. It is a no-op
+// unless explicitly asked to fail via classicPhase201ProbeFailEnv.
+func TestClassicContractPhase201IntentionallyFailingProof(t *testing.T) {
+	if os.Getenv(classicPhase201ProbeFailEnv) != "1" {
+		t.Skip("only fails when explicitly invoked as the Phase 201 broken-case proof")
+	}
+	t.Fatal("intentional failure: proves the Phase 201 causal-execution harness surfaces a broken case's command, exit code, and captured output")
+}
+
+// TestClassicContractPhase201CausalExecution is Task 2's execution proof,
+// following the structure of TestClassicContractPhase200CausalExecution: it
+// loads the corpus through the strict loader, selects every case naming a
+// SYN-201 decision, and executes each one's go_test_symbol proof through
+// executeClassicPhase200GoTestProof -- the same causal-Go-proof mechanism
+// Phase 200 already uses, generalized here by that function's own
+// semantic_fields-driven (not phase200_proof-gated) design. A SYN-201
+// decision or a Phase 201 group with zero executing cases fails by name
+// rather than passing vacuously.
+func TestClassicContractPhase201CausalExecution(t *testing.T) {
+	document := loadClassicContractCorpus(t)
+	executedDecisions := make(map[string]int, len(classicContractPhase201Decisions))
+	executedGroups := make(map[string]int, len(classicContractPhase201Groups))
+	executed := 0
+	for _, testCase := range document.Cases {
+		if !strings.HasPrefix(testCase.SynthesisDecision, "SYN-201-") {
+			continue
+		}
+		executed++
+		executedDecisions[testCase.SynthesisDecision]++
+		executedGroups[testCase.Group]++
+		t.Run(testCase.ID, func(t *testing.T) {
+			if !executeClassicPhase200GoTestProof(t, testCase) {
+				t.Fatalf("%s has no executable go_test_symbol proof", testCase.ID)
+			}
+		})
+	}
+	if executed == 0 {
+		t.Fatal("no Phase 201 cases were executed")
+	}
+	for _, id := range classicContractPhase201Decisions {
+		if executedDecisions[id] == 0 {
+			t.Errorf("SYN-201 decision %q has no executing case", id)
+		}
+	}
+	for _, group := range classicContractPhase201Groups {
+		if executedGroups[group] == 0 {
+			t.Errorf("Phase 201 group %q has no executing case", group)
+		}
+	}
+
+	t.Run("a broken case's command, exit code, and captured output are surfaced", func(t *testing.T) {
+		symbol := "TestClassicContractPhase201IntentionallyFailingProof"
+		command := exec.Command(os.Args[0], "-test.run=^"+regexp.QuoteMeta(symbol)+"$", "-test.count=1")
+		command.Env = append(append([]string(nil), os.Environ()...), classicPhase201ProbeFailEnv+"=1")
+		output, err := command.CombinedOutput()
+		if err == nil {
+			t.Fatalf("expected %s to fail under %s=1, but the subprocess exited cleanly:\n%s", symbol, classicPhase201ProbeFailEnv, output)
+		}
+		exitCode := -1
+		if command.ProcessState != nil {
+			exitCode = command.ProcessState.ExitCode()
+		}
+		if exitCode == 0 {
+			t.Fatalf("expected a nonzero exit code from %s, got %d", symbol, exitCode)
+		}
+		if !strings.Contains(string(output), symbol) {
+			t.Fatalf("captured output does not name the failing proof %s:\n%s", symbol, output)
+		}
+		if !strings.Contains(string(output), "intentional failure") {
+			t.Fatalf("captured output does not carry the failure reason:\n%s", output)
+		}
+	})
+}
+
 func TestClassicContractCorpusRequiredCategories(t *testing.T) {
 	document := loadClassicContractCorpus(t)
 	assertClassicContractJourneyMatrix(t, document)
