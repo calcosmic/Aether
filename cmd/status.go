@@ -761,6 +761,9 @@ func buildStatusResult(state colony.ColonyState, s *storage.Store) map[string]in
 	if report := loadAutopilotLastReport(s); report != nil {
 		result["last_report"] = report
 	}
+	if runningTotal := computeColonyRunningSpendTotal(state); runningTotal.hasAnyFacts() {
+		result["colony_running_total"] = runningTotal.jsonSummary()
+	}
 
 	// Reconciliation section (JSON mode)
 	recon := detectUnreconciledChanges(s, &state)
@@ -1102,6 +1105,17 @@ func renderDashboard(state colony.ColonyState, s *storage.Store, result map[stri
 	b.WriteString(renderColonyHealthLine(vitals))
 	b.WriteString(renderColonyHealthBreakdown(vitals))
 
+	// Running colony total (Phase 201, D-06): elapsed time and reported
+	// cost, summed across every planned phase's durable facts. Omitted
+	// entirely on a colony that has recorded nothing at all, so a freshly
+	// initialized colony is not shown a "not known" line about work it has
+	// never attempted.
+	runningTotal := computeColonyRunningSpendTotal(state)
+	if runningTotal.hasAnyFacts() {
+		b.WriteString("\n")
+		b.WriteString(renderColonyRunningSpendTotal(runningTotal))
+	}
+
 	// State
 	stateLabel := string(state.State)
 	if state.Paused {
@@ -1123,6 +1137,127 @@ func renderDashboard(state colony.ColonyState, s *storage.Store, result map[stri
 		b.WriteString("Watch progress with `tail -f .aether/data/spawn-tree.txt`, or run `aether proof` to inspect the active context and skill proof.\n")
 	}
 	b.WriteString(renderLifecycleClosing(result, "status"))
+
+	return b.String()
+}
+
+// colonyRunningSpendTotal is the colony-wide running total across every
+// planned phase's durable facts (Phase 201, D-06). ElapsedMeasured and
+// CostTokens are each the exact sum of the rows/attempts that answered --
+// an unreported or unmeasured row is counted in its own field and never
+// folded into either sum, matching the discipline cmd/spend_cost_line.go
+// already holds for one phase's own block.
+type colonyRunningSpendTotal struct {
+	ElapsedMeasured    time.Duration
+	ElapsedUnmeasured  int
+	CostTokens         int64
+	CostReportedRows   int
+	CostUnreportedRows int
+}
+
+// hasAnyFacts reports whether this total carries anything at all to show --
+// distinguishing "the colony has genuinely recorded nothing yet" (nothing
+// rendered) from "the colony has recorded something, some of it unreported
+// or unmeasured" (rendered, honestly).
+func (t colonyRunningSpendTotal) hasAnyFacts() bool {
+	return t.ElapsedMeasured > 0 || t.ElapsedUnmeasured > 0 ||
+		t.CostReportedRows > 0 || t.CostUnreportedRows > 0
+}
+
+// jsonSummary is the machine-readable shape for buildStatusResult's JSON
+// envelope, carrying the identical figures the visual dashboard renders so
+// neither surface can disagree with the other.
+func (t colonyRunningSpendTotal) jsonSummary() map[string]interface{} {
+	return map[string]interface{}{
+		"elapsed_seconds":      t.ElapsedMeasured.Seconds(),
+		"elapsed_unmeasured":   t.ElapsedUnmeasured,
+		"cost_tokens":          t.CostTokens,
+		"cost_reported_rows":   t.CostReportedRows,
+		"cost_unreported_rows": t.CostUnreportedRows,
+	}
+}
+
+// computeColonyRunningSpendTotal sums the running colony total across every
+// phase in state's plan. It is a pure read -- loadSpendLedgersForPhase and
+// loadLatestBuildAttempt are both read-only, and nothing here saves
+// anything, so status stays a reader (D-06): no ledger file, no lock file
+// beyond the storage layer's own first-touch bookkeeping any read already
+// carries, no state mutation.
+//
+// Cost sums through loadSpendLedgersForPhase, the SAME loader
+// cmd/spend_cost_line.go's own per-phase block already reads -- one
+// accounting path, never a second one that could disagree with it. A row
+// with no reported usage (including a row carrying only a local estimate,
+// D-01 as amended) counts toward CostUnreportedRows, never toward
+// CostTokens.
+//
+// Elapsed sums each phase's own LATEST build attempt only, mirroring
+// renderSpendCostLine's own attempt-bound scope (Task 1): a phase with no
+// attempt recorded at all contributes nothing to either figure -- there is
+// nothing to say about it -- while a phase whose attempt is missing a
+// timestamp counts toward ElapsedUnmeasured and contributes no duration,
+// via the identical spendElapsedFigure sentinel Task 1 established.
+func computeColonyRunningSpendTotal(state colony.ColonyState) colonyRunningSpendTotal {
+	var total colonyRunningSpendTotal
+	for _, phase := range state.Plan.Phases {
+		if phase.ID <= 0 {
+			continue
+		}
+		if ledgers, ok := loadSpendLedgersForPhase(phase.ID); ok {
+			totals := computeSpendTotals(ledgers)
+			total.CostTokens += totals.MeasuredTokens
+			total.CostReportedRows += totals.MeasuredRows
+			rows := spendRowsAcross(ledgers)
+			total.CostUnreportedRows += len(rows) - totals.MeasuredRows
+		}
+		if _, attempt, ok := loadLatestBuildAttempt(phase.ID); ok {
+			figure := spendElapsedFigure(attempt.StartedAt, attempt.CompletedAt)
+			if figure == spendNotReportedFigure {
+				total.ElapsedUnmeasured++
+				continue
+			}
+			duration, err := time.ParseDuration(figure)
+			if err != nil {
+				total.ElapsedUnmeasured++
+				continue
+			}
+			total.ElapsedMeasured += duration
+		}
+	}
+	return total
+}
+
+// renderColonyRunningSpendTotal renders the colony-wide running total as one
+// small dashboard section: elapsed time and reported cost, each summed from
+// the same durable per-attempt/per-row facts every other screen in this
+// repository reads, plus how many attempts/rows were unreported or
+// unmeasured, named as such so the total is never mistaken for a complete
+// figure.
+func renderColonyRunningSpendTotal(total colonyRunningSpendTotal) string {
+	var b strings.Builder
+	b.WriteString("Colony Total\n")
+
+	switch {
+	case total.ElapsedMeasured == 0 && total.ElapsedUnmeasured == 0:
+		b.WriteString("   Elapsed: not known -- no attempt has recorded a start and end yet.\n")
+	case total.ElapsedUnmeasured > 0:
+		fmt.Fprintf(&b, "   Elapsed: %s (%d attempt(s) unmeasured -- missing a start or end timestamp)\n",
+			total.ElapsedMeasured.Round(time.Second), total.ElapsedUnmeasured)
+	default:
+		fmt.Fprintf(&b, "   Elapsed: %s\n", total.ElapsedMeasured.Round(time.Second))
+	}
+
+	switch {
+	case total.CostReportedRows == 0 && total.CostUnreportedRows == 0:
+		b.WriteString("   Cost: not known -- no worker has reported a token figure yet.\n")
+	case total.CostReportedRows == 0:
+		fmt.Fprintf(&b, "   Cost: not known -- %d worker run(s) unreported.\n", total.CostUnreportedRows)
+	case total.CostUnreportedRows > 0:
+		fmt.Fprintf(&b, "   Cost: %s tokens (%d worker run(s) unreported)\n",
+			spendCompactTokenFigure(total.CostTokens), total.CostUnreportedRows)
+	default:
+		fmt.Fprintf(&b, "   Cost: %s tokens\n", spendCompactTokenFigure(total.CostTokens))
+	}
 
 	return b.String()
 }
