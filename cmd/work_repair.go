@@ -448,19 +448,30 @@ func emitRepairCheckpointRestored(phase int, check string) {
 // nothing -- matching the pre-existing no-op behavior exactly.
 //
 // This is the direct check lane's production wiring (cmd/codex_continue.go).
-func applyBoundedCheckFixRepair(ctx context.Context, root string, state colony.ColonyState, phase colony.Phase, manifest codexContinueManifest, floor deterministicFloorResult, buildWatcher codexWatcherVerification, workerTimeout, verificationTimeout time.Duration, reviewerDispatched bool) (deterministicFloorResult, *checkFixAttemptRecord) {
+//
+// Its third return value, *repairHandback, is D-11's four-part failed-repair
+// handback (see buildFailedRepairHandback below). It is non-nil only on the
+// still-failing branch -- every other path (not eligible, checkpoint save
+// failed and the pre-checkpoint fallback ran, or the fix attempt actually
+// fixed the check) returns nil. The caller, runCodexContinueVerification
+// (cmd/codex_continue.go), carries it onto codexContinueVerificationReport
+// so it reaches the blocked check screen both continue lanes render through.
+func applyBoundedCheckFixRepair(ctx context.Context, root string, state colony.ColonyState, phase colony.Phase, manifest codexContinueManifest, floor deterministicFloorResult, buildWatcher codexWatcherVerification, workerTimeout, verificationTimeout time.Duration, reviewerDispatched bool) (deterministicFloorResult, *checkFixAttemptRecord, *repairHandback) {
 	record, eligible := planCheckFixAttempt(state, phase, manifest, floor, reviewerDispatched)
 	if !eligible {
-		return floor, nil
+		return floor, nil, nil
 	}
 
 	scopePaths := repairScopePathsForCheckFix(record, manifest, phase)
-	checkpoint, err := saveRepairCheckpoint(root, repairCheckpointIdentity(phase.ID, record.Check), scopePaths)
+	checkpointID := repairCheckpointIdentity(phase.ID, record.Check)
+	checkpoint, err := saveRepairCheckpoint(root, checkpointID, scopePaths)
 	if err != nil {
 		// A checkpoint that cannot be saved must never silently block the
 		// existing D-02 fix attempt -- fall back to the pre-201-09
-		// behavior (no checkpoint, no restore) rather than refuse to try.
-		return applyAutomaticCheckFixAttempt(ctx, root, state, phase, manifest, floor, buildWatcher, workerTimeout, verificationTimeout, reviewerDispatched)
+		// behavior (no checkpoint, no restore, no handback) rather than
+		// refuse to try.
+		newFloor, fixed := applyAutomaticCheckFixAttempt(ctx, root, state, phase, manifest, floor, buildWatcher, workerTimeout, verificationTimeout, reviewerDispatched)
+		return newFloor, fixed, nil
 	}
 	defer os.RemoveAll(checkpoint.BackupDir)
 
@@ -480,12 +491,39 @@ func applyBoundedCheckFixRepair(ctx context.Context, root string, state colony.C
 
 	newFloor, fixed := applyAutomaticCheckFixAttempt(ctx, root, state, phase, manifest, floor, buildWatcher, workerTimeout, verificationTimeout, reviewerDispatched)
 
-	if fixed != nil && fixed.Outcome == "still_failing" {
-		if restoreErr := restoreRepairCheckpoint(checkpoint); restoreErr == nil {
-			emitRepairCheckpointRestored(phase.ID, record.Check)
-		}
+	if fixed == nil || fixed.Outcome != "still_failing" {
+		return newFloor, fixed, nil
 	}
-	return newFloor, fixed
+
+	restoreErr := restoreRepairCheckpoint(checkpoint)
+	restored := restoreErr == nil
+	if restored {
+		emitRepairCheckpointRestored(phase.ID, record.Check)
+	}
+
+	// D-11: assemble the handback from what actually happened -- the
+	// re-run floor's own first failing step (deterministic: the fixed
+	// build/types/lint/tests order the floor already ran them in), never a
+	// hand-typed literal.
+	failingOutput := ""
+	if step := firstFailingVerificationStep(newFloor.Steps); step != nil {
+		failingOutput = step.Output
+	}
+	outcome := repairRoundOutcome{
+		Ran:          true,
+		Passed:       false,
+		Restored:     restored,
+		CheckpointID: checkpointID,
+		Receipt:      autopilotRepairReceipt{PlannedAction: fixed.Reason},
+	}
+	handback, _, buildErr := buildFailedRepairHandback(outcome, fixed.Check, failingOutput, phase.ID)
+	if buildErr != nil {
+		// A diagnostic that cannot be assembled must never turn a blocked
+		// check into a crash -- warn and hand back no handback.
+		fmt.Fprintf(os.Stderr, "warning: could not assemble failed-repair handback for phase %d check %q: %v\n", phase.ID, fixed.Check, buildErr)
+		return newFloor, fixed, nil
+	}
+	return newFloor, fixed, &handback
 }
 
 // repairScopePathsForCheckFix derives the checkpoint scope for a D-02 check
@@ -598,10 +636,10 @@ func deliverFailureBornRepairSignal(phase int, check, attemptID string) string {
 // concrete action for the owner. Named fields, not one prose blob, so each
 // element can be checked independently.
 type repairHandback struct {
-	Diagnosis        string
-	AttemptedAndWhy  string
-	RestoredPosition string
-	OwnerAction      LifecycleCloseoutRecommendedAction
+	Diagnosis        string                             `json:"diagnosis"`
+	AttemptedAndWhy  string                             `json:"attempted_and_why"`
+	RestoredPosition string                             `json:"restored_position"`
+	OwnerAction      LifecycleCloseoutRecommendedAction `json:"owner_action"`
 }
 
 // buildFailedRepairHandback assembles D-11's handback from a failed repair
@@ -626,6 +664,9 @@ func buildFailedRepairHandback(outcome repairRoundOutcome, failingCheck, failing
 	attempted := fmt.Sprintf("Tried: %s. It did not fix the %s check -- verification failed again after the fix ran.", plannedAction, failingCheck)
 
 	restored := fmt.Sprintf("Your project has been put back exactly to the state it was saved in, just before the automatic fix ran (checkpoint %s).", outcome.CheckpointID)
+	if !outcome.Restored {
+		restored = fmt.Sprintf("The automatic fix could not be undone cleanly, so the safe position saved before it ran (checkpoint %s) could not be confirmed -- check your working tree by hand before doing anything else.", outcome.CheckpointID)
+	}
 
 	_, attempt, _ := loadLatestBuildAttempt(phaseNum)
 	if strings.TrimSpace(attempt.Error) == "" {
@@ -650,4 +691,42 @@ func buildFailedRepairHandback(outcome repairRoundOutcome, failingCheck, failing
 		StandingInstructions: []string{restored},
 	}
 	return handback, details, nil
+}
+
+// renderFailedRepairHandback renders D-11's four-part failed-repair
+// handback as one plain-English block for a reader who has never opened a
+// file here: one labelled part each for what is failing, what was tried and
+// why it did not take, where the project stands now, and the one concrete
+// thing to do next with its reason and the alternatives beneath it. No
+// check-outcome enum spelling ("still_failing") or code token ever reaches
+// this text -- every part is prose assembled by buildFailedRepairHandback.
+func renderFailedRepairHandback(handback repairHandback) string {
+	var b strings.Builder
+	b.WriteString(renderStageMarker("What happened with the automatic fix"))
+	b.WriteString("What is failing\n  ")
+	b.WriteString(handback.Diagnosis)
+	b.WriteString("\n\n")
+	b.WriteString("What was tried, and why it did not work\n  ")
+	b.WriteString(handback.AttemptedAndWhy)
+	b.WriteString("\n\n")
+	b.WriteString("Where the project stands now\n  ")
+	b.WriteString(handback.RestoredPosition)
+	b.WriteString("\n\n")
+	b.WriteString("What to do next\n  ")
+	b.WriteString(handback.OwnerAction.Command)
+	if reason := strings.TrimSpace(handback.OwnerAction.Reason); reason != "" {
+		b.WriteString(" -- ")
+		b.WriteString(reason)
+	}
+	b.WriteString("\n")
+	for _, alt := range handback.OwnerAction.Alternatives {
+		alt = strings.TrimSpace(alt)
+		if alt == "" {
+			continue
+		}
+		b.WriteString("  Or: ")
+		b.WriteString(alt)
+		b.WriteString("\n")
+	}
+	return b.String()
 }
