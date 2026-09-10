@@ -386,7 +386,7 @@ func recommendedActionForWorkOutcome(verdict colony.WorkOutcome, attempt buildAt
 	case colony.WorkOutcomeInterrupted:
 		return LifecycleCloseoutRecommendedAction{
 			Command:      "aether resume",
-			Reason:       "the attempt was stopped before it finished, and aether resume is the one recovery door back into it.",
+			Reason:       "the attempt was stopped before it was done, and aether resume is the one recovery door back into it.",
 			Alternatives: []string{statusAlternative},
 		}, nil
 	default:
