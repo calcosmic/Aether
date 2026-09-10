@@ -364,13 +364,13 @@ Plans:
 
 **Requirements:** SYNTH-03, CEC-06, WORK-01..08
 
-**Plans:** 15 plans
+**Plans:** 1/15 plans executed
 
 Plans:
 
 **Wave 1**
 
-- [ ] 201-01-PLAN.md — Publish the cited work-cycle mechanism synthesis and register its decisions in the Classic corpus.
+- [x] 201-01-PLAN.md — Publish the cited work-cycle mechanism synthesis and register its decisions in the Classic corpus.
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

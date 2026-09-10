@@ -5,16 +5,16 @@ milestone_name: Classic Colony Restoration
 current_phase: 201
 current_phase_name: Queen-Led Work Cycle
 status: executing
-stopped_at: Phase 201 planned — 15 plans ready to execute
-last_updated: "2026-09-10T11:20:23.689Z"
+stopped_at: Completed 201-01-PLAN.md
+last_updated: "2026-09-10T11:50:33.695Z"
 last_activity: 2026-09-10
-last_activity_desc: Phase 201 planning complete
-state_head: b1ba6243932b82fd8f8b1b7d65c8af08426623c6
+last_activity_desc: Phase 201 execution started
+state_head: 8f21a8764c06918ce54d94958ea2ae12466f13ab
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 104
-  completed_plans: 89
+  completed_plans: 90
   percent: 0
 ---
 
@@ -25,17 +25,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-07)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 200 — Iterative Planning
+**Current focus:** Phase 201 — Queen-Led Work Cycle
 **Previous milestone:** v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02 (48/48 requirements; audit `tech_debt`, no blockers)
 **Product version:** v1.0.66 (installed and source binaries agree in the 2026-09-02 local check)
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
 
 ## Current Position
 
-Phase: 201 (Queen-Led Work Cycle) — READY TO EXECUTE
-Plan: 89 of 89
+Phase: 201 (Queen-Led Work Cycle) — EXECUTING
+Plan: 2 of 15
 Status: Ready to execute
-Last activity: 2026-09-10 — Phase 201 planning complete
+Last activity: 2026-09-10 — Phase 201 execution started
 
 ## Performance Metrics
 
@@ -168,6 +168,7 @@ Last activity: 2026-09-10 — Phase 201 planning complete
 | Phase 200 P52 | 83min | 3 tasks | 9 files |
 | Phase 200 P53 | 20min | 2 tasks | 3 files |
 | Phase 200 P54 | 38min | 3 tasks | 9 files |
+| Phase 201 P01 | 55min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -539,6 +540,8 @@ Last activity: 2026-09-10 — Phase 201 planning complete
 - [Phase 200]: Partial build cards and envelopes consume typed partial_recovery authority. — Loose recovery fields are compatibility projections, not independent sources of truth.
 - [Phase 200]: Golden snapshots refresh only after canonical authority and semantic assertions pass. — Approved specifications, accepted plans, receipts, attempts, and claims prevent refusal output from masquerading as a valid golden.
 - [Phase 200]: Static debt inventories may only move one-for-one or shrink. — The live and frozen command-advice copies remain byte-identical, and no new writer waiver was accepted.
+- [Phase 201]: SYN-201-03/04/10/14 resolve RESEARCH.md's 3 open questions + Assumption A2 as explicit synthesis rows (boundary decision type, lane error-surface split, model-routing policy layer, pause-handoff reuse for repair checkpoints).
+- [Phase 201]: Classic's double build-time-Watcher + continue-time-review-squad pattern predates the modern double-verification defect (OLD-03/04); SYN-201-03 disposes replace-better, not restore-modern, so the phase does not restore the wasteful pattern it exists to remove.
 
 ### Pending Todos
 
@@ -655,9 +658,9 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-10T10:39:29.234Z
-Stopped at: Phase 201 context gathered
-Resume file: .planning/phases/201-queen-led-work-cycle/201-CONTEXT.md
+Last session: 2026-09-10T11:50:33.649Z
+Stopped at: Completed 201-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
