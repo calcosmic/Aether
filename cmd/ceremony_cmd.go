@@ -261,6 +261,30 @@ func renderCeremonyCloseout(workflow, completionFile string) (map[string]interfa
 		// The card the owner reads and the fields a wrapper reads come from one
 		// resolve (Phase 197 plan 04).
 		applyLifecycleNextAction(result, state, workflow, override, "")
+		// D-03/D-05/D-07/D-08 (201-19): the wrapper's own build closeout gets
+		// the same verdict-carrying treatment the direct lane's ending screen
+		// does. The completion's own phase (the manifest-derived
+		// completion_phase this closeout was actually run for, falling back
+		// to the live colony's current_phase) is what buildWorkCloseoutDetails
+		// resolves against -- never a second, independent phase guess. When
+		// no verdict resolves, or applyLifecycleCloseout errors because this
+		// result carries no lifecycle projection, this falls through to
+		// exactly what renderCeremonyCloseout returned before this existed.
+		if workflow == "build" {
+			phaseID := intValue(result["completion_phase"])
+			if phaseID == 0 {
+				phaseID = intValue(result["current_phase"])
+			}
+			if details, ok := buildWorkCloseoutDetails(phaseID); ok {
+				if err := applyLifecycleCloseout(result, workflow, details); err == nil {
+					body := renderCeremonyCloseoutVisualBody(result)
+					if fileCard := renderBuildResultFileSection(phaseID); fileCard != "" {
+						body = strings.TrimRight(body, "\n") + "\n\n" + fileCard
+					}
+					return result, appendLifecycleCloseoutVisual(body, result, detectPlatform())
+				}
+			}
+		}
 	} else {
 		result["state_available"] = false
 		result["message"] = colonyStateLoadMessage(stateErr)
@@ -563,7 +587,13 @@ func renderCeremonyWorkerComplete(workflow string, dispatch ceremonyDispatch) st
 	return b.String()
 }
 
-func renderCeremonyCloseoutVisual(result map[string]interface{}) string {
+// renderCeremonyCloseoutVisualBody renders the ceremony closeout up through
+// the closing block, stopping before the one cost-and-time line. Split out
+// (201-19) so the build workflow's own verdict-carrying closeout
+// (renderCeremonyCloseout) can share this exact body with the generic
+// renderer below it, instead of duplicating it or letting either path
+// produce a second cost block on the same screen.
+func renderCeremonyCloseoutVisualBody(result map[string]interface{}) string {
 	workflow := normalizedCeremonyWorkflow(stringValue(result["workflow"]))
 	title := fmt.Sprintf("%s Summary", workflow)
 	emoji := commandEmoji(workflow)
@@ -658,20 +688,27 @@ func renderCeremonyCloseoutVisual(result map[string]interface{}) string {
 	}
 	writeCeremonyCompletionReport(&b, result)
 	b.WriteString(renderLifecycleClosing(result, stringValue(result["workflow"])))
-	// The one cost line, last on the screen — the same position it takes on
-	// the direct lane's own ending screens, so "the cost line is the last
-	// thing you read" is one rule rather than two. Only the two workflows
-	// that actually spawn workers reach it: nothing was spent planning a
-	// phase or archiving a finished project, so a cost block on those screens
-	// would be a heading over an empty answer (cmd/spend_cost_line.go).
+	return b.String()
+}
+
+// renderCeremonyCloseoutVisual is the thin wrapper around the body above: it
+// appends the one cost-and-time line, last on the screen — the same
+// position it takes on the direct lane's own ending screens, so "the cost
+// line is the last thing you read" is one rule rather than two. Only the two
+// workflows that actually spawn workers reach it: nothing was spent planning
+// a phase or archiving a finished project, so a cost block on those screens
+// would be a heading over an empty answer (cmd/spend_cost_line.go).
+func renderCeremonyCloseoutVisual(result map[string]interface{}) string {
+	workflow := normalizedCeremonyWorkflow(stringValue(result["workflow"]))
+	body := renderCeremonyCloseoutVisualBody(result)
 	if workflow == "build" || workflow == "continue" {
 		phaseID := intValue(result["completion_phase"])
 		if phaseID == 0 {
 			phaseID = intValue(result["current_phase"])
 		}
-		return appendSpendCostLine(b.String(), phaseID)
+		return appendSpendCostLine(body, phaseID)
 	}
-	return b.String()
+	return body
 }
 
 // renderPendingSuggestionsBlock renders the once-at-the-end, tick-to-approve

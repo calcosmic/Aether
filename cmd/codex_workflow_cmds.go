@@ -456,16 +456,40 @@ var buildCmd = &cobra.Command{
 			}
 		}
 		reviewDepthBuild := reviewDepthFromResult(result)
-		buildVisual := appendSpendCostLine(
-			renderBuildVisualWithDispatches(state, state.Plan.Phases[phaseNum-1], dispatches, reviewDepthBuild, queenPolicyFromResult(result)),
-			phaseNum,
-		)
+		renderedBuildVisual := renderBuildVisualWithDispatches(state, state.Plan.Phases[phaseNum-1], dispatches, reviewDepthBuild, queenPolicyFromResult(result))
+
+		// D-03/D-05/D-07/D-08 (201-19): when the phase's own sealed build
+		// attempt resolves to a real work verdict, render the verdict, the
+		// recommended next action and the credited/uncredited file card
+		// through the one shared closeout instead of today's plain visual.
+		// A phase with no terminal attempt, or a result with no lifecycle
+		// projection to apply the closeout onto (applyLifecycleCloseout
+		// erroring), falls through to exactly today's rendering -- nothing
+		// regresses for an older or projection-less result.
+		var buildVisual string
+		var closeoutRendered bool
+		if details, ok := buildWorkCloseoutDetails(phaseNum); ok {
+			result["current_phase"] = phaseNum
+			if err := applyLifecycleCloseout(result, "build", details); err == nil {
+				body := renderedBuildVisual
+				if fileCard := renderBuildResultFileSection(phaseNum); fileCard != "" {
+					body = strings.TrimRight(body, "\n") + "\n\n" + fileCard
+				}
+				buildVisual = appendLifecycleCloseoutVisual(body, result, detectPlatform())
+				closeoutRendered = true
+			} else {
+				delete(result, "current_phase")
+			}
+		}
+		if !closeoutRendered {
+			// The one cost line ends this lane's ending screen too. The
+			// plan-only path above deliberately does NOT get one: nothing has
+			// been spent yet when a team is merely being planned.
+			buildVisual = appendSpendCostLine(renderedBuildVisual, phaseNum)
+		}
 		if advisoryVisual := renderBuildAdvisoryResult(result); advisoryVisual != "" {
 			buildVisual = advisoryVisual + "\n\n" + buildVisual
 		}
-		// The one cost line ends this lane's ending screen too. The
-		// plan-only path above deliberately does NOT get one: nothing has
-		// been spent yet when a team is merely being planned.
 		outputWorkflow(result, buildVisual)
 		return nil
 	},
