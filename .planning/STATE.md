@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
 status: executing
-stopped_at: Completed 201-05-PLAN.md
-last_updated: "2026-09-10T13:55:33.749Z"
+stopped_at: Completed 201-06-PLAN.md
+last_updated: "2026-09-10T14:24:11.791Z"
 last_activity: 2026-09-10
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 104
-  completed_plans: 94
+  completed_plans: 95
   percent: 29
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 201 (Queen-Led Work Cycle) — EXECUTING
-Plan: 6 of 15
+Plan: 7 of 15
 Status: Ready to execute
 Last activity: 2026-09-10
 
@@ -169,6 +169,7 @@ Last activity: 2026-09-10
 | Phase 201 P03 | 50min | 3 tasks | 3 files |
 | Phase 201 P04 | 45min | 3 tasks | 4 files |
 | Phase 201 P05 | 50min | 3 tasks | 6 files |
+| Phase 201 P06 | 45min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -549,6 +550,9 @@ Last activity: 2026-09-10
 - [Phase ?]: The closeout's generic default summary now reads from WorkOutcomeLabels() when a verdict is present, fixing a real word collision with the success label. — The generic fallback text shared the word finished with the success verdict's label, which would have borrowed success-shaped language onto every non-success card.
 - [Phase 201]: queenBuildPostWaveDispatches and plannedContinueReviewDispatches now derive attemptRel internally via loadLatestBuildAttempt(phase.ID) rather than taking a new parameter, avoiding a signature change across dozens of existing call sites — Threading attemptRel as a new parameter through plannedBuildDispatchesWithJobProposals/plannedContinueReviewDispatches would have broken ~15 existing test call sites across the cmd package; deriving it internally from the phase ID (already available) keeps every existing signature stable while still reading the real per-attempt record
 - [Phase 201]: With no verification-boundary decision recorded for an attempt (the common case until a later plan wires up the write side), build-end now dispatches zero post-wave reviewers unconditionally, even under --heavy or explicit --castes — The plan's own behavior spec is unconditional on this point (check-step is the safe default, D-01); this required updating 7 pre-existing tests that asserted measurer/chaos present at build time under heavy depth to record a build-end boundary fixture first
+- [Phase ?]: Elapsed time is attempt-bound (renderSpendCostLine(phase) only); an absent attempt renders no line at all, distinct from an incomplete one which renders the dash sentinel.
+- [Phase ?]: Cost-and-time block in lifecycle_closeout.go is gated strictly on WorkOutcome != nil, reusing appendSpendCostLine as the single placement rule rather than a workflow allowlist.
+- [Phase ?]: Colony-wide running total sums cost across every attempt via loadSpendLedgersForPhase but elapsed from only each phase's latest build attempt via loadLatestBuildAttempt.
 
 ### Pending Todos
 
@@ -665,8 +669,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-10T13:55:24.127Z
-Stopped at: Completed 201-05-PLAN.md
+Last session: 2026-09-10T14:24:11.781Z
+Stopped at: Completed 201-06-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

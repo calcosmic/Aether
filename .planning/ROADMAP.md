@@ -364,7 +364,7 @@ Plans:
 
 **Requirements:** SYNTH-03, CEC-06, WORK-01..08
 
-**Plans:** 5/15 plans executed
+**Plans:** 6/15 plans executed
 
 Plans:
 
@@ -384,7 +384,7 @@ Plans:
 **Wave 4** *(blocked on Wave 3 completion)*
 
 - [x] 201-05-PLAN.md — Eliminate double verification and render the honest unverified build card.
-- [ ] 201-06-PLAN.md — Add elapsed time to the cost block and the running colony total to status.
+- [x] 201-06-PLAN.md — Add elapsed time to the cost block and the running colony total to status.
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
