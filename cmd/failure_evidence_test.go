@@ -421,3 +421,156 @@ func TestOneRecoveryModelConsumesFlagsAndFailures(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// Task 3: this phase's own failure-born signal reaches the repair wave's
+// brief, in the same run.
+// ---------------------------------------------------------------------------
+
+func seedFailureBornMiddenEntry(t *testing.T, phase int, attemptID, message string) {
+	t.Helper()
+	if store == nil {
+		t.Fatal("seedFailureBornMiddenEntry: store is nil")
+	}
+	if err := appendMiddenEntry(store, middenCategoryWorkerFailed, "aether build", message, []string{"build", "builder", middenAttemptTagPrefix + attemptID}); err != nil {
+		t.Fatalf("seed failure-born midden entry: %v", err)
+	}
+}
+
+func TestFailureBornSignalReachesTheRepairBrief(t *testing.T) {
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	const attemptID = "attempt-repair-brief-1"
+	const failureText = "go test ./cmd -run TestWidget failed: nil pointer dereference in widget.go"
+	seedFailureBornMiddenEntry(t, 5, attemptID, failureText+" — build phase 5, worker Mason-1 (builder), status failed")
+
+	delivered := deliverFailureBornRepairSignal(5, "go test ./cmd", attemptID)
+	if delivered == "" {
+		t.Fatal("deliverFailureBornRepairSignal returned empty text for a known failure record")
+	}
+	if !strings.Contains(delivered, failureText) {
+		t.Fatalf("delivered signal = %q, want it to name the specific failure %q", delivered, failureText)
+	}
+
+	// The repair worker's brief: plannedCheckFixBuilderDispatch
+	// (cmd/check_fix_attempt.go) already sets ContextCapsule to
+	// resolveCodexWorkerContext() -- the same function every other build
+	// worker's steering content flows through. Read it back here to prove
+	// the signal actually reaches that existing channel.
+	brief := resolveCodexWorkerContext()
+	if !strings.Contains(brief, failureText) {
+		t.Fatalf("resolveCodexWorkerContext() does not carry the same-run failure signal:\n%s", brief)
+	}
+
+	// composeBuildManifestBrief's own "## Pheromone Signals" steering
+	// section reads the identical active-signal store -- no new section was
+	// added for this.
+	pheromoneSection := resolvePheromoneSection()
+	if !strings.Contains(pheromoneSection, failureText) {
+		t.Fatalf("resolvePheromoneSection() does not carry the same-run failure signal:\n%s", pheromoneSection)
+	}
+	if strings.Contains(brief, "## Same-Run Repair Signal") || strings.Contains(pheromoneSection, "## Same-Run Repair Signal") {
+		t.Fatal("a new brief section was introduced; the signal must ride the existing pheromone-signal channel only")
+	}
+}
+
+// TestSignalDeliveredBeforeRepairDispatch asserts, from the parsed syntax
+// tree of applyBoundedCheckFixRepair, that the call to
+// deliverFailureBornRepairSignal appears (as a statement) before the call
+// to applyAutomaticCheckFixAttempt that actually dispatches the repair
+// wave -- proving delivery happens inside this run, before the dispatch,
+// not merely "eventually".
+func TestSignalDeliveredBeforeRepairDispatch(t *testing.T) {
+	fset := token.NewFileSet()
+	path := filepath.Join(".", "work_repair.go")
+	file, err := parser.ParseFile(fset, path, nil, 0)
+	if err != nil {
+		t.Fatalf("parse %s: %v", path, err)
+	}
+
+	var deliverPos, dispatchPos token.Pos
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Body == nil || fn.Name.Name != "applyBoundedCheckFixRepair" {
+			continue
+		}
+		ast.Inspect(fn.Body, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			ident, ok := call.Fun.(*ast.Ident)
+			if !ok {
+				return true
+			}
+			switch ident.Name {
+			case "deliverFailureBornRepairSignal":
+				if deliverPos == token.NoPos {
+					deliverPos = call.Pos()
+				}
+			case "applyAutomaticCheckFixAttempt":
+				// There are two call sites: an early-return fallback taken
+				// ONLY when saving the checkpoint itself fails (before any
+				// signal could be delivered), and the real dispatch taken
+				// after the checkpoint succeeds. The LAST occurrence in
+				// source order is always the real dispatch -- the fallback
+				// is textually first because it sits in the checkpoint's
+				// own error-handling block, earlier in the function body.
+				dispatchPos = call.Pos()
+			}
+			return true
+		})
+	}
+	if deliverPos == token.NoPos {
+		t.Fatal("applyBoundedCheckFixRepair does not call deliverFailureBornRepairSignal")
+	}
+	if dispatchPos == token.NoPos {
+		t.Fatal("applyBoundedCheckFixRepair does not call applyAutomaticCheckFixAttempt")
+	}
+	if deliverPos >= dispatchPos {
+		t.Fatalf("deliverFailureBornRepairSignal (pos %d) must be called before the real repair dispatch (pos %d)", deliverPos, dispatchPos)
+	}
+}
+
+func TestRepairBriefRespectsItsContentBudget(t *testing.T) {
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	const attemptID = "attempt-repair-brief-2"
+	// Deliberately far longer than signalContentSafeLimit so truncation is
+	// forced.
+	longFailure := strings.Repeat("this failure text is exactly the same repeated phrase, over and over again, ", 10)
+	seedFailureBornMiddenEntry(t, 9, attemptID, longFailure+" — build phase 9, worker Hammer-1 (builder), status failed")
+
+	delivered := deliverFailureBornRepairSignal(9, "go vet ./cmd", attemptID)
+	if delivered == "" {
+		t.Fatal("deliverFailureBornRepairSignal returned empty text for a known (over-long) failure record")
+	}
+	if len(delivered) > signalContentSafeLimit {
+		t.Fatalf("delivered signal is %d chars, want it capped at the declared budget (%d chars)", len(delivered), signalContentSafeLimit)
+	}
+	if !strings.HasSuffix(delivered, "...") {
+		t.Fatalf("delivered signal = %q, want a forced trim to be reported (trailing ellipsis) rather than silently dropped", delivered)
+	}
+
+	// The trimmed signal must still have been genuinely stored -- never
+	// silently discarded because it was too long.
+	var pf colony.PheromoneFile
+	if err := s.LoadJSON("pheromones.json", &pf); err != nil {
+		t.Fatalf("load pheromones.json: %v", err)
+	}
+	found := false
+	for _, sig := range pf.Signals {
+		var content struct {
+			Text string `json:"text"`
+		}
+		if err := json.Unmarshal(sig.Content, &content); err == nil && content.Text == delivered {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("the trimmed signal was not durably stored in pheromones.json: %+v", pf.Signals)
+	}
+}

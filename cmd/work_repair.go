@@ -465,6 +465,19 @@ func applyBoundedCheckFixRepair(ctx context.Context, root string, state colony.C
 	defer os.RemoveAll(checkpoint.BackupDir)
 
 	emitRepairCheckpointSaved(phase.ID, record.Check)
+
+	// D-12: deliver this same-run attempt's own failure evidence (Task 1's
+	// midden entry, written by recordDispatchWorkerOutcome before this check
+	// ever ran) into the repair wave's brief -- before the repair wave
+	// dispatches, so the second attempt does not repeat the first attempt's
+	// mistake. plannedCheckFixBuilderDispatch's ContextCapsule already reads
+	// resolveCodexWorkerContext(), which already surfaces active pheromone
+	// signals; deliverFailureBornRepairSignal reuses that existing steering
+	// channel rather than adding a new one.
+	if _, attempt, ok := loadLatestBuildAttempt(phase.ID); ok {
+		deliverFailureBornRepairSignal(phase.ID, record.Check, attempt.ID)
+	}
+
 	newFloor, fixed := applyAutomaticCheckFixAttempt(ctx, root, state, phase, manifest, floor, buildWatcher, workerTimeout, verificationTimeout, reviewerDispatched)
 
 	if fixed != nil && fixed.Outcome == "still_failing" {
@@ -504,6 +517,79 @@ func repairScopePathsForCheckFix(record checkFixAttemptRecord, manifest codexCon
 		paths = append(paths, path)
 	}
 	return paths
+}
+
+// failureBornRepairSignal (D-12) reads the failure evidence Task 1 wrote
+// (cmd/memory_feed.go's recordDispatchWorkerOutcome -> midden.json, tagged
+// via middenAttemptTagPrefix) for the exact attempt driving this repair
+// round, and returns the newest matching entry's own sanitised message --
+// worker text that was already sanitised once, at storage time
+// (sanitizedWorkerSentence), and is never re-sanitised into a different
+// value here on replay. Returns "" when this attempt produced no failure
+// record (nothing to steer around) or when store is unavailable.
+func failureBornRepairSignal(attemptID string) string {
+	attemptID = strings.TrimSpace(attemptID)
+	if store == nil || attemptID == "" {
+		return ""
+	}
+	mf, err := loadMiddenFile(store)
+	if err != nil {
+		return ""
+	}
+	var newest colony.MiddenEntry
+	found := false
+	for _, entry := range mf.Entries {
+		if entry.Category != middenCategoryWorkerFailed {
+			continue
+		}
+		if middenEntryAttemptID(entry) != attemptID {
+			continue
+		}
+		if !found || entry.Timestamp > newest.Timestamp {
+			newest = entry
+			found = true
+		}
+	}
+	if !found {
+		return ""
+	}
+	return newest.Message
+}
+
+// deliverFailureBornRepairSignal (D-12) writes the same-run failure-born
+// signal into the ONE existing steering-signal channel every dispatch
+// already reads from -- active pheromone signals (writePheromoneSignal,
+// read back by both resolveCodexWorkerContext, which
+// plannedCheckFixBuilderDispatch's ContextCapsule already calls, and
+// composeBuildManifestBrief's own "## Pheromone Signals" section) -- never
+// a new section. Called once, right after the repair checkpoint is saved
+// and before the repair wave dispatches (see applyBoundedCheckFixRepair),
+// so delivery happens inside this same run rather than at the next phase
+// boundary.
+//
+// Content is truncated (never silently dropped) to signalContentSafeLimit
+// -- the same budget-with-visible-ellipsis discipline
+// emitMiddenThresholdRedirect already applies to the near-identical
+// "recurring failure" signal (cmd/phase_end_signals.go) -- so a forced trim
+// reports the omission via the trailing "..." rather than a signal that
+// silently vanishes. A write failure is warned to stderr and never blocks
+// the repair round (writing failure evidence never fails a build or a
+// check). Returns the delivered text ("" when there was nothing to
+// deliver), so a caller can assert on exactly what reached the channel.
+func deliverFailureBornRepairSignal(phase int, check, attemptID string) string {
+	signal := failureBornRepairSignal(attemptID)
+	if strings.TrimSpace(signal) == "" {
+		return ""
+	}
+	text := truncateSignalContent(fmt.Sprintf(
+		"Same-run repair signal for phase %d: the %s check just failed with %s -- do not repeat that same action for this repair.",
+		phase, check, signal,
+	), signalContentSafeLimit)
+	if _, _, err := writePheromoneSignal("REDIRECT", text, "", "aether continue", "", "", 0, nil); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not deliver same-run repair signal for phase %d check %q: %v\n", phase, check, err)
+		return ""
+	}
+	return text
 }
 
 // repairHandback is D-11's four-element failed-repair handback: a
