@@ -55,8 +55,8 @@ func TestAvailabilityPreflightAttemptsAreBoundedByFailureClass(t *testing.T) {
 
 	t.Run("timeout gets one retry", func(t *testing.T) {
 		binary, counter := writeCountingProbe(t, map[int]bool{1: true}, 0)
-		t.Setenv("AETHER_PREFLIGHT_TIMEOUT", "500ms")
-		t.Setenv("AETHER_PROBE_TIMEOUT", "500ms") // keeps the RED run bounded before the shared setting lands
+		t.Setenv("AETHER_PREFLIGHT_TIMEOUT", "8s")
+		t.Setenv("AETHER_PROBE_TIMEOUT", "8s") // keeps the RED run bounded before the shared setting lands
 
 		if _, err := runAvailabilityProbe(context.Background(), binary); err != nil {
 			t.Fatalf("second readiness attempt should succeed: %v", err)

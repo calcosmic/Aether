@@ -73,7 +73,7 @@ func shrinkPreflightTimeout(t *testing.T, d time.Duration) {
 // the three consecutive /ant-plan failures in M4L on 27 July 2026: the probe
 // timed out once, and nothing retried it.
 func TestHostedPreflightRetriesAfterTimeout(t *testing.T) {
-	shrinkPreflightTimeout(t, 1500*time.Millisecond)
+	shrinkPreflightTimeout(t, 8*time.Second)
 	binary, counter := writeCountingProbe(t, map[int]bool{1: true}, 0)
 
 	status := AvailabilityStatus{Platform: PlatformClaude, Binary: binary, Available: true}
@@ -107,7 +107,7 @@ func TestHostedPreflightDoesNotRetryHardFailure(t *testing.T) {
 // When every attempt times out the command still fails — tolerance must not
 // become an unbounded retry loop.
 func TestHostedPreflightGivesUpAfterAllAttempts(t *testing.T) {
-	shrinkPreflightTimeout(t, 1500*time.Millisecond)
+	shrinkPreflightTimeout(t, 8*time.Second)
 	binary, counter := writeCountingProbe(t, map[int]bool{1: true, 2: true}, 0)
 
 	status := AvailabilityStatus{Platform: PlatformClaude, Binary: binary, Available: true}
@@ -256,7 +256,10 @@ func TestHostedPreflightRunsOutsideRepoWorkingTree(t *testing.T) {
 func TestCodexPreflightHonorsSharedTimeoutAndRetry(t *testing.T) {
 	binary, counter := writeCountingProbe(t, map[int]bool{1: true}, 0)
 	t.Setenv("AETHER_CODEX_PATH", binary)
-	t.Setenv("AETHER_PREFLIGHT_TIMEOUT", "1500ms")
+	// 8s (not a tight 1500ms) so the healthy second attempt has slack to
+	// launch under full-suite CPU contention; the run-1 hang is sleep 30, so
+	// the first-attempt timeout this test relies on still fires well below it.
+	t.Setenv("AETHER_PREFLIGHT_TIMEOUT", "8s")
 
 	result := NewRealInvoker().Preflight(context.Background(), t.TempDir())
 
