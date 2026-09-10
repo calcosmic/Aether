@@ -482,6 +482,10 @@ type directCodexBuildPreparation struct {
 	Dispatches    []codexBuildDispatch
 	JobDecisions  []coherentJobDecision
 	CasteDecision map[string]interface{}
+	// VerificationBoundary is the reconciled decision (queenApplyVerificationBoundary)
+	// for where reviewer judgement lands on this exact preparation -- the same
+	// value this preparation's own Dispatches were planned against (D-01).
+	VerificationBoundary verificationBoundaryDecision
 }
 
 // codexBuildPlanAuthorityError preserves the typed refusal through build's
@@ -562,8 +566,12 @@ func prepareDirectCodexBuild(root string, state colony.ColonyState, phaseNum int
 	})
 	reviewDepth := colony.NormalizeVerificationDepth(policy.VerificationDepth)
 	mergedQueenCastes, queenCasteWhyReasons := parseAndMergeCasteWhy(options.QueenCastes, options.QueenCasteWhy)
+	// D-01/D-02: reconciled exactly once per preparation, before dispatches are
+	// planned, so the decision this preparation returns is the SAME one its own
+	// Dispatches were planned against -- not a later, possibly different, read.
+	boundaryDecision := queenApplyVerificationBoundary(options.QueenVerificationBoundary, options.QueenVerificationBoundaryWhy, phase, state)
 	dispatches, jobDecisions, err := plannedBuildDispatchesWithJobProposals(
-		phase, state, selectedTaskIDs, reviewDepth, mergedQueenCastes, options.QueenCasteReason, queenCasteWhyReasons, options.JobProposals,
+		phase, state, selectedTaskIDs, reviewDepth, mergedQueenCastes, options.QueenCasteReason, queenCasteWhyReasons, options.JobProposals, boundaryDecision,
 	)
 	if err != nil {
 		return directCodexBuildPreparation{}, err
@@ -579,14 +587,15 @@ func prepareDirectCodexBuild(root string, state colony.ColonyState, phaseNum int
 	}
 
 	return directCodexBuildPreparation{
-		State:         state,
-		Phase:         phase,
-		PlanAuthority: authority,
-		Policy:        policy,
-		ReviewDepth:   reviewDepth,
-		Dispatches:    dispatches,
-		JobDecisions:  jobDecisions,
-		CasteDecision: queenCasteDecisionSummary(phase, state, reviewDepth, mergedQueenCastes, options.QueenCasteReason, queenCasteWhyReasons),
+		State:                state,
+		Phase:                phase,
+		PlanAuthority:        authority,
+		Policy:               policy,
+		ReviewDepth:          reviewDepth,
+		Dispatches:           dispatches,
+		JobDecisions:         jobDecisions,
+		CasteDecision:        queenCasteDecisionSummary(phase, state, reviewDepth, mergedQueenCastes, options.QueenCasteReason, queenCasteWhyReasons),
+		VerificationBoundary: boundaryDecision,
 	}, nil
 }
 
@@ -697,8 +706,12 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	// planner runs here, before an idle attempt can be superseded, so invalid
 	// proposals and dependency cycles have a strict zero-side-effect boundary.
 	mergedQueenCastes, queenCasteWhyReasons := parseAndMergeCasteWhy(options.QueenCastes, options.QueenCasteWhy)
+	// D-01/D-02: reconciled exactly once per plan-only invocation, before
+	// dispatches are planned, so this build's own dispatch list and its
+	// persisted attempt record (attachVerificationBoundary, below) agree.
+	boundaryDecision := queenApplyVerificationBoundary(options.QueenVerificationBoundary, options.QueenVerificationBoundaryWhy, phase, state)
 	dispatches, jobDecisions, err := plannedBuildDispatchesWithJobProposals(
-		phase, state, selectedTaskIDs, reviewDepth, mergedQueenCastes, options.QueenCasteReason, queenCasteWhyReasons, options.JobProposals,
+		phase, state, selectedTaskIDs, reviewDepth, mergedQueenCastes, options.QueenCasteReason, queenCasteWhyReasons, options.JobProposals, boundaryDecision,
 	)
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
@@ -860,6 +873,15 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 		receipt, err := commitBuildStart(root, request, options.BuildStartOptions)
 		if err != nil {
 			return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+		}
+		// D-01: persist the SAME decision this build's own dispatches were
+		// planned against, immediately, onto the attempt it belongs to. An
+		// unrecorded boundary would leave the check step unable to tell
+		// whether review already happened at build end, so a write failure
+		// here fails the build start exactly like any other evidentiary
+		// write failure on this path.
+		if err := attachVerificationBoundary(receipt.AttemptPath, boundaryDecision); err != nil {
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to record verification boundary decision: %w", err)
 		}
 		if err := persistBuildWorkerBriefFiles(preparedBriefs); err != nil {
 			return nil, colony.ColonyState{}, colony.Phase{}, nil, err
@@ -1137,6 +1159,17 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 			_ = transitionBuildAttempt(attemptRel, buildAttemptInterrupted, "build command ended before durable finalization", nil, nil, "", fmt.Errorf("build command ended before durable finalization"))
 		}
 	}()
+	// D-01: persist the SAME decision this build's own dispatches (prepared.
+	// Dispatches, planned against prepared.VerificationBoundary) were planned
+	// against, immediately, onto the attempt it belongs to. A write failure
+	// here fails the build start, exactly like any other evidentiary write
+	// failure on this path -- an unrecorded boundary would leave the check
+	// step unable to tell whether review already happened at build end.
+	if err := attachVerificationBoundary(attemptRel, prepared.VerificationBoundary); err != nil {
+		wrapped := fmt.Errorf("failed to record verification boundary decision: %w", err)
+		finishAttempt(buildAttemptFailed, "failed to record verification boundary decision", wrapped)
+		return nil, wrapped
+	}
 
 	updatedState, err := loadActiveColonyState()
 	if err != nil {
@@ -1768,6 +1801,13 @@ func plannedBuildDispatchesWithJudgement(phase colony.Phase, state colony.Colony
 // Queen judgement to the pure coherent-job planner. It resolves exactly one
 // owner seed per selected task, plans jobs before assigning dispatch waves,
 // and returns proposal decisions so callers can persist the full audit trail.
+//
+// boundary is a trailing variadic seam: a caller that has already reconciled
+// a verification-boundary decision for this exact build (queenApplyVerificationBoundary)
+// supplies it here so the SAME decision governs this build's own post-wave
+// reviewer dispatches (D-01). Omitting it preserves every existing caller's
+// behaviour unchanged -- queenBuildPostWaveDispatches falls back to its
+// existing recorded-attempt read.
 func plannedBuildDispatchesWithJobProposals(
 	phase colony.Phase,
 	state colony.ColonyState,
@@ -1777,6 +1817,7 @@ func plannedBuildDispatchesWithJobProposals(
 	casteReason string,
 	reasons map[string]string,
 	proposals []coherentJobProposal,
+	boundary ...verificationBoundaryDecision,
 ) ([]codexBuildDispatch, []coherentJobDecision, error) {
 	depth := normalizedBuildDepth(state.ColonyDepth)
 	selected := make(map[string]struct{}, len(selectedTaskIDs))
@@ -1888,7 +1929,7 @@ func plannedBuildDispatchesWithJobProposals(
 		reviewersSpawned = true
 	}
 	if len(selected) == 0 {
-		postWaveDispatches := queenBuildPostWaveDispatches(phase, queenCastes, reviewWave)
+		postWaveDispatches := queenBuildPostWaveDispatches(phase, queenCastes, reviewWave, boundary...)
 		dispatches = append(dispatches, postWaveDispatches...)
 		reviewersSpawned = reviewersSpawned || len(postWaveDispatches) > 0
 	}
@@ -2055,18 +2096,32 @@ func queenBuildPreWaveDispatches(phase colony.Phase, queenCastes map[string]bool
 }
 
 // queenBuildPostWaveDispatches is the build-time half of D-05's single
-// boundary: it reads (never re-derives) the verification-boundary decision
-// recorded on the phase's current build attempt (verificationBoundaryForAttempt,
-// cmd/verification_boundary.go) and dispatches a post-wave reviewer only when
-// that recorded decision names build-end. Absent a recorded decision -- the
-// common case until a caller actually proposes and records one -- or a
-// recorded check-step choice, the check-step default applies (D-01) and this
+// boundary. When a caller supplies a boundary decision (a build already
+// reconciling its own proposal via queenApplyVerificationBoundary, before an
+// attempt exists to read back), that supplied decision governs -- this is
+// what lets a build-end choice reach the same build's own dispatch list
+// instead of only the following one. With none supplied, it falls back to
+// its original behaviour: read (never re-derive) the verification-boundary
+// decision recorded on the phase's current build attempt
+// (verificationBoundaryForAttempt, cmd/verification_boundary.go). Either way,
+// a post-wave reviewer dispatches only when the effective decision names
+// build-end. Absent any decision -- the common case until a caller actually
+// proposes and records one -- the check-step default applies (D-01) and this
 // function dispatches nothing: judgement lands at `aether continue` instead,
 // closing the doubled build-plus-check review CONCERNS.md named.
-func queenBuildPostWaveDispatches(phase colony.Phase, queenCastes map[string]bool, startExecutionWave int) []codexBuildDispatch {
-	attemptRel, _, hasAttempt := loadLatestBuildAttempt(phase.ID)
-	decision, hasDecision := verificationBoundaryForAttempt(attemptRel)
-	if !hasAttempt || !hasDecision || decision.Choice != verificationBoundaryChoiceBuildEnd {
+func queenBuildPostWaveDispatches(phase colony.Phase, queenCastes map[string]bool, startExecutionWave int, boundary ...verificationBoundaryDecision) []codexBuildDispatch {
+	var decision verificationBoundaryDecision
+	if len(boundary) > 0 {
+		decision = boundary[0]
+	} else {
+		attemptRel, _, hasAttempt := loadLatestBuildAttempt(phase.ID)
+		recorded, hasDecision := verificationBoundaryForAttempt(attemptRel)
+		if !hasAttempt || !hasDecision {
+			return nil
+		}
+		decision = recorded
+	}
+	if decision.Choice != verificationBoundaryChoiceBuildEnd {
 		return nil
 	}
 	// All post-wave reviewers examine the same finished code and share no
