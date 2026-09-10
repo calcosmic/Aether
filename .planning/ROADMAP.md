@@ -364,7 +364,7 @@ Plans:
 
 **Requirements:** SYNTH-03, CEC-06, WORK-01..08
 
-**Plans:** 7/15 plans executed
+**Plans:** 8/15 plans executed
 
 Plans:
 
@@ -389,7 +389,7 @@ Plans:
 **Wave 5** *(blocked on Wave 4 completion)*
 
 - [x] 201-07-PLAN.md — Name credited and orphaned files, recommend one next action, bind plan-versus-reality evidence.
-- [ ] 201-08-PLAN.md — Carry one job and attempt identity everywhere; move claims artifacts onto attempt-bound paths.
+- [x] 201-08-PLAN.md — Carry one job and attempt identity everywhere; move claims artifacts onto attempt-bound paths.
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
