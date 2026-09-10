@@ -518,6 +518,13 @@ type autopilotRepairReceipt struct {
 	BudgetBefore    int                         `json:"budget_before"`
 	BudgetRemaining int                         `json:"budget_remaining"`
 	Verification    autopilotRepairVerification `json:"verification"`
+	// CheckpointID is D-09/SYN-201-10's idempotency key: the checkpoint
+	// identity this receipt is bound to (cmd/work_repair.go's
+	// runBoundedRepairRound), so a replayed call for the same identity
+	// finds this receipt rather than starting a second round. Empty for
+	// receipts predating that generalization (omitempty preserves their
+	// existing serialization).
+	CheckpointID string `json:"checkpoint_id,omitempty"`
 }
 
 type autopilotRepairLedger struct {
