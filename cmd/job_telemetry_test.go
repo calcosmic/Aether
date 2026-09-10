@@ -5,10 +5,14 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/calcosmic/Aether/pkg/codex"
+	"github.com/calcosmic/Aether/pkg/colony"
 )
 
 // ---------------------------------------------------------------------
@@ -224,5 +228,149 @@ func TestJobTelemetryKeyedByAttemptAndJob(t *testing.T) {
 	record := newJobTelemetryRecord("  attempt-keyed  ", "  job-keyed  ", capture, time.Now())
 	if record.AttemptID != "attempt-keyed" || record.JobName != "job-keyed" {
 		t.Fatalf("expected trimmed attempt/job identity, got AttemptID=%q JobName=%q", record.AttemptID, record.JobName)
+	}
+}
+
+// ---------------------------------------------------------------------
+// Task 2: capturing the segments at real instrumentation points.
+// ---------------------------------------------------------------------
+
+// oneJobTelemetryFixturePhase builds a single-task, one-job colony state
+// fixture ready for a real runCodexBuild call, writing it via
+// createTestColonyState.
+func oneJobTelemetryFixturePhase(t *testing.T, dataDir, taskID, hintFile string) {
+	t.Helper()
+	goal := "One job produces a real timing record"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0", Goal: &goal, State: colony.StateREADY, ColonyDepth: "light", CurrentPhase: 0,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID: 1, Name: "One job phase", Status: colony.PhaseReady,
+			Tasks: []colony.Task{
+				{ID: &taskID, Goal: "Add the telemetry fixture helper", Hints: []string{hintFile}, Status: colony.TaskPending},
+			},
+		}}},
+	})
+}
+
+// TestRealBuildProducesMeasuredSegments drives a real one-job build,
+// followed by a real check, against an isolated fixture, and asserts the
+// segments this plan's own architecture can genuinely observe are measured
+// with a named source, and every segment it cannot observe is unmeasured
+// with a stated reason.
+func TestRealBuildProducesMeasuredSegments(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	taskID := "1.1"
+	oneJobTelemetryFixturePhase(t, dataDir, taskID, "cmd/job_telemetry_fixture_a.go")
+
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return workIdentitySuccessInvoker{} }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	if _, err := runCodexBuild(root, 1, nil, false); err != nil {
+		t.Fatalf("runCodexBuild returned error: %v", err)
+	}
+
+	_, attempt, ok := loadLatestBuildAttempt(1)
+	if !ok {
+		t.Fatalf("no build attempt was recorded for phase 1")
+	}
+	if len(attempt.Dispatches) != 1 {
+		t.Fatalf("fixture is broken: expected exactly one dispatch, got %d", len(attempt.Dispatches))
+	}
+
+	if _, _, _, _, _, _, err := runCodexContinue(root, codexContinueOptions{}); err != nil {
+		t.Fatalf("runCodexContinue returned error: %v", err)
+	}
+
+	record, ok := readJobTelemetryRecord(attempt.ID)
+	if !ok {
+		t.Fatalf("expected a job telemetry record for attempt %s, found none", attempt.ID)
+	}
+	if record.AttemptID != attempt.ID {
+		t.Fatalf("record attempt id = %q, want %q", record.AttemptID, attempt.ID)
+	}
+
+	required := map[string]bool{
+		jobTelemetrySegmentQueue:        true,
+		jobTelemetrySegmentContext:      true,
+		jobTelemetrySegmentWork:         true,
+		jobTelemetrySegmentVerification: true,
+	}
+	for _, named := range record.namedSegments() {
+		if required[named.Name] {
+			if !named.Segment.Measured {
+				t.Fatalf("expected segment %q to be measured on a real one-job build+check, got %+v", named.Name, named.Segment)
+			}
+			if strings.TrimSpace(named.Segment.Source) == "" {
+				t.Fatalf("segment %q is measured but names no instrumentation source", named.Name)
+			}
+			continue
+		}
+		if named.Segment.Measured {
+			// A segment this test does not require may still legitimately
+			// be measured; nothing more to assert about it.
+			continue
+		}
+		if strings.TrimSpace(named.Segment.Source) == "" {
+			t.Fatalf("segment %q is unmeasured but carries no stated reason", named.Name)
+		}
+	}
+}
+
+// TestInstrumentationAddsNoDispatchOrPause proves the segment capture added
+// in this plan never itself dispatches a worker or creates an owner-pause
+// boundary: the same one-job fixture produces exactly one dispatch across
+// both build and check, on the same attempt identifier throughout.
+func TestInstrumentationAddsNoDispatchOrPause(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	taskID := "1.1"
+	oneJobTelemetryFixturePhase(t, dataDir, taskID, "cmd/job_telemetry_fixture_b.go")
+
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return workIdentitySuccessInvoker{} }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	if _, err := runCodexBuild(root, 1, nil, false); err != nil {
+		t.Fatalf("runCodexBuild returned error: %v", err)
+	}
+	_, attemptAfterBuild, ok := loadLatestBuildAttempt(1)
+	if !ok {
+		t.Fatalf("no build attempt was recorded for phase 1")
+	}
+	if len(attemptAfterBuild.Dispatches) != 1 {
+		t.Fatalf("expected exactly one dispatch for this one-task fixture; instrumentation must never add a phantom dispatch, got %d: %#v", len(attemptAfterBuild.Dispatches), attemptAfterBuild.Dispatches)
+	}
+
+	if _, _, _, _, _, _, err := runCodexContinue(root, codexContinueOptions{}); err != nil {
+		t.Fatalf("runCodexContinue returned error: %v", err)
+	}
+
+	_, attemptAfterContinue, ok := loadLatestBuildAttempt(1)
+	if !ok {
+		t.Fatalf("no build attempt found after continue")
+	}
+	if attemptAfterContinue.ID != attemptAfterBuild.ID {
+		t.Fatalf("continue created a new build attempt (%s -> %s); instrumentation must never trigger a fresh dispatch cycle", attemptAfterBuild.ID, attemptAfterContinue.ID)
+	}
+	if len(attemptAfterContinue.Dispatches) != 1 {
+		t.Fatalf("expected exactly one dispatch after continue, got %d -- instrumentation must never add a dispatch", len(attemptAfterContinue.Dispatches))
+	}
+
+	record, ok := readJobTelemetryRecord(attemptAfterContinue.ID)
+	if !ok {
+		t.Fatal("expected a job telemetry record to exist after the run")
+	}
+	if !record.Work.Measured || !record.Verification.Measured {
+		t.Fatalf("expected both work and verification segments measured across build+continue, got Work=%+v Verification=%+v", record.Work, record.Verification)
 	}
 }
