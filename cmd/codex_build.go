@@ -1221,6 +1221,14 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
 		return nil, err
 	}
+	// CAP-071/SYN-201-09: additionally persist this attempt's own claims at
+	// its attempt-bound path (attempts/<id>/claims.json), alongside --
+	// never in place of -- the legacy shared claimsRel write above. This is
+	// purely additive new evidence, not a gate: a failure here never blocks
+	// or rolls back an otherwise-successful build.
+	if err := writeAttemptBoundArtifact(receipt.AttemptID, attemptArtifactKindClaims, terminalClaims); err != nil {
+		visualFprintf(stderr, "warning: could not persist attempt-bound claims artifact for build attempt %s: %v\n", receipt.AttemptID, err)
+	}
 	updatedState.State = colony.StateBUILT
 	reconcileCompletedBuildTasks(&updatedState, phaseNum, dispatches)
 	updatedPhase = updatedState.Plan.Phases[phaseNum-1]
