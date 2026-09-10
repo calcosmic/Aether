@@ -7424,6 +7424,1085 @@
           ]
         }
       }
+    },
+    {
+      "id": "work-cycle.boundary.queen-proportionate-team",
+      "group": "V-201-BOUNDARY",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-01:.planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-201-01",
+      "cap_ids": [
+        "CAP-004"
+      ],
+      "source_citations": [
+        "cmd/queen_judgement.go:29-126",
+        "cmd/queen_judgement_test.go:230",
+        ".planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "build",
+        "args": [
+          "<phase>"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "work-cycle.boundary.queen-proportionate-team",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "WORK-01",
+            "WORK-02"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "proof:TestOneTaskBugFixIsOneWorkerPlusChecks",
+          "structured_assertions": [
+            "decision.SYN-201-01.causal-proof"
+          ],
+          "go_test_symbol": "TestOneTaskBugFixIsOneWorkerPlusChecks"
+        },
+        "required_text_tokens": [
+          "SYN-201-01"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "work-cycle.boundary.queen-proportionate-team"
+        },
+        "fault_point": "work-cycle.boundary.queen-proportionate-team.causal-proof"
+      }
+    },
+    {
+      "id": "work-cycle.identity.coherent-jobs-and-waves",
+      "group": "V-201-IDENTITY",
+      "kind": "behavior",
+      "historical_anchors": [
+        "no-analog:.planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-201-02",
+      "cap_ids": [
+        "CAP-022"
+      ],
+      "source_citations": [
+        "cmd/coherent_jobs.go:47-95",
+        "cmd/coherent_jobs_test.go:125",
+        ".planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "build",
+        "args": [
+          "<phase>"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "work-cycle.identity.coherent-jobs-and-waves",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "WORK-03"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "proof:TestCoherentJobProposalAccepted",
+          "structured_assertions": [
+            "decision.SYN-201-02.causal-proof"
+          ],
+          "go_test_symbol": "TestCoherentJobProposalAccepted"
+        },
+        "required_text_tokens": [
+          "SYN-201-02"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "work-cycle.identity.coherent-jobs-and-waves"
+        },
+        "fault_point": "work-cycle.identity.coherent-jobs-and-waves.causal-proof"
+      }
+    },
+    {
+      "id": "work-cycle.boundary.one-verification-boundary",
+      "group": "V-201-BOUNDARY",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-03:.planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-201-03",
+      "cap_ids": [
+        "CAP-022"
+      ],
+      "source_citations": [
+        "cmd/codex_build.go:1908-1922",
+        "cmd/codex_continue.go:1405-1460",
+        ".planning/codebase/CONCERNS.md#same-phase-verified-twice",
+        ".planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "build",
+        "args": [
+          "<phase>"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "work-cycle.boundary.one-verification-boundary",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "WORK-01",
+            "WORK-04"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "proof:TestPhaseVerifiedOnce",
+          "structured_assertions": [
+            "decision.SYN-201-03.causal-proof"
+          ],
+          "go_test_symbol": "TestPhaseVerifiedOnce"
+        },
+        "required_text_tokens": [
+          "SYN-201-03"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "work-cycle.boundary.one-verification-boundary"
+        },
+        "fault_point": "work-cycle.boundary.one-verification-boundary.causal-proof"
+      }
+    },
+    {
+      "id": "work-cycle.identity.shared-accept-verify-advance",
+      "group": "V-201-IDENTITY",
+      "kind": "behavior",
+      "historical_anchors": [
+        "no-analog:.planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-201-04",
+      "cap_ids": [
+        "CAP-022"
+      ],
+      "source_citations": [
+        "cmd/codex_continue.go:637",
+        "cmd/codex_continue_plan.go:86",
+        "cmd/codex_continue_finalize.go:139",
+        "cmd/codex_continue.go:3061",
+        ".planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "continue",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "work-cycle.identity.shared-accept-verify-advance",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "WORK-04",
+            "CEC-06"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "proof:TestAllThreeContinueLanesShareOneAcceptVerifyAdvanceBody",
+          "structured_assertions": [
+            "decision.SYN-201-04.causal-proof"
+          ],
+          "go_test_symbol": "TestAllThreeContinueLanesShareOneAcceptVerifyAdvanceBody"
+        },
+        "required_text_tokens": [
+          "SYN-201-04"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "work-cycle.identity.shared-accept-verify-advance"
+        },
+        "fault_point": "work-cycle.identity.shared-accept-verify-advance.causal-proof"
+      }
+    },
+    {
+      "id": "work-cycle.outcome.honest-unverified-closeout",
+      "group": "V-201-OUTCOME",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-06:.planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-201-05",
+      "cap_ids": [
+        "CAP-004"
+      ],
+      "source_citations": [
+        "cmd/build_attempt.go:87",
+        "cmd/codex_build_finalize.go:871-895",
+        ".planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "build",
+        "args": [
+          "<phase>"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "work-cycle.outcome.honest-unverified-closeout",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "WORK-02",
+            "WORK-04"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "proof:TestBuildBeforeVerificationSaysItIsNotVerifiedYet",
+          "structured_assertions": [
+            "decision.SYN-201-05.causal-proof"
+          ],
+          "go_test_symbol": "TestBuildBeforeVerificationSaysItIsNotVerifiedYet"
+        },
+        "required_text_tokens": [
+          "SYN-201-05"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "work-cycle.outcome.honest-unverified-closeout"
+        },
+        "fault_point": "work-cycle.outcome.honest-unverified-closeout.causal-proof"
+      }
+    },
+    {
+      "id": "work-cycle.outcome.complete-outcome-vocabulary",
+      "group": "V-201-OUTCOME",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-07:.planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-201-06",
+      "cap_ids": [
+        "CAP-004",
+        "CAP-051"
+      ],
+      "source_citations": [
+        "pkg/colony/lifecycle.go:206-221",
+        "cmd/lifecycle_closeout.go:189",
+        "cmd/status.go:744-745",
+        ".planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "continue",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "work-cycle.outcome.complete-outcome-vocabulary",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "WORK-05",
+            "CEC-06"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "proof:TestEveryWorkVerdictRendersTheSameCeremonySlots",
+          "structured_assertions": [
+            "decision.SYN-201-06.causal-proof"
+          ],
+          "go_test_symbol": "TestEveryWorkVerdictRendersTheSameCeremonySlots"
+        },
+        "required_text_tokens": [
+          "SYN-201-06"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "work-cycle.outcome.complete-outcome-vocabulary"
+        },
+        "fault_point": "work-cycle.outcome.complete-outcome-vocabulary.causal-proof"
+      }
+    },
+    {
+      "id": "work-cycle.outcome.attempt-bound-cost-and-time",
+      "group": "V-201-OUTCOME",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-06:.planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-201-07",
+      "cap_ids": [
+        "CAP-051"
+      ],
+      "source_citations": [
+        "cmd/spend_cost_line.go:114",
+        "cmd/spend_cost_line.go:8-53",
+        ".planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "status",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "work-cycle.outcome.attempt-bound-cost-and-time",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "CEC-06",
+            "WORK-05"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "proof:TestElapsedTimeComesFromTheAttemptTimestamps",
+          "structured_assertions": [
+            "decision.SYN-201-07.causal-proof"
+          ],
+          "go_test_symbol": "TestElapsedTimeComesFromTheAttemptTimestamps"
+        },
+        "required_text_tokens": [
+          "SYN-201-07"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "work-cycle.outcome.attempt-bound-cost-and-time"
+        },
+        "fault_point": "work-cycle.outcome.attempt-bound-cost-and-time.causal-proof"
+      }
+    },
+    {
+      "id": "work-cycle.outcome.one-next-action",
+      "group": "V-201-OUTCOME",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-07:.planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-201-08",
+      "cap_ids": [
+        "CAP-024"
+      ],
+      "source_citations": [
+        "cmd/next_action.go",
+        ".planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "continue",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "work-cycle.outcome.one-next-action",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "WORK-05",
+            "CEC-06"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "proof:TestEveryDeciderAgreesOnTheNextCommand",
+          "structured_assertions": [
+            "decision.SYN-201-08.causal-proof"
+          ],
+          "go_test_symbol": "TestEveryDeciderAgreesOnTheNextCommand"
+        },
+        "required_text_tokens": [
+          "SYN-201-08"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "work-cycle.outcome.one-next-action"
+        },
+        "fault_point": "work-cycle.outcome.one-next-action.causal-proof"
+      }
+    },
+    {
+      "id": "work-cycle.identity.credited-and-orphaned-files",
+      "group": "V-201-IDENTITY",
+      "kind": "behavior",
+      "historical_anchors": [
+        "no-analog:.planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-201-09",
+      "cap_ids": [
+        "CAP-071"
+      ],
+      "source_citations": [
+        "cmd/codex_build_worktree.go:641-655",
+        "cmd/codex_build_finalize.go:1095-1154",
+        "cmd/codex_build_finalize.go:630",
+        "cmd/codex_continue.go:895",
+        ".planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "build",
+        "args": [
+          "<phase>"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "work-cycle.identity.credited-and-orphaned-files",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "WORK-05",
+            "WORK-03"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "proof:TestGroupedWorktreePartialReceiptsSyncBeforeCredit",
+          "structured_assertions": [
+            "decision.SYN-201-09.causal-proof"
+          ],
+          "go_test_symbol": "TestGroupedWorktreePartialReceiptsSyncBeforeCredit"
+        },
+        "required_text_tokens": [
+          "SYN-201-09"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "work-cycle.identity.credited-and-orphaned-files"
+        },
+        "fault_point": "work-cycle.identity.credited-and-orphaned-files.causal-proof"
+      }
+    },
+    {
+      "id": "work-cycle.repair.bounded-checkpointed-repair",
+      "group": "V-201-REPAIR",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-08:.planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-201-10",
+      "cap_ids": [
+        "CAP-024"
+      ],
+      "source_citations": [
+        "cmd/build_attempt.go:547-591",
+        "cmd/autopilot_policy.go:506-533",
+        "pkg/colony/lifecycle.go:473-474",
+        "cmd/session_flow_cmds.go:353-390",
+        ".planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "continue",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "work-cycle.repair.bounded-checkpointed-repair",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "WORK-06"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "proof:TestFailedRepairRestoresTheCheckpointExactly",
+          "structured_assertions": [
+            "decision.SYN-201-10.causal-proof"
+          ],
+          "go_test_symbol": "TestFailedRepairRestoresTheCheckpointExactly"
+        },
+        "required_text_tokens": [
+          "SYN-201-10"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "work-cycle.repair.bounded-checkpointed-repair"
+        },
+        "fault_point": "work-cycle.repair.bounded-checkpointed-repair.causal-proof"
+      }
+    },
+    {
+      "id": "work-cycle.repair.failure-evidence-steers-repair",
+      "group": "V-201-REPAIR",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-10:.planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-201-11",
+      "cap_ids": [
+        "CAP-003",
+        "CAP-022",
+        "CAP-024"
+      ],
+      "source_citations": [
+        "cmd/midden_shared.go:33",
+        "cmd/autopilot_retry_record.go",
+        "cmd/memory_feed.go",
+        ".planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "continue",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "work-cycle.repair.failure-evidence-steers-repair",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "WORK-06",
+            "WORK-05"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "proof:TestFailureBornSignalReachesTheRepairBrief",
+          "structured_assertions": [
+            "decision.SYN-201-11.causal-proof"
+          ],
+          "go_test_symbol": "TestFailureBornSignalReachesTheRepairBrief"
+        },
+        "required_text_tokens": [
+          "SYN-201-11"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "work-cycle.repair.failure-evidence-steers-repair"
+        },
+        "fault_point": "work-cycle.repair.failure-evidence-steers-repair.causal-proof"
+      }
+    },
+    {
+      "id": "work-cycle.autopilot.goal-level-one-result-model",
+      "group": "V-201-AUTOPILOT",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-11:.planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-201-12",
+      "cap_ids": [
+        "CAP-029"
+      ],
+      "source_citations": [
+        "cmd/command_truth.go:374",
+        "cmd/autopilot_policy.go:523",
+        ".planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "run",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "work-cycle.autopilot.goal-level-one-result-model",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "WORK-07"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "proof:TestAutopilotSelectsTransitionsFromOneAcceptedGoal",
+          "structured_assertions": [
+            "decision.SYN-201-12.causal-proof"
+          ],
+          "go_test_symbol": "TestAutopilotSelectsTransitionsFromOneAcceptedGoal"
+        },
+        "required_text_tokens": [
+          "SYN-201-12"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "work-cycle.autopilot.goal-level-one-result-model"
+        },
+        "fault_point": "work-cycle.autopilot.goal-level-one-result-model.causal-proof"
+      }
+    },
+    {
+      "id": "work-cycle.telemetry.honest-unmeasured-segments",
+      "group": "V-201-TELEMETRY",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-06:.planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-201-13",
+      "cap_ids": [
+        "CAP-066"
+      ],
+      "source_citations": [
+        "cmd/verification_scope.go:33-47",
+        "cmd/verification_scope.go:67",
+        ".planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "build",
+        "args": [
+          "<phase>"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "work-cycle.telemetry.honest-unmeasured-segments",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "WORK-08",
+            "CEC-06"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "proof:TestRealBuildProducesMeasuredSegments",
+          "structured_assertions": [
+            "decision.SYN-201-13.causal-proof"
+          ],
+          "go_test_symbol": "TestRealBuildProducesMeasuredSegments"
+        },
+        "required_text_tokens": [
+          "SYN-201-13"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "work-cycle.telemetry.honest-unmeasured-segments"
+        },
+        "fault_point": "work-cycle.telemetry.honest-unmeasured-segments.causal-proof"
+      }
+    },
+    {
+      "id": "work-cycle.telemetry.approved-turnaround-levers",
+      "group": "V-201-TELEMETRY",
+      "kind": "behavior",
+      "historical_anchors": [
+        "no-analog:.planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-201-14",
+      "cap_ids": [
+        "CAP-029"
+      ],
+      "source_citations": [
+        "cmd/verification_scope.go:189",
+        "pkg/codex/handoff.go:10-20",
+        ".planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "build",
+        "args": [
+          "<phase>"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "work-cycle.telemetry.approved-turnaround-levers",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "WORK-08"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "proof:TestScopedTestsRunInTheLoopAndTheFullSuiteAtTheBoundary",
+          "structured_assertions": [
+            "decision.SYN-201-14.causal-proof"
+          ],
+          "go_test_symbol": "TestScopedTestsRunInTheLoopAndTheFullSuiteAtTheBoundary"
+        },
+        "required_text_tokens": [
+          "SYN-201-14"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "work-cycle.telemetry.approved-turnaround-levers"
+        },
+        "fault_point": "work-cycle.telemetry.approved-turnaround-levers.causal-proof"
+      }
+    },
+    {
+      "id": "work-cycle.repair.no-second-automatic-attempt",
+      "group": "V-201-REPAIR",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-08:.planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-201-10",
+      "cap_ids": [
+        "CAP-024"
+      ],
+      "source_citations": [
+        "cmd/build_attempt.go:547-591",
+        "cmd/autopilot_policy.go:506-533",
+        "pkg/colony/lifecycle.go:473-474",
+        "cmd/session_flow_cmds.go:353-390",
+        ".planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "continue",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "work-cycle.repair.second-attempt-refused",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "WORK-06"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "proof:TestRepairRunsAtMostOnceAutomatically",
+          "structured_assertions": [
+            "negative.SYN-201-10.rejected-shortcut"
+          ],
+          "go_test_symbol": "TestRepairRunsAtMostOnceAutomatically"
+        },
+        "required_text_tokens": [
+          "SYN-201-10"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/repair/second-automatic-attempt-receipt.json"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "work-cycle.repair.second-attempt-refused"
+        },
+        "fault_point": "work-cycle.repair.no-second-automatic-attempt.rejected-shortcut"
+      }
+    },
+    {
+      "id": "work-cycle.boundary.no-double-caste-dispatch",
+      "group": "V-201-BOUNDARY",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-03:.planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-201-03",
+      "cap_ids": [
+        "CAP-022"
+      ],
+      "source_citations": [
+        "cmd/codex_build.go:1908-1922",
+        "cmd/codex_continue.go:1405-1460",
+        ".planning/codebase/CONCERNS.md#same-phase-verified-twice",
+        ".planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "build",
+        "args": [
+          "<phase>"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "work-cycle.boundary.no-duplicate-reviewer-dispatch",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "WORK-01",
+            "WORK-04"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "proof:TestNoCasteIsDispatchedAtBothBoundaries",
+          "structured_assertions": [
+            "negative.SYN-201-03.rejected-shortcut"
+          ],
+          "go_test_symbol": "TestNoCasteIsDispatchedAtBothBoundaries"
+        },
+        "required_text_tokens": [
+          "SYN-201-03"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/dispatch/duplicate-caste-both-boundaries.json"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "work-cycle.boundary.no-duplicate-reviewer-dispatch"
+        },
+        "fault_point": "work-cycle.boundary.no-double-caste-dispatch.rejected-shortcut"
+      }
+    },
+    {
+      "id": "work-cycle.telemetry.no-segment-without-source",
+      "group": "V-201-TELEMETRY",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-06:.planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-201-13",
+      "cap_ids": [
+        "CAP-066"
+      ],
+      "source_citations": [
+        "cmd/verification_scope.go:33-47",
+        "cmd/verification_scope.go:67",
+        ".planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "build",
+        "args": [
+          "<phase>"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "work-cycle.telemetry.segment-refused-without-source",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "WORK-08",
+            "CEC-06"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "proof:TestSegmentRequiresAnInstrumentationSource",
+          "structured_assertions": [
+            "negative.SYN-201-13.rejected-shortcut"
+          ],
+          "go_test_symbol": "TestSegmentRequiresAnInstrumentationSource"
+        },
+        "required_text_tokens": [
+          "SYN-201-13"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/job-telemetry/derived-segment-without-source.json"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "work-cycle.telemetry.segment-refused-without-source"
+        },
+        "fault_point": "work-cycle.telemetry.no-segment-without-source.rejected-shortcut"
+      }
+    },
+    {
+      "id": "work-cycle.outcome.no-success-token-on-non-success",
+      "group": "V-201-OUTCOME",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-07:.planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-201-06",
+      "cap_ids": [
+        "CAP-004",
+        "CAP-051"
+      ],
+      "source_citations": [
+        "pkg/colony/lifecycle.go:206-221",
+        "cmd/lifecycle_closeout.go:189",
+        "cmd/status.go:744-745",
+        ".planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "continue",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "work-cycle.outcome.non-success-card-has-no-success-wording",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "WORK-05",
+            "CEC-06"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "proof:TestNonSuccessVerdictBorrowsNoSuccessWording",
+          "structured_assertions": [
+            "negative.SYN-201-06.rejected-shortcut"
+          ],
+          "go_test_symbol": "TestNonSuccessVerdictBorrowsNoSuccessWording"
+        },
+        "required_text_tokens": [
+          "SYN-201-06"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/closeout/non-success-card-with-success-token.json"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "work-cycle.outcome.non-success-card-has-no-success-wording"
+        },
+        "fault_point": "work-cycle.outcome.no-success-token-on-non-success.rejected-shortcut"
+      }
     }
   ]
 }
