@@ -364,7 +364,7 @@ Plans:
 
 **Requirements:** SYNTH-03, CEC-06, WORK-01..08
 
-**Plans:** 1/15 plans executed
+**Plans:** 2/15 plans executed
 
 Plans:
 
@@ -374,7 +374,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 201-02-PLAN.md — Tracer: collapse the three continue lanes onto one accept/verify/advance decision body.
+- [x] 201-02-PLAN.md — Tracer: collapse the three continue lanes onto one accept/verify/advance decision body.
 
 **Wave 3** *(blocked on Wave 2 completion)*
 

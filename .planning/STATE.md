@@ -2,20 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
-current_phase: 201
-current_phase_name: Queen-Led Work Cycle
 status: executing
-stopped_at: Completed 201-01-PLAN.md
-last_updated: "2026-09-10T11:50:33.695Z"
+stopped_at: Completed 201-02-PLAN.md
+last_updated: "2026-09-10T12:29:33.697Z"
 last_activity: 2026-09-10
-last_activity_desc: Phase 201 execution started
-state_head: 8f21a8764c06918ce54d94958ea2ae12466f13ab
 progress:
   total_phases: 7
-  completed_phases: 0
+  completed_phases: 2
   total_plans: 104
   completed_plans: 90
-  percent: 0
+  percent: 29
 ---
 
 # Project State
@@ -33,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 201 (Queen-Led Work Cycle) — EXECUTING
-Plan: 2 of 15
+Plan: 3 of 15
 Status: Ready to execute
-Last activity: 2026-09-10 — Phase 201 execution started
+Last activity: 2026-09-10
 
 ## Performance Metrics
 
@@ -169,6 +165,7 @@ Last activity: 2026-09-10 — Phase 201 execution started
 | Phase 200 P53 | 20min | 2 tasks | 3 files |
 | Phase 200 P54 | 38min | 3 tasks | 9 files |
 | Phase 201 P01 | 55min | 2 tasks | 4 files |
+| Phase 201 P02 | 110min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -542,6 +539,7 @@ Last activity: 2026-09-10 — Phase 201 execution started
 - [Phase 200]: Static debt inventories may only move one-for-one or shrink. — The live and frozen command-advice copies remain byte-identical, and no new writer waiver was accepted.
 - [Phase 201]: SYN-201-03/04/10/14 resolve RESEARCH.md's 3 open questions + Assumption A2 as explicit synthesis rows (boundary decision type, lane error-surface split, model-routing policy layer, pause-handoff reuse for repair checkpoints).
 - [Phase 201]: Classic's double build-time-Watcher + continue-time-review-squad pattern predates the modern double-verification defect (OLD-03/04); SYN-201-03 disposes replace-better, not restore-modern, so the phase does not restore the wasteful pattern it exists to remove.
+- [Phase 201]: Continue lanes' shared accept/verify/advance body takes an already-evaluated gate report as input rather than recomputing gates internally — The finalize lane's soft_block auto-resolve pass mutates its own gates value before the decision is made; recomputing gates inside the shared body would silently discard that resolution. Each lane still funnels through the one shared gate evaluator; it is each lane's own responsibility to call it before reaching the decision body.
 
 ### Pending Todos
 
@@ -658,8 +656,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-10T11:50:33.649Z
-Stopped at: Completed 201-01-PLAN.md
+Last session: 2026-09-10T12:29:33.687Z
+Stopped at: Completed 201-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
