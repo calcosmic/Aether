@@ -58,6 +58,10 @@ type LifecycleCloseoutColonyValue struct {
 type LifecycleCloseoutEvent struct {
 	Summary string             `json:"summary"`
 	Outcome colony.OutcomeKind `json:"outcome_kind"`
+	// Verdict is the work verdict's owner-facing label, read from
+	// colony.WorkOutcomeLabels() -- the single authority for that wording.
+	// Empty when no work verdict was supplied for this closeout.
+	Verdict string `json:"verdict,omitempty"`
 }
 
 type LifecycleCloseoutStateChangeSet struct {
@@ -76,9 +80,13 @@ type LifecycleCloseoutOpenItems struct {
 // block. Slots contains only applicable sections and is always in canonical
 // order. The typed values remain available independently of the prose.
 type LifecycleCloseout struct {
-	SchemaVersion        string                          `json:"schema_version"`
-	Command              string                          `json:"command"`
-	OutcomeKind          colony.OutcomeKind              `json:"outcome_kind"`
+	SchemaVersion string             `json:"schema_version"`
+	Command       string             `json:"command"`
+	OutcomeKind   colony.OutcomeKind `json:"outcome_kind"`
+	// WorkOutcome is the six-verdict work-cycle result (D-05), additive to
+	// the existing OutcomeKind above. omitempty preserves byte-identical
+	// serialization for a closeout built without a verdict.
+	WorkOutcome          *colony.WorkOutcome             `json:"work_outcome,omitempty"`
 	ProjectionRevision   string                          `json:"projection_revision"`
 	Closure              LifecycleClosureProjection      `json:"closure"`
 	Colony               LifecycleCloseoutColonyValue    `json:"colony"`
@@ -98,7 +106,12 @@ type LifecycleCloseout struct {
 // ran. Values are additive; they cannot replace projection-owned identity,
 // state, closure, or Next Up policy.
 type LifecycleCloseoutDetails struct {
-	Summary              string
+	Summary string
+	// WorkOutcome is the command's six-verdict work-cycle result (D-05).
+	// The zero value means no verdict was supplied, and buildLifecycleCloseout
+	// leaves every existing field exactly as it behaved before this field
+	// existed.
+	WorkOutcome          colony.WorkOutcome
 	Participants         []LifecycleActorFact
 	Evidence             []colony.LifecycleEvidence
 	Verification         []colony.LifecycleVerification
@@ -191,6 +204,26 @@ func buildLifecycleCloseout(projection LifecycleProjection, command string, outc
 	if command == "" {
 		return LifecycleCloseout{}, fmt.Errorf("lifecycle closeout command is empty")
 	}
+
+	// When a work verdict is supplied, it is the source of the lifecycle
+	// outcome (never a second, independent inference) and of the verdict's
+	// owner-facing wording (via colony.WorkOutcomeLabels(), the one
+	// authority for that text). A closeout built without a verdict -- the
+	// zero value, Valid() == false -- takes neither branch and behaves
+	// exactly as it did before this field existed.
+	var workOutcome *colony.WorkOutcome
+	var verdictLabel string
+	if details.WorkOutcome.Valid() {
+		derived, err := details.WorkOutcome.LifecycleOutcome()
+		if err != nil {
+			return LifecycleCloseout{}, fmt.Errorf("lifecycle closeout work outcome %q: %w", details.WorkOutcome, err)
+		}
+		outcome = derived
+		verdict := details.WorkOutcome
+		workOutcome = &verdict
+		verdictLabel = colony.WorkOutcomeLabels()[details.WorkOutcome]
+	}
+
 	if !outcome.Valid() {
 		return LifecycleCloseout{}, fmt.Errorf("lifecycle closeout outcome %q is invalid", outcome)
 	}
@@ -200,7 +233,15 @@ func buildLifecycleCloseout(projection LifecycleProjection, command string, outc
 
 	summary := strings.TrimSpace(details.Summary)
 	if summary == "" {
-		summary = fmt.Sprintf("%s finished with outcome %s.", command, outcome)
+		if workOutcome != nil && verdictLabel != "" {
+			// The default summary for a verdict-carrying closeout is drawn
+			// from WorkOutcomeLabels() too -- never the generic "finished
+			// with outcome" phrasing, which would leak a success-shaped word
+			// ("finished") into every non-success card regardless of verdict.
+			summary = fmt.Sprintf("%s: %s.", command, verdictLabel)
+		} else {
+			summary = fmt.Sprintf("%s finished with outcome %s.", command, outcome)
+		}
 	}
 	standing := lifecycleCloseoutSignalTexts(projection.Signals.Value)
 	standing = appendUniqueLifecycleCloseoutStrings(standing, details.StandingInstructions...)
@@ -211,6 +252,7 @@ func buildLifecycleCloseout(projection LifecycleProjection, command string, outc
 		SchemaVersion:      LifecycleCloseoutSchemaVersion,
 		Command:            command,
 		OutcomeKind:        outcome,
+		WorkOutcome:        workOutcome,
 		ProjectionRevision: projection.ProjectionRevision,
 		Closure:            projection.Closure,
 		Colony: LifecycleCloseoutColonyValue{
@@ -219,7 +261,7 @@ func buildLifecycleCloseout(projection LifecycleProjection, command string, outc
 			Standing: strings.TrimSpace(projection.Standing.Value),
 		},
 		Participants: participants,
-		WhatHappened: LifecycleCloseoutEvent{Summary: summary, Outcome: outcome},
+		WhatHappened: LifecycleCloseoutEvent{Summary: summary, Outcome: outcome, Verdict: verdictLabel},
 		Evidence:     append(append([]colony.LifecycleEvidence(nil), projection.Evidence...), details.Evidence...),
 		Verification: append(append([]colony.LifecycleVerification(nil), projection.Verification...), details.Verification...),
 		StateChanges: LifecycleCloseoutStateChangeSet{
@@ -240,29 +282,38 @@ func buildLifecycleCloseout(projection LifecycleProjection, command string, outc
 	return closeout, nil
 }
 
+// lifecycleCloseoutSlots decides which canonical slots render. A closeout
+// carrying a work verdict (D-05) renders EVERY canonical slot regardless of
+// content -- a non-success verdict must look as considered as a success, so
+// an empty slot is never silently dropped, it says plainly there is nothing
+// there (see the render helpers below). A closeout with no verdict keeps the
+// exact pre-existing behavior: an empty optional slot is omitted.
 func lifecycleCloseoutSlots(closeout LifecycleCloseout) []LifecycleCloseoutSlot {
+	fullCeremony := closeout.WorkOutcome != nil
 	slots := make([]LifecycleCloseoutSlot, 0, len(lifecycleCloseoutCanonicalSlots))
 	for _, slot := range lifecycleCloseoutCanonicalSlots {
-		switch slot {
-		case LifecycleCloseoutColony:
-			if closeout.Colony.Name == "" && closeout.Colony.Goal == "" && closeout.Colony.Standing == "" {
-				continue
-			}
-		case LifecycleCloseoutParticipants:
-			if len(closeout.Participants) == 0 {
-				continue
-			}
-		case LifecycleCloseoutEvidence:
-			if len(closeout.Evidence) == 0 && len(closeout.Verification) == 0 {
-				continue
-			}
-		case LifecycleCloseoutStandingInstructions:
-			if len(closeout.StandingInstructions) == 0 {
-				continue
-			}
-		case LifecycleCloseoutUnresolved:
-			if !lifecycleCloseoutHasOpenItems(closeout.Unresolved) {
-				continue
+		if !fullCeremony {
+			switch slot {
+			case LifecycleCloseoutColony:
+				if closeout.Colony.Name == "" && closeout.Colony.Goal == "" && closeout.Colony.Standing == "" {
+					continue
+				}
+			case LifecycleCloseoutParticipants:
+				if len(closeout.Participants) == 0 {
+					continue
+				}
+			case LifecycleCloseoutEvidence:
+				if len(closeout.Evidence) == 0 && len(closeout.Verification) == 0 {
+					continue
+				}
+			case LifecycleCloseoutStandingInstructions:
+				if len(closeout.StandingInstructions) == 0 {
+					continue
+				}
+			case LifecycleCloseoutUnresolved:
+				if !lifecycleCloseoutHasOpenItems(closeout.Unresolved) {
+					continue
+				}
 			}
 		}
 		slots = append(slots, slot)
@@ -414,6 +465,9 @@ func renderLifecycleCloseout(closeout LifecycleCloseout, platform string) string
 			lifecycleCloseoutRenderParticipants(&b, closeout.Participants)
 		case LifecycleCloseoutWhatHappened:
 			fmt.Fprintf(&b, "%s\nOutcome: %s\n", closeout.WhatHappened.Summary, closeout.WhatHappened.Outcome)
+			if closeout.WhatHappened.Verdict != "" {
+				fmt.Fprintf(&b, "Verdict: %s\n", closeout.WhatHappened.Verdict)
+			}
 		case LifecycleCloseoutEvidence:
 			lifecycleCloseoutRenderEvidence(&b, closeout.Evidence, closeout.Verification)
 		case LifecycleCloseoutStateChanges:
@@ -422,6 +476,9 @@ func renderLifecycleCloseout(closeout LifecycleCloseout, platform string) string
 				fmt.Fprintf(&b, "- %s: %s\n", emptyFallback(strings.TrimSpace(change.Target), "state"), emptyFallback(strings.TrimSpace(change.Action), "changed"))
 			}
 		case LifecycleCloseoutStandingInstructions:
+			if len(closeout.StandingInstructions) == 0 {
+				b.WriteString("No standing instructions recorded.\n")
+			}
 			for _, instruction := range closeout.StandingInstructions {
 				fmt.Fprintf(&b, "- %s\n", instruction)
 			}
@@ -470,6 +527,10 @@ func lifecycleCloseoutSlotLabel(slot LifecycleCloseoutSlot) string {
 }
 
 func lifecycleCloseoutRenderColony(b *strings.Builder, value LifecycleCloseoutColonyValue) {
+	if value.Name == "" && value.Goal == "" && value.Standing == "" {
+		b.WriteString("Nothing recorded.\n")
+		return
+	}
 	if value.Name != "" {
 		fmt.Fprintf(b, "Name: %s\n", value.Name)
 	}
@@ -482,6 +543,10 @@ func lifecycleCloseoutRenderColony(b *strings.Builder, value LifecycleCloseoutCo
 }
 
 func lifecycleCloseoutRenderParticipants(b *strings.Builder, participants []LifecycleActorFact) {
+	if len(participants) == 0 {
+		b.WriteString("No participants recorded.\n")
+		return
+	}
 	for _, participant := range participants {
 		identity := strings.TrimSpace(strings.Join([]string{participant.Caste, participant.Name}, " "))
 		if identity == "" {
@@ -500,6 +565,10 @@ func lifecycleCloseoutRenderParticipants(b *strings.Builder, participants []Life
 }
 
 func lifecycleCloseoutRenderEvidence(b *strings.Builder, evidence []colony.LifecycleEvidence, verification []colony.LifecycleVerification) {
+	if len(evidence) == 0 && len(verification) == 0 {
+		b.WriteString("No evidence recorded.\n")
+		return
+	}
 	for _, item := range evidence {
 		label := emptyFallback(strings.TrimSpace(item.Summary), emptyFallback(strings.TrimSpace(item.Source), item.ID))
 		fmt.Fprintf(b, "- %s\n", label)
@@ -518,6 +587,10 @@ func lifecycleCloseoutRenderEvidence(b *strings.Builder, evidence []colony.Lifec
 }
 
 func lifecycleCloseoutRenderOpenItems(b *strings.Builder, items LifecycleCloseoutOpenItems) {
+	if !lifecycleCloseoutHasOpenItems(items) {
+		b.WriteString("Nothing unresolved.\n")
+		return
+	}
 	for _, group := range [][]colony.LifecycleIssue{items.Warnings, items.Debt, items.Blockers} {
 		for _, item := range group {
 			fmt.Fprintf(b, "- %s\n", emptyFallback(strings.TrimSpace(item.Summary), item.ID))
