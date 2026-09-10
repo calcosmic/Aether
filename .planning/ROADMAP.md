@@ -364,7 +364,7 @@ Plans:
 
 **Requirements:** SYNTH-03, CEC-06, WORK-01..08
 
-**Plans:** 14/15 plans executed
+**Plans:** 15/15 plans executed
 
 Plans:
 
@@ -417,7 +417,7 @@ Plans:
 
 **Wave 12** *(blocked on Wave 11 completion)*
 
-- [ ] 201-15-PLAN.md — Execute the Phase 201 Classic corpus cases and record exact coverage.
+- [x] 201-15-PLAN.md — Execute the Phase 201 Classic corpus cases and record exact coverage.
 
 **Success criteria:**
 
