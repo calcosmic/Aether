@@ -6,6 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/events"
 )
 
@@ -71,4 +72,186 @@ func nextLiveSequence(episodeID string) int64 {
 	}
 	liveSequenceMu.Unlock()
 	return atomic.AddInt64(counter, 1)
+}
+
+// Per-lane emission helpers (202-03). Every lifecycle lane -- planning,
+// building, checking, recovery -- speaks on the live stream through one of
+// these thin, typed wrappers, never by constructing an events.ColonyLivePayload
+// and calling emitColonyLive directly at its own call site. Each helper fills
+// only the payload fields its moment genuinely knows, from the
+// already-available domain value handed to it (a codex.WorkerDispatch, a
+// codex.DispatchResult, a check name and outcome, a recovery state) --
+// mirroring cmd/ceremony_emitter.go's emitBuildCeremonyWorkerStarting /
+// emitBuildCeremonyWorkerFinished mapping style so the two vocabularies stay
+// recognizably parallel. An absent field means unknown, never a zero
+// measurement -- no helper invents a value its input does not carry.
+
+// emitColonyLiveEpisodeStarted marks the beginning of one lifecycle episode
+// (a build, a check pass, a planning run, ...). episodeKind should be one of
+// the events.EpisodeKind* constants.
+func emitColonyLiveEpisodeStarted(episodeID, episodeKind string) {
+	emitColonyLive(events.LiveTopicEpisodeStarted, events.ColonyLivePayload{
+		EpisodeID:   episodeID,
+		EpisodeKind: episodeKind,
+		Status:      "starting",
+	})
+}
+
+// emitColonyLiveEpisodeEnded closes the episode episodeID opened. status is
+// the episode's own terminal status (e.g. "completed", "failed", "blocked",
+// "interrupted") -- whatever the caller's own outcome value already is.
+func emitColonyLiveEpisodeEnded(episodeID, episodeKind, status string) {
+	emitColonyLive(events.LiveTopicEpisodeEnded, events.ColonyLivePayload{
+		EpisodeID:   episodeID,
+		EpisodeKind: episodeKind,
+		Status:      status,
+	})
+}
+
+// emitColonyLiveWaveStarted marks the beginning of one dispatch wave inside
+// an already-open episode.
+func emitColonyLiveWaveStarted(episodeID, episodeKind string, wave int) {
+	emitColonyLive(events.LiveTopicWaveStarted, events.ColonyLivePayload{
+		EpisodeID:   episodeID,
+		EpisodeKind: episodeKind,
+		Wave:        wave,
+		Status:      "starting",
+	})
+}
+
+// emitColonyLiveWaveEnded closes the wave wave opened. status is the wave's
+// own terminal status.
+func emitColonyLiveWaveEnded(episodeID, episodeKind string, wave int, status string) {
+	emitColonyLive(events.LiveTopicWaveEnded, events.ColonyLivePayload{
+		EpisodeID:   episodeID,
+		EpisodeKind: episodeKind,
+		Wave:        wave,
+		Status:      status,
+	})
+}
+
+// emitColonyLiveWorkerStarted records one worker beginning its dispatch.
+// Worker identity, caste, wave and workspace all come directly from
+// dispatch. When dispatch names a parent (dispatch.ParentWorkerID is
+// non-empty), that parent is recorded on the payload -- lineage read from
+// the dispatch's own field, never derived from a rendered string.
+func emitColonyLiveWorkerStarted(episodeID, episodeKind string, dispatch codex.WorkerDispatch) {
+	emitColonyLive(events.LiveTopicWorkerStarted, events.ColonyLivePayload{
+		EpisodeID:      episodeID,
+		EpisodeKind:    episodeKind,
+		Wave:           dispatch.Wave,
+		WorkerID:       dispatch.WorkerName,
+		ParentWorkerID: dispatch.ParentWorkerID,
+		Caste:          dispatch.Caste,
+		WorkerName:     dispatch.WorkerName,
+		Workspace:      dispatch.Root,
+		Status:         "active",
+	})
+}
+
+// emitColonyLiveWorkerProgress records an in-flight progress note for an
+// already-started worker. message is whatever the caller's own progress
+// text already is (e.g. a WorkerProgressEvent.Message) -- never invented.
+// It rides the payload's Question field, the same free-text "what this
+// worker is doing right now" slot replayColonyLiveSnapshot's reducer
+// already folds a worker.progress event's text into.
+func emitColonyLiveWorkerProgress(episodeID, episodeKind string, dispatch codex.WorkerDispatch, message string) {
+	emitColonyLive(events.LiveTopicWorkerProgress, events.ColonyLivePayload{
+		EpisodeID:   episodeID,
+		EpisodeKind: episodeKind,
+		Wave:        dispatch.Wave,
+		WorkerID:    dispatch.WorkerName,
+		Caste:       dispatch.Caste,
+		WorkerName:  dispatch.WorkerName,
+		Status:      "running",
+		Question:    strings.TrimSpace(message),
+	})
+}
+
+// firstNonEmptyStringSlice wraps a single already-trimmed message into a
+// one-element slice, or returns nil for an empty message -- kept local to
+// this file since it exists purely to keep the check-failed mapping below a
+// one-liner.
+func firstNonEmptyStringSlice(message string) []string {
+	if strings.TrimSpace(message) == "" {
+		return nil
+	}
+	return []string{message}
+}
+
+// emitColonyLiveWorkerFinished records one worker's terminal result.
+// Identity comes from dispatch; status comes from result -- the same two
+// values cmd/ceremony_emitter.go's emitBuildCeremonyWorkerFinished already
+// reads at its own call sites.
+func emitColonyLiveWorkerFinished(episodeID, episodeKind string, dispatch codex.WorkerDispatch, result codex.DispatchResult) {
+	status := strings.TrimSpace(result.Status)
+	if status == "" {
+		status = "failed"
+	}
+	emitColonyLive(events.LiveTopicWorkerFinished, events.ColonyLivePayload{
+		EpisodeID:      episodeID,
+		EpisodeKind:    episodeKind,
+		Wave:           dispatch.Wave,
+		WorkerID:       dispatch.WorkerName,
+		ParentWorkerID: dispatch.ParentWorkerID,
+		Caste:          dispatch.Caste,
+		WorkerName:     dispatch.WorkerName,
+		Workspace:      dispatch.Root,
+		Status:         status,
+	})
+}
+
+// emitColonyLiveCheckStarted marks the beginning of one named deterministic
+// check (build, types, lint, tests, ...) inside a check episode.
+func emitColonyLiveCheckStarted(episodeID, episodeKind, checkName string) {
+	emitColonyLive(events.LiveTopicCheckStarted, events.ColonyLivePayload{
+		EpisodeID:   episodeID,
+		EpisodeKind: episodeKind,
+		CheckName:   checkName,
+		Status:      "starting",
+	})
+}
+
+// emitColonyLiveCheckPassed records one check's passing terminal result.
+func emitColonyLiveCheckPassed(episodeID, episodeKind, checkName string) {
+	emitColonyLive(events.LiveTopicCheckPassed, events.ColonyLivePayload{
+		EpisodeID:   episodeID,
+		EpisodeKind: episodeKind,
+		CheckName:   checkName,
+		Status:      "passed",
+	})
+}
+
+// emitColonyLiveCheckFailed records one check's failing terminal result.
+// summary is whatever the check's own already-computed failure summary is.
+func emitColonyLiveCheckFailed(episodeID, episodeKind, checkName, summary string) {
+	emitColonyLive(events.LiveTopicCheckFailed, events.ColonyLivePayload{
+		EpisodeID:   episodeID,
+		EpisodeKind: episodeKind,
+		CheckName:   checkName,
+		Status:      "failed",
+		Findings:    firstNonEmptyStringSlice(summary),
+	})
+}
+
+// emitColonyLiveRecoveryChanged records one recovery state transition.
+// recoveryState is the orchestrator's own already-decided action type (e.g.
+// "retry", "peer_reassignment", "fixer_dispatch", "escalate").
+func emitColonyLiveRecoveryChanged(episodeID, episodeKind, recoveryState string) {
+	emitColonyLive(events.LiveTopicRecoveryChanged, events.ColonyLivePayload{
+		EpisodeID:     episodeID,
+		EpisodeKind:   episodeKind,
+		RecoveryState: recoveryState,
+	})
+}
+
+// emitColonyLiveSignalConsulted records the pheromone signals a lane
+// consulted while making a decision. signals is whatever the caller's own
+// already-resolved signal list is.
+func emitColonyLiveSignalConsulted(episodeID, episodeKind string, signals []string) {
+	emitColonyLive(events.LiveTopicSignalConsulted, events.ColonyLivePayload{
+		EpisodeID:   episodeID,
+		EpisodeKind: episodeKind,
+		Signals:     append([]string{}, signals...),
+	})
 }

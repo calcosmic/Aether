@@ -46,6 +46,15 @@ type WorkerDispatch struct {
 	// empty for a dispatch that was never grouped.
 	JobName   string
 	JobReason string
+	// ParentWorkerID is the identifier of the worker that spawned this one,
+	// when the dispatch itself already knows it. Empty for the overwhelming
+	// majority of dispatches (a top-level worker dispatched directly by the
+	// Queen has no worker parent) -- 202-03's live-event lineage mapping
+	// (cmd/live_events.go's emitColonyLiveWorkerStarted) reads this field
+	// directly rather than deriving lineage from a rendered string, per
+	// 202-CLASSIC-SYNTHESIS.md's "never derive lineage from a rendered
+	// string when the dispatch already knows the parent" prohibition.
+	ParentWorkerID string
 }
 
 // DispatchResult captures the outcome of a single worker dispatch within a batch.

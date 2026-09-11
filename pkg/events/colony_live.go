@@ -29,6 +29,34 @@ const (
 	LiveTopicRecoveryChanged    = "live.recovery.changed"
 )
 
+// Episode-kind vocabulary. EpisodeKind on ColonyLivePayload is a free-form
+// string field, but every lifecycle lane that opens an episode (202-03) uses
+// one of these declared values, and cmd/live_lane_coverage_test.go's
+// TestEveryLifecycleLaneEmitsLiveEvents derives its lane inventory from
+// ColonyLiveEpisodeKinds() rather than a hand-typed list, so a kind declared
+// here with no lane driving it through a real public entry point fails that
+// test by name.
+const (
+	EpisodeKindSwarm    = "swarm"
+	EpisodeKindBuild    = "build"
+	EpisodeKindContinue = "continue"
+	EpisodeKindPlan     = "plan"
+	EpisodeKindRecovery = "recovery"
+)
+
+// ColonyLiveEpisodeKinds returns every declared episode-kind constant. A
+// kind added to the const block above must also be added here, mirroring
+// ColonyLiveTopics()'s own completeness contract.
+func ColonyLiveEpisodeKinds() []string {
+	return []string{
+		EpisodeKindSwarm,
+		EpisodeKindBuild,
+		EpisodeKindContinue,
+		EpisodeKindPlan,
+		EpisodeKindRecovery,
+	}
+}
+
 // ColonyLiveSchemaVersion is the current wire-shape version of
 // ColonyLivePayload. Every event this model publishes carries this value in
 // its SchemaVersion field so a future incompatible change can be detected
