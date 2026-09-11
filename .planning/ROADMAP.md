@@ -463,20 +463,46 @@ Plans:
 **Plans:** 15 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 202-01-PLAN.md — Classic Swarm/Oracle/live-display mechanism synthesis and SYN-202 corpus registration
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 202-02-PLAN.md — Tracer: one versioned typed live-event model, emitted, replayed and watched end to end
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 202-03-PLAN.md — Live events across every lifecycle lane, with a coverage guard
 - [ ] 202-04-PLAN.md — Retire the dead NDJSON event stream and refuse a second transport
 - [ ] 202-05-PLAN.md — Four distinct Swarm lenses, hypothesis comparison and ranked repair card
+- [ ] 202-08-PLAN.md — Shared Fast/Balanced/Deep/Exhaustive research depth vocabulary
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 202-06-PLAN.md — The live colony cockpit: dashboard, ticker and Classic house style
 - [ ] 202-07-PLAN.md — Checkpointed Swarm repair, rollback, and the three-strike architectural case
-- [ ] 202-08-PLAN.md — Shared Fast/Balanced/Deep/Exhaustive research depth vocabulary
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 202-09-PLAN.md — Replay-backed idle watch with the honest no-history floor preserved
 - [ ] 202-10-PLAN.md — One durable replay-safe Swarm episode, retention, and learning proposal
 - [ ] 202-11-PLAN.md — Watchable Oracle rounds: clarify once, confidence, contradictions, diminishing returns
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 202-12-PLAN.md — Recommendation-first durable Oracle synthesis with provenance
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
 - [ ] 202-13-PLAN.md — One honest standing vocabulary and the unverified-work inventory
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
 - [ ] 202-14-PLAN.md — Status and history surface every episode, synthesis and unproven note
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
 - [ ] 202-15-PLAN.md — Wrapper triplets, Classic contract cases, and shipped-claim guards
 
 ### Phase 203: Biological Runtime
