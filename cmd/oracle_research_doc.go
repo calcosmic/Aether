@@ -106,9 +106,16 @@ func renderOracleResearchDocument(state oracleStateFile, plan oraclePlanFile, bo
 	fmt.Fprintf(&b, "template: %s\n", emptyFallback(strings.TrimSpace(state.Template), "custom"))
 	fmt.Fprintf(&b, "scope: %s\n", emptyFallback(strings.TrimSpace(state.Scope), defaultOracleScope))
 	fmt.Fprintf(&b, "iterations: %d\n", state.Iteration)
+	// 202-12 (LIVE-07, D-10/D-12): round_count is the same value as
+	// iterations, named in the "round" vocabulary the rest of this phase's
+	// live events and synthesis sections already use -- added, not renamed,
+	// so a document written before this plan still has its "iterations" key.
+	fmt.Fprintf(&b, "round_count: %d\n", state.Iteration)
 	fmt.Fprintf(&b, "confidence: %d\n", state.OverallConfidence)
 	fmt.Fprintf(&b, "target_confidence: %d\n", state.TargetConfidence)
 	fmt.Fprintf(&b, "status: %s\n", emptyFallback(strings.TrimSpace(state.Status), "unknown"))
+	fmt.Fprintf(&b, "standing: %s\n", oracleYAMLScalar(oracleResearchStandingLabel(state)))
+	fmt.Fprintf(&b, "run_identifier: %s\n", oracleYAMLScalar(oracleLiveEpisodeID(state)))
 	if reason := strings.TrimSpace(state.StopReason); reason != "" {
 		fmt.Fprintf(&b, "stop_reason: %s\n", reason)
 	}
@@ -148,11 +155,49 @@ func oracleResearchPartialLabel(state oracleStateFile) string {
 	return fmt.Sprintf("partial — stopped after %d %s", rounds, roundWord)
 }
 
+// oracleResearchStandingLabel names, in plain English, whether this
+// document is a settled answer or useful partial notes (D-12) -- the front
+// matter's "standing" key. Reuses oracleResearchPartialLabel rather than
+// inventing a second vocabulary: a clean completion stands as "settled", and
+// anything short of that carries the exact same partial-run sentence a
+// worker reading the document body already sees.
+func oracleResearchStandingLabel(state oracleStateFile) string {
+	if label := oracleResearchPartialLabel(state); label != "" {
+		return label
+	}
+	return "settled"
+}
+
 // oracleYAMLScalar quotes a value so a topic containing a colon cannot produce
 // unparseable front matter.
 func oracleYAMLScalar(value string) string {
 	value = strings.Join(strings.Fields(strings.TrimSpace(value)), " ")
 	return `"` + strings.ReplaceAll(value, `"`, `\"`) + `"`
+}
+
+// oracleFindExistingResearchDocument scans dir for a saved document whose
+// front matter carries the given run_identifier, so saveOracleResearchDocument
+// can replace it in place instead of writing a duplicate (Task 3).
+func oracleFindExistingResearchDocument(dir, runIdentifier string) (string, bool) {
+	runIdentifier = strings.TrimSpace(runIdentifier)
+	if runIdentifier == "" {
+		return "", false
+	}
+	matches, err := filepath.Glob(filepath.Join(dir, "*.md"))
+	if err != nil {
+		return "", false
+	}
+	for _, match := range matches {
+		data, readErr := os.ReadFile(match)
+		if readErr != nil {
+			continue
+		}
+		entry := parseOracleResearchFrontMatter(string(data))
+		if strings.TrimSpace(entry.RunIdentifier) == runIdentifier {
+			return match, true
+		}
+	}
+	return "", false
 }
 
 // saveOracleResearchDocument writes the finished research somewhere it will
@@ -192,9 +237,16 @@ func saveOracleResearchDocument(paths oraclePaths, state oracleStateFile, plan o
 		return "", fmt.Errorf("create research dir: %w", err)
 	}
 	target := filepath.Join(dir, filename)
-	// Two runs on the same topic on the same day must not overwrite each other.
-	for i := 2; fileExists(target); i++ {
-		target = filepath.Join(dir, fmt.Sprintf("%s-%s-%d.md", time.Now().UTC().Format("2006-01-02"), oracleResearchSlug(slug), i))
+	// 202-12 (D-12): re-saving the same run replaces its own document,
+	// identified by run_identifier, rather than adding a second one. Two
+	// genuinely different runs on the same topic on the same day still keep
+	// distinct documents -- they carry distinct run identifiers.
+	if existing, ok := oracleFindExistingResearchDocument(dir, oracleLiveEpisodeID(state)); ok {
+		target = existing
+	} else {
+		for i := 2; fileExists(target); i++ {
+			target = filepath.Join(dir, fmt.Sprintf("%s-%s-%d.md", time.Now().UTC().Format("2006-01-02"), oracleResearchSlug(slug), i))
+		}
 	}
 
 	sourceWorkspace := ""
@@ -271,7 +323,13 @@ type oracleResearchEntry struct {
 	Template     string `json:"template,omitempty"`
 	Confidence   int    `json:"confidence"`
 	Status       string `json:"status,omitempty"`
-	Iterations   int    `json:"iterations"`
+	// Standing is the plain-English "settled"/"partial ..." label (202-12,
+	// D-12). Empty for a document written before this plan -- the listing
+	// falls back to Status for those, so their rendered shape is unchanged.
+	Standing      string `json:"standing,omitempty"`
+	Iterations    int    `json:"iterations"`
+	RoundCount    int    `json:"round_count,omitempty"`
+	RunIdentifier string `json:"run_identifier,omitempty"`
 }
 
 // runResearchList backs `aether research list`. Without it the directory is
@@ -339,10 +397,16 @@ func parseOracleResearchFrontMatter(text string) oracleResearchEntry {
 			entry.Template = value
 		case "status":
 			entry.Status = value
+		case "standing":
+			entry.Standing = value
 		case "confidence":
 			entry.Confidence = atoiOrZero(value)
 		case "iterations":
 			entry.Iterations = atoiOrZero(value)
+		case "round_count":
+			entry.RoundCount = atoiOrZero(value)
+		case "run_identifier":
+			entry.RunIdentifier = value
 		}
 	}
 	return entry
@@ -363,7 +427,12 @@ func renderResearchList(result map[string]interface{}) string {
 	for _, entry := range entries {
 		fmt.Fprintf(&b, "%s\n", entry.Path)
 		fmt.Fprintf(&b, "   %s\n", truncateString(emptyFallback(entry.CoreQuestion, entry.Title), 88))
-		fmt.Fprintf(&b, "   %d%% confidence after %d rounds — %s\n\n", entry.Confidence, entry.Iterations, emptyFallback(entry.Status, "unknown"))
+		// 202-12 (D-12): a document written before this plan has no
+		// "standing" front-matter key -- Standing is empty and the line
+		// falls back to Status exactly as it always has, so an older
+		// document's listing output is byte-identical.
+		standing := emptyFallback(entry.Standing, emptyFallback(entry.Status, "unknown"))
+		fmt.Fprintf(&b, "   %d%% confidence after %d rounds — %s\n\n", entry.Confidence, entry.Iterations, standing)
 	}
 	b.WriteString("Point a new colony at one with:\n  aether init --research <path> \"<goal>\"")
 	return strings.TrimSpace(b.String())

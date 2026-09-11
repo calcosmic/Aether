@@ -36,6 +36,12 @@ func setupOracleAutofileTest(t *testing.T) string {
 }
 
 // --- Task 1: a finished run registers its own write-up on the colony ---
+//
+// 202-12 note: saveOracleResearchDocument now keys resaving a document on
+// the run identifier derived from state.StartedAt (oracleLiveEpisodeID), so
+// tests below that model two genuinely different runs on the same topic
+// give each call its own StartedAt -- the same distinguishing signal two
+// separate `aether oracle` invocations would carry for real.
 
 func TestFinishedResearchRegistersItselfForTheNextHelper(t *testing.T) {
 	root := setupOracleAutofileTest(t)
@@ -89,7 +95,7 @@ func TestResearchOnTheSameTopicKeepsBothWriteUps(t *testing.T) {
 		t.Fatalf("ensure workspace: %v", err)
 	}
 
-	state := oracleStateFile{Topic: "repeat topic", CoreQuestion: "Repeat topic question?", TargetConfidence: 80}
+	state := oracleStateFile{Topic: "repeat topic", CoreQuestion: "Repeat topic question?", TargetConfidence: 80, StartedAt: "2024-01-01T00:00:00Z"}
 
 	plan1 := oraclePlanFile{
 		Sources: map[string]oracleSource{},
@@ -112,6 +118,7 @@ func TestResearchOnTheSameTopicKeepsBothWriteUps(t *testing.T) {
 			{ID: "q1", Text: "Q", Status: "answered", Confidence: 60, KeyFindings: []oracleFinding{{Text: "Second run distinctive finding sentence."}}},
 		},
 	}
+	state.StartedAt = "2024-01-02T00:00:00Z" // a second, distinct run on the same topic
 	result2, err := finalizeOracleLoop(paths, state, plan2, "go", nil, nil, 4, "complete", "", "aether oracle status")
 	if err != nil {
 		t.Fatalf("finalizeOracleLoop (second run): %v", err)

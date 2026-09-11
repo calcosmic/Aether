@@ -186,6 +186,14 @@ func TestOracleSaveRefusesWithoutResearch(t *testing.T) {
 	}
 }
 
+// TestOracleSaveKeepsBothRunsOnTheSameTopicAndDay proves two genuinely
+// different runs on the same topic on the same day stay as two documents.
+// 202-12 made resaving keyed on run identifier (state.StartedAt via
+// oracleLiveEpisodeID) rather than on topic+day alone, so this fixture now
+// gives the second save its own StartedAt -- the same distinguishing signal
+// a second, later `aether oracle` invocation would carry for real. Resaving
+// the *same* run (identical StartedAt) is covered separately by
+// TestResaveOfOneRunDoesNotDuplicate, which proves the opposite case.
 func TestOracleSaveKeepsBothRunsOnTheSameTopicAndDay(t *testing.T) {
 	root := t.TempDir()
 	paths, state, plan := seedFinishedOracleRun(t, root, "cache storage", "Should the cache use SQLite or Postgres?", "# First\n\nOne.\n")
@@ -196,6 +204,7 @@ func TestOracleSaveKeepsBothRunsOnTheSameTopicAndDay(t *testing.T) {
 	if err := os.WriteFile(paths.SynthesisPath, []byte("# Second\n\nTwo.\n"), 0644); err != nil {
 		t.Fatalf("rewrite synthesis: %v", err)
 	}
+	state.StartedAt = "2024-01-02T00:00:00Z" // a second, distinct run
 	second, err := saveOracleResearchDocument(paths, state, plan, "")
 	if err != nil {
 		t.Fatalf("save second: %v", err)
@@ -218,6 +227,9 @@ func TestResearchListReportsSavedDocuments(t *testing.T) {
 	stateB.OverallConfidence = 41
 	stateB.Status = "stopped"
 	stateB.Iteration = 5
+	// A genuinely different run (202-12 keys resaving on run identifier, not
+	// topic+day) -- give it its own StartedAt so it does not replace A.
+	stateB.StartedAt = "2024-01-02T00:00:00Z"
 	if err := os.WriteFile(pathsA.SynthesisPath, []byte("# B\n\nTwo.\n"), 0644); err != nil {
 		t.Fatalf("rewrite synthesis: %v", err)
 	}

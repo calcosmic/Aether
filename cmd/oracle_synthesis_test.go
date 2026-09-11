@@ -262,3 +262,161 @@ func TestSynthesisWithoutARecommendationSaysSo(t *testing.T) {
 		t.Errorf("a run with no recommendation began with a source list instead of saying so:\n%s", recSection)
 	}
 }
+
+// --- Task 3: discoverable after the run ends ---
+
+func TestSynthesisIsSavedOutOfTheWorkspace(t *testing.T) {
+	root := t.TempDir()
+	paths, state, plan := seedFinishedOracleRun(t, root,
+		"cache storage: sqlite vs postgres",
+		"Should the local cache use SQLite or Postgres?",
+		"# Tech Evaluation\n\nSQLite is sufficient for the observed write volume.\n")
+
+	saved, err := saveOracleResearchDocument(paths, state, plan, "")
+	if err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	before, err := os.ReadFile(filepath.Join(root, saved))
+	if err != nil {
+		t.Fatalf("read saved document: %v", err)
+	}
+
+	// A workspace reset (what the next run does before starting) must not
+	// touch the durable copy.
+	if err := archiveOracleWorkspace(paths); err != nil {
+		t.Fatalf("archive workspace: %v", err)
+	}
+
+	after, err := os.ReadFile(filepath.Join(root, saved))
+	if err != nil {
+		t.Fatalf("saved document did not survive the workspace reset: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("saved document changed when the workspace was reset")
+	}
+}
+
+func TestSavedSynthesisFrontMatterCarriesStandingAndConfidence(t *testing.T) {
+	root := t.TempDir()
+	paths, state, plan := seedFinishedOracleRun(t, root,
+		"cache storage", "Should the cache use SQLite or Postgres?",
+		"# Findings\n\nBody.\n")
+	state.Status = "stopped"
+	state.Iteration = 6
+
+	saved, err := saveOracleResearchDocument(paths, state, plan, "")
+	if err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(root, saved))
+	if err != nil {
+		t.Fatalf("read saved document: %v", err)
+	}
+	text := string(data)
+	for _, want := range []string{
+		"round_count: 6",
+		`standing: "partial — stopped after 6 rounds"`,
+		"confidence: 92",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("saved front matter missing %q:\n%s", want, truncateString(text, 800))
+		}
+	}
+	entry := parseOracleResearchFrontMatter(text)
+	if strings.TrimSpace(entry.RunIdentifier) == "" {
+		t.Error("saved front matter did not carry a run identifier")
+	}
+	if entry.RoundCount != 6 {
+		t.Errorf("round_count did not round-trip: got %d", entry.RoundCount)
+	}
+}
+
+func TestResaveOfOneRunDoesNotDuplicate(t *testing.T) {
+	root := t.TempDir()
+	paths, state, plan := seedFinishedOracleRun(t, root,
+		"cache storage", "Should the cache use SQLite or Postgres?",
+		"# First save\n\nOne.\n")
+
+	first, err := saveOracleResearchDocument(paths, state, plan, "")
+	if err != nil {
+		t.Fatalf("save first: %v", err)
+	}
+	if err := os.WriteFile(paths.SynthesisPath, []byte("# Second save\n\nTwo, more evidence gathered.\n"), 0644); err != nil {
+		t.Fatalf("rewrite synthesis: %v", err)
+	}
+	// Same state (same StartedAt/run identifier) -- this is a resave of the
+	// same run, not a new one.
+	second, err := saveOracleResearchDocument(paths, state, plan, "")
+	if err != nil {
+		t.Fatalf("save second: %v", err)
+	}
+	if first != second {
+		t.Fatalf("resaving the same run created a second document: %q vs %q", first, second)
+	}
+
+	matches, err := filepath.Glob(filepath.Join(oracleResearchDir(root), "*.md"))
+	if err != nil {
+		t.Fatalf("glob research dir: %v", err)
+	}
+	if len(matches) != 1 {
+		t.Fatalf("research directory has %d documents for one run, want 1: %v", len(matches), matches)
+	}
+	data, err := os.ReadFile(matches[0])
+	if err != nil {
+		t.Fatalf("read replaced document: %v", err)
+	}
+	if !strings.Contains(string(data), "Two, more evidence gathered.") {
+		t.Error("the resaved document does not carry the newer content")
+	}
+}
+
+func TestResearchListStillParsesOlderDocuments(t *testing.T) {
+	root := t.TempDir()
+	dir := oracleResearchDir(root)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatalf("mkdir research dir: %v", err)
+	}
+	// The exact shape renderOracleResearchDocument wrote before 202-12 --
+	// no standing, round_count, or run_identifier keys.
+	oldDoc := `---
+title: "Should we use Redis for sessions?"
+core_question: "Should we use Redis for sessions?"
+topic: "session storage"
+generated: 2026-01-01T00:00:00Z
+template: custom
+scope: both
+iterations: 12
+confidence: 77
+target_confidence: 90
+status: stopped
+questions_answered: 1
+questions_total: 2
+---
+
+Old-shape body.
+`
+	if err := os.WriteFile(filepath.Join(dir, "2026-01-01-old-doc.md"), []byte(oldDoc), 0644); err != nil {
+		t.Fatalf("write old-shape fixture: %v", err)
+	}
+
+	result, err := runResearchList(root)
+	if err != nil {
+		t.Fatalf("research list: %v", err)
+	}
+	entries, _ := result["documents"].([]oracleResearchEntry)
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 document, got %d", len(entries))
+	}
+	entry := entries[0]
+	if entry.Confidence != 77 || entry.Status != "stopped" || entry.Iterations != 12 {
+		t.Fatalf("old-shape document did not parse correctly: %+v", entry)
+	}
+	if entry.Standing != "" {
+		t.Errorf("old-shape document unexpectedly carries a standing value: %q", entry.Standing)
+	}
+
+	rendered := renderResearchList(result)
+	if !strings.Contains(rendered, "77% confidence after 12 rounds — stopped") {
+		t.Errorf("listing output for an old-shape document changed shape:\n%s", rendered)
+	}
+}
