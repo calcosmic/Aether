@@ -5,17 +5,17 @@ milestone_name: Classic Colony Restoration
 current_phase: 202
 current_phase_name: Swarm, Oracle, and Live Colony
 status: executing
-stopped_at: Completed 202-08-PLAN.md
-last_updated: "2026-09-11T10:36:46.029Z"
+stopped_at: Completed 202-06-PLAN.md
+last_updated: "2026-09-11T13:30:00.000Z"
 last_activity: 2026-09-11
-last_activity_desc: "Completed 202-08-PLAN.md (wave 3); 202-06 and 202-07 (wave 4) still pending"
-state_head: 7c74cd95153f2515ba484087a0ea015e19039867
+state_head: 1f047160561cd4f1d19a16bc536de194ea97216d
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 124
-  completed_plans: 115
+  completed_plans: 116
   percent: 43
+last_activity_desc: "Completed 202-06-PLAN.md (wave 4, live colony cockpit); 202-07 (wave 4) still pending"
 ---
 
 # Project State
@@ -33,7 +33,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 202 (Swarm, Oracle, and Live Colony) — EXECUTING
-Plan: 08 of 15 complete (6/15 summaries on disk: 01-05, 08; wave 4 plans 202-06 and 202-07 still pending — plan numbering is wave-ordered, not sequential)
+Plan: 7/15 summaries on disk (01-06, 08); wave 4 plan 202-07 still pending — plan numbering is wave-ordered, not sequential
 Status: In Progress
 Last activity: 2026-09-11
 
@@ -607,6 +607,9 @@ Last activity: 2026-09-11
 - [Phase 202]: 202-04: the second-transport guard uses same-function co-occurrence, not unrestricted call-graph reachability — The cmd package has 70+ unrelated os.WriteFile call sites; full transitive reachability would produce false positives from unrelated call chains
 - [Phase 202]: Swarm's four lenses (tracker/scout/archaeologist/oracle) are dispatched unconditionally via a floor in buildSwarmPlansForWave, not by changing isAlwaysRequired -- avoids reversing the pinned TestSwarmTrivialBugSkipsHistoryAndResearch decision and starving gatekeeper/medic's optional budget slots.
 - [Phase ?]: 202-08: reused cmd/planning_stage.go's planningStagePreset type for Oracle's preset IDs instead of a parallel enum -- one shared vocabulary, not a copy of it
+- [Phase 202]: 202-06: the unfinished-worker-interrupted rule reads spawn-runs.json lock-free (os.ReadFile), mirroring the event-bus read discipline -- storage.Store.ReadFile/agent.SpawnTree.CurrentRun() would create a lock file on every `aether watch` invocation, breaking the command's read-only guarantee.
+- [Phase 202]: 202-06: the redraw loop is gated on isTerminalWriter(stdout), not shouldRenderVisualOutput(stdout) -- the latter is also true for a forced/piped/test-forced render that wants exactly one frame back; gating on visual mode alone hung a pre-existing test (TestWatchVisualOutputShowsHonestIdleFallback) until its timeout killed it.
+- [Phase 202]: 202-06: watchCmd's Args changed from cobra.NoArgs to cobra.MaximumNArgs(1) to carry an optional drill-down selector (worker identity or wave number); Cobra derives the command name from the first word of Use, so name-based references to `watch` are unaffected.
 
 ### Pending Todos
 
@@ -723,8 +726,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-11T10:36:34.578Z
-Stopped at: Completed 202-08-PLAN.md
+Last session: 2026-09-11T13:30:00.000Z
+Stopped at: Completed 202-06-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
