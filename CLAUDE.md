@@ -1347,6 +1347,29 @@ appears, naming what would make it verified, rather than three different
 subsystems inventing their own wording for the same idea. Locked by
 `TestOneStandingVocabularyAcrossSubsystems`.
 
+**Recovery stays part of the run it happened inside.** A recovery decision
+taken while a build or check is actively running is recorded on that same
+run's own live screen -- the workers already shown keep running, with the
+recovery decision shown alongside them, rather than the screen jumping to a
+separate, near-empty recovery view of its own. Locked by
+`TestRecoveryDecisionKeepsTheBuildEpisodeLive` (the decision lands on the
+real open episode it happened inside) and
+`TestWatchFollowsTheMostRecentlyStartedOpenEpisode` (the live view keeps
+following the most recently started still-open episode, never whichever
+episode merely owns the newest single event).
+
+**A running research round is genuinely shown as running.** While Oracle is
+actively iterating on a question, the live view shows it as running --
+exactly like any other worker -- and finishing the run or stopping it by
+hand ends that live view honestly. A research round whose background
+process has died is never shown as still running, even in a colony where an
+earlier build has already finished. Locked by `TestOracleRoundIsLiveWhileItRuns`
+(a round genuinely in flight resolves live), `TestOracleEpisodeBoundaryIsWiredIntoTheLoop`
+(the live boundary is provably called by the research loop itself, not
+merely defined somewhere unused), and `TestAbandonedOracleRoundIsNotLive` (a
+round whose controller process is gone, or whose state has moved on, is
+never shown as still running).
+
 *For dummies: type `aether watch` and you get one truthful screen -- what's
 happening now, what just finished, or an honest "nothing yet" -- never a
 made-up status. Ask Swarm to chase down a bug and four different kinds of
@@ -1356,7 +1379,11 @@ warning if the same bug beats three attempts in a row. Ask Oracle a question
 and it asks you one round of clarifying questions, then researches on its own
 and hands back an answer that leads with what to do, not a wall of sources.
 And anything not yet proven -- a repair idea, a half-finished bit of research
--- always says so in the same words, everywhere you see it.*
+-- always says so in the same words, everywhere you see it. A recovery
+decision made mid-build no longer jumps you to a separate screen, and a
+research round genuinely shows as running while it works and stops looking
+that way the moment it finishes, is stopped, or its background process
+dies.*
 
 ---
 
