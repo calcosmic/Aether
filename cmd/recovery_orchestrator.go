@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/codex"
-	"github.com/calcosmic/Aether/pkg/events"
 )
 
 // RecoveryBudget tracks per-wave recovery action consumption.
@@ -208,11 +207,16 @@ func orchestrateRecovery(ctx RecoveryContext) RecoveryOutcome {
 		}
 	}
 
-	// episodeID is derived from ctx.Phase (RecoveryContext's own field --
-	// nothing new invented) since recovery decisions have no independent
-	// run/attempt identifier of their own to reuse; every recovery
-	// transition for the same phase shares this one episode.
-	emitColonyLiveRecoveryChanged(fmt.Sprintf("recovery-phase-%d", ctx.Phase), events.EpisodeKindRecovery, outcome.Action.Type)
+	// The recovery transition is recorded against the episode it actually
+	// happened inside -- the open build or check episode -- rather than a
+	// synthetic identifier of its own, so a recovery decision fired mid-run
+	// never hijacks `aether watch` away from the real episode and its
+	// active workers (CR-02). Only when no live episode is open at all
+	// (currentLiveRecoveryEpisode's phase-derived fallback) does recovery
+	// get an episode of its own, so a standalone decision is still
+	// recorded rather than dropped.
+	recoveryEpisodeID, recoveryEpisodeKind := currentLiveRecoveryEpisode(ctx.Phase)
+	emitColonyLiveRecoveryChanged(recoveryEpisodeID, recoveryEpisodeKind, outcome.Action.Type)
 	return outcome
 }
 

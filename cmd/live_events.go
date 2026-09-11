@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -336,4 +337,35 @@ func currentLiveContinueEpisode() string {
 	activeLiveContinueEpisodeMu.RLock()
 	defer activeLiveContinueEpisodeMu.RUnlock()
 	return activeLiveContinueEpisodeID
+}
+
+// currentLiveRecoveryEpisode resolves the episode a recovery decision for
+// phase should be recorded against: the active build episode when one is
+// set, otherwise the active continue (check) episode when one is set,
+// otherwise a phase-derived fallback identifier for the (rarer) case where
+// a recovery decision fires with no live episode open at all -- so a
+// standalone recovery decision is still recorded rather than silently
+// dropped.
+//
+// The episode kind returned alongside the ID is the OWNING episode's own
+// kind (events.EpisodeKindBuild or events.EpisodeKindContinue), never
+// events.EpisodeKindRecovery, except in the no-open-episode fallback case.
+// This is deliberate: the projection's snapshot.EpisodeKind must keep
+// naming the run the owner is actually watching (a build, or a check) --
+// recovery is a detail layered onto that episode via RecoveryState, never
+// a screen of its own.
+//
+// Build is checked before continue. In the runtime today this precedence
+// can never actually matter: cmd/codex_build.go and cmd/codex_continue.go
+// each clear their own carrier via a deferred restore before the other
+// lane's call chain can run, so at most one of the two carriers is ever
+// non-empty at a time a recovery decision fires.
+func currentLiveRecoveryEpisode(phase int) (string, string) {
+	if id := currentLiveBuildEpisode(); id != "" {
+		return id, events.EpisodeKindBuild
+	}
+	if id := currentLiveContinueEpisode(); id != "" {
+		return id, events.EpisodeKindContinue
+	}
+	return fmt.Sprintf("recovery-phase-%d", phase), events.EpisodeKindRecovery
 }
