@@ -1,0 +1,324 @@
+package cmd
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/calcosmic/Aether/pkg/events"
+	"github.com/calcosmic/Aether/pkg/storage"
+)
+
+// colonyLiveTickerLimit bounds the most-recent-events tail carried on a
+// snapshot for cockpit rendering.
+const colonyLiveTickerLimit = 20
+
+// colonyLiveEventBusFile is the persisted JSONL filename events.Bus writes
+// live.* (and every other) event to, relative to the store's base path.
+// Matches events.DefaultConfig().JSONLFile.
+const colonyLiveEventBusFile = "event-bus.jsonl"
+
+// colonyLiveWorkerRow is one worker's current picture inside a live
+// episode: identity, lineage, workspace, lens, and the question/findings it
+// has surfaced so far. Ordered by first-seen (worker.started) sequence.
+type colonyLiveWorkerRow struct {
+	WorkerID       string   `json:"worker_id"`
+	ParentWorkerID string   `json:"parent_worker_id,omitempty"`
+	Caste          string   `json:"caste"`
+	WorkerName     string   `json:"worker_name"`
+	Wave           int      `json:"wave,omitempty"`
+	Workspace      string   `json:"workspace,omitempty"`
+	Lens           string   `json:"lens,omitempty"`
+	Question       string   `json:"question,omitempty"`
+	Findings       []string `json:"findings,omitempty"`
+	Status         string   `json:"status,omitempty"`
+}
+
+// colonyLiveTickerEntry is one entry in the bounded most-recent-events tail
+// carried on the snapshot for cockpit rendering.
+type colonyLiveTickerEntry struct {
+	Topic     string `json:"topic"`
+	Timestamp string `json:"timestamp"`
+	WorkerID  string `json:"worker_id,omitempty"`
+	Status    string `json:"status,omitempty"`
+}
+
+// colonyLiveSnapshot is the pure-replay projection of a live episode's
+// persisted events. It is the only shape any renderer -- live or replay --
+// reads a live-colony picture through; replaying the same persisted file
+// twice must always produce a byte-identical snapshot, and driving the
+// projection from the persisted event file alone, with no live process,
+// must reproduce the same snapshot field for field as the live path that
+// emitted the events.
+type colonyLiveSnapshot struct {
+	SchemaVersion    string                  `json:"schema_version"`
+	EpisodeID        string                  `json:"episode_id"`
+	EpisodeKind      string                  `json:"episode_kind,omitempty"`
+	Open             bool                    `json:"open"`
+	StartedAt        string                  `json:"started_at,omitempty"`
+	ElapsedSeconds   float64                 `json:"elapsed_seconds,omitempty"`
+	Wave             int                     `json:"wave,omitempty"`
+	Workers          []colonyLiveWorkerRow   `json:"workers,omitempty"`
+	Confidence       float64                 `json:"confidence,omitempty"`
+	TargetConfidence float64                 `json:"target_confidence,omitempty"`
+	Contradictions   []string                `json:"contradictions,omitempty"`
+	RecoveryState    string                  `json:"recovery_state,omitempty"`
+	Ticker           []colonyLiveTickerEntry `json:"ticker,omitempty"`
+
+	// SkippedEventCount / SkippedSchemaVersions record events whose schema
+	// version this reducer does not recognize -- skipped, never fatal.
+	SkippedEventCount     int      `json:"skipped_event_count,omitempty"`
+	SkippedSchemaVersions []string `json:"skipped_schema_versions,omitempty"`
+
+	LastEventID   string `json:"last_event_id,omitempty"`
+	LastTimestamp string `json:"last_timestamp,omitempty"`
+}
+
+// colonyLiveDecodedEvent pairs a raw persisted event with its decoded
+// ColonyLivePayload, used internally while sorting and folding.
+type colonyLiveDecodedEvent struct {
+	event   events.Event
+	payload events.ColonyLivePayload
+}
+
+// replayColonyLiveSnapshot is the pure reducer that folds persisted live
+// events into a live snapshot. It is the only path any renderer -- live or
+// replay -- may read a live-colony picture through.
+//
+// episodeID scopes the replay to a single episode; an empty episodeID
+// resolves to whichever episode the chronologically-latest persisted event
+// belongs to. An absent or empty persisted file, or a nil store, yields an
+// empty snapshot and a nil error -- never an error.
+func replayColonyLiveSnapshot(ctx context.Context, s *storage.Store, episodeID string, since time.Time) (colonyLiveSnapshot, error) {
+	_ = ctx
+	snapshot := colonyLiveSnapshot{SchemaVersion: events.ColonyLiveSchemaVersion, EpisodeID: episodeID}
+	if s == nil {
+		return snapshot, nil
+	}
+
+	raw := readColonyLiveEventsRaw(s, since)
+	if len(raw) == 0 {
+		return snapshot, nil
+	}
+
+	decoded := decodeColonyLiveEvents(raw)
+	sortColonyLiveEntries(decoded)
+
+	if episodeID == "" && len(decoded) > 0 {
+		episodeID = decoded[len(decoded)-1].payload.EpisodeID
+		snapshot.EpisodeID = episodeID
+	}
+	if episodeID != "" {
+		decoded = filterColonyLiveEntriesByEpisode(decoded, episodeID)
+	}
+
+	return foldColonyLiveEvents(snapshot, decoded), nil
+}
+
+// readColonyLiveEventsRaw reads the persisted live-event JSONL file
+// directly via os.ReadFile, deliberately bypassing storage.Store's locking
+// read path (store.ReadJSONL / events.Bus.Query). Every code path that
+// resolves the watch mode runs on EVERY `aether watch` invocation,
+// including the plain idle path -- taking a lock there would create a
+// lock-file side effect on a command that must stay strictly read-only
+// (TestWatchIdle199ReadOnly). This mirrors the established discipline in
+// cmd/lifecycle_facts.go's readLifecycleJSON/readLifecycleActors, which
+// exist for exactly the same reason.
+func readColonyLiveEventsRaw(s *storage.Store, since time.Time) []events.Event {
+	if s == nil {
+		return nil
+	}
+	path := filepath.Join(s.BasePath(), colonyLiveEventBusFile)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		// Absent file (no episode ever recorded) -- an empty, not an
+		// error, result.
+		return nil
+	}
+
+	now := events.FormatTimestamp(time.Now().UTC())
+	var sinceStamp string
+	if !since.IsZero() {
+		sinceStamp = events.FormatTimestamp(since.UTC())
+	}
+
+	lines := bytes.Split(data, []byte{'\n'})
+	result := make([]events.Event, 0, len(lines))
+	for _, line := range lines {
+		trimmed := bytes.TrimSpace(line)
+		if len(trimmed) == 0 {
+			continue
+		}
+		var evt events.Event
+		if err := json.Unmarshal(trimmed, &evt); err != nil {
+			continue // malformed line -- skip, never abort the replay
+		}
+		if !strings.HasPrefix(evt.Topic, "live.") {
+			continue
+		}
+		if evt.ExpiresAt != "" && evt.ExpiresAt <= now {
+			continue // expired
+		}
+		if sinceStamp != "" && evt.Timestamp < sinceStamp {
+			continue
+		}
+		result = append(result, evt)
+	}
+	return result
+}
+
+func decodeColonyLiveEvents(raw []events.Event) []colonyLiveDecodedEvent {
+	decoded := make([]colonyLiveDecodedEvent, 0, len(raw))
+	for _, evt := range raw {
+		var payload events.ColonyLivePayload
+		if err := json.Unmarshal(evt.Payload, &payload); err != nil {
+			// Not a valid ColonyLivePayload at all (malformed JSON) --
+			// skip rather than abort the surrounding replay.
+			continue
+		}
+		decoded = append(decoded, colonyLiveDecodedEvent{event: evt, payload: payload})
+	}
+	return decoded
+}
+
+func filterColonyLiveEntriesByEpisode(entries []colonyLiveDecodedEvent, episodeID string) []colonyLiveDecodedEvent {
+	filtered := make([]colonyLiveDecodedEvent, 0, len(entries))
+	for _, entry := range entries {
+		if entry.payload.EpisodeID == episodeID {
+			filtered = append(filtered, entry)
+		}
+	}
+	return filtered
+}
+
+// sortColonyLiveEntries sorts strictly by timestamp, then sequence number,
+// then event identifier -- so two events sharing an identical
+// (second-precision) timestamp always replay in one specified order, and
+// repeated replays of the same file produce identical snapshots.
+func sortColonyLiveEntries(entries []colonyLiveDecodedEvent) {
+	sort.SliceStable(entries, func(i, j int) bool {
+		a, b := entries[i], entries[j]
+		if a.event.Timestamp != b.event.Timestamp {
+			return a.event.Timestamp < b.event.Timestamp
+		}
+		if a.payload.Sequence != b.payload.Sequence {
+			return a.payload.Sequence < b.payload.Sequence
+		}
+		return a.event.ID < b.event.ID
+	})
+}
+
+func foldColonyLiveEvents(snapshot colonyLiveSnapshot, entries []colonyLiveDecodedEvent) colonyLiveSnapshot {
+	workerIndex := map[string]int{}
+	openBalance := 0
+
+	for _, entry := range entries {
+		evt, payload := entry.event, entry.payload
+
+		if payload.SchemaVersion != "" && payload.SchemaVersion != events.ColonyLiveSchemaVersion {
+			snapshot.SkippedEventCount++
+			if !containsString(snapshot.SkippedSchemaVersions, payload.SchemaVersion) {
+				snapshot.SkippedSchemaVersions = append(snapshot.SkippedSchemaVersions, payload.SchemaVersion)
+			}
+			continue
+		}
+
+		snapshot.LastEventID = evt.ID
+		snapshot.LastTimestamp = evt.Timestamp
+		if snapshot.EpisodeKind == "" && payload.EpisodeKind != "" {
+			snapshot.EpisodeKind = payload.EpisodeKind
+		}
+
+		switch evt.Topic {
+		case events.LiveTopicEpisodeStarted, events.LiveTopicWaveStarted:
+			openBalance++
+			if snapshot.StartedAt == "" {
+				snapshot.StartedAt = evt.Timestamp
+			}
+			if payload.Wave > 0 {
+				snapshot.Wave = payload.Wave
+			}
+		case events.LiveTopicEpisodeEnded, events.LiveTopicWaveEnded:
+			if openBalance > 0 {
+				openBalance--
+			}
+			if payload.ElapsedSeconds > 0 {
+				snapshot.ElapsedSeconds = payload.ElapsedSeconds
+			}
+		case events.LiveTopicWorkerStarted:
+			key := firstNonEmpty(payload.WorkerID, payload.WorkerName)
+			row := colonyLiveWorkerRow{
+				WorkerID:       key,
+				ParentWorkerID: payload.ParentWorkerID,
+				Caste:          payload.Caste,
+				WorkerName:     payload.WorkerName,
+				Wave:           payload.Wave,
+				Workspace:      payload.Workspace,
+				Lens:           payload.Lens,
+				Question:       payload.Question,
+				Status:         firstNonEmpty(payload.Status, "active"),
+			}
+			if payload.Wave > 0 {
+				snapshot.Wave = payload.Wave
+			}
+			if idx, ok := workerIndex[key]; ok {
+				snapshot.Workers[idx] = row
+			} else {
+				workerIndex[key] = len(snapshot.Workers)
+				snapshot.Workers = append(snapshot.Workers, row)
+			}
+		case events.LiveTopicWorkerProgress, events.LiveTopicWorkerFinished, events.LiveTopicQuestionChanged, events.LiveTopicFindingRecorded:
+			key := firstNonEmpty(payload.WorkerID, payload.WorkerName)
+			if idx, ok := workerIndex[key]; ok {
+				if payload.Question != "" {
+					snapshot.Workers[idx].Question = payload.Question
+				}
+				if len(payload.Findings) > 0 {
+					snapshot.Workers[idx].Findings = append(snapshot.Workers[idx].Findings, payload.Findings...)
+				}
+				if payload.Status != "" {
+					snapshot.Workers[idx].Status = payload.Status
+				}
+			}
+		case events.LiveTopicConfidenceChanged:
+			snapshot.Confidence = payload.Confidence
+			snapshot.TargetConfidence = payload.TargetConfidence
+		case events.LiveTopicContradictionFound:
+			snapshot.Contradictions = append(snapshot.Contradictions, payload.Contradictions...)
+		case events.LiveTopicRecoveryChanged:
+			snapshot.RecoveryState = payload.RecoveryState
+		}
+
+		snapshot.Ticker = append(snapshot.Ticker, colonyLiveTickerEntry{
+			Topic:     evt.Topic,
+			Timestamp: evt.Timestamp,
+			WorkerID:  firstNonEmpty(payload.WorkerID, payload.WorkerName),
+			Status:    payload.Status,
+		})
+	}
+
+	if len(snapshot.Ticker) > colonyLiveTickerLimit {
+		snapshot.Ticker = snapshot.Ticker[len(snapshot.Ticker)-colonyLiveTickerLimit:]
+	}
+
+	// Open is derived from a start/end balance across episode- and
+	// wave-level boundary events, never from wall-clock inference: a
+	// started boundary with no matching ended boundary yet leaves the
+	// balance positive, so the episode/wave is reported open.
+	snapshot.Open = openBalance > 0
+
+	if snapshot.Open && snapshot.StartedAt != "" && snapshot.ElapsedSeconds == 0 {
+		if started, err := time.Parse(time.RFC3339, snapshot.StartedAt); err == nil {
+			if last, err := time.Parse(time.RFC3339, snapshot.LastTimestamp); err == nil {
+				snapshot.ElapsedSeconds = last.Sub(started).Seconds()
+			}
+		}
+	}
+
+	return snapshot
+}

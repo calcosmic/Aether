@@ -63,8 +63,19 @@ var watchCmd = &cobra.Command{
 	Annotations: map[string]string{"aether.io/read-only": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		_ = cmd // --once/--interval remain accepted compatibility flags.
-		result := buildIdleWatchResult(resolveAetherRoot(), store, time.Now().UTC())
-		outputWorkflow(result, renderIdleWatchVisual(result))
+		now := time.Now().UTC()
+		mode, snapshot := resolveWatchMode(context.Background(), store, now)
+		switch mode {
+		case watchModeLive:
+			outputWorkflow(liveWatchResult(snapshot, now), renderLiveWatchVisual(snapshot))
+		default:
+			// watchModeReplay: plan 202-09 owns rendering a closed episode
+			// from its persisted events; until then it falls through to the
+			// honest idle floor below, unchanged.
+			// watchModeIdle: no live-colony evidence exists at all.
+			result := buildIdleWatchResult(resolveAetherRoot(), store, now)
+			outputWorkflow(result, renderIdleWatchVisual(result))
+		}
 		return nil
 	},
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/spf13/cobra"
 )
 
@@ -306,8 +307,15 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 	}
 
 	investigation := buildSwarmInvestigationPlans(root, target)
+	investigationWave := swarmPlansWaveNumber(investigation)
 	emitVisualProgress(renderSwarmDispatchPreview(swarmID, target, investigation, "Investigation Wave"))
-	investigationRuns, err := executeSwarmWave(ctx, root, swarmID, target, investigation, "", invoker)
+	emitColonyLive(events.LiveTopicWaveStarted, events.ColonyLivePayload{
+		EpisodeID:   swarmID,
+		EpisodeKind: "swarm",
+		Wave:        investigationWave,
+		Status:      "starting",
+	})
+	investigationRuns, err := executeSwarmWave(ctx, root, swarmID, target, investigation, "", invoker, true)
 	if err != nil {
 		if ctx.Err() != nil {
 			runStatus = "timeout"
@@ -315,11 +323,17 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 		}
 		return nil, err
 	}
+	emitColonyLive(events.LiveTopicWaveEnded, events.ColonyLivePayload{
+		EpisodeID:   swarmID,
+		EpisodeKind: "swarm",
+		Wave:        investigationWave,
+		Status:      "completed",
+	})
 
 	findingSummary := renderSwarmFindingSummary(investigationRuns)
 	fixPlans := buildSwarmFixPlans(root, target)
 	emitVisualProgress(renderSwarmDispatchPreview(swarmID, target, fixPlans, "Fix Wave"))
-	builderRuns, err := executeSwarmWave(ctx, root, swarmID, target, fixPlans, findingSummary, invoker)
+	builderRuns, err := executeSwarmWave(ctx, root, swarmID, target, fixPlans, findingSummary, invoker, false)
 	if err != nil {
 		if ctx.Err() != nil {
 			runStatus = "timeout"
@@ -331,7 +345,7 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 	builderSummary := renderSwarmFindingSummary(builderRuns)
 	verificationPlans := buildSwarmVerificationPlans(root, target)
 	emitVisualProgress(renderSwarmDispatchPreview(swarmID, target, verificationPlans, "Verification Wave"))
-	watcherRuns, err := executeSwarmWave(ctx, root, swarmID, target, verificationPlans, findingSummary+"\n\n"+builderSummary, invoker)
+	watcherRuns, err := executeSwarmWave(ctx, root, swarmID, target, verificationPlans, findingSummary+"\n\n"+builderSummary, invoker, false)
 	if err != nil {
 		if ctx.Err() != nil {
 			runStatus = "timeout"
@@ -1107,7 +1121,13 @@ func buildLegacySwarmWatcherPlan(root, target string) swarmWorkerPlan {
 	}
 }
 
-func executeSwarmWave(ctx context.Context, root, swarmID, target string, plans []swarmWorkerPlan, priorSummary string, invoker codex.WorkerInvoker) ([]swarmWorkerExecution, error) {
+// executeSwarmWave dispatches plans sequentially and records their outcome.
+// liveEpisode, when true, publishes a worker-started event through
+// emitColonyLive as each plan is dispatched and a worker-finished event as
+// each returns -- currently wired for the investigation wave only (202-02);
+// the fix and verification waves pass false and are unaffected (202-03
+// owns wiring the rest of the lifecycle lanes).
+func executeSwarmWave(ctx context.Context, root, swarmID, target string, plans []swarmWorkerPlan, priorSummary string, invoker codex.WorkerInvoker, liveEpisode bool) ([]swarmWorkerExecution, error) {
 	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
 	runs := make([]swarmWorkerExecution, 0, len(plans))
 	for _, plan := range plans {
@@ -1122,6 +1142,18 @@ func executeSwarmWave(ctx context.Context, root, swarmID, target string, plans [
 		}
 		if err := updateSwarmDisplayStatus(swarmID, plan.Name, "active"); err != nil {
 			return nil, fmt.Errorf("update swarm display %s: %w", plan.Name, err)
+		}
+		if liveEpisode {
+			emitColonyLive(events.LiveTopicWorkerStarted, events.ColonyLivePayload{
+				EpisodeID:   swarmID,
+				EpisodeKind: "swarm",
+				Wave:        plan.Wave,
+				WorkerID:    plan.Name,
+				Caste:       plan.Caste,
+				WorkerName:  plan.Name,
+				Workspace:   root,
+				Status:      "active",
+			})
 		}
 
 		responsePath := swarmResponsePath(swarmID, plan.Name)
@@ -1195,10 +1227,35 @@ func executeSwarmWave(ctx context.Context, root, swarmID, target string, plans [
 		if err := recordSwarmFinding(swarmID, plan.Name, response, execution); err != nil {
 			return nil, fmt.Errorf("record swarm finding %s: %w", plan.Name, err)
 		}
+		if liveEpisode {
+			emitColonyLive(events.LiveTopicWorkerFinished, events.ColonyLivePayload{
+				EpisodeID:   swarmID,
+				EpisodeKind: "swarm",
+				Wave:        plan.Wave,
+				WorkerID:    plan.Name,
+				Caste:       plan.Caste,
+				WorkerName:  plan.Name,
+				Workspace:   root,
+				Status:      execution.Status,
+				Findings:    append([]string{}, execution.Response.Findings...),
+			})
+		}
 
 		runs = append(runs, execution)
 	}
 	return runs, nil
+}
+
+// swarmPlansWaveNumber returns the wave number shared by a wave's plans,
+// falling back to 1 when the wave list is empty.
+func swarmPlansWaveNumber(plans []swarmWorkerPlan) int {
+	if len(plans) == 0 {
+		return 1
+	}
+	if plans[0].Wave > 0 {
+		return plans[0].Wave
+	}
+	return 1
 }
 
 func invokeSwarmWorker(ctx context.Context, root, target, swarmID string, plan swarmWorkerPlan, priorSummary, responsePath string, invoker codex.WorkerInvoker) (*codex.WorkerResult, *swarmWorkerResponse, error) {

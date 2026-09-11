@@ -414,7 +414,7 @@ func TestSwarmWorkerFailureReachesTheFailureLogOnBothLanes(t *testing.T) {
 			Wave: 1, Timeout: 5 * time.Second,
 		}
 
-		runs, err := executeSwarmWave(context.Background(), root, swarmID, "reported bug", []swarmWorkerPlan{plan}, "", &failingWorkerInvoker{err: wantErr})
+		runs, err := executeSwarmWave(context.Background(), root, swarmID, "reported bug", []swarmWorkerPlan{plan}, "", &failingWorkerInvoker{err: wantErr}, false)
 		if err != nil {
 			t.Fatalf("executeSwarmWave: %v", err)
 		}
@@ -549,7 +549,7 @@ func TestNativeSwarmLaneRecordsSelfReportedWorkerFailure(t *testing.T) {
 			}
 
 			invoker := &selfReportingWorkerInvoker{status: tc.status, summary: summary}
-			runs, err := executeSwarmWave(context.Background(), root, swarmID, "reported bug", []swarmWorkerPlan{plan}, "", invoker)
+			runs, err := executeSwarmWave(context.Background(), root, swarmID, "reported bug", []swarmWorkerPlan{plan}, "", invoker, false)
 			if err != nil {
 				t.Fatalf("executeSwarmWave: %v", err)
 			}
