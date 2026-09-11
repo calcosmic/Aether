@@ -2,11 +2,18 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"os/signal"
+	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/storage"
+	"github.com/spf13/cobra"
 )
 
 // watchMode is one of the three shapes `aether watch` can render.
@@ -43,10 +50,91 @@ func resolveWatchMode(ctx context.Context, s *storage.Store, now time.Time) (wat
 	if err != nil || snapshot.EpisodeID == "" {
 		return watchModeIdle, colonyLiveSnapshot{}
 	}
+	snapshot = applyUnfinishedWorkerInterruption(s, snapshot)
 	if snapshot.Open {
 		return watchModeLive, snapshot
 	}
 	return watchModeReplay, snapshot
+}
+
+// colonyLiveSpawnRunFile is the persisted JSON filename the spawn tree's
+// run tracker writes, relative to the store's base path. Matches
+// agent.SpawnTree's own internal defaultSpawnRunFile constant
+// (unexported in pkg/agent), duplicated here deliberately: reading it
+// through agent.NewSpawnTree(...).CurrentRun() goes through
+// storage.Store.ReadFile, which takes an RLock and creates a lock file on
+// every `aether watch` invocation -- exactly the side effect
+// readColonyLiveEventsRaw's own doc comment already refuses for the same
+// reason (TestWatchIdle199ReadOnly / this plan's own read-only guarantee).
+const colonyLiveSpawnRunFile = "spawn-runs.json"
+
+// colonyLiveSpawnRunState mirrors the persisted shape of spawn-runs.json --
+// agent.SpawnTree's own current-run-ID plus its bounded run history --
+// closely enough to read run.Status without importing the unexported type.
+type colonyLiveSpawnRunState struct {
+	CurrentRunID string           `json:"current_run_id,omitempty"`
+	Runs         []agent.SpawnRun `json:"runs,omitempty"`
+}
+
+// latestSpawnRunRaw reads spawn-runs.json directly via os.ReadFile
+// (lock-free, mirroring readColonyLiveEventsRaw) and returns the run named
+// by CurrentRunID, or -- when that ID does not resolve -- the most recently
+// recorded run, matching agent.SpawnTree.CurrentRun()'s own fallback. An
+// absent file, an unparseable file, or an empty run history all resolve to
+// (agent.SpawnRun{}, false) -- never an error, since this runs on every
+// `aether watch` invocation.
+func latestSpawnRunRaw(s *storage.Store) (agent.SpawnRun, bool) {
+	if s == nil {
+		return agent.SpawnRun{}, false
+	}
+	path := filepath.Join(s.BasePath(), colonyLiveSpawnRunFile)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return agent.SpawnRun{}, false
+	}
+	var state colonyLiveSpawnRunState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return agent.SpawnRun{}, false
+	}
+	for _, run := range state.Runs {
+		if run.ID != "" && run.ID == state.CurrentRunID {
+			return run, true
+		}
+	}
+	if len(state.Runs) == 0 {
+		return agent.SpawnRun{}, false
+	}
+	return state.Runs[len(state.Runs)-1], true
+}
+
+// applyUnfinishedWorkerInterruption reclassifies every still-open worker
+// row (Finished == false) as interrupted, naming the owning run's own
+// terminal status as the reason, once that durable run record itself
+// reaches a terminal status (agent.IsTerminalSpawnStatus) -- the identical
+// vocabulary buildIdleWatchResult already applies to a spawn-tree actor's
+// own status. A worker is NEVER shown as completed by this function; that
+// can only ever come from its own worker.finished live event (Finished ==
+// true), which this function leaves untouched.
+//
+// When no run record exists, or the current run is still active, snapshot
+// is returned unchanged -- an open worker with an active run is simply
+// still running.
+func applyUnfinishedWorkerInterruption(s *storage.Store, snapshot colonyLiveSnapshot) colonyLiveSnapshot {
+	if len(snapshot.Workers) == 0 {
+		return snapshot
+	}
+	run, ok := latestSpawnRunRaw(s)
+	if !ok || !agent.IsTerminalSpawnStatus(run.Status) {
+		return snapshot
+	}
+	for i := range snapshot.Workers {
+		if snapshot.Workers[i].Finished {
+			continue
+		}
+		snapshot.Workers[i].Status = "interrupted"
+		snapshot.Workers[i].InterruptedReason = run.Status
+	}
+	return snapshot
 }
 
 // latestLiveEpisodeID finds the episode ID the chronologically-latest
@@ -127,5 +215,140 @@ func liveWatchResult(snapshot colonyLiveSnapshot, now time.Time) map[string]inte
 		"active_count":    len(snapshot.Workers),
 		"captured_at":     now.UTC().Format(time.RFC3339Nano),
 		"snapshot":        snapshot,
+	}
+}
+
+// colonyLiveRefreshClearSequence is the in-place redraw control sequence
+// written before every frame after the first in the refresh loop: move the
+// cursor home and clear the screen, so each new frame replaces the
+// previous one on screen rather than appending below it.
+const colonyLiveRefreshClearSequence = "\x1b[H\x1b[2J"
+
+// colonyLiveRefreshTickerOverride lets a test drive the refresh loop off a
+// channel and stop function it controls instead of a real wall-clock
+// ticker, so a test can prove three redraws happen without a real sleep.
+// nil (unset) in production.
+var colonyLiveRefreshTickerOverride func(time.Duration) (<-chan time.Time, func())
+
+// newColonyLiveRefreshTicker returns the tick source the refresh loop reads
+// from -- a real time.Ticker in production, or a test's own override.
+func newColonyLiveRefreshTicker(interval time.Duration) (<-chan time.Time, func()) {
+	if colonyLiveRefreshTickerOverride != nil {
+		return colonyLiveRefreshTickerOverride(interval)
+	}
+	t := time.NewTicker(interval)
+	return t.C, t.Stop
+}
+
+// runWatchCommand is watchCmd's RunE body. It renders exactly one frame
+// and, unless the single-snapshot flag is set or the output is not going
+// to a human-readable surface, redraws in place on the configured interval
+// until interrupted (SIGINT/SIGTERM). Every read the loop performs
+// (resolveWatchMode, the idle floor, the spawn-run lookup, the cost
+// ledger) is a plain read already proven read-only elsewhere in this
+// package -- the loop itself creates no lock file, writes no state, and
+// starts no store write path.
+func runWatchCommand(cmd *cobra.Command, args []string) error {
+	once, _ := cmd.Flags().GetBool("once")
+	interval, _ := cmd.Flags().GetDuration("interval")
+	if interval <= 0 {
+		interval = 2 * time.Second
+	}
+	drill := parseColonyLiveDrillSelector(args)
+
+	// The redraw loop is gated on isTerminalWriter, not
+	// shouldRenderVisualOutput: the latter is also true for a forced/piped
+	// "pretty" render (AETHER_FORCE_VISUAL, AETHER_OUTPUT_MODE=visual, a
+	// test's own buffer) that wants exactly one frame back, not an
+	// unbounded loop that never returns until a real terminal's owner
+	// interrupts it. Only a genuine TTY gets the live redraw.
+	if once || !isTerminalWriter(stdout) {
+		writeColonyWatchFrame(context.Background(), drill, time.Now().UTC(), true)
+		return nil
+	}
+
+	ctx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
+	return runColonyLiveRefreshLoop(ctx, drill, interval)
+}
+
+// colonyLiveHideCursorSequence / colonyLiveShowCursorSequence bracket the
+// refresh loop's whole run: the cursor is hidden once, before the first
+// frame, and restored once, when the loop returns for any reason --
+// including an interrupt -- so the terminal is left in a usable state
+// rather than showing a cursor blinking mid-frame.
+const (
+	colonyLiveHideCursorSequence = "\x1b[?25l"
+	colonyLiveShowCursorSequence = "\x1b[?25h"
+)
+
+// runColonyLiveRefreshLoop renders one frame immediately, then redraws in
+// place on every tick from newColonyLiveRefreshTicker(interval) until ctx
+// is done. An interrupt (ctx cancelled) is a clean stop -- it returns nil,
+// never an error -- and always restores the cursor via its deferred write,
+// however the loop exits. Split out of runWatchCommand so a test can drive
+// it from its own cancellable context instead of sending a real OS signal.
+//
+// Every frame is written through the package's own `stdout` var (the same
+// writer every other command in this package uses), never a writer passed
+// in separately -- a test drives this by reassigning `stdout`, matching
+// the existing convention (saveGlobals / TestResumeDashboard and friends),
+// rather than by threading a second, potentially-divergent writer through
+// the envelope path.
+func runColonyLiveRefreshLoop(ctx context.Context, drill colonyLiveDrillSelector, interval time.Duration) error {
+	fmt.Fprint(stdout, colonyLiveHideCursorSequence)
+	defer fmt.Fprint(stdout, colonyLiveShowCursorSequence)
+
+	writeColonyWatchFrame(ctx, drill, time.Now().UTC(), true)
+
+	ticker, stopTicker := newColonyLiveRefreshTicker(interval)
+	defer stopTicker()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case tick, ok := <-ticker:
+			if !ok {
+				return nil
+			}
+			fmt.Fprint(stdout, colonyLiveRefreshClearSequence)
+			writeColonyWatchFrame(ctx, drill, tick.UTC(), false)
+		}
+	}
+}
+
+// writeColonyWatchFrame renders and writes exactly one watch frame to
+// `stdout`: the live dashboard when an episode is open, the honest idle
+// floor otherwise.
+//
+// useEnvelope selects between the full JSON+visual envelope
+// (outputWorkflow, used for the first/only frame so `aether watch --once`
+// and `aether watch --json` keep their existing shape) and a bare visual
+// write (writeVisualOutput, used for every later redraw in the loop, where
+// emitting a fresh JSON document on every tick would not be meaningful).
+func writeColonyWatchFrame(ctx context.Context, drill colonyLiveDrillSelector, now time.Time, useEnvelope bool) {
+	mode, snapshot := resolveWatchMode(ctx, store, now)
+	switch mode {
+	case watchModeLive:
+		state, _ := readColonyStateWithoutWriting()
+		ledgers, _ := loadSpendLedgersForPhase(state.CurrentPhase)
+		visual := renderColonyLiveDashboard(snapshot, state, ledgers, drill)
+		if useEnvelope {
+			outputWorkflow(liveWatchResult(snapshot, now), visual)
+			return
+		}
+		writeVisualOutput(stdout, visual)
+	default:
+		// watchModeReplay: plan 202-09 owns rendering a closed episode from
+		// its persisted events; until then it falls through to the honest
+		// idle floor below, unchanged.
+		// watchModeIdle: no live-colony evidence exists at all.
+		result := buildIdleWatchResult(resolveAetherRoot(), store, now)
+		visual := renderIdleWatchVisual(result)
+		if useEnvelope {
+			outputWorkflow(result, visual)
+			return
+		}
+		writeVisualOutput(stdout, visual)
 	}
 }

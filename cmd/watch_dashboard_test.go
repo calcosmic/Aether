@@ -1,15 +1,25 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/events"
+	"github.com/spf13/cobra"
 )
 
 // --- fixtures -------------------------------------------------------------
@@ -284,5 +294,260 @@ func TestLiveTickerLinesArePlainEnglish(t *testing.T) {
 		if !strings.Contains(line, entry.Timestamp) {
 			t.Errorf("rendered ticker line for %q missing its timestamp:\n%q", topic, line)
 		}
+	}
+}
+
+// --- Task 3: refresh loop and the unfinished-worker rule --------------------
+
+func newTestWatchCmd() *cobra.Command {
+	c := &cobra.Command{Use: "watch", RunE: runWatchCommand}
+	c.Flags().Bool("once", false, "")
+	c.Flags().Duration("interval", 2*time.Second, "")
+	return c
+}
+
+// dirDigest computes a stable digest over root's file set and contents,
+// keyed by path relative to root -- used to prove the refresh loop performs
+// no state mutation.
+func dirDigest(t *testing.T, root string) string {
+	t.Helper()
+	h := sha256.New()
+	var paths []string
+	files := map[string][]byte{}
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		paths = append(paths, rel)
+		files[rel] = data
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk %s: %v", root, err)
+	}
+	sort.Strings(paths)
+	for _, p := range paths {
+		h.Write([]byte(p))
+		h.Write(files[p])
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// TestWatchSingleSnapshotRendersOnce proves the --once flag renders exactly
+// one frame and returns zero, with no in-place redraw control sequence
+// ever written.
+func TestWatchSingleSnapshotRendersOnce(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+	os.Setenv("AETHER_FORCE_VISUAL", "1")
+	t.Cleanup(func() { os.Unsetenv("AETHER_FORCE_VISUAL") })
+
+	var buf bytes.Buffer
+	stdout = &buf
+
+	c := newTestWatchCmd()
+	c.Flags().Set("once", "true")
+	if err := runWatchCommand(c, nil); err != nil {
+		t.Fatalf("runWatchCommand with --once returned an error: %v", err)
+	}
+	if buf.Len() == 0 {
+		t.Fatalf("runWatchCommand with --once wrote nothing")
+	}
+	if strings.Contains(buf.String(), colonyLiveRefreshClearSequence) {
+		t.Fatalf("--once wrote the in-place redraw control sequence -- exactly one frame should have been written, with no redraw:\n%s", buf.String())
+	}
+}
+
+// TestWatchRefreshesInPlaceWithoutMutating proves three consecutive
+// intervals produce three frames that replace rather than append (the
+// in-place control sequence appears exactly twice, between frame 1-2 and
+// 2-3), and that the colony data directory is byte-identical before and
+// after the run.
+func TestWatchRefreshesInPlaceWithoutMutating(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	episodeID := "refresh-loop-test"
+	emitColonyLive(events.LiveTopicWorkerStarted, events.ColonyLivePayload{EpisodeID: episodeID, EpisodeKind: "swarm", WorkerID: "Scout-1", WorkerName: "Scout-1", Caste: "scout"})
+
+	before := dirDigest(t, s.BasePath())
+
+	var buf bytes.Buffer
+	stdout = &buf
+	tickCh := make(chan time.Time)
+	origOverride := colonyLiveRefreshTickerOverride
+	colonyLiveRefreshTickerOverride = func(time.Duration) (<-chan time.Time, func()) {
+		return tickCh, func() {}
+	}
+	t.Cleanup(func() { colonyLiveRefreshTickerOverride = origOverride })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- runColonyLiveRefreshLoop(ctx, colonyLiveDrillSelector{}, time.Millisecond)
+	}()
+
+	for i := 0; i < 3; i++ {
+		select {
+		case tickCh <- time.Now().UTC():
+		case <-time.After(2 * time.Second):
+			t.Fatalf("refresh loop did not read tick %d in time", i+1)
+		}
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("runColonyLiveRefreshLoop returned an error: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("runColonyLiveRefreshLoop did not return after ctx cancellation")
+	}
+
+	redraws := strings.Count(buf.String(), colonyLiveRefreshClearSequence)
+	if redraws != 3 {
+		t.Fatalf("in-place control sequence appeared %d times, want 3 (once before each of the 3 tick-driven redraws)", redraws)
+	}
+	if !strings.Contains(buf.String(), colonyLiveShowCursorSequence) {
+		t.Fatalf("refresh loop did not restore the cursor on exit")
+	}
+
+	after := dirDigest(t, s.BasePath())
+	if before != after {
+		t.Fatalf("colony data directory changed across a refresh loop run:\n before: %s\n after:  %s", before, after)
+	}
+}
+
+// TestWatchRefreshStopsCleanlyOnInterrupt proves an interrupt (context
+// cancellation, the same mechanism a real SIGINT/SIGTERM drives via
+// signal.NotifyContext in runWatchCommand) returns without error and
+// restores the cursor.
+func TestWatchRefreshStopsCleanlyOnInterrupt(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	var buf bytes.Buffer
+	stdout = &buf
+	tickCh := make(chan time.Time)
+	origOverride := colonyLiveRefreshTickerOverride
+	colonyLiveRefreshTickerOverride = func(time.Duration) (<-chan time.Time, func()) {
+		return tickCh, func() {}
+	}
+	t.Cleanup(func() { colonyLiveRefreshTickerOverride = origOverride })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- runColonyLiveRefreshLoop(ctx, colonyLiveDrillSelector{}, time.Millisecond)
+	}()
+
+	cancel() // simulates the interrupt
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("interrupt returned an error, want nil: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("refresh loop did not return promptly after interrupt")
+	}
+	if !strings.Contains(buf.String(), colonyLiveShowCursorSequence) {
+		t.Fatalf("refresh loop did not restore the cursor after interrupt")
+	}
+}
+
+// TestUnfinishedWorkerShowsAsRunningThenInterrupted proves a worker with a
+// start event and no terminal event renders as running with elapsed time,
+// and -- once the spawn run that owned it carries a terminal status --
+// renders as interrupted with that status named, never as completed.
+func TestUnfinishedWorkerShowsAsRunningThenInterrupted(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	episodeID := "unfinished-worker-test"
+	emitColonyLive(events.LiveTopicEpisodeStarted, events.ColonyLivePayload{EpisodeID: episodeID, EpisodeKind: "build"})
+	emitColonyLive(events.LiveTopicWorkerStarted, events.ColonyLivePayload{
+		EpisodeID: episodeID, EpisodeKind: "build", WorkerID: "Mason-1", WorkerName: "Mason-1", Caste: "builder",
+	})
+
+	ctx := context.Background()
+	_, snapshot := resolveWatchMode(ctx, s, time.Now().UTC())
+	if len(snapshot.Workers) != 1 {
+		t.Fatalf("expected exactly 1 worker, got %d", len(snapshot.Workers))
+	}
+	row := snapshot.Workers[0]
+	if row.Finished {
+		t.Fatalf("worker with no worker.finished event reports Finished = true")
+	}
+	if row.Status != "active" {
+		t.Fatalf("open worker's status = %q, want %q (still running)", row.Status, "active")
+	}
+
+	state := newColonyLiveDashboardFixtureState("Aether", 1, colony.StateEXECUTING)
+	rendered := renderColonyLiveDashboard(snapshot, state, nil, colonyLiveDrillSelector{})
+	if !strings.Contains(rendered, "Mason-1") {
+		t.Fatalf("rendered dashboard missing the open worker's row:\n%s", rendered)
+	}
+
+	// Now the run that dispatched this worker ends without the worker
+	// itself ever reporting a terminal live event -- write spawn-runs.json
+	// directly (bypassing the locking Store write path, matching how this
+	// file is read: readColonyLiveEventsRaw-style, lock-free).
+	writeSpawnRunFixture(t, s.BasePath(), "run-1", "failed")
+
+	_, snapshot2 := resolveWatchMode(ctx, s, time.Now().UTC())
+	row2 := snapshot2.Workers[0]
+	if row2.Finished {
+		t.Fatalf("worker still reports Finished = true after only the run ended, not the worker's own event")
+	}
+	if row2.Status != "interrupted" {
+		t.Fatalf("worker after the owning run ended: Status = %q, want %q", row2.Status, "interrupted")
+	}
+	if row2.InterruptedReason != "failed" {
+		t.Fatalf("worker's InterruptedReason = %q, want the run's own terminal status %q", row2.InterruptedReason, "failed")
+	}
+
+	rendered2 := renderColonyLiveDashboard(snapshot2, state, nil, colonyLiveDrillSelector{})
+	if !strings.Contains(rendered2, "interrupted") {
+		t.Errorf("rendered dashboard does not name the worker as interrupted:\n%s", rendered2)
+	}
+	if !strings.Contains(rendered2, "failed") {
+		t.Errorf("rendered dashboard does not name the owning run's own terminal status:\n%s", rendered2)
+	}
+	if strings.Contains(rendered2, "completed") {
+		t.Errorf("rendered dashboard uses the word for completion on a worker that was never confirmed finished:\n%s", rendered2)
+	}
+}
+
+// writeSpawnRunFixture writes a minimal spawn-runs.json naming one run at
+// a given terminal status, matching the shape latestSpawnRunRaw reads.
+func writeSpawnRunFixture(t *testing.T, basePath, runID, status string) {
+	t.Helper()
+	state := colonyLiveSpawnRunState{
+		CurrentRunID: runID,
+		Runs: []agent.SpawnRun{{
+			ID: runID, Command: "build", StartedAt: time.Now().UTC().Format(time.RFC3339), Status: status,
+		}},
+	}
+	data, err := json.Marshal(state)
+	if err != nil {
+		t.Fatalf("marshal spawn run fixture: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(basePath, colonyLiveSpawnRunFile), data, 0644); err != nil {
+		t.Fatalf("write spawn run fixture: %v", err)
 	}
 }
