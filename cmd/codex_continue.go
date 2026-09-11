@@ -17,6 +17,7 @@ import (
 	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/events"
 )
 
 // VerificationErrorClass classifies why a verification step failed.
@@ -784,6 +785,23 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	runStatus := "failed"
 	defer func() {
 		finishRuntimeSpawnRun(runHandle, runStatus, time.Now().UTC())
+	}()
+
+	// 202-03 (CEC-05): the check episode. continueEpisodeID reuses the same
+	// run identifier finishRuntimeSpawnRun above persists, so the cockpit
+	// and the durable spawn-run record name the same episode. Wrapped
+	// around every return path below (including the FIELD-04 replay-outcome
+	// early return immediately after) via defer, exactly like build's own
+	// episode boundary in cmd/codex_build.go.
+	continueEpisodeID := ""
+	if runHandle != nil {
+		continueEpisodeID = runHandle.Run.ID
+	}
+	emitColonyLiveEpisodeStarted(continueEpisodeID, events.EpisodeKindContinue)
+	restoreLiveContinueEpisode := setActiveLiveContinueEpisode(continueEpisodeID)
+	defer restoreLiveContinueEpisode()
+	defer func() {
+		emitColonyLiveEpisodeEnded(continueEpisodeID, events.EpisodeKindContinue, runStatus)
 	}()
 
 	// FIELD-04 (191.1-CONTEXT.md D-07/D-08): a completed, passing
@@ -2097,6 +2115,23 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 	floor := runDeterministicFloor(ctx, root, phase, manifest, buildWatcher, verificationTimeout)
 	jobTelemetryVerificationEndedAt := time.Now()
 	recordCodexContinueVerificationTelemetry(phase, jobTelemetryVerificationStartedAt, jobTelemetryVerificationEndedAt)
+	// 202-03 (CEC-05): one check-started followed by exactly one terminal
+	// check event per check the deterministic floor actually ran -- a
+	// skipped step (no resolved command) never ran, so it emits nothing.
+	// Check names come directly from floor.Steps, the floor's own result
+	// handling, never a separately maintained list.
+	liveContinueEpisodeID := currentLiveContinueEpisode()
+	for _, step := range floor.Steps {
+		if step.Skipped {
+			continue
+		}
+		emitColonyLiveCheckStarted(liveContinueEpisodeID, events.EpisodeKindContinue, step.Name)
+		if step.Passed {
+			emitColonyLiveCheckPassed(liveContinueEpisodeID, events.EpisodeKindContinue, step.Name)
+		} else {
+			emitColonyLiveCheckFailed(liveContinueEpisodeID, events.EpisodeKindContinue, step.Name, step.Summary)
+		}
+	}
 
 	// continueWatcherDecision resolves only whether a reviewer is dispatched
 	// at all -- it never consults the floor's result, so the deterministic

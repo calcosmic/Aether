@@ -15,6 +15,7 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/calcosmic/Aether/pkg/storage"
 )
 
@@ -336,6 +337,8 @@ func dispatchCodexBuildWorkersWithReconciliation(ctx context.Context, root strin
 		waveDispatches := waves[wave]
 		emitBuildCeremonyWaveStart(phase, wave, waveDispatches, parallelMode)
 		emitCodexBuildWaveProgress(phase, wave, waveDispatches, parallelMode)
+		liveEpisodeID := currentLiveBuildEpisode()
+		emitColonyLiveWaveStarted(liveEpisodeID, events.EpisodeKindBuild, wave)
 		outcomes := make([]*worktreeWaveOutcome, len(waveDispatches))
 		cb.Reset() // Per D-06: per-wave reset
 		var wg sync.WaitGroup
@@ -409,6 +412,7 @@ func dispatchCodexBuildWorkersWithReconciliation(ctx context.Context, root strin
 
 				emitBuildCeremonyWorkerStarting(dispatch, wave)
 				emitCodexBuildWorkerStarted(dispatch, wave)
+				emitColonyLiveWorkerStarted(liveEpisodeID, events.EpisodeKindBuild, dispatch)
 
 				cfg := codex.WorkerConfig{
 					AgentName:         dispatch.AgentName,
@@ -471,6 +475,7 @@ func dispatchCodexBuildWorkersWithReconciliation(ctx context.Context, root strin
 		wg.Wait()
 		waveResults := reconcileWorktreeWave(root, phase, wave, outcomes, cb, ledger)
 		emitBuildCeremonyWaveEnd(phase, wave, waveResults)
+		emitColonyLiveWaveEnded(liveEpisodeID, events.EpisodeKindBuild, wave, "completed")
 		results = append(results, waveResults...)
 	}
 	return results, nil
@@ -596,6 +601,7 @@ func reconcileWorktreeWave(root string, phase colony.Phase, wave int, outcomes [
 
 		emitBuildCeremonyWorkerFinished(outcome.dispatch, dr)
 		emitCodexBuildWorkerFinished(outcome.dispatch, dr)
+		emitColonyLiveWorkerFinished(currentLiveBuildEpisode(), events.EpisodeKindBuild, outcome.dispatch, dr)
 		outcome.result = dr
 	}
 
@@ -841,6 +847,8 @@ func dispatchCodexBuildWorkersInRepo(ctx context.Context, phase colony.Phase, di
 		waveDispatches := waves[wave]
 		emitBuildCeremonyWaveStart(phase, wave, waveDispatches, parallelMode)
 		emitCodexBuildWaveProgress(phase, wave, waveDispatches, parallelMode)
+		liveEpisodeID := currentLiveBuildEpisode()
+		emitColonyLiveWaveStarted(liveEpisodeID, events.EpisodeKindBuild, wave)
 		waveResults := make([]codex.DispatchResult, 0, len(waveDispatches))
 		cb.Reset() // Per D-06: per-wave reset
 		for _, dispatch := range waveDispatches {
@@ -881,6 +889,7 @@ func dispatchCodexBuildWorkersInRepo(ctx context.Context, phase colony.Phase, di
 			}
 			emitBuildCeremonyWorkerStarting(dispatch, wave)
 			emitCodexBuildWorkerStarted(dispatch, wave)
+			emitColonyLiveWorkerStarted(liveEpisodeID, events.EpisodeKindBuild, dispatch)
 
 			cfg := codex.WorkerConfig{
 				AgentName:         dispatch.AgentName,
@@ -938,10 +947,12 @@ func dispatchCodexBuildWorkersInRepo(ctx context.Context, phase colony.Phase, di
 			}
 			emitBuildCeremonyWorkerFinished(dispatch, dr)
 			emitCodexBuildWorkerFinished(dispatch, dr)
+			emitColonyLiveWorkerFinished(liveEpisodeID, events.EpisodeKindBuild, dispatch, dr)
 			waveResults = append(waveResults, dr)
 			results = append(results, dr)
 		}
 		emitBuildCeremonyWaveEnd(phase, wave, waveResults)
+		emitColonyLiveWaveEnded(liveEpisodeID, events.EpisodeKindBuild, wave, "completed")
 	}
 	return results, nil
 }

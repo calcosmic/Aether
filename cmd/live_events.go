@@ -43,6 +43,16 @@ func emitColonyLive(topic string, payload events.ColonyLivePayload) {
 		return
 	}
 
+	if colonyLiveEmissionFailureOverride {
+		// Test-only seam (see doc comment below): simulates a real
+		// bus.Publish failure at the exact same point a genuine one would
+		// occur -- used by TestFailedLiveEmitNeverChangesLaneOutcome to prove
+		// every lifecycle lane's own result and durable state are byte-
+		// identical whether or not the live-event publish itself succeeds.
+		// Empty (false) in production; never set outside a test.
+		return
+	}
+
 	bus := events.NewBus(store, events.DefaultConfig())
 	_, _ = bus.Publish(context.Background(), topic, raw, "aether-live")
 }
@@ -51,6 +61,12 @@ func emitColonyLive(topic string, payload events.ColonyLivePayload) {
 // checks above. It must never be set outside a test, and every test that
 // sets it must restore it to "" (e.g. via t.Cleanup) before returning.
 var colonyLiveSchemaVersionOverride string
+
+// colonyLiveEmissionFailureOverride is the test-only seam emitColonyLive
+// checks above, right before the point it would otherwise publish. It must
+// never be set outside a test, and every test that sets it must restore it
+// to false (e.g. via t.Cleanup) before returning.
+var colonyLiveEmissionFailureOverride bool
 
 var (
 	liveSequenceMu       sync.Mutex
@@ -254,4 +270,70 @@ func emitColonyLiveSignalConsulted(episodeID, episodeKind string, signals []stri
 		EpisodeKind: episodeKind,
 		Signals:     append([]string{}, signals...),
 	})
+}
+
+// activeLiveBuildEpisode carries the current build's live-episode ID across
+// the direct build lane's own call chain (cmd/codex_build.go's
+// runCodexBuildWithOptions down into cmd/codex_build_worktree.go's per-wave
+// dispatch loops), mirroring cmd/ceremony_emitter.go's
+// activeBuildCeremony/setActiveBuildCeremony/currentBuildCeremony pattern --
+// the same problem (a value the top of the call chain knows and a deeply
+// nested dispatch loop needs) solved the same way, rather than threading a
+// new parameter through every function in between.
+var (
+	activeLiveBuildEpisodeMu sync.RWMutex
+	activeLiveBuildEpisodeID string
+)
+
+// setActiveLiveBuildEpisode sets the current build's live-episode ID and
+// returns a restore function the caller must defer, so a nested or
+// re-entrant build never leaks its episode ID into an unrelated one.
+func setActiveLiveBuildEpisode(episodeID string) func() {
+	activeLiveBuildEpisodeMu.Lock()
+	previous := activeLiveBuildEpisodeID
+	activeLiveBuildEpisodeID = episodeID
+	activeLiveBuildEpisodeMu.Unlock()
+	return func() {
+		activeLiveBuildEpisodeMu.Lock()
+		activeLiveBuildEpisodeID = previous
+		activeLiveBuildEpisodeMu.Unlock()
+	}
+}
+
+// currentLiveBuildEpisode returns the active build's live-episode ID, or ""
+// when no build has one active (e.g. a call path never wrapped by
+// setActiveLiveBuildEpisode) -- emitColonyLive still emits in that case,
+// simply with an empty EpisodeID, exactly like any other unknown field.
+func currentLiveBuildEpisode() string {
+	activeLiveBuildEpisodeMu.RLock()
+	defer activeLiveBuildEpisodeMu.RUnlock()
+	return activeLiveBuildEpisodeID
+}
+
+// activeLiveContinueEpisode is continue's own instance of the same
+// active-episode carrier build uses above -- runCodexContinueVerification
+// (cmd/codex_continue.go) reads it from inside runDeterministicFloor's own
+// result handling, several call frames below where the check episode ID is
+// known.
+var (
+	activeLiveContinueEpisodeMu sync.RWMutex
+	activeLiveContinueEpisodeID string
+)
+
+func setActiveLiveContinueEpisode(episodeID string) func() {
+	activeLiveContinueEpisodeMu.Lock()
+	previous := activeLiveContinueEpisodeID
+	activeLiveContinueEpisodeID = episodeID
+	activeLiveContinueEpisodeMu.Unlock()
+	return func() {
+		activeLiveContinueEpisodeMu.Lock()
+		activeLiveContinueEpisodeID = previous
+		activeLiveContinueEpisodeMu.Unlock()
+	}
+}
+
+func currentLiveContinueEpisode() string {
+	activeLiveContinueEpisodeMu.RLock()
+	defer activeLiveContinueEpisodeMu.RUnlock()
+	return activeLiveContinueEpisodeID
 }

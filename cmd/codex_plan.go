@@ -19,6 +19,7 @@ import (
 	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/events"
 )
 
 type codexPlanningDispatch struct {
@@ -1448,6 +1449,18 @@ func runCodexPlanWithOptionsInSession(session *planningMutationSession, opts cod
 		finishRuntimeSpawnRun(runHandle, runStatus, time.Now().UTC())
 	}()
 
+	// 202-03 (CEC-05): the planning episode. planEpisodeID reuses the same
+	// run identifier finishRuntimeSpawnRun above persists, so the cockpit
+	// and the durable spawn-run record name the same episode.
+	planEpisodeID := ""
+	if runHandle != nil {
+		planEpisodeID = runHandle.Run.ID
+	}
+	emitColonyLiveEpisodeStarted(planEpisodeID, events.EpisodeKindPlan)
+	defer func() {
+		emitColonyLiveEpisodeEnded(planEpisodeID, events.EpisodeKindPlan, runStatus)
+	}()
+
 	survey, err := loadCodexSurveyContext(root)
 	if err != nil {
 		return nil, err
@@ -1646,6 +1659,22 @@ func runCodexPlanWithOptionsInSession(session *planningMutationSession, opts cod
 		}
 	}
 	emitPlanCeremonyDispatchSequence("aether-plan", dispatches)
+	// 202-03 (CEC-05): the planning wave and its worker started/finished
+	// pairs, immediately adjacent to the ceremony dispatch sequence above --
+	// dispatches are already fully resolved (Name/Caste/Status) by this
+	// point, so start and finish are emitted back to back rather than
+	// bracketing an async run the way build's per-worker loop does.
+	emitColonyLiveWaveStarted(planEpisodeID, events.EpisodeKindPlan, 1)
+	for _, dispatch := range dispatches {
+		planWorker := codex.WorkerDispatch{WorkerName: dispatch.Name, Caste: dispatch.Caste, Wave: 1}
+		emitColonyLiveWorkerStarted(planEpisodeID, events.EpisodeKindPlan, planWorker)
+		status := strings.TrimSpace(dispatch.Status)
+		if status == "" || status == "spawned" {
+			status = "completed"
+		}
+		emitColonyLiveWorkerFinished(planEpisodeID, events.EpisodeKindPlan, planWorker, codex.DispatchResult{WorkerName: dispatch.Name, Status: status})
+	}
+	emitColonyLiveWaveEnded(planEpisodeID, events.EpisodeKindPlan, 1, "completed")
 
 	statuses := make([]string, 0, len(dispatches))
 	for _, dispatch := range dispatches {

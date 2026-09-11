@@ -17,6 +17,7 @@ import (
 	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/events"
 )
 
 type codexBuildDispatch struct {
@@ -1049,6 +1050,24 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	runStatus := "failed"
 	defer func() {
 		finishRuntimeSpawnRun(runHandle, runStatus, time.Now().UTC())
+	}()
+
+	// 202-03 (CEC-05): the direct build lane's live episode. buildEpisodeID
+	// reuses the same run identifier finishRuntimeSpawnRun above persists,
+	// so the cockpit and the durable spawn-run record name the same
+	// episode. runHandle is nil when store == nil (beginRuntimeSpawnRun's
+	// own no-op contract) -- emitColonyLiveEpisodeStarted degrades to an
+	// empty episode ID in that case, matching emitColonyLive's own nil-store
+	// no-op.
+	buildEpisodeID := ""
+	if runHandle != nil {
+		buildEpisodeID = runHandle.Run.ID
+	}
+	emitColonyLiveEpisodeStarted(buildEpisodeID, events.EpisodeKindBuild)
+	restoreLiveBuildEpisode := setActiveLiveBuildEpisode(buildEpisodeID)
+	defer restoreLiveBuildEpisode()
+	defer func() {
+		emitColonyLiveEpisodeEnded(buildEpisodeID, events.EpisodeKindBuild, runStatus)
 	}()
 
 	dispatches, err = ensureUniqueBuildDispatchNames(dispatches, phaseNum)

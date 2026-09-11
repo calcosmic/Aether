@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/codex"
+	"github.com/calcosmic/Aether/pkg/events"
 )
 
 // RecoveryBudget tracks per-wave recovery action consumption.
@@ -134,6 +135,12 @@ type RecoveryOutcome struct {
 //
 // Per D-01: Recovery sequence is classification-dependent.
 // Per D-06: The orchestrator is a pure function -- classify, decide, log, return.
+// 202-03 (CEC-05): "log" already meant recording the decision (the
+// LogEntries this function has always built); emitColonyLiveRecoveryChanged
+// below is the same recording, on the live stream, from the one funnel
+// point every classification branch now returns through -- it never
+// participates in the decision itself and a failed emission can never change
+// the outcome (emitColonyLive's own no-op-on-failure contract).
 func orchestrateRecovery(ctx RecoveryContext) RecoveryOutcome {
 	classification, failType, rationale := classifyWorkerFailure(ctx.Status, ctx.ErrorMessage)
 
@@ -152,10 +159,11 @@ func orchestrateRecovery(ctx RecoveryContext) RecoveryOutcome {
 		RetryCount:     countRetries(ctx.RecoveryHistory),
 	}
 
+	var outcome RecoveryOutcome
 	switch classification {
 	case Blocking:
 		// Per D-04: immediate escalation, no retry, no reassignment, no budget consumed
-		return RecoveryOutcome{
+		outcome = RecoveryOutcome{
 			Classification: classification,
 			FailureType:    failType,
 			Rationale:      rationale,
@@ -180,24 +188,32 @@ func orchestrateRecovery(ctx RecoveryContext) RecoveryOutcome {
 		}
 
 	case RequiresAttempt:
-		return sequenceRequiresAttempt(ctx, classification, failType, rationale, failureRecord, now)
+		outcome = sequenceRequiresAttempt(ctx, classification, failType, rationale, failureRecord, now)
 
 	case Recoverable:
-		return sequenceRecoverable(ctx, classification, failType, rationale, failureRecord, now)
+		outcome = sequenceRecoverable(ctx, classification, failType, rationale, failureRecord, now)
+
+	default:
+		// Unknown classification -- escalate safely
+		outcome = RecoveryOutcome{
+			Classification: classification,
+			FailureType:    failType,
+			Rationale:      rationale,
+			Action: RecoveryAction{
+				Type:       "escalate",
+				WorkerName: ctx.WorkerName,
+				Detail:     rationale,
+			},
+			Exhausted: true,
+		}
 	}
 
-	// Unknown classification -- escalate safely
-	return RecoveryOutcome{
-		Classification: classification,
-		FailureType:    failType,
-		Rationale:      rationale,
-		Action: RecoveryAction{
-			Type:       "escalate",
-			WorkerName: ctx.WorkerName,
-			Detail:     rationale,
-		},
-		Exhausted: true,
-	}
+	// episodeID is derived from ctx.Phase (RecoveryContext's own field --
+	// nothing new invented) since recovery decisions have no independent
+	// run/attempt identifier of their own to reuse; every recovery
+	// transition for the same phase shares this one episode.
+	emitColonyLiveRecoveryChanged(fmt.Sprintf("recovery-phase-%d", ctx.Phase), events.EpisodeKindRecovery, outcome.Action.Type)
+	return outcome
 }
 
 // sequenceRequiresAttempt handles the requires-attempt recovery sequence.
