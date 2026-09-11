@@ -54,6 +54,14 @@ type WorkerDispatch struct {
 	// directly rather than deriving lineage from a rendered string, per
 	// 202-CLASSIC-SYNTHESIS.md's "never derive lineage from a rendered
 	// string when the dispatch already knows the parent" prohibition.
+	//
+	// No production dispatch currently assigns this field (WR-03, 202-16
+	// verification): the colony has no worker-spawns-worker producer
+	// today, so every existing dispatch sets it to "". The read/render path
+	// downstream (cmd/live_events.go, cmd/watch_dashboard.go) is
+	// forward-looking plumbing for a lineage scenario that does not yet
+	// exist in this codebase -- a reader must not take rendered lineage
+	// output as evidence that worker lineage is actually being recorded.
 	ParentWorkerID string
 }
 

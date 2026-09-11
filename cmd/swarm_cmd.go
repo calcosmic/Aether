@@ -327,7 +327,7 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 	emitVisualProgress(renderSwarmDispatchPreview(swarmID, target, investigation, "Investigation Wave"))
 	emitColonyLive(events.LiveTopicWaveStarted, events.ColonyLivePayload{
 		EpisodeID:   swarmID,
-		EpisodeKind: "swarm",
+		EpisodeKind: events.EpisodeKindSwarm,
 		Wave:        investigationWave,
 		Status:      "starting",
 	})
@@ -344,7 +344,7 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 	}
 	emitColonyLive(events.LiveTopicWaveEnded, events.ColonyLivePayload{
 		EpisodeID:   swarmID,
-		EpisodeKind: "swarm",
+		EpisodeKind: events.EpisodeKindSwarm,
 		Wave:        investigationWave,
 		Status:      "completed",
 	})
@@ -1533,7 +1533,7 @@ func executeSwarmWave(ctx context.Context, root, swarmID, target string, plans [
 		if liveEpisode {
 			emitColonyLive(events.LiveTopicWorkerStarted, events.ColonyLivePayload{
 				EpisodeID:   swarmID,
-				EpisodeKind: "swarm",
+				EpisodeKind: events.EpisodeKindSwarm,
 				Wave:        plan.Wave,
 				WorkerID:    plan.Name,
 				Caste:       plan.Caste,
@@ -1618,7 +1618,7 @@ func executeSwarmWave(ctx context.Context, root, swarmID, target string, plans [
 		if liveEpisode {
 			emitColonyLive(events.LiveTopicWorkerFinished, events.ColonyLivePayload{
 				EpisodeID:   swarmID,
-				EpisodeKind: "swarm",
+				EpisodeKind: events.EpisodeKindSwarm,
 				Wave:        plan.Wave,
 				WorkerID:    plan.Name,
 				Caste:       plan.Caste,

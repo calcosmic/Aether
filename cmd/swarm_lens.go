@@ -641,7 +641,7 @@ func emitSwarmHypothesisEvents(swarmID string, hypotheses []swarmHypothesis) {
 	for _, h := range hypotheses {
 		emitColonyLive(events.LiveTopicFindingRecorded, events.ColonyLivePayload{
 			EpisodeID:   swarmID,
-			EpisodeKind: "swarm",
+			EpisodeKind: events.EpisodeKindSwarm,
 			Wave:        1,
 			WorkerID:    h.WorkerName,
 			Caste:       h.Caste,
@@ -660,7 +660,7 @@ func emitSwarmContradictionEvents(swarmID string, contradictions []swarmContradi
 	for _, c := range contradictions {
 		emitColonyLive(events.LiveTopicContradictionFound, events.ColonyLivePayload{
 			EpisodeID:   swarmID,
-			EpisodeKind: "swarm",
+			EpisodeKind: events.EpisodeKindSwarm,
 			Wave:        1,
 			Lens:        c.LensA,
 			Contradictions: []string{
