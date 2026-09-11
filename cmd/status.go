@@ -428,6 +428,61 @@ func renderLoopSafetySection(loopEvents []events.Event) string {
 	return b.String()
 }
 
+// loadMostRecentColonyEpisode returns the shared lineage's own newest entry
+// (loadColonyEpisodeIndex, cmd/episode_index.go, already ordered newest
+// first) -- never a second selection rule. ok is false only when the index
+// has no entries at all.
+func loadMostRecentColonyEpisode(root string, s *storage.Store) (colonyEpisodeEntry, bool) {
+	idx, err := loadColonyEpisodeIndex(root, s)
+	if err != nil || len(idx.Entries) == 0 {
+		return colonyEpisodeEntry{}, false
+	}
+	return idx.Entries[0], true
+}
+
+// renderMostRecentEpisodeSection renders status's "most recent episode"
+// section: what it was, how it ended, what it cost, and where to read it in
+// full (LIVE-05, LIVE-07, D-11). Returns empty string when there is nothing
+// to show, so the section is OMITTED entirely rather than rendered empty --
+// mirrors renderLoopSafetySection's identical loader+renderer shape.
+// Resolving and rendering this section performs no write of any kind: every
+// read behind it (loadColonyEpisodeIndex, loadSpendLedgersForPhase) is a
+// plain, already-proven read-only path.
+func renderMostRecentEpisodeSection(entry colonyEpisodeEntry, ok bool) string {
+	if !ok {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(renderBanner("\U0001F4D6", "Most Recent Episode"))
+	b.WriteString(visualDividerStr())
+	fmt.Fprintf(&b, "%s: %s\n", colonyEpisodeKindLabel(entry.Kind), entry.Subject)
+
+	outcome := entry.Outcome
+	if !entry.OutcomeKnown {
+		outcome = "unknown"
+	}
+	fmt.Fprintf(&b, "Outcome: %s\n", outcome)
+	fmt.Fprintf(&b, "Standing: %s\n", workStandingLabel(entry.Standing, entry.StandingReason))
+
+	if !entry.StartedAt.IsZero() && !entry.EndedAt.IsZero() {
+		fmt.Fprintf(&b, "Elapsed: %s\n", entry.EndedAt.Sub(entry.StartedAt).Round(time.Second))
+	}
+	fmt.Fprintf(&b, "Read the full write-up: %s\n\n", emptyFallback(entry.Path, "not available"))
+
+	b.WriteString(renderSpendCostLineFromLedgers(colonyEpisodeLedgers(entry.Cost)))
+	return b.String()
+}
+
+// renderMostRecentEpisodeStatusSection resolves root through the same
+// resolveAetherRoot the watch and history commands already use (never
+// skillWorkspaceRoot's cwd-dependent guess, which a subagent's working
+// directory can silently defeat) so status, history and watch can never
+// disagree about which colony they are describing.
+func renderMostRecentEpisodeStatusSection(s *storage.Store) string {
+	entry, ok := loadMostRecentColonyEpisode(resolveAetherRoot(), s)
+	return renderMostRecentEpisodeSection(entry, ok)
+}
+
 // renderGateStatusSection renders the Gate Status dashboard section.
 // Returns empty string when no gate-results file exists for the current phase,
 // or when the phase is 0 (not started).
@@ -1064,6 +1119,10 @@ func renderDashboard(state colony.ColonyState, s *storage.Store, result map[stri
 	if _, attempt, ok := loadRelevantBuildAttempt(state); ok {
 		b.WriteString("\nBuild Attempt\n")
 		b.WriteString(renderBuildAttemptStatus(attempt))
+	}
+	if episodeSection := renderMostRecentEpisodeStatusSection(s); episodeSection != "" {
+		b.WriteString("\n")
+		b.WriteString(episodeSection)
 	}
 	if guidance := loadActiveRecoveryGuidance(state); guidance != nil {
 		b.WriteString("\nRecovery\n")

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
 )
 
@@ -237,5 +238,79 @@ func TestEpisodeIndexIsReadOnly(t *testing.T) {
 	}
 	if len(idx.Unavailable) != 3 {
 		t.Fatalf("expected all three sources named unavailable, got %v", idx.Unavailable)
+	}
+}
+
+// --- Task 2: the most-recent-episode section on the status dashboard -----
+
+func loadStatusTestState(t *testing.T, s *storage.Store) colony.ColonyState {
+	t.Helper()
+	var state colony.ColonyState
+	if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	return state
+}
+
+func TestStatusShowsTheMostRecentEpisode(t *testing.T) {
+	saveGlobals(t)
+	s, root := setupTestStore(t)
+	store = s
+	t.Setenv("AETHER_ROOT", root)
+	state := loadStatusTestState(t, s)
+
+	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	writeEpisodeIndexSwarmFixture(t, s, "swarm-status-shows-1", "The status section target", now.Add(-30*time.Minute), now, false)
+
+	result := buildStatusResult(state, s)
+	visual := renderDashboard(state, s, result)
+
+	if !strings.Contains(visual, "Read the full write-up:") {
+		t.Fatalf("expected the most-recent-episode section, got:\n%s", visual)
+	}
+	if !strings.Contains(visual, "The status section target") {
+		t.Fatalf("expected the episode's subject, got:\n%s", visual)
+	}
+	if !strings.Contains(visual, ".aether/data/swarms/swarm-status-shows-1/episode.json") {
+		t.Fatalf("expected the episode's write-up path, got:\n%s", visual)
+	}
+}
+
+func TestStatusOmitsTheEpisodeSectionWhenThereAreNone(t *testing.T) {
+	saveGlobals(t)
+	s, root := setupTestStore(t)
+	store = s
+	t.Setenv("AETHER_ROOT", root)
+	state := loadStatusTestState(t, s)
+
+	result := buildStatusResult(state, s)
+	visual := renderDashboard(state, s, result)
+
+	if strings.Contains(visual, "Read the full write-up:") {
+		t.Fatalf("expected no episode section with nothing recorded, got:\n%s", visual)
+	}
+}
+
+func TestStatusEpisodeSectionDoesNotDisturbOtherSections(t *testing.T) {
+	saveGlobals(t)
+	s, root := setupTestStore(t)
+	store = s
+	t.Setenv("AETHER_ROOT", root)
+	state := loadStatusTestState(t, s)
+
+	before := renderDashboard(state, s, buildStatusResult(state, s))
+
+	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	writeEpisodeIndexSwarmFixture(t, s, "swarm-status-section-1", "Status section fixture", now.Add(-time.Hour), now, false)
+
+	after := renderDashboard(state, s, buildStatusResult(state, s))
+
+	section := renderMostRecentEpisodeStatusSection(s)
+	if section == "" {
+		t.Fatalf("expected a non-empty episode section once a swarm episode exists")
+	}
+	reconstructed := strings.Replace(after, "\n"+section, "", 1)
+	if reconstructed != before {
+		t.Fatalf("episode section disturbed other sections.\nbefore:\n%s\n\nafter (with section removed):\n%s", before, reconstructed)
 	}
 }
