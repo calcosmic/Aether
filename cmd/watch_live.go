@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/agent"
+	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
 )
@@ -66,10 +67,62 @@ func resolveWatchMode(ctx context.Context, s *storage.Store, now time.Time) (wat
 	// belongs to the replay branch (as an interrupted episode), never the
 	// live one. An absent run record is NOT treated as terminated -- a
 	// start boundary with nothing to contradict it is still genuinely open.
-	if snapshot.Open && !colonyLiveEpisodeRunHasTerminated(s) {
+	if snapshot.Open && !colonyLiveEpisodeAbandoned(s, snapshot) {
 		return watchModeLive, snapshot
 	}
 	return watchModeReplay, snapshot
+}
+
+// colonyLiveEpisodeAbandoned reports whether the process that owns an open
+// episode has gone away -- the same question colonyLiveEpisodeRunHasTerminated
+// already answers for every dispatch-tree lane (build, continue, plan,
+// Swarm), asked here per episode kind instead of unconditionally.
+//
+// Oracle never registers a spawn run of its own -- its owning process is its
+// own controller PID, tracked in its own durable state file, not in
+// spawn-runs.json -- so for an Oracle episode this delegates to
+// oracleLiveEpisodeAbandoned, which reads that state instead. Every other
+// episode kind keeps colonyLiveEpisodeRunHasTerminated's rule byte-for-byte,
+// so build/continue/plan/Swarm behaviour (TestWatchResolvesThreeBranchesFromEvidenceAlone)
+// is completely unaffected by this dispatch (202-17, CR-01's second half).
+func colonyLiveEpisodeAbandoned(s *storage.Store, snapshot colonyLiveSnapshot) bool {
+	if snapshot.EpisodeKind == events.EpisodeKindOracle {
+		return oracleLiveEpisodeAbandoned(snapshot.EpisodeID)
+	}
+	return colonyLiveEpisodeRunHasTerminated(s)
+}
+
+// oracleLiveEpisodeAbandoned is Oracle's own instance of the identical
+// question colonyLiveEpisodeRunHasTerminated answers for every other lane:
+// has the process that owns this episode gone away? It stays read-only --
+// loadOracleStateFile is a plain os.ReadFile that takes no lock, and
+// oracleProcessExists only inspects the process table, exactly what
+// `oracle status --follow` already does on every poll -- so calling it from
+// `aether watch` adds no new mutation risk.
+//
+// The repository root is resolved the same way every other read-only
+// Oracle-adjacent helper in this package does (resolveAetherRootPath,
+// store-derived), so this works against a test store with no environment
+// variable set. An unreadable state file (never started, or genuinely
+// absent) returns false: absent evidence is not evidence of termination,
+// exactly as the existing spawn-run rule already documents for every other
+// lane.
+func oracleLiveEpisodeAbandoned(episodeID string) bool {
+	root := resolveAetherRootPath()
+	state, err := loadOracleStateFile(oracleWorkspacePaths(root).StatePath)
+	if err != nil {
+		return false
+	}
+	if oracleLiveEpisodeID(state) != episodeID {
+		// The durable state has moved on to a different run than the one
+		// this episode names -- this episode's own owning run is gone.
+		return true
+	}
+	status := strings.TrimSpace(state.Status)
+	if !strings.EqualFold(status, "active") && !strings.EqualFold(status, "planned") {
+		return true
+	}
+	return oracleStateHasStaleController(state)
 }
 
 // colonyLiveEpisodeRunHasTerminated reports whether the durable spawn-run
@@ -281,9 +334,9 @@ func renderLiveWatchVisual(snapshot colonyLiveSnapshot) string {
 // regardless of which mode resolved.
 func liveWatchResult(snapshot colonyLiveSnapshot, now time.Time) map[string]interface{} {
 	return map[string]interface{}{
-		"schema_version": LifecycleResultSchemaVersion,
-		"mode":           "live_watch",
-		"command":        "watch",
+		"schema_version":  LifecycleResultSchemaVersion,
+		"mode":            "live_watch",
+		"command":         "watch",
 		"live_capability": "supported",
 		"active_count":    len(snapshot.Workers),
 		"captured_at":     now.UTC().Format(time.RFC3339Nano),

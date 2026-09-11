@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"os/exec"
 	"reflect"
 	"strconv"
 	"strings"
@@ -326,4 +327,196 @@ func TestOneOpenBalanceRule(t *testing.T) {
 	if snapshot.Open {
 		t.Fatalf("episode should be closed after episode.ended, both rules must agree it is closed")
 	}
+}
+
+// oracleDeadControllerPID starts a short-lived process, waits for it to
+// exit and be reaped, and returns its PID -- a controller PID the test
+// itself proved is gone, never a typed-in "looks dead" literal (CLAUDE.md's
+// fixture rule). Mirrors compatibility_cmds_test.go's
+// TestOracleCompatibilityStopKillsControllerProcessTree, which derives a
+// real, definitely-ALIVE PID the same way, from an actual process rather
+// than a hand-picked number.
+func oracleDeadControllerPID(t *testing.T) int {
+	t.Helper()
+	cmd := exec.Command("true")
+	if err := cmd.Run(); err != nil {
+		if isPermissionDeniedForTest(err) {
+			t.Skipf("process fixture unavailable in this sandbox: %v", err)
+		}
+		t.Fatalf("run throwaway process: %v", err)
+	}
+	pid := cmd.Process.Pid
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if !oracleProcessExists(pid) {
+			return pid
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("process %d did not become dead in time", pid)
+	return pid
+}
+
+// TestAbandonedOracleRoundIsNotLive proves oracleLiveEpisodeAbandoned (via
+// resolveWatchMode's colonyLiveEpisodeAbandoned dispatch) judges an Oracle
+// episode by Oracle's own durable state and controller process, never by
+// another lane's spawn-run record (202-17, CR-01's second half).
+func TestAbandonedOracleRoundIsNotLive(t *testing.T) {
+	t.Run("active oracle round stays live despite a terminated spawn run from an earlier build", func(t *testing.T) {
+		saveGlobals(t)
+		s, root := newTestStore(t)
+		store = s
+		writeSpawnRunFixture(t, s.BasePath(), "earlier-build-run", "completed")
+
+		paths := oracleWorkspacePaths(root)
+		if err := ensureOracleWorkspace(paths); err != nil {
+			t.Fatalf("ensure oracle workspace: %v", err)
+		}
+		state := oracleStateFile{
+			StartedAt:     "2026-01-01T00:00:00Z",
+			Status:        "active",
+			Phase:         "investigate",
+			Iteration:     1,
+			MaxIterations: 10,
+		}
+		if err := writeOracleStateFile(paths.StatePath, state); err != nil {
+			t.Fatalf("write oracle state: %v", err)
+		}
+		openOracleLiveEpisode(state)
+		emitOracleLiveRound(state)
+
+		mode, _ := resolveWatchMode(context.Background(), s, time.Now().UTC())
+		if mode != watchModeLive {
+			t.Fatalf("mode = %q, want %q -- an active Oracle round must not be demoted by a finished earlier build's spawn run", mode, watchModeLive)
+		}
+	})
+
+	t.Run("oracle round whose controller process is dead resolves replay", func(t *testing.T) {
+		saveGlobals(t)
+		s, root := newTestStore(t)
+		store = s
+
+		paths := oracleWorkspacePaths(root)
+		if err := ensureOracleWorkspace(paths); err != nil {
+			t.Fatalf("ensure oracle workspace: %v", err)
+		}
+		deadPID := oracleDeadControllerPID(t)
+		state := oracleStateFile{
+			StartedAt:     "2026-01-01T00:00:00Z",
+			Status:        "active",
+			Phase:         "investigate",
+			Iteration:     1,
+			MaxIterations: 10,
+			ControllerPID: deadPID,
+		}
+		if err := writeOracleStateFile(paths.StatePath, state); err != nil {
+			t.Fatalf("write oracle state: %v", err)
+		}
+		openOracleLiveEpisode(state)
+		emitOracleLiveRound(state)
+
+		mode, _ := resolveWatchMode(context.Background(), s, time.Now().UTC())
+		if mode != watchModeReplay {
+			t.Fatalf("mode = %q, want %q -- a round whose controller process is gone must not be shown as live", mode, watchModeReplay)
+		}
+	})
+
+	t.Run("durable state naming a different run than the open episode resolves replay", func(t *testing.T) {
+		saveGlobals(t)
+		s, root := newTestStore(t)
+		store = s
+
+		paths := oracleWorkspacePaths(root)
+		if err := ensureOracleWorkspace(paths); err != nil {
+			t.Fatalf("ensure oracle workspace: %v", err)
+		}
+		firstRun := oracleStateFile{
+			StartedAt:     "2026-01-01T00:00:00Z",
+			Status:        "active",
+			Phase:         "investigate",
+			Iteration:     1,
+			MaxIterations: 10,
+		}
+		episodeID, _ := openOracleLiveEpisode(firstRun)
+		emitOracleLiveRound(firstRun)
+
+		// The durable state has moved on to a second run -- e.g. a fresh
+		// `aether oracle "new topic"` overwrote state.json -- without the
+		// first episode's own close ever being emitted.
+		secondRun := firstRun
+		secondRun.StartedAt = "2026-02-01T00:00:00Z"
+		if err := writeOracleStateFile(paths.StatePath, secondRun); err != nil {
+			t.Fatalf("write second-run oracle state: %v", err)
+		}
+		if oracleLiveEpisodeID(secondRun) == episodeID {
+			t.Fatalf("fixture is broken: second run's episode ID must differ from the first's")
+		}
+
+		mode, snapshot := resolveWatchMode(context.Background(), s, time.Now().UTC())
+		if snapshot.EpisodeID != episodeID {
+			t.Fatalf("fixture setup broken: resolveWatchMode picked episode %q, want the first run's %q", snapshot.EpisodeID, episodeID)
+		}
+		if mode != watchModeReplay {
+			t.Fatalf("mode = %q, want %q -- the first run's episode is abandoned once durable state names a different run", mode, watchModeReplay)
+		}
+	})
+
+	t.Run("no readable oracle state resolves live -- absent evidence is not evidence of termination", func(t *testing.T) {
+		saveGlobals(t)
+		s, _ := newTestStore(t)
+		store = s
+
+		state := oracleStateFile{StartedAt: "2026-01-01T00:00:00Z"}
+		openOracleLiveEpisode(state)
+		emitOracleLiveRound(state)
+
+		mode, _ := resolveWatchMode(context.Background(), s, time.Now().UTC())
+		if mode != watchModeLive {
+			t.Fatalf("mode = %q, want %q -- an unreadable/absent oracle state must not be treated as termination", mode, watchModeLive)
+		}
+	})
+
+	t.Run("non-oracle episode kind keeps the existing spawn-run rule", func(t *testing.T) {
+		saveGlobals(t)
+		s, _ := newTestStore(t)
+		store = s
+		emitColonyLiveEpisodeStarted("build-ep", events.EpisodeKindBuild)
+		writeSpawnRunFixture(t, s.BasePath(), "run-1", "failed")
+
+		mode, _ := resolveWatchMode(context.Background(), s, time.Now().UTC())
+		if mode != watchModeReplay {
+			t.Fatalf("mode = %q, want %q -- a build episode's own spawn-run rule must be unchanged", mode, watchModeReplay)
+		}
+	})
+
+	t.Run("resolving writes nothing to the colony data directory", func(t *testing.T) {
+		saveGlobals(t)
+		s, root := newTestStore(t)
+		store = s
+		writeSpawnRunFixture(t, s.BasePath(), "earlier-build-run", "completed")
+
+		paths := oracleWorkspacePaths(root)
+		if err := ensureOracleWorkspace(paths); err != nil {
+			t.Fatalf("ensure oracle workspace: %v", err)
+		}
+		state := oracleStateFile{
+			StartedAt:     "2026-01-01T00:00:00Z",
+			Status:        "active",
+			Phase:         "investigate",
+			Iteration:     1,
+			MaxIterations: 10,
+		}
+		if err := writeOracleStateFile(paths.StatePath, state); err != nil {
+			t.Fatalf("write oracle state: %v", err)
+		}
+		openOracleLiveEpisode(state)
+		emitOracleLiveRound(state)
+
+		before := dirDigest(t, s.BasePath())
+		resolveWatchMode(context.Background(), s, time.Now().UTC())
+		after := dirDigest(t, s.BasePath())
+		if before != after {
+			t.Fatalf("resolveWatchMode wrote to the colony data directory: before=%s after=%s", before, after)
+		}
+	})
 }
