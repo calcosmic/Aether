@@ -139,12 +139,31 @@ func renderOracleResearchDocument(state oracleStateFile, plan oraclePlanFile, bo
 	return b.String()
 }
 
+// oracleResearchStanding resolves an Oracle research run's standing through
+// the shared vocabulary (cmd/partial_work_label.go): a clean completion is
+// verified; an owner stop, a worker time-out, or the iteration cap is useful
+// notes. This is the exact trigger condition oracleResearchPartialLabel used
+// before this function existed (202-13, LIVE-07/D-12/CAP-072) -- reused
+// here, not re-derived, so the label below and this listing's standing can
+// never disagree about which research runs are unfinished.
+func oracleResearchStanding(status string) workStanding {
+	if strings.TrimSpace(status) == "complete" {
+		return workStandingVerified
+	}
+	return workStandingUsefulNotes
+}
+
 // oracleResearchPartialLabel names a plain-English partial-run warning for
 // anything short of a clean completion -- an owner stop, a worker time-out,
 // or the iteration cap -- so the document itself says what a status field
 // buried in the front matter would not. Empty for a clean completion.
+//
+// The wording here is unchanged from before this plan (front matter keys and
+// the listing parser stay byte-identical, 202-13) -- only the branch
+// decision is now resolved through the shared oracleResearchStanding rather
+// than a locally re-checked condition.
 func oracleResearchPartialLabel(state oracleStateFile) string {
-	if strings.TrimSpace(state.Status) == "complete" {
+	if oracleResearchStanding(state.Status) == workStandingVerified {
 		return ""
 	}
 	rounds := state.Iteration

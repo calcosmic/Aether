@@ -32,6 +32,12 @@ const (
 	swarmEpisodeStatusInterrupted = "interrupted"
 )
 
+// swarmEpisodeVerificationCompleted is the VerificationStatus value a
+// verification wave that actually finished carries -- the same literal
+// proposeSwarmLearningFromEpisode already checks, named here so
+// swarmRepairIdeaStanding does not re-type it.
+const swarmEpisodeVerificationCompleted = "completed"
+
 // swarmEpisodeStageInvestigation/Fix/Verification name the stage an
 // interrupted run stopped at -- the wave whose dispatch was attempted (or
 // under way) when the run stopped.
@@ -335,6 +341,42 @@ func persistInterruptedSwarmEpisode(swarmID, target, stage string, startedAt tim
 	})
 	if err := persistSwarmEpisode(store, record); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: could not persist interrupted swarm episode for %q: %v\n", target, err)
+	}
+}
+
+// swarmEpisodeStanding resolves an episode's own run standing through the
+// shared vocabulary (cmd/partial_work_label.go): an interrupted run is
+// useful notes, naming the stage it stopped at; a completed run is verified.
+// This is the same function collectUnverifiedSwarmWork (cmd/
+// partial_work_label.go) reads, so a run's episode card and the read-only
+// unverified-work inventory can never disagree about whether it finished
+// (202-13, LIVE-05/D-12/CAP-072).
+func swarmEpisodeStanding(episode swarmEpisodeRecord) (workStanding, string) {
+	if episode.Status == swarmEpisodeStatusInterrupted {
+		stage := emptyFallback(strings.TrimSpace(episode.InterruptedStage), "an unrecorded stage")
+		return workStandingUsefulNotes, fmt.Sprintf("the run finishing past where it was interrupted (%s)", stage)
+	}
+	return workStandingVerified, ""
+}
+
+// swarmRepairIdeaStanding resolves a Swarm episode's proposed repair idea to
+// its standing through the shared vocabulary: an idea that was never applied
+// (no fix wave ran, or none was selected) or one that was applied and then
+// rolled back is useful notes, named with its own reason -- a repair idea is
+// never presented as verified truth on its own. Only a repair that was
+// applied and held through verification, without being rolled back, is
+// verified.
+func swarmRepairIdeaStanding(episode swarmEpisodeRecord) (workStanding, string) {
+	if episode.Comparison.Selected == nil {
+		return workStandingVerified, ""
+	}
+	switch {
+	case episode.Checkpoint.Restored:
+		return workStandingUsefulNotes, "the repair being reapplied and holding through verification instead of being rolled back"
+	case episode.VerificationStatus != swarmEpisodeVerificationCompleted:
+		return workStandingUsefulNotes, "the repair idea being applied and verified, which never happened for this run"
+	default:
+		return workStandingVerified, ""
 	}
 }
 
