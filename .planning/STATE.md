@@ -5,17 +5,17 @@ milestone_name: Classic Colony Restoration
 current_phase: 202
 current_phase_name: Swarm, Oracle, and Live Colony
 status: executing
-stopped_at: Completed 202-11-PLAN.md
-last_updated: "2026-09-11T12:16:23.181Z"
+stopped_at: Completed 202-09-PLAN.md
+last_updated: "2026-09-11T12:35:55.129Z"
 last_activity: 2026-09-11
-state_head: 3638beaf1f4e3b45e7b00399b40ec0d131b48a51
+state_head: 3b891e06f69a0b5dd91f26e29864c9d2a789405b
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 124
-  completed_plans: 120
+  completed_plans: 119
   percent: 14
-last_activity_desc: Completed 202-11-PLAN.md (wave 5, Oracle live-event emission, clarify-once proof, confidence/diminishing-returns dashboard)
+last_activity_desc: Completed 202-09-PLAN.md (wave 5, replay-backed watch middle branch -- buildReplayWatchResult/renderReplayWatchVisual, three-way resolution in Go, idle floor narrowed)
 ---
 
 # Project State
@@ -33,7 +33,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 202 (Swarm, Oracle, and Live Colony) — EXECUTING
-Plan: 9/15 summaries on disk (01-08, 11) — plan numbering is wave-ordered, not sequential
+Plan: 10/15 summaries on disk (01-09, 11) — plan numbering is wave-ordered, not sequential
 Status: In Progress
 Last activity: 2026-09-11
 
@@ -196,6 +196,7 @@ Last activity: 2026-09-11
 | Phase 202 P08 | 9min | 2 tasks | 5 files |
 | Phase 202 P07 | 40min | 3 tasks | 3 files |
 | Phase 202 P11 | 55min | 3 tasks | 7 files |
+| Phase 202 P09 | 18min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -615,6 +616,7 @@ Last activity: 2026-09-11
 - [Phase 202]: 202-07: Swarm's repair checkpoint (cmd/swarm_repair_checkpoint.go) is a thin adapter calling saveRepairCheckpoint/restoreRepairCheckpoint directly, never runBoundedRepairRound/applyBoundedCheckFixRepair (the phase-and-check-shaped wrappers); whether the repair held is decided from the verification wave's own outcome alone, and a restore failure gets a distinct repair_failed_not_restored status rather than being folded into failed/blocked.
 - [Phase 202]: 202-07: the third-strike architectural case is additive to swarmArchitecturalConcernResult's existing payload and reads entirely from durable swarmResultRecord history (loadSwarmResultRecordByID) plus 202-05's hypothesesFromSwarmRuns/detectSwarmSharedCauses reused unmodified -- cmd/swarm_strikes.go's counting/persistence machinery stays untouched.
 - [Phase 202]: Oracle's pre-existing propose/brief/--from-brief ritual (built 2026-08-16) already satisfies D-08; no new clarification gate was built, only tests proving it. — Gating the direct-topic path would have broken pre-existing tests that rely on it completing synchronously with no approved brief, and the wrapper contract documents direct-topic invocation as a sanctioned skip-scoping escape hatch.
+- [Phase 202]: Episode 'start event' for recency ranking is its boundary-start event (episode.started, or earliest wave.started), not literally its first-ever event -- per-episode sequence counters always reset to 1.
 
 ### Pending Todos
 
@@ -731,8 +733,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-11T12:16:23.066Z
-Stopped at: Completed 202-11-PLAN.md
+Last session: 2026-09-11T12:35:55.001Z
+Stopped at: Completed 202-09-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
