@@ -460,7 +460,7 @@ Plans:
 4. A multi-round Oracle question visibly targets uncertainty, reports confidence and contradictions, detects diminishing returns, and produces a source-grounded final synthesis.
 5. Useful partial Swarm/Oracle work, activity, learning, plan research, and local Dreams remain durable, discoverable, and accurately labelled rather than discarded or called verified.
 
-**Plans:** 14/15 plans executed
+**Plans:** 15/15 plans executed
 
 Plans:
 **Wave 1**
@@ -503,7 +503,7 @@ Plans:
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
-- [ ] 202-15-PLAN.md — Wrapper triplets, Classic contract cases, and shipped-claim guards
+- [x] 202-15-PLAN.md — Wrapper triplets, Classic contract cases, and shipped-claim guards
 
 ### Phase 203: Biological Runtime
 

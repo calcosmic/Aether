@@ -5,17 +5,17 @@ milestone_name: Classic Colony Restoration
 current_phase: 202
 current_phase_name: Swarm, Oracle, and Live Colony
 status: executing
-stopped_at: Completed 202-14-PLAN.md
-last_updated: "2026-09-11T14:16:41.801Z"
+stopped_at: Completed 202-15-PLAN.md
+last_updated: "2026-09-11T15:31:40.000Z"
 last_activity: 2026-09-11
 state_head: 9fc28e3b3d1ab034990440e81468d181315b43ba
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 124
-  completed_plans: 123
+  completed_plans: 124
   percent: 14
-last_activity_desc: Completed 202-14-PLAN.md (one read-only lineage over Swarm episodes, Oracle research, and build/check attempts -- cmd/episode_index.go's loadColonyEpisodeIndex, surfaced as status's Most Recent Episode section and history's episode + unverified-work listing with a --kind filter, plus a cross-surface proof that status, history and watch agree)
+last_activity_desc: Completed 202-15-PLAN.md (updated the watch/Swarm/Oracle wrapper triplets on both platforms, registered 18 executable Phase 202 corpus cases covering all twelve SYN-202 decisions, and added a CLAUDE.md section naming a live test beside every restored-behaviour claim -- Phase 202 now has 15/15 plans summarized)
 ---
 
 # Project State
@@ -32,9 +32,9 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 
 ## Current Position
 
-Phase: 202 (Swarm, Oracle, and Live Colony) — EXECUTING
-Plan: 14/15 summaries on disk (01-14) — plan numbering is wave-ordered, not sequential
-Status: In Progress
+Phase: 202 (Swarm, Oracle, and Live Colony) — PLANS COMPLETE
+Plan: 15/15 summaries on disk (01-15) — plan numbering is wave-ordered, not sequential
+Status: Plans complete, pending phase verification
 Last activity: 2026-09-11
 
 ## Performance Metrics
@@ -201,6 +201,7 @@ Last activity: 2026-09-11
 | Phase 202 P12 | 19min | 3 tasks | 6 files |
 | Phase 202 P13 | 25min | 2 tasks | 4 files |
 | Phase 202 P14 | 55min | 3 tasks | 8 files |
+| Phase 202 P15 | 75min | 3 tasks | 18 files |
 
 ## Accumulated Context
 
@@ -625,6 +626,9 @@ Last activity: 2026-09-11
 - [Phase 202]: [Phase 202]: 202-12: Oracle synthesis documents now render recommendation-first (recommendation, plain-English confidence, unsettled questions, sources, evidence trail); a claim citing a source not in the run's own recorded sources is refused by name at render time; resaving a run replaces its own document (keyed on run_identifier) instead of duplicating it.
 - [Phase 202]: One shared standing vocabulary (verified/useful notes/standing unknown) resolved through workStandingLabel; Oracle's rendered text kept byte-identical, only its internal branch decision rewired — Existing tests assert Oracle's exact 'partial — stopped after N rounds' wording; changing it was out of scope
 - [Phase 202]: 202-14: one read-only projection (loadColonyEpisodeIndex) over Swarm episodes, Oracle research, and build/check attempts backs status's Most Recent Episode section and history's full listing; history renders the same full cost block as status so the two can be compared byte-for-byte. — Avoids a fourth durable record type and proves status/history/watch cannot silently disagree about what ran.
+- [Phase 202]: 202-15: extended validateClassicContractCorpus's Phase 200/201 front-door-journey exemption to SYN-202- cases — without it no Phase 202 corpus case could ever validate; the exemption existed for exactly this reason on the two prior phases.
+- [Phase 202]: 202-15: the Go-test-symbol resolver for Phase 202 corpus cases (classicContractCmdTestSymbols) parses the whole cmd package once rather than only each case's own cited _test.go file — a case's go_test_symbol must exist in the package regardless of which file its source_citations happen to name.
+- [Phase 202]: 202-15: Task 3's full-suite sweep caught two regressions from Task 1's wrapper edits that Task 1's own scoped verify list never covered (a stale CMD-04 command-hash ledger entry, and stale flat .claude/commands/ant-{watch,swarm,oracle}.md mirrors) — both fixed in the same commit rather than deferred, since both are directly caused by this plan's own Task 1.
 
 ### Pending Todos
 
@@ -741,11 +745,13 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-11T14:16:25.806Z
-Stopped at: Completed 202-14-PLAN.md
+Last session: 2026-09-11T15:31:40.000Z
+Stopped at: Completed 202-15-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
 
+- Phase 202 (Swarm, Oracle, and Live Colony) has all 15 plans summarized. Run `/gsd-verify-work 202` next.
+- Investigate the ~15 pre-existing, out-of-scope test failures logged in 202-15-SUMMARY.md's "Issues Encountered" section (build visuals, Queen orchestration, skill manifests, Phase 199 receipt fingerprint) before shipping v1.28.
 - Execute 200-55-PLAN.md to run the bounded normal/race suite in Wave 34, then rerun the unchanged final receipt Plan 200-40 in Wave 35.
 - Preserve the Phase 200 Scout/Route-Setter objective and do not waive normal or race gate failures.
