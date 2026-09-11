@@ -5,17 +5,17 @@ milestone_name: Classic Colony Restoration
 current_phase: 202
 current_phase_name: Swarm, Oracle, and Live Colony
 status: executing
-stopped_at: Completed 202-06-PLAN.md
-last_updated: "2026-09-11T13:30:00.000Z"
+stopped_at: Completed 202-07-PLAN.md
+last_updated: "2026-09-11T11:46:20.946Z"
 last_activity: 2026-09-11
-state_head: 1f047160561cd4f1d19a16bc536de194ea97216d
+state_head: 6f97ab8779e84aaf71f9d68f7fc6b14d22915824
 progress:
   total_phases: 7
-  completed_phases: 3
+  completed_phases: 1
   total_plans: 124
-  completed_plans: 116
-  percent: 43
-last_activity_desc: "Completed 202-06-PLAN.md (wave 4, live colony cockpit); 202-07 (wave 4) still pending"
+  completed_plans: 118
+  percent: 14
+last_activity_desc: Completed 202-07-PLAN.md (wave 4, Swarm repair checkpoint/rollback + third-strike architectural case)
 ---
 
 # Project State
@@ -33,7 +33,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 202 (Swarm, Oracle, and Live Colony) — EXECUTING
-Plan: 7/15 summaries on disk (01-06, 08); wave 4 plan 202-07 still pending — plan numbering is wave-ordered, not sequential
+Plan: 8/15 summaries on disk (01-08) — plan numbering is wave-ordered, not sequential
 Status: In Progress
 Last activity: 2026-09-11
 
@@ -194,6 +194,7 @@ Last activity: 2026-09-11
 | Phase 202 P04 | 25min | 2 tasks | 7 files |
 | Phase 202 P05 | 55min | 3 tasks | 4 files |
 | Phase 202 P08 | 9min | 2 tasks | 5 files |
+| Phase 202 P07 | 40min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -610,6 +611,8 @@ Last activity: 2026-09-11
 - [Phase 202]: 202-06: the unfinished-worker-interrupted rule reads spawn-runs.json lock-free (os.ReadFile), mirroring the event-bus read discipline -- storage.Store.ReadFile/agent.SpawnTree.CurrentRun() would create a lock file on every `aether watch` invocation, breaking the command's read-only guarantee.
 - [Phase 202]: 202-06: the redraw loop is gated on isTerminalWriter(stdout), not shouldRenderVisualOutput(stdout) -- the latter is also true for a forced/piped/test-forced render that wants exactly one frame back; gating on visual mode alone hung a pre-existing test (TestWatchVisualOutputShowsHonestIdleFallback) until its timeout killed it.
 - [Phase 202]: 202-06: watchCmd's Args changed from cobra.NoArgs to cobra.MaximumNArgs(1) to carry an optional drill-down selector (worker identity or wave number); Cobra derives the command name from the first word of Use, so name-based references to `watch` are unaffected.
+- [Phase 202]: 202-07: Swarm's repair checkpoint (cmd/swarm_repair_checkpoint.go) is a thin adapter calling saveRepairCheckpoint/restoreRepairCheckpoint directly, never runBoundedRepairRound/applyBoundedCheckFixRepair (the phase-and-check-shaped wrappers); whether the repair held is decided from the verification wave's own outcome alone, and a restore failure gets a distinct repair_failed_not_restored status rather than being folded into failed/blocked.
+- [Phase 202]: 202-07: the third-strike architectural case is additive to swarmArchitecturalConcernResult's existing payload and reads entirely from durable swarmResultRecord history (loadSwarmResultRecordByID) plus 202-05's hypothesesFromSwarmRuns/detectSwarmSharedCauses reused unmodified -- cmd/swarm_strikes.go's counting/persistence machinery stays untouched.
 
 ### Pending Todos
 
