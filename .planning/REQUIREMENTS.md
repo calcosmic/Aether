@@ -76,7 +76,7 @@ For dummies: keep the reliable modern engine and brakes, then restore the dashbo
 - [x] **LIVE-04 — Safe Swarm repair:** Swarm uses runtime-issued identities and manifests, checkpoints before mutation, applies the ranked repair through an authorized path, verifies it, rolls back failed repair, and preserves the proven three-strike architectural escalation.
 - [x] **LIVE-05 — Durable Swarm outcome:** Swarm activity, success or failure, strikes, archive/cleanup, relevant FOCUS or REDIRECT learning, and the final evidence-backed synthesis remain one replay-safe episode available to status, history, and later work.
 - [ ] **LIVE-06 — Iterative Oracle:** Oracle offers an understandable research entry point, clarifies the actual question, runs multi-round evidence gathering and synthesis, displays confidence and contradictions, targets gaps, and stops on sufficiency or diminishing returns.
-- [ ] **LIVE-07 — Durable Oracle synthesis:** Oracle writes a final synthesis with sources, provenance, confidence, unresolved questions, and actionable conclusions; useful partial research is saved honestly, and plan research or Dreams artifacts remain discoverable without being mislabelled as verified truth.
+- [x] **LIVE-07 — Durable Oracle synthesis:** Oracle writes a final synthesis with sources, provenance, confidence, unresolved questions, and actionable conclusions; useful partial research is saved honestly, and plan research or Dreams artifacts remain discoverable without being mislabelled as verified truth.
 
 ### Biological Runtime
 

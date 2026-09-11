@@ -265,8 +265,18 @@ func TestStatusShowsTheMostRecentEpisode(t *testing.T) {
 	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
 	writeEpisodeIndexSwarmFixture(t, s, "swarm-status-shows-1", "The status section target", now.Add(-30*time.Minute), now, false)
 
+	// Warm every path the render pass will touch -- the storage layer's own
+	// first-touch lock bookkeeping is a documented exception
+	// (TestStatusRunningTotalWritesNothing), not a write this task made.
+	_ = renderDashboard(state, s, buildStatusResult(state, s))
+
+	before := dirDigest(t, s.BasePath())
 	result := buildStatusResult(state, s)
 	visual := renderDashboard(state, s, result)
+	after := dirDigest(t, s.BasePath())
+	if before != after {
+		t.Fatalf("rendering status changed the colony data directory:\nbefore: %s\nafter:  %s", before, after)
+	}
 
 	if !strings.Contains(visual, "Read the full write-up:") {
 		t.Fatalf("expected the most-recent-episode section, got:\n%s", visual)
@@ -338,7 +348,12 @@ func TestHistoryListsEveryEpisodeWithOutcomeAndCost(t *testing.T) {
 	seedSpendLedgerForTest(t, 44, spendWorkflowBuild, measuredSpendRowForTest("Mason-44", "builder", 100_000))
 
 	facts, projection := newHistoryTestProjection(root)
+	before := dirDigest(t, s.BasePath())
 	result := buildLifecycleHistoryProjection(facts, projection, "", 0, "", root, s)
+	after := dirDigest(t, s.BasePath())
+	if before != after {
+		t.Fatalf("rendering history changed the colony data directory:\nbefore: %s\nafter:  %s", before, after)
+	}
 
 	var episodeRows []LifecycleHistoryRow
 	for _, row := range result.Events {
