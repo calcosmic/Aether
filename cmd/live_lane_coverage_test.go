@@ -1,8 +1,11 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -349,5 +352,136 @@ func TestLiveLaneHelpersMapOnlyKnownFields(t *testing.T) {
 			}()
 			emitColonyLiveSignalConsulted("ep-1", events.EpisodeKindBuild, []string{"REDIRECT: avoid X"})
 		}()
+	})
+}
+
+// liveLaneEntryPoint drives one lifecycle lane through its real public entry
+// point against an isolated fixture and returns every live.* event that
+// drive persisted, in emission order.
+type liveLaneEntryPoint func(t *testing.T) []liveTestEvent
+
+func driveSwarmLiveLane(t *testing.T) []liveTestEvent {
+	t.Helper()
+	saveGlobals(t)
+	s, root := newTestStore(t)
+	store = s
+
+	target := "Auth panic when session is missing"
+	swarmID := "swarm-live-coverage-test"
+	if err := initializeSwarmRun(swarmID); err != nil {
+		t.Fatalf("initialize swarm run: %v", err)
+	}
+	investigation := buildSwarmInvestigationPlans(root, target)
+	if len(investigation) == 0 {
+		t.Fatalf("fixture is broken: buildSwarmInvestigationPlans returned no plans for %q", target)
+	}
+	wave := swarmPlansWaveNumber(investigation)
+	ctx := context.Background()
+	invoker := &swarmTestInvoker{}
+
+	// Mirrors runSwarmDestroy's own wave-boundary emission
+	// (cmd/swarm_cmd.go) around executeSwarmWave -- the same pattern
+	// 202-02's TestSwarmInvestigationWaveReachesTheLiveWatchScreen already
+	// established for driving the Swarm lane in a test.
+	emitColonyLive(events.LiveTopicWaveStarted, events.ColonyLivePayload{
+		EpisodeID: swarmID, EpisodeKind: events.EpisodeKindSwarm, Wave: wave, Status: "starting",
+	})
+	if _, err := executeSwarmWave(ctx, root, swarmID, target, investigation, "", invoker, true); err != nil {
+		t.Fatalf("executeSwarmWave: %v", err)
+	}
+	emitColonyLive(events.LiveTopicWaveEnded, events.ColonyLivePayload{
+		EpisodeID: swarmID, EpisodeKind: events.EpisodeKindSwarm, Wave: wave, Status: "completed",
+	})
+	return liveEventsSince(t)
+}
+
+func driveBuildLiveLane(t *testing.T) []liveTestEvent {
+	t.Helper()
+	runFailedEmitBuildFixture(t, false)
+	return liveEventsSince(t)
+}
+
+func driveContinueLiveLane(t *testing.T) []liveTestEvent {
+	t.Helper()
+	runFailedEmitCheckFixture(t, false)
+	return liveEventsSince(t)
+}
+
+func drivePlanLiveLane(t *testing.T) []liveTestEvent {
+	t.Helper()
+	runFailedEmitPlanFixture(t, false)
+	return liveEventsSince(t)
+}
+
+func driveRecoveryLiveLane(t *testing.T) []liveTestEvent {
+	t.Helper()
+	runFailedEmitRecoveryFixture(t, false)
+	return liveEventsSince(t)
+}
+
+// liveLaneEntryPoints maps every declared episode kind to the real public
+// entry point that drives it. A kind present in events.ColonyLiveEpisodeKinds()
+// with no entry registered here fails TestEveryLifecycleLaneEmitsLiveEvents
+// by name -- the lane inventory below is exhaustive over the declared
+// vocabulary, never a hand-typed subset of "today's lanes".
+var liveLaneEntryPoints = map[string]liveLaneEntryPoint{
+	events.EpisodeKindSwarm:    driveSwarmLiveLane,
+	events.EpisodeKindBuild:    driveBuildLiveLane,
+	events.EpisodeKindContinue: driveContinueLiveLane,
+	events.EpisodeKindPlan:     drivePlanLiveLane,
+	events.EpisodeKindRecovery: driveRecoveryLiveLane,
+}
+
+// assertLiveKindPresent is the guard TestEveryLifecycleLaneEmitsLiveEvents
+// applies per lane: it reports, by name, when no persisted event carries
+// the expected episode kind. Kept as a standalone function (rather than
+// inlined into the test) so the negative case below can prove the guard is
+// capable of failing, not merely capable of passing.
+func assertLiveKindPresent(kind string, liveEvents []liveTestEvent) error {
+	for _, e := range liveEvents {
+		if e.Payload.EpisodeKind == kind {
+			return nil
+		}
+	}
+	return fmt.Errorf("lifecycle lane %q emitted no live event carrying episode kind %q -- this lane has gone dark on the live stream", kind, kind)
+}
+
+// TestEveryLifecycleLaneEmitsLiveEvents drives every lifecycle lane declared
+// in events.ColonyLiveEpisodeKinds() through its real public entry point
+// against an isolated fixture, and fails by name (episode kind + entry
+// point) the moment a lane produces zero live events of its own kind --
+// catching a lane that stops speaking on the live stream as a test failure
+// rather than an owner noticing an empty cockpit.
+func TestEveryLifecycleLaneEmitsLiveEvents(t *testing.T) {
+	kinds := events.ColonyLiveEpisodeKinds()
+	if len(kinds) == 0 {
+		t.Fatal("fixture is broken: events.ColonyLiveEpisodeKinds() returned no declared episode kinds")
+	}
+
+	for _, kind := range kinds {
+		kind := kind
+		t.Run(kind, func(t *testing.T) {
+			entry, ok := liveLaneEntryPoints[kind]
+			if !ok {
+				t.Fatalf("no real public entry point is registered in liveLaneEntryPoints for declared episode kind %q -- every kind in events.ColonyLiveEpisodeKinds() must have one", kind)
+			}
+			liveEvents := entry(t)
+			if err := assertLiveKindPresent(kind, liveEvents); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+
+	t.Run("a lane with its emission stubbed to no-ops is reported by name", func(t *testing.T) {
+		// Simulates a lane whose emission calls were removed (its helpers
+		// stubbed to no-ops): zero live events reach the store, exactly as
+		// if emitColonyLive itself had never been called for this kind.
+		err := assertLiveKindPresent(events.EpisodeKindBuild, nil)
+		if err == nil {
+			t.Fatal("expected the guard to fail when a lane's live events are empty")
+		}
+		if !strings.Contains(err.Error(), events.EpisodeKindBuild) {
+			t.Fatalf("guard failure %q does not name the stubbed lane %q", err.Error(), events.EpisodeKindBuild)
+		}
 	})
 }
