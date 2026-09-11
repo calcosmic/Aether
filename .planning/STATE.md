@@ -5,16 +5,16 @@ milestone_name: Classic Colony Restoration
 current_phase: 202
 current_phase_name: Swarm, Oracle, and Live Colony
 status: executing
-stopped_at: Completed 202-02-PLAN.md
-last_updated: "2026-09-11T08:53:40.497Z"
+stopped_at: Completed 202-03-PLAN.md
+last_updated: "2026-09-11T09:28:17.983Z"
 last_activity: 2026-09-11
 last_activity_desc: Phase 202 execution started
-state_head: 2bccc3d559f11ba28d2cb727cc7bdbc91e7d39b8
+state_head: 1eeee9bc21ce04eaecf8cba0f96d6f30ffdc3b46
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 124
-  completed_plans: 111
+  completed_plans: 112
   percent: 14
 ---
 
@@ -33,7 +33,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 202 (Swarm, Oracle, and Live Colony) — EXECUTING
-Plan: 3 of 15
+Plan: 4 of 15
 Status: Ready to execute
 Last activity: 2026-09-11 — Phase 202 execution started
 
@@ -190,6 +190,7 @@ Last activity: 2026-09-11 — Phase 202 execution started
 | Phase 201 P20 | 70min | 3 tasks | 7 files |
 | Phase 202 P01 | 33min | 2 tasks | 4 files |
 | Phase 202 P02 | 9min | 3 tasks | 10 files |
+| Phase 202 P03 | 58min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -597,6 +598,8 @@ Last activity: 2026-09-11 — Phase 202 execution started
 - [Phase 202]: [Phase 202] CAP-045 scope ruling: this phase proposes scoped FOCUS/REDIRECT learning from successful Swarm evidence; measuring that learning's later effect is explicitly Phase 204's boundary. — The capability ledger routed CAP-045 here without splitting its two halves; the synthesis rules in writing which half belongs to this phase so the boundary with Phase 204's learning governance work is explicit, not discovered later.
 - [Phase 202]: executeSwarmWave gained a liveEpisode bool parameter (investigation wave true, fix/verification waves false) so the investigation wave emits live events without touching the other two waves — plan 202-03 owns wiring the rest of the lifecycle lanes.
 - [Phase 202]: watch-mode resolution reads event-bus.jsonl via a lock-free os.ReadFile rather than events.Bus.Query, mirroring cmd/lifecycle_facts.go's discipline, to preserve aether watch's locked-in read-only guarantee (TestWatchIdle199ReadOnly).
+- [Phase 202]: Real build per-worker live wiring lives in cmd/codex_build_worktree.go (both in-repo and worktree dispatch loops), not cmd/codex_build.go -- that file only holds the build's episode boundary. — The plan named codex_build.go for wiring, but the actual per-worker dispatch loop and existing ceremony emission calls live in codex_build_worktree.go.
+- [Phase 202]: orchestrateRecovery refactored to funnel all four classification branches through one outcome variable and one emitColonyLiveRecoveryChanged call before its single return. — Avoids duplicating the live emission call at four separate return sites while preserving the function's pure classify/decide/log/return contract.
 
 ### Pending Todos
 
@@ -713,8 +716,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-11T08:53:40.361Z
-Stopped at: Completed 202-02-PLAN.md
+Last session: 2026-09-11T09:28:17.873Z
+Stopped at: Completed 202-03-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
