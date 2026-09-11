@@ -315,6 +315,60 @@ func sortColonyLiveEntries(entries []colonyLiveDecodedEvent) {
 	})
 }
 
+// colonyLiveBoundaryDelta is the single source of truth for whether a live
+// event topic opens or closes an episode's (or wave's) start/end balance:
+// +1 for a topic that opens a boundary, -1 for a topic that closes one, and
+// 0 for every other topic. Both foldColonyLiveEvents (the reducer, which
+// derives snapshot.Open from a running balance) and openColonyLiveEpisodeIDs
+// (the selector latestLiveEpisodeID uses to pick which episode is "still
+// open") obtain their increment/decrement from this one function -- so the
+// reducer and the selector can never disagree about what "still open"
+// means for the same recorded event sequence.
+func colonyLiveBoundaryDelta(topic string) int {
+	switch topic {
+	case events.LiveTopicEpisodeStarted, events.LiveTopicWaveStarted:
+		return 1
+	case events.LiveTopicEpisodeEnded, events.LiveTopicWaveEnded:
+		return -1
+	default:
+		return 0
+	}
+}
+
+// openColonyLiveEpisodeIDs returns the set of episode IDs whose own
+// start/end boundary balance -- accumulated via colonyLiveBoundaryDelta
+// across already-decoded entries -- is currently positive. It applies the
+// identical schema-version skip foldColonyLiveEvents applies (an event
+// carrying an unrecognized schema version can never open an episode here
+// that the reducer itself would also skip), and treats an entry with no
+// episode ID as contributing to no episode's balance. The returned map
+// contains only episode IDs that are genuinely open; an absent key means
+// closed (or never seen).
+func openColonyLiveEpisodeIDs(entries []colonyLiveDecodedEvent) map[string]bool {
+	balances := make(map[string]int)
+	for _, entry := range entries {
+		payload := entry.payload
+		if payload.SchemaVersion != "" && payload.SchemaVersion != events.ColonyLiveSchemaVersion {
+			continue
+		}
+		if payload.EpisodeID == "" {
+			continue
+		}
+		delta := colonyLiveBoundaryDelta(entry.event.Topic)
+		if delta == 0 {
+			continue
+		}
+		balances[payload.EpisodeID] += delta
+	}
+	open := make(map[string]bool, len(balances))
+	for id, balance := range balances {
+		if balance > 0 {
+			open[id] = true
+		}
+	}
+	return open
+}
+
 // foldColonyLiveEvents folds entries into snapshot. snapshot may be a
 // fresh zero value (a full replay from the beginning) or a previously
 // folded snapshot (a resume) -- in the resume case, its existing workers
@@ -349,9 +403,20 @@ func foldColonyLiveEvents(snapshot colonyLiveSnapshot, entries []colonyLiveDecod
 			snapshot.EpisodeKind = payload.EpisodeKind
 		}
 
+		// The open/close contribution of this topic comes from the single
+		// shared rule (colonyLiveBoundaryDelta), never a literal ++/--
+		// inside the switch below -- the floor that never lets the balance
+		// go negative is preserved exactly as before.
+		if delta := colonyLiveBoundaryDelta(evt.Topic); delta != 0 {
+			if openBalance+delta < 0 {
+				openBalance = 0
+			} else {
+				openBalance += delta
+			}
+		}
+
 		switch evt.Topic {
 		case events.LiveTopicEpisodeStarted, events.LiveTopicWaveStarted:
-			openBalance++
 			if snapshot.StartedAt == "" {
 				snapshot.StartedAt = evt.Timestamp
 			}
@@ -359,9 +424,6 @@ func foldColonyLiveEvents(snapshot colonyLiveSnapshot, entries []colonyLiveDecod
 				snapshot.Wave = payload.Wave
 			}
 		case events.LiveTopicEpisodeEnded, events.LiveTopicWaveEnded:
-			if openBalance > 0 {
-				openBalance--
-			}
 			if payload.ElapsedSeconds > 0 {
 				snapshot.ElapsedSeconds = payload.ElapsedSeconds
 			}

@@ -46,10 +46,15 @@ func colonyLiveEpisodeStartEntry(entries []colonyLiveDecodedEvent, episodeID str
 // then by its event ID, reusing the exact (timestamp, sequence, event ID)
 // total order colonyLiveEntryAfterCursor already defines for resuming a
 // replay. This is deliberately independent of which episode the single
-// most-recent EVENT belongs to (latestLiveEpisodeID): an older episode can
-// still be receiving events after a newer one has already begun, and "what
-// just ran" means the newest EPISODE, not the newest event. Returns "" when
-// no live event has ever been recorded.
+// most-recent EVENT belongs to: an older episode can still be receiving
+// events after a newer one has already begun, and "what just ran" means
+// the newest EPISODE, not the newest event. latestLiveEpisodeID
+// (cmd/watch_live.go) shares this exact selection logic through
+// latestStartedLiveEpisodeAmong below -- it additionally prefers the
+// subset of episodes that are still open, falling back to this same
+// "latest started, among all episodes" answer with nothing open, so the
+// live and replay branches can never name different episodes when nothing
+// is running. Returns "" when no live event has ever been recorded.
 func mostRecentlyStartedLiveEpisode(s *storage.Store) string {
 	raw := readColonyLiveEventsRaw(s, time.Time{})
 	if len(raw) == 0 {
@@ -72,10 +77,26 @@ func mostRecentlyStartedLiveEpisode(s *storage.Store) string {
 		episodeIDs = append(episodeIDs, id)
 	}
 
+	return latestStartedLiveEpisodeAmong(decoded, episodeIDs)
+}
+
+// latestStartedLiveEpisodeAmong returns whichever episode ID in episodeIDs
+// has the chronologically LATEST own start event
+// (colonyLiveEpisodeStartEntry), ties broken by that event's own sequence
+// number then its event ID -- the exact (timestamp, sequence, event ID)
+// total order colonyLiveEntryAfterCursor already defines. entries must
+// already be decoded and sorted (sortColonyLiveEntries). Returns "" when
+// none of episodeIDs has any recorded start entry at all. This is the one
+// shared "latest started episode" selection both
+// mostRecentlyStartedLiveEpisode (the replay branch, called over every
+// episode) and latestLiveEpisodeID (the live branch, called over the open
+// subset and, as its fallback, every episode) call -- there is exactly one
+// implementation of this rule in the package.
+func latestStartedLiveEpisodeAmong(entries []colonyLiveDecodedEvent, episodeIDs []string) string {
 	best := ""
 	var bestEntry colonyLiveDecodedEvent
 	for _, id := range episodeIDs {
-		entry, ok := colonyLiveEpisodeStartEntry(decoded, id)
+		entry, ok := colonyLiveEpisodeStartEntry(entries, id)
 		if !ok {
 			continue
 		}

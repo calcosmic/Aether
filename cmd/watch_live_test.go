@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/calcosmic/Aether/pkg/storage"
 )
@@ -185,4 +186,144 @@ func TestLiveProjectionIsPureReplay(t *testing.T) {
 			t.Fatalf("rendered output differs between two replays of the same persisted fixture file")
 		}
 	})
+}
+
+// TestWatchFollowsTheMostRecentlyStartedOpenEpisode proves resolveWatchMode
+// prefers the older, still-open episode over a newer episode that has
+// already closed -- CR-02's core regression. Before this task,
+// latestLiveEpisodeID picked whichever episode owned the chronologically
+// newest single event, so once the newer episode closed (its own last
+// event), the cockpit would follow it into replay instead of staying on
+// the still-running older episode and its workers.
+func TestWatchFollowsTheMostRecentlyStartedOpenEpisode(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	emitColonyLiveEpisodeStarted("older-open-ep", events.EpisodeKindBuild)
+	emitColonyLiveWorkerStarted("older-open-ep", events.EpisodeKindBuild, codex.WorkerDispatch{
+		WorkerName: "Mason-1",
+		Caste:      "builder",
+		Wave:       1,
+	})
+
+	// A genuine timestamp gap so the newer episode's own start event is
+	// provably later than the older one's, not merely later in file order.
+	time.Sleep(1100 * time.Millisecond)
+
+	emitColonyLiveEpisodeStarted("newer-closed-ep", events.EpisodeKindContinue)
+	emitColonyLiveEpisodeEnded("newer-closed-ep", events.EpisodeKindContinue, "completed")
+
+	mode, snapshot := resolveWatchMode(context.Background(), s, time.Now().UTC())
+	if mode != watchModeLive {
+		t.Fatalf("resolveWatchMode mode = %q, want %q -- the older episode is still open", mode, watchModeLive)
+	}
+	if snapshot.EpisodeID != "older-open-ep" {
+		t.Fatalf("resolveWatchMode named episode %q, want the still-open older episode %q -- a newer closed episode must never hijack the live view", snapshot.EpisodeID, "older-open-ep")
+	}
+	if len(snapshot.Workers) != 1 || snapshot.Workers[0].WorkerID != "Mason-1" {
+		t.Fatalf("resolveWatchMode's snapshot dropped the still-open episode's worker rows: %+v", snapshot.Workers)
+	}
+}
+
+// TestClosedEpisodesPickTheSameEpisodeTheReplaySummaryNames proves that
+// with nothing open at all, resolveWatchMode's snapshot names the exact
+// same episode mostRecentlyStartedLiveEpisode (the replay summary's own
+// selection) does -- the live and replay branches can never disagree about
+// "what just ran" (D-03).
+func TestClosedEpisodesPickTheSameEpisodeTheReplaySummaryNames(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	emitColonyLiveEpisodeStarted("closed-ep-1", events.EpisodeKindBuild)
+	emitColonyLiveEpisodeEnded("closed-ep-1", events.EpisodeKindBuild, "completed")
+
+	time.Sleep(1100 * time.Millisecond)
+
+	emitColonyLiveEpisodeStarted("closed-ep-2", events.EpisodeKindContinue)
+	emitColonyLiveEpisodeEnded("closed-ep-2", events.EpisodeKindContinue, "completed")
+
+	mode, snapshot := resolveWatchMode(context.Background(), s, time.Now().UTC())
+	if mode != watchModeReplay {
+		t.Fatalf("fixture setup broken: mode = %q, want %q (both episodes are closed)", mode, watchModeReplay)
+	}
+
+	want := mostRecentlyStartedLiveEpisode(s)
+	if want == "" {
+		t.Fatalf("fixture setup broken: mostRecentlyStartedLiveEpisode returned no episode")
+	}
+	if snapshot.EpisodeID != want {
+		t.Fatalf("resolveWatchMode named episode %q, but the replay summary names %q -- with nothing open, live and replay must agree", snapshot.EpisodeID, want)
+	}
+}
+
+// TestOneOpenBalanceRule drives one recorded event sequence through both
+// foldColonyLiveEvents (via replayColonyLiveSnapshot) and
+// openColonyLiveEpisodeIDs and fails if the two disagree about whether the
+// episode is open -- proving the reducer and the selector share one open/
+// close rule. It also asserts colonyLiveBoundaryDelta itself returns a
+// non-zero delta for each of the four boundary topics and zero for a
+// worker topic.
+func TestOneOpenBalanceRule(t *testing.T) {
+	for _, topic := range []string{events.LiveTopicEpisodeStarted, events.LiveTopicWaveStarted} {
+		if d := colonyLiveBoundaryDelta(topic); d <= 0 {
+			t.Errorf("colonyLiveBoundaryDelta(%q) = %d, want a positive delta", topic, d)
+		}
+	}
+	for _, topic := range []string{events.LiveTopicEpisodeEnded, events.LiveTopicWaveEnded} {
+		if d := colonyLiveBoundaryDelta(topic); d >= 0 {
+			t.Errorf("colonyLiveBoundaryDelta(%q) = %d, want a negative delta", topic, d)
+		}
+	}
+	if d := colonyLiveBoundaryDelta(events.LiveTopicWorkerStarted); d != 0 {
+		t.Errorf("colonyLiveBoundaryDelta(%q) = %d, want 0 for a non-boundary topic", events.LiveTopicWorkerStarted, d)
+	}
+
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	episodeID := "balance-ep"
+	emitColonyLiveEpisodeStarted(episodeID, events.EpisodeKindBuild)
+	emitColonyLiveWorkerStarted(episodeID, events.EpisodeKindBuild, codex.WorkerDispatch{
+		WorkerName: "Mason-1",
+		Caste:      "builder",
+		Wave:       1,
+	})
+
+	decodedOpen := func() []colonyLiveDecodedEvent {
+		raw := readColonyLiveEventsRaw(s, time.Time{})
+		decoded := decodeColonyLiveEvents(raw)
+		sortColonyLiveEntries(decoded)
+		return decoded
+	}
+
+	decoded := decodedOpen()
+	snapshot, err := replayColonyLiveSnapshot(context.Background(), s, episodeID, time.Time{})
+	if err != nil {
+		t.Fatalf("replayColonyLiveSnapshot: %v", err)
+	}
+	openSet := openColonyLiveEpisodeIDs(decoded)
+	if snapshot.Open != openSet[episodeID] {
+		t.Fatalf("after starting: foldColonyLiveEvents reports Open=%v but openColonyLiveEpisodeIDs reports open=%v for the same recorded sequence", snapshot.Open, openSet[episodeID])
+	}
+	if !snapshot.Open {
+		t.Fatalf("fixture setup broken: episode should be open (started, never ended)")
+	}
+
+	emitColonyLiveEpisodeEnded(episodeID, events.EpisodeKindBuild, "completed")
+
+	decoded = decodedOpen()
+	snapshot, err = replayColonyLiveSnapshot(context.Background(), s, episodeID, time.Time{})
+	if err != nil {
+		t.Fatalf("replayColonyLiveSnapshot: %v", err)
+	}
+	openSet = openColonyLiveEpisodeIDs(decoded)
+	if snapshot.Open != openSet[episodeID] {
+		t.Fatalf("after ending: foldColonyLiveEvents reports Open=%v but openColonyLiveEpisodeIDs reports open=%v for the same recorded sequence", snapshot.Open, openSet[episodeID])
+	}
+	if snapshot.Open {
+		t.Fatalf("episode should be closed after episode.ended, both rules must agree it is closed")
+	}
 }

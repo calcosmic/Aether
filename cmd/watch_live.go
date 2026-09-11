@@ -165,10 +165,28 @@ func applyUnfinishedWorkerInterruption(s *storage.Store, snapshot colonyLiveSnap
 	return snapshot
 }
 
-// latestLiveEpisodeID finds the episode ID the chronologically-latest
-// persisted live.* event belongs to. Returns false when no live events have
-// ever been recorded. Reads via readColonyLiveEventsRaw -- lock-free, since
-// this runs on every `aether watch` invocation including the idle path.
+// latestLiveEpisodeID resolves the episode `aether watch`'s live branch
+// follows: the most recently started episode that is STILL OPEN (its own
+// start/end boundary balance, per colonyLiveBoundaryDelta and
+// openColonyLiveEpisodeIDs, is currently positive), falling back to the
+// most recently started episode among ALL recorded episodes when none is
+// open -- exactly the same "latest started" selection
+// mostRecentlyStartedLiveEpisode (cmd/watch_replay.go) uses for the replay
+// branch, via the shared latestStartedLiveEpisodeAmong. With nothing open,
+// this function and mostRecentlyStartedLiveEpisode therefore always name
+// the same episode, so the live and replay paths can never disagree about
+// what "just ran" means (D-03).
+//
+// This is deliberately independent of which episode owns the single
+// chronologically newest EVENT: a recovery decision (or any other detail)
+// recorded against an older, still-open episode must not cause a newer,
+// already-closed episode to be preferred just because it happens to own
+// the most recent timestamp -- "live" means the newest STILL-OPEN episode,
+// never the newest event.
+//
+// Returns false only when no episode ID resolves at all. Reads via
+// readColonyLiveEventsRaw -- lock-free, since this runs on every `aether
+// watch` invocation including the idle path.
 func latestLiveEpisodeID(ctx context.Context, s *storage.Store) (string, bool) {
 	_ = ctx
 	raw := readColonyLiveEventsRaw(s, time.Time{})
@@ -180,8 +198,35 @@ func latestLiveEpisodeID(ctx context.Context, s *storage.Store) (string, bool) {
 		return "", false
 	}
 	sortColonyLiveEntries(decoded)
-	episodeID := decoded[len(decoded)-1].payload.EpisodeID
-	return episodeID, episodeID != ""
+
+	seen := map[string]bool{}
+	episodeIDs := make([]string, 0, len(decoded))
+	for _, entry := range decoded {
+		id := entry.payload.EpisodeID
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		episodeIDs = append(episodeIDs, id)
+	}
+	if len(episodeIDs) == 0 {
+		return "", false
+	}
+
+	if openSet := openColonyLiveEpisodeIDs(decoded); len(openSet) > 0 {
+		openIDs := make([]string, 0, len(openSet))
+		for _, id := range episodeIDs {
+			if openSet[id] {
+				openIDs = append(openIDs, id)
+			}
+		}
+		if best := latestStartedLiveEpisodeAmong(decoded, openIDs); best != "" {
+			return best, true
+		}
+	}
+
+	best := latestStartedLiveEpisodeAmong(decoded, episodeIDs)
+	return best, best != ""
 }
 
 // renderLiveWatchVisual renders a colonyLiveSnapshot as the live watch
