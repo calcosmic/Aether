@@ -54,7 +54,15 @@ var (
 		"V-201-AUTOPILOT",
 		"V-201-TELEMETRY",
 	}
-	classicContractGroups            = append(append(slices.Clone(classicContractPhase199Groups), classicContractPhase200Groups...), classicContractPhase201Groups...)
+	classicContractPhase202Groups = []string{
+		"V-202-EVENTS",
+		"V-202-COCKPIT",
+		"V-202-LENS",
+		"V-202-REPAIR",
+		"V-202-EPISODE",
+		"V-202-ORACLE",
+	}
+	classicContractGroups            = append(append(append(slices.Clone(classicContractPhase199Groups), classicContractPhase200Groups...), classicContractPhase201Groups...), classicContractPhase202Groups...)
 	classicContractPlatforms         = []string{"runtime", "claude", "opencode"}
 	classicContractPhase199Decisions = []string{
 		"SYN-199-01",
@@ -79,7 +87,12 @@ var (
 		"SYN-201-09", "SYN-201-10", "SYN-201-11", "SYN-201-12",
 		"SYN-201-13", "SYN-201-14",
 	}
-	classicContractDecisions            = append(append(slices.Clone(classicContractPhase199Decisions), classicContractPhase200Decisions...), classicContractPhase201Decisions...)
+	classicContractPhase202Decisions = []string{
+		"SYN-202-01", "SYN-202-02", "SYN-202-03", "SYN-202-04",
+		"SYN-202-05", "SYN-202-06", "SYN-202-07", "SYN-202-08",
+		"SYN-202-09", "SYN-202-10", "SYN-202-11", "SYN-202-12",
+	}
+	classicContractDecisions            = append(append(append(slices.Clone(classicContractPhase199Decisions), classicContractPhase200Decisions...), classicContractPhase201Decisions...), classicContractPhase202Decisions...)
 	classicContractPhase199Capabilities = []string{
 		"CAP-006", "CAP-007", "CAP-008", "CAP-013", "CAP-015", "CAP-016", "CAP-017",
 		"CAP-018", "CAP-019", "CAP-020", "CAP-026", "CAP-027", "CAP-028", "CAP-032",
@@ -93,8 +106,11 @@ var (
 	classicContractPhase201Capabilities = []string{
 		"CAP-003", "CAP-004", "CAP-022", "CAP-024", "CAP-029", "CAP-051", "CAP-066", "CAP-071",
 	}
+	classicContractPhase202Capabilities = []string{
+		"CAP-021", "CAP-044", "CAP-045", "CAP-046", "CAP-047", "CAP-048", "CAP-063", "CAP-072",
+	}
 	classicContractCaseIDPattern          = regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`)
-	classicContractDecisionPattern        = regexp.MustCompile(`^SYN-(?:199-(?:0[1-9]|10)|200-(?:0[1-9]|1[0-2])|201-(?:0[1-9]|1[0-4]))$`)
+	classicContractDecisionPattern        = regexp.MustCompile(`^SYN-(?:199-(?:0[1-9]|10)|200-(?:0[1-9]|1[0-2])|201-(?:0[1-9]|1[0-4])|202-(?:0[1-9]|1[0-2]))$`)
 	classicContractCAPPattern             = regexp.MustCompile(`^CAP-[0-9]{3}$`)
 	classicContractRoundVocabulary        = regexp.MustCompile(`(?i)\brounds?\b`)
 	classicContractPhase200PublicCommands = map[string]bool{
@@ -106,6 +122,9 @@ var (
 	}
 	classicContractPhase201PublicCommands = map[string]bool{
 		"/ant-build": true, "/ant-continue": true, "/ant-run": true, "/ant-status": true, "/ant-quick": true,
+	}
+	classicContractPhase202PublicCommands = map[string]bool{
+		"/ant-watch": true, "/ant-swarm": true, "/ant-oracle": true, "/ant-status": true, "/ant-history": true,
 	}
 	classicContractPhase200MechanismProofs = []classicPhase200MechanismProofExpectation{
 		{
@@ -384,11 +403,13 @@ func TestClassicMechanismCoverage(t *testing.T) {
 		".planning/phases/199-front-door-and-classic-contract/199-CLASSIC-SYNTHESIS.md",
 		".planning/phases/200-iterative-planning/200-CLASSIC-SYNTHESIS.md",
 		".planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md",
+		".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md",
 	}) {
-		t.Fatalf("synthesis_sources = %v, want the ordered Phase 199, Phase 200, and Phase 201 sources", registry.SynthesisSources)
+		t.Fatalf("synthesis_sources = %v, want the ordered Phase 199, Phase 200, Phase 201, and Phase 202 sources", registry.SynthesisSources)
 	}
 	assertClassicSynthesisSource(t, repoRoot, registry.SynthesisSources[1], classicContractPhase200Decisions, classicContractPhase200Capabilities, false)
 	assertClassicSynthesisSource(t, repoRoot, registry.SynthesisSources[2], classicContractPhase201Decisions, classicContractPhase201Capabilities, false)
+	assertClassicSynthesisSource(t, repoRoot, registry.SynthesisSources[3], classicContractPhase202Decisions, classicContractPhase202Capabilities, false)
 
 	after := snapshotStoreFileHashesForTest(t, contractDir)
 	assertHashSnapshotsEqualForTest(t, "Classic mechanism validation", before, after)
@@ -467,6 +488,97 @@ func TestClassicContractPhase201MechanismRegistry(t *testing.T) {
 
 	after := snapshotStoreFileHashesForTest(t, contractDir)
 	assertHashSnapshotsEqualForTest(t, "Classic Phase 201 mechanism registry validation", before, after)
+}
+
+// TestClassicContractPhase202MechanismRegistry proves the widened corpus
+// carries the twelve SYN-202 Swarm/Oracle/live-colony mechanism identities
+// and that an unregistered identifier -- at the registry layer, referenced
+// from a case, or differing from a registered identifier only by letter case
+// -- is refused by its own name rather than silently accepted. This test
+// asserts registry shape only, per the plan's own scope note; plan 202-15
+// owns the Phase 202 executable case set once the behaviours it covers
+// exist.
+func TestClassicContractPhase202MechanismRegistry(t *testing.T) {
+	contractDir := classicContractFixtureDir(t)
+	before := snapshotStoreFileHashesForTest(t, contractDir)
+	registry, err := loadClassicMechanismRegistry(filepath.Join(contractDir, "mechanisms.json"))
+	if err != nil {
+		t.Fatalf("load Classic mechanism registry: %v", err)
+	}
+
+	decisionCounts := make(map[string]int, len(classicContractPhase202Decisions))
+	for _, mechanism := range registry.Mechanisms {
+		if !strings.HasPrefix(mechanism.ID, "SYN-202-") {
+			continue
+		}
+		decisionCounts[mechanism.ID]++
+		if len(mechanism.CAPIDs) == 0 {
+			t.Errorf("mechanism %q requires at least one CAP identifier", mechanism.ID)
+		}
+		if len(mechanism.SourceCitations) == 0 || classicStringsContainBlank(mechanism.SourceCitations) {
+			t.Errorf("mechanism %q requires at least one source citation", mechanism.ID)
+		}
+		if len(mechanism.PublicCommands) == 0 || classicStringsContainBlank(mechanism.PublicCommands) {
+			t.Errorf("mechanism %q requires at least one public command", mechanism.ID)
+		}
+		if len(mechanism.Groups) == 0 {
+			t.Errorf("mechanism %q requires at least one owning group", mechanism.ID)
+		}
+	}
+	for _, id := range classicContractPhase202Decisions {
+		if decisionCounts[id] != 1 {
+			t.Errorf("mechanism %s count = %d, want exactly 1", id, decisionCounts[id])
+		}
+	}
+
+	t.Run("unregistered SYN-202 identifier is refused by name", func(t *testing.T) {
+		invalid := cloneClassicMechanismRegistry(t, registry)
+		invalid.Mechanisms = classicMechanismsWithoutDecision(invalid.Mechanisms, "SYN-202-06")
+		assertClassicMechanismError(t, invalid, `missing synthesis decision "SYN-202-06"`)
+	})
+
+	t.Run("case referencing an unregistered decision fails coverage validation by name", func(t *testing.T) {
+		invalid := cloneClassicMechanismRegistry(t, registry)
+		invalid.Mechanisms = classicMechanismsWithoutDecision(invalid.Mechanisms, "SYN-202-06")
+		testCase := classicContractValidDocument().Cases[0]
+		testCase.ID = "swarm-oracle-live.probe.unregistered-decision"
+		testCase.SynthesisDecision = "SYN-202-06"
+		err := validateClassicCaseSynthesisCoverage([]classicContractCase{testCase}, invalid)
+		if err == nil || !strings.Contains(err.Error(), `"SYN-202-06"`) {
+			t.Fatalf("coverage validation error = %v, want it to name SYN-202-06", err)
+		}
+	})
+
+	t.Run("identifier differing only by letter case is rejected by exact byte match", func(t *testing.T) {
+		testCase := classicContractValidDocument().Cases[0]
+		testCase.ID = "swarm-oracle-live.probe.case-variant-decision"
+		testCase.SynthesisDecision = "syn-202-06"
+		document := classicContractDocument{SchemaVersion: classicContractSchemaVersion, Cases: []classicContractCase{testCase}}
+		err := validateClassicContractDocument(document)
+		if err == nil || !strings.Contains(err.Error(), `"syn-202-06"`) {
+			t.Fatalf("schema validation error = %v, want it to name the rejected case-variant identifier \"syn-202-06\"", err)
+		}
+		if err := validateClassicCaseSynthesisCoverage(document.Cases, registry); err == nil || !strings.Contains(err.Error(), `"syn-202-06"`) {
+			t.Fatalf("coverage validation error = %v, want it to name the rejected case-variant identifier \"syn-202-06\" -- exact byte equality against the registered \"SYN-202-06\" must not match", err)
+		}
+	})
+
+	t.Run("SYN-202-06 case in group V-202-LENS validates against the widened schema and passes coverage", func(t *testing.T) {
+		testCase := classicContractValidDocument().Cases[0]
+		testCase.ID = "swarm-oracle-live.probe.registered-decision"
+		testCase.Group = "V-202-LENS"
+		testCase.SynthesisDecision = "SYN-202-06"
+		document := classicContractDocument{SchemaVersion: classicContractSchemaVersion, Cases: []classicContractCase{testCase}}
+		if err := validateClassicContractDocument(document); err != nil {
+			t.Fatalf("schema validation error = %v, want nil for SYN-202-06 in V-202-LENS", err)
+		}
+		if err := validateClassicCaseSynthesisCoverage(document.Cases, registry); err != nil {
+			t.Fatalf("coverage validation error = %v, want nil for a registered decision", err)
+		}
+	})
+
+	after := snapshotStoreFileHashesForTest(t, contractDir)
+	assertHashSnapshotsEqualForTest(t, "Classic Phase 202 mechanism registry validation", before, after)
 }
 
 func TestClassicContractPhase200SchemaMechanismsAndCausalCases(t *testing.T) {
@@ -2166,6 +2278,7 @@ func validateClassicMechanismRegistry(registry classicMechanismRegistry) error {
 		".planning/phases/199-front-door-and-classic-contract/199-CLASSIC-SYNTHESIS.md",
 		".planning/phases/200-iterative-planning/200-CLASSIC-SYNTHESIS.md",
 		".planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md",
+		".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md",
 	}) {
 		return fmt.Errorf("unexpected synthesis_sources %v", registry.SynthesisSources)
 	}
@@ -2200,6 +2313,10 @@ func validateClassicMechanismRegistry(registry classicMechanismRegistry) error {
 				if !slices.Contains(classicContractPhase201Capabilities, capID) {
 					return fmt.Errorf("mechanism %q has unexpected Phase 201 capability %q", mechanism.ID, capID)
 				}
+			} else if strings.HasPrefix(mechanism.ID, "SYN-202-") {
+				if !slices.Contains(classicContractPhase202Capabilities, capID) {
+					return fmt.Errorf("mechanism %q has unexpected Phase 202 capability %q", mechanism.ID, capID)
+				}
 			} else if !slices.Contains(classicContractPhase200Capabilities, capID) {
 				return fmt.Errorf("mechanism %q has unexpected Phase 200 capability %q", mechanism.ID, capID)
 			}
@@ -2217,6 +2334,13 @@ func validateClassicMechanismRegistry(registry classicMechanismRegistry) error {
 		if strings.HasPrefix(mechanism.ID, "SYN-201-") {
 			for _, command := range mechanism.PublicCommands {
 				if !classicContractPhase201PublicCommands[command] {
+					return fmt.Errorf("mechanism %q uses stale or non-public command %q", mechanism.ID, command)
+				}
+			}
+		}
+		if strings.HasPrefix(mechanism.ID, "SYN-202-") {
+			for _, command := range mechanism.PublicCommands {
+				if !classicContractPhase202PublicCommands[command] {
 					return fmt.Errorf("mechanism %q uses stale or non-public command %q", mechanism.ID, command)
 				}
 			}

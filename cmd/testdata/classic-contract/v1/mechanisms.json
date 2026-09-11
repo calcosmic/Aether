@@ -4,7 +4,8 @@
   "synthesis_sources": [
     ".planning/phases/199-front-door-and-classic-contract/199-CLASSIC-SYNTHESIS.md",
     ".planning/phases/200-iterative-planning/200-CLASSIC-SYNTHESIS.md",
-    ".planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md"
+    ".planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md",
+    ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md"
   ],
   "mechanisms": [
     {
@@ -981,6 +982,249 @@
       ],
       "groups": [
         "V-201-TELEMETRY"
+      ]
+    },
+    {
+      "id": "SYN-202-01",
+      "title": "One versioned typed live-event model with replay and resume",
+      "disposition": "replace-better",
+      "cap_ids": [
+        "CAP-047"
+      ],
+      "public_commands": [
+        "/ant-watch",
+        "/ant-status",
+        "/ant-history"
+      ],
+      "source_citations": [
+        "git:v5.4.0:.aether/commands/watch.yaml",
+        "cmd/event_types.go",
+        "pkg/events/bus.go:31",
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-202-EVENTS"
+      ]
+    },
+    {
+      "id": "SYN-202-02",
+      "title": "Live cockpit information grammar",
+      "disposition": "restore-modern",
+      "cap_ids": [
+        "CAP-047"
+      ],
+      "public_commands": [
+        "/ant-watch"
+      ],
+      "source_citations": [
+        "git:v5.4.0:.aether/commands/watch.yaml",
+        "cmd/compatibility_cmds.go:59-70",
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-202-COCKPIT"
+      ]
+    },
+    {
+      "id": "SYN-202-03",
+      "title": "Replay-backed idle and the honest no-history floor",
+      "disposition": "restore-modern",
+      "cap_ids": [
+        "CAP-047"
+      ],
+      "public_commands": [
+        "/ant-watch"
+      ],
+      "source_citations": [
+        "cmd/compatibility_cmds.go:448-455",
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-202-COCKPIT"
+      ]
+    },
+    {
+      "id": "SYN-202-04",
+      "title": "Classic February-April visual character over truthful events",
+      "disposition": "keep-current",
+      "cap_ids": [
+        "CAP-047"
+      ],
+      "public_commands": [
+        "/ant-watch",
+        "/ant-swarm",
+        "/ant-oracle"
+      ],
+      "source_citations": [
+        "git:v5.4.0:.aether/utils/swarm-display.sh",
+        "cmd/codex_visuals.go:42,89,132,5554-5666",
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-202-COCKPIT"
+      ]
+    },
+    {
+      "id": "SYN-202-05",
+      "title": "Four genuinely distinct Swarm lenses",
+      "disposition": "restore-modern",
+      "cap_ids": [
+        "CAP-045"
+      ],
+      "public_commands": [
+        "/ant-swarm"
+      ],
+      "source_citations": [
+        "git:v5.4.0:.aether/commands/swarm.yaml",
+        "cmd/swarm_cmd.go:1015-1097",
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-202-LENS"
+      ]
+    },
+    {
+      "id": "SYN-202-06",
+      "title": "Hypothesis comparison, contradiction surfacing, and ranked repair",
+      "disposition": "restore-modern",
+      "cap_ids": [
+        "CAP-045"
+      ],
+      "public_commands": [
+        "/ant-swarm"
+      ],
+      "source_citations": [
+        "git:v5.4.0:.aether/commands/swarm.yaml",
+        "cmd/swarm_cmd.go:1390",
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-202-LENS"
+      ]
+    },
+    {
+      "id": "SYN-202-07",
+      "title": "One checkpoint, verify, and rollback transaction shared with every repair lane",
+      "disposition": "restore-modern",
+      "cap_ids": [
+        "CAP-044",
+        "CAP-063"
+      ],
+      "public_commands": [
+        "/ant-swarm"
+      ],
+      "source_citations": [
+        "git:v5.4.0:.aether/commands/swarm.yaml",
+        "cmd/work_repair.go:240-459",
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-202-REPAIR"
+      ]
+    },
+    {
+      "id": "SYN-202-08",
+      "title": "Three-strike architectural escalation preserved through the refactor",
+      "disposition": "keep-current",
+      "cap_ids": [
+        "CAP-046"
+      ],
+      "public_commands": [
+        "/ant-swarm"
+      ],
+      "source_citations": [
+        "git:v5.4.0:.aether/commands/swarm.yaml",
+        "cmd/swarm_strikes.go:149,501",
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-202-REPAIR"
+      ]
+    },
+    {
+      "id": "SYN-202-09",
+      "title": "One durable, replay-safe Swarm episode with retention and cleanup",
+      "disposition": "replace-better",
+      "cap_ids": [
+        "CAP-047",
+        "CAP-048"
+      ],
+      "public_commands": [
+        "/ant-swarm",
+        "/ant-status",
+        "/ant-history"
+      ],
+      "source_citations": [
+        "git:v5.4.0:.aether/commands/swarm.yaml",
+        "cmd/swarm_cmd.go:349-361",
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-202-EPISODE"
+      ]
+    },
+    {
+      "id": "SYN-202-10",
+      "title": "Oracle depth vocabulary shared with planning, Oracle's own economics unchanged",
+      "disposition": "restore-modern",
+      "cap_ids": [
+        "CAP-021"
+      ],
+      "public_commands": [
+        "/ant-oracle"
+      ],
+      "source_citations": [
+        "git:v5.4.0:.aether/commands/oracle.yaml",
+        "cmd/oracle_loop.go:57-64",
+        "cmd/codex_plan.go:217-220",
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-202-ORACLE"
+      ]
+    },
+    {
+      "id": "SYN-202-11",
+      "title": "Oracle round visibility: question, confidence, contradictions, diminishing returns",
+      "disposition": "restore-modern",
+      "cap_ids": [
+        "CAP-072"
+      ],
+      "public_commands": [
+        "/ant-oracle",
+        "/ant-watch"
+      ],
+      "source_citations": [
+        "git:v5.4.0:.aether/commands/oracle.yaml",
+        "cmd/oracle_loop.go:294-337",
+        "cmd/oracle_progress.go:103",
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-202-ORACLE"
+      ]
+    },
+    {
+      "id": "SYN-202-12",
+      "title": "Durable Oracle synthesis, discoverability, and one honest partial-work vocabulary",
+      "disposition": "restore-modern",
+      "cap_ids": [
+        "CAP-021",
+        "CAP-072"
+      ],
+      "public_commands": [
+        "/ant-oracle",
+        "/ant-status",
+        "/ant-history"
+      ],
+      "source_citations": [
+        "git:v5.4.0:.aether/commands/oracle.yaml",
+        "cmd/oracle_research_doc.go:139,160,264",
+        "cmd/oracle_promote.go:42",
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-202-ORACLE"
       ]
     }
   ]
