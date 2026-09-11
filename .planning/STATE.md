@@ -5,16 +5,16 @@ milestone_name: Classic Colony Restoration
 current_phase: 202
 current_phase_name: Swarm, Oracle, and Live Colony
 status: executing
-stopped_at: Completed 202-03-PLAN.md
-last_updated: "2026-09-11T09:28:17.983Z"
+stopped_at: Completed 202-04-PLAN.md
+last_updated: "2026-09-11T09:43:08.563Z"
 last_activity: 2026-09-11
 last_activity_desc: Phase 202 execution started
-state_head: 1eeee9bc21ce04eaecf8cba0f96d6f30ffdc3b46
+state_head: 3ccbf24a94ec3250a35ebaeaf9a3b6fa706dad63
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 124
-  completed_plans: 112
+  completed_plans: 113
   percent: 14
 ---
 
@@ -33,7 +33,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 202 (Swarm, Oracle, and Live Colony) — EXECUTING
-Plan: 4 of 15
+Plan: 5 of 15
 Status: Ready to execute
 Last activity: 2026-09-11 — Phase 202 execution started
 
@@ -191,6 +191,7 @@ Last activity: 2026-09-11 — Phase 202 execution started
 | Phase 202 P01 | 33min | 2 tasks | 4 files |
 | Phase 202 P02 | 9min | 3 tasks | 10 files |
 | Phase 202 P03 | 58min | 3 tasks | 9 files |
+| Phase 202 P04 | 25min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -600,6 +601,8 @@ Last activity: 2026-09-11 — Phase 202 execution started
 - [Phase 202]: watch-mode resolution reads event-bus.jsonl via a lock-free os.ReadFile rather than events.Bus.Query, mirroring cmd/lifecycle_facts.go's discipline, to preserve aether watch's locked-in read-only guarantee (TestWatchIdle199ReadOnly).
 - [Phase 202]: Real build per-worker live wiring lives in cmd/codex_build_worktree.go (both in-repo and worktree dispatch loops), not cmd/codex_build.go -- that file only holds the build's episode boundary. — The plan named codex_build.go for wiring, but the actual per-worker dispatch loop and existing ceremony emission calls live in codex_build_worktree.go.
 - [Phase 202]: orchestrateRecovery refactored to funnel all four classification branches through one outcome variable and one emitColonyLiveRecoveryChanged call before its single return. — Avoids duplicating the live emission call at four separate return sites while preserving the function's pure classify/decide/log/return contract.
+- [Phase 202]: 202-04: caller-freedom for the retired event stream was proven by a repository-wide symbol search (Go/TS/wrapper docs), not assumed — Deletion decisions require positive evidence of zero callers, not absence-of-grep-hits-so-far assumptions
+- [Phase 202]: 202-04: the second-transport guard uses same-function co-occurrence, not unrestricted call-graph reachability — The cmd package has 70+ unrelated os.WriteFile call sites; full transitive reachability would produce false positives from unrelated call chains
 
 ### Pending Todos
 
@@ -716,8 +719,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-11T09:28:17.873Z
-Stopped at: Completed 202-03-PLAN.md
+Last session: 2026-09-11T09:43:08.407Z
+Stopped at: Completed 202-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

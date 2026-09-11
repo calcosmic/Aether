@@ -460,7 +460,7 @@ Plans:
 4. A multi-round Oracle question visibly targets uncertainty, reports confidence and contradictions, detects diminishing returns, and produces a source-grounded final synthesis.
 5. Useful partial Swarm/Oracle work, activity, learning, plan research, and local Dreams remain durable, discoverable, and accurately labelled rather than discarded or called verified.
 
-**Plans:** 3/15 plans executed
+**Plans:** 4/15 plans executed
 
 Plans:
 **Wave 1**
@@ -474,7 +474,7 @@ Plans:
 **Wave 3** *(blocked on Wave 2 completion)*
 
 - [x] 202-03-PLAN.md — Live events across every lifecycle lane, with a coverage guard
-- [ ] 202-04-PLAN.md — Retire the dead NDJSON event stream and refuse a second transport
+- [x] 202-04-PLAN.md — Retire the dead NDJSON event stream and refuse a second transport
 - [ ] 202-05-PLAN.md — Four distinct Swarm lenses, hypothesis comparison and ranked repair card
 - [ ] 202-08-PLAN.md — Shared Fast/Balanced/Deep/Exhaustive research depth vocabulary
 

@@ -70,7 +70,7 @@ For dummies: keep the reliable modern engine and brakes, then restore the dashbo
 
 ### Swarm, Oracle, and Live Colony
 
-- [ ] **LIVE-01 — Typed event bridge:** One versioned runtime event model carries planning, dispatch, worker, research, signal, check, recovery, and completion transitions to all supported renderers, with replay and resume semantics.
+- [x] **LIVE-01 — Typed event bridge:** One versioned runtime event model carries planning, dispatch, worker, research, signal, check, recovery, and completion transitions to all supported renderers, with replay and resume semantics.
 - [ ] **LIVE-02 — Real live cockpit:** `watch` and status views show authoritative active workers, castes, parent/child lineage, waves, workspaces, current questions, confidence, contradictions, signals, findings, recovery state, elapsed time, and reported cost without polling fabricated state.
 - [ ] **LIVE-03 — Substantive Swarm diagnosis:** Swarm runs four distinct evidence-producing lenses, compares competing hypotheses, identifies contradictions and shared causes, and ranks candidate repairs instead of launching four cosmetically different prompts.
 - [ ] **LIVE-04 — Safe Swarm repair:** Swarm uses runtime-issued identities and manifests, checkpoints before mutation, applies the ranked repair through an authorized path, verifies it, rolls back failed repair, and preserves the proven three-strike architectural escalation.
