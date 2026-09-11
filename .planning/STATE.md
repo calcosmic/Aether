@@ -5,7 +5,7 @@ milestone_name: Classic Colony Restoration
 current_phase: 202
 current_phase_name: Swarm, Oracle, and Live Colony
 status: executing
-stopped_at: Completed 202-15-PLAN.md
+stopped_at: Planned gap closure (202-16, 202-17) after verification found gaps
 last_updated: "2026-09-11T15:31:40.000Z"
 last_activity: 2026-09-11
 state_head: 9fc28e3b3d1ab034990440e81468d181315b43ba
@@ -15,7 +15,7 @@ progress:
   total_plans: 124
   completed_plans: 124
   percent: 14
-last_activity_desc: Completed 202-15-PLAN.md (updated the watch/Swarm/Oracle wrapper triplets on both platforms, registered 18 executable Phase 202 corpus cases covering all twelve SYN-202 decisions, and added a CLAUDE.md section naming a live test beside every restored-behaviour claim -- Phase 202 now has 15/15 plans summarized)
+last_activity_desc: Verification found 2 blocker wiring gaps (recovery hijacks the live watch view; Oracle runs never classify as live); planned gap-closure plans 202-16 and 202-17, plan-checker passed with no issues
 ---
 
 # Project State
@@ -32,9 +32,9 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 
 ## Current Position
 
-Phase: 202 (Swarm, Oracle, and Live Colony) — PLANS COMPLETE
-Plan: 15/15 summaries on disk (01-15) — plan numbering is wave-ordered, not sequential
-Status: Plans complete, pending phase verification
+Phase: 202 (Swarm, Oracle, and Live Colony) — GAP CLOSURE PLANNED
+Plan: 15/15 executed plans summarized; gap-closure plans 202-16 (wave 1) and 202-17 (wave 2) verified and awaiting execution
+Status: Verification gaps found — gap-closure plans ready for /gsd-execute-phase 202 --gaps-only
 Last activity: 2026-09-11
 
 ## Performance Metrics
