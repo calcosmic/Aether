@@ -5,17 +5,17 @@ milestone_name: Classic Colony Restoration
 current_phase: 202
 current_phase_name: Swarm, Oracle, and Live Colony
 status: executing
-stopped_at: Completed 202-13-PLAN.md
-last_updated: "2026-09-11T13:47:10.082Z"
+stopped_at: Completed 202-14-PLAN.md
+last_updated: "2026-09-11T14:16:41.801Z"
 last_activity: 2026-09-11
-state_head: 3420117bb880a6b7d11a519cb637f5af6b7998f8
+state_head: 9fc28e3b3d1ab034990440e81468d181315b43ba
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 124
-  completed_plans: 122
+  completed_plans: 123
   percent: 14
-last_activity_desc: Completed 202-13-PLAN.md (one shared standing vocabulary -- workStanding/workStandingLabel in cmd/partial_work_label.go, Oracle and Swarm both resolve standings through it, and collectUnverifiedWork inventories partial research, unproven/rolled-back Swarm repair ideas, interrupted episodes, plan research, and reflections, read-only)
+last_activity_desc: Completed 202-14-PLAN.md (one read-only lineage over Swarm episodes, Oracle research, and build/check attempts -- cmd/episode_index.go's loadColonyEpisodeIndex, surfaced as status's Most Recent Episode section and history's episode + unverified-work listing with a --kind filter, plus a cross-surface proof that status, history and watch agree)
 ---
 
 # Project State
@@ -33,7 +33,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 202 (Swarm, Oracle, and Live Colony) — EXECUTING
-Plan: 13/15 summaries on disk (01-13) — plan numbering is wave-ordered, not sequential
+Plan: 14/15 summaries on disk (01-14) — plan numbering is wave-ordered, not sequential
 Status: In Progress
 Last activity: 2026-09-11
 
@@ -200,6 +200,7 @@ Last activity: 2026-09-11
 | Phase 202 P10 | 55min | 3 tasks | 3 files |
 | Phase 202 P12 | 19min | 3 tasks | 6 files |
 | Phase 202 P13 | 25min | 2 tasks | 4 files |
+| Phase 202 P14 | 55min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -623,6 +624,7 @@ Last activity: 2026-09-11
 - [Phase 202]: Swarm episode retention recomputes eligibility fresh from the whole episode set (latest-for-target, unresolved strike sequence) rather than caching it, and removal requires the exact identifier plus a previewed digest -- never a directory sweep. — Retention.Class stored on the episode; age/eligibility derived at plan time so it can never go stale.
 - [Phase 202]: [Phase 202]: 202-12: Oracle synthesis documents now render recommendation-first (recommendation, plain-English confidence, unsettled questions, sources, evidence trail); a claim citing a source not in the run's own recorded sources is refused by name at render time; resaving a run replaces its own document (keyed on run_identifier) instead of duplicating it.
 - [Phase 202]: One shared standing vocabulary (verified/useful notes/standing unknown) resolved through workStandingLabel; Oracle's rendered text kept byte-identical, only its internal branch decision rewired — Existing tests assert Oracle's exact 'partial — stopped after N rounds' wording; changing it was out of scope
+- [Phase 202]: 202-14: one read-only projection (loadColonyEpisodeIndex) over Swarm episodes, Oracle research, and build/check attempts backs status's Most Recent Episode section and history's full listing; history renders the same full cost block as status so the two can be compared byte-for-byte. — Avoids a fourth durable record type and proves status/history/watch cannot silently disagree about what ran.
 
 ### Pending Todos
 
@@ -739,8 +741,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-11T13:47:09.965Z
-Stopped at: Completed 202-13-PLAN.md
+Last session: 2026-09-11T14:16:25.806Z
+Stopped at: Completed 202-14-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

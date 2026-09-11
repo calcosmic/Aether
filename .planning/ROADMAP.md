@@ -460,7 +460,7 @@ Plans:
 4. A multi-round Oracle question visibly targets uncertainty, reports confidence and contradictions, detects diminishing returns, and produces a source-grounded final synthesis.
 5. Useful partial Swarm/Oracle work, activity, learning, plan research, and local Dreams remain durable, discoverable, and accurately labelled rather than discarded or called verified.
 
-**Plans:** 13/15 plans executed
+**Plans:** 14/15 plans executed
 
 Plans:
 **Wave 1**
@@ -499,7 +499,7 @@ Plans:
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 202-14-PLAN.md — Status and history surface every episode, synthesis and unproven note
+- [x] 202-14-PLAN.md — Status and history surface every episode, synthesis and unproven note
 
 **Wave 9** *(blocked on Wave 8 completion)*
 
