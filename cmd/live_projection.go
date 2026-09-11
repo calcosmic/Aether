@@ -18,6 +18,14 @@ import (
 // snapshot for cockpit rendering.
 const colonyLiveTickerLimit = 20
 
+// colonyLiveRawReadCalls counts calls to readColonyLiveEventsRaw, the one
+// place this package reads the persisted live-event file. It exists so a
+// test can prove the dashboard and the ticker are built from one replay --
+// count this before and after a render call, not before and after a
+// resolveWatchMode call, which legitimately reads twice (once to find the
+// latest episode ID, once to replay it).
+var colonyLiveRawReadCalls int
+
 // colonyLiveEventBusFile is the persisted JSONL filename events.Bus writes
 // live.* (and every other) event to, relative to the store's base path.
 // Matches events.DefaultConfig().JSONLFile.
@@ -223,6 +231,7 @@ func replayColonyLiveSnapshotResume(ctx context.Context, s *storage.Store, episo
 // cmd/lifecycle_facts.go's readLifecycleJSON/readLifecycleActors, which
 // exist for exactly the same reason.
 func readColonyLiveEventsRaw(s *storage.Store, since time.Time) []events.Event {
+	colonyLiveRawReadCalls++
 	if s == nil {
 		return nil
 	}

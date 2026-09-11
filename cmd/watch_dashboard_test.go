@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -136,7 +137,7 @@ func TestLiveDashboardRendersDeterministically(t *testing.T) {
 	state := newColonyLiveDashboardFixtureState("Aether", 7, colony.StateEXECUTING)
 	snapshot := colonyLiveSnapshot{
 		EpisodeID: "ep-det", EpisodeKind: "build", Wave: 1, StartedAt: "2026-01-01T00:00:00Z", ElapsedSeconds: 12,
-		Workers: []colonyLiveWorkerRow{{WorkerID: "Mason-1", WorkerName: "Mason-1", Caste: "builder", Wave: 1, Status: "active", StartedAt: "2026-01-01T00:00:00Z"}},
+		Workers:       []colonyLiveWorkerRow{{WorkerID: "Mason-1", WorkerName: "Mason-1", Caste: "builder", Wave: 1, Status: "active", StartedAt: "2026-01-01T00:00:00Z"}},
 		LastTimestamp: "2026-01-01T00:00:30Z",
 	}
 	ledger := spendLedger{Phase: 7, Workflow: spendWorkflowBuild, Rows: []spendRow{{AgentName: "Mason-1", Caste: "builder", Status: "completed"}}}
@@ -188,5 +189,100 @@ func TestLiveDashboardDrillDown(t *testing.T) {
 	}
 	if strings.Contains(rendered, "tracker-workspace") {
 		t.Errorf("drill-down by worker identity leaked the non-selected worker's detail:\n%s", rendered)
+	}
+}
+
+// --- Task 2: renderColonyLiveTicker -----------------------------------------
+
+// TestLiveTickerIsBoundedAndNewestLast proves the ticker renders exactly
+// colonyLiveTickerLimit lines, ending with the newest, when more events
+// than the bound were emitted -- and exactly as many lines as it has when
+// fewer were emitted.
+func TestLiveTickerIsBoundedAndNewestLast(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	episodeID := "ticker-bound-test"
+	total := colonyLiveTickerLimit + 5
+	for i := 0; i < total; i++ {
+		emitColonyLive(events.LiveTopicWorkerProgress, events.ColonyLivePayload{
+			EpisodeID: episodeID, EpisodeKind: "swarm", WorkerID: fmt.Sprintf("Worker-%d", i), WorkerName: fmt.Sprintf("Worker-%d", i),
+		})
+	}
+
+	_, snapshot := resolveWatchMode(context.Background(), s, time.Now().UTC())
+	if len(snapshot.Ticker) != colonyLiveTickerLimit {
+		t.Fatalf("snapshot.Ticker has %d entries, want exactly the bound %d", len(snapshot.Ticker), colonyLiveTickerLimit)
+	}
+	last := snapshot.Ticker[len(snapshot.Ticker)-1]
+	if last.WorkerID != fmt.Sprintf("Worker-%d", total-1) {
+		t.Fatalf("last ticker entry is %q, want the most recently emitted worker %q", last.WorkerID, fmt.Sprintf("Worker-%d", total-1))
+	}
+
+	rendered := renderColonyLiveTicker(snapshot.Ticker)
+	lineCount := strings.Count(rendered, "\n") - 1 // subtract the stage-marker line
+	if lineCount != colonyLiveTickerLimit {
+		t.Fatalf("rendered ticker has %d lines, want exactly the bound %d:\n%s", lineCount, colonyLiveTickerLimit, rendered)
+	}
+
+	// Fewer events than the bound: exactly that many lines, no filler.
+	saveGlobals(t)
+	s2, _ := newTestStore(t)
+	store = s2
+	episodeID2 := "ticker-under-bound-test"
+	for i := 0; i < 3; i++ {
+		emitColonyLive(events.LiveTopicWorkerProgress, events.ColonyLivePayload{
+			EpisodeID: episodeID2, EpisodeKind: "swarm", WorkerID: fmt.Sprintf("Worker-%d", i), WorkerName: fmt.Sprintf("Worker-%d", i),
+		})
+	}
+	_, snapshot2 := resolveWatchMode(context.Background(), s2, time.Now().UTC())
+	rendered2 := renderColonyLiveTicker(snapshot2.Ticker)
+	lineCount2 := strings.Count(rendered2, "\n") - 1
+	if lineCount2 != 3 {
+		t.Fatalf("rendered ticker with 3 emitted events has %d lines, want exactly 3, no filler:\n%s", lineCount2, rendered2)
+	}
+}
+
+// TestLiveTickerAndDashboardShareOneReplay proves rendering the dashboard
+// (which includes the ticker) performs no additional read of the
+// persisted live-event file beyond the single replay that already
+// produced the snapshot passed in.
+func TestLiveTickerAndDashboardShareOneReplay(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	episodeID := "ticker-one-replay-test"
+	emitColonyLive(events.LiveTopicWorkerStarted, events.ColonyLivePayload{EpisodeID: episodeID, EpisodeKind: "swarm", WorkerID: "Scout-1", WorkerName: "Scout-1", Caste: "scout"})
+
+	_, snapshot := resolveWatchMode(context.Background(), s, time.Now().UTC())
+	state := newColonyLiveDashboardFixtureState("Aether", 1, colony.StateEXECUTING)
+
+	before := colonyLiveRawReadCalls
+	_ = renderColonyLiveDashboard(snapshot, state, nil, colonyLiveDrillSelector{})
+	after := colonyLiveRawReadCalls
+	if after != before {
+		t.Fatalf("renderColonyLiveDashboard performed %d additional read(s) of the persisted live-event file; it must render from the already-replayed snapshot alone", after-before)
+	}
+}
+
+// TestLiveTickerLinesArePlainEnglish proves every declared live.* topic's
+// rendered ticker description is ordinary English, never the raw dotted
+// topic string.
+func TestLiveTickerLinesArePlainEnglish(t *testing.T) {
+	for _, topic := range events.ColonyLiveTopics() {
+		entry := colonyLiveTickerEntry{Topic: topic, Timestamp: "2026-01-01T00:00:00Z", WorkerID: "Scout-1", Caste: "scout", Status: "completed"}
+		description := colonyLiveTickerDescription(entry)
+		if description == "" {
+			t.Errorf("topic %q has no rendered description", topic)
+		}
+		if strings.Contains(description, "live.") {
+			t.Errorf("topic %q rendered %q -- the raw repository topic vocabulary leaked into owner-facing text", topic, description)
+		}
+		line := renderColonyLiveTickerLine(entry)
+		if !strings.Contains(line, entry.Timestamp) {
+			t.Errorf("rendered ticker line for %q missing its timestamp:\n%q", topic, line)
+		}
 	}
 }
