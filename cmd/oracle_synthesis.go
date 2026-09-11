@@ -81,6 +81,13 @@ func validateOracleSynthesisConclusions(conclusions []oracleSynthesisConclusion,
 	return nil
 }
 
+// oracleEmptyRunTopic names what an empty run was even trying to answer, for
+// the owner-facing "gathered no evidence" message -- falls back to a plain
+// phrase when even the topic was never recorded.
+func oracleEmptyRunTopic(state oracleStateFile) string {
+	return emptyFallback(strings.TrimSpace(state.CoreQuestion), emptyFallback(strings.TrimSpace(state.Topic), "this research run"))
+}
+
 // oracleSynthesisSourceRound finds the earliest round (iteration) whose
 // recorded finding cited this source -- "the round that produced it." A
 // source no finding currently cites reports round 0.

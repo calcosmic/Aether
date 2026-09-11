@@ -1399,6 +1399,11 @@ func finalizeOracleResearchArtifacts(paths oraclePaths, state oracleStateFile, p
 
 	body, readErr := os.ReadFile(paths.SynthesisPath)
 	if readErr != nil || strings.TrimSpace(string(body)) == "" {
+		// 202-12 (LIVE-07): a run that gathered no evidence writes no
+		// synthesis document at all -- this is reported to the owner as an
+		// empty run, naming what it tried, not as a silent no-op or an
+		// unverified synthesis.
+		emitVisualLine(fmt.Sprintf("ℹ %s: this run gathered no evidence, so nothing was written -- nothing to save", oracleEmptyRunTopic(state)))
 		return ""
 	}
 

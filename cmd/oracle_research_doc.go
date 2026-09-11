@@ -166,6 +166,18 @@ func saveOracleResearchDocument(paths oraclePaths, state oracleStateFile, plan o
 		return "", fmt.Errorf("no research to save: %s is empty", paths.SynthesisPath)
 	}
 
+	// 202-12 (LIVE-07, D-10): the durable document's body is the
+	// recommendation-first synthesis, not the raw per-template write-up --
+	// the existing per-template report (tech-eval/generic/etc, still written
+	// to paths.SynthesisPath by writeOracleSynthesisReport) becomes the
+	// document's closing evidence-trail section rather than the whole body.
+	// A conclusion citing a source not in plan.Sources refuses here, naming
+	// the conclusion, before anything is written to disk.
+	synthesized, synthErr := renderOracleFinalSynthesis(state, plan, string(body))
+	if synthErr != nil {
+		return "", synthErr
+	}
+
 	slug := strings.TrimSpace(name)
 	if slug == "" {
 		slug = strings.TrimSpace(state.CoreQuestion)
@@ -189,7 +201,7 @@ func saveOracleResearchDocument(paths oraclePaths, state oracleStateFile, plan o
 	if rel, relErr := filepath.Rel(paths.Root, paths.Dir); relErr == nil {
 		sourceWorkspace = rel
 	}
-	document := renderOracleResearchDocument(state, plan, string(body), sourceWorkspace)
+	document := renderOracleResearchDocument(state, plan, synthesized, sourceWorkspace)
 	if err := os.WriteFile(target, []byte(document), 0644); err != nil {
 		return "", fmt.Errorf("write research document: %w", err)
 	}
@@ -223,7 +235,11 @@ func runOracleSave(root, name string, dryRun bool) (map[string]interface{}, erro
 		if slug == "" {
 			slug = emptyFallback(strings.TrimSpace(state.CoreQuestion), state.Topic)
 		}
-		preview := renderOracleResearchDocument(state, plan, string(body), "")
+		synthesized, synthErr := renderOracleFinalSynthesis(state, plan, string(body))
+		if synthErr != nil {
+			return nil, synthErr
+		}
+		preview := renderOracleResearchDocument(state, plan, synthesized, "")
 		return map[string]interface{}{
 			"mode":         "save",
 			"dry_run":      true,

@@ -1,6 +1,13 @@
 package cmd
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -109,6 +116,120 @@ func TestSynthesisCarriesTheStandingLabelInTheFirstSection(t *testing.T) {
 	recSection := doc[:strings.Index(doc, "## Confidence")]
 	if !strings.Contains(recSection, "partial — stopped after 3 rounds") {
 		t.Fatalf("early-stopped run's standing label is not inside the first section:\n%s", recSection)
+	}
+}
+
+func TestSynthesisSourcesCarryRoundAndKind(t *testing.T) {
+	state, plan := oracleSynthesisFixture()
+	doc, err := renderOracleFinalSynthesis(state, plan, "")
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	sourcesSection := doc[strings.Index(doc, "## Sources"):strings.Index(doc, "## Evidence Trail")]
+	for _, want := range []string{"Official docs", "https://example.com/docs", "official", "round 2"} {
+		if !strings.Contains(sourcesSection, want) {
+			t.Errorf("sources section missing %q:\n%s", want, sourcesSection)
+		}
+	}
+}
+
+func TestUnsupportedConclusionIsRefusedByName(t *testing.T) {
+	state, plan := oracleSynthesisFixture()
+	// Corrupt one finding to cite a source ID the plan never recorded.
+	q := plan.Questions[0]
+	q.KeyFindings = append([]oracleFinding{{Text: "A dangling claim with no real source.", SourceIDs: []string{"S9"}}}, q.KeyFindings...)
+	plan.Questions[0] = q
+
+	_, err := renderOracleFinalSynthesis(state, plan, "")
+	if err == nil {
+		t.Fatal("render accepted a conclusion citing a source the plan never recorded")
+	}
+	if !strings.Contains(err.Error(), "A dangling claim with no real source.") {
+		t.Errorf("refusal did not name the offending conclusion: %v", err)
+	}
+}
+
+// directoryDigest hashes every file under root by relative path, size and
+// content, so a test can prove a directory is byte-identical before and
+// after an operation rather than merely "still exists."
+func directoryDigest(t *testing.T, root string) string {
+	t.Helper()
+	var paths []string
+	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		rel, relErr := filepath.Rel(root, path)
+		if relErr != nil {
+			rel = path
+		}
+		paths = append(paths, rel)
+		return nil
+	})
+	sort.Strings(paths)
+	h := sha256.New()
+	for _, rel := range paths {
+		data, err := os.ReadFile(filepath.Join(root, rel))
+		if err != nil {
+			t.Fatalf("digest read %s: %v", rel, err)
+		}
+		fmt.Fprintf(h, "%s:%d:", rel, len(data))
+		h.Write(data)
+	}
+	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
+func TestEmptyResearchRunWritesNoDocument(t *testing.T) {
+	root := t.TempDir()
+	paths := oracleWorkspacePaths(root)
+	if err := ensureOracleWorkspace(paths); err != nil {
+		t.Fatalf("ensure workspace: %v", err)
+	}
+	// synthesis.md is deliberately never written -- this run gathered
+	// nothing.
+	state := oracleStateFile{Topic: "an unexplored idea", Status: "stopped", Iteration: 1}
+	plan := oraclePlanFile{Sources: map[string]oracleSource{}}
+
+	before := directoryDigest(t, root)
+	saved := finalizeOracleResearchArtifacts(paths, state, plan)
+	after := directoryDigest(t, root)
+
+	if saved != "" {
+		t.Fatalf("an empty run reported a saved document: %q", saved)
+	}
+	if before != after {
+		t.Fatal("an empty run changed the workspace directory")
+	}
+	if _, err := os.Stat(oracleResearchDir(root)); !os.IsNotExist(err) {
+		t.Fatal("an empty run created the research directory")
+	}
+}
+
+func TestEmptyResearchRunIsReportedAsEmpty(t *testing.T) {
+	root := t.TempDir()
+	paths := oracleWorkspacePaths(root)
+	if err := ensureOracleWorkspace(paths); err != nil {
+		t.Fatalf("ensure workspace: %v", err)
+	}
+	state := oracleStateFile{Topic: "cache eviction policy", Status: "stopped", Iteration: 2}
+	plan := oraclePlanFile{Sources: map[string]oracleSource{}}
+
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	oldStdout := stdout
+	var buf bytes.Buffer
+	stdout = &buf
+	t.Cleanup(func() { stdout = oldStdout })
+
+	saved := finalizeOracleResearchArtifacts(paths, state, plan)
+	if saved != "" {
+		t.Fatalf("an empty run reported a saved document: %q", saved)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "cache eviction policy") {
+		t.Errorf("empty-run message did not name the topic:\n%s", out)
+	}
+	if !strings.Contains(out, "no evidence") {
+		t.Errorf("empty-run message did not say why nothing was written:\n%s", out)
 	}
 }
 
