@@ -601,6 +601,11 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 		StrikeStanding:     strikeStanding,
 		SpawnRunID:         spawnRunIDFrom(runHandle),
 	})
+	// D-CAP-045: the proposer runs once, here, on the same path that
+	// persists the episode -- attached to the record BEFORE the one write,
+	// so persisting the episode and offering its learning proposal (if any)
+	// is a single atomic step rather than a second write.
+	episode.LearningProposal = proposeSwarmLearningFromEpisode(episode)
 	if episodeErr := persistSwarmEpisode(store, episode); episodeErr != nil {
 		fmt.Fprintf(os.Stderr, "warning: could not persist swarm episode for %q: %v\n", target, episodeErr)
 	}

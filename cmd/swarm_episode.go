@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
 )
 
@@ -101,11 +102,11 @@ type swarmEpisodeRetentionMeta struct {
 // swarmLearningProposal is Task 3's scoped focus/avoid-this offer, attached
 // to the episode as a proposal only -- see proposeSwarmLearningFromEpisode.
 type swarmLearningProposal struct {
-	Kind       string   `json:"kind"`
-	Scope      string   `json:"scope"`
-	Text       string   `json:"text"`
-	Lenses     []string `json:"lenses,omitempty"`
-	EpisodeID  string   `json:"episode_id"`
+	Kind      string   `json:"kind"`
+	Scope     string   `json:"scope"`
+	Text      string   `json:"text"`
+	Lenses    []string `json:"lenses,omitempty"`
+	EpisodeID string   `json:"episode_id"`
 }
 
 // swarmEpisodeRecord is the one durable, replay-safe record of a single
@@ -123,8 +124,8 @@ type swarmEpisodeRecord struct {
 	StartedAt         string `json:"started_at"`
 	EndedAt           string `json:"ended_at"`
 
-	Lenses     []swarmEpisodeLens `json:"lenses"`
-	Hypotheses []swarmHypothesis  `json:"hypotheses,omitempty"`
+	Lenses     []swarmEpisodeLens     `json:"lenses"`
+	Hypotheses []swarmHypothesis      `json:"hypotheses,omitempty"`
 	Comparison swarmEpisodeComparison `json:"comparison"`
 
 	Checkpoint swarmEpisodeCheckpoint `json:"checkpoint"`
@@ -149,18 +150,18 @@ type swarmEpisodeRecord struct {
 // restore-failure completion, the ordinary success completion, and each of
 // the three interrupted branches) that each fill a different subset.
 type swarmEpisodeBuildParams struct {
-	SwarmID             string
-	Target              string
-	Status              string
-	InterruptedStage    string
-	StartedAt           time.Time
-	EndedAt             time.Time
-	Comparison          swarmComparison
-	CheckpointSaved     bool
-	CheckpointRestored  bool
-	VerificationStatus  string
-	StrikeStanding      swarmStrikeHistory
-	SpawnRunID          string
+	SwarmID            string
+	Target             string
+	Status             string
+	InterruptedStage   string
+	StartedAt          time.Time
+	EndedAt            time.Time
+	Comparison         swarmComparison
+	CheckpointSaved    bool
+	CheckpointRestored bool
+	VerificationStatus string
+	StrikeStanding     swarmStrikeHistory
+	SpawnRunID         string
 }
 
 // swarmEpisodePath is the one path an episode is ever written to or read
@@ -319,18 +320,18 @@ func spawnRunIDFrom(handle *runtimeSpawnRun) string {
 func persistInterruptedSwarmEpisode(swarmID, target, stage string, startedAt time.Time, comparison swarmComparison, checkpointSaved bool, spawnRunID string) {
 	strikeStanding, _ := evaluateSwarmStrikeHistory(store, target)
 	record := buildSwarmEpisodeRecord(swarmEpisodeBuildParams{
-		SwarmID:             swarmID,
-		Target:              target,
-		Status:              swarmEpisodeStatusInterrupted,
-		InterruptedStage:    stage,
-		StartedAt:           startedAt,
-		EndedAt:             time.Now().UTC(),
-		Comparison:          comparison,
-		CheckpointSaved:     checkpointSaved,
-		CheckpointRestored:  false,
-		VerificationStatus:  "not_run",
-		StrikeStanding:      strikeStanding,
-		SpawnRunID:          spawnRunID,
+		SwarmID:            swarmID,
+		Target:             target,
+		Status:             swarmEpisodeStatusInterrupted,
+		InterruptedStage:   stage,
+		StartedAt:          startedAt,
+		EndedAt:            time.Now().UTC(),
+		Comparison:         comparison,
+		CheckpointSaved:    checkpointSaved,
+		CheckpointRestored: false,
+		VerificationStatus: "not_run",
+		StrikeStanding:     strikeStanding,
+		SpawnRunID:         spawnRunID,
 	})
 	if err := persistSwarmEpisode(store, record); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: could not persist interrupted swarm episode for %q: %v\n", target, err)
@@ -556,4 +557,97 @@ func removeSwarmEpisodes(s *storage.Store, requests []swarmEpisodeRemovalRequest
 		removed = append(removed, v.swarmID)
 	}
 	return swarmEpisodeRemovalResult{Removed: removed}, nil
+}
+
+// --- Task 3: propose a scoped note from successful evidence, without
+// claiming it worked (CAP-045) ---
+
+// swarmLearningProposalKindFocus and swarmLearningProposalKindAvoid are the
+// only two proposal kinds proposeSwarmLearningFromEpisode ever produces:
+// naming an area the corroborated hypotheses agreed on, or naming the
+// pattern a non-selected candidate shared, whichever the episode's own
+// comparison supports.
+const (
+	swarmLearningProposalKindFocus = "focus"
+	swarmLearningProposalKindAvoid = "avoid"
+)
+
+// proposeSwarmLearningFromEpisode derives at most one proposed note from an
+// episode whose repair passed verification, was never rolled back, and had
+// usable evidence behind it. Every other case -- a failed repair, a
+// restored (rolled-back) repair, or no selected repair at all -- proposes
+// nothing, because there is nothing corroborated to offer.
+//
+// When the investigation's hypotheses shared an agreed cause
+// (Comparison.SharedCauses), the proposal is a focus note naming that area.
+// Otherwise, when the ranking produced a runner-up candidate that was
+// considered but not selected, the proposal is an avoid-this note naming
+// the pattern that runner-up shared. Absent both -- a single, unshared
+// hypothesis with no runner-up -- nothing is proposed; a lone claim is not
+// corroboration.
+//
+// The proposal is attached to the episode as a PROPOSAL only: nothing here
+// writes an active pheromone signal, and no field on swarmLearningProposal
+// asserts the note was applied, used, or effective -- measuring that is the
+// next phase's boundary (202-CLASSIC-SYNTHESIS.md).
+func proposeSwarmLearningFromEpisode(episode swarmEpisodeRecord) *swarmLearningProposal {
+	if episode.Status != swarmEpisodeStatusCompleted {
+		return nil
+	}
+	if episode.VerificationStatus != "completed" {
+		return nil
+	}
+	if episode.Checkpoint.Restored {
+		// The repair was rolled back -- verification did not actually hold.
+		return nil
+	}
+	if episode.Comparison.Selected == nil {
+		return nil
+	}
+	if len(episode.Hypotheses) == 0 {
+		return nil
+	}
+
+	var kind, scope string
+	var lenses []string
+	var text string
+	switch {
+	case len(episode.Comparison.SharedCauses) > 0:
+		cause := episode.Comparison.SharedCauses[0]
+		kind = swarmLearningProposalKindFocus
+		scope = cause.Cause
+		lenses = append([]string{}, cause.Lenses...)
+		text = fmt.Sprintf(
+			"Swarm run %s corroborated and successfully repaired an issue related to: %s. Consider giving this area extra attention.",
+			episode.SwarmID, scope,
+		)
+	case len(episode.Comparison.Ranked) > 1:
+		runnerUp := episode.Comparison.Ranked[1]
+		kind = swarmLearningProposalKindAvoid
+		scope = runnerUp.Repair
+		lenses = append([]string{}, runnerUp.Lenses...)
+		text = fmt.Sprintf(
+			"Swarm run %s applied a different repair than %q, which was considered but not selected. Consider avoiding that pattern here.",
+			episode.SwarmID, scope,
+		)
+	default:
+		// A single, unshared hypothesis with no runner-up: nothing to offer.
+		return nil
+	}
+
+	sanitized, err := colony.SanitizeSignalContent(text)
+	if err != nil {
+		// Worker-authored text that fails sanitization is dropped rather
+		// than stored unsanitized or with a fallback wording that could
+		// itself carry the rejected content.
+		return nil
+	}
+
+	return &swarmLearningProposal{
+		Kind:      kind,
+		Scope:     scope,
+		Text:      sanitized,
+		Lenses:    lenses,
+		EpisodeID: episode.SwarmID,
+	}
 }

@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -653,5 +655,271 @@ func TestSwarmRemovalLeavesStrikeHistoryUnchanged(t *testing.T) {
 	resultPath := filepath.Join(s.BasePath(), "swarms", oldID, "result.json")
 	if _, err := os.Stat(resultPath); err != nil {
 		t.Fatalf("expected result.json to survive episode removal: %v", err)
+	}
+}
+
+// --- Task 3: propose a scoped note from successful evidence ---
+
+// swarmSharedCauseInvoker is a Task-3-only worker fixture: unlike
+// swarmTestInvoker, tracker and scout deliberately report the SAME root
+// cause claim, so the investigation wave's comparison finds a genuine
+// shared cause (compareSwarmHypotheses' SharedCauses) -- the condition
+// proposeSwarmLearningFromEpisode's focus-note branch requires.
+type swarmSharedCauseInvoker struct {
+	configs []codex.WorkerConfig
+}
+
+func (i *swarmSharedCauseInvoker) Invoke(_ context.Context, cfg codex.WorkerConfig) (codex.WorkerResult, error) {
+	i.configs = append(i.configs, cfg)
+
+	response := swarmWorkerResponse{
+		Role:    cfg.Caste,
+		Status:  "completed",
+		Summary: cfg.Caste + " completed the swarm pass.",
+	}
+	result := codex.WorkerResult{
+		WorkerName: cfg.WorkerName,
+		Caste:      cfg.Caste,
+		TaskID:     cfg.TaskID,
+		Status:     "completed",
+		Duration:   time.Second,
+	}
+
+	switch cfg.Caste {
+	case "tracker", "scout":
+		response.RootCause = "a shared root cause both lenses independently found"
+		response.Summary = cfg.Caste + " found the shared root cause."
+	case "archaeologist":
+		response.RootCause = "an archaeologist-only finding, not shared with anyone else"
+	case "builder":
+		response.ProposedFix = "apply the fix for the shared root cause"
+		response.FilesTouched = []string{"pkg/example.go"}
+		response.TestsWritten = []string{"pkg/example_test.go"}
+	case "watcher":
+		response.Verification = []string{"go test ./pkg/example"}
+	}
+	result.Summary = response.Summary
+
+	if strings.TrimSpace(cfg.ResponsePath) == "" {
+		return codex.WorkerResult{}, context.Canceled
+	}
+	if err := os.MkdirAll(filepath.Dir(cfg.ResponsePath), 0755); err != nil {
+		return codex.WorkerResult{}, err
+	}
+	data, err := json.MarshalIndent(response, "", "  ")
+	if err != nil {
+		return codex.WorkerResult{}, err
+	}
+	if err := os.WriteFile(cfg.ResponsePath, append(data, '\n'), 0644); err != nil {
+		return codex.WorkerResult{}, err
+	}
+	return result, nil
+}
+
+func (i *swarmSharedCauseInvoker) IsAvailable(_ context.Context) bool { return true }
+func (i *swarmSharedCauseInvoker) ValidateAgent(_ string) error       { return nil }
+
+// fileDigestIfExists hashes a file's content, or a fixed sentinel when the
+// file does not exist -- so "before" and "after" digests are comparable
+// even when the file is created or deleted between them.
+func fileDigestIfExists(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return "absent"
+	}
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}
+
+func TestSuccessfulSwarmProposesOneScopedNote(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to test root: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	goal := "Fix a bug"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{
+				ID:     1,
+				Name:   "Bug fix",
+				Status: colony.PhaseReady,
+				Tasks:  []colony.Task{{ID: &taskID, Goal: "Fix the bug", Status: colony.TaskPending}},
+			}},
+		},
+	})
+
+	originalInvoker := newSwarmWorkerInvoker
+	invoker := &swarmSharedCauseInvoker{}
+	newSwarmWorkerInvoker = func() codex.WorkerInvoker { return invoker }
+	defer func() { newSwarmWorkerInvoker = originalInvoker }()
+
+	pheromonesPath := filepath.Join(dataDir, "pheromones.json")
+	beforeDigest := fileDigestIfExists(t, pheromonesPath)
+
+	var buf bytes.Buffer
+	stdout = &buf
+
+	target := "Learning proposal fixture target"
+	rootCmd.SetArgs([]string{"swarm", target})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("swarm returned error: %v", err)
+	}
+	env := parseEnvelope(t, buf.String())
+	result := env["result"].(map[string]interface{})
+	swarmID, _ := result["swarm_id"].(string)
+	if strings.TrimSpace(swarmID) == "" {
+		t.Fatalf("expected swarm_id in result, got %v", result)
+	}
+
+	episode, ok := loadSwarmEpisode(store, swarmID)
+	if !ok {
+		t.Fatalf("could not load episode for %s", swarmID)
+	}
+	if episode.LearningProposal == nil {
+		t.Fatalf("expected exactly one learning proposal on a passing run, got none")
+	}
+	if episode.LearningProposal.Kind != swarmLearningProposalKindFocus {
+		t.Fatalf("proposal kind = %q, want %q", episode.LearningProposal.Kind, swarmLearningProposalKindFocus)
+	}
+	if !strings.Contains(episode.LearningProposal.Scope, "shared root cause") {
+		t.Fatalf("proposal scope = %q, want it to name the corroborated area", episode.LearningProposal.Scope)
+	}
+	if episode.LearningProposal.EpisodeID != swarmID {
+		t.Fatalf("proposal episode id = %q, want %q", episode.LearningProposal.EpisodeID, swarmID)
+	}
+
+	afterDigest := fileDigestIfExists(t, pheromonesPath)
+	if beforeDigest != afterDigest {
+		t.Fatalf("pheromones.json changed even though a proposal must never write an active signal: before=%s after=%s", beforeDigest, afterDigest)
+	}
+}
+
+func TestFailedOrRolledBackSwarmProposesNothing(t *testing.T) {
+	base := swarmEpisodeRecord{
+		SwarmID: "swarm-learning-base",
+		Status:  swarmEpisodeStatusCompleted,
+		Hypotheses: []swarmHypothesis{
+			{Lens: swarmLensErrorPath, Claim: "a cause"},
+		},
+		Comparison: swarmEpisodeComparison{
+			Selected: &swarmRankedRepair{Repair: "apply fix", Lenses: []string{swarmLensErrorPath}},
+		},
+	}
+
+	failed := base
+	failed.VerificationStatus = "failed"
+	if p := proposeSwarmLearningFromEpisode(failed); p != nil {
+		t.Fatalf("expected no proposal for a failed repair, got %+v", p)
+	}
+
+	rolledBack := base
+	rolledBack.VerificationStatus = "completed"
+	rolledBack.Checkpoint = swarmEpisodeCheckpoint{Saved: true, Restored: true}
+	if p := proposeSwarmLearningFromEpisode(rolledBack); p != nil {
+		t.Fatalf("expected no proposal for a rolled-back repair, got %+v", p)
+	}
+
+	noEvidence := base
+	noEvidence.VerificationStatus = "not_run"
+	noEvidence.Comparison = swarmEpisodeComparison{}
+	noEvidence.Hypotheses = nil
+	if p := proposeSwarmLearningFromEpisode(noEvidence); p != nil {
+		t.Fatalf("expected no proposal for a no-evidence run, got %+v", p)
+	}
+}
+
+func TestSwarmLearningProposalIsSanitized(t *testing.T) {
+	dirtyClaim := "the counter never resets when count < threshold and result > expected"
+	episode := swarmEpisodeRecord{
+		SwarmID:            "swarm-learning-sanitize",
+		Status:             swarmEpisodeStatusCompleted,
+		VerificationStatus: "completed",
+		Hypotheses: []swarmHypothesis{
+			{Lens: swarmLensErrorPath, Claim: dirtyClaim},
+			{Lens: swarmLensPattern, Claim: dirtyClaim},
+		},
+		Comparison: swarmEpisodeComparison{
+			SharedCauses: []swarmSharedCause{{Cause: dirtyClaim, Lenses: []string{swarmLensErrorPath, swarmLensPattern}}},
+			Selected:     &swarmRankedRepair{Repair: "apply fix", Lenses: []string{swarmLensErrorPath}},
+		},
+	}
+
+	proposal := proposeSwarmLearningFromEpisode(episode)
+	if proposal == nil {
+		t.Fatalf("expected a proposal to be produced")
+	}
+
+	unsanitized := fmt.Sprintf(
+		"Swarm run %s corroborated and successfully repaired an issue related to: %s. Consider giving this area extra attention.",
+		episode.SwarmID, dirtyClaim,
+	)
+	expected, err := colony.SanitizeSignalContent(unsanitized)
+	if err != nil {
+		t.Fatalf("sanitize fixture text: %v", err)
+	}
+	if proposal.Text != expected {
+		t.Fatalf("proposal text was not sanitized as the sanitizer itself would produce:\ngot:  %q\nwant: %q", proposal.Text, expected)
+	}
+	if proposal.Text == unsanitized {
+		t.Fatalf("proposal text equals the unsanitized input -- sanitization did not run")
+	}
+	if strings.Contains(proposal.Text, "<") || strings.Contains(proposal.Text, ">") {
+		t.Fatalf("proposal text still contains raw angle brackets: %q", proposal.Text)
+	}
+}
+
+func TestSwarmLearningProposalClaimsNoEffect(t *testing.T) {
+	episode := swarmEpisodeRecord{
+		SwarmID:            "swarm-learning-no-effect",
+		Status:             swarmEpisodeStatusCompleted,
+		VerificationStatus: "completed",
+		Hypotheses: []swarmHypothesis{
+			{Lens: swarmLensErrorPath, Claim: "corroborated cause"},
+			{Lens: swarmLensPattern, Claim: "corroborated cause"},
+		},
+		Comparison: swarmEpisodeComparison{
+			SharedCauses: []swarmSharedCause{{Cause: "corroborated cause", Lenses: []string{swarmLensErrorPath, swarmLensPattern}}},
+			Selected:     &swarmRankedRepair{Repair: "apply fix", Lenses: []string{swarmLensErrorPath}},
+		},
+	}
+
+	proposal := proposeSwarmLearningFromEpisode(episode)
+	if proposal == nil {
+		t.Fatalf("expected a proposal to be produced")
+	}
+
+	data, err := json.Marshal(proposal)
+	if err != nil {
+		t.Fatalf("marshal proposal: %v", err)
+	}
+	var fields map[string]interface{}
+	if err := json.Unmarshal(data, &fields); err != nil {
+		t.Fatalf("unmarshal proposal: %v", err)
+	}
+	for _, forbidden := range []string{"applied", "used", "effective", "effect", "worked"} {
+		for key := range fields {
+			if strings.Contains(strings.ToLower(key), forbidden) {
+				t.Fatalf("proposal carries a field named %q, which asserts a measured effect -- forbidden", key)
+			}
+		}
 	}
 }
