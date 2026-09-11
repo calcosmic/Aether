@@ -333,6 +333,9 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 	})
 	investigationRuns, err := executeSwarmWave(ctx, root, swarmID, target, investigation, "", invoker, true)
 	if err != nil {
+		partialHypotheses, partialMissing := hypothesesFromSwarmRuns(investigationRuns)
+		persistInterruptedSwarmEpisode(swarmID, target, swarmEpisodeStageInvestigation, startedAt,
+			compareSwarmHypotheses(partialHypotheses, partialMissing), false, spawnRunIDFrom(runHandle))
 		if ctx.Err() != nil {
 			runStatus = "timeout"
 			return nil, fmt.Errorf("swarm stopped: %w", ctx.Err())
@@ -345,6 +348,12 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 		Wave:        investigationWave,
 		Status:      "completed",
 	})
+
+	// D-08/LIVE-05 test seam: a no-op in production, called here so a test
+	// can cancel this run's own context right at the investigation/fix
+	// boundary -- see swarmMidRunInterruptFunc's doc comment
+	// (cmd/swarm_episode.go).
+	swarmMidRunInterruptFunc(cancel)
 
 	findingSummary := renderSwarmFindingSummary(investigationRuns)
 
@@ -373,7 +382,7 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 		blockers = swarmCompactStrings(blockers)
 		recommendation := "No repair was applied: none of the four investigation lenses produced usable evidence."
 		next := swarmNextCommand(state, "failed")
-		if _, err := persistSwarmResultOutcome(store, swarmResultRecord{
+		strikeStanding, err := persistSwarmResultOutcome(store, swarmResultRecord{
 			SwarmID:        swarmID,
 			Target:         target,
 			Status:         "failed",
@@ -383,8 +392,24 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 			Tests:          testsWritten,
 			Blockers:       blockers,
 			CompletedAt:    time.Now().UTC().Format(time.RFC3339Nano),
-		}); err != nil {
+		})
+		if err != nil {
 			return nil, fmt.Errorf("write and evaluate swarm result: %w", err)
+		}
+		if persistErr := persistSwarmEpisode(store, buildSwarmEpisodeRecord(swarmEpisodeBuildParams{
+			SwarmID:            swarmID,
+			Target:             target,
+			Status:             swarmEpisodeStatusCompleted,
+			StartedAt:          startedAt,
+			EndedAt:            time.Now().UTC(),
+			Comparison:         comparison,
+			CheckpointSaved:    false,
+			CheckpointRestored: false,
+			VerificationStatus: "not_run",
+			StrikeStanding:     strikeStanding,
+			SpawnRunID:         spawnRunIDFrom(runHandle),
+		})); persistErr != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not persist swarm episode for %q: %v\n", target, persistErr)
 		}
 		result := map[string]interface{}{
 			"mode":                "destroy",
@@ -429,6 +454,7 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 		if haveCheckpoint {
 			os.RemoveAll(checkpoint.BackupDir)
 		}
+		persistInterruptedSwarmEpisode(swarmID, target, swarmEpisodeStageFix, startedAt, comparison, haveCheckpoint, spawnRunIDFrom(runHandle))
 		if ctx.Err() != nil {
 			runStatus = "timeout"
 			return nil, fmt.Errorf("swarm stopped: %w", ctx.Err())
@@ -444,6 +470,7 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 		if haveCheckpoint {
 			os.RemoveAll(checkpoint.BackupDir)
 		}
+		persistInterruptedSwarmEpisode(swarmID, target, swarmEpisodeStageVerification, startedAt, comparison, haveCheckpoint, spawnRunIDFrom(runHandle))
 		if ctx.Err() != nil {
 			runStatus = "timeout"
 			return nil, fmt.Errorf("swarm stopped: %w", ctx.Err())
@@ -463,6 +490,7 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 		return nil, verificationErr
 	}
 	repairHeld := verificationStatus == "completed"
+	checkpointRestored := false
 
 	if haveCheckpoint {
 		if repairHeld {
@@ -479,7 +507,7 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 			notRestoredRuns := append(append([]swarmWorkerExecution{}, investigationRuns...), builderRuns...)
 			notRestoredRuns = append(notRestoredRuns, watcherRuns...)
 			filesTouched, testsWritten := collectSwarmTouchedFiles(notRestoredRuns)
-			if _, persistErr := persistSwarmResultOutcome(store, swarmResultRecord{
+			strikeStanding, persistErr := persistSwarmResultOutcome(store, swarmResultRecord{
 				SwarmID:        swarmID,
 				Target:         target,
 				Status:         "failed",
@@ -489,8 +517,24 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 				Tests:          testsWritten,
 				Blockers:       []string{message},
 				CompletedAt:    time.Now().UTC().Format(time.RFC3339Nano),
-			}); persistErr != nil {
+			})
+			if persistErr != nil {
 				return nil, fmt.Errorf("write and evaluate swarm result: %w", persistErr)
+			}
+			if episodeErr := persistSwarmEpisode(store, buildSwarmEpisodeRecord(swarmEpisodeBuildParams{
+				SwarmID:             swarmID,
+				Target:              target,
+				Status:              swarmEpisodeStatusCompleted,
+				StartedAt:           startedAt,
+				EndedAt:             time.Now().UTC(),
+				Comparison:          comparison,
+				CheckpointSaved:     true,
+				CheckpointRestored:  false,
+				VerificationStatus:  verificationStatus,
+				StrikeStanding:      strikeStanding,
+				SpawnRunID:          spawnRunIDFrom(runHandle),
+			})); episodeErr != nil {
+				fmt.Fprintf(os.Stderr, "warning: could not persist swarm episode for %q: %v\n", target, episodeErr)
 			}
 			result := map[string]interface{}{
 				"mode":                "destroy",
@@ -511,6 +555,7 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 			return resultWithSwarmInterventionContract(result, contract), nil
 		} else {
 			announceSwarmCheckpointRestored(swarmID, target)
+			checkpointRestored = true
 			os.RemoveAll(checkpoint.BackupDir)
 		}
 	}
@@ -526,7 +571,7 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 	filesTouched, testsWritten := collectSwarmTouchedFiles(allRuns)
 	next := swarmNextCommand(state, status)
 
-	if _, err := persistSwarmResultOutcome(store, swarmResultRecord{
+	strikeStanding, err := persistSwarmResultOutcome(store, swarmResultRecord{
 		SwarmID:        swarmID,
 		Target:         target,
 		Status:         status,
@@ -538,8 +583,26 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 		Tests:          testsWritten,
 		Blockers:       blockers,
 		CompletedAt:    time.Now().UTC().Format(time.RFC3339Nano),
-	}); err != nil {
+	})
+	if err != nil {
 		return nil, fmt.Errorf("write and evaluate swarm result: %w", err)
+	}
+
+	episode := buildSwarmEpisodeRecord(swarmEpisodeBuildParams{
+		SwarmID:            swarmID,
+		Target:             target,
+		Status:             swarmEpisodeStatusCompleted,
+		StartedAt:          startedAt,
+		EndedAt:            time.Now().UTC(),
+		Comparison:         comparison,
+		CheckpointSaved:    haveCheckpoint,
+		CheckpointRestored: checkpointRestored,
+		VerificationStatus: verificationStatus,
+		StrikeStanding:     strikeStanding,
+		SpawnRunID:         spawnRunIDFrom(runHandle),
+	})
+	if episodeErr := persistSwarmEpisode(store, episode); episodeErr != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not persist swarm episode for %q: %v\n", target, episodeErr)
 	}
 
 	result := map[string]interface{}{
@@ -1097,8 +1160,27 @@ func runSwarmFinalize(root string, completion externalSwarmCompletion) (map[stri
 		CompletedAt:       time.Now().UTC().Format(time.RFC3339Nano),
 		DispatchMode:      "external-task",
 	}
-	if _, err := persistSwarmResultOutcome(store, outcome); err != nil {
+	strikeStanding, err := persistSwarmResultOutcome(store, outcome)
+	if err != nil {
 		return nil, fmt.Errorf("write and evaluate swarm result: %w", err)
+	}
+	externalHypotheses, externalMissingLenses := hypothesesFromSwarmRuns(runs)
+	externalComparison := compareSwarmHypotheses(externalHypotheses, externalMissingLenses)
+	externalEpisode := buildSwarmEpisodeRecord(swarmEpisodeBuildParams{
+		SwarmID:            swarmID,
+		Target:             manifest.Target,
+		Status:             swarmEpisodeStatusCompleted,
+		StartedAt:          startedAt,
+		EndedAt:            time.Now().UTC(),
+		Comparison:         externalComparison,
+		CheckpointSaved:    false,
+		CheckpointRestored: false,
+		VerificationStatus: status,
+		StrikeStanding:     strikeStanding,
+		SpawnRunID:         spawnRunIDFrom(runHandle),
+	})
+	if episodeErr := persistSwarmEpisode(store, externalEpisode); episodeErr != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not persist swarm episode for %q: %v\n", manifest.Target, episodeErr)
 	}
 	receipt, err := completeExternalSwarmFinalization(*manifest, manifestDigest, completionDigest, outcome, next)
 	if err != nil {
