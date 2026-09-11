@@ -651,7 +651,24 @@ func startOracleCompatibility(root, topic, depth string, confidenceTarget string
 	_ = os.Remove(paths.StopPath)
 	_ = os.Remove(paths.LoopPath)
 
-	depthCfg := resolveOracleDepth(depth)
+	// The owner-facing start path speaks the shared Fast/Balanced/Deep/
+	// Exhaustive vocabulary via resolveOraclePreset -- every other use of
+	// oracleDepthLevels/resolveOracleDepth in this file (the loop's own
+	// stopping arithmetic, `oracle iterate`) is untouched. An omitted --depth
+	// still defaults to Balanced; anything else invalid is refused by name.
+	presetInput := strings.TrimSpace(depth)
+	if presetInput == "" {
+		presetInput = string(planningStagePresetBalanced)
+	}
+	preset, err := resolveOraclePreset(presetInput)
+	if err != nil {
+		return nil, err
+	}
+	depthCfg := oracleDepthConfig{
+		MaxIterations:    preset.RoundCap,
+		TargetConfidence: preset.TargetConfidence,
+		Label:            preset.Label,
+	}
 	scopeProfile, err := resolveOracleScope(topic, requestedScope)
 	if err != nil {
 		return nil, err

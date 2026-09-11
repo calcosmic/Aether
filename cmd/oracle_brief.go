@@ -102,26 +102,40 @@ type oracleScopingOption struct {
 }
 
 // oracleDepthOptionOrder keeps the presented order stable and meaningful --
-// cheapest first -- rather than depending on map iteration.
-var oracleDepthOptionOrder = []string{"quick", "balanced", "deep", "exhaustive"}
+// cheapest first -- matching the four shared preset names planning already
+// established (Fast, Balanced, Deep, Exhaustive), rather than Oracle's own
+// legacy depth words or map iteration order.
+var oracleDepthOptionOrder = []string{
+	string(planningStagePresetFast),
+	string(planningStagePresetBalanced),
+	string(planningStagePresetDeep),
+	string(planningStagePresetExhaustive),
+}
 
+// oracleDepthOptions renders the four shared presets, each carrying its own
+// confidence target and round cap -- Oracle's own numbers, never planning's.
+// `recommended` may be a shared name or any legacy word oracleSuggestedDepth
+// returns; both resolve through resolveOraclePreset onto the row they mark.
 func oracleDepthOptions(recommended string) []oracleDepthOption {
-	recommended = strings.ToLower(strings.TrimSpace(recommended))
+	recommendedPreset, recErr := resolveOraclePreset(recommended)
 	options := make([]oracleDepthOption, 0, len(oracleDepthOptionOrder))
-	for _, key := range oracleDepthOptionOrder {
-		cfg := oracleDepthLevels[key]
+	for _, id := range oracleDepthOptionOrder {
+		policy, err := resolveOraclePreset(id)
+		if err != nil {
+			continue
+		}
 		options = append(options, oracleDepthOption{
-			Value:            key,
-			Label:            cfg.Label,
-			MaxIterations:    cfg.MaxIterations,
-			TargetConfidence: cfg.TargetConfidence,
-			Description:      cfg.Description,
+			Value:            string(policy.ID),
+			Label:            policy.Label,
+			MaxIterations:    policy.RoundCap,
+			TargetConfidence: policy.TargetConfidence,
+			Description:      fmt.Sprintf("%s research, up to %d rounds", policy.Label, policy.RoundCap),
 			// Estimates come from the real per-attempt watchdogs in
 			// defaultOracleAttemptPolicy: 3-6 minutes each, and workers
 			// usually return well before the ceiling.
-			TypicalMinutes: cfg.MaxIterations * 2,
-			MaxMinutes:     cfg.MaxIterations * 5,
-			Recommended:    key == recommended,
+			TypicalMinutes: policy.RoundCap * 2,
+			MaxMinutes:     policy.RoundCap * 5,
+			Recommended:    recErr == nil && policy.ID == recommendedPreset.ID,
 		})
 	}
 	return options
@@ -251,8 +265,15 @@ func runOraclePropose(root, topic string) (map[string]interface{}, error) {
 	scope := inferOracleAutoScope(trimmed)
 	score, reasons := oracleVaguenessScore(trimmed)
 	questionCount := oracleSuggestedQuestionCount(score)
+	// oracleSuggestedDepth's recommendation logic is unchanged -- it still
+	// returns a legacy word -- but the result is translated through
+	// resolveOraclePreset so the recommended row in depth_options is marked
+	// under its shared name rather than the legacy word.
 	depth := oracleSuggestedDepth(score, template)
-	depthCfg := resolveOracleDepth(depth)
+	preset, presetErr := resolveOraclePreset(depth)
+	if presetErr != nil {
+		preset, _ = resolveOraclePreset(string(planningStagePresetBalanced))
+	}
 
 	return map[string]interface{}{
 		"topic":          trimmed,
@@ -263,15 +284,15 @@ func runOraclePropose(root, topic string) (map[string]interface{}, error) {
 			// override, never apply them silently.
 			"template":                   template,
 			"scope":                      scope,
-			"depth":                      depth,
-			"target_confidence":          depthCfg.TargetConfidence,
+			"depth":                      string(preset.ID),
+			"target_confidence":          preset.TargetConfidence,
 			"clarifying_questions":       questionCount,
 			"basis":                      "keyword heuristics over the raw topic",
 			"vagueness_score":            score,
 			"vagueness_reasons":          reasons,
 			"present_as_suggestion_only": true,
 		},
-		"depth_options":      oracleDepthOptions(depth),
+		"depth_options":      oracleDepthOptions(string(preset.ID)),
 		"confidence_options": oracleConfidenceOptions(),
 		"scoping_options":    oracleScopingOptions(questionCount),
 		"next":               "aether oracle brief --core-question \"...\" --depth <depth> --confidence <percent>",
@@ -292,7 +313,11 @@ func renderOraclePropose(result map[string]interface{}) string {
 		b.WriteString("Suggested (from keywords -- confirm or change):\n")
 		fmt.Fprintf(&b, "  Output shape:        %v\n", suggested["template"])
 		fmt.Fprintf(&b, "  Evidence sources:    %v\n", suggested["scope"])
-		fmt.Fprintf(&b, "  Depth:               %v\n", suggested["depth"])
+		depthLabel := fmt.Sprintf("%v", suggested["depth"])
+		if preset, err := resolveOraclePreset(depthLabel); err == nil {
+			depthLabel = preset.Label
+		}
+		fmt.Fprintf(&b, "  Depth:               %s\n", depthLabel)
 		fmt.Fprintf(&b, "  Target accuracy:     %v%%\n", suggested["target_confidence"])
 		fmt.Fprintf(&b, "  Scoping questions:   %v\n", suggested["clarifying_questions"])
 		if reasons, ok := suggested["vagueness_reasons"].([]string); ok && len(reasons) > 0 {
@@ -308,8 +333,8 @@ func renderOraclePropose(result map[string]interface{}) string {
 			if option.Recommended {
 				marker = "*"
 			}
-			fmt.Fprintf(&b, "  %s %-11s up to %2d rounds, ~%d min (max %d min)\n",
-				marker, option.Value, option.MaxIterations, option.TypicalMinutes, option.MaxMinutes)
+			fmt.Fprintf(&b, "  %s %-11s target %d%%, up to %2d rounds, ~%d min (max %d min)\n",
+				marker, option.Label, option.TargetConfidence, option.MaxIterations, option.TypicalMinutes, option.MaxMinutes)
 		}
 	}
 	return strings.TrimSpace(b.String())
@@ -342,18 +367,23 @@ func runOracleBriefApprove(root string, opts oracleBriefOptions, dryRun bool) (m
 		return nil, err
 	}
 
-	depth := strings.ToLower(strings.TrimSpace(opts.Depth))
-	if depth == "" {
-		depth = "balanced"
+	depthInput := strings.TrimSpace(opts.Depth)
+	if depthInput == "" {
+		depthInput = string(planningStagePresetBalanced)
 	}
-	if _, ok := oracleDepthLevels[depth]; !ok {
-		return nil, fmt.Errorf("--depth must be quick, balanced, deep, or exhaustive, got %q", opts.Depth)
+	// The picker this brief follows (oracleDepthOptions) now offers the
+	// shared Fast/Balanced/Deep/Exhaustive names as its Value, and the
+	// --depth flag's own help text advertises them too -- so the brief must
+	// accept exactly what it was just shown, not only the legacy words.
+	preset, err := resolveOraclePreset(depthInput)
+	if err != nil {
+		return nil, err
 	}
-	depthCfg := resolveOracleDepth(depth)
+	depth := string(preset.ID)
 
 	target := opts.TargetConfidence
 	if target == 0 {
-		target = depthCfg.TargetConfidence
+		target = preset.TargetConfidence
 	}
 	if target < 1 || target > 100 {
 		return nil, fmt.Errorf("--confidence must be between 1 and 100, got %d", target)
@@ -430,12 +460,20 @@ func renderOracleBriefPanel(brief oraclePendingBrief) string {
 		}
 	}
 	b.WriteString("\n")
-	iterations := resolveOracleDepth(brief.Depth).MaxIterations
-	if brief.MaxIterations > 0 {
-		iterations = brief.MaxIterations
+	depthLabel := brief.Depth
+	iterations := brief.MaxIterations
+	if preset, err := resolveOraclePreset(brief.Depth); err == nil {
+		depthLabel = preset.Label
+		if iterations <= 0 {
+			iterations = preset.RoundCap
+		}
+	} else if iterations <= 0 {
+		// Defensive fallback for a brief written to disk before this preset
+		// layer existed, or hand-edited to carry an unrecognized depth.
+		iterations = resolveOracleDepth(brief.Depth).MaxIterations
 	}
 	fmt.Fprintf(&b, "Output shape: %s   Sources: %s\n", brief.Template, brief.Scope)
-	fmt.Fprintf(&b, "Depth: %s (up to %d rounds)   Target: %d%%\n", brief.Depth, iterations, brief.TargetConfidence)
+	fmt.Fprintf(&b, "Depth: %s (up to %d rounds)   Target: %d%%\n", depthLabel, iterations, brief.TargetConfidence)
 	return strings.TrimSpace(b.String())
 }
 

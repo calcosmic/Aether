@@ -204,6 +204,12 @@ var oracleCmd = &cobra.Command{
 		}
 
 		depth, _ := cmd.Flags().GetString("depth")
+		if strings.TrimSpace(depth) != "" {
+			if _, presetErr := resolveOraclePreset(depth); presetErr != nil {
+				outputError(1, presetErr.Error(), nil)
+				return renderedErrorExit(1)
+			}
+		}
 		confidenceTarget, _ := cmd.Flags().GetString("confidence-target")
 		scope, _ := cmd.Flags().GetString("scope")
 		template, _ := cmd.Flags().GetString("template")
@@ -375,7 +381,7 @@ func init() {
 
 	oracleCmd.Flags().Int("min-confidence", 80, "For `oracle promote`: minimum question confidence to promote findings from")
 	oracleCmd.Flags().Bool("dry-run", false, "For `oracle promote`: report what would be promoted without writing")
-	oracleCmd.Flags().String("depth", "", "Research depth: quick, balanced, deep, exhaustive (default: balanced)")
+	oracleCmd.Flags().String("depth", "", "Research depth: fast, balanced, deep, or exhaustive (default: balanced). quick/standard/exhaustive/marathon still accepted.")
 	oracleCmd.Flags().String("confidence-target", "", "Target confidence percentage 1-100 (default: per depth level). Oracle will not finalize below this target unless a hard blocker is reported or max iterations are reached.")
 	oracleCmd.Flags().String("scope", defaultOracleScope, "Research scope: auto, repo, web, or both")
 	oracleCmd.Flags().String("template", defaultOracleTemplate, "Output template: auto, prd, tech-eval, architecture-review, bug-investigation, research-brief, or custom")
