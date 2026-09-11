@@ -550,13 +550,16 @@ var specialistCommandSurfaceHashes = map[string]string{
 	// Tester's Law, and credit-resilience framing are unchanged.
 	".claude/commands/ant/chaos.md":       "16f24da7ea50ec125ca5e754ea7f7c0c8a06aed3a8d2e7f8d4f128a1b71115a0",
 	".claude/commands/ant/archaeology.md": "fada154f485134084ec39eccdf129f0bc2d4b0750e5d055e22620f060c3bc2ba",
-	".claude/commands/ant/dream.md":       "06158585eeafe94748086c871b02f7a9c2aa8165a8cd0409dcc98663fc94609e",
-	".claude/commands/ant/oracle.md":      "bdd9c4cbaae5bf81360d50f671dfef334b179f58b8e4ba19e9552353553e597f",
-	// swarm.md hashes updated 2026-08-16 (reclaim sweep): documented
-	// swarm-findings-read / swarm-cleanup as the inspection and housekeeping
-	// affordances for the runtime-recorded swarm state (RECLAIM-07). Content
-	// addition only; the swarm flow itself is unchanged.
-	".claude/commands/ant/swarm.md": "a8f81e0474550915399d66a05effe03a41b5ed073e189242bc070770ae5f8529",
+	".claude/commands/ant/dream.md": "06158585eeafe94748086c871b02f7a9c2aa8165a8cd0409dcc98663fc94609e",
+	// oracle.md and swarm.md hashes updated 2026-09-11 (202-15 Task 1):
+	// watchable-rounds and recommendation-first-answer prose added to
+	// oracle.md; four-lens investigation, comparison card, checkpointed
+	// repair and three-strike case prose added to swarm.md. Content
+	// addition only -- oracle.md's intent-refinement/brief/run/promote flow
+	// and swarm.md's manifest/spawn/finalize ceremony contract (asserted by
+	// TestSwarmWrapperCeremonyContract) are unchanged.
+	".claude/commands/ant/oracle.md": "93a47b261303991f6eb01802ecec5178ec6461a8171f3368a29998b753129504",
+	".claude/commands/ant/swarm.md":  "c2e775263e5063d1e2ccd7d4d75fc69ef4408dc37e8554c288e49fb5382883a2",
 	// Phase 198.2 plan 01 (WIRE-01): colonize wrappers now prepend the colony
 	// memory capsule from the manifest, on all three hand-maintained copies.
 	// Behaviour, tools and flow are otherwise unchanged; the capsule block is
@@ -566,8 +569,8 @@ var specialistCommandSurfaceHashes = map[string]string{
 	".opencode/commands/ant/chaos.md":       "16f24da7ea50ec125ca5e754ea7f7c0c8a06aed3a8d2e7f8d4f128a1b71115a0",
 	".opencode/commands/ant/archaeology.md": "fada154f485134084ec39eccdf129f0bc2d4b0750e5d055e22620f060c3bc2ba",
 	".opencode/commands/ant/dream.md":       "06158585eeafe94748086c871b02f7a9c2aa8165a8cd0409dcc98663fc94609e",
-	".opencode/commands/ant/oracle.md":      "bdd9c4cbaae5bf81360d50f671dfef334b179f58b8e4ba19e9552353553e597f",
-	".opencode/commands/ant/swarm.md":       "a8f81e0474550915399d66a05effe03a41b5ed073e189242bc070770ae5f8529",
+	".opencode/commands/ant/oracle.md":      "93a47b261303991f6eb01802ecec5178ec6461a8171f3368a29998b753129504",
+	".opencode/commands/ant/swarm.md":       "c2e775263e5063d1e2ccd7d4d75fc69ef4408dc37e8554c288e49fb5382883a2",
 	".opencode/commands/ant/colonize.md":    "f512474c4d81037d2c047b70d3a2aa9fb4dfc5d36cd55ab247f15d57ee35dd4e",
 	".opencode/commands/ant/council.md":     "c7fbb1923890e84687fb23c40d8b8e88d6543ef0bf9fb8d5c931b4d1d853e568",
 	// aether-sage hashes updated 2026-08-21 (no-change vocabulary round): the

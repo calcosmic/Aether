@@ -1276,6 +1276,90 @@ Aether supports two parallel execution strategies, selected at colony init:
 
 ---
 
+## Live Colony, Swarm, and Oracle (v1.28)
+
+Phase 202 restored three owner-visible screens on top of one shared, durable
+event trail -- the live colony view (`aether watch`), Swarm's four-lens bug
+diagnosis (`/ant-swarm`), and Oracle's iterative research loop (`/ant-oracle`).
+Nothing rendered by any of the three is invented; each fact traces to
+something the colony actually recorded.
+
+**Live colony view.** `aether watch` shows exactly one of three screens,
+chosen by the runtime alone from what actually happened -- the wrapper you
+type the command into never decides: a live dashboard that updates in place
+while something is running, a replay of the most recent run (what ran, how it
+ended, what it cost) when nothing is running but something has run before,
+and an honest empty card when nothing has ever run. The live screen keeps the
+current wave's workers in depth and compresses the rest of the colony to one
+line, with a short ticker strip at the bottom naming the last few things that
+happened. Locked by `TestEveryLiveEventGoesThroughOneBoundary` (one event
+trail feeds every screen), `TestOneLiveEventModelOnly` (no second, competing
+event system), `TestWatchResolvesThreeBranchesFromEvidenceAlone` (the
+three-screen choice comes from evidence alone), `TestWatchIdle199NoFakeLiveness`
+(the empty card never invents activity), `TestLiveDashboardShowsCurrentWaveInDepth`
+(current wave in depth, the rest compressed to one line), and
+`TestSwarmCardUsesSharedCasteIdentity` (the caste emoji, color, and name
+system already built for other screens is reused here, not duplicated).
+
+**Swarm's four-lens diagnosis.** `/ant-swarm` on a bug sends four genuinely
+different investigators at it in the same wave -- one traces the bug through
+the project's git history, one searches the working code for the same
+pattern elsewhere, one traces the actual error, and one researches outside
+sources -- then renders one comparison card naming where they agree, where
+they disagree, and which fix ranks highest with its evidence. The top fix
+then applies automatically through the same save-a-checkpoint,
+verify-it-worked, roll-back-if-it-failed safety net every other repair path
+in the colony already uses -- no approval prompt mid-flight, just the full
+story afterward. If the same problem survives three repair attempts,
+automatic repair stops and a plain-language case goes to the owner instead.
+Locked by `TestSwarmInvestigationRunsFourLenses` and
+`TestFourSwarmLensesProduceDistinctEvidence` (the four investigators are
+genuinely distinct, not four copies of one prompt),
+`TestSwarmComparisonSurfacesSharedCausesAndContradictions` (the comparison
+card), `TestSwarmRepairCheckpointsBeforeTheFixWave` and
+`TestSwarmRepairRollsBackOnFailedVerification` (the fix never runs before its
+own checkpoint, and a failed fix always rolls back), and
+`TestThirdStrikeRendersAnArchitecturalCase` (the three-strike escalation
+survives unchanged). Finished Swarm runs are kept, not deleted -- removal
+requires the run's exact identifier and digest, never a loose prefix match,
+proven by `TestSwarmRemovalRequiresIdentifierAndDigest`.
+
+**Oracle's iterative research.** `/ant-oracle` clarifies the actual question
+exactly once before any research round runs, then works autonomously --
+rounds, confidence, and any contradictions found are all visible live in the
+colony view the same way any other worker is, with no per-round check-ins.
+Depth picks from the same four names planning already uses -- Fast, Balanced,
+Deep, Exhaustive -- each showing its own confidence target and round limit,
+rather than Oracle inventing a separate dial of its own. The finished answer
+leads with the actionable recommendation in plain language, states confidence
+and any open questions honestly right beneath it, and keeps the full source
+trail further down for anyone who wants to read it -- never sources first.
+Locked by `TestOraclePresetLabelsMatchPlanningVocabulary` (the shared
+four-name picker), `TestOracleRoundsReachTheLiveStream` (rounds are visible
+live, not only through polling), and `TestSynthesisLeadsWithTheRecommendation`
+and `TestSynthesisStatesConfidenceInOrdinaryWords` (the answer leads with the
+recommendation, never the sources).
+
+**Shared standing vocabulary.** Work that is useful but not yet verified --
+Swarm's unproven repair ideas, Oracle's partial research, plan research, and
+Dreams notes -- is now labelled with the same honest words everywhere it
+appears, naming what would make it verified, rather than three different
+subsystems inventing their own wording for the same idea. Locked by
+`TestOneStandingVocabularyAcrossSubsystems`.
+
+*For dummies: type `aether watch` and you get one truthful screen -- what's
+happening now, what just finished, or an honest "nothing yet" -- never a
+made-up status. Ask Swarm to chase down a bug and four different kinds of
+investigation run at once, then you get one card explaining which fix won and
+why, applied safely with an automatic undo if it doesn't work, and a plain
+warning if the same bug beats three attempts in a row. Ask Oracle a question
+and it asks you one round of clarifying questions, then researches on its own
+and hands back an answer that leads with what to do, not a wall of sources.
+And anything not yet proven -- a repair idea, a half-finished bit of research
+-- always says so in the same words, everywhere you see it.*
+
+---
+
 ## The Core Insight
 
 The system's pieces are now **connected**:
