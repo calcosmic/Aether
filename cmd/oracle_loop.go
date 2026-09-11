@@ -949,6 +949,11 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 		state.StopReason = ""
 		state.ActiveQuestionID = strings.TrimSpace(target.ID)
 		state.ActiveQuestionText = strings.TrimSpace(target.Text)
+		// 202-11 (LIVE-06/CEC-05): announce the round beginning on the live
+		// stream at the moment the loop has already decided everything the
+		// event needs -- the round number, its cap, the phase and the
+		// active question are all set on state by this point.
+		emitOracleLiveRound(state)
 		state.ActiveAttempt = 0
 		state.ActiveReasoning = ""
 		state.ActiveTimeoutSec = 0
@@ -1106,6 +1111,10 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 
 		state.OverallConfidence = oracleOverallConfidence(plan)
 		appendOracleProgressEvent(paths.ProgressPath, newOracleProgressEvent(oracleProgressEventIterationEnd, state))
+		// 202-11 (LIVE-06/CEC-05): announce the round ending, carrying the
+		// confidence it ended at, at the same existing mutation point the
+		// round-log's own "iteration_end" event already uses.
+		emitOracleLiveRoundEnded(state)
 		state.Platform = oracleInvokerPlatform(invoker)
 		state.ActiveAttempt = 0
 		state.ActiveReasoning = ""
@@ -2687,12 +2696,30 @@ func applyOracleWorkerResponse(state oracleStateFile, plan oraclePlanFile, respo
 	plan.Questions[idx] = question
 	plan.LastUpdated = now
 
+	// 202-11 (LIVE-06/CEC-05): capture the pre-merge values so the live
+	// stream can announce only what is genuinely new -- a contradiction or
+	// gap already recorded before this merge must not be announced again,
+	// and a confidence figure that did not move must not fire a "changed"
+	// event.
+	previousGaps := append([]string(nil), state.OpenGaps...)
+	previousContradictions := append([]string(nil), state.Contradictions...)
+	previousConfidence := state.OverallConfidence
+
 	state.OpenGaps = mergeOracleNotes(state.OpenGaps, response.Gaps)
 	state.Contradictions = mergeOracleNotes(state.Contradictions, response.Contradictions)
+	for _, gap := range newOracleNotes(previousGaps, state.OpenGaps) {
+		emitOracleLiveGapTargeted(state, gap)
+	}
+	for _, contradiction := range newOracleNotes(previousContradictions, state.Contradictions) {
+		emitOracleLiveContradiction(state, contradiction)
+	}
 	if strings.TrimSpace(response.Recommendation) != "" {
 		state.Recommendation = response.Recommendation
 	}
 	state.OverallConfidence = oracleOverallConfidence(plan)
+	if state.OverallConfidence != previousConfidence {
+		emitOracleLiveConfidence(state, previousConfidence)
+	}
 	state.Summary = response.Summary
 	state.LastUpdated = now
 

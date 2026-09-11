@@ -419,6 +419,29 @@ func driveRecoveryLiveLane(t *testing.T) []liveTestEvent {
 	return liveEventsSince(t)
 }
 
+// driveOracleLiveLane (202-11, LIVE-06/CEC-05) drives one real Oracle
+// research round through runOracleCompatibility's "run-loop" resume path --
+// the same real public entry point `aether oracle run-loop` uses -- with a
+// fixture invoker standing in for the real worker subprocess, then returns
+// every live.* event that round persisted.
+func driveOracleLiveLane(t *testing.T) []liveTestEvent {
+	t.Helper()
+	saveGlobals(t)
+	s, root := newTestStore(t)
+	store = s
+
+	originalInvoker := newOracleWorkerInvoker
+	newOracleWorkerInvoker = func() codex.WorkerInvoker { return &oracleCompletingInvoker{} }
+	t.Cleanup(func() { newOracleWorkerInvoker = originalInvoker })
+
+	setupOracleLiveFixtureWorkspace(t, root, 4, 60, 5)
+
+	if _, err := runOracleCompatibility(root, []string{"run-loop"}, "", ""); err != nil {
+		t.Fatalf("oracle run-loop: %v", err)
+	}
+	return liveEventsSince(t)
+}
+
 // liveLaneEntryPoints maps every declared episode kind to the real public
 // entry point that drives it. A kind present in events.ColonyLiveEpisodeKinds()
 // with no entry registered here fails TestEveryLifecycleLaneEmitsLiveEvents
@@ -428,6 +451,7 @@ var liveLaneEntryPoints = map[string]liveLaneEntryPoint{
 	events.EpisodeKindSwarm:    driveSwarmLiveLane,
 	events.EpisodeKindBuild:    driveBuildLiveLane,
 	events.EpisodeKindContinue: driveContinueLiveLane,
+	events.EpisodeKindOracle:   driveOracleLiveLane,
 	events.EpisodeKindPlan:     drivePlanLiveLane,
 	events.EpisodeKindRecovery: driveRecoveryLiveLane,
 }

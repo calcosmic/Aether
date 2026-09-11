@@ -27,6 +27,11 @@ const (
 	LiveTopicCheckPassed        = "live.check.passed"
 	LiveTopicCheckFailed        = "live.check.failed"
 	LiveTopicRecoveryChanged    = "live.recovery.changed"
+	// LiveTopicGapTargeted (202-11, LIVE-06/CEC-05) announces one newly
+	// added open research gap -- the same "new entries only" discipline
+	// LiveTopicContradictionFound already uses, emitted immediately beside
+	// it at Oracle's state.OpenGaps merge point.
+	LiveTopicGapTargeted = "live.gap.targeted"
 )
 
 // Episode-kind vocabulary. EpisodeKind on ColonyLivePayload is a free-form
@@ -42,6 +47,13 @@ const (
 	EpisodeKindContinue = "continue"
 	EpisodeKindPlan     = "plan"
 	EpisodeKindRecovery = "recovery"
+	// EpisodeKindOracle (202-11, LIVE-06/CEC-05) is Oracle's own research
+	// run. Oracle has no per-worker dispatch of its own -- one round is one
+	// pass of the same research effort, not a new worker -- so a running
+	// research episode is represented as a single, repeatedly-replaced
+	// worker row (see cmd/oracle_live.go) rather than a new live-event
+	// shape.
+	EpisodeKindOracle = "oracle"
 )
 
 // ColonyLiveEpisodeKinds returns every declared episode-kind constant. A
@@ -54,6 +66,7 @@ func ColonyLiveEpisodeKinds() []string {
 		EpisodeKindContinue,
 		EpisodeKindPlan,
 		EpisodeKindRecovery,
+		EpisodeKindOracle,
 	}
 }
 
@@ -76,27 +89,36 @@ const ColonyLiveSchemaVersion = "live/v1"
 // currency-shaped field here would reopen the exact "unread money field"
 // hazard Phase 196 already fixed once.
 type ColonyLivePayload struct {
-	SchemaVersion    string   `json:"schema_version"`
-	EpisodeID        string   `json:"episode_id"`
-	EpisodeKind      string   `json:"episode_kind,omitempty"`
-	Sequence         int64    `json:"sequence"`
-	Wave             int      `json:"wave,omitempty"`
-	WorkerID         string   `json:"worker_id,omitempty"`
-	ParentWorkerID   string   `json:"parent_worker_id,omitempty"`
-	Caste            string   `json:"caste,omitempty"`
-	WorkerName       string   `json:"worker_name,omitempty"`
-	Workspace        string   `json:"workspace,omitempty"`
-	Lens             string   `json:"lens,omitempty"`
-	Question         string   `json:"question,omitempty"`
-	Confidence       float64  `json:"confidence,omitempty"`
-	TargetConfidence float64  `json:"target_confidence,omitempty"`
-	Contradictions   []string `json:"contradictions,omitempty"`
-	Findings         []string `json:"findings,omitempty"`
-	Signals          []string `json:"signals,omitempty"`
-	CheckName        string   `json:"check_name,omitempty"`
-	RecoveryState    string   `json:"recovery_state,omitempty"`
-	Status           string   `json:"status,omitempty"`
-	ElapsedSeconds   float64  `json:"elapsed_seconds,omitempty"`
+	SchemaVersion string `json:"schema_version"`
+	EpisodeID     string `json:"episode_id"`
+	EpisodeKind   string `json:"episode_kind,omitempty"`
+	Sequence      int64  `json:"sequence"`
+	Wave          int    `json:"wave,omitempty"`
+	// RoundCap (202-11, LIVE-06) is Oracle's own round-cap number for the
+	// wave/round this event describes (oracleStateFile.MaxIterations) --
+	// generic enough to carry any future lane's own "up to N of these"
+	// figure, but only Oracle sets it today.
+	RoundCap         int     `json:"round_cap,omitempty"`
+	WorkerID         string  `json:"worker_id,omitempty"`
+	ParentWorkerID   string  `json:"parent_worker_id,omitempty"`
+	Caste            string  `json:"caste,omitempty"`
+	WorkerName       string  `json:"worker_name,omitempty"`
+	Workspace        string  `json:"workspace,omitempty"`
+	Lens             string  `json:"lens,omitempty"`
+	Question         string  `json:"question,omitempty"`
+	Confidence       float64 `json:"confidence,omitempty"`
+	TargetConfidence float64 `json:"target_confidence,omitempty"`
+	// PreviousConfidence (202-11, LIVE-06) is the confidence value a
+	// live.confidence.changed event is moving FROM -- Confidence above is
+	// always the new value. Only a confidence-changed event sets this.
+	PreviousConfidence float64  `json:"previous_confidence,omitempty"`
+	Contradictions     []string `json:"contradictions,omitempty"`
+	Findings           []string `json:"findings,omitempty"`
+	Signals            []string `json:"signals,omitempty"`
+	CheckName          string   `json:"check_name,omitempty"`
+	RecoveryState      string   `json:"recovery_state,omitempty"`
+	Status             string   `json:"status,omitempty"`
+	ElapsedSeconds     float64  `json:"elapsed_seconds,omitempty"`
 }
 
 // RawMessage marshals the payload for events.Bus.Publish, mirroring
@@ -131,5 +153,6 @@ func ColonyLiveTopics() []string {
 		LiveTopicCheckPassed,
 		LiveTopicCheckFailed,
 		LiveTopicRecoveryChanged,
+		LiveTopicGapTargeted,
 	}
 }
