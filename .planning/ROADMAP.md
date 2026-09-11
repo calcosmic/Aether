@@ -460,7 +460,7 @@ Plans:
 4. A multi-round Oracle question visibly targets uncertainty, reports confidence and contradictions, detects diminishing returns, and produces a source-grounded final synthesis.
 5. Useful partial Swarm/Oracle work, activity, learning, plan research, and local Dreams remain durable, discoverable, and accurately labelled rather than discarded or called verified.
 
-**Plans:** 15/17 plans executed (2 gap-closure plans added after verification)
+**Plans:** 16/17 plans executed (2 gap-closure plans added after verification)
 
 Plans:
 **Wave 1**
@@ -507,7 +507,7 @@ Plans:
 
 **Gap closure Wave 1** *(from 202-VERIFICATION.md; runs after all plans above)*
 
-- [ ] 202-16-PLAN.md — The cockpit follows the real open episode: recovery stops hijacking the live view (CR-02)
+- [x] 202-16-PLAN.md — The cockpit follows the real open episode: recovery stops hijacking the live view (CR-02)
 
 **Gap closure Wave 2** *(blocked on 202-16)*
 

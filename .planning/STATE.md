@@ -5,17 +5,17 @@ milestone_name: Classic Colony Restoration
 current_phase: 202
 current_phase_name: Swarm, Oracle, and Live Colony
 status: executing
-stopped_at: Planned gap closure (202-16, 202-17) after verification found gaps
-last_updated: "2026-09-11T15:31:40.000Z"
+stopped_at: Completed 202-16-PLAN.md (gap closure)
+last_updated: "2026-09-11T20:02:52.066Z"
 last_activity: 2026-09-11
-state_head: 9fc28e3b3d1ab034990440e81468d181315b43ba
+last_activity_desc: Executed gap-closure plan 202-16 (CR-02 recovery hijack + WR-03/WR-04 warnings)
+state_head: 97695af3777b99ab3a85514eb6ac0f67fc635711
 progress:
   total_phases: 7
   completed_phases: 1
-  total_plans: 124
-  completed_plans: 124
+  total_plans: 126
+  completed_plans: 125
   percent: 14
-last_activity_desc: Verification found 2 blocker wiring gaps (recovery hijacks the live watch view; Oracle runs never classify as live); planned gap-closure plans 202-16 and 202-17, plan-checker passed with no issues
 ---
 
 # Project State
@@ -32,10 +32,10 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 
 ## Current Position
 
-Phase: 202 (Swarm, Oracle, and Live Colony) — GAP CLOSURE PLANNED
-Plan: 15/15 executed plans summarized; gap-closure plans 202-16 (wave 1) and 202-17 (wave 2) verified and awaiting execution
-Status: Verification gaps found — gap-closure plans ready for /gsd-execute-phase 202 --gaps-only
-Last activity: 2026-09-11
+Phase: 202 (Swarm, Oracle, and Live Colony) — GAP CLOSURE IN PROGRESS
+Plan: 202-16 executed (recovery live-view hijack fixed); 202-17 (Oracle liveness, CR-01) remains
+Status: Gap-closure plan 202-16 complete — run 202-17 next, then /gsd-verify-work 202
+Last activity: 2026-09-11 — Executed gap-closure plan 202-16
 
 ## Performance Metrics
 
@@ -202,6 +202,7 @@ Last activity: 2026-09-11
 | Phase 202 P13 | 25min | 2 tasks | 4 files |
 | Phase 202 P14 | 55min | 3 tasks | 8 files |
 | Phase 202 P15 | 75min | 3 tasks | 18 files |
+| Phase 202 P16 | 55min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -629,6 +630,8 @@ Last activity: 2026-09-11
 - [Phase 202]: 202-15: extended validateClassicContractCorpus's Phase 200/201 front-door-journey exemption to SYN-202- cases — without it no Phase 202 corpus case could ever validate; the exemption existed for exactly this reason on the two prior phases.
 - [Phase 202]: 202-15: the Go-test-symbol resolver for Phase 202 corpus cases (classicContractCmdTestSymbols) parses the whole cmd package once rather than only each case's own cited _test.go file — a case's go_test_symbol must exist in the package regardless of which file its source_citations happen to name.
 - [Phase 202]: 202-15: Task 3's full-suite sweep caught two regressions from Task 1's wrapper edits that Task 1's own scoped verify list never covered (a stale CMD-04 command-hash ledger entry, and stale flat .claude/commands/ant-{watch,swarm,oracle}.md mirrors) — both fixed in the same commit rather than deferred, since both are directly caused by this plan's own Task 1.
+- [Phase 202]: Recovery decisions now route onto the real open build/continue episode instead of a synthetic recovery-phase-N episode, closing CR-02 (the live-view hijack).
+- [Phase 202]: The live view selects the most recently started STILL-OPEN episode via a shared colonyLiveBoundaryDelta rule, never whichever episode owns the newest single event, so aether watch never abandons a running build for a closed one.
 
 ### Pending Todos
 
@@ -745,8 +748,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-11T15:31:40.000Z
-Stopped at: Completed 202-15-PLAN.md
+Last session: 2026-09-11T20:02:51.947Z
+Stopped at: Completed 202-16-PLAN.md (gap closure)
 Resume file: None
 
 ## Operator Next Steps

@@ -150,7 +150,15 @@ Each task was committed atomically:
 
 ## Deviations from Plan
 
-None - plan executed exactly as written. All three tasks matched their `<action>` specifications; both break-it-to-prove-it observations (Task 1 and Task 2) confirmed the named tests fail when the fix is reverted and pass when restored.
+None affecting the plan's own tasks - all three tasks executed exactly as written. One process-level deviation during the post-execution requirements update:
+
+**[Rule 3 - Blocking] `requirements mark-complete` regex does not match this project's REQUIREMENTS.md checkbox format**
+- **Found during:** `update_requirements` step (post-task-3, pre-SUMMARY-metadata-commit)
+- **Issue:** `gsd-tools query requirements.mark-complete LIVE-02` returned `not_found`. The tool's checkbox-flip regex expects `- [ ] **REQ-ID**` (bold wraps only the ID), but this project's REQUIREMENTS.md format is `- [ ] **REQ-ID — Title:** description` (bold wraps the ID plus the title through the colon) -- the same format every already-`[x]`-checked requirement in this file uses, so this is a pre-existing format/tool mismatch, not something introduced by this plan.
+- **Fix:** Manually flipped `- [ ]` to `- [x]` for `LIVE-02` in `.planning/REQUIREMENTS.md` (line 74), matching the checkbox state the tool would have written had its regex matched. `requirements.ready-ids` had already confirmed `LIVE-02` was safe to mark (not shared with a still-pending sibling plan) and `CEC-05` was correctly held back (shared with plan 202-17, still pending).
+- **Files modified:** `.planning/REQUIREMENTS.md`
+- **Verification:** `grep -n "LIVE-02" .planning/REQUIREMENTS.md` shows `- [x]`.
+- **Committed in:** the final `docs(202-16): update state, roadmap, requirements` metadata commit.
 
 ### Break-it-to-prove-it observations
 
@@ -159,8 +167,8 @@ None - plan executed exactly as written. All three tasks matched their `<action>
 
 ---
 
-**Total deviations:** 0
-**Impact on plan:** None -- plan executed exactly as specified, both regressions were proven and then fixed as designed.
+**Total deviations:** 1 auto-fixed (1 blocking -- tooling regex mismatch, worked around manually)
+**Impact on plan:** None on the three tasks themselves; the one deviation is a bookkeeping workaround for a pre-existing gsd-tools/REQUIREMENTS.md format mismatch, unrelated to this plan's code changes.
 
 ## Issues Encountered
 
