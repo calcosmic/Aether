@@ -5,17 +5,17 @@ milestone_name: Classic Colony Restoration
 current_phase: 202
 current_phase_name: Swarm, Oracle, and Live Colony
 status: executing
-stopped_at: Completed 202-10-PLAN.md
-last_updated: "2026-09-11T12:58:01.386Z"
+stopped_at: Completed 202-12-PLAN.md
+last_updated: "2026-09-11T13:30:43.254Z"
 last_activity: 2026-09-11
-state_head: a02d1ef131d5a12977ee82c7bcad97a4692b66a5
+state_head: dcd4da7541ad4596a057ae9c9e96e9af97acb0a0
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 124
-  completed_plans: 120
+  completed_plans: 121
   percent: 14
-last_activity_desc: Completed 202-10-PLAN.md (wave 5, one durable replay-safe swarm episode per run -- swarmEpisodeRecord bound to the existing result record, retention/removal by exact identifier and digest, sanitized learning proposal from a passed repair)
+last_activity_desc: Completed 202-12-PLAN.md (recommendation-first Oracle synthesis -- renderOracleFinalSynthesis renders recommendation, plain-English confidence, unsettled questions, sources, then the evidence trail; unsupported-source conclusions refused by name; resave keyed on run_identifier replaces rather than duplicates)
 ---
 
 # Project State
@@ -33,7 +33,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 202 (Swarm, Oracle, and Live Colony) — EXECUTING
-Plan: 11/15 summaries on disk (01-11) — plan numbering is wave-ordered, not sequential
+Plan: 12/15 summaries on disk (01-12) — plan numbering is wave-ordered, not sequential
 Status: In Progress
 Last activity: 2026-09-11
 
@@ -198,6 +198,7 @@ Last activity: 2026-09-11
 | Phase 202 P11 | 55min | 3 tasks | 7 files |
 | Phase 202 P09 | 18min | 2 tasks | 5 files |
 | Phase 202 P10 | 55min | 3 tasks | 3 files |
+| Phase 202 P12 | 19min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -619,6 +620,7 @@ Last activity: 2026-09-11
 - [Phase 202]: Oracle's pre-existing propose/brief/--from-brief ritual (built 2026-08-16) already satisfies D-08; no new clarification gate was built, only tests proving it. — Gating the direct-topic path would have broken pre-existing tests that rely on it completing synchronously with no approved brief, and the wrapper contract documents direct-topic invocation as a sanctioned skip-scoping escape hatch.
 - [Phase 202]: Episode 'start event' for recency ranking is its boundary-start event (episode.started, or earliest wave.started), not literally its first-ever event -- per-episode sequence counters always reset to 1.
 - [Phase 202]: Swarm episode retention recomputes eligibility fresh from the whole episode set (latest-for-target, unresolved strike sequence) rather than caching it, and removal requires the exact identifier plus a previewed digest -- never a directory sweep. — Retention.Class stored on the episode; age/eligibility derived at plan time so it can never go stale.
+- [Phase 202]: [Phase 202]: 202-12: Oracle synthesis documents now render recommendation-first (recommendation, plain-English confidence, unsettled questions, sources, evidence trail); a claim citing a source not in the run's own recorded sources is refused by name at render time; resaving a run replaces its own document (keyed on run_identifier) instead of duplicating it.
 
 ### Pending Todos
 
@@ -735,8 +737,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-11T12:35:55.001Z
-Stopped at: Completed 202-09-PLAN.md
+Last session: 2026-09-11T13:30:43.139Z
+Stopped at: Completed 202-12-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
