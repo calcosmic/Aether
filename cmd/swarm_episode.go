@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -345,3 +346,214 @@ func persistInterruptedSwarmEpisode(swarmID, target, stage string, startedAt tim
 // ctx.Err() surfaced by the real public Swarm path, rather than a
 // timing-dependent sleep racing a timeout.
 var swarmMidRunInterruptFunc = func(cancel func()) {}
+
+// --- Task 2: retention and cleanup that act on a named episode (CAP-048) ---
+//
+// planSwarmEpisodeRetention/removeSwarmEpisodes never sweep by directory
+// prefix or content guess. A removal names an exact episode identifier
+// together with the digest it was previewed at (the manifest-and-digest
+// discipline this repository already applies to maintenance deletion, e.g.
+// safeIdentifierSegment/validateDurableSwarmID above); a stale or mismatched
+// digest refuses the whole operation before anything is deleted.
+
+// swarmEpisodeRetentionEntry is one episode's retention verdict: whether it
+// is eligible for removal right now, and why. Eligibility is recomputed
+// fresh on every call from the CURRENT full episode set -- it is
+// deliberately never cached on the episode record itself (see
+// swarmEpisodeRetentionMeta's doc comment), so a preview always reflects
+// what is true right now, not what was true when the episode was written.
+type swarmEpisodeRetentionEntry struct {
+	SwarmID    string `json:"swarm_id"`
+	Target     string `json:"target"`
+	Class      string `json:"class"`
+	AgeSeconds int64  `json:"age_seconds"`
+	Eligible   bool   `json:"eligible"`
+	Reason     string `json:"reason"`
+	Digest     string `json:"digest"`
+}
+
+// listSwarmEpisodes scans swarms/*/episode.json and returns every episode
+// that loads cleanly, mirroring the directory-scan discipline
+// evaluateSwarmStrikeHistoryAgainstPlan already uses for result.json. A
+// missing swarms directory yields an empty, non-error result.
+func listSwarmEpisodes(s *storage.Store) ([]swarmEpisodeRecord, error) {
+	if s == nil {
+		return nil, fmt.Errorf("list swarm episodes: no store initialized")
+	}
+	swarmsDir := filepath.Join(s.BasePath(), "swarms")
+	entries, err := os.ReadDir(swarmsDir)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("list swarm episodes: read swarms: %w", err)
+	}
+	var episodes []swarmEpisodeRecord
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		record, ok := loadSwarmEpisode(s, entry.Name())
+		if !ok {
+			continue
+		}
+		episodes = append(episodes, record)
+	}
+	return episodes, nil
+}
+
+// planSwarmEpisodeRetention is a pure read: it computes and returns the
+// eligible-for-removal set with a stated reason per episode, writing,
+// creating, or initializing nothing. Two rules make an episode ineligible,
+// checked in order:
+//
+//  1. It is the most recent (by EndedAt) episode recorded for its target --
+//     the one entry point an owner or a later Swarm run would look at first.
+//  2. It belongs to a target's currently unresolved strike sequence --
+//     re-derived from evaluateSwarmStrikeHistory (cmd/swarm_strikes.go), the
+//     exact same evidence the three-strike escalation guard reads, so
+//     retention and strike counting can never disagree about which episodes
+//     are "still live".
+//
+// Every other episode is eligible, with a plain reason stating so.
+func planSwarmEpisodeRetention(s *storage.Store, now time.Time) ([]swarmEpisodeRetentionEntry, error) {
+	episodes, err := listSwarmEpisodes(s)
+	if err != nil {
+		return nil, err
+	}
+
+	latestByTarget := map[string]string{}
+	latestTimeByTarget := map[string]time.Time{}
+	for _, ep := range episodes {
+		endedAt, perr := time.Parse(time.RFC3339Nano, ep.EndedAt)
+		if perr != nil {
+			continue
+		}
+		fp := ep.TargetFingerprint
+		if cur, ok := latestTimeByTarget[fp]; !ok || endedAt.After(cur) {
+			latestTimeByTarget[fp] = endedAt
+			latestByTarget[fp] = ep.SwarmID
+		}
+	}
+
+	strikeLiveSwarmIDs := map[string]bool{}
+	seenTargets := map[string]bool{}
+	for _, ep := range episodes {
+		if seenTargets[ep.TargetFingerprint] {
+			continue
+		}
+		seenTargets[ep.TargetFingerprint] = true
+		history, herr := evaluateSwarmStrikeHistory(s, ep.Target)
+		if herr != nil {
+			continue
+		}
+		for _, e := range history.Evidence {
+			strikeLiveSwarmIDs[e.SwarmID] = true
+		}
+	}
+
+	out := make([]swarmEpisodeRetentionEntry, 0, len(episodes))
+	for _, ep := range episodes {
+		entry := swarmEpisodeRetentionEntry{
+			SwarmID:  ep.SwarmID,
+			Target:   ep.Target,
+			Class:    ep.Retention.Class,
+			Eligible: true,
+			Reason:   "not the latest episode for its target and not part of an unresolved strike sequence",
+		}
+		if endedAt, perr := time.Parse(time.RFC3339Nano, ep.EndedAt); perr == nil {
+			age := now.Sub(endedAt)
+			if age > 0 {
+				entry.AgeSeconds = int64(age.Seconds())
+			}
+		}
+		switch {
+		case latestByTarget[ep.TargetFingerprint] == ep.SwarmID:
+			entry.Eligible = false
+			entry.Reason = "this is the most recent episode recorded for its target"
+		case strikeLiveSwarmIDs[ep.SwarmID]:
+			entry.Eligible = false
+			entry.Reason = "this episode is part of an unresolved strike sequence for its target"
+		}
+		if digest, derr := swarmEpisodeFileDigest(s, ep.SwarmID); derr == nil {
+			entry.Digest = digest
+		}
+		out = append(out, entry)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].SwarmID < out[j].SwarmID })
+	return out, nil
+}
+
+// swarmEpisodeRemovalRequest is one caller-named episode to remove: its
+// exact identifier and the digest it was previewed at (from
+// planSwarmEpisodeRetention's Digest field). A prefix, a glob, or an
+// identifier that does not match the runtime-issued swarm-id convention is
+// refused by validateDurableSwarmID before anything is inspected further.
+type swarmEpisodeRemovalRequest struct {
+	SwarmID string
+	Digest  string
+}
+
+// swarmEpisodeRemovalResult names exactly what was removed.
+type swarmEpisodeRemovalResult struct {
+	Removed []string `json:"removed"`
+}
+
+// removeSwarmEpisodes validates every request -- identifier AND digest --
+// before deleting anything. A digest that no longer matches the currently
+// stored episode is refused, naming the mismatched episode, and the WHOLE
+// batch is refused with it: a removal request is a promise made against a
+// specific preview, and honoring part of a batch whose preview has gone
+// stale would remove something the caller never actually confirmed.
+// Removing an episode deletes only its episode.json -- result.json (the
+// strike-history source of truth) and the swarm's issuance record are never
+// touched, so removal can never alter strike history.
+func removeSwarmEpisodes(s *storage.Store, requests []swarmEpisodeRemovalRequest) (swarmEpisodeRemovalResult, error) {
+	if s == nil {
+		return swarmEpisodeRemovalResult{}, fmt.Errorf("remove swarm episodes: no store initialized")
+	}
+	if len(requests) == 0 {
+		return swarmEpisodeRemovalResult{}, nil
+	}
+
+	type validatedRemoval struct {
+		path    string
+		swarmID string
+	}
+	toDelete := make([]validatedRemoval, 0, len(requests))
+	for _, req := range requests {
+		swarmID := strings.TrimSpace(req.SwarmID)
+		swarmDir, err := validateDurableSwarmID(s, swarmID)
+		if err != nil {
+			return swarmEpisodeRemovalResult{}, fmt.Errorf("remove swarm episodes: invalid identifier %q: %w", req.SwarmID, err)
+		}
+		episodePath := filepath.Join(swarmDir, "episode.json")
+		info, statErr := os.Lstat(episodePath)
+		if statErr != nil {
+			return swarmEpisodeRemovalResult{}, fmt.Errorf("remove swarm episodes: episode %q was not found: %w", swarmID, statErr)
+		}
+		if !info.Mode().IsRegular() {
+			return swarmEpisodeRemovalResult{}, fmt.Errorf("remove swarm episodes: episode %q is not a regular file", swarmID)
+		}
+		currentDigest, derr := swarmEpisodeFileDigest(s, swarmID)
+		if derr != nil {
+			return swarmEpisodeRemovalResult{}, fmt.Errorf("remove swarm episodes: read current digest for %q: %w", swarmID, derr)
+		}
+		requestedDigest := strings.TrimSpace(req.Digest)
+		if requestedDigest == "" || currentDigest != requestedDigest {
+			return swarmEpisodeRemovalResult{}, fmt.Errorf(
+				"remove swarm episodes: episode %q has changed since it was previewed (digest mismatch) -- refusing the whole removal", swarmID,
+			)
+		}
+		toDelete = append(toDelete, validatedRemoval{path: episodePath, swarmID: swarmID})
+	}
+
+	removed := make([]string, 0, len(toDelete))
+	for _, v := range toDelete {
+		if err := os.Remove(v.path); err != nil {
+			return swarmEpisodeRemovalResult{Removed: removed}, fmt.Errorf("remove swarm episodes: delete %q: %w", v.swarmID, err)
+		}
+		removed = append(removed, v.swarmID)
+	}
+	return swarmEpisodeRemovalResult{Removed: removed}, nil
+}

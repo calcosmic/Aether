@@ -2,10 +2,13 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -344,5 +347,311 @@ func TestSwarmEpisodeIdentityComesFromIssuance(t *testing.T) {
 	}
 	if _, ok := loadSwarmEpisode(store, goodID); !ok {
 		t.Fatalf("expected episode %s to have been written", goodID)
+	}
+}
+
+// --- Task 2: retention and cleanup that act on a named episode ---
+
+func mustSaveSwarmResultFixture(t *testing.T, swarmID, target, status string, completedAt time.Time) {
+	t.Helper()
+	if err := saveSwarmResultRecord(store, swarmResultRecord{
+		SwarmID:     swarmID,
+		Target:      target,
+		Status:      status,
+		CompletedAt: completedAt.UTC().Format(time.RFC3339Nano),
+	}); err != nil {
+		t.Fatalf("save swarm result fixture: %v", err)
+	}
+}
+
+func mustPersistSwarmEpisodeFixture(t *testing.T, swarmID, target string, endedAt time.Time) swarmEpisodeRecord {
+	t.Helper()
+	record := buildSwarmEpisodeRecord(swarmEpisodeBuildParams{
+		SwarmID:            swarmID,
+		Target:             target,
+		Status:             swarmEpisodeStatusCompleted,
+		StartedAt:          endedAt.Add(-time.Minute),
+		EndedAt:            endedAt,
+		Comparison:         swarmComparison{},
+		VerificationStatus: "completed",
+	})
+	if err := persistSwarmEpisode(store, record); err != nil {
+		t.Fatalf("persist swarm episode fixture: %v", err)
+	}
+	loaded, ok := loadSwarmEpisode(store, swarmID)
+	if !ok {
+		t.Fatalf("could not reload persisted episode fixture %s", swarmID)
+	}
+	return loaded
+}
+
+// storeDirDigest hashes the sorted (relative path, content) pairs of every
+// regular file under dir -- a whole-tree content digest used to prove a
+// read-only operation changed nothing on disk.
+func storeDirDigest(t *testing.T, dir string) string {
+	t.Helper()
+	var paths []string
+	if err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		rel, relErr := filepath.Rel(dir, path)
+		if relErr != nil {
+			return relErr
+		}
+		paths = append(paths, rel)
+		return nil
+	}); err != nil {
+		t.Fatalf("walk store dir: %v", err)
+	}
+	sort.Strings(paths)
+	h := sha256.New()
+	for _, rel := range paths {
+		data, err := os.ReadFile(filepath.Join(dir, rel))
+		if err != nil {
+			t.Fatalf("read %s: %v", rel, err)
+		}
+		h.Write([]byte(rel))
+		h.Write([]byte{0})
+		h.Write(data)
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func TestSwarmRetentionNeverRemovesTheLatestOrAStrikeEpisode(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	base := time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC)
+
+	// Target A: two ordinary episodes, no live strike sequence. The older is
+	// eligible; the newer (most recent) is not.
+	targetA := "Retention target ordinary"
+	swarmA1 := newSwarmRunID(base)
+	swarmA2 := newSwarmRunID(base.Add(time.Minute))
+	mustSaveSwarmResultFixture(t, swarmA1, targetA, "completed", base)
+	mustSaveSwarmResultFixture(t, swarmA2, targetA, "completed", base.Add(time.Minute))
+	mustPersistSwarmEpisodeFixture(t, swarmA1, targetA, base)
+	mustPersistSwarmEpisodeFixture(t, swarmA2, targetA, base.Add(time.Minute))
+
+	// Target B: two failed episodes, no completed reset in between -- both
+	// are part of B's currently unresolved (2-strike) sequence.
+	targetB := "Retention target unresolved strikes"
+	swarmB1 := newSwarmRunID(base.Add(2 * time.Minute))
+	swarmB2 := newSwarmRunID(base.Add(3 * time.Minute))
+	mustSaveSwarmResultFixture(t, swarmB1, targetB, "failed", base.Add(2*time.Minute))
+	mustSaveSwarmResultFixture(t, swarmB2, targetB, "failed", base.Add(3*time.Minute))
+	mustPersistSwarmEpisodeFixture(t, swarmB1, targetB, base.Add(2*time.Minute))
+	mustPersistSwarmEpisodeFixture(t, swarmB2, targetB, base.Add(3*time.Minute))
+
+	plan, err := planSwarmEpisodeRetention(s, base.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("plan swarm episode retention: %v", err)
+	}
+	byID := map[string]swarmEpisodeRetentionEntry{}
+	for _, entry := range plan {
+		byID[entry.SwarmID] = entry
+	}
+
+	if entry, ok := byID[swarmA1]; !ok || !entry.Eligible {
+		t.Fatalf("expected the older ordinary episode to be eligible: %+v", entry)
+	}
+	if entry, ok := byID[swarmA2]; !ok || entry.Eligible {
+		t.Fatalf("expected the most recent episode for its target to be ineligible: %+v", entry)
+	} else if !strings.Contains(entry.Reason, "recent") {
+		t.Fatalf("expected a stated 'most recent' reason, got %q", entry.Reason)
+	}
+	if entry, ok := byID[swarmB1]; !ok || entry.Eligible {
+		t.Fatalf("expected an episode in an unresolved strike sequence to be ineligible: %+v", entry)
+	} else if !strings.Contains(entry.Reason, "strike") {
+		t.Fatalf("expected a stated strike-sequence reason, got %q", entry.Reason)
+	}
+	if entry, ok := byID[swarmB2]; !ok || entry.Eligible {
+		t.Fatalf("expected the other episode in the unresolved strike sequence to be ineligible: %+v", entry)
+	}
+}
+
+func TestSwarmRemovalRequiresIdentifierAndDigest(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	base := time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC)
+	target := "Removal target requires identifier"
+	oldID := newSwarmRunID(base)
+	newID := newSwarmRunID(base.Add(time.Minute))
+	mustSaveSwarmResultFixture(t, oldID, target, "completed", base)
+	mustSaveSwarmResultFixture(t, newID, target, "completed", base.Add(time.Minute))
+	mustPersistSwarmEpisodeFixture(t, oldID, target, base)
+	mustPersistSwarmEpisodeFixture(t, newID, target, base.Add(time.Minute))
+
+	plan, err := planSwarmEpisodeRetention(s, base.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("plan retention: %v", err)
+	}
+	var digest string
+	for _, entry := range plan {
+		if entry.SwarmID == oldID {
+			digest = entry.Digest
+		}
+	}
+	if digest == "" {
+		t.Fatalf("expected a digest for the eligible older episode")
+	}
+
+	// A prefix instead of the exact identifier is refused, naming what was
+	// supplied.
+	prefix := oldID[:len(oldID)-2]
+	if _, err := removeSwarmEpisodes(s, []swarmEpisodeRemovalRequest{{SwarmID: prefix, Digest: digest}}); err == nil {
+		t.Fatalf("expected removal by prefix to be refused")
+	} else if !strings.Contains(err.Error(), prefix) {
+		t.Fatalf("expected refusal to name the supplied identifier %q, got: %v", prefix, err)
+	}
+
+	// A glob is refused.
+	if _, err := removeSwarmEpisodes(s, []swarmEpisodeRemovalRequest{{SwarmID: "swarm-*", Digest: digest}}); err == nil {
+		t.Fatalf("expected removal by glob to be refused")
+	}
+
+	// A missing digest is refused.
+	if _, err := removeSwarmEpisodes(s, []swarmEpisodeRemovalRequest{{SwarmID: oldID, Digest: ""}}); err == nil {
+		t.Fatalf("expected removal without a digest to be refused")
+	}
+
+	// Exact identifier with the correct digest succeeds.
+	result, err := removeSwarmEpisodes(s, []swarmEpisodeRemovalRequest{{SwarmID: oldID, Digest: digest}})
+	if err != nil {
+		t.Fatalf("expected exact-identifier removal to succeed: %v", err)
+	}
+	if len(result.Removed) != 1 || result.Removed[0] != oldID {
+		t.Fatalf("expected removed = [%s], got %v", oldID, result.Removed)
+	}
+	if _, ok := loadSwarmEpisode(s, oldID); ok {
+		t.Fatalf("expected episode %s to be gone after removal", oldID)
+	}
+}
+
+func TestSwarmRemovalRefusesChangedDigest(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	base := time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC)
+	target := "Removal target changed digest"
+	oldID := newSwarmRunID(base)
+	newID := newSwarmRunID(base.Add(time.Minute))
+	mustSaveSwarmResultFixture(t, oldID, target, "completed", base)
+	mustSaveSwarmResultFixture(t, newID, target, "completed", base.Add(time.Minute))
+	mustPersistSwarmEpisodeFixture(t, oldID, target, base)
+	mustPersistSwarmEpisodeFixture(t, newID, target, base.Add(time.Minute))
+
+	plan, err := planSwarmEpisodeRetention(s, base.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("plan retention: %v", err)
+	}
+	var staleDigest string
+	for _, entry := range plan {
+		if entry.SwarmID == oldID {
+			staleDigest = entry.Digest
+		}
+	}
+	if staleDigest == "" {
+		t.Fatalf("expected a digest for the eligible episode")
+	}
+
+	// The episode changes after the preview (re-persisted with a different
+	// verification status), so its digest no longer matches the preview.
+	changed := mustPersistSwarmEpisodeFixture(t, oldID, target, base)
+	changed.VerificationStatus = "failed"
+	if err := persistSwarmEpisode(s, changed); err != nil {
+		t.Fatalf("re-persist changed episode: %v", err)
+	}
+
+	before, err := os.ReadFile(filepath.Join(s.BasePath(), "swarms", oldID, "episode.json"))
+	if err != nil {
+		t.Fatalf("read episode before refused removal: %v", err)
+	}
+
+	if _, err := removeSwarmEpisodes(s, []swarmEpisodeRemovalRequest{{SwarmID: oldID, Digest: staleDigest}}); err == nil {
+		t.Fatalf("expected removal with a stale digest to be refused")
+	} else if !strings.Contains(err.Error(), oldID) {
+		t.Fatalf("expected refusal to name the mismatched episode %q, got: %v", oldID, err)
+	}
+
+	after, err := os.ReadFile(filepath.Join(s.BasePath(), "swarms", oldID, "episode.json"))
+	if err != nil {
+		t.Fatalf("read episode after refused removal: %v", err)
+	}
+	if string(before) != string(after) {
+		t.Fatalf("a refused removal must delete nothing -- episode content changed")
+	}
+}
+
+func TestSwarmRetentionPreviewIsReadOnly(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	base := time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC)
+	target := "Retention preview read only target"
+	swarmID := newSwarmRunID(base)
+	mustSaveSwarmResultFixture(t, swarmID, target, "completed", base)
+	mustPersistSwarmEpisodeFixture(t, swarmID, target, base)
+
+	before := storeDirDigest(t, s.BasePath())
+	if _, err := planSwarmEpisodeRetention(s, base.Add(time.Hour)); err != nil {
+		t.Fatalf("plan retention: %v", err)
+	}
+	after := storeDirDigest(t, s.BasePath())
+	if before != after {
+		t.Fatalf("planSwarmEpisodeRetention must not write anything: digest changed from %s to %s", before, after)
+	}
+}
+
+func TestSwarmRemovalLeavesStrikeHistoryUnchanged(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	base := time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC)
+	target := "Removal leaves strike history unchanged"
+	oldID := newSwarmRunID(base)
+	newID := newSwarmRunID(base.Add(time.Minute))
+	mustSaveSwarmResultFixture(t, oldID, target, "completed", base)
+	mustSaveSwarmResultFixture(t, newID, target, "completed", base.Add(time.Minute))
+	mustPersistSwarmEpisodeFixture(t, oldID, target, base)
+	mustPersistSwarmEpisodeFixture(t, newID, target, base.Add(time.Minute))
+
+	beforeHistory := swarmStrikeHistoryDigestFor(t, target)
+
+	plan, err := planSwarmEpisodeRetention(s, base.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("plan retention: %v", err)
+	}
+	var digest string
+	for _, entry := range plan {
+		if entry.SwarmID == oldID {
+			digest = entry.Digest
+		}
+	}
+	if digest == "" {
+		t.Fatalf("expected a digest for the eligible episode")
+	}
+	if _, err := removeSwarmEpisodes(s, []swarmEpisodeRemovalRequest{{SwarmID: oldID, Digest: digest}}); err != nil {
+		t.Fatalf("remove swarm episode: %v", err)
+	}
+
+	afterHistory := swarmStrikeHistoryDigestFor(t, target)
+	if beforeHistory != afterHistory {
+		t.Fatalf("removing an episode changed strike history:\nbefore: %s\nafter:  %s", beforeHistory, afterHistory)
+	}
+
+	resultPath := filepath.Join(s.BasePath(), "swarms", oldID, "result.json")
+	if _, err := os.Stat(resultPath); err != nil {
+		t.Fatalf("expected result.json to survive episode removal: %v", err)
 	}
 }
