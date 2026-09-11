@@ -107,7 +107,24 @@ func TestLifecycleHistory199Order(t *testing.T) {
 		t.Fatalf("history ordering is nondeterministic\nfirst: %#v\nsecond: %#v", first["events"], second["events"])
 	}
 
+	// 202-14 additively lists the shared episode lineage and unverified-work
+	// inventory in this same "events" listing -- the "valid" fixture's own
+	// research/dreams files (seedLifecycleFactsFixture) now legitimately
+	// surface as extra rows. Filtering those two new categories out here
+	// proves this task's own success criterion in prose: "the existing
+	// history rows for lifecycle events and receipts are unchanged in shape
+	// and order relative to each other" -- never that no other row may
+	// exist alongside them.
 	rows := lifecycleHistory199Rows(t, first, "events")
+	preexisting := rows[:0:0]
+	for _, row := range rows {
+		category, _ := row["category"].(string)
+		if category == lifecycleHistoryCategoryEpisode || category == lifecycleHistoryCategoryUnverified {
+			continue
+		}
+		preexisting = append(preexisting, row)
+	}
+	rows = preexisting
 	wantTimestamps := []string{
 		"2026-09-03T12:00:00Z",
 		"2026-09-03T12:00:00Z",

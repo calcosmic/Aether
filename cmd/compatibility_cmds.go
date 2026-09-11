@@ -426,7 +426,7 @@ func buildIdleWatchResult(root string, factStore *storage.Store, now time.Time) 
 	projection.Actors.Value = terminalActors
 	projection.Lineage.Value = nil
 
-	history := buildLifecycleHistoryProjection(facts, projection, "", 5)
+	history := buildLifecycleHistoryProjection(facts, projection, "", 5, "", root, factStore)
 	recent := append([]LifecycleHistoryRow(nil), history.Events...)
 	for i := range recent {
 		if recent[i].Category == lifecycleHistoryCategoryActiveWork {

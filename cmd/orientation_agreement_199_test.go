@@ -53,7 +53,7 @@ func TestOrientationViewsAgree199(t *testing.T) {
 			phaseDetail, detailMessage := buildLifecyclePhaseProjection(facts, focused, lifecyclePhaseSelectionDetail, 0, false)
 			phaseList, listMessage := buildLifecyclePhaseProjection(facts, focused, lifecyclePhaseSelectionList, 0, false)
 			phaseAll, allMessage := buildLifecyclePhaseProjection(facts, focused, lifecyclePhaseSelectionAll, 0, false)
-			history := buildLifecycleHistoryProjection(facts, focused, "", 20)
+			history := buildLifecycleHistoryProjection(facts, focused, "", 20, "", "", nil)
 			if fixture.name != "empty" && (detailMessage != "" || listMessage != "" || allMessage != "") {
 				t.Fatalf("phase builder rejected %s fixture: detail=%q list=%q all=%q", fixture.name, detailMessage, listMessage, allMessage)
 			}

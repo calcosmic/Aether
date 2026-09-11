@@ -8,12 +8,14 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
 )
 
 var (
 	historyLimit  int
 	historyFilter string
+	historyKind   string
 	historyJSON   bool
 )
 
@@ -22,6 +24,18 @@ const (
 	lifecycleHistoryCategoryActiveWork      = "active_work"
 	lifecycleHistoryCategoryRecentOutcome   = "recent_outcome"
 	lifecycleHistoryCategoryUnknownEvidence = "unknown_evidence"
+	// lifecycleHistoryCategoryEpisode and lifecycleHistoryCategoryUnverified
+	// are 202-14's two additional row families: one durable, finished-or-not
+	// episode (Swarm run, Oracle research, build/check attempt -- the shared
+	// lineage, cmd/episode_index.go) and one piece of unproven work (Oracle
+	// partial research, a Swarm repair idea, an interrupted episode, plan
+	// research, a reflection -- cmd/partial_work_label.go's
+	// collectUnverifiedWork). Both are appended to the existing event/actor/
+	// receipt rows, never merged into an existing category -- the two
+	// systems can list the SAME underlying Swarm episode or Oracle document
+	// without this listing trying to reconcile them into one row.
+	lifecycleHistoryCategoryEpisode    = "episode"
+	lifecycleHistoryCategoryUnverified = "unverified_work"
 )
 
 // LifecycleHistoryRow is the human meaning of one recorded history fact. Raw
@@ -40,6 +54,15 @@ type LifecycleHistoryRow struct {
 	ReceiptID      string                   `json:"receipt_id,omitempty"`
 	OutcomeKind    colony.OutcomeKind       `json:"outcome_kind,omitempty"`
 	RawReceipt     *colony.LifecycleReceipt `json:"raw_receipt,omitempty"`
+
+	// Kind, Standing, Cost and Path are populated ONLY by the 202-14 episode
+	// and unverified-work rows below -- every existing lifecycle event,
+	// actor and receipt row leaves all four empty, so writeLifecycleHistoryRow
+	// renders those rows byte-identically to before this plan.
+	Kind     string `json:"kind,omitempty"`
+	Standing string `json:"standing,omitempty"`
+	Cost     string `json:"cost,omitempty"`
+	Path     string `json:"path,omitempty"`
 }
 
 // LifecycleHistoryResult is a focused view over the shared lifecycle
@@ -62,8 +85,12 @@ type LifecycleHistoryResult struct {
 	RecentOutcomes []LifecycleHistoryRow `json:"recent_outcomes"`
 	Count          int                   `json:"count"`
 	Filter         string                `json:"filter,omitempty"`
-	Limit          int                   `json:"limit"`
-	HistorySource  LifecycleFactSource   `json:"history_source"`
+	// Kind narrows the listing to one row kind (e.g. "swarm",
+	// "oracle-research", "build-attempt", or one of collectUnverifiedWork's
+	// kinds) without altering any surviving row's own content (202-14).
+	Kind          string              `json:"kind,omitempty"`
+	Limit         int                 `json:"limit"`
+	HistorySource LifecycleFactSource `json:"history_source"`
 
 	Blockers       []colony.LifecycleIssue     `json:"blockers"`
 	OwnerDecisions []colony.LifecycleDecision  `json:"owner_decisions"`
@@ -86,7 +113,7 @@ var historyCmd = &cobra.Command{
 		}
 		projection := projectLifecycle(facts, LifecycleViewFocused, detectPlatform())
 		projection.Command = "history"
-		result := buildLifecycleHistoryProjection(facts, projection, historyFilter, historyLimit)
+		result := buildLifecycleHistoryProjection(facts, projection, historyFilter, historyLimit, historyKind, root, store)
 
 		if historyJSON {
 			outputOK(result)
@@ -101,6 +128,7 @@ func init() {
 	rootCmd.AddCommand(historyCmd)
 	historyCmd.Flags().IntVar(&historyLimit, "limit", 20, "Maximum number of history rows to show")
 	historyCmd.Flags().StringVar(&historyFilter, "filter", "", "Filter history by event, actor, result, or evidence source")
+	historyCmd.Flags().StringVar(&historyKind, "kind", "", "Narrow the listing to one row kind (e.g. swarm, oracle-research, build-attempt, check-attempt, or an unverified-work kind)")
 	historyCmd.Flags().BoolVar(&historyJSON, "json", false, "Output as JSON, including raw evidence detail")
 }
 
@@ -121,7 +149,7 @@ func parseEvent(event string) (timestamp, eventType, source, message string) {
 	}
 }
 
-func buildLifecycleHistoryProjection(facts LifecycleFacts, projection LifecycleProjection, filter string, limit int) LifecycleHistoryResult {
+func buildLifecycleHistoryProjection(facts LifecycleFacts, projection LifecycleProjection, filter string, limit int, kind, root string, s *storage.Store) LifecycleHistoryResult {
 	rows := make([]LifecycleHistoryRow, 0, len(facts.History.Value)+len(facts.Actors.Value)+1)
 	for _, raw := range facts.History.Value {
 		rows = append(rows, lifecycleHistoryEventRow(raw))
@@ -132,6 +160,13 @@ func buildLifecycleHistoryProjection(facts LifecycleFacts, projection LifecycleP
 	if receipt := facts.Evidence.Value.Receipt; receipt != nil {
 		rows = append(rows, lifecycleHistoryReceiptRow(receipt))
 	}
+	// 202-14: every episode in the shared lineage, and every piece of
+	// unverified work, in the SAME listing -- never a second screen the
+	// owner has to remember to check. Neither call ever writes anything
+	// (loadColonyEpisodeIndex, collectUnverifiedWork are both pure reads);
+	// an unresolvable source simply contributes no rows.
+	rows = append(rows, lifecycleHistoryEpisodeRows(root, s)...)
+	rows = append(rows, lifecycleHistoryUnverifiedRows(root)...)
 
 	filter = strings.TrimSpace(filter)
 	if filter != "" {
@@ -143,6 +178,17 @@ func buildLifecycleHistoryProjection(facts LifecycleFacts, projection LifecycleP
 				row.EvidenceKind, row.EvidenceSource, row.Raw,
 			}, "\n"))
 			if strings.Contains(haystack, needle) {
+				filtered = append(filtered, row)
+			}
+		}
+		rows = filtered
+	}
+
+	kind = strings.TrimSpace(kind)
+	if kind != "" {
+		filtered := rows[:0]
+		for _, row := range rows {
+			if row.Kind == kind {
 				filtered = append(filtered, row)
 			}
 		}
@@ -190,6 +236,7 @@ func buildLifecycleHistoryProjection(facts LifecycleFacts, projection LifecycleP
 		RecentOutcomes:     recent,
 		Count:              len(rows),
 		Filter:             filter,
+		Kind:               kind,
 		Limit:              limit,
 		HistorySource:      facts.History.Source,
 		Blockers:           append([]colony.LifecycleIssue(nil), projection.Blockers...),
@@ -420,4 +467,126 @@ func writeLifecycleHistoryRow(b *strings.Builder, row LifecycleHistoryRow) {
 	b.WriteString("[" + label + "] " + emptyFallback(strings.TrimSpace(row.Event), "unknown evidence") + "\n")
 	b.WriteString("  Actor: " + emptyFallback(strings.TrimSpace(row.Actor), "Unknown") + "\n")
 	b.WriteString("  Result: " + emptyFallback(strings.TrimSpace(row.Result), "No result was recorded.") + "\n")
+	// The three lines below are ONLY written when the row actually carries
+	// this 202-14 content -- every pre-existing event/actor/receipt row
+	// leaves Standing/Cost/Path empty, so this function's output for those
+	// rows is byte-identical to before this plan.
+	if standing := strings.TrimSpace(row.Standing); standing != "" {
+		b.WriteString("  Standing: " + standing + "\n")
+	}
+	if cost := strings.TrimSpace(row.Cost); cost != "" {
+		b.WriteString("  Cost: " + cost + "\n")
+	}
+	if path := strings.TrimSpace(row.Path); path != "" {
+		b.WriteString("  Read the full write-up: " + path + "\n")
+	}
+}
+
+// --- 202-14: episode and unverified-work rows -----------------------------
+
+// lifecycleHistoryEpisodeRows renders the shared lineage (cmd/episode_index.go)
+// as history rows: one per Swarm episode, saved Oracle research document, or
+// build/check attempt, each carrying its outcome, its standing, its cost
+// where a ledger reference resolves to one, and the path to read it in
+// full. Never merges an episode into an existing event/actor/receipt row --
+// this is purely additive.
+func lifecycleHistoryEpisodeRows(root string, s *storage.Store) []LifecycleHistoryRow {
+	idx, err := loadColonyEpisodeIndex(root, s)
+	if err != nil {
+		return nil
+	}
+	rows := make([]LifecycleHistoryRow, 0, len(idx.Entries))
+	for _, entry := range idx.Entries {
+		rows = append(rows, lifecycleHistoryRowFromEpisode(entry))
+	}
+	return rows
+}
+
+func lifecycleHistoryRowFromEpisode(entry colonyEpisodeEntry) LifecycleHistoryRow {
+	at := entry.EndedAt
+	if at.IsZero() {
+		at = entry.StartedAt
+	}
+	timestamp := ""
+	if !at.IsZero() {
+		timestamp = at.UTC().Format(time.RFC3339Nano)
+	}
+
+	outcome := entry.Outcome
+	if !entry.OutcomeKnown {
+		outcome = "unknown"
+	}
+
+	return LifecycleHistoryRow{
+		Timestamp:      timestamp,
+		Event:          colonyEpisodeKindLabel(entry.Kind) + ": " + entry.Subject,
+		Actor:          "Unknown",
+		Result:         "Outcome: " + outcome,
+		Category:       lifecycleHistoryCategoryEpisode,
+		EvidenceKind:   "episode",
+		EvidenceSource: entry.Kind,
+		Known:          entry.OutcomeKnown,
+		Kind:           entry.Kind,
+		Standing:       workStandingLabel(entry.Standing, entry.StandingReason),
+		Cost:           colonyEpisodeCostBlock(entry.Cost),
+		Path:           entry.Path,
+	}
+}
+
+// colonyEpisodeCostBlock renders an episode entry's cost reference through
+// the exact SAME renderer status's own section uses
+// (renderSpendCostLineFromLedgers, cmd/spend_cost_line.go) -- never a
+// second accounting path or a second rendering -- so status and history can
+// never disagree about what one episode cost. Empty when the entry carries
+// no ledger reference at all (Swarm and Oracle research today, whose Cost
+// field is the zero value): "cost where applicable" (202-14) never prints a
+// line for an entry that was never billed against a phase ledger to begin
+// with.
+func colonyEpisodeCostBlock(ref colonyEpisodeCostRef) string {
+	if ref.Phase <= 0 {
+		return ""
+	}
+	return renderSpendCostLineFromLedgers(colonyEpisodeLedgers(ref))
+}
+
+// lifecycleHistoryUnverifiedRows renders collectUnverifiedWork's inventory
+// (cmd/partial_work_label.go) as history rows: Oracle partial research, an
+// unapplied or rolled-back Swarm repair idea, an interrupted Swarm episode,
+// plan research, and local reflections -- every piece of work this
+// repository has recorded that is not yet a checked result, each carrying
+// its standing label and the path to read it in full. This listing can
+// name the same underlying Swarm episode or Oracle document
+// lifecycleHistoryEpisodeRows already named -- the two are deliberately
+// separate rows (one lineage entry, one standing-vocabulary entry), never
+// merged or deduplicated against each other.
+func lifecycleHistoryUnverifiedRows(root string) []LifecycleHistoryRow {
+	items, err := collectUnverifiedWork(root)
+	if err != nil {
+		return nil
+	}
+	rows := make([]LifecycleHistoryRow, 0, len(items))
+	for _, item := range items {
+		rows = append(rows, lifecycleHistoryRowFromUnverified(item))
+	}
+	return rows
+}
+
+func lifecycleHistoryRowFromUnverified(item unverifiedWorkEntry) LifecycleHistoryRow {
+	timestamp := ""
+	if !item.RecordedAt.IsZero() {
+		timestamp = item.RecordedAt.UTC().Format(time.RFC3339Nano)
+	}
+	return LifecycleHistoryRow{
+		Timestamp:      timestamp,
+		Event:          "Unverified work: " + item.Subject,
+		Actor:          "Unknown",
+		Result:         item.Reason,
+		Category:       lifecycleHistoryCategoryUnverified,
+		EvidenceKind:   "unverified-work",
+		EvidenceSource: item.Kind,
+		Known:          item.Standing != workStandingUnknown,
+		Kind:           item.Kind,
+		Standing:       item.Label,
+		Path:           item.Path,
+	}
 }

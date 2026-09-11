@@ -1,14 +1,17 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/calcosmic/Aether/pkg/storage"
 )
 
@@ -312,5 +315,274 @@ func TestStatusEpisodeSectionDoesNotDisturbOtherSections(t *testing.T) {
 	reconstructed := strings.Replace(after, "\n"+section, "", 1)
 	if reconstructed != before {
 		t.Fatalf("episode section disturbed other sections.\nbefore:\n%s\n\nafter (with section removed):\n%s", before, reconstructed)
+	}
+}
+
+// --- Task 3: episodes and unverified work in the history listing ---------
+
+func newHistoryTestProjection(root string) (LifecycleFacts, LifecycleProjection) {
+	facts := unavailableLifecycleFacts(root, time.Now().UTC(), "episode index test fixture")
+	projection := projectLifecycle(facts, LifecycleViewFocused, "codex")
+	return facts, projection
+}
+
+func TestHistoryListsEveryEpisodeWithOutcomeAndCost(t *testing.T) {
+	saveGlobals(t)
+	s, root := newEpisodeIndexTestStore(t)
+	store = s
+	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+
+	writeEpisodeIndexSwarmFixture(t, s, "swarm-history-1", "History episode target A", now.Add(-3*time.Hour), now.Add(-2*time.Hour), false)
+	writeEpisodeIndexResearchFixture(t, root, "history-research-1", "History episode target B", "complete", now.Add(-4*time.Hour))
+	writeEpisodeIndexAttemptFixture(t, s, 44, "attempt-history-1", "History episode target C", buildAttemptBuilt, now.Add(-time.Hour), now, nil)
+	seedSpendLedgerForTest(t, 44, spendWorkflowBuild, measuredSpendRowForTest("Mason-44", "builder", 100_000))
+
+	facts, projection := newHistoryTestProjection(root)
+	result := buildLifecycleHistoryProjection(facts, projection, "", 0, "", root, s)
+
+	var episodeRows []LifecycleHistoryRow
+	for _, row := range result.Events {
+		if row.Category == lifecycleHistoryCategoryEpisode {
+			episodeRows = append(episodeRows, row)
+		}
+	}
+	if len(episodeRows) != 3 {
+		t.Fatalf("expected 3 episode rows, got %d: %+v", len(episodeRows), episodeRows)
+	}
+
+	wantCostBlock := renderSpendCostLineFromLedgers(func() []spendLedger {
+		ledgers, _ := loadSpendLedgersForPhase(44)
+		return ledgers
+	}())
+
+	var sawBuildAttemptCost bool
+	for _, row := range episodeRows {
+		if !strings.HasPrefix(row.Result, "Outcome:") {
+			t.Errorf("episode row %q missing an outcome: %+v", row.Event, row)
+		}
+		if row.Path == "" {
+			t.Errorf("episode row %q missing a path to its full write-up: %+v", row.Event, row)
+		}
+		if row.Kind == colonyEpisodeKindBuildAttempt {
+			if row.Cost != wantCostBlock {
+				t.Errorf("build attempt row cost = %q, want the ledger authority's own block:\n%s", row.Cost, wantCostBlock)
+			}
+			sawBuildAttemptCost = true
+		}
+	}
+	if !sawBuildAttemptCost {
+		t.Fatalf("expected the build attempt row to carry a cost, got episode rows: %+v", episodeRows)
+	}
+}
+
+func TestHistoryListsUnverifiedWorkWithItsStanding(t *testing.T) {
+	saveGlobals(t)
+	s, root := newEpisodeIndexTestStore(t)
+	store = s
+
+	planDir := filepath.Join(root, ".aether", "data", "planning")
+	if err := os.MkdirAll(planDir, 0755); err != nil {
+		t.Fatalf("mkdir plan research dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(planDir, "SCOUT.md"), []byte("# Scout notes\n"), 0644); err != nil {
+		t.Fatalf("write plan research fixture: %v", err)
+	}
+
+	dreamsDir := filepath.Join(root, ".aether", "dreams")
+	if err := os.MkdirAll(dreamsDir, 0755); err != nil {
+		t.Fatalf("mkdir dreams dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dreamsDir, "note.md"), []byte("# A reflection\n"), 0644); err != nil {
+		t.Fatalf("write reflection fixture: %v", err)
+	}
+
+	facts, projection := newHistoryTestProjection(root)
+	result := buildLifecycleHistoryProjection(facts, projection, "", 0, "", root, s)
+
+	var unverifiedRows []LifecycleHistoryRow
+	for _, row := range result.Events {
+		if row.Category == lifecycleHistoryCategoryUnverified {
+			unverifiedRows = append(unverifiedRows, row)
+		}
+	}
+	if len(unverifiedRows) != 2 {
+		t.Fatalf("expected 2 unverified-work rows, got %d: %+v", len(unverifiedRows), unverifiedRows)
+	}
+	for _, row := range unverifiedRows {
+		if !strings.Contains(row.Standing, "useful notes, not verified") {
+			t.Errorf("unverified row %q standing = %q, want the shared useful-notes label", row.Event, row.Standing)
+		}
+		if row.Path == "" {
+			t.Errorf("unverified row %q missing a path", row.Event)
+		}
+	}
+}
+
+func TestHistoryVerifiedAndUnverifiedAreDistinguishable(t *testing.T) {
+	saveGlobals(t)
+	s, root := newEpisodeIndexTestStore(t)
+	store = s
+	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+
+	writeEpisodeIndexSwarmFixture(t, s, "swarm-verified-1", "Verified swarm run", now.Add(-2*time.Hour), now.Add(-time.Hour), false)
+	writeEpisodeIndexSwarmFixture(t, s, "swarm-unverified-1", "Unverified swarm run", now.Add(-4*time.Hour), now.Add(-3*time.Hour), true)
+
+	facts, projection := newHistoryTestProjection(root)
+	result := buildLifecycleHistoryProjection(facts, projection, "", 0, "", root, s)
+
+	var verifiedRow, unverifiedRow *LifecycleHistoryRow
+	for i := range result.Events {
+		row := result.Events[i]
+		switch row.Event {
+		case colonyEpisodeKindLabel(colonyEpisodeKindSwarm) + ": Verified swarm run":
+			verifiedRow = &result.Events[i]
+		case colonyEpisodeKindLabel(colonyEpisodeKindSwarm) + ": Unverified swarm run":
+			unverifiedRow = &result.Events[i]
+		}
+	}
+	if verifiedRow == nil || unverifiedRow == nil {
+		t.Fatalf("expected both a verified and an unverified swarm row, got events: %+v", result.Events)
+	}
+	if verifiedRow.Standing != "verified" {
+		t.Errorf("verified row standing = %q, want %q", verifiedRow.Standing, "verified")
+	}
+	if unverifiedRow.Standing == "verified" || !strings.Contains(unverifiedRow.Standing, "useful notes") {
+		t.Errorf("unverified row standing = %q, want a useful-notes label", unverifiedRow.Standing)
+	}
+	if verifiedRow.Standing == unverifiedRow.Standing {
+		t.Fatalf("verified and unverified rows carry the identical standing field: %q", verifiedRow.Standing)
+	}
+
+	var bVerified, bUnverified strings.Builder
+	writeLifecycleHistoryRow(&bVerified, *verifiedRow)
+	writeLifecycleHistoryRow(&bUnverified, *unverifiedRow)
+	if bVerified.String() == bUnverified.String() {
+		t.Fatalf("verified and unverified rows rendered identically")
+	}
+}
+
+func TestHistoryFilterNarrowsWithoutChangingRows(t *testing.T) {
+	saveGlobals(t)
+	s, root := newEpisodeIndexTestStore(t)
+	store = s
+	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+
+	writeEpisodeIndexSwarmFixture(t, s, "swarm-filter-1", "Filter target A", now.Add(-2*time.Hour), now.Add(-time.Hour), false)
+	writeEpisodeIndexResearchFixture(t, root, "filter-research-1", "Filter target B", "complete", now.Add(-3*time.Hour))
+	writeEpisodeIndexAttemptFixture(t, s, 55, "attempt-filter-1", "Filter target C", buildAttemptBuilt, now.Add(-4*time.Hour), now.Add(-3*time.Hour), nil)
+
+	facts, projection := newHistoryTestProjection(root)
+	unfiltered := buildLifecycleHistoryProjection(facts, projection, "", 0, "", root, s)
+
+	unfilteredSwarmRows := map[string]LifecycleHistoryRow{}
+	for _, row := range unfiltered.Events {
+		if row.Kind == colonyEpisodeKindSwarm {
+			unfilteredSwarmRows[row.Event] = row
+		}
+	}
+	if len(unfilteredSwarmRows) != 1 {
+		t.Fatalf("expected exactly 1 unfiltered swarm row, got %d: %+v", len(unfilteredSwarmRows), unfiltered.Events)
+	}
+
+	filtered := buildLifecycleHistoryProjection(facts, projection, "", 0, colonyEpisodeKindSwarm, root, s)
+	if len(filtered.Events) != 1 {
+		t.Fatalf("expected exactly 1 row once filtered to kind %q, got %d: %+v", colonyEpisodeKindSwarm, len(filtered.Events), filtered.Events)
+	}
+	got := filtered.Events[0]
+	want, ok := unfilteredSwarmRows[got.Event]
+	if !ok {
+		t.Fatalf("filtered row %q was not present in the unfiltered listing", got.Event)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("filtering changed the row's own content:\nunfiltered: %+v\nfiltered:   %+v", want, got)
+	}
+}
+
+// TestStatusHistoryAndWatchShareOneLineage drives one fixture through the
+// status dashboard, the history listing, and the replay-backed watch
+// summary, and proves all three name the same most-recent episode with the
+// same outcome and the same cost block -- the point of 202-14: the three
+// surfaces read one lineage and cannot disagree about what ran.
+func TestStatusHistoryAndWatchShareOneLineage(t *testing.T) {
+	saveGlobals(t)
+	s, root := newTestStore(t)
+	store = s
+	t.Setenv("AETHER_ROOT", root)
+
+	const phase = 77
+	const episodeName = "lineage-episode-202-14"
+	goal := "One shared lineage fixture"
+	now := time.Now().UTC()
+	createTestColonyState(t, s.BasePath(), colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: phase,
+		Plan: colony.Plan{Phases: []colony.Phase{
+			{ID: phase, Name: "Lineage phase"},
+		}},
+	})
+
+	seedSpendLedgerForTest(t, phase, spendWorkflowBuild, measuredSpendRowForTest("Mason-77", "builder", 250_000))
+
+	writeEpisodeIndexAttemptFixture(t, s, phase, "attempt-lineage-1", episodeName, buildAttemptBuilt,
+		now.Add(-30*time.Minute), now, nil)
+
+	emitColonyLive(events.LiveTopicEpisodeStarted, events.ColonyLivePayload{EpisodeID: episodeName, EpisodeKind: "build", Status: "starting"})
+	emitColonyLive(events.LiveTopicEpisodeEnded, events.ColonyLivePayload{EpisodeID: episodeName, EpisodeKind: "build", Status: buildAttemptBuilt})
+
+	wantCostBlock := renderSpendCostLineFromLedgers(func() []spendLedger {
+		ledgers, _ := loadSpendLedgersForPhase(phase)
+		return ledgers
+	}())
+	if !strings.Contains(wantCostBlock, "250") && !strings.Contains(wantCostBlock, "K") && !strings.Contains(wantCostBlock, "M") {
+		t.Fatalf("test fixture cost block carries no figure, cannot prove agreement: %q", wantCostBlock)
+	}
+
+	// Watch: the replay-backed summary of the most recently started live
+	// episode.
+	ctx := context.Background()
+	watchResult := buildReplayWatchResult(ctx, root, s, now)
+	watchVisual := renderReplayWatchVisual(watchResult)
+	if got := stringValue(watchResult["episode_id"]); got != episodeName {
+		t.Fatalf("watch replayed episode %q, want %q", got, episodeName)
+	}
+	if got := stringValue(watchResult["outcome"]); got != buildAttemptBuilt {
+		t.Fatalf("watch outcome = %q, want %q", got, buildAttemptBuilt)
+	}
+	if !strings.HasSuffix(watchVisual, wantCostBlock) {
+		t.Fatalf("watch's rendered cost block does not match the ledger authority's own block:\nwatch:\n%s\nwant suffix:\n%s", watchVisual, wantCostBlock)
+	}
+
+	// Status: the most-recent-episode section.
+	statusSection := renderMostRecentEpisodeStatusSection(s)
+	if !strings.Contains(statusSection, episodeName) {
+		t.Fatalf("status section does not name the shared episode %q:\n%s", episodeName, statusSection)
+	}
+	if !strings.Contains(statusSection, buildAttemptBuilt) {
+		t.Fatalf("status section does not name the outcome %q:\n%s", buildAttemptBuilt, statusSection)
+	}
+	if !strings.Contains(statusSection, wantCostBlock) {
+		t.Fatalf("status section's cost block does not match the ledger authority's own block:\nstatus:\n%s\nwant:\n%s", statusSection, wantCostBlock)
+	}
+
+	// History: the episode row for the same build attempt.
+	facts, projection := newHistoryTestProjection(root)
+	history := buildLifecycleHistoryProjection(facts, projection, "", 0, "", root, s)
+	var historyRow *LifecycleHistoryRow
+	for i := range history.Events {
+		if strings.Contains(history.Events[i].Event, episodeName) {
+			historyRow = &history.Events[i]
+			break
+		}
+	}
+	if historyRow == nil {
+		t.Fatalf("history does not list the shared episode %q: %+v", episodeName, history.Events)
+	}
+	if !strings.Contains(historyRow.Result, buildAttemptBuilt) {
+		t.Fatalf("history row outcome = %q, want to contain %q", historyRow.Result, buildAttemptBuilt)
+	}
+	if historyRow.Cost != wantCostBlock {
+		t.Fatalf("history row cost block does not match the ledger authority's own block:\nhistory:\n%s\nwant:\n%s", historyRow.Cost, wantCostBlock)
 	}
 }
