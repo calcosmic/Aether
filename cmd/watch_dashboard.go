@@ -329,6 +329,8 @@ func colonyLiveTickerDescription(entry colonyLiveTickerEntry) string {
 		return "a check failed"
 	case events.LiveTopicRecoveryChanged:
 		return "recovery state changed (" + emptyFallback(entry.Status, "unknown") + ")"
+	case events.LiveTopicGapTargeted:
+		return "a research gap was flagged"
 	default:
 		return "activity recorded"
 	}

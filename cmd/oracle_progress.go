@@ -50,6 +50,13 @@ type oracleProgressEvent struct {
 	Attempt          int    `json:"attempt,omitempty"`
 	Status           string `json:"status,omitempty"`
 	StopReason       string `json:"stop_reason,omitempty"`
+	// ConsecutiveLow (202-11, LIVE-06) mirrors
+	// oracleStateFile.Novelty.ConsecutiveLow -- how many rounds in a row
+	// have now added no new ground. It is never a new counter: only the
+	// existing value the loop already tracks, carried onto the round line
+	// and the live event payload so diminishing returns is visible, not
+	// just measured.
+	ConsecutiveLow int `json:"consecutive_low,omitempty"`
 }
 
 // newOracleProgressEvent snapshots the fields every event shares so callers
@@ -73,6 +80,7 @@ func newOracleProgressEvent(event string, state oracleStateFile) oracleProgressE
 		Reasoning:        strings.TrimSpace(state.ActiveReasoning),
 		Status:           strings.TrimSpace(state.Status),
 		StopReason:       strings.TrimSpace(state.StopReason),
+		ConsecutiveLow:   state.Novelty.ConsecutiveLow,
 	}
 }
 
@@ -121,6 +129,9 @@ func renderOracleProgressLine(event oracleProgressEvent) string {
 		if reason == "" {
 			reason = event.Status
 		}
+		if reason == "diminishing_returns" {
+			return fmt.Sprintf("🔮 finished after %d rounds at %d%% — stopped: the last %d answers in a row added no new ground", event.Iteration, event.Confidence, event.ConsecutiveLow)
+		}
 		return fmt.Sprintf("🔮 finished after %d rounds at %d%% (%s)", event.Iteration, event.Confidence, emptyFallback(reason, "done"))
 	default:
 		// Phase transitions, attempts and iteration ends are recorded for
@@ -139,6 +150,9 @@ func renderOracleProgressLine(event oracleProgressEvent) string {
 	}
 	if event.Question != "" {
 		line += "  " + truncateString(event.Question, 72)
+	}
+	if event.ConsecutiveLow > 0 {
+		line += fmt.Sprintf("  (%d in a row added no new ground)", event.ConsecutiveLow)
 	}
 	return line
 }

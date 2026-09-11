@@ -10,8 +10,10 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/codex"
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/events"
 )
 
@@ -547,5 +549,161 @@ func TestOracleClarificationWritesNothingUntilConfirmed(t *testing.T) {
 		if before[i] != after[i] {
 			t.Fatalf("clarification changed the Oracle workspace contents before confirmation:\n before: %v\n after:  %v", before, after)
 		}
+	}
+}
+
+// --- Task 3: confidence and diminishing returns exactly as recorded -------
+
+// TestConfidenceIsShownExactlyAsRecorded drives one integer confidence
+// value -- 67%, a value any nearest-5 or nearest-10 rounding rule would
+// change -- through the round line, the live event payload and the
+// dashboard, and asserts the same integer appears at each point.
+func TestConfidenceIsShownExactlyAsRecorded(t *testing.T) {
+	const confidence = 67
+	const target = 95
+
+	state := oracleStateFile{
+		Iteration:          2,
+		MaxIterations:      10,
+		Phase:              "investigate",
+		ActiveQuestionID:   "q2",
+		ActiveQuestionText: "Does the chosen value survive every rendering path unrounded?",
+		OverallConfidence:  confidence,
+		TargetConfidence:   target,
+	}
+
+	// Round line.
+	event := newOracleProgressEvent(oracleProgressEventIterationStart, state)
+	if event.Confidence != confidence {
+		t.Fatalf("progress event Confidence = %d, want %d", event.Confidence, confidence)
+	}
+	line := renderOracleProgressLine(event)
+	if !strings.Contains(line, fmt.Sprintf("%d%%", confidence)) {
+		t.Fatalf("round line does not show %d%% unrounded:\n%s", confidence, line)
+	}
+
+	// Live event payload.
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+	emitOracleLiveRound(state)
+	allEvents := liveEventsSince(t)
+	roundStarted := oracleLiveEventsOfKind(allEvents, events.LiveTopicWorkerStarted)
+	if len(roundStarted) != 1 {
+		t.Fatalf("got %d round-started events, want 1", len(roundStarted))
+	}
+	if got := int(roundStarted[0].Payload.Confidence); got != confidence {
+		t.Fatalf("live event payload Confidence = %d, want %d", got, confidence)
+	}
+
+	// Dashboard.
+	snapshot := colonyLiveSnapshot{
+		EpisodeID:        "oracle-dashboard-confidence-test",
+		EpisodeKind:      events.EpisodeKindOracle,
+		Confidence:       float64(confidence),
+		TargetConfidence: float64(target),
+	}
+	dashboardState := newColonyLiveDashboardFixtureState("Aether", 1, colony.StateEXECUTING)
+	rendered := renderColonyLiveDashboard(snapshot, dashboardState, nil, colonyLiveDrillSelector{})
+	if !strings.Contains(rendered, fmt.Sprintf("Confidence: %.2f", float64(confidence))) {
+		t.Fatalf("dashboard does not show confidence %d unrounded:\n%s", confidence, rendered)
+	}
+}
+
+// TestDiminishingReturnsIsStatedWithItsCount proves that once the
+// consecutive-low-novelty counter is above zero, the round line states the
+// stall in plain English and names the count -- without changing the
+// counter, its threshold, or the stall limit.
+func TestDiminishingReturnsIsStatedWithItsCount(t *testing.T) {
+	state := oracleStateFile{
+		Iteration:         4,
+		MaxIterations:     10,
+		Phase:             "investigate",
+		OverallConfidence: 70,
+		TargetConfidence:  95,
+		Novelty:           noveltyTracker{ConsecutiveLow: 2},
+	}
+	event := newOracleProgressEvent(oracleProgressEventIterationStart, state)
+	if event.ConsecutiveLow != 2 {
+		t.Fatalf("progress event ConsecutiveLow = %d, want 2", event.ConsecutiveLow)
+	}
+	line := renderOracleProgressLine(event)
+	if !strings.Contains(line, "2 in a row added no new ground") {
+		t.Fatalf("round line does not state the stall with its count:\n%s", line)
+	}
+
+	// A run that actually stopped for this reason names it in plain English
+	// on the run-end line too.
+	endState := state
+	endState.Novelty.ConsecutiveLow = oracleNoveltyStallLimit
+	endState.StopReason = "diminishing_returns"
+	endEvent := newOracleProgressEvent(oracleProgressEventRunEnd, endState)
+	endLine := renderOracleProgressLine(endEvent)
+	if strings.Contains(endLine, "diminishing_returns") {
+		t.Fatalf("run-end line leaked the raw stop-reason code instead of plain English:\n%s", endLine)
+	}
+	if !strings.Contains(endLine, fmt.Sprintf("%d answers in a row added no new ground", oracleNoveltyStallLimit)) {
+		t.Fatalf("run-end line does not explain the stall in plain English with its count:\n%s", endLine)
+	}
+}
+
+// TestOracleStopsAtExactlyTheStallLimit proves the stall boundary fires at
+// exactly oracleNoveltyStallLimit, never one round earlier -- against the
+// real predicate the loop uses, not a re-implementation of it.
+func TestOracleStopsAtExactlyTheStallLimit(t *testing.T) {
+	oneBelow := oracleStateFile{Novelty: noveltyTracker{ConsecutiveLow: oracleNoveltyStallLimit - 1}}
+	if oracleDiminishingReturns(oneBelow) {
+		t.Fatalf("oracleDiminishingReturns stopped one round below the stall limit (%d)", oracleNoveltyStallLimit)
+	}
+	atLimit := oracleStateFile{Novelty: noveltyTracker{ConsecutiveLow: oracleNoveltyStallLimit}}
+	if !oracleDiminishingReturns(atLimit) {
+		t.Fatalf("oracleDiminishingReturns did not stop exactly at the stall limit (%d)", oracleNoveltyStallLimit)
+	}
+}
+
+// TestLiveDashboardShowsTheResearchRound proves a running Oracle round
+// renders its current round, question, confidence against target and
+// contradictions through the existing dashboard renderer, and that a run
+// with no contradictions renders no contradictions section.
+func TestLiveDashboardShowsTheResearchRound(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	state := oracleStateFile{
+		StartedAt:          "2026-01-01T00:00:00Z",
+		Iteration:          2,
+		MaxIterations:      10,
+		Phase:              "investigate",
+		ActiveQuestionText: "Which cache layer needs the fix first?",
+		OverallConfidence:  70,
+		TargetConfidence:   95,
+	}
+	emitOracleLiveRound(state)
+	emitOracleLiveConfidence(state, 60)
+
+	_, snapshot := resolveWatchMode(context.Background(), s, time.Now().UTC())
+	dashboardState := newColonyLiveDashboardFixtureState("Aether", 1, colony.StateEXECUTING)
+	rendered := renderColonyLiveDashboard(snapshot, dashboardState, nil, colonyLiveDrillSelector{})
+
+	if !strings.Contains(rendered, "Oracle") {
+		t.Fatalf("dashboard does not show the Oracle round:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "Which cache layer needs the fix first?") {
+		t.Fatalf("dashboard does not show the round's question:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "Confidence: 70.00 / target 95.00") {
+		t.Fatalf("dashboard does not show confidence against target:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "Contradictions:") {
+		t.Fatalf("dashboard rendered an empty contradictions section for a run with none:\n%s", rendered)
+	}
+
+	// Now with a contradiction: the section must appear.
+	emitOracleLiveContradiction(state, "Two workers reported opposite cache TTL values")
+	_, snapshotWithContradiction := resolveWatchMode(context.Background(), s, time.Now().UTC())
+	renderedWithContradiction := renderColonyLiveDashboard(snapshotWithContradiction, dashboardState, nil, colonyLiveDrillSelector{})
+	if !strings.Contains(renderedWithContradiction, "Contradictions:") || !strings.Contains(renderedWithContradiction, "opposite cache TTL values") {
+		t.Fatalf("dashboard did not render the contradictions section once one existed:\n%s", renderedWithContradiction)
 	}
 }
