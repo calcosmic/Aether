@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/events"
 )
 
 func seedWatchIdle199Fixture(t *testing.T) (string, string) {
@@ -52,6 +53,14 @@ func TestWatchIdle199StatusFallback(t *testing.T) {
 	_, _ = seedWatchIdle199Fixture(t)
 
 	result, _ := runWatchIdle199(t, "json")
+	// This fixture records recent activity via spawn-tree.txt / durable
+	// events, but no live.* episode has ever been recorded -- Task 2
+	// (202-09) narrows the idle branch to exactly that case, so this
+	// asserts the idle branch was actually chosen, not merely that its
+	// content looks right.
+	if result["mode"] != "idle_watch" {
+		t.Fatalf("watch mode = %v, want idle_watch (no recorded live episode)", result["mode"])
+	}
 	if result["idle_message"] != "No ants are active right now" {
 		t.Fatalf("idle message = %v", result["idle_message"])
 	}
@@ -84,6 +93,9 @@ func TestWatchIdle199NoFakeLiveness(t *testing.T) {
 	_, _ = seedWatchIdle199Fixture(t)
 
 	result, _ := runWatchIdle199(t, "json")
+	if result["mode"] != "idle_watch" {
+		t.Fatalf("watch mode = %v, want idle_watch (no recorded live episode)", result["mode"])
+	}
 	if intValue(result["active_count"]) != 0 || result["live_capability"] != "unsupported" {
 		t.Fatalf("idle watch fabricated live capability: %+v", result)
 	}
@@ -109,7 +121,10 @@ func TestWatchIdle199ReadOnly(t *testing.T) {
 	resetRootCmd(t)
 	_, root := seedWatchIdle199Fixture(t)
 	before := hashDirContents(t, root)
-	_, _ = runWatchIdle199(t, "json")
+	result, _ := runWatchIdle199(t, "json")
+	if result["mode"] != "idle_watch" {
+		t.Fatalf("watch mode = %v, want idle_watch (no recorded live episode)", result["mode"])
+	}
 	after := hashDirContents(t, root)
 	if before != after {
 		t.Fatalf("idle watch mutated the workspace: %s -> %s", before, after)
@@ -118,5 +133,38 @@ func TestWatchIdle199ReadOnly(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(root, ".aether", "data", forbidden)); !os.IsNotExist(err) {
 			t.Fatalf("idle watch wrote deprecated snapshot artifact %s", forbidden)
 		}
+	}
+}
+
+// TestWatchIdle199NarrowedByRecordedEpisode proves the idle floor's scope
+// is explicit rather than implied (Task 2, 202-09): a fixture that is
+// otherwise identical to the idle fixture above, but carries one recorded,
+// cleanly-closed live episode, no longer reaches the idle branch -- it
+// reaches the replay branch instead. The idle card is narrowed, never
+// removed: TestWatchIdle199StatusFallback/NoFakeLiveness/ReadOnly above
+// still prove its own content is byte-for-byte unchanged for the
+// genuinely-no-history case.
+func TestWatchIdle199NarrowedByRecordedEpisode(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	_, _ = seedWatchIdle199Fixture(t)
+
+	emitColonyLive(events.LiveTopicEpisodeStarted, events.ColonyLivePayload{EpisodeID: "narrows-idle", EpisodeKind: "build", Status: "starting"})
+	emitColonyLive(events.LiveTopicEpisodeEnded, events.ColonyLivePayload{EpisodeID: "narrows-idle", EpisodeKind: "build", Status: "completed"})
+
+	result, _ := runWatchIdle199(t, "json")
+	if result["mode"] == "idle_watch" {
+		t.Fatalf("watch mode = %v, want something other than idle_watch once one live episode is recorded", result["mode"])
+	}
+	if result["mode"] != "replay_watch" {
+		t.Fatalf("watch mode = %v, want replay_watch (one closed episode, none open)", result["mode"])
+	}
+	if result["idle_message"] != nil {
+		t.Fatalf("replay-mode result still carries the idle branch's idle_message: %+v", result)
+	}
+
+	_, visual := runWatchIdle199(t, "visual")
+	if strings.Contains(visual, "No ants are active right now") {
+		t.Fatalf("watch rendered the idle card even though a live episode was recorded:\n%s", visual)
 	}
 }

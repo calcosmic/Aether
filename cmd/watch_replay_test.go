@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"strings"
 	"testing"
@@ -174,4 +175,161 @@ func TestReplaySummaryNextCommandComesFromTheProjection(t *testing.T) {
 	if want != "" && !strings.Contains(renderReplayWatchVisual(result), want) {
 		t.Errorf("rendered replay visual does not carry the next command %q", want)
 	}
+}
+
+// TestWatchResolvesThreeBranchesFromEvidenceAlone proves the three-way
+// watch-mode decision is made entirely from recorded evidence in Go: an
+// open episode resolves live; an episode left open by a run that has since
+// terminated resolves replay (never live); episodes that are all closed
+// resolve replay; no episode at all resolves idle; and no environment
+// variable changes which branch a fixture resolves to.
+func TestWatchResolvesThreeBranchesFromEvidenceAlone(t *testing.T) {
+	t.Run("open episode resolves live", func(t *testing.T) {
+		saveGlobals(t)
+		s, _ := newTestStore(t)
+		store = s
+		emitColonyLive(events.LiveTopicEpisodeStarted, events.ColonyLivePayload{EpisodeID: "open-ep", EpisodeKind: "build", Status: "starting"})
+
+		mode, snapshot := resolveWatchMode(context.Background(), s, time.Now().UTC())
+		if mode != watchModeLive {
+			t.Fatalf("mode = %q, want %q", mode, watchModeLive)
+		}
+		if !snapshot.Open {
+			t.Fatalf("snapshot.Open = false for a genuinely open episode")
+		}
+	})
+
+	t.Run("closed-only episode resolves replay", func(t *testing.T) {
+		saveGlobals(t)
+		s, _ := newTestStore(t)
+		store = s
+		emitColonyLive(events.LiveTopicEpisodeStarted, events.ColonyLivePayload{EpisodeID: "closed-ep", EpisodeKind: "build", Status: "starting"})
+		emitColonyLive(events.LiveTopicEpisodeEnded, events.ColonyLivePayload{EpisodeID: "closed-ep", EpisodeKind: "build", Status: "completed"})
+
+		mode, _ := resolveWatchMode(context.Background(), s, time.Now().UTC())
+		if mode != watchModeReplay {
+			t.Fatalf("mode = %q, want %q", mode, watchModeReplay)
+		}
+	})
+
+	t.Run("open episode whose owning run has terminated resolves replay, not live", func(t *testing.T) {
+		saveGlobals(t)
+		s, _ := newTestStore(t)
+		store = s
+		emitColonyLive(events.LiveTopicEpisodeStarted, events.ColonyLivePayload{EpisodeID: "abandoned-ep", EpisodeKind: "build", Status: "starting"})
+		writeSpawnRunFixture(t, s.BasePath(), "run-1", "failed")
+
+		mode, snapshot := resolveWatchMode(context.Background(), s, time.Now().UTC())
+		if mode != watchModeReplay {
+			t.Fatalf("mode = %q, want %q (start boundary with no end, but the owning run already terminated)", mode, watchModeReplay)
+		}
+		if !snapshot.Open {
+			t.Fatalf("snapshot.Open = false; the replayed boundary balance itself must be unaffected by the mode decision")
+		}
+	})
+
+	t.Run("no episode at all resolves idle", func(t *testing.T) {
+		saveGlobals(t)
+		s, _ := newTestStore(t)
+		store = s
+
+		mode, _ := resolveWatchMode(context.Background(), s, time.Now().UTC())
+		if mode != watchModeIdle {
+			t.Fatalf("mode = %q, want %q", mode, watchModeIdle)
+		}
+	})
+
+	t.Run("no environment variable changes the branch a fixture resolves to", func(t *testing.T) {
+		saveGlobals(t)
+		s, _ := newTestStore(t)
+		store = s
+		emitColonyLive(events.LiveTopicEpisodeStarted, events.ColonyLivePayload{EpisodeID: "env-proof-ep", EpisodeKind: "build", Status: "starting"})
+		emitColonyLive(events.LiveTopicEpisodeEnded, events.ColonyLivePayload{EpisodeID: "env-proof-ep", EpisodeKind: "build", Status: "completed"})
+
+		base, _ := resolveWatchMode(context.Background(), s, time.Now().UTC())
+		if base != watchModeReplay {
+			t.Fatalf("fixture setup broken: base mode = %q, want %q", base, watchModeReplay)
+		}
+
+		for _, env := range [][2]string{
+			{"AETHER_OUTPUT_MODE", "visual"},
+			{"AETHER_FORCE_VISUAL", "1"},
+			{"AETHER_WATCH_MODE", "live"},
+			{"AETHER_LIVE", "1"},
+		} {
+			t.Setenv(env[0], env[1])
+			mode, _ := resolveWatchMode(context.Background(), s, time.Now().UTC())
+			if mode != base {
+				t.Fatalf("setting %s=%s changed the resolved watch mode from %q to %q", env[0], env[1], base, mode)
+			}
+		}
+	})
+}
+
+// TestWatchIsReadOnlyInEveryBranch compares a digest of the colony data
+// directory before and after each of the three branches renders, proving
+// the read-only guarantee (watchCmd's aether.io/read-only annotation) holds
+// structurally for every branch, not just the idle one.
+func TestWatchIsReadOnlyInEveryBranch(t *testing.T) {
+	runOnce := func(t *testing.T) {
+		t.Helper()
+		var buf bytes.Buffer
+		stdout = &buf
+		c := newTestWatchCmd()
+		c.Flags().Set("once", "true")
+		if err := runWatchCommand(c, nil); err != nil {
+			t.Fatalf("runWatchCommand returned an error: %v", err)
+		}
+	}
+
+	t.Run("live branch", func(t *testing.T) {
+		saveGlobals(t)
+		s, _ := newTestStore(t)
+		store = s
+		emitColonyLive(events.LiveTopicEpisodeStarted, events.ColonyLivePayload{EpisodeID: "ro-live", EpisodeKind: "build", Status: "starting"})
+		if mode, _ := resolveWatchMode(context.Background(), s, time.Now().UTC()); mode != watchModeLive {
+			t.Fatalf("fixture setup broken: mode = %q, want %q", mode, watchModeLive)
+		}
+
+		before := dirDigest(t, s.BasePath())
+		runOnce(t)
+		after := dirDigest(t, s.BasePath())
+		if before != after {
+			t.Fatalf("live branch mutated the colony data directory: %s -> %s", before, after)
+		}
+	})
+
+	t.Run("replay branch", func(t *testing.T) {
+		saveGlobals(t)
+		s, _ := newTestStore(t)
+		store = s
+		emitColonyLive(events.LiveTopicEpisodeStarted, events.ColonyLivePayload{EpisodeID: "ro-replay", EpisodeKind: "build", Status: "starting"})
+		emitColonyLive(events.LiveTopicEpisodeEnded, events.ColonyLivePayload{EpisodeID: "ro-replay", EpisodeKind: "build", Status: "completed"})
+		if mode, _ := resolveWatchMode(context.Background(), s, time.Now().UTC()); mode != watchModeReplay {
+			t.Fatalf("fixture setup broken: mode = %q, want %q", mode, watchModeReplay)
+		}
+
+		before := dirDigest(t, s.BasePath())
+		runOnce(t)
+		after := dirDigest(t, s.BasePath())
+		if before != after {
+			t.Fatalf("replay branch mutated the colony data directory: %s -> %s", before, after)
+		}
+	})
+
+	t.Run("idle branch", func(t *testing.T) {
+		saveGlobals(t)
+		s, _ := newTestStore(t)
+		store = s
+		if mode, _ := resolveWatchMode(context.Background(), s, time.Now().UTC()); mode != watchModeIdle {
+			t.Fatalf("fixture setup broken: mode = %q, want %q", mode, watchModeIdle)
+		}
+
+		before := dirDigest(t, s.BasePath())
+		runOnce(t)
+		after := dirDigest(t, s.BasePath())
+		if before != after {
+			t.Fatalf("idle branch mutated the colony data directory: %s -> %s", before, after)
+		}
+	})
 }

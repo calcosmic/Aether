@@ -58,7 +58,7 @@ type autopilotReplanEvaluation struct {
 
 var watchCmd = &cobra.Command{
 	Use:         "watch [worker-identity|wave-number]",
-	Short:       "Show the live colony cockpit, or the honest idle watch fallback",
+	Short:       "Show the live colony cockpit, a replay of the most recent episode, or the honest idle fallback",
 	Args:        cobra.MaximumNArgs(1),
 	Annotations: map[string]string{"aether.io/read-only": "true"},
 	RunE:        runWatchCommand,

@@ -21,12 +21,15 @@ type watchMode string
 
 const (
 	// watchModeLive means an episode is currently open (a started boundary
-	// with no matching ended boundary yet) -- rendered by
+	// with no matching ended boundary yet, AND the run that owns it has not
+	// itself already reached a terminal status) -- rendered by
 	// renderLiveWatchVisual from a replayed colonyLiveSnapshot.
 	watchModeLive watchMode = "live"
-	// watchModeReplay means a persisted live episode exists but is closed.
-	// Plan 202-09 owns rendering this branch; until then it falls through to
-	// the honest idle floor, unchanged.
+	// watchModeReplay means no episode is genuinely open (either every
+	// recorded episode closed cleanly, or the most recent one was left open
+	// by a run that has since terminated) but at least one episode was
+	// recorded -- rendered by buildReplayWatchResult / renderReplayWatchVisual
+	// (plan 202-09).
 	watchModeReplay watchMode = "replay"
 	// watchModeIdle means no live-colony evidence exists at all -- rendered
 	// by the existing buildIdleWatchResult / renderIdleWatchVisual pair.
@@ -35,7 +38,9 @@ const (
 
 // resolveWatchMode is the one place a platform wrapper's `watch` command
 // defers to for which of the three watch modes applies. It is resolved in
-// Go, from persisted evidence, never guessed by a wrapper.
+// Go, from persisted evidence, never guessed by a wrapper: no flag,
+// environment variable, or wrapper argument can select a branch the
+// recorded evidence does not support.
 func resolveWatchMode(ctx context.Context, s *storage.Store, now time.Time) (watchMode, colonyLiveSnapshot) {
 	if s == nil {
 		return watchModeIdle, colonyLiveSnapshot{}
@@ -51,10 +56,33 @@ func resolveWatchMode(ctx context.Context, s *storage.Store, now time.Time) (wat
 		return watchModeIdle, colonyLiveSnapshot{}
 	}
 	snapshot = applyUnfinishedWorkerInterruption(s, snapshot)
-	if snapshot.Open {
+
+	// A start boundary with no matching end normally means "still running"
+	// -- but only while the run that dispatched it is itself still alive.
+	// Once that durable run record reaches a terminal status (the exact
+	// rule applyUnfinishedWorkerInterruption already applies to an
+	// individual unfinished worker row), the episode is not genuinely open
+	// anymore; it was left open by a process that has since ended, so it
+	// belongs to the replay branch (as an interrupted episode), never the
+	// live one. An absent run record is NOT treated as terminated -- a
+	// start boundary with nothing to contradict it is still genuinely open.
+	if snapshot.Open && !colonyLiveEpisodeRunHasTerminated(s) {
 		return watchModeLive, snapshot
 	}
 	return watchModeReplay, snapshot
+}
+
+// colonyLiveEpisodeRunHasTerminated reports whether the durable spawn-run
+// record (read lock-free via latestSpawnRunRaw, mirroring
+// applyUnfinishedWorkerInterruption's own read) has already reached a
+// terminal status (agent.IsTerminalSpawnStatus). This is the episode-level
+// application of the identical rule the dashboard already uses to
+// reclassify an unfinished worker as interrupted, so the live/replay
+// boundary and the dashboard's own worker-level boundary can never
+// disagree about what "still running" means.
+func colonyLiveEpisodeRunHasTerminated(s *storage.Store) bool {
+	run, ok := latestSpawnRunRaw(s)
+	return ok && agent.IsTerminalSpawnStatus(run.Status)
 }
 
 // colonyLiveSpawnRunFile is the persisted JSON filename the spawn tree's
@@ -338,10 +366,21 @@ func writeColonyWatchFrame(ctx context.Context, drill colonyLiveDrillSelector, n
 			return
 		}
 		writeVisualOutput(stdout, visual)
+	case watchModeReplay:
+		// No episode is genuinely open (every recorded episode closed
+		// cleanly, or the most recent one was left open by a run that has
+		// since terminated) but at least one was recorded -- the
+		// replay-backed summary of the most recently started one (plan
+		// 202-09), never the honest idle floor below, which is reserved for
+		// "nothing has ever run at all".
+		result := buildReplayWatchResult(ctx, resolveAetherRoot(), store, now)
+		visual := renderReplayWatchVisual(result)
+		if useEnvelope {
+			outputWorkflow(result, visual)
+			return
+		}
+		writeVisualOutput(stdout, visual)
 	default:
-		// watchModeReplay: plan 202-09 owns rendering a closed episode from
-		// its persisted events; until then it falls through to the honest
-		// idle floor below, unchanged.
 		// watchModeIdle: no live-colony evidence exists at all.
 		result := buildIdleWatchResult(resolveAetherRoot(), store, now)
 		visual := renderIdleWatchVisual(result)
