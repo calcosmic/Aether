@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -11,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/codex"
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/events"
 )
 
@@ -205,3 +208,310 @@ func TestSwarmCheckpointAnnouncementsAreOrdered(t *testing.T) {
 		t.Fatalf("live recovery states = %v, want %v", states, want)
 	}
 }
+
+// swarmRepairFixtureInvoker is Task 2's own stub worker invoker: unlike
+// swarmTestInvoker (cmd/swarm_cmd_test.go), it genuinely mutates a real
+// fixture file under root when it plays the builder, so the checkpoint
+// round trip inside a real runSwarmDestroy pass has something concrete to
+// protect and restore. Every investigation lens reports evidence naming
+// the same fixture file; tracker and scout additionally share the exact
+// same root-cause text so compareSwarmHypotheses' shared-cause detection
+// selects a repair scoped to that file.
+type swarmRepairFixtureInvoker struct {
+	t             *testing.T
+	root          string
+	watcherStatus string
+	configs       []codex.WorkerConfig
+}
+
+func (i *swarmRepairFixtureInvoker) Invoke(_ context.Context, cfg codex.WorkerConfig) (codex.WorkerResult, error) {
+	i.configs = append(i.configs, cfg)
+
+	response := swarmWorkerResponse{Role: cfg.Caste, Status: "completed", Summary: cfg.Caste + " ran the swarm pass."}
+	switch cfg.Caste {
+	case "tracker", "scout":
+		response.RootCause = "target.go has a broken guard"
+		response.Evidence = []string{"target.go"}
+	case "archaeologist", "oracle":
+		response.Summary = cfg.Caste + " found supporting context in target.go."
+		response.Evidence = []string{"target.go"}
+	case "builder":
+		if err := os.WriteFile(filepath.Join(i.root, "target.go"), []byte("// repaired\npackage fixture\n"), 0o644); err != nil {
+			i.t.Fatalf("builder failed to mutate fixture: %v", err)
+		}
+		response.ProposedFix = "patch the broken guard in target.go"
+		response.FilesTouched = []string{"target.go"}
+	case "watcher":
+		status := i.watcherStatus
+		if status == "" {
+			status = "completed"
+		}
+		response.Status = status
+		if status != "completed" {
+			response.Summary = "verification still fails after the fix"
+		}
+	}
+
+	result := codex.WorkerResult{
+		WorkerName: cfg.WorkerName, Caste: cfg.Caste, TaskID: cfg.TaskID,
+		Status: response.Status, Summary: response.Summary, Duration: time.Millisecond,
+	}
+	if strings.TrimSpace(cfg.ResponsePath) == "" {
+		return codex.WorkerResult{}, context.Canceled
+	}
+	if err := os.MkdirAll(filepath.Dir(cfg.ResponsePath), 0o755); err != nil {
+		return codex.WorkerResult{}, err
+	}
+	data, err := json.MarshalIndent(response, "", "  ")
+	if err != nil {
+		return codex.WorkerResult{}, err
+	}
+	if err := os.WriteFile(cfg.ResponsePath, append(data, '\n'), 0o644); err != nil {
+		return codex.WorkerResult{}, err
+	}
+	return result, nil
+}
+
+func (i *swarmRepairFixtureInvoker) IsAvailable(_ context.Context) bool { return true }
+func (i *swarmRepairFixtureInvoker) ValidateAgent(_ string) error       { return nil }
+
+// setupSwarmRepairCheckpointFixture wires an isolated fixture root with one
+// real source file the fix wave can mutate, a bound store, and a stub
+// invoker whose watcher plays back watcherStatus -- driving the real
+// runSwarmDestroy path end to end, per Task 2's plan instruction.
+func setupSwarmRepairCheckpointFixture(t *testing.T, watcherStatus string) (root string, invoker *swarmRepairFixtureInvoker) {
+	t.Helper()
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root = filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	mustWriteRepairFixtureFile(t, filepath.Join(root, "target.go"), "// original\npackage fixture\n")
+
+	goal := "Destroy a stubborn checkpoint bug"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0", Goal: &goal, State: colony.StateREADY,
+	})
+
+	invoker = &swarmRepairFixtureInvoker{t: t, root: root, watcherStatus: watcherStatus}
+	originalInvoker := newSwarmWorkerInvoker
+	newSwarmWorkerInvoker = func() codex.WorkerInvoker { return invoker }
+	t.Cleanup(func() { newSwarmWorkerInvoker = originalInvoker })
+
+	return root, invoker
+}
+
+// TestSwarmRepairCheckpointsBeforeTheFixWave proves the checkpoint save (and
+// its announcement) happens before the fix wave's own dispatch preview is
+// rendered, and that a passing verification leaves the repair in place.
+func TestSwarmRepairCheckpointsBeforeTheFixWave(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	root, _ := setupSwarmRepairCheckpointFixture(t, "completed")
+
+	result, err := runSwarmDestroy(root, "Fix the broken guard in target.go")
+	if err != nil {
+		t.Fatalf("runSwarmDestroy: %v", err)
+	}
+	if got := result["status"]; got != "completed" {
+		t.Fatalf("status = %v, want completed: %+v", got, result)
+	}
+
+	visual := stdout.(*bytes.Buffer).String()
+	savedAt := strings.Index(visual, "Saving your project's current state")
+	fixWaveAt := strings.Index(visual, spacedTitle("Fix Wave"))
+	if savedAt < 0 || fixWaveAt < 0 {
+		t.Fatalf("expected both the checkpoint save and the fix wave banner in output:\n%s", visual)
+	}
+	if savedAt > fixWaveAt {
+		t.Fatalf("checkpoint save happened after the fix wave dispatch: saved=%d fixWave=%d\n%s", savedAt, fixWaveAt, visual)
+	}
+
+	got, err := os.ReadFile(filepath.Join(root, "target.go"))
+	if err != nil || string(got) != "// repaired\npackage fixture\n" {
+		t.Fatalf("expected the repair to stay in place, got %q err=%v", got, err)
+	}
+}
+
+// TestSwarmRepairRollsBackOnFailedVerification proves a fix wave whose
+// verification fails restores the checkpoint exactly (byte-identical to the
+// pre-repair fixture, by digest) and reports the run as a failed repair
+// rather than a success.
+func TestSwarmRepairRollsBackOnFailedVerification(t *testing.T) {
+	root, invoker := setupSwarmRepairCheckpointFixture(t, "failed")
+
+	preRepairDigest, err := repairCheckpointDirectoryDigest(root, []string{"target.go"})
+	if err != nil {
+		t.Fatalf("pre-repair digest: %v", err)
+	}
+
+	result, err := runSwarmDestroy(root, "Fix the broken guard in target.go")
+	if err != nil {
+		t.Fatalf("runSwarmDestroy: %v", err)
+	}
+	if got := result["status"]; got == "completed" {
+		t.Fatalf("status = %v, want a failed repair, not completed", got)
+	}
+	if got := result["status"]; got == swarmRepairNotRestoredStatus {
+		t.Fatalf("status = %v, restore should have succeeded in this fixture", got)
+	}
+
+	postRestoreDigest, err := repairCheckpointDirectoryDigest(root, []string{"target.go"})
+	if err != nil {
+		t.Fatalf("post-restore digest: %v", err)
+	}
+	if postRestoreDigest != preRepairDigest {
+		t.Fatalf("fixture tree not byte-identical after restore: pre=%s post=%s", preRepairDigest, postRestoreDigest)
+	}
+	got, err := os.ReadFile(filepath.Join(root, "target.go"))
+	if err != nil || string(got) != "// original\npackage fixture\n" {
+		t.Fatalf("target.go was not restored to its pre-repair content: %q err=%v", got, err)
+	}
+
+	for _, cfg := range invoker.configs {
+		if strings.Contains(strings.ToLower(cfg.TaskBrief), "approve") {
+			t.Fatalf("worker brief unexpectedly asked for approval: %s", cfg.TaskBrief)
+		}
+	}
+}
+
+// TestSwarmRestoreFailureIsReportedHonestly proves that when the checkpoint
+// restore itself fails, the run reports the distinct not-restored state,
+// names the saved copy's location and a runnable recovery command, and
+// never renders the rollback-succeeded announcement text.
+func TestSwarmRestoreFailureIsReportedHonestly(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	root, _ := setupSwarmRepairCheckpointFixture(t, "failed")
+
+	original := swarmRestoreRepairCheckpointFunc
+	swarmRestoreRepairCheckpointFunc = func(checkpoint repairCheckpoint) error {
+		return fmt.Errorf("simulated restore failure")
+	}
+	t.Cleanup(func() { swarmRestoreRepairCheckpointFunc = original })
+
+	result, err := runSwarmDestroy(root, "Fix the broken guard in target.go")
+	if err != nil {
+		t.Fatalf("runSwarmDestroy: %v", err)
+	}
+	if got := result["status"]; got != swarmRepairNotRestoredStatus {
+		t.Fatalf("status = %v, want %v", got, swarmRepairNotRestoredStatus)
+	}
+	backupPath, _ := result["backup_path"].(string)
+	if strings.TrimSpace(backupPath) == "" {
+		t.Fatalf("expected a backup_path naming the saved copy: %+v", result)
+	}
+	recommendation, _ := result["recommendation"].(string)
+	if !strings.Contains(recommendation, backupPath) {
+		t.Fatalf("recommendation does not name the saved copy's directory: %q", recommendation)
+	}
+	if !strings.Contains(recommendation, "cp -r") {
+		t.Fatalf("recommendation does not carry a runnable recovery command: %q", recommendation)
+	}
+	if strings.Contains(strings.ToLower(recommendation), "rolled back") || strings.Contains(strings.ToLower(recommendation), "rollback") {
+		t.Fatalf("recommendation must never claim a rollback happened: %q", recommendation)
+	}
+
+	visual := stdout.(*bytes.Buffer).String()
+	if strings.Contains(visual, "put back exactly to the state it was saved in") {
+		t.Fatalf("rollback-succeeded announcement rendered despite a failed restore:\n%s", visual)
+	}
+}
+
+// TestSwarmRepairAsksNothingMidFlight proves the automatic repair path never
+// blocks on input and never renders an approval prompt, on both the
+// passing and the failing verification branch.
+func TestSwarmRepairAsksNothingMidFlight(t *testing.T) {
+	for _, watcherStatus := range []string{"completed", "failed"} {
+		t.Run(watcherStatus, func(t *testing.T) {
+			root, _ := setupSwarmRepairCheckpointFixture(t, watcherStatus)
+
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				if _, err := runSwarmDestroy(root, "Fix the broken guard in target.go"); err != nil {
+					t.Errorf("runSwarmDestroy: %v", err)
+				}
+			}()
+			select {
+			case <-done:
+			case <-time.After(10 * time.Second):
+				t.Fatal("runSwarmDestroy did not return -- it is likely blocked waiting on a prompt")
+			}
+
+			visual := stdout.(*bytes.Buffer).String()
+			for _, jargon := range []string{"y/n", "approve?", "proceed?", "confirm the repair"} {
+				if strings.Contains(strings.ToLower(visual), jargon) {
+					t.Fatalf("output contains an approval prompt %q:\n%s", jargon, visual)
+				}
+			}
+		})
+	}
+}
+
+// TestSwarmRepairAsNoCheckpointForNoRepair proves a run that selected no
+// repair (no lens produced usable evidence) saves no checkpoint at all.
+func TestSwarmRepairAsNoCheckpointForNoRepair(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	goal := "Destroy a bug nobody can reproduce"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0", Goal: &goal, State: colony.StateREADY,
+	})
+
+	invoker := &swarmNoEvidenceInvoker{}
+	originalInvoker := newSwarmWorkerInvoker
+	newSwarmWorkerInvoker = func() codex.WorkerInvoker { return invoker }
+	t.Cleanup(func() { newSwarmWorkerInvoker = originalInvoker })
+
+	result, err := runSwarmDestroy(root, "A bug with no reproducible evidence")
+	if err != nil {
+		t.Fatalf("runSwarmDestroy: %v", err)
+	}
+	if noEvidence, _ := result["no_evidence"].(bool); !noEvidence {
+		t.Fatalf("expected a no-evidence outcome, got %+v", result)
+	}
+	if invoker.builderDispatched {
+		t.Fatalf("no repair was selected, but a fix-wave worker was still dispatched")
+	}
+}
+
+// swarmNoEvidenceInvoker reports no usable claim from every investigation
+// lens, so compareSwarmHypotheses selects no repair and the fix wave (and
+// therefore the checkpoint) is never reached.
+type swarmNoEvidenceInvoker struct {
+	builderDispatched bool
+}
+
+func (i *swarmNoEvidenceInvoker) Invoke(_ context.Context, cfg codex.WorkerConfig) (codex.WorkerResult, error) {
+	if cfg.Caste == "builder" {
+		i.builderDispatched = true
+	}
+	response := swarmWorkerResponse{Role: cfg.Caste, Status: "blocked", Summary: ""}
+	result := codex.WorkerResult{
+		WorkerName: cfg.WorkerName, Caste: cfg.Caste, TaskID: cfg.TaskID,
+		Status: "blocked", Summary: "", Duration: time.Millisecond,
+		Blockers: []string{"no evidence available"},
+	}
+	if strings.TrimSpace(cfg.ResponsePath) == "" {
+		return codex.WorkerResult{}, context.Canceled
+	}
+	if err := os.MkdirAll(filepath.Dir(cfg.ResponsePath), 0o755); err != nil {
+		return codex.WorkerResult{}, err
+	}
+	data, err := json.MarshalIndent(response, "", "  ")
+	if err != nil {
+		return codex.WorkerResult{}, err
+	}
+	if err := os.WriteFile(cfg.ResponsePath, append(data, '\n'), 0o644); err != nil {
+		return codex.WorkerResult{}, err
+	}
+	return result, nil
+}
+
+func (i *swarmNoEvidenceInvoker) IsAvailable(_ context.Context) bool { return true }
+func (i *swarmNoEvidenceInvoker) ValidateAgent(_ string) error       { return nil }

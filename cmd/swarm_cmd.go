@@ -26,6 +26,20 @@ const (
 
 var newSwarmWorkerInvoker = codex.NewWorkerInvoker
 
+// swarmRestoreRepairCheckpointFunc is the one call site runSwarmDestroy uses
+// to restore a swarm repair checkpoint -- a test seam (mirroring
+// newSwarmWorkerInvoker above) so TestSwarmRestoreFailureIsReportedHonestly
+// can force the "restore itself failed" case without corrupting real
+// filesystem state. Production always leaves this as
+// restoreSwarmRepairCheckpoint, the direct adapter call.
+var swarmRestoreRepairCheckpointFunc = restoreSwarmRepairCheckpoint
+
+// swarmRepairNotRestoredStatus is the run status reported when a repair
+// failed verification AND the checkpoint restore itself did not succeed --
+// distinct from both "completed" and an ordinary failed/blocked repair, so
+// this state is never described as a rollback that happened.
+const swarmRepairNotRestoredStatus = "repair_failed_not_restored"
+
 type swarmWorkerPlan struct {
 	Stage            string                 `json:"stage,omitempty"`
 	Wave             int                    `json:"wave"`
@@ -392,9 +406,27 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 	}
 
 	fixPlans := buildSwarmFixPlans(root, target)
+
+	// D-05/LIVE-04: checkpoint the working tree before the fix wave ever
+	// dispatches, so a repair that fails verification can be put back
+	// exactly. A checkpoint that cannot be saved must never silently block
+	// the existing repair attempt (mirroring applyBoundedCheckFixRepair's
+	// own fallback, cmd/work_repair.go) -- warn and proceed unprotected
+	// rather than refuse to try.
+	checkpoint, checkpointErr := saveSwarmRepairCheckpoint(root, swarmID, target, comparison)
+	haveCheckpoint := checkpointErr == nil
+	if haveCheckpoint {
+		announceSwarmCheckpointSaved(swarmID, target)
+	} else {
+		fmt.Fprintf(os.Stderr, "warning: could not save swarm repair checkpoint for %q: %v\n", target, checkpointErr)
+	}
+
 	emitVisualProgress(renderSwarmDispatchPreview(swarmID, target, fixPlans, "Fix Wave"))
 	builderRuns, err := executeSwarmWave(ctx, root, swarmID, target, fixPlans, swarmFixWaveBrief(comparison), invoker, false)
 	if err != nil {
+		if haveCheckpoint {
+			os.RemoveAll(checkpoint.BackupDir)
+		}
 		if ctx.Err() != nil {
 			runStatus = "timeout"
 			return nil, fmt.Errorf("swarm stopped: %w", ctx.Err())
@@ -407,11 +439,78 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 	emitVisualProgress(renderSwarmDispatchPreview(swarmID, target, verificationPlans, "Verification Wave"))
 	watcherRuns, err := executeSwarmWave(ctx, root, swarmID, target, verificationPlans, findingSummary+"\n\n"+builderSummary, invoker, false)
 	if err != nil {
+		if haveCheckpoint {
+			os.RemoveAll(checkpoint.BackupDir)
+		}
 		if ctx.Err() != nil {
 			runStatus = "timeout"
 			return nil, fmt.Errorf("swarm stopped: %w", ctx.Err())
 		}
 		return nil, err
+	}
+
+	// The verification wave's own outcome -- not the run's combined outcome
+	// below, which also folds in the investigation wave -- decides whether
+	// the repair held. No approval prompt is ever shown here; D-05 is the
+	// owner's locked decision to apply the ranked repair automatically.
+	verificationStatus, _, _, _, _, verificationErr := summarizeSwarmOutcome(watcherRuns)
+	if verificationErr != nil {
+		if haveCheckpoint {
+			os.RemoveAll(checkpoint.BackupDir)
+		}
+		return nil, verificationErr
+	}
+	repairHeld := verificationStatus == "completed"
+
+	if haveCheckpoint {
+		if repairHeld {
+			// Verification passed: release the checkpoint's temporary copy,
+			// the repair stays in place.
+			os.RemoveAll(checkpoint.BackupDir)
+		} else if restoreErr := swarmRestoreRepairCheckpointFunc(checkpoint); restoreErr != nil {
+			// The fix did not work AND the restore itself failed. Stop here
+			// -- state plainly that the project was not put back, name
+			// where the saved copy is and the exact recovery command, and
+			// never describe this as a rollback that happened.
+			runStatus = "failed"
+			message := renderSwarmCheckpointRestoreFailureMessage(target, checkpoint, restoreErr)
+			notRestoredRuns := append(append([]swarmWorkerExecution{}, investigationRuns...), builderRuns...)
+			notRestoredRuns = append(notRestoredRuns, watcherRuns...)
+			filesTouched, testsWritten := collectSwarmTouchedFiles(notRestoredRuns)
+			if _, persistErr := persistSwarmResultOutcome(store, swarmResultRecord{
+				SwarmID:        swarmID,
+				Target:         target,
+				Status:         "failed",
+				Recommendation: message,
+				Workers:        notRestoredRuns,
+				Files:          filesTouched,
+				Tests:          testsWritten,
+				Blockers:       []string{message},
+				CompletedAt:    time.Now().UTC().Format(time.RFC3339Nano),
+			}); persistErr != nil {
+				return nil, fmt.Errorf("write and evaluate swarm result: %w", persistErr)
+			}
+			result := map[string]interface{}{
+				"mode":                "destroy",
+				"autopilot_available": true,
+				"swarm_id":            swarmID,
+				"target":              target,
+				"status":              swarmRepairNotRestoredStatus,
+				"recommendation":      message,
+				"workers":             swarmExecutionsForJSON(notRestoredRuns),
+				"worker_count":        len(notRestoredRuns),
+				"files_touched":       filesTouched,
+				"tests_written":       testsWritten,
+				"blockers":            []string{message},
+				"backup_path":         checkpoint.BackupDir,
+				"next":                "aether status",
+				"watch":               false,
+			}
+			return resultWithSwarmInterventionContract(result, contract), nil
+		} else {
+			announceSwarmCheckpointRestored(swarmID, target)
+			os.RemoveAll(checkpoint.BackupDir)
+		}
 	}
 
 	allRuns := append(append([]swarmWorkerExecution{}, investigationRuns...), builderRuns...)
