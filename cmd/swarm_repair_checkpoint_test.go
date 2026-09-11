@@ -15,6 +15,7 @@ import (
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/events"
+	"github.com/calcosmic/Aether/pkg/storage"
 )
 
 func mustWriteRepairFixtureFile(t *testing.T, path, content string) {
@@ -515,3 +516,249 @@ func (i *swarmNoEvidenceInvoker) Invoke(_ context.Context, cfg codex.WorkerConfi
 
 func (i *swarmNoEvidenceInvoker) IsAvailable(_ context.Context) bool { return true }
 func (i *swarmNoEvidenceInvoker) ValidateAgent(_ string) error       { return nil }
+
+// swarmArchitecturalStrikeFixture describes one recorded strike Task 3's
+// tests seed directly via saveSwarmResultRecord -- mirroring
+// writeSwarmStrikeFixture (cmd/swarm_strikes_test.go) but additionally
+// carrying the Solution/Blockers/Workers fields
+// augmentSwarmArchitecturalCase reads to build the rendered case and the
+// structural-change proposal.
+type swarmArchitecturalStrikeFixture struct {
+	swarmID    string
+	target     string
+	solution   string
+	blocker    string
+	rootCauses []string // one per lens worker recorded on this attempt (tracker, then scout)
+	at         time.Time
+}
+
+func writeSwarmArchitecturalStrikeFixture(t *testing.T, s *storage.Store, f swarmArchitecturalStrikeFixture) {
+	t.Helper()
+	lensCastes := []string{"tracker", "scout"}
+	workers := make([]swarmWorkerExecution, 0, len(f.rootCauses))
+	for i, cause := range f.rootCauses {
+		if i >= len(lensCastes) {
+			break
+		}
+		caste := lensCastes[i]
+		workers = append(workers, swarmWorkerExecution{
+			Name: caste + "-" + f.swarmID, Caste: caste, Role: caste,
+			Response: swarmWorkerResponse{Role: caste, RootCause: cause},
+		})
+	}
+	record := swarmResultRecord{
+		SwarmID:     f.swarmID,
+		Target:      f.target,
+		Status:      "failed",
+		Solution:    f.solution,
+		Blockers:    swarmCompactStrings([]string{f.blocker}),
+		Workers:     workers,
+		CompletedAt: f.at.UTC().Format(time.RFC3339Nano),
+	}
+	if err := saveSwarmResultRecord(s, record); err != nil {
+		t.Fatalf("save architectural strike fixture %s: %v", f.swarmID, err)
+	}
+}
+
+// TestThirdStrikeRendersAnArchitecturalCase proves the third recorded
+// failure on one target still routes to the existing escalation path (the
+// strike count and evidence identifier keys are unchanged in shape) and
+// that the result additionally carries a non-empty rendered case, with zero
+// workers dispatched to build it.
+func TestThirdStrikeRendersAnArchitecturalCase(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	goal := "Stop retrying a structural bug"
+	createTestColonyState(t, dataDir, colony.ColonyState{Version: "3.0", Goal: &goal, State: colony.StateREADY})
+
+	target := "Persistent nil pointer in the checkout handler"
+	base := time.Now().UTC().Add(-10 * time.Minute)
+	sharedCause := "checkout handler dereferences a nil cart"
+	for i := 0; i < 3; i++ {
+		writeSwarmArchitecturalStrikeFixture(t, store, swarmArchitecturalStrikeFixture{
+			swarmID:    fmt.Sprintf("swarm-strike-%d", i+1),
+			target:     target,
+			solution:   fmt.Sprintf("attempt %d added a nil guard around the cart lookup", i+1),
+			blocker:    fmt.Sprintf("attempt %d: the guard did not cover the async checkout path", i+1),
+			rootCauses: []string{sharedCause, sharedCause},
+			at:         base.Add(time.Duration(i) * time.Minute),
+		})
+	}
+
+	result, err := runSwarmCompatibility(root, target, false, false)
+	if err != nil {
+		t.Fatalf("runSwarmCompatibility: %v", err)
+	}
+	if got := result["status"]; got != "architectural_concern" {
+		t.Fatalf("status = %v, want architectural_concern: %+v", got, result)
+	}
+	if got := intValue(result["strike_count"]); got != 3 {
+		t.Fatalf("strike_count = %v, want 3", got)
+	}
+	if evidenceIDs := stringSliceValue(result["evidence_ids"]); len(evidenceIDs) != 3 {
+		t.Fatalf("evidence_ids = %v, want 3 entries", evidenceIDs)
+	}
+	if got := intValue(result["worker_count"]); got != 0 {
+		t.Fatalf("worker_count = %v, want 0", got)
+	}
+	caseText, _ := result["case"].(string)
+	if strings.TrimSpace(caseText) == "" {
+		t.Fatalf("expected a non-empty rendered case: %+v", result)
+	}
+}
+
+// TestArchitecturalCaseNamesAllThreeAttempts proves the rendered case names
+// each of the three attempts with what it tried and how it failed.
+func TestArchitecturalCaseNamesAllThreeAttempts(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	goal := "Stop retrying a structural bug"
+	createTestColonyState(t, dataDir, colony.ColonyState{Version: "3.0", Goal: &goal, State: colony.StateREADY})
+
+	target := "Persistent nil pointer in the checkout handler"
+	base := time.Now().UTC().Add(-10 * time.Minute)
+	tried := []string{}
+	failed := []string{}
+	for i := 0; i < 3; i++ {
+		triedText := fmt.Sprintf("attempt %d added a nil guard around the cart lookup", i+1)
+		failedText := fmt.Sprintf("attempt %d: the guard did not cover the async checkout path", i+1)
+		tried = append(tried, triedText)
+		failed = append(failed, failedText)
+		writeSwarmArchitecturalStrikeFixture(t, store, swarmArchitecturalStrikeFixture{
+			swarmID:    fmt.Sprintf("swarm-names-strike-%d", i+1),
+			target:     target,
+			solution:   triedText,
+			blocker:    failedText,
+			rootCauses: []string{fmt.Sprintf("distinct cause %d", i+1)},
+			at:         base.Add(time.Duration(i) * time.Minute),
+		})
+	}
+
+	result, err := runSwarmCompatibility(root, target, false, false)
+	if err != nil {
+		t.Fatalf("runSwarmCompatibility: %v", err)
+	}
+	caseText, _ := result["case"].(string)
+	for i := range tried {
+		if !strings.Contains(caseText, tried[i]) {
+			t.Fatalf("case text missing attempt %d's tried text %q:\n%s", i+1, tried[i], caseText)
+		}
+		if !strings.Contains(caseText, failed[i]) {
+			t.Fatalf("case text missing attempt %d's failed text %q:\n%s", i+1, failed[i], caseText)
+		}
+	}
+
+	attempts, ok := result["attempts"].([]swarmArchitecturalAttempt)
+	if !ok || len(attempts) != 3 {
+		t.Fatalf("expected 3 structured attempts, got %+v", result["attempts"])
+	}
+}
+
+// TestArchitecturalCaseProposalComesFromRecordedEvidence proves the proposed
+// structural change text is traceable to a recorded hypothesis: changing
+// that recorded value and re-deriving the case changes the proposal to
+// match.
+func TestArchitecturalCaseProposalComesFromRecordedEvidence(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	goal := "Stop retrying a structural bug"
+	createTestColonyState(t, dataDir, colony.ColonyState{Version: "3.0", Goal: &goal, State: colony.StateREADY})
+
+	target := "Persistent nil pointer in the checkout handler"
+	base := time.Now().UTC().Add(-10 * time.Minute)
+	writeThreeDistinctStrikes := func(firstCause string) {
+		causes := []string{firstCause, "an unrelated secondary cause", "a third, also unrelated cause"}
+		for i := 0; i < 3; i++ {
+			writeSwarmArchitecturalStrikeFixture(t, store, swarmArchitecturalStrikeFixture{
+				swarmID:    fmt.Sprintf("swarm-proposal-strike-%d", i+1),
+				target:     target,
+				solution:   fmt.Sprintf("attempt %d fix", i+1),
+				blocker:    fmt.Sprintf("attempt %d blocker", i+1),
+				rootCauses: []string{causes[i]},
+				at:         base.Add(time.Duration(i) * time.Minute),
+			})
+		}
+	}
+
+	writeThreeDistinctStrikes("checkout handler dereferences a nil cart")
+	result, err := runSwarmCompatibility(root, target, false, false)
+	if err != nil {
+		t.Fatalf("runSwarmCompatibility: %v", err)
+	}
+	proposal, _ := result["structural_change_proposal"].(string)
+	if !strings.Contains(proposal, "checkout handler dereferences a nil cart") {
+		t.Fatalf("proposal = %q, want it to name the recorded cause", proposal)
+	}
+
+	// Change the exact recorded hypothesis value the proposal is traceable
+	// to, and observe the proposal change to match.
+	writeThreeDistinctStrikes("checkout handler leaks a stale session token")
+	result2, err := runSwarmCompatibility(root, target, false, false)
+	if err != nil {
+		t.Fatalf("runSwarmCompatibility (second call): %v", err)
+	}
+	proposal2, _ := result2["structural_change_proposal"].(string)
+	if proposal2 == proposal {
+		t.Fatalf("proposal did not change after the recorded hypothesis changed: %q", proposal2)
+	}
+	if !strings.Contains(proposal2, "checkout handler leaks a stale session token") {
+		t.Fatalf("proposal2 = %q, want it to name the newly recorded cause", proposal2)
+	}
+}
+
+// TestSecondStrikeDoesNotEscalate proves two recorded failures dispatch
+// workers normally and produce no escalation or architectural case.
+func TestSecondStrikeDoesNotEscalate(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	goal := "Investigate a bug that has not yet proven architectural"
+	createTestColonyState(t, dataDir, colony.ColonyState{Version: "3.0", Goal: &goal, State: colony.StateREADY})
+
+	target := "Occasional timeout in the checkout handler"
+	base := time.Now().UTC().Add(-10 * time.Minute)
+	for i := 0; i < 2; i++ {
+		writeSwarmArchitecturalStrikeFixture(t, store, swarmArchitecturalStrikeFixture{
+			swarmID:    fmt.Sprintf("swarm-second-strike-%d", i+1),
+			target:     target,
+			solution:   fmt.Sprintf("attempt %d fix", i+1),
+			blocker:    fmt.Sprintf("attempt %d blocker", i+1),
+			rootCauses: []string{fmt.Sprintf("distinct cause %d", i+1)},
+			at:         base.Add(time.Duration(i) * time.Minute),
+		})
+	}
+
+	invoker := &swarmTestInvoker{}
+	originalInvoker := newSwarmWorkerInvoker
+	newSwarmWorkerInvoker = func() codex.WorkerInvoker { return invoker }
+	t.Cleanup(func() { newSwarmWorkerInvoker = originalInvoker })
+
+	result, err := runSwarmCompatibility(root, target, false, false)
+	if err != nil {
+		t.Fatalf("runSwarmCompatibility: %v", err)
+	}
+	if got := result["status"]; got == "architectural_concern" {
+		t.Fatalf("status = %v, want workers dispatched normally rather than an escalation", got)
+	}
+	if len(invoker.configs) == 0 {
+		t.Fatalf("expected workers to be dispatched normally on the second strike")
+	}
+	if _, has := result["case"]; has {
+		t.Fatalf("unexpected architectural case on a second-strike result: %+v", result)
+	}
+}

@@ -16,6 +16,7 @@ import (
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/events"
+	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
 )
 
@@ -191,7 +192,8 @@ func runSwarmCompatibility(root, target string, watch, planOnly bool) (map[strin
 		if err := ensureSwarmEscalationForHistory(store, target, history); err != nil {
 			return nil, err
 		}
-		return resultWithSwarmInterventionContract(swarmArchitecturalConcernResult(target, history), contract), nil
+		result := augmentSwarmArchitecturalCase(swarmArchitecturalConcernResult(target, history), history)
+		return resultWithSwarmInterventionContract(result, contract), nil
 	}
 	if history.LatestRecovery != nil {
 		if err := reconcileSwarmRecoveryEscalation(store, target, history); err != nil {
@@ -612,6 +614,120 @@ func runSwarmPlanOnly(root, target string) (map[string]interface{}, error) {
 
 func resultWithSwarmInterventionContract(result map[string]interface{}, contract SwarmInterventionContract) map[string]interface{} {
 	result["intervention_contract"] = contract
+	return result
+}
+
+// swarmArchitecturalAttempt is one recorded strike rendered for the
+// third-strike case: which run it was, its terminal status, what that
+// attempt tried, and how it failed -- read from the same durable
+// swarmResultRecord history.Evidence already names, never invented at
+// render time.
+type swarmArchitecturalAttempt struct {
+	SwarmID      string `json:"swarm_id"`
+	Status       string `json:"status"`
+	WhatWasTried string `json:"what_was_tried"`
+	HowItFailed  string `json:"how_it_failed"`
+}
+
+// loadSwarmResultRecordByID reads one already-durable swarm result record by
+// its swarm ID -- the same result.json evaluateSwarmStrikeHistoryAgainstPlan
+// (cmd/swarm_strikes.go) already scans to build history.Evidence, re-read
+// here to recover the fuller record (root cause, solution, workers,
+// blockers) that history.Evidence's own compact shape does not carry.
+func loadSwarmResultRecordByID(s *storage.Store, swarmID string) (swarmResultRecord, bool) {
+	swarmID = strings.TrimSpace(swarmID)
+	if s == nil || swarmID == "" {
+		return swarmResultRecord{}, false
+	}
+	var record swarmResultRecord
+	path := filepath.ToSlash(filepath.Join("swarms", swarmID, "result.json"))
+	if err := s.LoadJSON(path, &record); err != nil {
+		return swarmResultRecord{}, false
+	}
+	return record, true
+}
+
+// swarmArchitecturalAttempts renders one entry per recorded strike naming
+// what that attempt tried and how it failed, from the strike's own already-
+// durable record -- never composed generically at render time.
+func swarmArchitecturalAttempts(s *storage.Store, evidence []swarmStrikeEvidence) []swarmArchitecturalAttempt {
+	attempts := make([]swarmArchitecturalAttempt, 0, len(evidence))
+	for _, e := range evidence {
+		tried := "an automatic fix, but no record of what it attempted survived"
+		failed := fmt.Sprintf("the attempt ended with status %q", e.Status)
+		if record, ok := loadSwarmResultRecordByID(s, e.SwarmID); ok {
+			if solution := strings.TrimSpace(record.Solution); solution != "" {
+				tried = solution
+			} else if rootCause := strings.TrimSpace(record.RootCause); rootCause != "" {
+				tried = fmt.Sprintf("addressed the suspected cause: %s", rootCause)
+			}
+			if len(record.Blockers) > 0 {
+				failed = strings.Join(swarmCompactStrings(record.Blockers), "; ")
+			} else if recommendation := strings.TrimSpace(record.Recommendation); recommendation != "" {
+				failed = recommendation
+			}
+		}
+		attempts = append(attempts, swarmArchitecturalAttempt{
+			SwarmID: e.SwarmID, Status: e.Status, WhatWasTried: tried, HowItFailed: failed,
+		})
+	}
+	return attempts
+}
+
+// swarmArchitecturalStructuralChangeProposal draws the proposed structural
+// change from the recorded hypotheses' shared causes across all three
+// strikes -- reusing hypothesesFromSwarmRuns and detectSwarmSharedCauses
+// (cmd/swarm_lens.go) against each strike's own already-durable Workers
+// field, never a fresh claim composed at render time. A cause two or more
+// recorded hypotheses independently named across the three attempts is the
+// strongest signal that patching around it will not work; absent one, the
+// first recorded hypothesis's claim is used; absent any hypothesis at all,
+// the case says plainly that no structural cause could be determined.
+func swarmArchitecturalStructuralChangeProposal(s *storage.Store, evidence []swarmStrikeEvidence) string {
+	var allHypotheses []swarmHypothesis
+	for _, e := range evidence {
+		record, ok := loadSwarmResultRecordByID(s, e.SwarmID)
+		if !ok {
+			continue
+		}
+		hypotheses, _ := hypothesesFromSwarmRuns(record.Workers)
+		allHypotheses = append(allHypotheses, hypotheses...)
+	}
+	if len(allHypotheses) == 0 {
+		return "No structural cause could be determined from the recorded attempts -- a human should review the three failures directly before deciding what to change."
+	}
+	cause := allHypotheses[0].Claim
+	if shared := detectSwarmSharedCauses(allHypotheses); len(shared) > 0 {
+		cause = shared[0].Cause
+	}
+	return fmt.Sprintf("Address %s directly. Patching around it has not worked across %d attempts.", cause, len(evidence))
+}
+
+// augmentSwarmArchitecturalCase adds the plain-language architectural case
+// (D-07/CAP-046) to swarmArchitecturalConcernResult's existing payload,
+// alongside its existing keys -- strike_count, evidence_ids, next, and every
+// other key it already returns are kept unchanged in shape. The case names
+// each of the three attempts with what it tried and how it failed, states
+// plainly why continuing to patch is not working, and names the structural
+// change proposed, sourced from the recorded hypotheses rather than invented
+// here. No worker is dispatched to build this case -- it is read entirely
+// from durable history already on disk.
+func augmentSwarmArchitecturalCase(result map[string]interface{}, history swarmStrikeHistory) map[string]interface{} {
+	attempts := swarmArchitecturalAttempts(store, history.Evidence)
+	proposal := swarmArchitecturalStructuralChangeProposal(store, history.Evidence)
+
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("This has now failed %d times in a row. Here is what happened each time:\n", len(attempts)))
+	for i, attempt := range attempts {
+		b.WriteString(fmt.Sprintf("%d. Tried: %s. Failed: %s.\n", i+1, attempt.WhatWasTried, attempt.HowItFailed))
+	}
+	b.WriteString(fmt.Sprintf("\nContinuing to patch this the same way is not working -- three separate attempts have each tried a fix and each been undone by the same problem.\n\n"))
+	b.WriteString("What we think needs to change structurally: ")
+	b.WriteString(proposal)
+
+	result["case"] = strings.TrimSpace(b.String())
+	result["attempts"] = attempts
+	result["structural_change_proposal"] = proposal
 	return result
 }
 
