@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"testing"
 
 	"github.com/calcosmic/Aether/pkg/codex"
@@ -326,5 +329,223 @@ func TestFailedOracleEmitNeverChangesTheRun(t *testing.T) {
 	forced := runOracleEmissionFixture(t, true)
 	if normal != forced {
 		t.Fatalf("oracle run outcome differs with live emission forced to fail:\n normal: %+v\n forced: %+v", normal, forced)
+	}
+}
+
+// --- Task 2: clarify once, then run without interrupting ------------------
+
+// TestOracleClarifiesOnceBeforeTheFirstRound proves the existing setup
+// ritual (propose -> brief --dry-run) presents the clarified core question,
+// the recommended preset's own target and cap, and any success criteria,
+// and writes nothing until the brief is actually approved.
+func TestOracleClarifiesOnceBeforeTheFirstRound(t *testing.T) {
+	saveGlobals(t)
+	s, root := newTestStore(t)
+	store = s
+
+	topic := "improve error handling across the CLI"
+	proposal, err := runOraclePropose(root, topic)
+	if err != nil {
+		t.Fatalf("propose: %v", err)
+	}
+	suggested, _ := proposal["suggested"].(map[string]interface{})
+	depth, _ := suggested["depth"].(string)
+	preset, err := resolveOraclePreset(depth)
+	if err != nil {
+		t.Fatalf("resolve suggested preset %q: %v", depth, err)
+	}
+
+	result, err := runOracleBriefApprove(root, oracleBriefOptions{
+		Topic:           topic,
+		CoreQuestion:    "Which CLI commands most need improved error handling first?",
+		Depth:           depth,
+		SuccessCriteria: []string{"Each identified command has a documented failure mode"},
+	}, true)
+	if err != nil {
+		t.Fatalf("brief dry-run: %v", err)
+	}
+
+	panel, _ := result["panel"].(string)
+	if !strings.Contains(panel, "Core Question:") || !strings.Contains(panel, "Which CLI commands") {
+		t.Fatalf("clarification panel missing the core question:\n%s", panel)
+	}
+	if !strings.Contains(panel, fmt.Sprintf("Target: %d%%", preset.TargetConfidence)) {
+		t.Fatalf("clarification panel missing the preset's own target (%d%%):\n%s", preset.TargetConfidence, panel)
+	}
+	if !strings.Contains(panel, fmt.Sprintf("up to %d rounds", preset.RoundCap)) {
+		t.Fatalf("clarification panel missing the preset's own round cap (%d):\n%s", preset.RoundCap, panel)
+	}
+	if !strings.Contains(panel, "Success Criteria:") || !strings.Contains(panel, "documented failure mode") {
+		t.Fatalf("clarification panel missing success criteria:\n%s", panel)
+	}
+
+	if approved, _ := result["approved"].(bool); approved {
+		t.Fatal("dry-run brief reported approved = true, want false (not yet confirmed)")
+	}
+	if fileExists(oraclePendingBriefPath(root)) {
+		t.Fatal("dry-run brief wrote a pending brief file before confirmation")
+	}
+	paths := oracleWorkspacePaths(root)
+	if fileExists(paths.StatePath) {
+		t.Fatalf("clarification started a round before confirmation: %s exists", paths.StatePath)
+	}
+}
+
+// TestOracleWithApprovedBriefSkipsClarification proves that once a brief is
+// actually approved for a topic, starting research on that same topic goes
+// straight to the first round -- no clarification screen, no second
+// confirmation.
+func TestOracleWithApprovedBriefSkipsClarification(t *testing.T) {
+	saveGlobals(t)
+	s, root := newTestStore(t)
+	store = s
+
+	originalInvoker := newOracleWorkerInvoker
+	newOracleWorkerInvoker = func() codex.WorkerInvoker { return &oracleCompletingInvoker{} }
+	t.Cleanup(func() { newOracleWorkerInvoker = originalInvoker })
+
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/oracle-skip-clarify\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	agentsDir := filepath.Join(root, ".codex", "agents")
+	if err := os.MkdirAll(agentsDir, 0755); err != nil {
+		t.Fatalf("mkdir agents: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(agentsDir, "aether-oracle.toml"), validCodexAgentTOML("aether-oracle", "oracle"), 0644); err != nil {
+		t.Fatalf("write oracle agent: %v", err)
+	}
+
+	topic := "should the job queue use redis or postgres"
+	approveResult, err := runOracleBriefApprove(root, oracleBriefOptions{
+		Topic:        topic,
+		CoreQuestion: "Should the job queue use Redis or Postgres?",
+		Depth:        "quick",
+	}, false)
+	if err != nil {
+		t.Fatalf("brief approve: %v", err)
+	}
+	if approved, _ := approveResult["approved"].(bool); !approved {
+		t.Fatalf("brief was not approved: %+v", approveResult)
+	}
+
+	result, err := runOracleCompatibility(root, []string{topic}, "quick", "")
+	if err != nil {
+		t.Fatalf("start from approved-brief topic: %v", err)
+	}
+	if _, gated := result["needs_confirmation"]; gated {
+		t.Fatalf("run with an approved brief still showed a clarification screen: %+v", result)
+	}
+	if started, _ := result["started"].(bool); !started {
+		t.Fatalf("run with an approved brief did not start: %+v", result)
+	}
+
+	paths := oracleWorkspacePaths(root)
+	state, err := loadOracleStateFile(paths.StatePath)
+	if err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if state.CoreQuestion == "" {
+		t.Fatal("state carries no core question from the approved brief")
+	}
+	if state.Iteration == 0 {
+		t.Fatal("state shows no rounds ran, want at least one")
+	}
+}
+
+// TestOracleAsksNothingOnceRoundsBegin proves two things together: the
+// round loop's own source never reads stdin (a structural check that can
+// fail the moment a prompt is added), and a real multi-round fixture run
+// completes successfully with stdin poisoned -- any attempted read would
+// have to survive an error from a pipe whose write end is never fed.
+func TestOracleAsksNothingOnceRoundsBegin(t *testing.T) {
+	for _, name := range []string{"oracle_loop.go", "oracle_progress.go", "oracle_live.go", "oracle_brief.go"} {
+		data, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		if strings.Contains(string(data), "os.Stdin") {
+			t.Fatalf("%s reads from stdin -- Oracle's round loop must never wait on input once it starts (D-08)", name)
+		}
+	}
+
+	saveGlobals(t)
+	s, root := newTestStore(t)
+	store = s
+
+	originalInvoker := newOracleWorkerInvoker
+	newOracleWorkerInvoker = func() codex.WorkerInvoker { return &oracleCompletingInvoker{} }
+	t.Cleanup(func() { newOracleWorkerInvoker = originalInvoker })
+
+	setupOracleLiveFixtureWorkspace(t, root, 4, 60, 5)
+
+	originalStdin := os.Stdin
+	poisonedRead, poisonedWrite, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("create poisoned stdin pipe: %v", err)
+	}
+	poisonedWrite.Close() // closed write end: any Read on poisonedRead returns EOF immediately, never blocks
+	os.Stdin = poisonedRead
+	t.Cleanup(func() {
+		os.Stdin = originalStdin
+		poisonedRead.Close()
+	})
+
+	result, err := runOracleCompatibility(root, []string{"run-loop"}, "", "")
+	if err != nil {
+		t.Fatalf("run-loop with poisoned stdin returned an error -- something tried to read input: %v", err)
+	}
+	if status, _ := result["status"].(string); status != "complete" {
+		t.Fatalf("run-loop with poisoned stdin status = %v, want complete", result["status"])
+	}
+}
+
+// oracleWorkspaceDigest lists every path under the Oracle workspace
+// directory, sorted -- a before/after comparison proves nothing was
+// written, without depending on any single well-known filename.
+func oracleWorkspaceDigest(t *testing.T, root string) []string {
+	t.Helper()
+	dir := filepath.Join(root, ".aether", "oracle")
+	var entries []string
+	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		entries = append(entries, path)
+		return nil
+	})
+	sort.Strings(entries)
+	return entries
+}
+
+// TestOracleClarificationWritesNothingUntilConfirmed proves the read-only
+// proposal step and a dry-run brief approval together leave the Oracle
+// workspace directory byte-for-byte unchanged.
+func TestOracleClarificationWritesNothingUntilConfirmed(t *testing.T) {
+	saveGlobals(t)
+	s, root := newTestStore(t)
+	store = s
+
+	before := oracleWorkspaceDigest(t, root)
+
+	topic := "improve error handling across the CLI"
+	if _, err := runOraclePropose(root, topic); err != nil {
+		t.Fatalf("propose: %v", err)
+	}
+	if _, err := runOracleBriefApprove(root, oracleBriefOptions{
+		Topic:        topic,
+		CoreQuestion: "Which CLI commands most need improved error handling first?",
+		Depth:        "balanced",
+	}, true); err != nil {
+		t.Fatalf("brief dry-run: %v", err)
+	}
+
+	after := oracleWorkspaceDigest(t, root)
+	if len(before) != len(after) {
+		t.Fatalf("clarification changed the Oracle workspace contents before confirmation:\n before: %v\n after:  %v", before, after)
+	}
+	for i := range before {
+		if before[i] != after[i] {
+			t.Fatalf("clarification changed the Oracle workspace contents before confirmation:\n before: %v\n after:  %v", before, after)
+		}
 	}
 }
