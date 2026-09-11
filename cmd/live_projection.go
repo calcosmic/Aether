@@ -37,6 +37,24 @@ type colonyLiveWorkerRow struct {
 	Question       string   `json:"question,omitempty"`
 	Findings       []string `json:"findings,omitempty"`
 	Status         string   `json:"status,omitempty"`
+
+	// StartedAt is this worker's own worker.started event timestamp -- the
+	// only source an "elapsed time" figure for this specific worker may
+	// ever be computed from (never wall-clock "now").
+	StartedAt string `json:"started_at,omitempty"`
+	// Finished is true once a worker.finished event has been folded for
+	// this worker. A row with Finished == false has no terminal event of
+	// its own, whatever Status currently reads (worker.progress and
+	// question/finding updates also write Status without ever finishing
+	// the worker) -- this is the one field the "never call an unfinished
+	// worker finished" rule (202-06 Task 3) reads.
+	Finished bool `json:"finished,omitempty"`
+	// InterruptedReason is set only when a still-open worker (Finished ==
+	// false) is reclassified as interrupted because the spawn run that
+	// owned it reached a terminal status without ever emitting this
+	// worker's own worker.finished event. It names that run's own recorded
+	// terminal status -- never a guess, never "completed".
+	InterruptedReason string `json:"interrupted_reason,omitempty"`
 }
 
 // colonyLiveTickerEntry is one entry in the bounded most-recent-events tail
@@ -45,6 +63,7 @@ type colonyLiveTickerEntry struct {
 	Topic     string `json:"topic"`
 	Timestamp string `json:"timestamp"`
 	WorkerID  string `json:"worker_id,omitempty"`
+	Caste     string `json:"caste,omitempty"`
 	Status    string `json:"status,omitempty"`
 }
 
@@ -67,6 +86,7 @@ type colonyLiveSnapshot struct {
 	Confidence       float64                 `json:"confidence,omitempty"`
 	TargetConfidence float64                 `json:"target_confidence,omitempty"`
 	Contradictions   []string                `json:"contradictions,omitempty"`
+	Signals          []string                `json:"signals,omitempty"`
 	RecoveryState    string                  `json:"recovery_state,omitempty"`
 	Ticker           []colonyLiveTickerEntry `json:"ticker,omitempty"`
 
@@ -348,6 +368,7 @@ func foldColonyLiveEvents(snapshot colonyLiveSnapshot, entries []colonyLiveDecod
 				Lens:           payload.Lens,
 				Question:       payload.Question,
 				Status:         firstNonEmpty(payload.Status, "active"),
+				StartedAt:      evt.Timestamp,
 			}
 			if payload.Wave > 0 {
 				snapshot.Wave = payload.Wave
@@ -370,12 +391,18 @@ func foldColonyLiveEvents(snapshot colonyLiveSnapshot, entries []colonyLiveDecod
 				if payload.Status != "" {
 					snapshot.Workers[idx].Status = payload.Status
 				}
+				if evt.Topic == events.LiveTopicWorkerFinished {
+					snapshot.Workers[idx].Finished = true
+					snapshot.Workers[idx].InterruptedReason = ""
+				}
 			}
 		case events.LiveTopicConfidenceChanged:
 			snapshot.Confidence = payload.Confidence
 			snapshot.TargetConfidence = payload.TargetConfidence
 		case events.LiveTopicContradictionFound:
 			snapshot.Contradictions = append(snapshot.Contradictions, payload.Contradictions...)
+		case events.LiveTopicSignalConsulted:
+			snapshot.Signals = append(snapshot.Signals, payload.Signals...)
 		case events.LiveTopicRecoveryChanged:
 			snapshot.RecoveryState = payload.RecoveryState
 		}
@@ -384,6 +411,7 @@ func foldColonyLiveEvents(snapshot colonyLiveSnapshot, entries []colonyLiveDecod
 			Topic:     evt.Topic,
 			Timestamp: evt.Timestamp,
 			WorkerID:  firstNonEmpty(payload.WorkerID, payload.WorkerName),
+			Caste:     payload.Caste,
 			Status:    payload.Status,
 		})
 	}
