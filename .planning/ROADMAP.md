@@ -460,6 +460,25 @@ Plans:
 4. A multi-round Oracle question visibly targets uncertainty, reports confidence and contradictions, detects diminishing returns, and produces a source-grounded final synthesis.
 5. Useful partial Swarm/Oracle work, activity, learning, plan research, and local Dreams remain durable, discoverable, and accurately labelled rather than discarded or called verified.
 
+**Plans:** 15 plans
+
+Plans:
+- [ ] 202-01-PLAN.md — Classic Swarm/Oracle/live-display mechanism synthesis and SYN-202 corpus registration
+- [ ] 202-02-PLAN.md — Tracer: one versioned typed live-event model, emitted, replayed and watched end to end
+- [ ] 202-03-PLAN.md — Live events across every lifecycle lane, with a coverage guard
+- [ ] 202-04-PLAN.md — Retire the dead NDJSON event stream and refuse a second transport
+- [ ] 202-05-PLAN.md — Four distinct Swarm lenses, hypothesis comparison and ranked repair card
+- [ ] 202-06-PLAN.md — The live colony cockpit: dashboard, ticker and Classic house style
+- [ ] 202-07-PLAN.md — Checkpointed Swarm repair, rollback, and the three-strike architectural case
+- [ ] 202-08-PLAN.md — Shared Fast/Balanced/Deep/Exhaustive research depth vocabulary
+- [ ] 202-09-PLAN.md — Replay-backed idle watch with the honest no-history floor preserved
+- [ ] 202-10-PLAN.md — One durable replay-safe Swarm episode, retention, and learning proposal
+- [ ] 202-11-PLAN.md — Watchable Oracle rounds: clarify once, confidence, contradictions, diminishing returns
+- [ ] 202-12-PLAN.md — Recommendation-first durable Oracle synthesis with provenance
+- [ ] 202-13-PLAN.md — One honest standing vocabulary and the unverified-work inventory
+- [ ] 202-14-PLAN.md — Status and history surface every episode, synthesis and unproven note
+- [ ] 202-15-PLAN.md — Wrapper triplets, Classic contract cases, and shipped-claim guards
+
 ### Phase 203: Biological Runtime
 
 **Goal:** Complete the real worker-discovery → governed recruitment → child result → knowledge transfer → downstream decision loop, then make pheromones operational decision inputs.
