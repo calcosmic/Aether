@@ -286,6 +286,7 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 - Memory reaches every relevant helper: plan and colonize delegate manifests carry the runtime-built memory capsule; Oracle research files and registers itself; the greeting shows preferences, strongest habits and the last helper note; dead capsule sections are removed under a writer invariant; survey content and the previous phase's outcome reach later briefs within named budgets (WIRE-01..07) -- v1.27 (Phase 198.2; one real-world UAT carried as acknowledged debt)
 - Overnight stamina: owner-eye work queues, genuine danger stops, replans survive restarts, elapsed/cost reporting is durable, blocker truth fails closed, external swarm evidence is issuance-bound, and the six-phase fixture completes unattended (STAM-01..06) -- v1.27 (Phase 198.3)
 - Front door and Classic lifecycle contract: one grouped normal journey, automatic territory freshness, one authoritative orientation model, exactly-once pause/resume, retained honest seal plus verified optional entomb, transaction-backed expert maintenance, and a versioned cross-platform behavior corpus (SYNTH-01, CEC-01/02/04/08, LIFE-01..06, PROOF-01) -- v1.28 (Phase 199)
+- Queen-led work cycle: the Queen picks and explains the smallest capable team, ordinary work stays proportionate, related tasks form coherent jobs and waves, build/continue/autopilot tell one story with one verification boundary, complete result truth (verdict, checks, cost, elapsed time, changed files, knowledge deltas) binds to the exact attempt, recovery checkpoints and restores, goal-level autopilot advances with declared stops, and worker turnaround is measured (SYNTH-03, CEC-06, WORK-01..08) -- v1.28 (Phase 201; verified 101/101, UAT 74/74)
 
 ### Active
 
@@ -437,4 +438,4 @@ This document evolves at phase transitions and milestone boundaries.
 - Do not move install/update/publish safety out of Go
 - Do not make visual output parsing authoritative
 
-*Last updated: 2026-09-07 after Phase 199*
+*Last updated: 2026-09-11 after Phase 201*
