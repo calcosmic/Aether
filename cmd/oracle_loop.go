@@ -17,6 +17,7 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/events"
 )
 
 const (
@@ -569,6 +570,15 @@ func stopOracleCompatibility(root string) (map[string]interface{}, error) {
 		return nil, fmt.Errorf("create oracle dir: %w", err)
 	}
 	state, _ := loadOracleStateFile(paths.StatePath)
+	// Captured before the StartedAt backfill immediately below can invent
+	// one -- a genuinely never-started run (StartedAt still empty here) has
+	// no live episode to close, and oracleLiveEpisodeID's own "oracle"
+	// fallback for an empty StartedAt would otherwise let this manual stop
+	// close an episode it never opened.
+	liveEpisodeID := ""
+	if strings.TrimSpace(state.StartedAt) != "" {
+		liveEpisodeID = oracleLiveEpisodeID(state)
+	}
 	if err := os.WriteFile(paths.StopPath, []byte(time.Now().UTC().Format(time.RFC3339)+"\n"), 0644); err != nil {
 		return nil, fmt.Errorf("write stop marker: %w", err)
 	}
@@ -587,15 +597,19 @@ func stopOracleCompatibility(root string) (map[string]interface{}, error) {
 	if err := writeOracleStateFile(paths.StatePath, state); err != nil {
 		return nil, err
 	}
+	// The controller process this just killed may never reach its own
+	// finalizeOracleLoop terminal branch, or runOracleLoop's deferred
+	// episode close -- this command owns finishing work for a run stopped
+	// from outside its own process (D-05, D-06, D-07), including closing
+	// the live episode (202-17, CR-01) so a stopped run does not stay
+	// classified as live forever.
+	if liveEpisodeID != "" {
+		emitColonyLiveEpisodeEnded(liveEpisodeID, events.EpisodeKindOracle, state.Status)
+	}
 
 	researchDocument := ""
 	if plan, err := loadOraclePlanFile(paths.PlanPath); err == nil {
 		_ = writeOracleDerivedReports(paths, state, plan)
-		// The controller process this just killed may never reach its own
-		// finalizeOracleLoop terminal branch -- this command owns filing,
-		// registering, and promoting for a run stopped from outside its own
-		// process (D-05, D-06, D-07). Same body finalizeOracleLoop uses; see
-		// finalizeOracleResearchArtifacts's doc comment.
 		researchDocument = finalizeOracleResearchArtifacts(paths, state, plan)
 	}
 
@@ -898,7 +912,36 @@ func oracleBackgroundEnv(env []string) []string {
 	return out
 }
 
-func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks []string) (map[string]interface{}, error) {
+// runOracleLoop wraps the round-based run (runOracleLoopRounds, this
+// function's former body, renamed) in Oracle's own live episode boundary
+// (202-17, CR-01/CEC-05/LIVE-06), mirroring cmd/codex_build.go's and
+// cmd/codex_continue.go's emit-started / defer-emit-ended shape on their own
+// lanes.
+//
+// The boundary is opened only when the durable state already carries a
+// non-empty StartedAt. runOracleLoopRounds's own invoker-availability and
+// agent-validation checks run first, inside it, and can still refuse to
+// start the run entirely -- opening an episode here for a run that never
+// began would record a phantom episode that closes immediately with no
+// round ever having played on it. StartedAt is set once, before this
+// function is ever called (by the run/resume entry points that construct
+// oracleStateFile), so an empty value here means this particular invocation
+// is not really a run at all.
+//
+// state is loaded independently of runOracleLoopRounds's own load: a
+// failure to load it here only means the episode boundary is skipped, and
+// runOracleLoopRounds's own reload owns the real error path.
+func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks []string) (result map[string]interface{}, err error) {
+	if state, loadErr := loadOracleStateFile(paths.StatePath); loadErr == nil && strings.TrimSpace(state.StartedAt) != "" {
+		_, closeEpisode := openOracleLiveEpisode(state)
+		defer func() {
+			closeEpisode(oracleLiveTerminalStatus(result, err))
+		}()
+	}
+	return runOracleLoopRounds(paths, detectedType, languages, frameworks)
+}
+
+func runOracleLoopRounds(paths oraclePaths, detectedType string, languages, frameworks []string) (map[string]interface{}, error) {
 	ctx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopSignals()
 

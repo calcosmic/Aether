@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -679,10 +682,18 @@ func TestLiveDashboardShowsTheResearchRound(t *testing.T) {
 		OverallConfidence:  70,
 		TargetConfidence:   95,
 	}
+	// 202-17 (CR-01): the fixture now opens the same episode boundary the
+	// production loop opens, so this test proves the mode resolveWatchMode
+	// returns for a genuinely-in-progress round, not just what the
+	// dashboard renders from an already-assembled snapshot.
+	openOracleLiveEpisode(state)
 	emitOracleLiveRound(state)
 	emitOracleLiveConfidence(state, 60)
 
-	_, snapshot := resolveWatchMode(context.Background(), s, time.Now().UTC())
+	mode, snapshot := resolveWatchMode(context.Background(), s, time.Now().UTC())
+	if mode != watchModeLive {
+		t.Fatalf("mode = %q, want %q for a round genuinely in progress", mode, watchModeLive)
+	}
 	dashboardState := newColonyLiveDashboardFixtureState("Aether", 1, colony.StateEXECUTING)
 	rendered := renderColonyLiveDashboard(snapshot, dashboardState, nil, colonyLiveDrillSelector{})
 
@@ -699,11 +710,168 @@ func TestLiveDashboardShowsTheResearchRound(t *testing.T) {
 		t.Fatalf("dashboard rendered an empty contradictions section for a run with none:\n%s", rendered)
 	}
 
-	// Now with a contradiction: the section must appear.
+	// Now with a contradiction: the section must appear, and the round is
+	// still live.
 	emitOracleLiveContradiction(state, "Two workers reported opposite cache TTL values")
-	_, snapshotWithContradiction := resolveWatchMode(context.Background(), s, time.Now().UTC())
+	modeWithContradiction, snapshotWithContradiction := resolveWatchMode(context.Background(), s, time.Now().UTC())
+	if modeWithContradiction != watchModeLive {
+		t.Fatalf("mode = %q, want %q once a contradiction lands on the same still-open round", modeWithContradiction, watchModeLive)
+	}
 	renderedWithContradiction := renderColonyLiveDashboard(snapshotWithContradiction, dashboardState, nil, colonyLiveDrillSelector{})
 	if !strings.Contains(renderedWithContradiction, "Contradictions:") || !strings.Contains(renderedWithContradiction, "opposite cache TTL values") {
 		t.Fatalf("dashboard did not render the contradictions section once one existed:\n%s", renderedWithContradiction)
+	}
+}
+
+// TestOracleRoundIsLiveWhileItRuns proves CR-01's core claim: a round-based
+// Oracle run that opens its live episode and emits a round resolves
+// watchModeLive -- including in a store that already holds a terminated
+// spawn run from an earlier build (the half of the gap a clean fixture
+// would hide, per 202-VERIFICATION.md and this plan's objective). Closing
+// the episode with a terminal status then flips the same store to
+// watchModeReplay.
+func TestOracleRoundIsLiveWhileItRuns(t *testing.T) {
+	saveGlobals(t)
+	s, root := newTestStore(t)
+	store = s
+
+	// An earlier build already ran and finished in this colony -- the
+	// spawn-run record colonyLiveEpisodeRunHasTerminated consults is not
+	// empty, it is a real terminated run from a different lane entirely.
+	writeSpawnRunFixture(t, s.BasePath(), "earlier-build-run", "completed")
+
+	paths := oracleWorkspacePaths(root)
+	if err := ensureOracleWorkspace(paths); err != nil {
+		t.Fatalf("ensure oracle workspace: %v", err)
+	}
+	state := oracleStateFile{
+		StartedAt:          "2026-01-01T00:00:00Z",
+		Status:             "active",
+		Phase:              "investigate",
+		Iteration:          2,
+		MaxIterations:      10,
+		ActiveQuestionText: "Which cache layer needs the fix first?",
+		OverallConfidence:  70,
+		TargetConfidence:   95,
+	}
+	if err := writeOracleStateFile(paths.StatePath, state); err != nil {
+		t.Fatalf("write oracle state: %v", err)
+	}
+
+	episodeID, closeEpisode := openOracleLiveEpisode(state)
+	emitOracleLiveRound(state)
+	emitOracleLiveConfidence(state, 60)
+
+	mode, snapshot := resolveWatchMode(context.Background(), s, time.Now().UTC())
+	if mode != watchModeLive {
+		t.Fatalf("mode = %q, want %q for an Oracle round in flight, even with a finished earlier build's spawn run in the same store", mode, watchModeLive)
+	}
+	if snapshot.EpisodeID != episodeID {
+		t.Fatalf("snapshot.EpisodeID = %q, want the episode openOracleLiveEpisode opened (%q)", snapshot.EpisodeID, episodeID)
+	}
+	if len(snapshot.Workers) == 0 || snapshot.Workers[0].Question != state.ActiveQuestionText {
+		t.Fatalf("snapshot workers = %+v, want a worker row carrying question %q", snapshot.Workers, state.ActiveQuestionText)
+	}
+	if snapshot.Confidence != float64(state.OverallConfidence) {
+		t.Fatalf("snapshot.Confidence = %v, want %v", snapshot.Confidence, float64(state.OverallConfidence))
+	}
+
+	closeEpisode("complete")
+
+	modeAfterClose, _ := resolveWatchMode(context.Background(), s, time.Now().UTC())
+	if modeAfterClose != watchModeReplay {
+		t.Fatalf("mode after closing with a terminal status = %q, want %q", modeAfterClose, watchModeReplay)
+	}
+}
+
+// TestOracleManualStopClosesTheLiveEpisode proves stopOracleCompatibility
+// closes the live episode for a controller it just killed, so a manually
+// stopped run does not stay classified live forever.
+func TestOracleManualStopClosesTheLiveEpisode(t *testing.T) {
+	saveGlobals(t)
+	s, root := newTestStore(t)
+	store = s
+
+	paths := oracleWorkspacePaths(root)
+	if err := ensureOracleWorkspace(paths); err != nil {
+		t.Fatalf("ensure oracle workspace: %v", err)
+	}
+	state := oracleStateFile{
+		StartedAt:     "2026-01-01T00:00:00Z",
+		Status:        "active",
+		Phase:         "investigate",
+		Iteration:     1,
+		MaxIterations: 10,
+		ControllerPID: 0,
+	}
+	if err := writeOracleStateFile(paths.StatePath, state); err != nil {
+		t.Fatalf("write oracle state: %v", err)
+	}
+
+	openOracleLiveEpisode(state)
+	emitOracleLiveRound(state)
+
+	modeBeforeStop, _ := resolveWatchMode(context.Background(), s, time.Now().UTC())
+	if modeBeforeStop != watchModeLive {
+		t.Fatalf("fixture setup broken: mode before stop = %q, want %q", modeBeforeStop, watchModeLive)
+	}
+
+	if _, err := stopOracleCompatibility(root); err != nil {
+		t.Fatalf("stopOracleCompatibility: %v", err)
+	}
+
+	modeAfterStop, _ := resolveWatchMode(context.Background(), s, time.Now().UTC())
+	if modeAfterStop != watchModeReplay {
+		t.Fatalf("mode after manual stop = %q, want %q -- a stopped run must not stay live", modeAfterStop, watchModeReplay)
+	}
+}
+
+// TestOracleEpisodeBoundaryIsWiredIntoTheLoop parses cmd/oracle_loop.go and
+// fails by name unless runOracleLoop's own body both calls
+// openOracleLiveEpisode and defers a call carrying oracleLiveTerminalStatus
+// -- so the boundary cannot regress into a function nothing invokes, the
+// way it did before this plan (CR-01). Follows
+// TestEveryLiveEventGoesThroughOneBoundary's AST-walk idiom rather than a
+// text search over the file.
+func TestOracleEpisodeBoundaryIsWiredIntoTheLoop(t *testing.T) {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "oracle_loop.go", nil, 0)
+	if err != nil {
+		t.Fatalf("parse oracle_loop.go: %v", err)
+	}
+
+	var fn *ast.FuncDecl
+	for _, decl := range file.Decls {
+		fd, ok := decl.(*ast.FuncDecl)
+		if !ok || fd.Recv != nil || fd.Name.Name != "runOracleLoop" {
+			continue
+		}
+		fn = fd
+		break
+	}
+	if fn == nil || fn.Body == nil {
+		t.Fatal("fixture is broken: func runOracleLoop(...) not found in oracle_loop.go")
+	}
+
+	callsOpen := false
+	closureCallsTerminalStatus := false
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		switch node := n.(type) {
+		case *ast.CallExpr:
+			if ident, ok := node.Fun.(*ast.Ident); ok && ident.Name == "openOracleLiveEpisode" {
+				callsOpen = true
+			}
+			if ident, ok := node.Fun.(*ast.Ident); ok && ident.Name == "oracleLiveTerminalStatus" {
+				closureCallsTerminalStatus = true
+			}
+		}
+		return true
+	})
+
+	if !callsOpen {
+		t.Fatal("runOracleLoop does not call openOracleLiveEpisode -- the live episode boundary is not wired into the loop")
+	}
+	if !closureCallsTerminalStatus {
+		t.Fatal("runOracleLoop does not derive its closing status with oracleLiveTerminalStatus -- the episode may close with an invented status or never close at all")
 	}
 }

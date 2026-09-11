@@ -120,6 +120,50 @@ func emitOracleLiveRoundEnded(state oracleStateFile) {
 	})
 }
 
+// openOracleLiveEpisode opens Oracle's own episode boundary (202-17,
+// CR-01/CEC-05/LIVE-06) -- the same emitColonyLiveEpisodeStarted /
+// emitColonyLiveEpisodeEnded pair cmd/codex_build.go's and
+// cmd/codex_continue.go's own lanes already use, so a genuinely iterating
+// Oracle round can go positive in foldColonyLiveEvents's start/end balance
+// like any other lane instead of never opening a boundary at all. The
+// episode ID deliberately reuses oracleLiveEpisodeID(state), derived from
+// state.StartedAt, which does not change across an `oracle iterate` resume
+// of the same run -- so a resumed run rejoins the same episode rather than
+// minting a second one every time the process restarts. The returned close
+// function is intended to be deferred by the caller with the run's own
+// terminal status (see oracleLiveTerminalStatus) so every return path closes
+// the episode it opened.
+func openOracleLiveEpisode(state oracleStateFile) (string, func(status string)) {
+	episodeID := oracleLiveEpisodeID(state)
+	emitColonyLiveEpisodeStarted(episodeID, events.EpisodeKindOracle)
+	return episodeID, func(status string) {
+		emitColonyLiveEpisodeEnded(episodeID, events.EpisodeKindOracle, status)
+	}
+}
+
+// oracleLiveTerminalStatus derives the status an Oracle live episode closes
+// with from the loop's own reported outcome -- never a status the run did
+// not itself report. finalizeOracleLoop already writes a "status" value
+// into every terminal result map it returns (e.g. "complete", "stopped",
+// "blocked", "max_iterations_reached"); this reads that value back rather
+// than re-deriving it. A non-nil error means the loop never reached
+// finalizeOracleLoop at all (state/plan failed to load, invoker
+// unavailable, or a mid-round write failed) and closes as "failed". A nil
+// error with no readable "status" value should not happen in practice, but
+// still closes as "interrupted" rather than leaving the episode open
+// forever.
+func oracleLiveTerminalStatus(result map[string]interface{}, err error) string {
+	if err != nil {
+		return "failed"
+	}
+	if result != nil {
+		if status, ok := result["status"].(string); ok && strings.TrimSpace(status) != "" {
+			return status
+		}
+	}
+	return "interrupted"
+}
+
 // newOracleNotes returns the entries present in after but not before, in
 // after's own order -- the "genuinely new" diff emitOracleLiveContradiction
 // and emitOracleLiveGapTargeted's call sites use so an unchanged,
