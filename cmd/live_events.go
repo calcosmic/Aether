@@ -27,6 +27,14 @@ func emitColonyLive(topic string, payload events.ColonyLivePayload) {
 		return
 	}
 	payload.SchemaVersion = events.ColonyLiveSchemaVersion
+	if colonyLiveSchemaVersionOverride != "" {
+		// Test-only seam (see doc comment below): lets a test produce a
+		// genuine, boundary-emitted event carrying an unrecognized schema
+		// version, so the replay reducer's version-skip path is proven
+		// against real published events rather than a hand-typed JSON
+		// fixture. Empty in production; never set outside a test.
+		payload.SchemaVersion = colonyLiveSchemaVersionOverride
+	}
 	payload.Sequence = nextLiveSequence(payload.EpisodeID)
 
 	raw, err := payload.RawMessage()
@@ -37,6 +45,11 @@ func emitColonyLive(topic string, payload events.ColonyLivePayload) {
 	bus := events.NewBus(store, events.DefaultConfig())
 	_, _ = bus.Publish(context.Background(), topic, raw, "aether-live")
 }
+
+// colonyLiveSchemaVersionOverride is the test-only seam emitColonyLive
+// checks above. It must never be set outside a test, and every test that
+// sets it must restore it to "" (e.g. via t.Cleanup) before returning.
+var colonyLiveSchemaVersionOverride string
 
 var (
 	liveSequenceMu       sync.Mutex

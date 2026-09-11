@@ -1,14 +1,17 @@
 package cmd
 
 import (
+	"context"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/events"
 )
@@ -224,5 +227,149 @@ func assertStrictlyIncreasingSequence(t *testing.T, label string, seq []int64) {
 		if seq[i] <= seq[i-1] {
 			t.Fatalf("%s: sequence not strictly increasing at index %d: %d <= %d", label, i, seq[i], seq[i-1])
 		}
+	}
+}
+
+// TestLiveModelVersionSkipsUnknownWithoutAborting proves the replay
+// reducer's version-tolerance contract: an event whose schema version this
+// reducer does not recognize is skipped with a named note (a count and the
+// unrecognized version string, both on the returned snapshot) and never
+// aborts the replay of the recognized events around it. It also covers an
+// episode with a start event and no end event: reported open, with its
+// elapsed time derived from its start event rather than wall-clock
+// inference.
+//
+// The unrecognized-version fixture event is produced through the real
+// emission boundary (emitColonyLive), via the version-override test seam,
+// rather than by hand-writing a JSON literal.
+func TestLiveModelVersionSkipsUnknownWithoutAborting(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	episodeID := "swarm-version-skip-test"
+
+	emitColonyLive(events.LiveTopicWaveStarted, events.ColonyLivePayload{
+		EpisodeID: episodeID, EpisodeKind: "swarm", Wave: 1, Status: "starting",
+	})
+	emitColonyLive(events.LiveTopicWorkerStarted, events.ColonyLivePayload{
+		EpisodeID: episodeID, Caste: "scout", WorkerID: "Scout-1", WorkerName: "Scout-1", Wave: 1,
+	})
+
+	const legacyVersion = "live/v0-legacy"
+	colonyLiveSchemaVersionOverride = legacyVersion
+	t.Cleanup(func() { colonyLiveSchemaVersionOverride = "" })
+	emitColonyLive(events.LiveTopicWorkerStarted, events.ColonyLivePayload{
+		EpisodeID: episodeID, Caste: "tracker", WorkerID: "Tracker-1", WorkerName: "Tracker-1", Wave: 1,
+	})
+	colonyLiveSchemaVersionOverride = ""
+
+	emitColonyLive(events.LiveTopicWorkerFinished, events.ColonyLivePayload{
+		EpisodeID: episodeID, Caste: "scout", WorkerID: "Scout-1", WorkerName: "Scout-1", Wave: 1, Status: "completed",
+	})
+
+	snapshot, err := replayColonyLiveSnapshot(context.Background(), s, episodeID, time.Time{})
+	if err != nil {
+		t.Fatalf("replayColonyLiveSnapshot: %v", err)
+	}
+
+	if snapshot.SkippedEventCount != 1 {
+		t.Fatalf("SkippedEventCount = %d, want 1", snapshot.SkippedEventCount)
+	}
+	if len(snapshot.SkippedSchemaVersions) != 1 || snapshot.SkippedSchemaVersions[0] != legacyVersion {
+		t.Fatalf("SkippedSchemaVersions = %v, want [%q]", snapshot.SkippedSchemaVersions, legacyVersion)
+	}
+	// The recognized events around the skipped one must still be
+	// projected: Scout-1's started+finished pair -- but never Tracker-1,
+	// whose only event carried the unrecognized version.
+	if len(snapshot.Workers) != 1 {
+		t.Fatalf("expected exactly 1 recognized worker, got %d: %+v", len(snapshot.Workers), snapshot.Workers)
+	}
+	if snapshot.Workers[0].WorkerID != "Scout-1" {
+		t.Fatalf("recognized worker = %q, want Scout-1", snapshot.Workers[0].WorkerID)
+	}
+	if snapshot.Workers[0].Status != "completed" {
+		t.Fatalf("Scout-1 status = %q, want completed -- the worker.finished event after the skipped one must still fold", snapshot.Workers[0].Status)
+	}
+
+	// No wave-ended event was emitted: the episode/wave must report open,
+	// with elapsed time derived from its own start event.
+	if !snapshot.Open {
+		t.Fatal("expected the snapshot to report Open=true with no wave-ended event emitted")
+	}
+	if snapshot.StartedAt == "" {
+		t.Fatal("expected StartedAt to be set from the wave-started event")
+	}
+	if snapshot.ElapsedSeconds < 0 {
+		t.Fatalf("ElapsedSeconds = %v, want >= 0", snapshot.ElapsedSeconds)
+	}
+}
+
+// TestLiveProjectionResumesWithoutDoubleCounting proves resume semantics
+// across a simulated process restart: folding forward from a previously
+// folded snapshot's cursor produces the exact same result as folding the
+// whole persisted file from the beginning, and repeating the same resume
+// twice from the identical checkpoint never double-counts anything.
+func TestLiveProjectionResumesWithoutDoubleCounting(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	episodeID := "swarm-resume-test"
+
+	emitColonyLive(events.LiveTopicWaveStarted, events.ColonyLivePayload{
+		EpisodeID: episodeID, EpisodeKind: "swarm", Wave: 1, Status: "starting",
+	})
+	emitColonyLive(events.LiveTopicWorkerStarted, events.ColonyLivePayload{
+		EpisodeID: episodeID, Caste: "scout", WorkerID: "Scout-1", WorkerName: "Scout-1", Wave: 1,
+	})
+
+	// Simulate a process restart: fold everything persisted so far into a
+	// checkpoint snapshot -- the exact artifact a restarted process would
+	// have saved before it stopped.
+	checkpoint, err := replayColonyLiveSnapshot(context.Background(), s, episodeID, time.Time{})
+	if err != nil {
+		t.Fatalf("replayColonyLiveSnapshot (checkpoint): %v", err)
+	}
+	if checkpoint.LastEventID == "" {
+		t.Fatal("fixture is broken: checkpoint snapshot captured no last event")
+	}
+
+	emitColonyLive(events.LiveTopicWorkerFinished, events.ColonyLivePayload{
+		EpisodeID: episodeID, Caste: "scout", WorkerID: "Scout-1", WorkerName: "Scout-1", Wave: 1, Status: "completed",
+	})
+	emitColonyLive(events.LiveTopicWaveEnded, events.ColonyLivePayload{
+		EpisodeID: episodeID, EpisodeKind: "swarm", Wave: 1, Status: "completed",
+	})
+
+	resumed, err := replayColonyLiveSnapshotResume(context.Background(), s, episodeID, checkpoint)
+	if err != nil {
+		t.Fatalf("replayColonyLiveSnapshotResume: %v", err)
+	}
+
+	fullReplay, err := replayColonyLiveSnapshot(context.Background(), s, episodeID, time.Time{})
+	if err != nil {
+		t.Fatalf("replayColonyLiveSnapshot (full): %v", err)
+	}
+
+	if !reflect.DeepEqual(resumed, fullReplay) {
+		t.Fatalf("resumed snapshot does not equal a full replay from the beginning:\n resumed: %+v\n full:    %+v", resumed, fullReplay)
+	}
+	if resumed.Open {
+		t.Fatal("resumed snapshot Open = true after wave-ended, want false")
+	}
+	if len(resumed.Workers) != 1 || resumed.Workers[0].Status != "completed" {
+		t.Fatalf("resumed snapshot worker state = %+v, want exactly 1 worker with status completed", resumed.Workers)
+	}
+
+	// Re-running the resume from the SAME checkpoint a second time (e.g. a
+	// duplicate resume attempt after another restart) must not double-count
+	// anything either.
+	resumedAgain, err := replayColonyLiveSnapshotResume(context.Background(), s, episodeID, checkpoint)
+	if err != nil {
+		t.Fatalf("replayColonyLiveSnapshotResume (second attempt): %v", err)
+	}
+	if !reflect.DeepEqual(resumedAgain, fullReplay) {
+		t.Fatalf("a second resume from the same checkpoint produced a different result than a full replay:\n resumedAgain: %+v\n full:         %+v", resumedAgain, fullReplay)
 	}
 }

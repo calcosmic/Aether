@@ -77,6 +77,37 @@ type colonyLiveSnapshot struct {
 
 	LastEventID   string `json:"last_event_id,omitempty"`
 	LastTimestamp string `json:"last_timestamp,omitempty"`
+	LastSequence  int64  `json:"last_sequence,omitempty"`
+}
+
+// colonyLiveResumeCursor identifies the last persisted event a prior
+// replay already folded, letting a restarted process continue folding
+// forward through only the events persisted since, without re-reading or
+// double-counting anything it already projected. The three fields together
+// match sortColonyLiveEntries' own ordering exactly, so "after the cursor"
+// means precisely the same thing here as it does during a full replay's
+// sort.
+type colonyLiveResumeCursor struct {
+	Timestamp string
+	Sequence  int64
+	EventID   string
+}
+
+// colonyLiveEntryAfterCursor reports whether entry sorts strictly after
+// cursor under the same (timestamp, sequence, event ID) ordering
+// sortColonyLiveEntries uses. A zero-value cursor (no EventID) means
+// "nothing has been folded yet" -- every entry is after it.
+func colonyLiveEntryAfterCursor(entry colonyLiveDecodedEvent, cursor colonyLiveResumeCursor) bool {
+	if cursor.EventID == "" {
+		return true
+	}
+	if entry.event.Timestamp != cursor.Timestamp {
+		return entry.event.Timestamp > cursor.Timestamp
+	}
+	if entry.payload.Sequence != cursor.Sequence {
+		return entry.payload.Sequence > cursor.Sequence
+	}
+	return entry.event.ID > cursor.EventID
 }
 
 // colonyLiveDecodedEvent pairs a raw persisted event with its decoded
@@ -118,6 +149,48 @@ func replayColonyLiveSnapshot(ctx context.Context, s *storage.Store, episodeID s
 	}
 
 	return foldColonyLiveEvents(snapshot, decoded), nil
+}
+
+// replayColonyLiveSnapshotResume continues folding from a previously
+// folded snapshot, forward through only the events persisted since that
+// snapshot's own last-folded event -- the mechanism a restarted watch
+// process uses to pick back up after a simulated process restart. Folding
+// forward from previous's cursor must always produce the exact same result
+// as folding the whole persisted file from the beginning; no event
+// previous already folded is ever counted twice.
+func replayColonyLiveSnapshotResume(ctx context.Context, s *storage.Store, episodeID string, previous colonyLiveSnapshot) (colonyLiveSnapshot, error) {
+	_ = ctx
+	if s == nil {
+		return previous, nil
+	}
+
+	raw := readColonyLiveEventsRaw(s, time.Time{})
+	if len(raw) == 0 {
+		return previous, nil
+	}
+
+	decoded := decodeColonyLiveEvents(raw)
+	sortColonyLiveEntries(decoded)
+	if episodeID != "" {
+		decoded = filterColonyLiveEntriesByEpisode(decoded, episodeID)
+	}
+
+	cursor := colonyLiveResumeCursor{
+		Timestamp: previous.LastTimestamp,
+		Sequence:  previous.LastSequence,
+		EventID:   previous.LastEventID,
+	}
+	forward := make([]colonyLiveDecodedEvent, 0, len(decoded))
+	for _, entry := range decoded {
+		if colonyLiveEntryAfterCursor(entry, cursor) {
+			forward = append(forward, entry)
+		}
+	}
+	if len(forward) == 0 {
+		return previous, nil
+	}
+
+	return foldColonyLiveEvents(previous, forward), nil
 }
 
 // readColonyLiveEventsRaw reads the persisted live-event JSONL file
@@ -213,9 +286,21 @@ func sortColonyLiveEntries(entries []colonyLiveDecodedEvent) {
 	})
 }
 
+// foldColonyLiveEvents folds entries into snapshot. snapshot may be a
+// fresh zero value (a full replay from the beginning) or a previously
+// folded snapshot (a resume) -- in the resume case, its existing workers
+// and open/closed balance are seeded as the starting accumulator so
+// forward-only entries update the same rows a full replay would, rather
+// than starting over.
 func foldColonyLiveEvents(snapshot colonyLiveSnapshot, entries []colonyLiveDecodedEvent) colonyLiveSnapshot {
-	workerIndex := map[string]int{}
+	workerIndex := make(map[string]int, len(snapshot.Workers))
+	for i, w := range snapshot.Workers {
+		workerIndex[w.WorkerID] = i
+	}
 	openBalance := 0
+	if snapshot.Open {
+		openBalance = 1
+	}
 
 	for _, entry := range entries {
 		evt, payload := entry.event, entry.payload
@@ -230,6 +315,7 @@ func foldColonyLiveEvents(snapshot colonyLiveSnapshot, entries []colonyLiveDecod
 
 		snapshot.LastEventID = evt.ID
 		snapshot.LastTimestamp = evt.Timestamp
+		snapshot.LastSequence = payload.Sequence
 		if snapshot.EpisodeKind == "" && payload.EpisodeKind != "" {
 			snapshot.EpisodeKind = payload.EpisodeKind
 		}
@@ -312,7 +398,7 @@ func foldColonyLiveEvents(snapshot colonyLiveSnapshot, entries []colonyLiveDecod
 	// balance positive, so the episode/wave is reported open.
 	snapshot.Open = openBalance > 0
 
-	if snapshot.Open && snapshot.StartedAt != "" && snapshot.ElapsedSeconds == 0 {
+	if snapshot.Open && snapshot.StartedAt != "" {
 		if started, err := time.Parse(time.RFC3339, snapshot.StartedAt); err == nil {
 			if last, err := time.Parse(time.RFC3339, snapshot.LastTimestamp); err == nil {
 				snapshot.ElapsedSeconds = last.Sub(started).Seconds()
