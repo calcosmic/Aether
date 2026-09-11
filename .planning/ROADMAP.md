@@ -460,7 +460,7 @@ Plans:
 4. A multi-round Oracle question visibly targets uncertainty, reports confidence and contradictions, detects diminishing returns, and produces a source-grounded final synthesis.
 5. Useful partial Swarm/Oracle work, activity, learning, plan research, and local Dreams remain durable, discoverable, and accurately labelled rather than discarded or called verified.
 
-**Plans:** 10/15 plans executed
+**Plans:** 11/15 plans executed
 
 Plans:
 **Wave 1**
@@ -486,7 +486,7 @@ Plans:
 **Wave 5** *(blocked on Wave 4 completion)*
 
 - [x] 202-09-PLAN.md — Replay-backed idle watch with the honest no-history floor preserved
-- [ ] 202-10-PLAN.md — One durable replay-safe Swarm episode, retention, and learning proposal
+- [x] 202-10-PLAN.md — One durable replay-safe Swarm episode, retention, and learning proposal
 - [x] 202-11-PLAN.md — Watchable Oracle rounds: clarify once, confidence, contradictions, diminishing returns
 
 **Wave 6** *(blocked on Wave 5 completion)*

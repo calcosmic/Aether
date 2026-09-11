@@ -5,17 +5,17 @@ milestone_name: Classic Colony Restoration
 current_phase: 202
 current_phase_name: Swarm, Oracle, and Live Colony
 status: executing
-stopped_at: Completed 202-09-PLAN.md
-last_updated: "2026-09-11T12:35:55.129Z"
+stopped_at: Completed 202-10-PLAN.md
+last_updated: "2026-09-11T12:58:01.386Z"
 last_activity: 2026-09-11
-state_head: 3b891e06f69a0b5dd91f26e29864c9d2a789405b
+state_head: a02d1ef131d5a12977ee82c7bcad97a4692b66a5
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 124
-  completed_plans: 119
+  completed_plans: 120
   percent: 14
-last_activity_desc: Completed 202-09-PLAN.md (wave 5, replay-backed watch middle branch -- buildReplayWatchResult/renderReplayWatchVisual, three-way resolution in Go, idle floor narrowed)
+last_activity_desc: Completed 202-10-PLAN.md (wave 5, one durable replay-safe swarm episode per run -- swarmEpisodeRecord bound to the existing result record, retention/removal by exact identifier and digest, sanitized learning proposal from a passed repair)
 ---
 
 # Project State
@@ -33,7 +33,7 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 202 (Swarm, Oracle, and Live Colony) — EXECUTING
-Plan: 10/15 summaries on disk (01-09, 11) — plan numbering is wave-ordered, not sequential
+Plan: 11/15 summaries on disk (01-11) — plan numbering is wave-ordered, not sequential
 Status: In Progress
 Last activity: 2026-09-11
 
@@ -197,6 +197,7 @@ Last activity: 2026-09-11
 | Phase 202 P07 | 40min | 3 tasks | 3 files |
 | Phase 202 P11 | 55min | 3 tasks | 7 files |
 | Phase 202 P09 | 18min | 2 tasks | 5 files |
+| Phase 202 P10 | 55min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -617,6 +618,7 @@ Last activity: 2026-09-11
 - [Phase 202]: 202-07: the third-strike architectural case is additive to swarmArchitecturalConcernResult's existing payload and reads entirely from durable swarmResultRecord history (loadSwarmResultRecordByID) plus 202-05's hypothesesFromSwarmRuns/detectSwarmSharedCauses reused unmodified -- cmd/swarm_strikes.go's counting/persistence machinery stays untouched.
 - [Phase 202]: Oracle's pre-existing propose/brief/--from-brief ritual (built 2026-08-16) already satisfies D-08; no new clarification gate was built, only tests proving it. — Gating the direct-topic path would have broken pre-existing tests that rely on it completing synchronously with no approved brief, and the wrapper contract documents direct-topic invocation as a sanctioned skip-scoping escape hatch.
 - [Phase 202]: Episode 'start event' for recency ranking is its boundary-start event (episode.started, or earliest wave.started), not literally its first-ever event -- per-episode sequence counters always reset to 1.
+- [Phase 202]: Swarm episode retention recomputes eligibility fresh from the whole episode set (latest-for-target, unresolved strike sequence) rather than caching it, and removal requires the exact identifier plus a previewed digest -- never a directory sweep. — Retention.Class stored on the episode; age/eligibility derived at plan time so it can never go stale.
 
 ### Pending Todos
 
