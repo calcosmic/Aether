@@ -5,11 +5,11 @@ milestone_name: Classic Colony Restoration
 current_phase: 202
 current_phase_name: Swarm, Oracle, and Live Colony
 status: executing
-stopped_at: Completed 202-16-PLAN.md (gap closure)
-last_updated: "2026-09-11T20:02:52.066Z"
+stopped_at: Completed 202-17-PLAN.md (gap closure)
+last_updated: "2026-09-11T20:23:43.000Z"
 last_activity: 2026-09-11
-last_activity_desc: Executed gap-closure plan 202-16 (CR-02 recovery hijack + WR-03/WR-04 warnings)
-state_head: 97695af3777b99ab3a85514eb6ac0f67fc635711
+last_activity_desc: Executed gap-closure plan 202-17 (CR-01 Oracle liveness -- episode boundary + episode-kind-aware abandonment)
+state_head: 1a4a4265d2df36b6e50d257ade668f480eb6915a
 progress:
   total_phases: 7
   completed_phases: 1
@@ -32,10 +32,10 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 
 ## Current Position
 
-Phase: 202 (Swarm, Oracle, and Live Colony) — GAP CLOSURE IN PROGRESS
-Plan: 202-16 executed (recovery live-view hijack fixed); 202-17 (Oracle liveness, CR-01) remains
-Status: Gap-closure plan 202-16 complete — run 202-17 next, then /gsd-verify-work 202
-Last activity: 2026-09-11 — Executed gap-closure plan 202-16
+Phase: 202 (Swarm, Oracle, and Live Colony) — GAP CLOSURE COMPLETE
+Plan: 202-16 (recovery live-view hijack) and 202-17 (Oracle liveness, CR-01) both executed
+Status: Both gap-closure plans complete — run /gsd-verify-work 202 next
+Last activity: 2026-09-11 — Executed gap-closure plan 202-17 (Oracle episode boundary + episode-kind-aware abandonment)
 
 ## Performance Metrics
 
@@ -203,6 +203,7 @@ Last activity: 2026-09-11 — Executed gap-closure plan 202-16
 | Phase 202 P14 | 55min | 3 tasks | 8 files |
 | Phase 202 P15 | 75min | 3 tasks | 18 files |
 | Phase 202 P16 | 55min | 3 tasks | 10 files |
+| Phase 202 P17 | 40min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -632,6 +633,7 @@ Last activity: 2026-09-11 — Executed gap-closure plan 202-16
 - [Phase 202]: 202-15: Task 3's full-suite sweep caught two regressions from Task 1's wrapper edits that Task 1's own scoped verify list never covered (a stale CMD-04 command-hash ledger entry, and stale flat .claude/commands/ant-{watch,swarm,oracle}.md mirrors) — both fixed in the same commit rather than deferred, since both are directly caused by this plan's own Task 1.
 - [Phase 202]: Recovery decisions now route onto the real open build/continue episode instead of a synthetic recovery-phase-N episode, closing CR-02 (the live-view hijack).
 - [Phase 202]: The live view selects the most recently started STILL-OPEN episode via a shared colonyLiveBoundaryDelta rule, never whichever episode owns the newest single event, so aether watch never abandons a running build for a closed one.
+- [Phase 202]: 202-17: Oracle's round-based run now opens/closes its own live-colony episode boundary and is judged abandoned by its own durable state and controller process (never another lane's spawn-run record), closing CR-01 (a running Oracle round could never register as live). The episode-open guard for a never-started run was applied: no boundary opens until the loaded state carries a non-empty StartedAt.
 
 ### Pending Todos
 
@@ -748,13 +750,13 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-11T20:02:51.947Z
-Stopped at: Completed 202-16-PLAN.md (gap closure)
+Last session: 2026-09-11T20:23:43.000Z
+Stopped at: Completed 202-17-PLAN.md (gap closure)
 Resume file: None
 
 ## Operator Next Steps
 
-- Phase 202 (Swarm, Oracle, and Live Colony) has all 15 plans summarized. Run `/gsd-verify-work 202` next.
+- Phase 202 (Swarm, Oracle, and Live Colony) has all 15 plans plus both gap-closure plans (202-16, 202-17) summarized. Run `/gsd-verify-work 202` next.
 - Investigate the ~15 pre-existing, out-of-scope test failures logged in 202-15-SUMMARY.md's "Issues Encountered" section (build visuals, Queen orchestration, skill manifests, Phase 199 receipt fingerprint) before shipping v1.28.
 - Execute 200-55-PLAN.md to run the bounded normal/race suite in Wave 34, then rerun the unchanged final receipt Plan 200-40 in Wave 35.
 - Preserve the Phase 200 Scout/Route-Setter objective and do not waive normal or race gate failures.

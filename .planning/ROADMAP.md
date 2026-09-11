@@ -460,7 +460,7 @@ Plans:
 4. A multi-round Oracle question visibly targets uncertainty, reports confidence and contradictions, detects diminishing returns, and produces a source-grounded final synthesis.
 5. Useful partial Swarm/Oracle work, activity, learning, plan research, and local Dreams remain durable, discoverable, and accurately labelled rather than discarded or called verified.
 
-**Plans:** 16/17 plans executed (2 gap-closure plans added after verification)
+**Plans:** 17/17 plans executed (2 gap-closure plans added after verification)
 
 Plans:
 **Wave 1**
@@ -511,7 +511,7 @@ Plans:
 
 **Gap closure Wave 2** *(blocked on 202-16)*
 
-- [ ] 202-17-PLAN.md — A running Oracle round is genuinely live, and an abandoned one honestly is not (CR-01)
+- [x] 202-17-PLAN.md — A running Oracle round is genuinely live, and an abandoned one honestly is not (CR-01)
 
 ### Phase 203: Biological Runtime
 
