@@ -123,6 +123,11 @@ run ends. Both together are the normal path.
 `aether oracle status` remains the inspection path and never modifies the run.
 If it reports a stale controller, `aether oracle recover` clears it.
 
+A running round is also visible in the live colony dashboard: `aether watch` in
+another view shows the round number, its cap, the current question, confidence
+against target, and any newly found contradiction or gap, live and in place —
+not only through this command's own `--follow` polling.
+
 When the runtime detects a hosted Claude/OpenCode agent session and the command
 is not already backgrounded, it auto-detaches the Oracle controller. Treat that
 as a normal background run.
@@ -137,6 +142,15 @@ aether oracle selftest             # one real round end to end
 `selftest` reports which dispatcher it picked, resolves the agent definition,
 runs a single real research round in a throwaway workspace, and exits non-zero
 if any part of that fails. Use it whenever the user doubts Oracle is working.
+
+## Reporting The Answer
+
+When the run finishes, report the answer recommendation-first: lead with the
+actionable recommendation in plain language, state confidence and any
+unresolved questions honestly right beneath it, and keep the full source and
+evidence trail further down for anyone who wants to read it. Never lead with
+sources or the evidence trail — the runtime's own saved write-up is already
+ordered this way; report it in that order rather than reshuffling it.
 
 ## Promoting Findings Into Colony Memory
 
