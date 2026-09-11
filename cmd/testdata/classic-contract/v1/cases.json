@@ -8503,6 +8503,1059 @@
         },
         "fault_point": "work-cycle.outcome.no-success-token-on-non-success.rejected-shortcut"
       }
+    },
+    {
+      "id": "live-colony.events.one-boundary-reaches-every-lane",
+      "group": "V-202-EVENTS",
+      "kind": "behavior",
+      "historical_anchors": [
+        "no-analog:.planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-202-01",
+      "cap_ids": [
+        "CAP-047"
+      ],
+      "source_citations": [
+        "cmd/live_events.go",
+        "cmd/live_projection_test.go",
+        "pkg/events/colony_live.go",
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "watch",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "live-colony.events.one-boundary-reaches-every-lane",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "LIVE-01",
+            "CEC-05"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "proof:TestEveryLiveEventGoesThroughOneBoundary",
+          "structured_assertions": [
+            "decision.SYN-202-01.causal-proof"
+          ],
+          "go_test_symbol": "TestEveryLiveEventGoesThroughOneBoundary"
+        },
+        "required_text_tokens": [
+          "SYN-202-01"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "live-colony.events.one-boundary-reaches-every-lane"
+        },
+        "fault_point": "live-colony.events.one-boundary-reaches-every-lane.causal-proof"
+      }
+    },
+    {
+      "id": "live-colony.events.no-second-event-transport",
+      "group": "V-202-EVENTS",
+      "kind": "behavior",
+      "historical_anchors": [
+        "no-analog:.planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-202-01",
+      "cap_ids": [
+        "CAP-047"
+      ],
+      "source_citations": [
+        "cmd/live_model_singleton_test.go",
+        "cmd/event_types.go",
+        "pkg/events/bus.go:31",
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "watch",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "live-colony.events.second-transport-refused",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "LIVE-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "proof:TestOneLiveEventModelOnly",
+          "structured_assertions": [
+            "negative.SYN-202-01.rejected-shortcut"
+          ],
+          "go_test_symbol": "TestOneLiveEventModelOnly"
+        },
+        "required_text_tokens": [
+          "SYN-202-01"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/live/second-event-transport-receipt.json"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "live-colony.events.second-transport-refused"
+        },
+        "fault_point": "live-colony.events.no-second-event-transport.rejected-shortcut"
+      }
+    },
+    {
+      "id": "live-colony.cockpit.current-wave-in-depth-rest-compressed",
+      "group": "V-202-COCKPIT",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-06:.planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-202-02",
+      "cap_ids": [
+        "CAP-047"
+      ],
+      "source_citations": [
+        "cmd/watch_dashboard.go",
+        "cmd/watch_dashboard_test.go",
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "watch",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "live-colony.cockpit.current-wave-in-depth-rest-compressed",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "LIVE-01",
+            "LIVE-02"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "proof:TestLiveDashboardShowsCurrentWaveInDepth",
+          "structured_assertions": [
+            "decision.SYN-202-02.causal-proof"
+          ],
+          "go_test_symbol": "TestLiveDashboardShowsCurrentWaveInDepth"
+        },
+        "required_text_tokens": [
+          "SYN-202-02"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "live-colony.cockpit.current-wave-in-depth-rest-compressed"
+        },
+        "fault_point": "live-colony.cockpit.current-wave-in-depth-rest-compressed.causal-proof"
+      }
+    },
+    {
+      "id": "live-colony.cockpit.replay-backed-idle-three-way-branch",
+      "group": "V-202-COCKPIT",
+      "kind": "behavior",
+      "historical_anchors": [
+        "no-analog:.planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-202-03",
+      "cap_ids": [
+        "CAP-047"
+      ],
+      "source_citations": [
+        "cmd/watch_live.go",
+        "cmd/watch_replay.go",
+        "cmd/watch_replay_test.go",
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "watch",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "live-colony.cockpit.replay-backed-idle-three-way-branch",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "LIVE-02"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "proof:TestWatchResolvesThreeBranchesFromEvidenceAlone",
+          "structured_assertions": [
+            "decision.SYN-202-03.causal-proof"
+          ],
+          "go_test_symbol": "TestWatchResolvesThreeBranchesFromEvidenceAlone"
+        },
+        "required_text_tokens": [
+          "SYN-202-03"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "live-colony.cockpit.replay-backed-idle-three-way-branch"
+        },
+        "fault_point": "live-colony.cockpit.replay-backed-idle-three-way-branch.causal-proof"
+      }
+    },
+    {
+      "id": "live-colony.cockpit.caste-identity-reused-not-duplicated",
+      "group": "V-202-COCKPIT",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-07:.planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-202-04",
+      "cap_ids": [
+        "CAP-047"
+      ],
+      "source_citations": [
+        "cmd/codex_visuals.go",
+        "cmd/swarm_lens_test.go",
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "swarm",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "live-colony.cockpit.caste-identity-reused-not-duplicated",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "LIVE-01"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "proof:TestSwarmCardUsesSharedCasteIdentity",
+          "structured_assertions": [
+            "decision.SYN-202-04.causal-proof"
+          ],
+          "go_test_symbol": "TestSwarmCardUsesSharedCasteIdentity"
+        },
+        "required_text_tokens": [
+          "SYN-202-04"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "live-colony.cockpit.caste-identity-reused-not-duplicated"
+        },
+        "fault_point": "live-colony.cockpit.caste-identity-reused-not-duplicated.causal-proof"
+      }
+    },
+    {
+      "id": "live-colony.cockpit.no-invented-liveness-row",
+      "group": "V-202-COCKPIT",
+      "kind": "behavior",
+      "historical_anchors": [
+        "no-analog:.planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-202-03",
+      "cap_ids": [
+        "CAP-047"
+      ],
+      "source_citations": [
+        "cmd/watch_idle_199_test.go",
+        "cmd/watch_live.go",
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "watch",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "live-colony.cockpit.invented-liveness-refused",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "LIVE-02"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "proof:TestWatchIdle199NoFakeLiveness",
+          "structured_assertions": [
+            "negative.SYN-202-03.rejected-shortcut"
+          ],
+          "go_test_symbol": "TestWatchIdle199NoFakeLiveness"
+        },
+        "required_text_tokens": [
+          "SYN-202-03"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/live/invented-liveness-row-receipt.json"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "live-colony.cockpit.invented-liveness-refused"
+        },
+        "fault_point": "live-colony.cockpit.no-invented-liveness-row.rejected-shortcut"
+      }
+    },
+    {
+      "id": "swarm.lens.four-genuinely-distinct-investigators",
+      "group": "V-202-LENS",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-01:.planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-202-05",
+      "cap_ids": [
+        "CAP-045"
+      ],
+      "source_citations": [
+        "cmd/swarm_lens.go",
+        "cmd/swarm_lens_test.go",
+        "cmd/swarm_cmd.go:1015-1097",
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "swarm",
+        "args": [
+          "--plan-only"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "swarm.lens.four-genuinely-distinct-investigators",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "LIVE-03"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "proof:TestSwarmInvestigationRunsFourLenses",
+          "structured_assertions": [
+            "decision.SYN-202-05.causal-proof"
+          ],
+          "go_test_symbol": "TestSwarmInvestigationRunsFourLenses"
+        },
+        "required_text_tokens": [
+          "SYN-202-05"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "swarm.lens.four-genuinely-distinct-investigators"
+        },
+        "fault_point": "swarm.lens.four-genuinely-distinct-investigators.causal-proof"
+      }
+    },
+    {
+      "id": "swarm.lens.comparison-card-ranks-repair-with-evidence",
+      "group": "V-202-LENS",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-02:.planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-202-06",
+      "cap_ids": [
+        "CAP-045"
+      ],
+      "source_citations": [
+        "cmd/swarm_lens.go",
+        "cmd/swarm_lens_test.go",
+        "cmd/swarm_cmd.go:1390",
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "swarm",
+        "args": [
+          "--plan-only"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "swarm.lens.comparison-card-ranks-repair-with-evidence",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "LIVE-03"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "proof:TestSwarmComparisonSurfacesSharedCausesAndContradictions",
+          "structured_assertions": [
+            "decision.SYN-202-06.causal-proof"
+          ],
+          "go_test_symbol": "TestSwarmComparisonSurfacesSharedCausesAndContradictions"
+        },
+        "required_text_tokens": [
+          "SYN-202-06"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "swarm.lens.comparison-card-ranks-repair-with-evidence"
+        },
+        "fault_point": "swarm.lens.comparison-card-ranks-repair-with-evidence.causal-proof"
+      }
+    },
+    {
+      "id": "swarm.lens.no-four-cosmetically-identical-lenses",
+      "group": "V-202-LENS",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-01:.planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-202-05",
+      "cap_ids": [
+        "CAP-045"
+      ],
+      "source_citations": [
+        "cmd/swarm_lens_test.go",
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "swarm",
+        "args": [
+          "--plan-only"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "swarm.lens.cosmetic-duplication-refused",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "LIVE-03"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "proof:TestFourSwarmLensesProduceDistinctEvidence",
+          "structured_assertions": [
+            "negative.SYN-202-05.rejected-shortcut"
+          ],
+          "go_test_symbol": "TestFourSwarmLensesProduceDistinctEvidence"
+        },
+        "required_text_tokens": [
+          "SYN-202-05"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/swarm/cosmetically-identical-lenses-receipt.json"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "swarm.lens.cosmetic-duplication-refused"
+        },
+        "fault_point": "swarm.lens.no-four-cosmetically-identical-lenses.rejected-shortcut"
+      }
+    },
+    {
+      "id": "swarm.repair.checkpoint-verify-rollback-shared-transaction",
+      "group": "V-202-REPAIR",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-03:.planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-202-07",
+      "cap_ids": [
+        "CAP-044",
+        "CAP-063"
+      ],
+      "source_citations": [
+        "cmd/swarm_repair_checkpoint.go",
+        "cmd/swarm_repair_checkpoint_test.go",
+        "cmd/work_repair.go:240-459",
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "swarm",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "swarm.repair.checkpoint-verify-rollback-shared-transaction",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "LIVE-04"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "proof:TestSwarmRepairRollsBackOnFailedVerification",
+          "structured_assertions": [
+            "decision.SYN-202-07.causal-proof"
+          ],
+          "go_test_symbol": "TestSwarmRepairRollsBackOnFailedVerification"
+        },
+        "required_text_tokens": [
+          "SYN-202-07"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "swarm.repair.checkpoint-verify-rollback-shared-transaction"
+        },
+        "fault_point": "swarm.repair.checkpoint-verify-rollback-shared-transaction.causal-proof"
+      }
+    },
+    {
+      "id": "swarm.repair.three-strike-architectural-escalation-preserved",
+      "group": "V-202-REPAIR",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-04:.planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-202-08",
+      "cap_ids": [
+        "CAP-046"
+      ],
+      "source_citations": [
+        "cmd/swarm_strikes.go:149,501",
+        "cmd/swarm_repair_checkpoint_test.go",
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "swarm",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "swarm.repair.three-strike-architectural-escalation-preserved",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "LIVE-04"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "proof:TestThirdStrikeRendersAnArchitecturalCase",
+          "structured_assertions": [
+            "decision.SYN-202-08.causal-proof"
+          ],
+          "go_test_symbol": "TestThirdStrikeRendersAnArchitecturalCase"
+        },
+        "required_text_tokens": [
+          "SYN-202-08"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "swarm.repair.three-strike-architectural-escalation-preserved"
+        },
+        "fault_point": "swarm.repair.three-strike-architectural-escalation-preserved.causal-proof"
+      }
+    },
+    {
+      "id": "swarm.repair.no-uncheckpointed-repair",
+      "group": "V-202-REPAIR",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-03:.planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-202-07",
+      "cap_ids": [
+        "CAP-044",
+        "CAP-063"
+      ],
+      "source_citations": [
+        "cmd/swarm_repair_checkpoint.go",
+        "cmd/swarm_repair_checkpoint_test.go",
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "swarm",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "swarm.repair.uncheckpointed-repair-refused",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "LIVE-04"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "proof:TestSwarmRepairCheckpointsBeforeTheFixWave",
+          "structured_assertions": [
+            "negative.SYN-202-07.rejected-shortcut"
+          ],
+          "go_test_symbol": "TestSwarmRepairCheckpointsBeforeTheFixWave"
+        },
+        "required_text_tokens": [
+          "SYN-202-07"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/swarm/uncheckpointed-repair-receipt.json"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "swarm.repair.uncheckpointed-repair-refused"
+        },
+        "fault_point": "swarm.repair.no-uncheckpointed-repair.rejected-shortcut"
+      }
+    },
+    {
+      "id": "swarm.episode.durable-replay-safe-with-retention",
+      "group": "V-202-EPISODE",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-05:.planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-202-09",
+      "cap_ids": [
+        "CAP-047",
+        "CAP-048"
+      ],
+      "source_citations": [
+        "cmd/swarm_episode.go",
+        "cmd/swarm_episode_test.go",
+        "cmd/swarm_cmd.go:349-361",
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "swarm",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "swarm.episode.durable-replay-safe-with-retention",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "LIVE-05"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "proof:TestSwarmRunProducesOneReplaySafeEpisode",
+          "structured_assertions": [
+            "decision.SYN-202-09.causal-proof"
+          ],
+          "go_test_symbol": "TestSwarmRunProducesOneReplaySafeEpisode"
+        },
+        "required_text_tokens": [
+          "SYN-202-09"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "swarm.episode.durable-replay-safe-with-retention"
+        },
+        "fault_point": "swarm.episode.durable-replay-safe-with-retention.causal-proof"
+      }
+    },
+    {
+      "id": "swarm.episode.no-prefix-based-deletion",
+      "group": "V-202-EPISODE",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-05:.planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-202-09",
+      "cap_ids": [
+        "CAP-048"
+      ],
+      "source_citations": [
+        "cmd/swarm_episode.go",
+        "cmd/swarm_episode_test.go",
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "swarm",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "swarm.episode.prefix-based-deletion-refused",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "LIVE-05"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "proof:TestSwarmRemovalRequiresIdentifierAndDigest",
+          "structured_assertions": [
+            "negative.SYN-202-09.rejected-shortcut"
+          ],
+          "go_test_symbol": "TestSwarmRemovalRequiresIdentifierAndDigest"
+        },
+        "required_text_tokens": [
+          "SYN-202-09"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/swarm/prefix-based-deletion-receipt.json"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "swarm.episode.prefix-based-deletion-refused"
+        },
+        "fault_point": "swarm.episode.no-prefix-based-deletion.rejected-shortcut"
+      }
+    },
+    {
+      "id": "oracle.depth.shared-vocabulary-own-economics-unchanged",
+      "group": "V-202-ORACLE",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-08:.planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-202-10",
+      "cap_ids": [
+        "CAP-021"
+      ],
+      "source_citations": [
+        "cmd/oracle_preset.go",
+        "cmd/oracle_preset_test.go",
+        "cmd/oracle_loop.go:57-64",
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "oracle",
+        "args": [
+          "propose"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "oracle.depth.shared-vocabulary-own-economics-unchanged",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "LIVE-06"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "proof:TestOraclePresetLabelsMatchPlanningVocabulary",
+          "structured_assertions": [
+            "decision.SYN-202-10.causal-proof"
+          ],
+          "go_test_symbol": "TestOraclePresetLabelsMatchPlanningVocabulary"
+        },
+        "required_text_tokens": [
+          "SYN-202-10"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "oracle.depth.shared-vocabulary-own-economics-unchanged"
+        },
+        "fault_point": "oracle.depth.shared-vocabulary-own-economics-unchanged.causal-proof"
+      }
+    },
+    {
+      "id": "oracle.round.confidence-and-contradictions-visible-live",
+      "group": "V-202-ORACLE",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-09:.planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-202-11",
+      "cap_ids": [
+        "CAP-072"
+      ],
+      "source_citations": [
+        "cmd/oracle_live.go",
+        "cmd/oracle_live_test.go",
+        "cmd/oracle_loop.go:294-337",
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "oracle",
+        "args": [
+          "--from-brief"
+        ],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "oracle.round.confidence-and-contradictions-visible-live",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "LIVE-06",
+            "CEC-05"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "proof:TestOracleRoundsReachTheLiveStream",
+          "structured_assertions": [
+            "decision.SYN-202-11.causal-proof"
+          ],
+          "go_test_symbol": "TestOracleRoundsReachTheLiveStream"
+        },
+        "required_text_tokens": [
+          "SYN-202-11"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "oracle.round.confidence-and-contradictions-visible-live"
+        },
+        "fault_point": "oracle.round.confidence-and-contradictions-visible-live.causal-proof"
+      }
+    },
+    {
+      "id": "oracle.synthesis.states-confidence-and-open-questions-honestly",
+      "group": "V-202-ORACLE",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-10:.planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-202-12",
+      "cap_ids": [
+        "CAP-021",
+        "CAP-072"
+      ],
+      "source_citations": [
+        "cmd/oracle_synthesis.go",
+        "cmd/oracle_synthesis_test.go",
+        "cmd/oracle_research_doc.go:139,160,264",
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "oracle",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "oracle.synthesis.states-confidence-and-open-questions-honestly",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "LIVE-07"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "proof:TestSynthesisStatesConfidenceInOrdinaryWords",
+          "structured_assertions": [
+            "decision.SYN-202-12.causal-proof"
+          ],
+          "go_test_symbol": "TestSynthesisStatesConfidenceInOrdinaryWords"
+        },
+        "required_text_tokens": [
+          "SYN-202-12"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "oracle.synthesis.states-confidence-and-open-questions-honestly"
+        },
+        "fault_point": "oracle.synthesis.states-confidence-and-open-questions-honestly.causal-proof"
+      }
+    },
+    {
+      "id": "oracle.synthesis.no-sources-first-ordering",
+      "group": "V-202-ORACLE",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-10:.planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-202-12",
+      "cap_ids": [
+        "CAP-021",
+        "CAP-072"
+      ],
+      "source_citations": [
+        "cmd/oracle_synthesis.go",
+        "cmd/oracle_synthesis_test.go",
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "oracle",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "oracle.synthesis.sources-first-ordering-refused",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "LIVE-07"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "proof:TestSynthesisLeadsWithTheRecommendation",
+          "structured_assertions": [
+            "negative.SYN-202-12.rejected-shortcut"
+          ],
+          "go_test_symbol": "TestSynthesisLeadsWithTheRecommendation"
+        },
+        "required_text_tokens": [
+          "SYN-202-12"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "forbidden_artifacts": [
+          ".aether/data/oracle/sources-first-synthesis-receipt.json"
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "oracle.synthesis.sources-first-ordering-refused"
+        },
+        "fault_point": "oracle.synthesis.no-sources-first-ordering.rejected-shortcut"
+      }
     }
   ]
 }

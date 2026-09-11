@@ -1653,7 +1653,7 @@ func validateClassicContractCorpus(document classicContractDocument) error {
 	platforms := make(map[string]map[string]bool, len(required))
 	phase199Cases := 0
 	for _, testCase := range document.Cases {
-		if strings.HasPrefix(testCase.SynthesisDecision, "SYN-200-") || strings.HasPrefix(testCase.SynthesisDecision, "SYN-201-") {
+		if strings.HasPrefix(testCase.SynthesisDecision, "SYN-200-") || strings.HasPrefix(testCase.SynthesisDecision, "SYN-201-") || strings.HasPrefix(testCase.SynthesisDecision, "SYN-202-") {
 			continue
 		}
 		phase199Cases++
