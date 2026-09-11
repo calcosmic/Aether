@@ -5,17 +5,17 @@ milestone_name: Classic Colony Restoration
 current_phase: 202
 current_phase_name: Swarm, Oracle, and Live Colony
 status: executing
-stopped_at: Completed 202-05-PLAN.md
-last_updated: "2026-09-11T10:19:57.991Z"
+stopped_at: Completed 202-08-PLAN.md
+last_updated: "2026-09-11T10:36:46.029Z"
 last_activity: 2026-09-11
-last_activity_desc: Phase 202 execution started
-state_head: 7284e5efa85ec2b0b6340997461cc9b929c9e935
+last_activity_desc: "Completed 202-08-PLAN.md (wave 3); 202-06 and 202-07 (wave 4) still pending"
+state_head: 7c74cd95153f2515ba484087a0ea015e19039867
 progress:
   total_phases: 7
-  completed_phases: 1
+  completed_phases: 3
   total_plans: 124
-  completed_plans: 114
-  percent: 14
+  completed_plans: 115
+  percent: 43
 ---
 
 # Project State
@@ -33,9 +33,9 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 ## Current Position
 
 Phase: 202 (Swarm, Oracle, and Live Colony) — EXECUTING
-Plan: 6 of 15
-Status: Ready to execute
-Last activity: 2026-09-11 — Phase 202 execution started
+Plan: 08 of 15 complete (6/15 summaries on disk: 01-05, 08; wave 4 plans 202-06 and 202-07 still pending — plan numbering is wave-ordered, not sequential)
+Status: In Progress
+Last activity: 2026-09-11
 
 ## Performance Metrics
 
@@ -193,6 +193,7 @@ Last activity: 2026-09-11 — Phase 202 execution started
 | Phase 202 P03 | 58min | 3 tasks | 9 files |
 | Phase 202 P04 | 25min | 2 tasks | 7 files |
 | Phase 202 P05 | 55min | 3 tasks | 4 files |
+| Phase 202 P08 | 9min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -605,6 +606,7 @@ Last activity: 2026-09-11 — Phase 202 execution started
 - [Phase 202]: 202-04: caller-freedom for the retired event stream was proven by a repository-wide symbol search (Go/TS/wrapper docs), not assumed — Deletion decisions require positive evidence of zero callers, not absence-of-grep-hits-so-far assumptions
 - [Phase 202]: 202-04: the second-transport guard uses same-function co-occurrence, not unrestricted call-graph reachability — The cmd package has 70+ unrelated os.WriteFile call sites; full transitive reachability would produce false positives from unrelated call chains
 - [Phase 202]: Swarm's four lenses (tracker/scout/archaeologist/oracle) are dispatched unconditionally via a floor in buildSwarmPlansForWave, not by changing isAlwaysRequired -- avoids reversing the pinned TestSwarmTrivialBugSkipsHistoryAndResearch decision and starving gatekeeper/medic's optional budget slots.
+- [Phase ?]: 202-08: reused cmd/planning_stage.go's planningStagePreset type for Oracle's preset IDs instead of a parallel enum -- one shared vocabulary, not a copy of it
 
 ### Pending Todos
 
@@ -721,8 +723,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-11T10:19:57.875Z
-Stopped at: Completed 202-05-PLAN.md
+Last session: 2026-09-11T10:36:34.578Z
+Stopped at: Completed 202-08-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
