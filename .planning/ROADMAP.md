@@ -460,12 +460,12 @@ Plans:
 4. A multi-round Oracle question visibly targets uncertainty, reports confidence and contradictions, detects diminishing returns, and produces a source-grounded final synthesis.
 5. Useful partial Swarm/Oracle work, activity, learning, plan research, and local Dreams remain durable, discoverable, and accurately labelled rather than discarded or called verified.
 
-**Plans:** 15 plans
+**Plans:** 1/15 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 202-01-PLAN.md — Classic Swarm/Oracle/live-display mechanism synthesis and SYN-202 corpus registration
+- [x] 202-01-PLAN.md — Classic Swarm/Oracle/live-display mechanism synthesis and SYN-202 corpus registration
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

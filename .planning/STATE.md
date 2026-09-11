@@ -4,17 +4,17 @@ milestone: v1.28
 milestone_name: Classic Colony Restoration
 current_phase: 202
 current_phase_name: Swarm, Oracle, and Live Colony
-status: planned
-stopped_at: Phase 202 planned (15 plans, waves 1-9)
-last_updated: "2026-09-11T07:51:11.345Z"
+status: executing
+stopped_at: Completed 202-01-PLAN.md
+last_updated: "2026-09-11T08:25:53.011Z"
 last_activity: 2026-09-11
-last_activity_desc: Phase 202 planned - 15 plans across 9 waves
-state_head: fcacd054a248a6abb05de4e2013e76a45b4cde1e
+last_activity_desc: Phase 202 execution started
+state_head: 8c1e3fff8b4aa60592ffff68472db4c231f3f756
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 124
-  completed_plans: 109
+  completed_plans: 110
   percent: 14
 ---
 
@@ -32,10 +32,10 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 
 ## Current Position
 
-Phase: 202 (Swarm, Oracle, and Live Colony) — READY TO EXECUTE
-Plan: 15 plans created (waves 1-9)
+Phase: 202 (Swarm, Oracle, and Live Colony) — EXECUTING
+Plan: 2 of 15
 Status: Ready to execute
-Last activity: 2026-09-11 — Phase 202 planned: 15 plans across 9 waves
+Last activity: 2026-09-11 — Phase 202 execution started
 
 ## Performance Metrics
 
@@ -188,6 +188,7 @@ Last activity: 2026-09-11 — Phase 202 planned: 15 plans across 9 waves
 | Phase 201 P18 | 45min | 3 tasks | 5 files |
 | Phase 201 P19 | 55min | 3 tasks | 5 files |
 | Phase 201 P20 | 70min | 3 tasks | 7 files |
+| Phase 202 P01 | 33min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -591,6 +592,8 @@ Last activity: 2026-09-11 — Phase 202 planned: 15 plans across 9 waves
 - [Phase ?]: [Phase 201] checkWorkOutcome derives the check's verdict once per continueAcceptVerifyAdvanceDecision and codex_continue.go stores it on the result at all three save sites; checkWorkCloseoutDetails reads it back, never recomputes
 - [Phase ?]: [Phase 201] The check screen (both continueCmd's direct lane and the wrapper's chat-path closeout) and both autopilot closeout sites (per-phase build card, terminal run screen) now carry a verdict, a recommended next action, and exactly one cost-and-time block
 - [Phase ?]: [Phase 201] cmd/codex_continue_finalize.go (the --classic-ceremony external lane) is deliberately left without check-verdict wiring -- not in this plan's declared files, its pre-review blocked path never reaches the shared decision body, and it falls back safely; the default/fast aether continue path and autopilot's own checks (same direct lane) are fully wired
+- [Phase 202]: [Phase 202] Extend pkg/events.Bus with typed swarm.*/oracle.*/watch.* topics rather than reviving the dead cmd/event_types.go trio or building a second bus. — The dead trio has zero production callers; pkg/events.Bus already has three live callers (spawn.go, status.go, oracle_promote.go/memory_feed.go) whose fragmentation across two buses would reproduce the repo's own documented 'three parallel implementations' pattern.
+- [Phase 202]: [Phase 202] CAP-045 scope ruling: this phase proposes scoped FOCUS/REDIRECT learning from successful Swarm evidence; measuring that learning's later effect is explicitly Phase 204's boundary. — The capability ledger routed CAP-045 here without splitting its two halves; the synthesis rules in writing which half belongs to this phase so the boundary with Phase 204's learning governance work is explicit, not discovered later.
 
 ### Pending Todos
 
@@ -707,9 +710,9 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-11T07:04:08.990Z
-Stopped at: Phase 202 context gathered
-Resume file: .planning/phases/202-swarm-oracle-and-live-colony/202-CONTEXT.md
+Last session: 2026-09-11T08:25:52.907Z
+Stopped at: Completed 202-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
