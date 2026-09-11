@@ -331,9 +331,69 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 	})
 
 	findingSummary := renderSwarmFindingSummary(investigationRuns)
+
+	// SYN-202-05/06: map the investigation wave's own worker responses into
+	// structured, per-lens hypotheses, compare and rank them, and render the
+	// one end-of-investigation card. The structured comparison -- not
+	// findingSummary's free-text concatenation above -- is what feeds the
+	// fix wave below. findingSummary itself is untouched and still feeds the
+	// verification wave's prior-summary input further down.
+	hypotheses, missingLenses := hypothesesFromSwarmRuns(investigationRuns)
+	comparison := compareSwarmHypotheses(hypotheses, missingLenses)
+	emitSwarmHypothesisEvents(swarmID, hypotheses)
+	emitSwarmContradictionEvents(swarmID, comparison.Contradictions)
+	emitVisualProgress(renderSwarmHypothesisCard(comparison))
+
+	if comparison.Selected == nil {
+		// No lens produced usable evidence: dispatch no fix wave and no
+		// verification wave, and complete the run with the honest outcome
+		// rather than proceeding on nothing.
+		runStatus = summarizeRunStatus("failed")
+		filesTouched, testsWritten := collectSwarmTouchedFiles(investigationRuns)
+		var blockers []string
+		for _, missingLens := range comparison.MissingLenses {
+			blockers = append(blockers, fmt.Sprintf("%s: %s", missingLens.Label, missingLens.Reason))
+		}
+		blockers = swarmCompactStrings(blockers)
+		recommendation := "No repair was applied: none of the four investigation lenses produced usable evidence."
+		next := swarmNextCommand(state, "failed")
+		if _, err := persistSwarmResultOutcome(store, swarmResultRecord{
+			SwarmID:        swarmID,
+			Target:         target,
+			Status:         "failed",
+			Recommendation: recommendation,
+			Workers:        investigationRuns,
+			Files:          filesTouched,
+			Tests:          testsWritten,
+			Blockers:       blockers,
+			CompletedAt:    time.Now().UTC().Format(time.RFC3339Nano),
+		}); err != nil {
+			return nil, fmt.Errorf("write and evaluate swarm result: %w", err)
+		}
+		result := map[string]interface{}{
+			"mode":                "destroy",
+			"autopilot_available": true,
+			"swarm_id":            swarmID,
+			"target":              target,
+			"status":              "failed",
+			"root_cause":          "",
+			"solution":            "",
+			"recommendation":      recommendation,
+			"workers":             swarmExecutionsForJSON(investigationRuns),
+			"worker_count":        len(investigationRuns),
+			"files_touched":       filesTouched,
+			"tests_written":       testsWritten,
+			"blockers":            blockers,
+			"next":                next,
+			"watch":               false,
+			"no_evidence":         true,
+		}
+		return resultWithSwarmInterventionContract(result, contract), nil
+	}
+
 	fixPlans := buildSwarmFixPlans(root, target)
 	emitVisualProgress(renderSwarmDispatchPreview(swarmID, target, fixPlans, "Fix Wave"))
-	builderRuns, err := executeSwarmWave(ctx, root, swarmID, target, fixPlans, findingSummary, invoker, false)
+	builderRuns, err := executeSwarmWave(ctx, root, swarmID, target, fixPlans, swarmFixWaveBrief(comparison), invoker, false)
 	if err != nil {
 		if ctx.Err() != nil {
 			runStatus = "timeout"
@@ -1026,12 +1086,30 @@ func buildSwarmVerificationPlans(root, target string) []swarmWorkerPlan {
 	return plans
 }
 
+// swarmMandatoryLensCastes are the four lens castes SYN-202-05 requires in
+// every investigation wave, regardless of the Queen's relevance-based
+// selection below. This is a structural floor layered on top of the
+// existing Queen caste-selection mechanism -- not a replacement of it:
+// gatekeeper and medic (and every other optional Swarm caste) still ride
+// entirely on the Queen's own relevance scoring, exactly as before this
+// plan (TestSwarmTrivialBugSkipsHistoryAndResearch's pin on that scoring is
+// untouched). Only tracker/scout/archaeologist/oracle -- the four declared
+// lenses in cmd/swarm_lens.go -- are unconditional, because a Swarm
+// investigation that skips one of its four genuinely distinct evidence
+// sources is not what LIVE-03 asks for.
+var swarmMandatoryLensCastes = map[string]bool{
+	"tracker":       true,
+	"scout":         true,
+	"archaeologist": true,
+	"oracle":        true,
+}
+
 func buildSwarmPlansForWave(root, target string, wave int) []swarmWorkerPlan {
 	selected := queenSwarmSelectedCastes(target)
-	order := []string{"tracker", "scout", "archaeologist", "gatekeeper", "medic", "builder", "weaver", "fixer", "watcher", "probe"}
+	order := []string{"tracker", "scout", "archaeologist", "oracle", "gatekeeper", "medic", "builder", "weaver", "fixer", "watcher", "probe"}
 	plans := make([]swarmWorkerPlan, 0, len(order))
 	for _, caste := range order {
-		if !selected[caste] {
+		if !selected[caste] && !swarmMandatoryLensCastes[caste] {
 			continue
 		}
 		plan := buildSwarmPlanForCaste(root, target, caste)
@@ -1090,6 +1168,8 @@ func swarmTaskForCaste(caste string) string {
 		return "Search the repo for the most relevant files, patterns, tests, and documentation tied to the reported bug."
 	case "archaeologist":
 		return "Inspect git history and prior fixes around the bug area to identify historical context, fragile zones, and regressions."
+	case "oracle":
+		return "Research external evidence for the reported bug: authoritative documentation, official sources, repository issues/history, blog posts, forum discussions, and academic or research sources. Cite the specific external source for each piece of evidence you report."
 	case "gatekeeper":
 		return "Inspect security, auth, permission, dependency, and release-integrity risks tied to the reported bug."
 	case "medic":
@@ -1143,6 +1223,11 @@ func executeSwarmWave(ctx context.Context, root, swarmID, target string, plans [
 		if err := updateSwarmDisplayStatus(swarmID, plan.Name, "active"); err != nil {
 			return nil, fmt.Errorf("update swarm display %s: %w", plan.Name, err)
 		}
+		lensID := ""
+		if lens, ok := swarmLensForCaste(plan.Caste); ok {
+			lensID = lens.ID
+		}
+
 		if liveEpisode {
 			emitColonyLive(events.LiveTopicWorkerStarted, events.ColonyLivePayload{
 				EpisodeID:   swarmID,
@@ -1152,6 +1237,7 @@ func executeSwarmWave(ctx context.Context, root, swarmID, target string, plans [
 				Caste:       plan.Caste,
 				WorkerName:  plan.Name,
 				Workspace:   root,
+				Lens:        lensID,
 				Status:      "active",
 			})
 		}
@@ -1236,6 +1322,7 @@ func executeSwarmWave(ctx context.Context, root, swarmID, target string, plans [
 				Caste:       plan.Caste,
 				WorkerName:  plan.Name,
 				Workspace:   root,
+				Lens:        lensID,
 				Status:      execution.Status,
 				Findings:    append([]string{}, execution.Response.Findings...),
 			})
@@ -1350,12 +1437,16 @@ func renderSwarmWorkerBrief(root, target, swarmID string, plan swarmWorkerPlan, 
 	b.WriteString(`  "proposed_fix": "what should change or what changed",` + "\n")
 	b.WriteString(`  "files_touched": ["path/to/file"],` + "\n")
 	b.WriteString(`  "tests_written": ["path/to/test"],` + "\n")
-	b.WriteString(`  "verification": ["command or evidence of validation"]` + "\n")
+	b.WriteString(`  "verification": ["command or evidence of validation"],` + "\n")
+	b.WriteString(`  "confidence": 0,` + "\n")
+	b.WriteString(`  "structured_evidence": [{"title": "what you inspected", "location": "file path, commit, or URL", "kind": "codebase | runtime | documentation | official | github | blog | forum | academic"}],` + "\n")
+	b.WriteString(`  "contradictions": ["how this conflicts with another lens's finding, naming that lens"]` + "\n")
 	b.WriteString("}\n")
 	b.WriteString("```\n")
 	b.WriteString("- Do not write markdown to the response file.\n")
 	b.WriteString("- Non-builder roles should leave files_touched/tests_written empty unless they truly changed something.\n")
 	b.WriteString("- Builder and watcher responses must mention concrete verification evidence.\n")
+	b.WriteString("- If you are one of Swarm's four investigation lenses (error-path/tracker, pattern/scout, history/archaeologist, external-evidence/oracle), state a confidence 0-100 if you have one, and name another lens by role if your finding conflicts with what it is likely to report.\n")
 	return strings.TrimSpace(b.String())
 }
 

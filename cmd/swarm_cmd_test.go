@@ -155,11 +155,18 @@ func TestSwarmDestroyRunsWorkerWavesAndReturnsStructuredResult(t *testing.T) {
 	if got := result["status"]; got != "completed" {
 		t.Fatalf("status = %v, want completed", got)
 	}
-	// Trio + Queen-selected gatekeeper for an auth bug; Scout and
-	// Archaeologist are relevance-selected now and this wording carries no
-	// research or history signal (TestSwarmTrivialBugSkipsHistoryAndResearch).
-	if got := result["worker_count"]; got != float64(4) {
-		t.Fatalf("worker_count = %v, want 4", got)
+	// The four mandatory lenses (tracker/scout/archaeologist/oracle,
+	// SYN-202-05) always run in the investigation wave regardless of
+	// relevance scoring, plus Queen-selected gatekeeper for an auth bug,
+	// plus builder (wave 2) and watcher (wave 3) = 7. Scout and
+	// Archaeologist's own relevance-based SELECTION into
+	// queenSwarmSelectedCastes is unaffected by this floor and this wording
+	// still carries no research or history signal there
+	// (TestSwarmTrivialBugSkipsHistoryAndResearch) -- they are dispatched
+	// here because they are two of the four mandatory lenses, not because
+	// the Queen scored them relevant.
+	if got := result["worker_count"]; got != float64(7) {
+		t.Fatalf("worker_count = %v, want 7", got)
 	}
 	if got := result["autopilot_available"]; got != true {
 		t.Fatalf("autopilot_available = %v, want true", got)
@@ -174,8 +181,8 @@ func TestSwarmDestroyRunsWorkerWavesAndReturnsStructuredResult(t *testing.T) {
 		t.Fatalf("next = %v, want aether status", got)
 	}
 
-	if len(invoker.configs) != 4 {
-		t.Fatalf("expected 4 worker configs, got %d", len(invoker.configs))
+	if len(invoker.configs) != 7 {
+		t.Fatalf("expected 7 worker configs, got %d", len(invoker.configs))
 	}
 	for _, cfg := range invoker.configs {
 		if strings.TrimSpace(cfg.ResponsePath) == "" {
@@ -296,9 +303,11 @@ func TestSwarmPlanOnlyPrintsManifestAndPersistsIssuanceOnly(t *testing.T) {
 	if swarmID == "" {
 		t.Fatal("swarm manifest did not include a swarm_id")
 	}
+	// 4 mandatory lenses (tracker/scout/archaeologist/oracle, SYN-202-05) +
+	// Queen-selected gatekeeper + builder + watcher = 7.
 	workers := result["workers"].([]interface{})
-	if len(workers) != 4 {
-		t.Fatalf("workers = %d, want 4", len(workers))
+	if len(workers) != 7 {
+		t.Fatalf("workers = %d, want 7", len(workers))
 	}
 	if !workerMapsHaveCaste(workers, "gatekeeper") {
 		t.Fatalf("workers missing Queen-selected gatekeeper: %+v", workers)
