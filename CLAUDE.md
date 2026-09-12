@@ -1387,6 +1387,68 @@ dies.*
 
 ---
 
+## Classic Visual Voice (v1.28)
+
+Phase 202.1 restored the Classic look on the ordinary screens an owner
+actually reads by default — not just the banner at the top, but every line
+beneath it. `aether plan`, `aether discuss`, `aether spec`, `aether status`,
+`aether build`, `aether continue`, `aether seal`, and the what-next card that
+closes every command now open each content line with a small symbol naming
+what kind of line it is (a goal, a phase, a warning, a finished task...), the
+same symbol system the live colony view (`aether watch`) already used.
+Nothing here is a one-time paint job: every one of the eight ordinary screens
+is registered into one shared list (the "voice corpus"), and a named check
+fails if a future screen is ever added without carrying the look, or if an
+existing screen's look quietly fades back to plain text.
+
+**The corpus knows which screens are supposed to be voiced, and notices if
+one goes missing.** Eight screen families are named once; a fresh screen
+family — say a ninth ordinary lifecycle screen added later — that is never
+registered is caught by name, not discovered later by an owner. Locked by
+`TestEveryOrdinaryScreenIsMeasuredForVoice`.
+
+**Every registered screen is measured, not eyeballed.** A number derived from
+the actual Classic-era screens (a "reference figure" computed from real
+February 2026 source, never typed in by hand) sets the bar every current
+screen must clear: the proportion of its own lines that carry a leading
+symbol. A screen that decorates one line in fifty and calls it done still
+fails. Locked by `TestEveryVoicedScreenMeetsTheReferenceDensity`.
+
+**No screen shows the program's own internal bookkeeping where a sentence
+belongs.** An internal state name (like `between_commands_boundary`) or a raw
+`key=value` pair is never printed to the owner; a value like that is
+translated into an ordinary sentence at the moment it becomes text. Locked by
+`TestVoicedScreensCarryNoRawStateToken`.
+
+**Every screen still speaks plain English.** A word this project invented —
+"colony" (this project), "caste" (a kind of helper), "pheromone" (a steering
+note), and so on — is never printed without explaining it, in the same
+sentence, the first time it appears on a given screen. Locked by
+`TestVoicedScreensSpeakPlainEnglish`.
+
+**There is exactly one table of symbols, never two.** Every screen reads its
+symbols from the same shared table the live colony view already used — a
+structural check refuses a second, hand-rolled symbol table anywhere in the
+program, so two screens can never quietly disagree about what a symbol means.
+Locked by `TestVoiceGlyphsHaveOneTable`.
+
+**A saved or resumed session never shows a raw internal code where a
+sentence belongs.** Pausing or resuming a project used to be able to print an
+internal code plus a private session ID straight onto the screen read next;
+that class of mistake is now closed at its one true source (the writer, not
+the reader), and a structural check refuses any future code from bypassing
+that source. Locked by `TestLifecycleEventSentenceTypeCannotBeBypassed`.
+
+*For dummies: every screen you actually look at day to day — planning,
+asking a question, checking status, building, finishing a phase, sealing a
+project — now carries the Classic look back: a little symbol at the start of
+each line telling you what kind of information it is, worded in plain
+English, never a raw code where a sentence belongs. And it can't quietly fade
+away again — six separate checks fail the moment any of that stops being
+true.*
+
+---
+
 ## The Core Insight
 
 The system's pieces are now **connected**:
