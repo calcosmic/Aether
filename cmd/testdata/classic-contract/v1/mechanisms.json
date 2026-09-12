@@ -5,7 +5,8 @@
     ".planning/phases/199-front-door-and-classic-contract/199-CLASSIC-SYNTHESIS.md",
     ".planning/phases/200-iterative-planning/200-CLASSIC-SYNTHESIS.md",
     ".planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md",
-    ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md"
+    ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md",
+    ".planning/phases/203-biological-runtime/203-CLASSIC-SYNTHESIS.md"
   ],
   "mechanisms": [
     {
@@ -1225,6 +1226,228 @@
       ],
       "groups": [
         "V-202-ORACLE"
+      ]
+    },
+    {
+      "id": "SYN-203-01",
+      "title": "Typed recruitment intent emitted through a public work path",
+      "disposition": "replace-better",
+      "cap_ids": [],
+      "public_commands": [
+        "/ant-build",
+        "/ant-continue"
+      ],
+      "source_citations": [
+        "cmd/spawn.go:288-306",
+        ".planning/phases/203-biological-runtime/203-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-203-INTENT"
+      ]
+    },
+    {
+      "id": "SYN-203-02",
+      "title": "One Go admission authority -- the existing three-check chokepoint extended, never forked",
+      "disposition": "replace-better",
+      "cap_ids": [],
+      "public_commands": [
+        "/ant-build",
+        "/ant-continue"
+      ],
+      "source_citations": [
+        "cmd/spawn.go:312-330",
+        ".aether/ts-host/src/wave-orchestrator.ts:245",
+        ".planning/phases/203-biological-runtime/203-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-203-ADMISSION"
+      ]
+    },
+    {
+      "id": "SYN-203-03",
+      "title": "Atomic manifest amendment before dispatch and unavailable-truth-denies-launch",
+      "disposition": "restore-modern",
+      "cap_ids": [],
+      "public_commands": [
+        "/ant-build",
+        "/ant-continue"
+      ],
+      "source_citations": [
+        "cmd/spawn_ancestor.go:95-98",
+        ".planning/phases/203-biological-runtime/203-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-203-ADMISSION"
+      ]
+    },
+    {
+      "id": "SYN-203-04",
+      "title": "Honest platform dispatch with a promoted adapter identity, root-mediated default and probed native nesting",
+      "disposition": "replace-better",
+      "cap_ids": [],
+      "public_commands": [
+        "/ant-build",
+        "/ant-continue"
+      ],
+      "source_citations": [
+        ".aether/ts-host/src/platform-dispatcher.ts:399-435",
+        ".planning/phases/203-biological-runtime/203-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-203-DISPATCH"
+      ]
+    },
+    {
+      "id": "SYN-203-05",
+      "title": "Probe contract -- configurable, bounded, process-tree-safe and isolated from the repository",
+      "disposition": "replace-better",
+      "cap_ids": [],
+      "public_commands": [
+        "/ant-build",
+        "/ant-continue"
+      ],
+      "source_citations": [
+        ".aether/ts-host/src/platform-dispatcher.ts:399-416",
+        ".planning/phases/203-biological-runtime/203-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-203-DISPATCH"
+      ]
+    },
+    {
+      "id": "SYN-203-06",
+      "title": "Exactly-once child result and explicit recovery reusing the handoff-ID plus transaction plus receipt pattern",
+      "disposition": "restore-modern",
+      "cap_ids": [],
+      "public_commands": [
+        "/ant-build",
+        "/ant-continue"
+      ],
+      "source_citations": [
+        "pkg/colony/lifecycle.go:474-503",
+        ".planning/phases/203-biological-runtime/203-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-203-RESULT"
+      ]
+    },
+    {
+      "id": "SYN-203-07",
+      "title": "Trophallaxis as scoped knowledge handback with acknowledgement and one named follow-on",
+      "disposition": "replace-better",
+      "cap_ids": [],
+      "public_commands": [
+        "/ant-build",
+        "/ant-continue"
+      ],
+      "source_citations": [
+        "cmd/codex_dispatch_contract.go:487-506",
+        "cmd/immune.go:27,89",
+        ".planning/phases/203-biological-runtime/203-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-203-RESULT"
+      ]
+    },
+    {
+      "id": "SYN-203-08",
+      "title": "Whole-subtree truth on one ledger and one live event model with no second accounting",
+      "disposition": "restore-modern",
+      "cap_ids": [],
+      "public_commands": [
+        "/ant-build",
+        "/ant-continue",
+        "/ant-watch",
+        "/ant-status"
+      ],
+      "source_citations": [
+        "pkg/agent/spawn_tree.go:28,108,679",
+        ".planning/phases/203-biological-runtime/203-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-203-SUBTREE"
+      ]
+    },
+    {
+      "id": "SYN-203-09",
+      "title": "Inline-only liveness and the end-of-run family tree with refusals",
+      "disposition": "restore-modern",
+      "cap_ids": [],
+      "public_commands": [
+        "/ant-watch",
+        "/ant-status"
+      ],
+      "source_citations": [
+        "cmd/spawn_ancestor.go:100-108",
+        ".planning/phases/203-biological-runtime/203-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-203-SUBTREE"
+      ]
+    },
+    {
+      "id": "SYN-203-10",
+      "title": "One canonical pheromone resolver carrying effective scope, expiry, strength, provenance and quarantine",
+      "disposition": "replace-better",
+      "cap_ids": [
+        "CAP-002",
+        "CAP-014",
+        "CAP-030",
+        "CAP-031"
+      ],
+      "public_commands": [
+        "/ant-pheromones",
+        "/ant-focus",
+        "/ant-redirect"
+      ],
+      "source_citations": [
+        "cmd/pheromone_loader.go:60-77",
+        "cmd/context.go:1737-1760",
+        "cmd/codex_plan.go:4274",
+        ".planning/phases/203-biological-runtime/203-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-203-SIGNALS"
+      ]
+    },
+    {
+      "id": "SYN-203-11",
+      "title": "One tick-to-approve surface for suggested notes and quarantined imports plus the full influence action history",
+      "disposition": "restore-modern",
+      "cap_ids": [
+        "CAP-009",
+        "CAP-058"
+      ],
+      "public_commands": [
+        "/ant-pheromones",
+        "/ant-focus",
+        "/ant-redirect"
+      ],
+      "source_citations": [
+        "pkg/colony/colony.go:326-334",
+        "cmd/suggest_approve.go:472-486",
+        ".planning/phases/203-biological-runtime/203-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-203-SIGNALS"
+      ]
+    },
+    {
+      "id": "SYN-203-12",
+      "title": "Credit earned only from a recorded changed decision plus a verified later outcome, including neutral and harmful ones",
+      "disposition": "restore-modern",
+      "cap_ids": [],
+      "public_commands": [
+        "/ant-pheromones",
+        "/ant-focus",
+        "/ant-redirect"
+      ],
+      "source_citations": [
+        "cmd/agency_contract.go:15,35-36,139-157,357",
+        ".planning/phases/203-biological-runtime/203-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-203-SIGNALS"
       ]
     }
   ]
