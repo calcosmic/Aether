@@ -94,3 +94,54 @@ func TestMaintenanceSyncRefusesEmptySourceAgainstManagedDest(t *testing.T) {
 		}
 	}
 }
+
+// The destination side of a cleanup pass walks the user's repo, where
+// symlinks (node_modules/.bin, etc.) are normal and can never be owned
+// managed files. They must be skipped, not abort the whole update
+// (2026-09-12: CosmicDashboard update failed on .aether/ts-host/node_modules).
+func TestMaintenanceCleanupSkipsDestinationSymlinks(t *testing.T) {
+	fixture := newMaintenanceMutation199Fixture(t)
+	source := filepath.Join(fixture.hub, "system", "commands", "claude")
+	if err := os.MkdirAll(source, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeMaintenanceMutation199File(t, filepath.Join(source, "ant-build.md"),
+		[]byte("<!-- Aether-managed: runtime spec at .aether/commands/build.yaml. Synced by aether update. -->\nlive\n"))
+
+	writeMaintenanceMutation199File(t, filepath.Join(fixture.claude, "ant-stale.md"),
+		[]byte("<!-- Aether-managed: runtime spec at .aether/commands/stale.yaml. Synced by aether update. -->\nstale\n"))
+	binDir := filepath.Join(fixture.claude, "node_modules", ".bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("/usr/bin/true", filepath.Join(binDir, "esbuild")); err != nil {
+		t.Fatal(err)
+	}
+
+	plan := fixture.plan("cleanup-skips-symlinks")
+	if err := appendMaintenanceSyncTargets(&plan, maintenanceSyncSpec{
+		Root:            lifecycleTransactionRootClaudeHome,
+		SourceDir:       source,
+		DestinationBase: ".",
+		Options: syncOptions{
+			cleanup:        true,
+			cleanupInclude: isManagedFlatClaudeCommandPath,
+		},
+	}); err != nil {
+		t.Fatalf("cleanup planning aborted on a destination symlink it does not own: %v", err)
+	}
+
+	prunedStale := false
+	for _, target := range plan.Targets {
+		if target.Action == lifecycleTransactionRemove {
+			if target.RelativeTarget == "ant-stale.md" {
+				prunedStale = true
+			} else {
+				t.Fatalf("cleanup planned removal beyond the stale wrapper: %#v", target)
+			}
+		}
+	}
+	if !prunedStale {
+		t.Fatalf("stale managed wrapper was not pruned: %#v", plan.Targets)
+	}
+}

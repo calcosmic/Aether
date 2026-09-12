@@ -503,13 +503,53 @@ func listMaintenanceRegularFiles(root string) ([]string, error) {
 	return files, nil
 }
 
+// listMaintenanceRegularFilesIfPresent lists cleanup candidates in a
+// DESTINATION tree — user territory, where symlinks and other non-regular
+// entries (node_modules/.bin, sockets) are normal and can never be owned
+// managed files. They are skipped, never an error; only the hub SOURCE
+// listing (listMaintenanceRegularFiles) stays strict.
 func listMaintenanceRegularFilesIfPresent(root string) ([]string, error) {
 	if _, err := os.Lstat(root); os.IsNotExist(err) {
 		return nil, nil
 	} else if err != nil {
 		return nil, err
 	}
-	return listMaintenanceRegularFiles(root)
+	var files []string
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if path == root {
+			return nil
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			if info, err := os.Stat(path); err == nil && info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		if !info.Mode().IsRegular() {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		files = append(files, rel)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(files)
+	return files, nil
 }
 
 type installSyncPair struct {
