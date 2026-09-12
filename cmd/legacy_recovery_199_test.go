@@ -315,6 +315,11 @@ func TestLegacyRecoveryCommands199ManagedPruning(t *testing.T) {
 		t.Fatalf("create source-absent command directory: %v", err)
 	}
 
+	// A real hub always ships commands; retirement is a populated source
+	// missing one name, never an empty directory (an empty source is refused
+	// as a corrupted/mid-publish hub since the 2026-09-12 incident).
+	writeMaintenanceMutation199File(t, filepath.Join(source, "ant-build.md"), []byte("<!-- Aether-managed: runtime spec at .aether/commands/build.yaml. Synced by aether update. -->\nlive build wrapper\n"))
+
 	managedPath := filepath.Join(fixture.claude, "ant-abandon.md")
 	writeMaintenanceMutation199File(t, managedPath, []byte("<!-- Aether-managed: runtime spec at .aether/commands/abandon.yaml. Synced by aether update. -->\nretired abandon wrapper\n"))
 	customPath := filepath.Join(fixture.claude, "custom", "ant-abandon.md")
@@ -338,8 +343,13 @@ func TestLegacyRecoveryCommands199ManagedPruning(t *testing.T) {
 	if err != nil {
 		t.Fatalf("preview managed reconciliation: %v", err)
 	}
-	if len(preview.Targets) != 1 || !maintenancePreviewHas199(preview, "ant-abandon.md", maintenanceMutationChangeRemove) {
-		t.Fatalf("managed abandon wrapper was not selected alone for pruning: %#v", preview.Targets)
+	if !maintenancePreviewHas199(preview, "ant-abandon.md", maintenanceMutationChangeRemove) {
+		t.Fatalf("managed abandon wrapper was not selected for pruning: %#v", preview.Targets)
+	}
+	for _, target := range preview.Targets {
+		if target.Change == maintenanceMutationChangeRemove && target.RelativeTarget != "ant-abandon.md" {
+			t.Fatalf("pruning selected more than the retired wrapper: %#v", preview.Targets)
+		}
 	}
 	if maintenancePreviewHasTarget199(preview, filepath.Join("custom", "ant-abandon.md")) {
 		t.Fatalf("unmanaged same-name command entered the managed target set: %#v", preview.Targets)

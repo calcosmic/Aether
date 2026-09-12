@@ -301,6 +301,7 @@ func syncDir(src, dest string, opts syncOptions) syncResult {
 
 	// Walk source and copy files
 	srcFiles := listFilesRecursive(src)
+	srcRawCount := len(srcFiles)
 	if opts.include != nil {
 		srcFiles = filterSyncFiles(srcFiles, opts.include)
 	}
@@ -395,6 +396,15 @@ func syncDir(src, dest string, opts syncOptions) syncResult {
 	if opts.cleanup {
 		// Remove stale files (in dest but not in src)
 		destFiles := listFilesRecursive(dest)
+		// A source directory with no files at all against a populated
+		// destination is a mid-publish or corrupted source, not a request to
+		// delete everything (2026-09-12: this deleted all user-level ant-*.md
+		// commands). A filtered sync whose source has files but copies none is
+		// still allowed to clean — that shape is deliberate.
+		if srcRawCount == 0 && len(destFiles) > 0 {
+			result.errors = append(result.errors, fmt.Sprintf("cleanup skipped: source %s yielded no files while destination %s holds %d files — refusing mass delete (source may be mid-publish or corrupted)", src, dest, len(destFiles)))
+			destFiles = nil
+		}
 		srcSet := make(map[string]struct{}, len(destFilesFromSource))
 		for _, f := range destFilesFromSource {
 			srcSet[f] = struct{}{}
@@ -977,6 +987,12 @@ func syncDirToHubWithExclusion(src, dest string, exclude map[string]bool, exclud
 
 	// Remove stale files (in dest but not in src)
 	destFiles := listFilesRecursive(dest)
+	// Same refusal as syncDir: an empty source never justifies emptying a
+	// populated hub destination (2026-09-12 incident).
+	if len(srcFiles) == 0 && len(destFiles) > 0 {
+		result.errors = append(result.errors, fmt.Sprintf("cleanup skipped: source %s yielded no files while destination %s holds %d files — refusing mass delete (source may be mid-publish or corrupted)", src, dest, len(destFiles)))
+		destFiles = nil
+	}
 	srcSet := make(map[string]struct{}, len(srcFiles))
 	for _, f := range srcFiles {
 		srcSet[f] = struct{}{}

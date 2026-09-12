@@ -407,6 +407,9 @@ func TestMaintenanceMutation199CustomPreserved(t *testing.T) {
 	if err := os.MkdirAll(source, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	// A real hub always ships commands; an empty source is refused outright
+	// (2026-09-12 incident), so seed one live wrapper alongside the stale one.
+	writeMaintenanceMutation199File(t, filepath.Join(source, "ant-build.md"), []byte("<!-- Generated from .aether/commands/build.yaml - DO NOT EDIT DIRECTLY -->\nlive\n"))
 	customPath := filepath.Join(fixture.claude, "ant-custom.md")
 	writeMaintenanceMutation199File(t, customPath, []byte("# owner custom command\n"))
 	managedPath := filepath.Join(fixture.claude, "ant-stale.md")

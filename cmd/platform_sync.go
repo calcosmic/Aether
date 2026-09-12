@@ -370,6 +370,7 @@ func appendMaintenanceSyncTargets(plan *maintenanceMutationPlan, spec maintenanc
 	if err != nil {
 		return err
 	}
+	sourceRawCount := len(sourceFiles)
 	if spec.Options.include != nil {
 		sourceFiles = filterSyncFiles(sourceFiles, spec.Options.include)
 	}
@@ -448,6 +449,14 @@ func appendMaintenanceSyncTargets(plan *maintenanceMutationPlan, spec maintenanc
 		targetRel := filepath.Clean(filepath.Join(base, destRel))
 		if added[filepath.ToSlash(targetRel)] {
 			continue
+		}
+		// A source directory with zero files never authorizes pruning: a real
+		// hub always ships commands, so an empty source is a mid-publish or
+		// corrupted hub (2026-09-12: this deleted all user-level ant-*.md
+		// commands). Retiring individual wrappers still works — that shape is
+		// a populated source missing some names, not an empty one.
+		if sourceRawCount == 0 {
+			return fmt.Errorf("maintenance sync %s: source %s has no files while destination %s holds managed files — refusing to prune (hub may be mid-publish or incomplete; run aether publish, then retry)", spec.Label, spec.SourceDir, destinationDir)
 		}
 		plan.Targets = append(plan.Targets, maintenanceMutationTarget{
 			Root: spec.Root, RelativeTarget: targetRel, Label: spec.Label, Source: "managed generated wrapper ownership header",
