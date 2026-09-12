@@ -19,6 +19,10 @@ package cmd
 
 import (
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/printer"
+	"go/token"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -334,6 +338,134 @@ func TestStoredEventShapeIsUnchangedForExistingReaders(t *testing.T) {
 // ---------------------------------------------------------------------------
 // Task 2 -- the class is closed structurally, not just at the one known site.
 // ---------------------------------------------------------------------------
+
+// lifecycleSentenceTypeName is the exact type name the guard below protects.
+const lifecycleSentenceTypeName = "lifecycleEventSentence"
+
+// lifecycleSentenceLegitimateConstructors are the only two functions
+// permitted to produce a lifecycleEventSentence value. Anything else -- a
+// third helper, a stray conversion anywhere else in the package -- is
+// exactly the bypass 202.1-RESEARCH.md's Pitfall 3 warns against: a fix that
+// patches the one known leak while leaving the pattern that produced it
+// (a raw string or enum value reaching the message field) fully available
+// for the next writer to repeat. A rendered-output check (the two tests
+// above) can only catch the ONE instance someone happened to render and
+// test; this structural guard catches the NEXT writer before their code
+// ships, regardless of whether anyone thought to render it.
+var lifecycleSentenceLegitimateConstructors = map[string]bool{
+	"pauseBoundarySentence":    true,
+	"resumeProvenanceSentence": true,
+}
+
+// lifecycleSentenceSite is one conversion into lifecycleEventSentence, found
+// structurally by parsing the cmd package's non-test .go files with go/ast.
+type lifecycleSentenceSite struct {
+	File     string
+	Function string // enclosing function name, or "<package level>"
+	Expr     string
+}
+
+// scanLifecycleSentenceConversions parses every non-test .go file directly
+// under cmdDir and finds every expression that produces a
+// lifecycleEventSentence value: a type conversion call (`lifecycleEventSentence(x)`)
+// or a var declaration whose explicit type is lifecycleEventSentence and
+// which is assigned a value.
+func scanLifecycleSentenceConversions(cmdDir string) ([]lifecycleSentenceSite, error) {
+	entries, err := os.ReadDir(cmdDir)
+	if err != nil {
+		return nil, fmt.Errorf("read cmd dir: %w", err)
+	}
+
+	var sites []lifecycleSentenceSite
+	fset := token.NewFileSet()
+	filesScanned := 0
+
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		path := filepath.Join(cmdDir, name)
+		src, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return nil, fmt.Errorf("read %s: %w", name, readErr)
+		}
+		file, parseErr := parser.ParseFile(fset, path, src, 0)
+		if parseErr != nil {
+			return nil, fmt.Errorf("parse %s: %w", name, parseErr)
+		}
+		filesScanned++
+		relName := filepath.Join("cmd", name)
+		sites = append(sites, scanFileForLifecycleSentenceConversions(fset, file, relName)...)
+	}
+
+	if filesScanned == 0 {
+		return nil, fmt.Errorf("scanned zero non-test .go files in %s", cmdDir)
+	}
+	return sites, nil
+}
+
+func scanFileForLifecycleSentenceConversions(fset *token.FileSet, file *ast.File, relName string) []lifecycleSentenceSite {
+	var sites []lifecycleSentenceSite
+
+	record := func(node ast.Node, enclosing string) {
+		sites = append(sites, lifecycleSentenceSite{
+			File:     relName,
+			Function: enclosing,
+			Expr:     lifecycleSentenceExprSource(fset, node),
+		})
+	}
+
+	inspectScope := func(node ast.Node, enclosing string) {
+		if node == nil {
+			return
+		}
+		ast.Inspect(node, func(n ast.Node) bool {
+			switch v := n.(type) {
+			case *ast.CallExpr:
+				if ident, ok := v.Fun.(*ast.Ident); ok && ident.Name == lifecycleSentenceTypeName {
+					record(v, enclosing)
+				}
+			}
+			return true
+		})
+	}
+
+	for _, decl := range file.Decls {
+		switch d := decl.(type) {
+		case *ast.FuncDecl:
+			if d.Body == nil {
+				continue
+			}
+			inspectScope(d.Body, d.Name.Name)
+		case *ast.GenDecl:
+			if d.Tok != token.VAR {
+				continue
+			}
+			for _, spec := range d.Specs {
+				vs, ok := spec.(*ast.ValueSpec)
+				if !ok {
+					continue
+				}
+				if ident, ok := vs.Type.(*ast.Ident); ok && ident.Name == lifecycleSentenceTypeName && len(vs.Values) > 0 {
+					record(vs, "<package level>")
+				}
+				for _, val := range vs.Values {
+					inspectScope(val, "<package level>")
+				}
+			}
+		}
+	}
+	return sites
+}
+
+func lifecycleSentenceExprSource(fset *token.FileSet, node ast.Node) string {
+	var buf strings.Builder
+	if err := printer.Fprint(&buf, fset, node); err != nil {
+		return fmt.Sprintf("<%T>", node)
+	}
+	return buf.String()
+}
 
 // TestLifecycleEventSentenceTypeCannotBeBypassed walks the non-test .go
 // files of the cmd package and refuses any conversion into
