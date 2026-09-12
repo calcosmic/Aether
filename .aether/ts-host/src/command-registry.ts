@@ -21,6 +21,7 @@ export interface ParsedHostArgs {
   force: boolean;
   forceResurvey: boolean;
   tasks: string[];
+  preset: string | undefined;
   depth: string | undefined;
   planningDepth: string | undefined;
   verificationDepth: string | undefined;
@@ -76,6 +77,7 @@ function planArgs(parsed: ParsedHostArgs): string[] {
   const args = ["plan", "--plan-only"];
   if (parsed.refresh) args.push("--refresh");
   if (parsed.force) args.push("--force");
+  if (parsed.preset) args.push("--preset", parsed.preset);
   if (parsed.depth) args.push("--depth", parsed.depth);
   if (parsed.planningDepth) args.push("--planning-depth", parsed.planningDepth);
   if (parsed.verificationDepth) args.push("--verification-depth", parsed.verificationDepth);

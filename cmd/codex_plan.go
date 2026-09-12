@@ -2037,6 +2037,38 @@ func runCodexPlanPlanOnlyInSession(session *planningMutationSession, state colon
 		return nil, err
 	}
 	generatedAt := time.Now().UTC()
+
+	// A run already waiting on a worker is resumed BEFORE a second run can be
+	// started beside it. Until this branch existed the planner always prepared
+	// a fresh Scout stage, so a run parked at route_running was unreachable:
+	// re-running produced a stray second run at the Scout stage while the
+	// Route-Setter stage manifest the first run had already issued had nowhere
+	// to be submitted. --refresh stays the deliberate way to abandon an
+	// in-flight run and start over.
+	if !opts.Refresh {
+		resume, resumeErr := resolvePlanningStageResume(root)
+		if resumeErr != nil {
+			return nil, resumeErr
+		}
+		if resume != nil {
+			resumeManifest, buildErr := buildPlanningStageResumeManifest(root, state, *resume, granularity, planDepth, planningDepth, verificationDepth, survey, resolveCodexWorkerContext(), opts, generatedAt)
+			if buildErr != nil {
+				return nil, buildErr
+			}
+			// Questions raised at this boundary are already materialized above
+			// and travel with the resumed dispatch exactly as they do with a
+			// fresh one -- a resumed run must not be the one path where an
+			// unanswered owner question goes unmentioned.
+			resumeManifest.BoundaryQuestions = append([]discussQuestion(nil), boundary.Questions...)
+			resumeManifest.BoundaryQuestionCount = len(boundary.Questions)
+			resumeManifest.BoundaryQuestionsCreated = boundary.Created
+			resumeManifest.BoundaryQuestionsExisting = boundary.Existing
+			envelope := planningStageResumeEnvelope(state, *resume, resumeManifest, granularity, planDepth, planningDepth, verificationDepth)
+			envelope["boundary_questions"] = resumeManifest.BoundaryQuestions
+			envelope["boundary_question_count"] = resumeManifest.BoundaryQuestionCount
+			return envelope, nil
+		}
+	}
 	planningLoop := resolvePlanningLoopOptions(planDepth, opts)
 	iterationSeed := planningManifestIterationSeed(*state.Goal, root, planDepth, planningDepth, planningLoop, revisionContext, generatedAt)
 	iteration := iterationSeed.LastIteration + 1

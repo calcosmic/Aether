@@ -296,13 +296,7 @@ var planFinalizeCmd = &cobra.Command{
 		// overwrite that with an independently-resolved answer
 		// (applyNextActionToResult has no "already set" guard), silently
 		// undoing the fold-in this exact entry was about.
-		result["state_effect"] = colony.LifecycleStateEffectCommitted
-		if boolValue(result["planned"]) {
-			result["outcome_kind"] = colony.OutcomeKindCompleted
-		} else {
-			result["outcome_kind"] = colony.OutcomeKindInProgress
-		}
-		if err := applyLifecycleCloseout(result, "plan", planLifecycleCloseoutDetails(result)); err != nil {
+		if err := applyPlanFinalizeCloseout(result); err != nil {
 			outputError(1, err.Error(), result)
 			return renderedErrorExit(1)
 		}
@@ -310,6 +304,38 @@ var planFinalizeCmd = &cobra.Command{
 		outputWorkflow(result, visual)
 		return nil
 	},
+}
+
+// applyPlanFinalizeCloseout stamps a finished plan-finalize result with its
+// outcome and closes it out.
+//
+// The projection guard is the fix for a finalize that committed its work and
+// then reported failure. The single-shot planning path folds in its own closing
+// answer via closeLifecycleRun, but the staged Scout and Route-Setter
+// finalizers return without one -- so they reached applyLifecycleCloseout with
+// no lifecycle projection, failed its "requires one lifecycle projection"
+// check, and exited non-zero AFTER the receipt, artifact and next-stage
+// authorization had already been committed. The caller saw a hard error for
+// work that had actually succeeded, recoverable only by reading the error's
+// own details payload.
+//
+// The guard is what makes this safe to apply to every path: resolving a second
+// answer unconditionally would overwrite the one the single-shot path already
+// folded in, because applyNextActionToResult has no "already set" check. Only
+// a result that carries no answer gets one resolved here, from the project on
+// disk -- which by this point is authoritative, the work having been committed.
+func applyPlanFinalizeCloseout(result map[string]interface{}) error {
+	result["state_effect"] = colony.LifecycleStateEffectCommitted
+	if boolValue(result["planned"]) {
+		result["outcome_kind"] = colony.OutcomeKindCompleted
+	} else {
+		result["outcome_kind"] = colony.OutcomeKindInProgress
+	}
+	if _, ok := lifecycleCloseoutProjectionFromValue(result[lifecycleProjectionKey]); !ok {
+		override, why := lifecycleOverrideFromResult(result)
+		closeLifecycleCommand(result, "plan", override, why)
+	}
+	return applyLifecycleCloseout(result, "plan", planLifecycleCloseoutDetails(result))
 }
 
 func planLifecycleCloseoutDetails(result map[string]interface{}) LifecycleCloseoutDetails {

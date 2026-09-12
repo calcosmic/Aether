@@ -157,6 +157,7 @@ export function parseArgs(argv: string[]): ParsedHostArgs {
   let force = false;
   let forceResurvey = false;
   const tasks: string[] = [];
+  let preset: string | undefined = undefined;
   let depth: string | undefined = undefined;
   let planningDepth: string | undefined = undefined;
   let verificationDepth: string | undefined = undefined;
@@ -226,6 +227,8 @@ export function parseArgs(argv: string[]): ParsedHostArgs {
     } else if (arg === "--task") {
       const value = readValue(arg);
       if (value !== undefined) tasks.push(value);
+    } else if (arg === "--preset") {
+      preset = readValue(arg);
     } else if (arg === "--depth") {
       depth = readValue(arg);
     } else if (arg === "--planning-depth") {
@@ -290,6 +293,7 @@ export function parseArgs(argv: string[]): ParsedHostArgs {
     force,
     forceResurvey,
     tasks,
+    preset,
     depth,
     planningDepth,
     verificationDepth,
@@ -338,7 +342,8 @@ function printUsage(): void {
       "  --force                Forward Go force aliases for plan/build\n" +
       "  --force-resurvey       Refresh colonize survey artifacts\n" +
       "  --task <id>            Limit build dispatch to a task id (repeatable)\n" +
-      "  --depth <level>        fast | balanced | deep | exhaustive\n" +
+      "  --preset <level>       fast | balanced | deep | exhaustive (primary; --depth is a legacy alias)\n" +
+      "  --depth <level>        fast | balanced | deep | exhaustive (legacy alias for --preset)\n" +
       "  --planning-depth <lvl> light | standard | deep\n" +
       "  --verification-depth <lvl> light | standard | heavy\n" +
       "  --target <n>           Planning confidence target 70-99\n" +

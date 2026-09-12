@@ -23,6 +23,7 @@ function parsed(overrides: Partial<ParsedHostArgs>): ParsedHostArgs {
     force: false,
     forceResurvey: false,
     tasks: [],
+    preset: undefined,
     depth: undefined,
     planningDepth: undefined,
     verificationDepth: undefined,

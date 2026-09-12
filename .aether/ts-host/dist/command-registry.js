@@ -15,6 +15,8 @@ function planArgs(parsed) {
         args.push("--refresh");
     if (parsed.force)
         args.push("--force");
+    if (parsed.preset)
+        args.push("--preset", parsed.preset);
     if (parsed.depth)
         args.push("--depth", parsed.depth);
     if (parsed.planningDepth)

@@ -13,6 +13,7 @@ export interface ParsedHostArgs {
     force: boolean;
     forceResurvey: boolean;
     tasks: string[];
+    preset: string | undefined;
     depth: string | undefined;
     planningDepth: string | undefined;
     verificationDepth: string | undefined;
