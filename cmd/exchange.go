@@ -459,6 +459,15 @@ func importPheromonesData(inputPath string, xmlData []byte, sourcePrefix string)
 			}
 		}
 		sig.Content = json.RawMessage(newContent)
+		// D-10: every cross-project import is quarantined and excluded from
+		// worker briefs by resolveEffectivePheromones until the owner
+		// releases it through the shared tick-to-approve queue. This is the
+		// one place a signal's provenance becomes "import" -- BIO-07's
+		// quarantine rule has no effect if this path never stamps it.
+		importProvenance := colony.PheromoneProvenanceImport
+		sig.Provenance = &importProvenance
+		quarantined := true
+		sig.Quarantined = &quarantined
 		sanitized = append(sanitized, sig)
 	}
 

@@ -503,6 +503,11 @@ func assignsQuarantinedField(fn *ast.FuncDecl) bool {
 func TestNoUngovernedQuarantineClear(t *testing.T) {
 	allowed := map[string]bool{
 		"writePheromoneSignal": true,
+		// importPheromonesData sets Quarantined true for every
+		// cross-project import (D-10) -- it never clears it, only ever
+		// sets it, matching the same one-directional discipline
+		// writePheromoneSignal already follows.
+		"importPheromonesData": true,
 	}
 	funcs := parseCmdPackageFuncs(t)
 	var offenders []string
