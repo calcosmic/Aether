@@ -77,7 +77,14 @@ func renderLifecycleStatusFull(projection LifecycleProjection, width int) string
 		phaseStatus := ""
 		if phase.Current != nil {
 			phaseName = strings.TrimSpace(phase.Current.Name)
-			phaseStatus = strings.TrimSpace(phase.Current.Status)
+			// The stored phase status is an internal snake_case token
+			// (e.g. "in_progress"); translate it to plain words at the
+			// point it becomes text on this owner-facing line, rather
+			// than leaving the raw token to leak through (RESEARCH.md
+			// criterion 4). The underlying phase.Current.Status value
+			// itself is untouched, so nothing a caller reads from the
+			// projection changes -- only this rendered string.
+			phaseStatus = strings.ReplaceAll(strings.TrimSpace(phase.Current.Status), "_", " ")
 		}
 		phaseLine := fmt.Sprintf("Phase %d/%d", phase.CurrentNumber, phase.TotalPhases)
 		if phaseName != "" {

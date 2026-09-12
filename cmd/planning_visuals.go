@@ -367,7 +367,7 @@ func renderPlanningIterationVisual(card colony.PlanningIterationCard, options pl
 	}
 	builder.WriteString(voiceLine("evidence", fmt.Sprintf("Overall: %d%% → %d%%", projection.OverallBefore, projection.OverallAfter)) + "\n")
 	builder.WriteString(renderStageMarker("Weakest gap"))
-	builder.WriteString(voiceLine("blocked", fmt.Sprintf("%s (%s): %s", projection.WeakestGap.ID, projection.WeakestGap.Materiality, projection.WeakestGap.Description)) + "\n")
+	builder.WriteString(voiceLine("blocked", fmt.Sprintf("%s (%s): %s", projection.WeakestGap.ID, planningEnumLabel(projection.WeakestGap.Materiality), projection.WeakestGap.Description)) + "\n")
 	builder.WriteString(voiceLine("question", fmt.Sprintf("Evidence that would change it: %s", projection.WeakestGap.EvidenceThatWouldChange)) + "\n")
 	builder.WriteString(renderStageMarker("Plan delta"))
 	renderPlanningValueList(&builder, "history", "Added", projection.SemanticDelta.Added)
@@ -403,7 +403,9 @@ func renderPlanningDecisionVisual(card planningDecisionCard, options planningVis
 		builder.WriteString(voiceLine("alternative", fmt.Sprintf("%s: %s", choice.ID, choice.Label)) + "\n")
 		builder.WriteString(voiceLine("alternative", fmt.Sprintf("Consequence: %s", choice.Consequence)) + "\n")
 		if choice.Impact.material() {
-			builder.WriteString(voiceLine("alternative", fmt.Sprintf("Contract impact: behavior=%s authority=%s scope=%s risk=%s acceptance=%s", choice.Impact.Behavior, choice.Impact.Authority, choice.Impact.Scope, choice.Impact.Risk, choice.Impact.Acceptance)) + "\n")
+			// Sentence form, not a bookkeeping key=value list (RESEARCH.md
+			// criterion 4) -- an owner-facing line never carries that shape.
+			builder.WriteString(voiceLine("alternative", fmt.Sprintf("Contract impact — behavior: %s; authority: %s; scope: %s; risk: %s; acceptance: %s", choice.Impact.Behavior, choice.Impact.Authority, choice.Impact.Scope, choice.Impact.Risk, choice.Impact.Acceptance)) + "\n")
 		}
 	}
 	renderPlanningValueList(&builder, "history", "Affected scope", projection.AffectedSemanticIDs)
@@ -425,7 +427,7 @@ func renderPlanningCandidateVisual(review planCandidateReview, options planningV
 	} else {
 		builder.WriteString(voiceLine("status", "CANDIDATE — NOT ACTIVE") + "\n")
 	}
-	builder.WriteString(voiceLine("history", fmt.Sprintf("Candidate: %s (%s)", projection.CandidateID, projection.CandidateStatus)) + "\n")
+	builder.WriteString(voiceLine("history", fmt.Sprintf("Candidate: %s (%s)", projection.CandidateID, planningEnumLabel(projection.CandidateStatus))) + "\n")
 	builder.WriteString(voiceLine("history", fmt.Sprintf("Candidate hash: %s", projection.CandidateContentHash)) + "\n")
 	builder.WriteString(voiceLine("history", fmt.Sprintf("Approved specification: %s", projection.SpecificationRevisionID)) + "\n")
 	builder.WriteString(voiceLine("history", fmt.Sprintf("SPEC hash: %s", projection.SpecificationRevisionHash)) + "\n")
@@ -450,7 +452,7 @@ func renderPlanningCandidateVisual(review planCandidateReview, options planningV
 		builder.WriteString(voiceLine("blocked", "none") + "\n")
 	}
 	for _, gap := range projection.ResidualGaps {
-		builder.WriteString(voiceLine("blocked", fmt.Sprintf("%s (%s): %s", gap.ID, gap.Materiality, gap.Description)) + "\n")
+		builder.WriteString(voiceLine("blocked", fmt.Sprintf("%s (%s): %s", gap.ID, planningEnumLabel(gap.Materiality), gap.Description)) + "\n")
 		builder.WriteString(voiceLine("question", fmt.Sprintf("Evidence that would change it: %s", gap.EvidenceThatWouldChange)) + "\n")
 	}
 	builder.WriteString(voiceLine("question", fmt.Sprintf("Evidence that would change it: %s", projection.EvidenceThatWouldChange)) + "\n")
@@ -559,7 +561,7 @@ func renderPlanningStopVisual(decision colony.PlanningStopDecision, residualGaps
 		builder.WriteString(voiceLine("blocked", "none") + "\n")
 	}
 	for _, gap := range residualGaps {
-		builder.WriteString(voiceLine("blocked", fmt.Sprintf("%s (%s): %s", gap.ID, gap.Materiality, gap.Description)) + "\n")
+		builder.WriteString(voiceLine("blocked", fmt.Sprintf("%s (%s): %s", gap.ID, planningEnumLabel(string(gap.Materiality)), gap.Description)) + "\n")
 		builder.WriteString(voiceLine("question", fmt.Sprintf("Evidence that would change it: %s", gap.EvidenceThatWouldChange)) + "\n")
 	}
 	builder.WriteString(voiceLine("question", fmt.Sprintf("Evidence that would change this decision: %s", decision.EvidenceThatWouldChange)) + "\n")
@@ -899,13 +901,13 @@ func renderPlanningRefusalVisual(action, because, state, next string, options pl
 }
 
 func renderPlanningCandidateRefusalVisual(details planCandidateRefusalDetails, options planningVisualOptions) string {
-	state := strings.ReplaceAll(string(details.StateEffect), "_", " ")
+	state := planningEnumLabel(string(details.StateEffect))
 	var builder strings.Builder
 	builder.WriteString(renderBanner(commandEmoji("plan"), "Plan Candidate Unavailable"))
 	builder.WriteString(casteIdentity("queen"))
 	builder.WriteString(" (Queen is this project's coordinator)\n")
 	builder.WriteString(voiceLine("history", fmt.Sprintf("Candidate: %s", details.CandidateID)) + "\n")
-	builder.WriteString(voiceLine("status", fmt.Sprintf("Candidate status: %s", details.CandidateStatus)) + "\n")
+	builder.WriteString(voiceLine("status", fmt.Sprintf("Candidate status: %s", planningEnumLabel(string(details.CandidateStatus)))) + "\n")
 	builder.WriteString(voiceLine("status", fmt.Sprintf("Standing: %s", details.Standing)) + "\n")
 	builder.WriteString(voiceLine("elapsed", fmt.Sprintf("Expires: %s", details.ExpiresAt.UTC().Format(time.RFC3339Nano))) + "\n")
 	builder.WriteString(voiceLine("avoid", fmt.Sprintf("Why unavailable: %s", details.WhyUnavailable)) + "\n")
@@ -1264,8 +1266,21 @@ func planningCandidateScores(review planCandidateReview) []planningScoreProjecti
 	return projected
 }
 
+// planningEnumLabel turns an internal snake_case enum value into the plain
+// English words CEC-09 criterion 4 requires at the point a value becomes
+// text -- never by filtering the reader. Applied only inside a render
+// function, over a value already destined for the rendered string; the
+// underlying projection struct fields (e.g. planningGapProjection.Materiality,
+// planningCandidateProjection.CandidateStatus) that also serialize into the
+// machine-readable planning_projection JSON envelope are left untouched, so
+// this never changes what a screen claims to a machine consumer -- only how
+// a human reads the same value on the card.
+func planningEnumLabel(value string) string {
+	return strings.ReplaceAll(strings.TrimSpace(value), "_", " ")
+}
+
 func planningDimensionLabel(dimension colony.PlanningDimension) string {
-	value := strings.ReplaceAll(string(dimension), "_", " ")
+	value := planningEnumLabel(string(dimension))
 	if value == "" {
 		return "Unknown"
 	}
@@ -1290,7 +1305,7 @@ func projectPlanningSemanticDelta(delta colony.PlanningSemanticDelta) planningSe
 	projection.Recovery = planningSemanticIDs(delta.RecoveryExpectations)
 	projection.PublicPaths = planningSemanticIDs(delta.PublicPaths)
 	for _, impact := range delta.AuthorityImpacts {
-		projection.AuthorityImpact = append(projection.AuthorityImpact, fmt.Sprintf("%s: %s", impact.Kind, impact.Rationale))
+		projection.AuthorityImpact = append(projection.AuthorityImpact, fmt.Sprintf("%s: %s", planningEnumLabel(string(impact.Kind)), impact.Rationale))
 	}
 	return projection
 }

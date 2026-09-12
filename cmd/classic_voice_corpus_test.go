@@ -17,6 +17,9 @@ package cmd
 // one `init` per screen, so two plans never edit the same file.
 
 import (
+	"fmt"
+	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -91,6 +94,49 @@ func joinVoiceViolations(violations []string) string {
 		out += v
 	}
 	return out
+}
+
+// rawStateTokenKeyEqualsValuePattern matches a bookkeeping key=value pair
+// (e.g. "state_effect=rolled_back") -- the shape an owner never types, only
+// internal code does.
+var rawStateTokenKeyEqualsValuePattern = regexp.MustCompile(`\b[a-zA-Z_][a-zA-Z0-9_]*=\S+`)
+
+// rawStateTokenCommandInvocationRe matches a full CLI invocation an owner is
+// told to type verbatim -- a slash command or an "aether <verb>" command --
+// through the rest of its line, flags and argument values included (e.g.
+// "/ant-discuss --answer D1=local"). Like a bare backticked command or a
+// flag, an owner types this whole example; it is not an internal token
+// leaking through.
+var rawStateTokenCommandInvocationRe = regexp.MustCompile(`(?:/ant-[a-z0-9-]+|\baether [a-z][a-z0-9-]*).*`)
+
+// rawStateTokenLeaks reports every line, outside a backticked span or a
+// full CLI invocation an owner types (rawStateTokenCommandInvocationRe,
+// which also covers the slash-command shape codeSpanRe matches in
+// next_action_card_test.go), that carries a lowercase identifier joined by
+// one or more underscores (underscoreTokenPattern, classic_voice_event_test.go
+// -- the exact shape of every pauseSafeBoundary/RecoveryProvenance value,
+// and of this codebase's other internal enum constants) or a key=value
+// bookkeeping pair. This follows untranslatedRepoWords' shape: strip what an
+// owner types first, then scan what remains -- but per rendered line rather
+// than per sentence, since RESEARCH.md's criterion 4 is about a token
+// appearing on an owner-facing line, not about an unexplained word in a
+// sentence.
+func rawStateTokenLeaks(text string) []string {
+	var violations []string
+	for _, rawLine := range strings.Split(text, "\n") {
+		stripped := rawStateTokenCommandInvocationRe.ReplaceAllString(rawLine, " ")
+		stripped = codeSpanRe.ReplaceAllString(stripped, " ")
+		if strings.TrimSpace(stripped) == "" {
+			continue
+		}
+		if m := underscoreTokenPattern.FindString(stripped); m != "" {
+			violations = append(violations, fmt.Sprintf("line %q carries the raw token %q", strings.TrimSpace(rawLine), m))
+		}
+		if m := rawStateTokenKeyEqualsValuePattern.FindString(stripped); m != "" {
+			violations = append(violations, fmt.Sprintf("line %q carries the bookkeeping pair %q", strings.TrimSpace(rawLine), m))
+		}
+	}
+	return violations
 }
 
 // TestVoicedScreenPlainEnglishCheckCanFail registers nothing and plants a
