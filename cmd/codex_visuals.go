@@ -664,7 +664,7 @@ func renderNextUp(primary string, alternatives ...string) string {
 	b.WriteString("\n")
 	b.WriteString(renderBanner(commandEmoji("next-up"), "Next Up"))
 	if strings.TrimSpace(primary) != "" {
-		b.WriteString(translateHintCommandsForPlatform(primary, platform))
+		b.WriteString(voiceLine("next", translateHintCommandsForPlatform(primary, platform)))
 		b.WriteString("\n")
 	}
 	for _, alt := range alternatives {
@@ -895,16 +895,20 @@ func nextActionSuggestionLine(command, explanation string) string {
 	return voiceLine("next", body)
 }
 
-// nextActionPrimarySuggestion is the recommendation as one sentence.
+// nextActionPrimarySuggestion is the recommendation as one sentence, WITHOUT a
+// glyph. It feeds machine-readable result["next"] fields (closeout_cmd.go,
+// codex_plan.go) as well as the visual renderers, and JSON stays raw -- the
+// glyph is applied by renderNextUp, the one visual funnel, never here.
 func nextActionPrimarySuggestion(answer nextAction) string {
-	return nextActionSuggestionLine(answer.Command, answer.Recommendation)
+	return nextActionSuggestionBody(answer.Command, answer.Recommendation)
 }
 
-// nextActionAlternativeSuggestions is the same shape for the other ways forward.
+// nextActionAlternativeSuggestions is the same shape for the other ways
+// forward, and is unglyphed for the same reason.
 func nextActionAlternativeSuggestions(answer nextAction) []string {
 	suggestions := make([]string, 0, len(answer.Alternatives))
 	for _, alternative := range answer.Alternatives {
-		if line := nextActionSuggestionLine(alternative.Command, alternative.Explanation); line != "" {
+		if line := nextActionSuggestionBody(alternative.Command, alternative.Explanation); line != "" {
 			suggestions = append(suggestions, line)
 		}
 	}

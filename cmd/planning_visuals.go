@@ -1169,8 +1169,11 @@ func planningVisualLineMayOverflow(line string) bool {
 // line's semantic content. A line with no leading glyph passes through
 // unchanged.
 func planningStripLeadingVoiceGlyph(plain string) string {
-	for _, glyph := range voiceGlyphMap {
-		if candidate := strings.TrimPrefix(plain, glyph+" "); candidate != plain {
+	// Resolve each kind through voiceGlyph, not the raw map, so an operator
+	// override is stripped too -- reading the map directly made this the one
+	// consumer that ignored the override every other call site honours.
+	for kind := range voiceGlyphMap {
+		if candidate := strings.TrimPrefix(plain, voiceGlyph(kind)+" "); candidate != plain {
 			return candidate
 		}
 	}
