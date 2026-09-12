@@ -234,3 +234,102 @@ func TestActiveStrongExpiredExcludedByEveryReader(t *testing.T) {
 		t.Errorf("extractSignalTexts: expected 0 texts, got %v", got)
 	}
 }
+
+// --- Task 2: record where every note came from, quarantine imports ---
+
+func TestLegacySignalReadsUnknownProvenanceAndNotQuarantined(t *testing.T) {
+	// A fixture written before Provenance/Quarantined existed: raw JSON with
+	// no such keys. Unmarshalling into today's struct must leave both nil,
+	// and the resolver must read that as "unknown", "not quarantined".
+	raw := `{"signals":[{"id":"legacy1","type":"FOCUS","priority":"normal","source":"cli","created_at":"2026-01-01T00:00:00Z","active":true,"strength":0.9,"content":{"text":"pre-existing signal"}}]}`
+	var pf colony.PheromoneFile
+	if err := json.Unmarshal([]byte(raw), &pf); err != nil {
+		t.Fatalf("unmarshal legacy fixture: %v", err)
+	}
+	if len(pf.Signals) != 1 {
+		t.Fatalf("expected 1 legacy signal, got %d", len(pf.Signals))
+	}
+	sig := pf.Signals[0]
+	if sig.Provenance != nil {
+		t.Errorf("expected nil Provenance on a legacy fixture, got %v", *sig.Provenance)
+	}
+	if sig.Quarantined != nil {
+		t.Errorf("expected nil Quarantined on a legacy fixture, got %v", *sig.Quarantined)
+	}
+	if got := pheromoneSignalProvenance(sig); got != colony.PheromoneProvenanceUnknown {
+		t.Errorf("pheromoneSignalProvenance = %q, want %q", got, colony.PheromoneProvenanceUnknown)
+	}
+	if pheromoneSignalQuarantined(sig) {
+		t.Error("expected legacy signal to read as not quarantined")
+	}
+}
+
+func TestImportedNoteIsQuarantinedAndExcludedFromWorkerBrief(t *testing.T) {
+	now := time.Now().UTC()
+	imported := colony.PheromoneSignal{
+		ID: "imported1", Type: "FOCUS", Active: true,
+		CreatedAt:   now.Format(time.RFC3339),
+		Strength:    floatPtr(1.0),
+		Provenance:  strPtr(colony.PheromoneProvenanceImport),
+		Quarantined: boolPtr(true),
+		Content:     json.RawMessage(`{"text": "imported from another project"}`),
+	}
+	pf := &colony.PheromoneFile{Signals: []colony.PheromoneSignal{imported}}
+
+	resolved := resolveEffectivePheromones(pf, now)
+	if len(resolved) != 1 {
+		t.Fatalf("expected the quarantined note to still appear in resolveEffectivePheromones's output, got %d entries", len(resolved))
+	}
+	if resolved[0].InEffect {
+		t.Fatal("expected quarantined note to be excluded from effect")
+	}
+	if resolved[0].ExcludedReason != pheromoneExcludedQuarantine {
+		t.Errorf("expected exclusion reason %q, got %q", pheromoneExcludedQuarantine, resolved[0].ExcludedReason)
+	}
+	if resolved[0].Provenance != colony.PheromoneProvenanceImport {
+		t.Errorf("expected Provenance %q on the resolved entry, got %q", colony.PheromoneProvenanceImport, resolved[0].Provenance)
+	}
+
+	if got := extractSignalTextsFrom(pf, 8); len(got) != 0 {
+		t.Errorf("extractSignalTextsFrom: expected quarantined note excluded from worker brief text, got %v", got)
+	}
+}
+
+func boolPtr(b bool) *bool { return &b }
+
+func TestWritePheromoneSignalStampsProvenanceAndQuarantinesImports(t *testing.T) {
+	saveGlobalsCmd(t)
+	s, tmpDir := newTestStoreCmd(t)
+	defer func() { _ = tmpDir }()
+	store = s
+
+	owner, _, err := writePheromoneSignal("FOCUS", "owner note", "", "cli", "", "", 0, nil)
+	if err != nil {
+		t.Fatalf("writePheromoneSignal (cli/owner): %v", err)
+	}
+	if owner.Provenance == nil || *owner.Provenance != colony.PheromoneProvenanceOwner {
+		t.Errorf("expected provenance %q for source=cli, got %v", colony.PheromoneProvenanceOwner, owner.Provenance)
+	}
+	if owner.Quarantined != nil && *owner.Quarantined {
+		t.Error("expected an owner-provenance note to not be quarantined")
+	}
+
+	runtimeSig, _, err := writePheromoneSignal("FEEDBACK", "runtime note", "", "aether continue", "", "", 0, nil)
+	if err != nil {
+		t.Fatalf("writePheromoneSignal (runtime): %v", err)
+	}
+	if runtimeSig.Provenance == nil || *runtimeSig.Provenance != colony.PheromoneProvenanceRuntime {
+		t.Errorf("expected provenance %q for source='aether continue', got %v", colony.PheromoneProvenanceRuntime, runtimeSig.Provenance)
+	}
+
+	imported, _, err := writePheromoneSignal("FOCUS", "imported note", "", "import", "", "", 0, nil)
+	if err != nil {
+		t.Fatalf("writePheromoneSignal (import): %v", err)
+	}
+	if imported.Provenance == nil || *imported.Provenance != colony.PheromoneProvenanceImport {
+		t.Errorf("expected provenance %q for source=import, got %v", colony.PheromoneProvenanceImport, imported.Provenance)
+	}
+	if imported.Quarantined == nil || !*imported.Quarantined {
+		t.Error("expected an import-provenance note to be quarantined")
+	}
+}
