@@ -165,8 +165,11 @@ func TestSealRendersCrownedAnthill(t *testing.T) {
 		"|  CROWNED |",
 		"| ANTHILL  |",
 		"C R O W N E D   A N T H I L L   v3",
-		"The colony stands crowned and sealed.",
-		"Its wisdom lives on in QUEEN.md.",
+		// Widened for Phase "Classic Visual Voice" plan 04: the seal summary
+		// now names "project" beside "colony" and "finished" beside
+		// "sealed"/"Queen" (the widened plain-English scan).
+		"The project (this colony) stands crowned and finished (sealed).",
+		"The coordinator (Queen) that decides your team keeps this wisdom in QUEEN.md for next time.",
 		"The anthill has reached its final form.",
 	} {
 		if !strings.Contains(output, want) {
@@ -190,7 +193,7 @@ func TestContinueFinalPhaseCelebratesProjectComplete(t *testing.T) {
 	for _, want := range []string{
 		"P R O J E C T   C O M P L E T E",
 		"👑 Goal Achieved: Ship the widget",
-		"🐜 The colony rests. Well done!",
+		"🐜 The project (this colony) rests. Well done!",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("final continue missing %q", want)

@@ -1004,7 +1004,11 @@ func TestContinueVisualOutputShowsColonyCompleteStageMarker(t *testing.T) {
 	output := stdout.(*bytes.Buffer).String()
 	for _, want := range []string{
 		"Phase 1 verified and completed: Finish the final slice",
-		"── Colony Complete ──",
+		// Widened for Phase "Classic Visual Voice" plan 04: the continue
+		// screen's stage marker now names "project" beside "colony" (the
+		// widened plain-English scan), unlike the build screen's marker,
+		// which is unchanged.
+		"── Project Complete (Colony) ──",
 		"Every phase in the plan is finished.",
 		"aether seal",
 		"it is safe to close this chat",

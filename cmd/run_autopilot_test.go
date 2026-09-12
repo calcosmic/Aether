@@ -182,7 +182,7 @@ func TestRunAutopilotStreamsAdvancement(t *testing.T) {
 		"--- Autopilot: Phase 1 done",
 		"A U T O P I L O T   C O M P L E T E",
 		"P R O J E C T   C O M P L E T E",
-		"The colony rests. Well done!",
+		"The project (this colony) rests. Well done!",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("streamed run output missing %q", want)

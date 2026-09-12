@@ -964,7 +964,7 @@ func standingFromInput(in nextActionInput, state colony.ColonyState) nextActionS
 func changedFromInput(in nextActionInput, state colony.ColonyState) []string {
 	changed := []string{}
 	if command := strings.TrimSpace(in.LastCommand); command != "" {
-		changed = append(changed, "The last thing you ran was "+command+".")
+		changed = append(changed, "The last thing you ran was "+lastCommandPlainEnglish(command)+".")
 	}
 	for _, event := range lastEventTexts(state.Events, 3) {
 		if sentence := nextActionEventSentence(event); sentence != "" {
@@ -975,6 +975,20 @@ func changedFromInput(in nextActionInput, state colony.ColonyState) []string {
 		changed = append(changed, "Nothing has changed since this project was last saved.")
 	}
 	return changed
+}
+
+// lastCommandPlainEnglish names the last-run command, adding a same-sentence
+// explanation when the command's own name is also a word this repo invented
+// (CLAUDE.md's vocabulary table) -- "seal" both names a command and requires
+// one of its own explanatory cues nearby, which a bare command name cannot
+// carry on its own (Phase "Classic Visual Voice" plan 04).
+func lastCommandPlainEnglish(command string) string {
+	switch strings.ToLower(strings.TrimSpace(command)) {
+	case "seal":
+		return "seal (marking the project finished)"
+	default:
+		return command
+	}
 }
 
 // nextActionEventSentence turns one saved event into something a person can

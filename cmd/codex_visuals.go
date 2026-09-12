@@ -2066,28 +2066,32 @@ func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phas
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("build"), fmt.Sprintf("Build Phase %d", phase.ID)))
 	b.WriteString(visualDividerStr())
-	b.WriteString(renderProgressSummary(phase.ID, len(state.Plan.Phases)))
+	b.WriteString(voiceLine("phase", renderProgressSummary(phase.ID, len(state.Plan.Phases))))
 	b.WriteString("\n")
-	b.WriteString("Phase: ")
-	b.WriteString(phase.Name)
+	b.WriteString(voiceLine("phase", "Phase: "+phase.Name))
 	b.WriteString("\n")
-	b.WriteString(renderReviewDepthLine(reviewDepth, phase.ID, len(state.Plan.Phases)))
+	b.WriteString(voiceLine("status", renderReviewDepthLine(reviewDepth, phase.ID, len(state.Plan.Phases))))
 	b.WriteString("\n")
 	if strings.TrimSpace(phase.Description) != "" {
-		b.WriteString("Objective: ")
-		b.WriteString(strings.TrimSpace(phase.Description))
+		b.WriteString(voiceLine("goal", "Objective: "+strings.TrimSpace(phase.Description)))
 		b.WriteString("\n")
 	}
 	b.WriteString(renderStageMarker("Context"))
 	b.WriteString(renderSteeringSignals())
 	b.WriteString(renderStageMarker("Tasks"))
 	for _, task := range phase.Tasks {
-		b.WriteString("  [ ] ")
-		b.WriteString(strings.TrimSpace(task.Goal))
+		kind := "task"
+		if task.Status == colony.TaskCompleted {
+			kind = "done"
+		}
+		b.WriteString("  ")
+		b.WriteString(voiceLine(kind, strings.TrimSpace(task.Goal)))
 		b.WriteString("\n")
 	}
 	if len(phase.Tasks) == 0 {
-		b.WriteString("  [ ] No explicit tasks captured for this phase.\n")
+		b.WriteString("  ")
+		b.WriteString(voiceLine("task", "No explicit tasks captured for this phase."))
+		b.WriteString("\n")
 	}
 	b.WriteString("\n")
 	b.WriteString(renderStageMarker("Dispatch"))
@@ -2102,16 +2106,20 @@ func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phas
 		displayDataPath("spawn-tree.txt"),
 	))
 	b.WriteString(renderStageMarker(fmt.Sprintf("Verification [%s]", string(reviewDepth))))
-	b.WriteString("Verification happens during `aether continue`.\n")
+	b.WriteString(voiceLine("evidence", "Verification happens during `aether continue`."))
+	b.WriteString("\n")
 	b.WriteString(renderStageMarker("Housekeeping"))
-	b.WriteString("Signal housekeeping runs during `aether continue`.\n")
+	b.WriteString(voiceLine("focus", "Signal housekeeping (tidying up the notes that steer this project) runs during `aether continue`."))
+	b.WriteString("\n")
 	if len(state.Plan.Phases) == phase.ID {
 		b.WriteString(renderStageMarker("Colony Complete"))
-		b.WriteString("This is the last phase in the plan. Once its work is checked, the project can be\n")
+		b.WriteString(voiceLine("milestone", "This is the last phase in the plan. Once its work is checked, the project can be"))
+		b.WriteString("\n")
 		b.WriteString("signed off as finished.\n")
 	} else {
 		b.WriteString(renderStageMarker("Next Phase"))
-		b.WriteString(fmt.Sprintf("Phase %d follows after continue.\n", phase.ID+1))
+		b.WriteString(voiceLine("next", fmt.Sprintf("Phase %d follows after continue.", phase.ID+1)))
+		b.WriteString("\n")
 	}
 	b.WriteString(renderNextActionCard(lifecycleNextActionForState(state, "build", "", "")))
 	return b.String()
@@ -2158,21 +2166,22 @@ func renderBuildPartialCreditVisual(state colony.ColonyState, phase colony.Phase
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("build"), fmt.Sprintf("Build Phase %d — Partly Done", phase.ID)))
 	b.WriteString(visualDividerStr())
-	b.WriteString(renderProgressSummary(phase.ID, len(state.Plan.Phases)))
+	b.WriteString(voiceLine("phase", renderProgressSummary(phase.ID, len(state.Plan.Phases))))
 	b.WriteString("\n")
-	b.WriteString("Phase: ")
-	b.WriteString(phase.Name)
+	b.WriteString(voiceLine("phase", "Phase: "+phase.Name))
 	b.WriteString("\n\n")
-	b.WriteString("Some of this phase is finished and saved. The rest was never started.\n")
-	b.WriteString("Nothing that was finished has been undone, and no finished work will be done twice.\n")
+	b.WriteString(voiceLine("warning", "Some of this phase is finished and saved. The rest was never started."))
+	b.WriteString("\n")
+	b.WriteString(voiceLine("warning", "Nothing that was finished has been undone, and no finished work will be done twice."))
+	b.WriteString("\n")
 
 	b.WriteString(renderStageMarker("Finished and kept"))
 	if len(done) == 0 {
 		b.WriteString("  (nothing)\n")
 	}
 	for _, label := range done {
-		b.WriteString("  [x] ")
-		b.WriteString(label)
+		b.WriteString("  ")
+		b.WriteString(voiceLine("done", label))
 		b.WriteString("\n")
 	}
 
@@ -2181,13 +2190,14 @@ func renderBuildPartialCreditVisual(state colony.ColonyState, phase colony.Phase
 		b.WriteString("  (nothing)\n")
 	}
 	for _, label := range remaining {
-		b.WriteString("  [ ] ")
-		b.WriteString(label)
+		b.WriteString("  ")
+		b.WriteString(voiceLine("task", label))
 		b.WriteString("\n")
 	}
 
 	b.WriteString("\n")
-	b.WriteString("This phase is NOT ready to be checked yet. Finish the remaining work first.\n")
+	b.WriteString(voiceLine("warning", "This phase is NOT ready to be checked yet. Finish the remaining work first."))
+	b.WriteString("\n")
 	// The command that picks up ONLY the work listed above is knowledge this run
 	// has and the saved project does not, so it is handed to the one decision as
 	// an input rather than written over its answer afterwards.
@@ -2300,31 +2310,45 @@ func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekee
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("continue"), "Continue"))
 	b.WriteString(visualDividerStr())
-	b.WriteString(renderReviewDepthLine(reviewDepth, phase.ID, len(state.Plan.Phases)))
+	b.WriteString(voiceLine("status", renderReviewDepthLine(reviewDepth, phase.ID, len(state.Plan.Phases))))
 	b.WriteString("\n")
 	b.WriteString(renderStageMarker("Verification"))
 	if partial, _ := result["partial_success"].(bool); partial {
-		b.WriteString("Verification passed with partial operational success.\n")
+		b.WriteString(voiceLine("warning", "Verification passed with partial operational success."))
 	} else {
-		b.WriteString("Verification pass complete.\n")
+		b.WriteString(voiceLine("done", "Verification pass complete."))
 	}
-	b.WriteString(fmt.Sprintf("Phase %d verified and completed: %s\n", phase.ID, phase.Name))
+	b.WriteString("\n")
+	b.WriteString(voiceLine("done", fmt.Sprintf("Phase %d verified and completed: %s", phase.ID, phase.Name)))
+	b.WriteString("\n")
 	renderContinueVerificationSummaryMap(&b, continueTypedResultMapValue(result["verification"]))
 	renderContinueVerificationDetail(&b, result["verification"])
 	if issues := stringSliceValue(result["operational_issues"]); len(issues) > 0 {
-		b.WriteString("Operational evidence\n")
-		b.WriteString(renderIndentedList(issues))
+		b.WriteString(voiceLine("evidence", "Operational evidence"))
+		b.WriteString("\n")
+		for _, issue := range issues {
+			if issue = strings.TrimSpace(issue); issue == "" {
+				continue
+			}
+			b.WriteString("  ")
+			b.WriteString(voiceLine("evidence", issue))
+			b.WriteString("\n")
+		}
 	}
 	renderCriterionEvidenceLines(&b, result["verification"])
-	b.WriteString("Workers\n")
+	b.WriteString(voiceLine("colony", "Workers (the helpers this phase used)"))
+	b.WriteString("\n")
 	if closed := stringSliceValue(result["closed_workers"]); len(closed) > 0 {
 		b.WriteString(renderIndentedList(closed))
 	} else {
-		b.WriteString("  - No workers required closing\n")
+		b.WriteString("  ")
+		b.WriteString(voiceLine("done", "No workers (helpers) required closing"))
+		b.WriteString("\n")
 	}
 	renderContinueWorkerFlowValue(&b, result["worker_flow"])
 	renderSpecialistFindingBlocks(&b, result["worker_flow"])
-	b.WriteString("Verification passed during continue\n")
+	b.WriteString(voiceLine("evidence", "Verification passed during continue"))
+	b.WriteString("\n")
 	artifacts := []string{
 		displayDataPath(fmt.Sprintf("build/phase-%d/verification.json", phase.ID)),
 		displayDataPath(fmt.Sprintf("build/phase-%d/gates.json", phase.ID)),
@@ -2340,14 +2364,17 @@ func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekee
 	renderContinueGateSummaryMap(&b, continueTypedResultMapValue(result["gates"]))
 	renderContinueGateDetail(&b, result["gates"])
 	if closed := stringSliceValue(result["closed_workers"]); len(closed) > 0 {
-		b.WriteString(fmt.Sprintf("Workers closed: %d\n", len(closed)))
+		b.WriteString(voiceLine("colony", fmt.Sprintf("Workers (helpers) closed: %d", len(closed))))
+		b.WriteString("\n")
 	}
 	b.WriteString(renderStageMarker("Housekeeping"))
 	if housekeeping != nil {
-		b.WriteString(fmt.Sprintf("Signals: %d active -> %d active after housekeeping\n", housekeeping.ActiveBefore, housekeeping.ActiveAfter))
+		b.WriteString(voiceLine("focus", fmt.Sprintf("Signals: %d active -> %d active after housekeeping", housekeeping.ActiveBefore, housekeeping.ActiveAfter)))
+		b.WriteString("\n")
 		if housekeeping.Updated > 0 {
-			b.WriteString(fmt.Sprintf("Expired: %d time-based, %d low-strength, %d stale continue signals\n",
-				housekeeping.ExpiredByTime, housekeeping.DeactivatedByStrength, housekeeping.ExpiredWorkerContinue))
+			b.WriteString(voiceLine("history", fmt.Sprintf("Expired: %d time-based, %d low-strength, %d stale continue signals",
+				housekeeping.ExpiredByTime, housekeeping.DeactivatedByStrength, housekeeping.ExpiredWorkerContinue)))
+			b.WriteString("\n")
 		}
 	}
 
@@ -2355,9 +2382,11 @@ func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekee
 	b.WriteString(renderSuggestedSteering(state))
 
 	if final {
-		b.WriteString(renderStageMarker("Colony Complete"))
+		b.WriteString(renderStageMarker("Project Complete (Colony)"))
 		b.WriteString(renderProjectComplete(state, len(state.Plan.Phases)))
-		b.WriteString("\n\nEvery phase in the plan is finished. The project is ready to be signed off as\n")
+		b.WriteString("\n\n")
+		b.WriteString(voiceLine("milestone", "Every phase in the plan is finished. The project is ready to be signed off as"))
+		b.WriteString("\n")
 		b.WriteString("complete -- the stage this project calls Crowned Anthill.\n")
 		b.WriteString(renderLifecycleClosingForState(result, state, "continue"))
 		return b.String()
@@ -2365,12 +2394,13 @@ func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekee
 
 	if nextPhase != nil {
 		b.WriteString(renderStageMarker("Next Phase"))
-		b.WriteString(fmt.Sprintf("Next phase ready: %d — %s\n", nextPhase.ID, nextPhase.Name))
+		b.WriteString(voiceLine("next", fmt.Sprintf("Next phase ready: %d — %s", nextPhase.ID, nextPhase.Name)))
+		b.WriteString("\n")
 	}
 	// The classic end-of-phase footer: flags, steering signals with content
-	// and strength, and progress — the colony's whole picture at the moment
+	// and strength, and progress — the project's whole picture at the moment
 	// you decide what to do next.
-	b.WriteString(renderStageMarker("Colony State"))
+	b.WriteString(renderStageMarker("Project State (Colony)"))
 	b.WriteString(renderPhaseEndFooter(state, phase.ID))
 	b.WriteString(renderLifecycleClosingForState(result, state, "continue"))
 	return b.String()
@@ -2613,12 +2643,16 @@ func renderContinueVerificationSummaryMap(b *strings.Builder, verification map[s
 			passed++
 		}
 	}
-	b.WriteString(fmt.Sprintf("Verification: %d passed, %d skipped\n", passed, skipped))
+	kind := "done"
+	if failed := len(steps) - passed - skipped; failed > 0 {
+		kind = "failed"
+	}
+	b.WriteString(voiceLine(kind, fmt.Sprintf("Verification: %d passed, %d skipped", passed, skipped)))
+	b.WriteString("\n")
 	if claims, ok := verification["claims"].(map[string]interface{}); ok {
 		summary := strings.TrimSpace(stringValue(claims["summary"]))
 		if summary != "" {
-			b.WriteString("Claims: ")
-			b.WriteString(summary)
+			b.WriteString(voiceLine("evidence", "Claims: "+summary))
 			b.WriteString("\n")
 		}
 	}
@@ -2679,7 +2713,7 @@ func renderContinueWorkerFlowValue(b *strings.Builder, raw interface{}) {
 		if len(flow) == 0 {
 			return
 		}
-		b.WriteString("Continue Worker Flow\n")
+		b.WriteString("Continue Worker Flow (the helpers who worked this phase)\n")
 		for _, step := range flow {
 			renderContinueWorkerFlowLine(b, step.Name, step.Caste, step.Status, step.Summary)
 			findings := make([]string, 0, len(step.Findings))
@@ -2710,7 +2744,7 @@ func renderContinueWorkerFlowMap(b *strings.Builder, flow []interface{}) {
 	if len(flow) == 0 {
 		return
 	}
-	b.WriteString("Continue Worker Flow\n")
+	b.WriteString("Continue Worker Flow (the helpers who worked this phase)\n")
 	for _, raw := range flow {
 		step, _ := raw.(map[string]interface{})
 		name := strings.TrimSpace(stringValue(step["name"]))
@@ -2813,7 +2847,12 @@ func renderContinueGateSummaryMap(b *strings.Builder, gates map[string]interface
 			passed++
 		}
 	}
-	b.WriteString(fmt.Sprintf("Gates: %d/%d passed\n", passed, len(checks)))
+	kind := "done"
+	if passed < len(checks) {
+		kind = "failed"
+	}
+	b.WriteString(voiceLine(kind, fmt.Sprintf("Gates: %d/%d passed", passed, len(checks))))
+	b.WriteString("\n")
 }
 
 // continueDetailCap is the per-category nested-detail cap shared by
@@ -2969,8 +3008,15 @@ func renderVerificationStepDetailLines(b *strings.Builder, views []verificationS
 	}
 	for _, v := range shown {
 		label := verificationStepDisplayName(v.Name)
+		kind := "done"
+		switch {
+		case v.Skipped:
+			kind = "status"
+		case !v.Passed:
+			kind = "failed"
+		}
 		b.WriteString("  ")
-		b.WriteString(formatVerificationStepResultLine(label, v.Skipped, v.Passed, v.Summary, v.Duration))
+		b.WriteString(voiceLine(kind, formatVerificationStepResultLine(label, v.Skipped, v.Passed, v.Summary, v.Duration)))
 		b.WriteString("\n")
 		if !v.Skipped && !v.Passed {
 			if cmd := strings.TrimSpace(v.Command); cmd != "" {
@@ -3119,10 +3165,12 @@ func renderGateCheckDetailLines(b *strings.Builder, views []gateCheckDetailView)
 	}
 	for _, v := range shown {
 		mark := "✓"
+		kind := "done"
 		if !v.Passed {
 			mark = "✗"
+			kind = "failed"
 		}
-		b.WriteString(fmt.Sprintf("  %s %s", mark, gateCheckDisplayName(v.Name)))
+		b.WriteString(voiceLine(kind, fmt.Sprintf("%s %s", mark, gateCheckDisplayName(v.Name))))
 		b.WriteString("\n")
 		if !v.Passed {
 			if hint := strings.TrimSpace(v.FixHint); hint != "" {
@@ -3241,9 +3289,13 @@ func renderCriterionEvidenceViewLines(b *strings.Builder, views []criterionEvide
 		}
 		switch criterionEvidenceDisplayState(v) {
 		case "satisfied":
-			b.WriteString(fmt.Sprintf("  ✓ %s — proved by: %s\n", label, strings.Join(v.Evidence, ", ")))
+			b.WriteString("  ")
+			b.WriteString(voiceLine("evidence", fmt.Sprintf("✓ %s — proved by: %s", label, strings.Join(v.Evidence, ", "))))
+			b.WriteString("\n")
 		case "awaiting_owner":
-			b.WriteString(fmt.Sprintf("  ⏳ %s — awaiting your confirmation\n", label))
+			b.WriteString("  ")
+			b.WriteString(voiceLine("evidence", fmt.Sprintf("⏳ %s — awaiting your confirmation", label)))
+			b.WriteString("\n")
 		case "blocked":
 			reason := strings.TrimSpace(v.Summary)
 			if reason == "" && len(v.BlockingIssues) > 0 {
@@ -3252,9 +3304,13 @@ func renderCriterionEvidenceViewLines(b *strings.Builder, views []criterionEvide
 			if reason == "" {
 				reason = "blocked"
 			}
-			b.WriteString(fmt.Sprintf("  ✗ %s — %s\n", label, reason))
+			b.WriteString("  ")
+			b.WriteString(voiceLine("evidence", fmt.Sprintf("✗ %s — %s", label, reason)))
+			b.WriteString("\n")
 		default: // unproven
-			b.WriteString(fmt.Sprintf("  ? %s — unproven: no evidence recorded\n", label))
+			b.WriteString("  ")
+			b.WriteString(voiceLine("evidence", fmt.Sprintf("? %s — unproven: no evidence recorded", label)))
+			b.WriteString("\n")
 		}
 	}
 	if overflow > 0 {
@@ -3472,7 +3528,7 @@ func renderProjectComplete(state colony.ColonyState, phasesCompleted int) string
 	b.WriteString(rule + "\n\n")
 	b.WriteString(fmt.Sprintf("👑 Goal Achieved: %s\n", goal))
 	b.WriteString(fmt.Sprintf("📍 Phases Completed: %d\n\n", total))
-	b.WriteString("🐜 The colony rests. Well done!")
+	b.WriteString("🐜 The project (this colony) rests. Well done!")
 	return b.String()
 }
 
@@ -3506,19 +3562,22 @@ func renderSealVisual(result map[string]interface{}, state colony.ColonyState, s
 	b.WriteString(fmt.Sprintf("   %s   v%d\n", spacedTitle("Crowned Anthill"), state.ColonyVersion))
 	b.WriteString(rule + "\n\n")
 	b.WriteString(renderStageMarker("Summary"))
-	b.WriteString("Colony sealed at Crowned Anthill.\n")
+	b.WriteString(voiceLine("milestone", "This project (the colony) is now finished — sealed at Crowned Anthill."))
+	b.WriteString("\n")
 	if state.Goal != nil {
-		b.WriteString("Goal: ")
-		b.WriteString(*state.Goal)
+		b.WriteString(voiceLine("goal", "Goal: "+*state.Goal))
 		b.WriteString("\n")
 	}
-	b.WriteString(fmt.Sprintf("Completed phases: %d\n", len(state.Plan.Phases)))
-	b.WriteString("Summary: ")
-	b.WriteString(summaryPath)
+	b.WriteString(voiceLine("phase", fmt.Sprintf("Completed phases: %d", len(state.Plan.Phases))))
+	b.WriteString("\n")
+	b.WriteString(voiceLine("artifact", "Summary: "+summaryPath))
 	b.WriteString("\n\n")
-	b.WriteString("The colony stands crowned and sealed.\n")
-	b.WriteString("Its wisdom lives on in QUEEN.md.\n")
-	b.WriteString("The anthill has reached its final form.\n")
+	b.WriteString(voiceLine("milestone", "The project (this colony) stands crowned and finished (sealed)."))
+	b.WriteString("\n")
+	b.WriteString(voiceLine("learning", "The coordinator (Queen) that decides your team keeps this wisdom in QUEEN.md for next time."))
+	b.WriteString("\n")
+	b.WriteString(voiceLine("archive", "The anthill has reached its final form."))
+	b.WriteString("\n")
 	// The card below is the one resolver's answer for a just-sealed project:
 	// it explains, in plain words, what finishing means and what archiving it
 	// would do (S-05) -- state was saved with the final milestone before this
@@ -5418,11 +5477,11 @@ func renderSpawnTeamExplanation(dispatches []codexBuildDispatch) string {
 	}
 
 	var b strings.Builder
-	b.WriteString("\nThe Queen chose this team for the phase: ")
+	b.WriteString("\nThe Queen (the coordinator that decides which helpers a phase needs) chose this team for the phase: ")
 	b.WriteString(strings.Join(names, ", "))
 	b.WriteString(".\n")
 	b.WriteString("Want a smaller team? Add `--light`. Want every check? Add `--heavy`.\n")
-	b.WriteString("Safety castes a risky phase needs are kept at every size.\n")
+	b.WriteString("Safety-critical helpers (the castes a risky phase needs) are kept at every size.\n")
 	return b.String()
 }
 
