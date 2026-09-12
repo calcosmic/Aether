@@ -52,13 +52,21 @@ func (r planningStageResume) nextCommandHint() string {
 // must dispatch instead of starting a fresh run, or nil when there is no such
 // run.
 //
+// It takes the CALLER'S session rather than a root, and every loader below is
+// the InSession variant, because the plan-only path already holds the planning
+// lock when it asks. The root-taking loaders each open a session of their own;
+// calling one from inside an existing session made the process wait on a lock
+// it was already holding, and `aether plan` hung forever against a real colony
+// with no CPU burn and no error -- caught only by running the wired path, since
+// calling this helper directly in a test never holds the lock first.
+//
 // A missing iteration state, a missing stage file, or a stage that is not
 // waiting on a worker are all "nothing to resume" -- they return (nil, nil) so
 // the caller falls through to starting a run normally. Only a genuinely
 // corrupt in-flight run returns an error: a run that says it is waiting on a
 // worker whose authorization cannot be loaded must not be silently replaced by
 // a second run, because that is the stray-run bug this function exists to fix.
-func resolvePlanningStageResume(root string) (*planningStageResume, error) {
+func resolvePlanningStageResume(session *planningMutationSession) (*planningStageResume, error) {
 	runID := ""
 	if seed, ok := loadPlanningIterationState(); ok {
 		runID = strings.TrimSpace(seed.PlanningRunID)
@@ -71,7 +79,7 @@ func resolvePlanningStageResume(root string) (*planningStageResume, error) {
 		// Keying the resume solely off the pointer would leave exactly the
 		// stuck colonies this exists to rescue still stuck, so fall back to
 		// the per-run stage files, which ARE durable.
-		discovered, err := discoverParkedPlanningRun(root)
+		discovered, err := discoverParkedPlanningRun(session)
 		if err != nil {
 			return nil, err
 		}
@@ -80,7 +88,7 @@ func resolvePlanningStageResume(root string) (*planningStageResume, error) {
 		}
 		runID = discovered
 	}
-	stageState, err := loadPlanningStageState(root, runID)
+	stageState, err := loadPlanningStageStateInSession(session, runID)
 	if err != nil {
 		// No stage file for this run: nothing is in flight.
 		if errors.Is(err, os.ErrNotExist) {
@@ -94,7 +102,7 @@ func resolvePlanningStageResume(root string) (*planningStageResume, error) {
 
 	switch stageState.Stage {
 	case planningStageRouteRunning:
-		dispatch, err := loadPlanningScoutRouteDispatch(root, stageState.RunID, stageState.Pass)
+		dispatch, err := loadPlanningScoutRouteDispatchInSession(session, stageState.RunID, stageState.Pass)
 		if err != nil {
 			return nil, fmt.Errorf("planning run %s is waiting on Route-Setter but its authorization could not be read: %w", stageState.RunID, err)
 		}
@@ -110,7 +118,7 @@ func resolvePlanningStageResume(root string) (*planningStageResume, error) {
 		// no separate authorization file; only a Scout re-authorized BY a
 		// Route-Setter pass does. A pass-1 Scout that is still running is
 		// therefore left to the normal path, which reissues it.
-		dispatch, err := loadPlanningRouteScoutDispatch(root, stageState.RunID, stageState.Pass)
+		dispatch, err := loadPlanningRouteScoutDispatchInSession(session, stageState.RunID, stageState.Pass)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {
 				return nil, nil
@@ -253,7 +261,7 @@ func planningStageResumeWorkerSpec(caste string) (planningWorkerSpec, bool) {
 // rather than picking a favourite. Starting the wrong run is precisely the
 // stray-run damage this whole path exists to prevent, so ambiguity falls back
 // to the ordinary "start a run" behaviour the caller already has.
-func discoverParkedPlanningRun(root string) (string, error) {
+func discoverParkedPlanningRun(session *planningMutationSession) (string, error) {
 	if store == nil {
 		return "", nil
 	}
@@ -270,7 +278,7 @@ func discoverParkedPlanningRun(root string) (string, error) {
 			continue
 		}
 		candidate := entry.Name()
-		state, err := loadPlanningStageState(root, candidate)
+		state, err := loadPlanningStageStateInSession(session, candidate)
 		if err != nil {
 			// A directory without a readable stage file is not a parked run.
 			continue

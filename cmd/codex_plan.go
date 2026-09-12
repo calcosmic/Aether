@@ -2046,7 +2046,7 @@ func runCodexPlanPlanOnlyInSession(session *planningMutationSession, state colon
 	// to be submitted. --refresh stays the deliberate way to abandon an
 	// in-flight run and start over.
 	if !opts.Refresh {
-		resume, resumeErr := resolvePlanningStageResume(root)
+		resume, resumeErr := resolvePlanningStageResume(session)
 		if resumeErr != nil {
 			return nil, resumeErr
 		}

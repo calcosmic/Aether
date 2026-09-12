@@ -57,7 +57,7 @@ func planningStageResumeTestParkedRun(t *testing.T) (string, planningStageManife
 func TestParkedRouteRunResumesInsteadOfStartingASecondRun(t *testing.T) {
 	root, routeManifest := planningStageResumeTestParkedRun(t)
 
-	resume, err := resolvePlanningStageResume(root)
+	resume, err := resolvePlanningStageResumeForTest(t, root)
 	if err != nil {
 		t.Fatalf("resolve planning stage resume: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestParkedRouteRunResumesInsteadOfStartingASecondRun(t *testing.T) {
 func TestResumedRouteManifestSatisfiesTheFinalizerContract(t *testing.T) {
 	root, routeManifest := planningStageResumeTestParkedRun(t)
 
-	resume, err := resolvePlanningStageResume(root)
+	resume, err := resolvePlanningStageResumeForTest(t, root)
 	if err != nil || resume == nil {
 		t.Fatalf("resolve planning stage resume: resume=%v err=%v", resume, err)
 	}
@@ -230,7 +230,7 @@ func TestParkedRunIsFoundWithNoIterationPointer(t *testing.T) {
 		t.Fatalf("remove iteration state: %v", err)
 	}
 
-	resume, err := resolvePlanningStageResume(root)
+	resume, err := resolvePlanningStageResumeForTest(t, root)
 	if err != nil {
 		t.Fatalf("resolve planning stage resume: %v", err)
 	}
@@ -287,11 +287,54 @@ func TestAmbiguousParkedRunsAreNotGuessed(t *testing.T) {
 		t.Fatalf("twin fixture is not a loadable parked run (stage=%v err=%v); the ambiguity being tested would not occur", twinState.Stage, err)
 	}
 
-	resume, err := resolvePlanningStageResume(root)
+	resume, err := resolvePlanningStageResumeForTest(t, root)
 	if err != nil {
 		t.Fatalf("resolve planning stage resume: %v", err)
 	}
 	if resume != nil {
 		t.Fatalf("two parked runs were ambiguous but one was chosen anyway (%q); starting the wrong run is the damage this prevents", resume.RunID)
+	}
+}
+
+// resolvePlanningStageResumeForTest runs the resolver the way production does:
+// inside an already-open planning session. Calling it with its own fresh
+// session instead would never hold the lock first, which is exactly how the
+// self-deadlock below escaped every test until a real colony hung on it.
+func resolvePlanningStageResumeForTest(t *testing.T, root string) (*planningStageResume, error) {
+	t.Helper()
+	var resume *planningStageResume
+	err := withPlanningMutationSession(root, "test-resolve-resume", func(session *planningMutationSession) error {
+		var inner error
+		resume, inner = resolvePlanningStageResume(session)
+		return inner
+	})
+	return resume, err
+}
+
+// TestResumeResolvesInsideAHeldLock is the regression test for a hang, not a
+// wrong answer. The plan-only path already holds the planning lock when it asks
+// what to resume; the first version of this resolver called loaders that each
+// open a session of their own, so the process waited on a lock it was already
+// holding. Against a real colony `aether plan` sat forever burning no CPU and
+// printing nothing -- the worst possible failure shape.
+//
+// The bounded wait is the assertion: a deadlock fails this in seconds with a
+// clear message instead of hanging the suite until the global test timeout.
+func TestResumeResolvesInsideAHeldLock(t *testing.T) {
+	root, _ := planningStageResumeTestParkedRun(t)
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := resolvePlanningStageResumeForTest(t, root)
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("resolve inside a held planning lock: %v", err)
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatal("resolving a resume deadlocked while the caller already held the planning lock: the process waits on a lock it is holding, which is how `aether plan` hung against a real colony")
 	}
 }
