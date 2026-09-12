@@ -535,7 +535,7 @@ func redirectWriteReason(target, cwd string) string {
 		if !sig.Active || sig.Type != "REDIRECT" {
 			continue
 		}
-		if computeEffectiveStrength(sig, now) < 0.1 {
+		if computeEffectiveStrength(sig, now) < pheromoneEffectiveFloor {
 			continue
 		}
 		text := strings.ToLower(extractSignalText(sig.Content))
