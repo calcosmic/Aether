@@ -154,3 +154,48 @@ func TestCorpusDensityGateCanFail(t *testing.T) {
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Task 2 -- no registered screen shows an internal state token where a
+// sentence belongs.
+// ---------------------------------------------------------------------------
+
+// TestVoicedScreensCarryNoRawStateToken runs rawStateTokenLeaks
+// (classic_voice_corpus_test.go) over every registered screen's rendered
+// output, as a subtest per screen -- the corpus-wide sibling of
+// TestVoicedScreensSpeakPlainEnglish, closing RESEARCH.md's criterion 4 for
+// every screen a plan has wired into the restored voice, not only the one
+// place the leak was first noticed.
+func TestVoicedScreensCarryNoRawStateToken(t *testing.T) {
+	for _, screen := range renderedVoiceScreens(t) {
+		screen := screen
+		t.Run(screen.Name, func(t *testing.T) {
+			if violations := rawStateTokenLeaks(screen.Rendered); len(violations) > 0 {
+				t.Errorf("%s shows an internal state token where a sentence belongs:\n  %s\n\nfull screen:\n%s",
+					screen.Name, strings.Join(violations, "\n  "), screen.Rendered)
+			}
+		})
+	}
+}
+
+// TestRawStateTokenCheckCanFail plants a rendering carrying one of the
+// pause-boundary values that used to leak onto the what-next card
+// (RESEARCH.md, "Where Owner-Facing Raw Identifiers Leak") and asserts
+// rawStateTokenLeaks reports it, proving the check can fail -- and, as its
+// own subtest, that a backticked occurrence of the same shape is correctly
+// exempted, because an owner types a backticked command.
+func TestRawStateTokenCheckCanFail(t *testing.T) {
+	planted := "── Where things stand ──\nhandoff=handoff-060d355f95c7b74a744bd164 between_commands_boundary\n"
+	violations := rawStateTokenLeaks(planted)
+	if len(violations) == 0 {
+		t.Fatalf("the raw-state-token check found nothing wrong with an obviously leaked internal token:\n%s", planted)
+	}
+
+	t.Run("a backticked occurrence is exempted", func(t *testing.T) {
+		exempt := "Run `aether continue --skip between_commands_boundary` to proceed.\n"
+		violations := rawStateTokenLeaks(exempt)
+		if len(violations) > 0 {
+			t.Errorf("a backticked command carrying an underscore was reported as a leak: %v\n%s", violations, exempt)
+		}
+	})
+}
