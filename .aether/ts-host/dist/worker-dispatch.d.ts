@@ -179,7 +179,7 @@ export declare const PREFLIGHT_GO_ATTEMPTS = 2;
  */
 export declare function resolvePreflightAdapterBudgetMs(): number;
 /** Ask the Go-owned adapter layer to select and preflight the worker provider. */
-export declare function preflightGoWorkerProvider(opts: GoBridgeOptions, context: string): Promise<GoWorkerAdapterResponse>;
+export declare function preflightGoWorkerProvider(opts: GoBridgeOptions, context: string, phase?: number): Promise<GoWorkerAdapterResponse>;
 export declare function sanitizeWorkerDiagnosticOutput(value: string): string;
 /**
  * Check if an error is classified as an authentication error.

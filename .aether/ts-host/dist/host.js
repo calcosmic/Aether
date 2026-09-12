@@ -436,7 +436,7 @@ function emitSkillSummary(dispatches) {
         process.stderr.write(`Injecting ${skillCount} skills into worker prompts.\n`);
     }
 }
-async function preflightHostWorkerDispatch(bridge, context, fallbackDiagnostic) {
+async function preflightHostWorkerDispatch(bridge, context, phase = 0, fallbackDiagnostic) {
     // D-06: a skipped preflight must never be silent, on either the
     // compat/test-hook path or the production Go-adapter path below.
     const skipRaw = process.env["AETHER_SKIP_PREFLIGHT"]?.trim().toLowerCase();
@@ -472,7 +472,7 @@ async function preflightHostWorkerDispatch(bridge, context, fallbackDiagnostic) 
         }
         return;
     }
-    await preflightGoWorkerProvider(bridge, context);
+    await preflightGoWorkerProvider(bridge, context, phase);
 }
 // ---------------------------------------------------------------------------
 // Dry-run ceremony preview (HOST-07, D-06)
@@ -887,7 +887,7 @@ async function runDispatchedBuildCommand(bridge, parsed, definition) {
     // Step 2: Ask Go to select and preflight the provider (unless simulating)
     if (!parsed.simulate) {
         const diagnostic = buildResult.provider_diagnostics;
-        await preflightHostWorkerDispatch(bridge, `Build phase ${phase}`, diagnostic ? `No platform workers available. ${diagnostic}` : undefined);
+        await preflightHostWorkerDispatch(bridge, `Build phase ${phase}`, buildManifest.phase, diagnostic ? `No platform workers available. ${diagnostic}` : undefined);
     }
     // Step 3: Render spawn-plan and wave-start ceremony
     const ceremonyEnvelope = { dispatch_manifest: buildManifest };
@@ -1030,7 +1030,7 @@ async function runDispatchedPlanCommand(bridge, parsed) {
     // See the note in runDryRunDispatchedCommand and cmd/codex_build.go.
     // Step 2: Ask Go to select and preflight the provider (unless simulating)
     if (!parsed.simulate) {
-        await preflightHostWorkerDispatch(bridge, "Plan");
+        await preflightHostWorkerDispatch(bridge, "Plan", 0);
     }
     // Step 3: Render spawn-plan and wave-start ceremony
     const ceremonyEnvelope = { plan_manifest: planManifest, dispatches };
@@ -1118,7 +1118,7 @@ async function runDispatchedContinueCommand(bridge, parsed) {
     // section; recomputing and attaching a second copy duplicated it.
     // Step 2: Ask Go to select and preflight the provider (unless simulating)
     if (!parsed.simulate) {
-        await preflightHostWorkerDispatch(bridge, "Continue");
+        await preflightHostWorkerDispatch(bridge, "Continue", continueManifest.phase);
     }
     // Step 3: Render spawn-plan and wave-start ceremony
     const ceremonyEnvelope = { continue_manifest: continueManifest, dispatches };
