@@ -20,7 +20,9 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -326,5 +328,82 @@ func TestStoredEventShapeIsUnchangedForExistingReaders(t *testing.T) {
 	// pause nor resume events match any of those substrings.
 	if got := planningOutcomeEvidence(colony.ColonyState{Events: []string{pauseEvent, resumeEvent}}); len(got) != 0 {
 		t.Fatalf("planningOutcomeEvidence picked up a pause/resume event unexpectedly: %v", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Task 2 -- the class is closed structurally, not just at the one known site.
+// ---------------------------------------------------------------------------
+
+// TestLifecycleEventSentenceTypeCannotBeBypassed walks the non-test .go
+// files of the cmd package and refuses any conversion into
+// lifecycleEventSentence outside its two legitimate constructors.
+//
+// This exists as a structural guard, rather than relying on
+// TestPausedCardShowsASentenceNotAStateToken /
+// TestResumedCardShowsASentenceNotAStateToken alone, because a rendered
+// check can only catch the one instance someone happened to render: it
+// would have passed the day before this leak was found, since nobody had
+// yet rendered the paused card with a handoff ID in it. 202.1-RESEARCH.md's
+// Pitfall 3 names exactly this failure mode -- patching the one known leak
+// while the pattern that produced it (any code being free to hand-build a
+// lifecycleEventSentence) remains available for the next writer to repeat.
+func TestLifecycleEventSentenceTypeCannotBeBypassed(t *testing.T) {
+	sites, err := scanLifecycleSentenceConversions(".")
+	if err != nil {
+		t.Fatalf("scan cmd/ for lifecycleEventSentence conversions: %v", err)
+	}
+
+	legitimate := 0
+	var illegitimate []string
+	for _, s := range sites {
+		if lifecycleSentenceLegitimateConstructors[s.Function] {
+			legitimate++
+			continue
+		}
+		illegitimate = append(illegitimate, fmt.Sprintf("%s:%s %s", s.File, s.Function, s.Expr))
+	}
+
+	// Guard the guard: a scanner that matches nothing has broken (wrong type
+	// name, wrong AST shape, wrong file scope), not proven both real
+	// constructors clean overnight.
+	if legitimate == 0 {
+		t.Fatal("scanLifecycleSentenceConversions found zero conversions inside pauseBoundarySentence/resumeProvenanceSentence -- the scanner is broken, not that both constructors vanished.")
+	}
+
+	if len(illegitimate) > 0 {
+		sort.Strings(illegitimate)
+		t.Errorf("%d conversion(s) into lifecycleEventSentence found outside its two legitimate constructors:\n  %s\nRoute this through pauseBoundarySentence or resumeProvenanceSentence instead.",
+			len(illegitimate), strings.Join(illegitimate, "\n  "))
+	}
+}
+
+// TestLifecycleEventSentenceGuardCanFail proves
+// TestLifecycleEventSentenceTypeCannotBeBypassed's scanner actually fires:
+// a synthetic file, written to a temp directory, containing a fresh
+// function that converts a plain string into lifecycleEventSentence, is
+// found. Same shape as TestNextActionHardcodeDetectsAPlantedViolation
+// (cmd/next_action_hardcode_ratchet_test.go).
+func TestLifecycleEventSentenceGuardCanFail(t *testing.T) {
+	tmp := t.TempDir()
+	planted := "func plantedLifecycleSentenceBypass(raw string) lifecycleEventSentence {\n\treturn lifecycleEventSentence(raw)\n}\n"
+	if err := os.WriteFile(filepath.Join(tmp, "synthetic.go"), []byte("package cmd\n\n"+planted), 0644); err != nil {
+		t.Fatalf("write synthetic fixture: %v", err)
+	}
+
+	sites, err := scanLifecycleSentenceConversions(tmp)
+	if err != nil {
+		t.Fatalf("scan synthetic fixture: %v", err)
+	}
+
+	found := false
+	for _, s := range sites {
+		if s.Function == "plantedLifecycleSentenceBypass" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("a planted bypass in a clean synthetic file was not detected; found sites: %+v", sites)
 	}
 }
