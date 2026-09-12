@@ -30,6 +30,28 @@ type pheromoneWriteError struct {
 
 func (e *pheromoneWriteError) Error() string { return e.msg }
 
+// pheromoneProvenanceFromSource classifies a signal's free-text `source`
+// input into one of BIO-07's write-time provenance categories. "cli" is the
+// pheromone-write CLI's own default --source value, used directly by the
+// owner-invoked /ant-focus, /ant-redirect and /ant-feedback wrappers, and
+// "discuss" carries a resolved clarification -- the owner's own answer --
+// so both map to owner. "import" is the sentinel a cross-project import
+// path stamps. Anything else (including phase-completion and
+// decision-answer's runtime-generated "aether continue"/"aether
+// decision-answer" sources, and assumptions.go's automated "assumptions"
+// analysis) defaults to runtime, since the write itself always originates
+// from Go code rather than directly from the owner's keyboard.
+func pheromoneProvenanceFromSource(source string) string {
+	switch strings.ToLower(strings.TrimSpace(source)) {
+	case "import":
+		return colony.PheromoneProvenanceImport
+	case "cli", "discuss":
+		return colony.PheromoneProvenanceOwner
+	default:
+		return colony.PheromoneProvenanceRuntime
+	}
+}
+
 // writePheromoneSignal is the extracted body of pheromoneWriteCmd's RunE
 // (198.1-04, FEED-04): id generation, content hashing before sanitization,
 // colony.SanitizeSignalContent, the {"text": "..."} content envelope,
@@ -102,6 +124,8 @@ func writePheromoneSignal(sigType, content, priority, source, reason, ttl string
 	// Build content as JSON object matching shell format: {"text": "..."}
 	contentJSON, _ := json.Marshal(map[string]string{"text": sanitized})
 
+	provenance := pheromoneProvenanceFromSource(source)
+
 	signal := colony.PheromoneSignal{
 		ID:          id,
 		Type:        sigType,
@@ -113,6 +137,11 @@ func writePheromoneSignal(sigType, content, priority, source, reason, ttl string
 		Strength:    &strength,
 		ContentHash: &contentHash,
 		Tags:        make([]colony.PheromoneTag, 0, len(tags)),
+		Provenance:  &provenance,
+	}
+	if provenance == colony.PheromoneProvenanceImport {
+		quarantined := true
+		signal.Quarantined = &quarantined
 	}
 
 	// Populate source_phase from current colony state

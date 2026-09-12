@@ -1733,7 +1733,12 @@ func extractRiskEntries(maxRisks int) []colony.FlagEntry {
 	return risks
 }
 
-// extractSignalTexts loads pheromones.json, computes effective strengths, sorts, and returns formatted signals.
+// extractSignalTexts loads pheromones.json and returns formatted, top-N
+// in-effect signal texts via the one resolver (resolveEffectivePheromones).
+// This used to filter only on sig.Active and a 0.1 literal, with no expiry
+// check -- the exact NOW-09 gap that let an active, strong, but expired
+// signal keep steering worker briefs; extractSignalTextsFrom now owns this
+// logic and this function is a thin wrapper over it.
 func extractSignalTexts(maxSignals int) []string {
 	if store == nil {
 		return nil
@@ -1742,54 +1747,7 @@ func extractSignalTexts(maxSignals int) []string {
 	if err := store.LoadJSON("pheromones.json", &pf); err != nil {
 		return nil
 	}
-
-	now := time.Now()
-
-	// Filter and compute effective strengths
-	type scoredSignal struct {
-		priority          int
-		effectiveStrength float64
-		text              string
-	}
-
-	var scored []scoredSignal
-	for _, sig := range pf.Signals {
-		if !sig.Active {
-			continue
-		}
-		eff := computeEffectiveStrength(sig, now)
-		if eff < 0.1 {
-			continue
-		}
-		text := extractSignalText(sig.Content)
-		if text == "" {
-			continue
-		}
-		scored = append(scored, scoredSignal{
-			priority:          signalPriority(sig.Type),
-			effectiveStrength: eff,
-			text:              fmt.Sprintf("%s: %s", sig.Type, text),
-		})
-	}
-
-	// Sort by priority (ascending), then by effective strength (descending)
-	sort.SliceStable(scored, func(i, j int) bool {
-		if scored[i].priority != scored[j].priority {
-			return scored[i].priority < scored[j].priority
-		}
-		return scored[i].effectiveStrength > scored[j].effectiveStrength
-	})
-
-	// Take top N
-	if len(scored) > maxSignals {
-		scored = scored[:maxSignals]
-	}
-
-	result := make([]string, len(scored))
-	for i, s := range scored {
-		result[i] = s.text
-	}
-	return result
+	return extractSignalTextsFrom(&pf, maxSignals)
 }
 
 // extractRollingSummary reads rolling-summary.log and extracts last N entries.

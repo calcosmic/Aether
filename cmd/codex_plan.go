@@ -4260,6 +4260,12 @@ func commonConstraints(survey codexSurveyContext) []string {
 	return limitStrings(appendUniqueStringsInOrder(constraints), 6)
 }
 
+// activeRedirectPlanConstraints reads REDIRECT constraints for plan-time
+// injection via the one resolver, rather than its own inline predicate.
+// Before this fix, the predicate here used `<= 0` -- no effective-strength
+// floor at all -- while every other reader used 0.1 (NOW-11's drift in
+// 203-CLASSIC-SYNTHESIS.md SYN-203-10). A REDIRECT the resolver treats as
+// below-floor or expired no longer fires as a plan constraint here.
 func activeRedirectPlanConstraints() []string {
 	if store == nil {
 		return nil
@@ -4270,11 +4276,11 @@ func activeRedirectPlanConstraints() []string {
 	}
 	now := time.Now().UTC()
 	constraints := []string{}
-	for _, signal := range pf.Signals {
-		if !signal.Active || !strings.EqualFold(signal.Type, "REDIRECT") || computeEffectiveStrength(signal, now) <= 0 {
+	for _, resolved := range resolveEffectivePheromones(&pf, now) {
+		if !resolved.InEffect || !strings.EqualFold(resolved.Signal.Type, "REDIRECT") {
 			continue
 		}
-		text := strings.TrimSpace(extractContentText(signal.Content))
+		text := strings.TrimSpace(extractContentText(resolved.Signal.Content))
 		if text != "" {
 			constraints = append(constraints, text)
 		}
