@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -211,4 +214,84 @@ func planningStageResumeTestScoutDispatches(manifest planningStageManifest) []co
 		TaskID:        stage.AuthorizationID,
 		StageManifest: &stage,
 	}}
+}
+
+// TestParkedRunIsFoundWithNoIterationPointer covers the real downstream
+// colony that reported this defect: a run stopped at route_running with no
+// iteration-state.json anywhere on disk. Keying the resume solely off that
+// pointer left exactly the stuck colonies this feature exists to rescue still
+// stuck, and the original fixture hid it by always writing the pointer.
+func TestParkedRunIsFoundWithNoIterationPointer(t *testing.T) {
+	root, routeManifest := planningStageResumeTestParkedRun(t)
+
+	// Delete the convenience pointer, leaving only the durable stage files --
+	// exactly the shape the reporting colony was in.
+	if err := os.Remove(filepath.Join(store.BasePath(), planningIterationStateRel)); err != nil {
+		t.Fatalf("remove iteration state: %v", err)
+	}
+
+	resume, err := resolvePlanningStageResume(root)
+	if err != nil {
+		t.Fatalf("resolve planning stage resume: %v", err)
+	}
+	if resume == nil {
+		t.Fatal("a parked run with no iteration pointer was not found: the colony stays stuck exactly as reported")
+	}
+	if resume.RunID != routeManifest.RunID {
+		t.Fatalf("discovered run = %q, want the parked run %q", resume.RunID, routeManifest.RunID)
+	}
+	if resume.Caste != planningStageCasteRouteSetter {
+		t.Fatalf("discovered caste = %q, want Route-Setter", resume.Caste)
+	}
+}
+
+// TestAmbiguousParkedRunsAreNotGuessed locks the refusal half: with no pointer
+// and two runs parked at route_running, the planner must NOT pick one. Starting
+// the wrong run is the stray-run damage this path exists to prevent.
+func TestAmbiguousParkedRunsAreNotGuessed(t *testing.T) {
+	root, routeManifest := planningStageResumeTestParkedRun(t)
+	if err := os.Remove(filepath.Join(store.BasePath(), planningIterationStateRel)); err != nil {
+		t.Fatalf("remove iteration state: %v", err)
+	}
+
+	// Clone the parked run's stage file under a second run id, so two runs
+	// both claim to be waiting on Route-Setter.
+	src := filepath.Join(store.BasePath(), "planning", routeManifest.RunID, "stage-state.json")
+	raw, err := os.ReadFile(src)
+	if err != nil {
+		t.Fatalf("read parked stage state: %v", err)
+	}
+	twinID := routeManifest.RunID + "-twin"
+	twin := filepath.Join(store.BasePath(), "planning", twinID)
+	if err := os.MkdirAll(twin, 0o755); err != nil {
+		t.Fatalf("make twin run dir: %v", err)
+	}
+	// The twin must be internally consistent -- its own run_id matching its
+	// own directory -- or the loader rejects it and the ambiguity never
+	// actually occurs. A fixture in a shape the runtime cannot produce would
+	// make this test pass without testing anything.
+	var decoded map[string]interface{}
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatalf("decode parked stage state: %v", err)
+	}
+	decoded["run_id"] = twinID
+	reencoded, err := json.Marshal(decoded)
+	if err != nil {
+		t.Fatalf("re-encode twin stage state: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(twin, "stage-state.json"), reencoded, 0o644); err != nil {
+		t.Fatalf("write twin stage state: %v", err)
+	}
+	// Prove the fixture is real: the twin must genuinely load as parked.
+	if twinState, err := loadPlanningStageState(root, twinID); err != nil || twinState.Stage != planningStageRouteRunning {
+		t.Fatalf("twin fixture is not a loadable parked run (stage=%v err=%v); the ambiguity being tested would not occur", twinState.Stage, err)
+	}
+
+	resume, err := resolvePlanningStageResume(root)
+	if err != nil {
+		t.Fatalf("resolve planning stage resume: %v", err)
+	}
+	if resume != nil {
+		t.Fatalf("two parked runs were ambiguous but one was chosen anyway (%q); starting the wrong run is the damage this prevents", resume.RunID)
+	}
 }

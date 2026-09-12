@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -58,13 +59,26 @@ func (r planningStageResume) nextCommandHint() string {
 // worker whose authorization cannot be loaded must not be silently replaced by
 // a second run, because that is the stray-run bug this function exists to fix.
 func resolvePlanningStageResume(root string) (*planningStageResume, error) {
-	seed, ok := loadPlanningIterationState()
-	if !ok {
-		return nil, nil
+	runID := ""
+	if seed, ok := loadPlanningIterationState(); ok {
+		runID = strings.TrimSpace(seed.PlanningRunID)
 	}
-	runID := strings.TrimSpace(seed.PlanningRunID)
 	if runID == "" {
-		return nil, nil
+		// The iteration state is a convenience pointer, not the durable
+		// truth, and a colony can sit parked with no pointer at all -- the
+		// real CosmicDashboard colony that reported this defect had a run
+		// stopped at route_running and no iteration-state.json anywhere.
+		// Keying the resume solely off the pointer would leave exactly the
+		// stuck colonies this exists to rescue still stuck, so fall back to
+		// the per-run stage files, which ARE durable.
+		discovered, err := discoverParkedPlanningRun(root)
+		if err != nil {
+			return nil, err
+		}
+		if discovered == "" {
+			return nil, nil
+		}
+		runID = discovered
 	}
 	stageState, err := loadPlanningStageState(root, runID)
 	if err != nil {
@@ -229,4 +243,44 @@ func planningStageResumeWorkerSpec(caste string) (planningWorkerSpec, bool) {
 		}
 	}
 	return planningWorkerSpecForCaste(caste)
+}
+
+// discoverParkedPlanningRun finds the one planning run waiting on a worker when
+// no iteration-state pointer names it.
+//
+// It never guesses: a run only counts when its own durable stage file says it
+// is waiting on a worker, and finding more than one such run returns nothing
+// rather than picking a favourite. Starting the wrong run is precisely the
+// stray-run damage this whole path exists to prevent, so ambiguity falls back
+// to the ordinary "start a run" behaviour the caller already has.
+func discoverParkedPlanningRun(root string) (string, error) {
+	if store == nil {
+		return "", nil
+	}
+	entries, err := os.ReadDir(filepath.Join(store.BasePath(), "planning"))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		return "", err
+	}
+	parked := make([]string, 0, 2)
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		candidate := entry.Name()
+		state, err := loadPlanningStageState(root, candidate)
+		if err != nil {
+			// A directory without a readable stage file is not a parked run.
+			continue
+		}
+		if state.Stage == planningStageRouteRunning && strings.TrimSpace(state.RunID) != "" {
+			parked = append(parked, candidate)
+		}
+	}
+	if len(parked) != 1 {
+		return "", nil
+	}
+	return parked[0], nil
 }
