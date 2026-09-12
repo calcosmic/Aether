@@ -1,7 +1,7 @@
 ---
 phase: 202-swarm-oracle-and-live-colony
 verified: 2026-09-11T23:30:00Z
-status: human_needed
+status: passed
 score: 5/5 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
@@ -14,7 +14,8 @@ re_verification:
     - "Every locked decision traces to at least one SYN-202 row and implementation plan (this truth was only listed because the two truths above had failed; it required no independent work and is now resolved along with them)."
   gaps_remaining: []
   regressions: []
-deferred: []
+deferred:
+  - "All three human_verification items deferred by owner on 2026-09-12 during /gsd-verify-work 202: tests 1-2 skipped (owner does not use the second-terminal watch dashboard; wants inline colony visibility), test 3 deferred to later. See 202-UAT.md."
 human_verification:
   - test: "Open aether watch during a live build/continue run, then trigger a recovery decision (e.g. force a worker failure) and observe whether the dashboard keeps showing the running build's active workers or switches to a near-empty recovery view."
     expected: "The build/continue episode and its active workers should remain visible, with recovery state layered on top -- not replaced by it."

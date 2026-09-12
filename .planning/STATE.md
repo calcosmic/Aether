@@ -4,18 +4,18 @@ milestone: v1.28
 milestone_name: Classic Colony Restoration
 current_phase: 202
 current_phase_name: Swarm, Oracle, and Live Colony
-status: executing
-stopped_at: Completed 202-17-PLAN.md (gap closure)
-last_updated: "2026-09-11T20:23:43.000Z"
-last_activity: 2026-09-11
-last_activity_desc: Executed gap-closure plan 202-17 (CR-01 Oracle liveness -- episode boundary + episode-kind-aware abandonment)
+status: phase_complete
+stopped_at: Phase 202 verified and complete (UAT closed 2026-09-12; human checks deferred by owner)
+last_updated: "2026-09-12T13:45:00.000Z"
+last_activity: 2026-09-12
+last_activity_desc: Phase 202 complete -- UAT closed (3 human checks skipped/deferred by owner), VERIFICATION passed
 state_head: 1a4a4265d2df36b6e50d257ade668f480eb6915a
 progress:
   total_phases: 7
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 126
   completed_plans: 125
-  percent: 14
+  percent: 29
 ---
 
 # Project State
@@ -32,10 +32,10 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 
 ## Current Position
 
-Phase: 202 (Swarm, Oracle, and Live Colony) — GAP CLOSURE COMPLETE
-Plan: 202-16 (recovery live-view hijack) and 202-17 (Oracle liveness, CR-01) both executed
-Status: Both gap-closure plans complete — run /gsd-verify-work 202 next
-Last activity: 2026-09-11 — Executed gap-closure plan 202-17 (Oracle episode boundary + episode-kind-aware abandonment)
+Phase: 202 (Swarm, Oracle, and Live Colony) — COMPLETE (verified 2026-09-12; human UAT items deferred by owner)
+Next phase: 203 (Biological Runtime)
+Status: Phase 202 done — run /gsd-plan-phase 203 next
+Last activity: 2026-09-12 — Closed 202 UAT (owner skipped second-terminal watch tests, deferred voice check) and marked phase complete
 
 ## Performance Metrics
 
