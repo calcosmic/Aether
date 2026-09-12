@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"io/fs"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -515,5 +516,259 @@ func TestNoUngovernedQuarantineClear(t *testing.T) {
 	}
 	if len(offenders) > 0 {
 		t.Fatalf("found a function assigning PheromoneSignal.Quarantined outside the declared writer: %v -- clearing or setting quarantine must go through an explicit, owner-gated release path", offenders)
+	}
+}
+
+// --- Task 3: lock the singleness of the writer and the predicate ---
+
+// unwrapParens strips parenthesised expressions so a comparison written as
+// `(computeEffectiveStrength(sig, now)) < 0.1` is still detected.
+func unwrapParens(e ast.Expr) ast.Expr {
+	for {
+		p, ok := e.(*ast.ParenExpr)
+		if !ok {
+			return e
+		}
+		e = p.X
+	}
+}
+
+func isComputeEffectiveStrengthCall(e ast.Expr) bool {
+	call, ok := unwrapParens(e).(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	ident, ok := call.Fun.(*ast.Ident)
+	return ok && ident.Name == "computeEffectiveStrength"
+}
+
+func isBasicLit(e ast.Expr) bool {
+	_, ok := unwrapParens(e).(*ast.BasicLit)
+	return ok
+}
+
+// comparesEffectiveStrengthAgainstLiteral reports whether fn contains a
+// comparison of computeEffectiveStrength(...)'s result against a literal
+// number -- exactly the "second predicate" pattern that let codex_plan.go's
+// old REDIRECT scan (`<= 0`) drift from filterSignalsForPrompt's `>= 0.1`
+// floor. A comparison against the named pheromoneEffectiveFloor constant
+// (an *ast.Ident, not a literal) does NOT match -- that is the sanctioned
+// form every current reader now uses.
+func comparesEffectiveStrengthAgainstLiteral(fn *ast.FuncDecl) bool {
+	found := false
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		bin, ok := n.(*ast.BinaryExpr)
+		if !ok {
+			return true
+		}
+		switch bin.Op {
+		case token.LSS, token.LEQ, token.GTR, token.GEQ, token.EQL, token.NEQ:
+		default:
+			return true
+		}
+		if (isComputeEffectiveStrengthCall(bin.X) && isBasicLit(bin.Y)) ||
+			(isComputeEffectiveStrengthCall(bin.Y) && isBasicLit(bin.X)) {
+			found = true
+		}
+		return true
+	})
+	return found
+}
+
+// TestOneEffectivePheromonePredicate is the structural guard BIO-07's read
+// side exists to satisfy: the three-way disagreement between
+// extractSignalTexts (missed expiry), filterSignalsForPrompt (the correct
+// superset), and codex_plan.go's REDIRECT scan (no floor at all) must never
+// recur. A future function comparing computeEffectiveStrength's result
+// against a literal floor -- rather than calling resolveEffectivePheromones
+// or reading the named pheromoneEffectiveFloor constant -- fails this test
+// by name.
+func TestOneEffectivePheromonePredicate(t *testing.T) {
+	// resolveEffectivePheromones is the one sanctioned implementation.
+	// signalActiveForPrompt/filterSignalsForPrompt are its declared thin
+	// adapters -- named here defensively in case a future edit inlines
+	// logic into them; today neither calls computeEffectiveStrength
+	// directly at all, since both delegate to the resolver.
+	exempt := map[string]bool{
+		"resolveEffectivePheromones": true,
+		"signalActiveForPrompt":      true,
+		"filterSignalsForPrompt":     true,
+	}
+
+	funcs := parseCmdPackageFuncs(t)
+	var offenders []string
+	for name, fn := range funcs {
+		if exempt[name] {
+			continue
+		}
+		if comparesEffectiveStrengthAgainstLiteral(fn) {
+			offenders = append(offenders, name)
+		}
+	}
+	sort.Strings(offenders)
+	if len(offenders) > 0 {
+		t.Fatalf("found a second effective-strength predicate outside resolveEffectivePheromones: %v -- route through resolveEffectivePheromones (or the named pheromoneEffectiveFloor constant) instead of comparing computeEffectiveStrength against a literal", offenders)
+	}
+}
+
+// pheromoneJSONWriterAllowlist is the exact, named inventory of top-level
+// functions in cmd/ permitted to write pheromones.json directly. This is a
+// ratchet: a new writer function must be added here deliberately (with a
+// stated reason), and a removed one must be dropped from here, keeping the
+// inventory equal to the live count on every run.
+var pheromoneJSONWriterAllowlist = map[string]string{
+	"writePheromoneSignal":           "the single create/reinforce chokepoint every other writer already funnels through",
+	"expireSignalsByType":            "deactivates existing signals of one type (lifecycle expiry), not a new-signal writer",
+	"runSignalHousekeepingWithState": "deactivates stale/weak signals during housekeeping GC",
+	"entombTempSweep":                "archival sweep during entomb",
+	"importPheromonesData":           "cross-project XML import (a distinct, already-reviewed ingestion path)",
+	"syncPheromoneStores":            "worktree merge-back sync to a target store, not the primary write path",
+}
+
+func writesPheromonesJSON(fn *ast.FuncDecl) bool {
+	found := false
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok || sel.Sel == nil || sel.Sel.Name != "SaveJSON" {
+			return true
+		}
+		if len(call.Args) == 0 {
+			return true
+		}
+		lit, ok := call.Args[0].(*ast.BasicLit)
+		if !ok || lit.Kind != token.STRING {
+			return true
+		}
+		value, err := strconv.Unquote(lit.Value)
+		if err == nil && value == "pheromones.json" {
+			found = true
+		}
+		return true
+	})
+	return found
+}
+
+// TestOnePheromoneWriterOnly is the write-side counterpart to
+// TestOneEffectivePheromonePredicate: any top-level function outside the
+// declared allowlist that writes pheromones.json fails this test by name.
+func TestOnePheromoneWriterOnly(t *testing.T) {
+	funcs := parseCmdPackageFuncs(t)
+	var writers []string
+	for name, fn := range funcs {
+		if writesPheromonesJSON(fn) {
+			writers = append(writers, name)
+		}
+	}
+	sort.Strings(writers)
+
+	var unexpected []string
+	for _, name := range writers {
+		if _, ok := pheromoneJSONWriterAllowlist[name]; !ok {
+			unexpected = append(unexpected, name)
+		}
+	}
+	if len(unexpected) > 0 {
+		t.Fatalf("found a writer of pheromones.json outside the declared allowlist: %v -- route through writePheromoneSignal, or add the new writer to pheromoneJSONWriterAllowlist with a stated reason", unexpected)
+	}
+
+	var missing []string
+	for name := range pheromoneJSONWriterAllowlist {
+		found := false
+		for _, w := range writers {
+			if w == name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			missing = append(missing, name)
+		}
+	}
+	sort.Strings(missing)
+	if len(missing) > 0 {
+		t.Fatalf("pheromoneJSONWriterAllowlist names %v but no such writer was found -- remove the stale entry so the allowlist matches the live count", missing)
+	}
+}
+
+// pheromoneBriefReaderRoots names every function that assembles pheromone
+// text for a worker brief or a plan-time constraint. Each must transitively
+// reach resolveEffectivePheromones -- removing that call from any of these
+// (e.g. resolvePheromoneSection) fails this test by name. The floor below
+// is this list's live count; it rises with any deliberate addition and
+// must never silently shrink without an equally deliberate edit.
+var pheromoneBriefReaderRoots = []string{
+	"resolvePheromoneSection",
+	"extractSignalTexts",
+	"extractSignalTextsFrom",
+	"filterSignalsForPrompt",
+	"signalActiveForPrompt",
+	"activeRedirectPlanConstraints",
+}
+
+const pheromoneBriefReaderFloor = 6
+
+func calleesOf(fn *ast.FuncDecl) []string {
+	var callees []string
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		if ident, ok := call.Fun.(*ast.Ident); ok {
+			callees = append(callees, ident.Name)
+		}
+		return true
+	})
+	return callees
+}
+
+func reachesResolver(funcs map[string]*ast.FuncDecl, start string) bool {
+	seen := map[string]bool{}
+	var visit func(name string) bool
+	visit = func(name string) bool {
+		if name == "resolveEffectivePheromones" {
+			return true
+		}
+		if seen[name] {
+			return false
+		}
+		seen[name] = true
+		fn, ok := funcs[name]
+		if !ok {
+			return false
+		}
+		for _, callee := range calleesOf(fn) {
+			if visit(callee) {
+				return true
+			}
+		}
+		return false
+	}
+	return visit(start)
+}
+
+// TestEveryBriefReaderUsesTheResolver derives, via a real AST call-graph
+// walk, whether each named worker-brief pheromone reader transitively
+// reaches resolveEffectivePheromones. Removing the resolver call from
+// resolvePheromoneSection (or any other root) fails this test by name.
+func TestEveryBriefReaderUsesTheResolver(t *testing.T) {
+	funcs := parseCmdPackageFuncs(t)
+
+	if len(pheromoneBriefReaderRoots) < pheromoneBriefReaderFloor {
+		t.Fatalf("pheromoneBriefReaderRoots shrank to %d entries, floor is %d -- update the floor deliberately if a reader was legitimately removed", len(pheromoneBriefReaderRoots), pheromoneBriefReaderFloor)
+	}
+
+	for _, root := range pheromoneBriefReaderRoots {
+		if _, ok := funcs[root]; !ok {
+			t.Errorf("expected brief-reader function %q to exist in cmd package", root)
+			continue
+		}
+		if !reachesResolver(funcs, root) {
+			t.Errorf("%s does not reach resolveEffectivePheromones (transitively) -- every worker-brief pheromone reader must call the one resolver", root)
+		}
 	}
 }
