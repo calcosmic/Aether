@@ -1050,8 +1050,16 @@ func invokeHostedWorker(ctx context.Context, dispatcher PlatformDispatcher, conf
 	}
 	configureWorkerCommand(cmd)
 
+	// Mark the process as an Aether-spawned worker. workerProcessEnv has
+	// existed since the process tracker was written but had NO caller, so
+	// AETHER_WORKER_NAME never actually reached a worker -- which is why
+	// `aether hook-stop`, running inside a worker's own Claude session, could
+	// not tell a worker from a person. It blocked the worker and told it to run
+	// `aether pause`, and a worker that pauses the colony mid-build strands the
+	// whole run. Setting it here is what makes that exemption possible.
+	cmd.Env = workerProcessEnv(os.Environ(), config, dispatcher.Platform())
 	if agentURL := os.Getenv(envOpenCodeAgentURL); agentURL != "" {
-		cmd.Env = append(os.Environ(), envOpenCodeAgentURL+"="+agentURL)
+		cmd.Env = setEnvValue(cmd.Env, envOpenCodeAgentURL, agentURL)
 	}
 
 	var stdout, stderr bytes.Buffer

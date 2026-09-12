@@ -240,6 +240,15 @@ var hookStopCmd = &cobra.Command{
 		if input.StopHookActive {
 			return nil
 		}
+		// A worker Aether spawned is not a person ending a session early. This
+		// hook exists to stop the OWNER walking away mid-phase; applied to
+		// Aether's own build workers it did the opposite of its purpose --
+		// it blocked a worker from finishing and advised `aether pause`, which
+		// a worker must never run mid-build. One worker followed that advice
+		// and paused a live Autopilot run.
+		if isAetherSpawnedWorker() {
+			return nil
+		}
 		if store == nil {
 			return nil
 		}
@@ -696,4 +705,13 @@ func init() {
 	rootCmd.AddCommand(hookStopCmd)
 	rootCmd.AddCommand(hookPreCompactCmd)
 	rootCmd.AddCommand(hookSessionStartCmd)
+}
+
+// isAetherSpawnedWorker reports whether the current process is running inside a
+// worker Aether spawned, rather than a session a person is driving. The spawn
+// path sets AETHER_WORKER_NAME on the worker's own environment
+// (pkg/codex.workerProcessEnv), and Claude Code passes its environment through
+// to the hooks it runs, so the variable is visible here.
+func isAetherSpawnedWorker() bool {
+	return strings.TrimSpace(os.Getenv("AETHER_WORKER_NAME")) != ""
 }
