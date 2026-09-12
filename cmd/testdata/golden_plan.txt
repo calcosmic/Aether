@@ -1,14 +1,14 @@
 ━━ 📋 P L A N ━━
-Identity: 👑🐜 Queen
-Goal: Golden workflow test colony
-Planning contract: SPEC Unreported [APPROVED]
+👑🐜 Queen (Queen is this project's coordinator)
+👑 Goal: Golden workflow test colony
+📋 Planning contract: SPEC Unreported [APPROVED]
 ── Choose Planning Preset ──
-Fast       Target 80  Up to 4 passes
-Balanced   Target 90  Up to 6 passes
-Deep       Target 95  Up to 8 passes
-Exhaustive Target 99  Up to 12 passes
-Choose the planning preset: Fast, Balanced, Deep, or Exhaustive.
-Planning did not start. State: unchanged.
+🔀 Fast       Target 80  Up to 4 passes
+🔀 Balanced   Target 90  Up to 6 passes
+🔀 Deep       Target 95  Up to 8 passes
+🔀 Exhaustive Target 99  Up to 12 passes
+🧭 Choose the planning preset: Fast, Balanced, Deep, or Exhaustive.
+📊 Planning did not start. State: unchanged.
 ━━ 📊 W H A T   N E X T ━━
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ── Where things stand ──

@@ -2121,8 +2121,8 @@ func TestRenderPlanVisual_RealDispatch(t *testing.T) {
 	if !strings.Contains(output, "2/2 workers completed") {
 		t.Errorf("real dispatch output missing summary '2/2 workers completed'\n%s", output)
 	}
-	// Should show "Workers" section header
-	if !strings.Contains(output, "\nWorkers\n") {
+	// Should show "Workers" section header (Phase 202.1 plan 06: glyph-led)
+	if !strings.Contains(output, "\n🐜 Workers\n") {
 		t.Errorf("real dispatch output should have 'Workers' header\n%s", output)
 	}
 }

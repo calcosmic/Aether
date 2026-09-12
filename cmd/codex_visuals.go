@@ -1552,19 +1552,17 @@ func renderPlanVisual(result map[string]interface{}) string {
 	b.WriteString(visualDividerStr())
 	if _, ok := result["repair_source"]; ok {
 		if repaired, _ := result["repaired"].(bool); repaired {
-			b.WriteString("Repaired phase-plan dependency references.\n")
+			b.WriteString(voiceLine("done", "Repaired phase-plan dependency references.") + "\n")
 		} else {
-			b.WriteString("Phase-plan dependency references are already valid.\n")
+			b.WriteString(voiceLine("done", "Phase-plan dependency references are already valid.") + "\n")
 		}
 		if phasePlan := strings.TrimSpace(stringValue(result["phase_plan"])); phasePlan != "" {
-			b.WriteString("Artifact: ")
-			b.WriteString(phasePlan)
-			b.WriteString("\n")
+			b.WriteString(voiceLine("artifact", "Artifact: "+phasePlan) + "\n")
 		}
-		b.WriteString(fmt.Sprintf("Plan size: %d phases, %d tasks\n\n", intValue(result["phase_count"]), intValue(result["task_count"])))
+		b.WriteString(voiceLine("phase", fmt.Sprintf("Plan size: %d phases, %d tasks", intValue(result["phase_count"]), intValue(result["task_count"]))) + "\n\n")
 		if repairs := stringSliceValue(result["repairs"]); len(repairs) > 0 {
-			b.WriteString("Repairs\n")
-			b.WriteString(renderIndentedList(repairs))
+			b.WriteString(voiceLine("checkpoint", "Repairs") + "\n")
+			b.WriteString(renderIndentedList(voicedLines("checkpoint", repairs)))
 			b.WriteString("\n")
 		}
 		b.WriteString(renderLifecycleClosing(result, "plan"))
@@ -1575,24 +1573,21 @@ func renderPlanVisual(result map[string]interface{}) string {
 	requiresFinalizer, _ := result["requires_finalizer"].(bool)
 	requiresNextIteration, _ := result["requires_next_iteration"].(bool)
 	if existing {
-		b.WriteString("Existing colony plan loaded.\n")
+		b.WriteString(voiceLine("decision", "Existing colony plan loaded — this project already has one.") + "\n")
 	} else if requiresNextIteration {
-		b.WriteString("Planning iteration recorded; another Scout and Route-Setter pass is required before the colony plan is written.\n")
+		b.WriteString(voiceLine("decision", "Planning iteration recorded; another Scout and Route-Setter pass is required before the plan is written.") + "\n")
 	} else if planOnly && requiresFinalizer {
-		b.WriteString("Planning manifest prepared for host-dispatched Scout and Route-Setter workers.\n")
+		b.WriteString(voiceLine("decision", "Planning manifest prepared for host-dispatched Scout and Route-Setter workers (helpers).") + "\n")
 	} else {
-		b.WriteString("Scout and Route-Setter mapped the colony goal into executable phases.\n")
+		b.WriteString(voiceLine("decision", "Scout and Route-Setter mapped the goal into executable phases.") + "\n")
 	}
-	b.WriteString("Goal: ")
-	b.WriteString(stringValue(result["goal"]))
-	b.WriteString("\n")
+	b.WriteString(voiceLine("goal", "Goal: "+stringValue(result["goal"])) + "\n")
 	if granularity := strings.TrimSpace(stringValue(result["granularity"])); granularity != "" {
-		b.WriteString("Granularity: ")
-		b.WriteString(granularity)
+		granularityLine := "Granularity: " + granularity
 		if min, max := intValue(result["granularity_min"]), intValue(result["granularity_max"]); min > 0 && max > 0 {
-			b.WriteString(fmt.Sprintf(" (%d-%d phases)", min, max))
+			granularityLine += fmt.Sprintf(" (%d-%d phases)", min, max)
 		}
-		b.WriteString("\n")
+		b.WriteString(voiceLine("decision", granularityLine) + "\n")
 	}
 	// Depth Selection Banner (per D-01, D-02)
 	if planningDepth := strings.TrimSpace(stringValue(result["planning_depth"])); planningDepth != "" {
@@ -1613,26 +1608,26 @@ func renderPlanVisual(result map[string]interface{}) string {
 		// Planning depth line with full reason
 		if planningSmartDefault && planningPhase.ID > 0 {
 			reason := renderSmartDepthReason(planningPhase, totalPhases)
-			b.WriteString(fmt.Sprintf("Planning depth: %s (%s)\n", planningDepth, reason))
+			b.WriteString(voiceLine("decision", fmt.Sprintf("Planning depth: %s (%s)", planningDepth, reason)) + "\n")
 		} else {
-			b.WriteString(fmt.Sprintf("Planning depth: %s\n", planningDepth))
+			b.WriteString(voiceLine("decision", fmt.Sprintf("Planning depth: %s", planningDepth)) + "\n")
 		}
 
 		// Verification depth line with full reason
 		if verificationDepth != "" {
 			if verificationSmartDefault && planningPhase.ID > 0 {
-				b.WriteString(renderReviewDepthLineWithReason(
+				b.WriteString(voiceLine("decision", strings.TrimSuffix(renderReviewDepthLineWithReason(
 					colony.NormalizeVerificationDepth(verificationDepth),
 					planningPhase.ID, totalPhases, planningPhase, true,
-				))
+				), "\n")) + "\n")
 			} else {
-				b.WriteString(fmt.Sprintf("Verification depth: %s\n", verificationDepth))
+				b.WriteString(voiceLine("decision", fmt.Sprintf("Verification depth: %s", verificationDepth)) + "\n")
 			}
 		}
 
 		// Override hint when either was smart-defaulted
 		if planningSmartDefault || verificationSmartDefault {
-			b.WriteString("Override: --planning-depth <light|standard|deep> --verification-depth <light|standard|heavy>\n")
+			b.WriteString(voiceLine("decision", "Override: --planning-depth <light|standard|deep> --verification-depth <light|standard|heavy>") + "\n")
 		}
 	}
 	// Dual-type: both runCodexPlanWithOptions and runCodexPlanFinalize always
@@ -1641,45 +1636,44 @@ func renderPlanVisual(result map[string]interface{}) string {
 	// (WINDOWS.md entry 5, found by 198-04). Mirrors planning_loop's existing
 	// struct/map switch immediately below.
 	if confidence, ok := result["confidence"].(codexPlanConfidence); ok {
-		b.WriteString(fmt.Sprintf("Confidence: %d%% overall\n", int(confidence.Overall)))
+		b.WriteString(voiceLine("evidence", fmt.Sprintf("Confidence: %d%% overall", int(confidence.Overall))) + "\n")
 	} else if confidence, ok := result["confidence"].(map[string]interface{}); ok {
-		b.WriteString(fmt.Sprintf("Confidence: %d%% overall\n", intValue(confidence["overall"])))
+		b.WriteString(voiceLine("evidence", fmt.Sprintf("Confidence: %d%% overall", intValue(confidence["overall"]))) + "\n")
 	}
 	if planningLoop, ok := result["planning_loop"].(codexPlanningLoop); ok && planningLoop.TargetConfidence > 0 {
-		b.WriteString(fmt.Sprintf("Planning loop: target %d%%, %d/%d iteration(s), stop=%s\n",
+		b.WriteString(voiceLine("evidence", fmt.Sprintf("Planning loop: target %d%%, %d/%d iteration(s), stop=%s",
 			planningLoop.TargetConfidence,
 			planningLoop.Iterations,
 			planningLoop.MaxIterations,
 			planningLoop.StopReason,
-		))
+		)) + "\n")
 	} else if planningLoop, ok := result["planning_loop"].(map[string]interface{}); ok && intValue(planningLoop["target_confidence"]) > 0 {
-		b.WriteString(fmt.Sprintf("Planning loop: target %d%%, %d/%d iteration(s), stop=%s\n",
+		b.WriteString(voiceLine("evidence", fmt.Sprintf("Planning loop: target %d%%, %d/%d iteration(s), stop=%s",
 			intValue(planningLoop["target_confidence"]),
 			intValue(planningLoop["iterations"]),
 			intValue(planningLoop["max_iterations"]),
 			stringValue(planningLoop["stop_reason"]),
-		))
+		)) + "\n")
 	}
 	phases := phaseSliceValue(result["phases"])
-	b.WriteString("Plan size: ")
-	b.WriteString(fmt.Sprintf("%d phases\n\n", len(phases)))
+	b.WriteString(voiceLine("phase", fmt.Sprintf("Plan size: %d phases", len(phases))) + "\n\n")
 	if revision, ok := result["plan_revision"].(colony.PlanRevision); ok && strings.TrimSpace(revision.ID) != "" {
-		b.WriteString(fmt.Sprintf("Plan revision: r%d (%s) - %s\n\n", revision.Number, revision.ReasonType, revision.Reason))
+		b.WriteString(voiceLine("history", fmt.Sprintf("Plan revision: r%d (%s) - %s", revision.Number, revision.ReasonType, revision.Reason)) + "\n\n")
 	} else if revision, ok := result["plan_revision"].(map[string]interface{}); ok && strings.TrimSpace(stringValue(revision["id"])) != "" {
-		b.WriteString(fmt.Sprintf("Plan revision: %s (%s)\n\n", stringValue(revision["id"]), stringValue(revision["reason_type"])))
+		b.WriteString(voiceLine("history", fmt.Sprintf("Plan revision: %s (%s)", stringValue(revision["id"]), stringValue(revision["reason_type"]))) + "\n\n")
 	}
 	if warning := strings.TrimSpace(stringValue(result["clarification_warning"])); warning != "" {
-		b.WriteString("Clarifications\n")
-		b.WriteString(fmt.Sprintf("  - %d unresolved clarification(s)\n", intValue(result["unresolved_clarifications"])))
-		b.WriteString("  - ")
-		b.WriteString(warning)
-		b.WriteString("\n\n")
+		b.WriteString(voiceLine("question", "Clarifications") + "\n")
+		b.WriteString(renderIndentedList(voicedLines("question", []string{
+			fmt.Sprintf("%d unresolved clarification(s)", intValue(result["unresolved_clarifications"])),
+			warning,
+		})))
+		b.WriteString("\n")
 	}
 	if warning := strings.TrimSpace(stringValue(result["planning_warning"])); warning != "" {
-		b.WriteString("Planning Warning\n")
-		b.WriteString("  - ")
-		b.WriteString(warning)
-		b.WriteString("\n\n")
+		b.WriteString(voiceLine("warning", "Planning Warning") + "\n")
+		b.WriteString(renderIndentedList(voicedLines("warning", []string{warning})))
+		b.WriteString("\n")
 	}
 	// WINDOWS.md entry 6 (198-REVIEW.md WR scope): renderResearchFailedWarning's
 	// own doc comment says this warning exists "so the omission is durable
@@ -1688,15 +1682,12 @@ func renderPlanVisual(result map[string]interface{}) string {
 	// the phase-ID list that fed this warning's own text -- named again here,
 	// structurally, rather than only as prose inside the warning string.
 	if warning := strings.TrimSpace(stringValue(result["research_warning"])); warning != "" {
-		b.WriteString("Research Warning\n")
-		b.WriteString("  - ")
-		b.WriteString(warning)
-		b.WriteString("\n")
+		b.WriteString(voiceLine("warning", "Research Warning") + "\n")
+		researchWarningLines := []string{warning}
 		if failedPhases := intSliceValue(result["research_failed_phases"]); len(failedPhases) > 0 {
-			b.WriteString("  - Affected phase(s): ")
-			b.WriteString(joinInts(failedPhases))
-			b.WriteString("\n")
+			researchWarningLines = append(researchWarningLines, "Affected phase(s): "+joinInts(failedPhases))
 		}
+		b.WriteString(renderIndentedList(voicedLines("warning", researchWarningLines)))
 		b.WriteString("\n")
 	}
 	if dispatches, ok := result["dispatches"].([]interface{}); ok && len(dispatches) > 0 {
@@ -1707,11 +1698,10 @@ func renderPlanVisual(result map[string]interface{}) string {
 			dispatchMode = "real"
 		}
 		if dispatchMode != "" {
-			b.WriteString("Dispatch: ")
-			b.WriteString(humanizeDispatchMode(dispatchMode))
-			b.WriteString("\n")
+			b.WriteString(voiceLine("status", "Dispatch: "+humanizeDispatchMode(dispatchMode)) + "\n")
 		}
-		b.WriteString("\nWorkers\n")
+		b.WriteString("\n")
+		b.WriteString(voiceLine("colony", "Workers") + "\n")
 		if hasRealData {
 			b.WriteString(renderPlanningWorkerResults(parsed))
 		} else {
@@ -1735,10 +1725,9 @@ func renderPlanVisual(result map[string]interface{}) string {
 		if !existing {
 			if agentDelegate, _ := result["agent_delegate"].(bool); agentDelegate || strings.TrimSpace(stringValue(result["dispatch_mode"])) == "agent-delegate" {
 				if reason := strings.TrimSpace(stringValue(result["agent_delegate_reason"])); reason != "" {
-					b.WriteString("Agent-Delegate\n")
-					b.WriteString("  - ")
-					b.WriteString(reason)
-					b.WriteString("\n\n")
+					b.WriteString(voiceLine("decision", "Agent-Delegate") + "\n")
+					b.WriteString(renderIndentedList(voicedLines("decision", []string{reason})))
+					b.WriteString("\n")
 				}
 				b.WriteString(renderPlanManifestOnlyNotice())
 				b.WriteString(renderLifecycleClosing(result, "plan"))
@@ -1750,88 +1739,72 @@ func renderPlanVisual(result map[string]interface{}) string {
 		}
 	}
 	if files := stringSliceValue(result["planning_files"]); len(files) > 0 {
-		b.WriteString("Planning Artifacts\n")
-		b.WriteString(renderIndentedList(files))
+		b.WriteString(voiceLine("artifact", "Planning Artifacts") + "\n")
+		b.WriteString(renderIndentedList(voicedLines("artifact", files)))
 		b.WriteString("\n")
 	}
 	if files := stringSliceValue(result["phase_research_files"]); len(files) > 0 {
-		b.WriteString("Phase Research\n")
-		b.WriteString(renderIndentedList(limitStrings(files, 5)))
+		b.WriteString(voiceLine("artifact", "Phase Research") + "\n")
+		researchFileLines := voicedLines("artifact", limitStrings(files, 5))
 		if len(files) > 5 {
-			b.WriteString(fmt.Sprintf("  - ... and %d more phase research files\n", len(files)-5))
+			researchFileLines = append(researchFileLines, voiceLine("artifact", fmt.Sprintf("... and %d more phase research files", len(files)-5)))
 		}
+		b.WriteString(renderIndentedList(researchFileLines))
 		b.WriteString("\n")
 	}
 	if requiresNextIteration {
 		if gaps := stringSliceValue(result["selected_gaps"]); len(gaps) > 0 {
-			b.WriteString("Next Iteration Gaps\n")
-			b.WriteString(renderIndentedList(gaps))
+			b.WriteString(voiceLine("blocked", "Next Iteration Gaps") + "\n")
+			b.WriteString(renderIndentedList(voicedLines("blocked", gaps)))
 			b.WriteString("\n")
 		}
-		b.WriteString("Coordination: ")
-		b.WriteString(displayDataPath("spawn-tree.txt"))
-		b.WriteString("\n\n")
-		b.WriteString("The plan is not finished: another research-and-planning pass is needed before\n")
-		b.WriteString("there is anything to build.\n")
+		b.WriteString(voiceLine("artifact", "Coordination: "+displayDataPath("spawn-tree.txt")) + "\n\n")
+		b.WriteString(voiceLine("blocked", "The plan is not finished: another research-and-planning pass is needed before there is anything to build.") + "\n")
 		b.WriteString(renderLifecycleClosing(result, "plan"))
 		return b.String()
 	}
 
 	for _, phase := range phases {
-		b.WriteString(fmt.Sprintf("Phase %d — %s\n", phase.ID, phase.Name))
+		b.WriteString(voiceLine("phase", fmt.Sprintf("Phase %d — %s", phase.ID, phase.Name)) + "\n")
 		if strings.TrimSpace(phase.Description) != "" {
-			b.WriteString("  ")
-			b.WriteString(strings.TrimSpace(phase.Description))
-			b.WriteString("\n")
+			b.WriteString(voiceLine("phase", "  "+strings.TrimSpace(phase.Description)) + "\n")
 		}
 		for _, task := range phase.Tasks {
 			taskLabel := strings.TrimSpace(ptrStr(task.ID))
 			if taskLabel == "" {
 				taskLabel = task.Goal
 			}
-			b.WriteString(fmt.Sprintf("  Task %s\n", taskLabel))
-			b.WriteString("    Goal: ")
-			b.WriteString(strings.TrimSpace(task.Goal))
-			b.WriteString("\n")
+			b.WriteString(voiceLine("task", fmt.Sprintf("  Task %s", taskLabel)) + "\n")
+			b.WriteString(voiceLine("goal", "    Goal: "+strings.TrimSpace(task.Goal)) + "\n")
 			if len(task.DependsOn) > 0 {
-				b.WriteString("    Depends on: ")
-				b.WriteString(strings.Join(task.DependsOn, ", "))
-				b.WriteString("\n")
+				b.WriteString(voiceLine("history", "    Depends on: "+strings.Join(task.DependsOn, ", ")) + "\n")
 			}
 			if len(task.Constraints) > 0 {
-				b.WriteString("    Constraints:\n")
+				b.WriteString(voiceLine("blocked", "    Constraints:") + "\n")
 				for _, constraint := range task.Constraints {
-					b.WriteString("      - ")
-					b.WriteString(constraint)
-					b.WriteString("\n")
+					b.WriteString(voiceLine("blocked", "      "+constraint) + "\n")
 				}
 			}
 			if len(task.Hints) > 0 {
-				b.WriteString("    Hints:\n")
+				b.WriteString(voiceLine("evidence", "    Hints:") + "\n")
 				for _, hint := range task.Hints {
-					b.WriteString("      - ")
-					b.WriteString(hint)
-					b.WriteString("\n")
+					b.WriteString(voiceLine("evidence", "      "+hint) + "\n")
 				}
 			}
 			if len(task.SuccessCriteria) > 0 {
-				b.WriteString("    Success Criteria:\n")
+				b.WriteString(voiceLine("checkpoint", "    Success Criteria:") + "\n")
 				for _, criterion := range task.SuccessCriteria {
-					b.WriteString("      - ")
-					b.WriteString(criterion)
-					b.WriteString("\n")
+					b.WriteString(voiceLine("checkpoint", "      "+criterion) + "\n")
 				}
 			}
 		}
 		if len(phase.Tasks) == 0 {
-			b.WriteString("  - No explicit tasks captured for this phase.\n")
+			b.WriteString(voiceLine("status", "  No explicit tasks captured for this phase.") + "\n")
 		}
 		if len(phase.SuccessCriteria) > 0 {
-			b.WriteString("  Phase Success Criteria:\n")
+			b.WriteString(voiceLine("checkpoint", "  Phase Success Criteria:") + "\n")
 			for _, criterion := range phase.SuccessCriteria {
-				b.WriteString("    - ")
-				b.WriteString(criterion)
-				b.WriteString("\n")
+				b.WriteString(voiceLine("checkpoint", "    "+criterion) + "\n")
 			}
 		}
 		b.WriteString("\n")
@@ -1841,13 +1814,11 @@ func renderPlanVisual(result map[string]interface{}) string {
 	// the mid-loop path above, where the narrower selected_gaps subset chosen
 	// for the next iteration IS rendered ("Next Iteration Gaps").
 	if gaps := stringSliceValue(result["gaps"]); len(gaps) > 0 {
-		b.WriteString("Unresolved Gaps\n")
-		b.WriteString(renderIndentedList(gaps))
+		b.WriteString(voiceLine("blocked", "Unresolved Gaps") + "\n")
+		b.WriteString(renderIndentedList(voicedLines("blocked", gaps)))
 		b.WriteString("\n")
 	}
-	b.WriteString("Coordination: ")
-	b.WriteString(displayDataPath("spawn-tree.txt"))
-	b.WriteString("\n\n")
+	b.WriteString(voiceLine("artifact", "Coordination: "+displayDataPath("spawn-tree.txt")) + "\n\n")
 
 	b.WriteString(renderLifecycleClosing(result, "plan"))
 	return b.String()

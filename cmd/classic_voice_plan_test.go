@@ -132,6 +132,13 @@ var classicVoicePlanCardNames = []string{
 	"plan-stage", "plan-stop", "plan-acceptance",
 }
 
+// classicVoicePlanAllCardNames is the seven Task-1 primary cards plus the
+// three Task-2 legacy/repair branches -- ten registrations in total, all held
+// to the same reference density.
+var classicVoicePlanAllCardNames = append(append([]string(nil), classicVoicePlanCardNames...),
+	"plan-repair", "plan-existing", "plan-iteration-legacy",
+)
+
 func classicVoicePlanCardRender(t *testing.T, name string) string {
 	t.Helper()
 	for _, screen := range voiceScreenRegistry {
@@ -143,13 +150,13 @@ func classicVoicePlanCardRender(t *testing.T, name string) string {
 	return ""
 }
 
-// TestPlanScreenMeetsTheReferenceDensity asserts each of the seven primary
-// planning cards measures at or above the figure derived from the reference
-// commits, as its own subtest. Task 2 (below, added by a later commit in this
-// same plan) extends the set this test iterates to ten.
+// TestPlanScreenMeetsTheReferenceDensity asserts each of the ten planning
+// registrations (the seven primary cards plus the three legacy/repair
+// branches) measures at or above the figure derived from the reference
+// commits, as its own subtest.
 func TestPlanScreenMeetsTheReferenceDensity(t *testing.T) {
 	reference := classicReferenceDensity(t)
-	for _, name := range classicVoicePlanCardNames {
+	for _, name := range classicVoicePlanAllCardNames {
 		name := name
 		t.Run(name, func(t *testing.T) {
 			rendered := classicVoicePlanCardRender(t, name)
@@ -269,5 +276,78 @@ func TestPlanningCardsFitTheirBandWithSymbols(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Task 2 -- the legacy and repair plan-screen branches in cmd/codex_visuals.go.
+// ---------------------------------------------------------------------------
+
+// classicVoicePlanRepairResultFixture selects renderPlanVisual's repair
+// branch: repair_source present, repairs performed and listed.
+func classicVoicePlanRepairResultFixture() map[string]interface{} {
+	return map[string]interface{}{
+		"repair_source": true, "repaired": true, "phase_plan": "phase-plan.json",
+		"phase_count": 3, "task_count": 12,
+		"repairs": []interface{}{"Phase 2 task 4: corrected dependency reference"},
+	}
+}
+
+// classicVoicePlanExistingResultFixture selects the existing-plan branch: an
+// already-loaded plan, plus the depth-selection block and dispatch table.
+func classicVoicePlanExistingResultFixture() map[string]interface{} {
+	return map[string]interface{}{
+		"existing_plan": true, "goal": "Ship the billing rewrite", "granularity": "standard",
+		"granularity_min": 3, "granularity_max": 6,
+		"planning_depth": "standard", "verification_depth": "standard",
+		"count":  3,
+		"phases": []colony.Phase{{ID: 1, Name: "Render planning truth"}, {ID: 2, Name: "Restore the classic voice"}, {ID: 3, Name: "Ship the milestone"}},
+	}
+}
+
+// classicVoicePlanIterationLegacyResultFixture selects the next-iteration
+// branch: requires_next_iteration true, with selected gaps to research next.
+func classicVoicePlanIterationLegacyResultFixture() map[string]interface{} {
+	return map[string]interface{}{
+		"requires_next_iteration": true, "goal": "Ship the billing rewrite",
+		"phases":        []colony.Phase{{ID: 1, Name: "Render planning truth"}},
+		"selected_gaps": []interface{}{"GAP-04: dependency ownership unverified"},
+	}
+}
+
+func init() {
+	registerVoiceScreen("plan-repair", func(t *testing.T) string {
+		t.Helper()
+		return renderPlanVisual(classicVoicePlanRepairResultFixture())
+	})
+	registerVoiceScreen("plan-existing", func(t *testing.T) string {
+		t.Helper()
+		return renderPlanVisual(classicVoicePlanExistingResultFixture())
+	})
+	registerVoiceScreen("plan-iteration-legacy", func(t *testing.T) string {
+		t.Helper()
+		return renderPlanVisual(classicVoicePlanIterationLegacyResultFixture())
+	})
+}
+
+// TestPlanVisualStillDelegatesToThePrimaryCard passes a result the primary
+// renderer accepts (renderCanonicalPlanningResult returns ok=true) and
+// asserts renderPlanVisual's output is exactly what the primary renderer
+// returns for the same input -- proving the fallback work in this file
+// cannot accidentally shadow the primary path renderPlanVisual delegates to
+// first.
+func TestPlanVisualStillDelegatesToThePrimaryCard(t *testing.T) {
+	review := planningVisualCandidateFixture()
+	result := map[string]interface{}{
+		"operation": string(planCandidateOperationReview),
+		"candidate": review.Candidate,
+	}
+	want, ok := renderCanonicalPlanningResult(result, planningVisualOptions{Width: lifecycleStatusOutputWidth()})
+	if !ok {
+		t.Fatalf("renderCanonicalPlanningResult did not accept a result its own operation names")
+	}
+	got := renderPlanVisual(result)
+	if got != want {
+		t.Fatalf("renderPlanVisual diverged from the primary renderer's own output for the same input:\nwant:\n%s\ngot:\n%s", want, got)
 	}
 }
