@@ -376,7 +376,7 @@ func pauseColonyAt(now time.Time) (pauseResumeLifecycleOutcome, error) {
 		id := session.SessionID
 		state.SessionID = &id
 	}
-	state.Events = append(state.Events, pauseResumeLifecycleEvent(now, "pause", handoffID, safeBoundary))
+	state.Events = append(state.Events, pauseResumeLifecycleEvent(now, "pause", pauseBoundarySentence(safeBoundary)))
 
 	session.LastCommand = "pause"
 	session.LastCommandAt = pausedAt
@@ -633,7 +633,7 @@ func resumeColonyAt(now time.Time) (pauseResumeLifecycleOutcome, error) {
 	state.RunID = &newRunID
 	state.PauseHandoff = reference
 	state.RecoveryProvenance = &provenance
-	state.Events = append(state.Events, pauseResumeLifecycleEvent(now, "resume", handoff.HandoffID, string(provenance)))
+	state.Events = append(state.Events, pauseResumeLifecycleEvent(now, "resume", resumeProvenanceSentence(provenance)))
 
 	resumedAt := now.UTC().Format(time.RFC3339)
 	session.LastCommand = "resume"
@@ -1015,6 +1015,65 @@ func loadRelevantBuildAttemptReadOnly(state colony.ColonyState) (string, buildAt
 		}
 	}
 	return selectedRel, selected, found
+}
+
+// lifecycleEventSentence is the message field of a stored lifecycle event
+// (`timestamp|event_type|source|message`, per nextActionEventSentence's own
+// documented contract in cmd/next_action.go). That field is what an owner
+// reads on the what-next card, and nextActionEventSentence trusts -- by
+// design, not by accident -- that it is already a finished sentence rather
+// than a raw internal token. This named type exists so a plain string
+// variable or a typed enum value can never be assigned into that field
+// directly: only pauseBoundarySentence and resumeProvenanceSentence, the two
+// constructors below, may produce a lifecycleEventSentence value.
+// TestLifecycleEventSentenceTypeCannotBeBypassed (cmd/classic_voice_event_test.go)
+// refuses any other conversion into this type anywhere in this package.
+type lifecycleEventSentence string
+
+// pauseBoundarySentence turns one of pauseSafeBoundary's seven internal
+// boundary values into a sentence an owner can read, describing what the
+// pause stopped at in ordinary words. It never echoes the raw boundary
+// value, including for a boundary this project does not yet name.
+func pauseBoundarySentence(boundary string) lifecycleEventSentence {
+	switch boundary {
+	case "worker_completion_boundary":
+		return lifecycleEventSentence("A helper had just finished its work when this was paused.")
+	case "interrupted_attempt_boundary":
+		return lifecycleEventSentence("Work was interrupted partway through, and the in-progress attempt was preserved.")
+	case "interrupted_execution_boundary":
+		return lifecycleEventSentence("Work was interrupted partway through building this phase.")
+	case "post_build_verification_boundary":
+		return lifecycleEventSentence("The phase was built and is waiting to be checked.")
+	case "completed_episode_boundary":
+		return lifecycleEventSentence("The phase had just finished when this was paused.")
+	case "idle_command_boundary":
+		return lifecycleEventSentence("Nothing was running when this was paused.")
+	case "between_commands_boundary":
+		return lifecycleEventSentence("This was paused between one command finishing and the next.")
+	default:
+		return lifecycleEventSentence("This was paused at a point this project cannot describe more precisely.")
+	}
+}
+
+// resumeProvenanceSentence turns one of the four declared colony.RecoveryProvenance
+// values into a sentence an owner can read, keeping the distinction the type
+// exists to carry: a verified recovery point, a rebuilt one, one where the
+// evidence disagreed, and one where the evidence could not be read. It never
+// echoes the raw provenance value, including for a value this project does
+// not yet name.
+func resumeProvenanceSentence(provenance colony.RecoveryProvenance) lifecycleEventSentence {
+	switch provenance {
+	case colony.RecoveryProvenanceConfirmed:
+		return lifecycleEventSentence("Resumed from a verified recovery point.")
+	case colony.RecoveryProvenanceReconstructed:
+		return lifecycleEventSentence("Resumed from a recovery point rebuilt from saved evidence.")
+	case colony.RecoveryProvenanceConflicting:
+		return lifecycleEventSentence("Resume found evidence that disagreed with itself and stopped rather than guess.")
+	case colony.RecoveryProvenanceUnknown:
+		return lifecycleEventSentence("Resume could not read enough evidence to confirm a recovery point.")
+	default:
+		return lifecycleEventSentence("This was resumed at a point this project cannot describe more precisely.")
+	}
 }
 
 func pauseSafeBoundary(state colony.ColonyState) (boundary, attemptID string, pending bool) {
@@ -1459,8 +1518,17 @@ func pauseResumeSessionIsStale(session colony.SessionFile, now time.Time, expect
 	return strings.TrimSpace(session.BaselineCommit) != "" && strings.TrimSpace(expectedHead) != "" && strings.TrimSpace(session.BaselineCommit) != strings.TrimSpace(expectedHead)
 }
 
-func pauseResumeLifecycleEvent(now time.Time, command, handoffID, detail string) string {
-	return fmt.Sprintf("%s|lifecycle_%s|%s|handoff=%s %s", now.UTC().Format(time.RFC3339), command, command, handoffID, detail)
+// pauseResumeLifecycleEvent builds the stored four-field lifecycle event
+// (`timestamp|event_type|source|message`) that nextActionEventSentence
+// (cmd/next_action.go) reads. sentence is REQUIRED to already be a finished,
+// owner-readable sentence -- the lifecycleEventSentence type refuses any
+// other value at compile time -- so no internal identifier or raw
+// enumeration value can reach this record's last field. The handoff
+// identifier is deliberately not part of this record: it is already durably
+// recorded on colony state as the pause-handoff reference
+// (colony.PauseHandoffReference), which is where recovery reads it.
+func pauseResumeLifecycleEvent(now time.Time, command string, sentence lifecycleEventSentence) string {
+	return fmt.Sprintf("%s|lifecycle_%s|%s|%s", now.UTC().Format(time.RFC3339), command, command, sentence)
 }
 
 func buildTransactionalHandoffDocument(now time.Time, state colony.ColonyState, session colony.SessionFile, handoff colony.PauseHandoff) string {
