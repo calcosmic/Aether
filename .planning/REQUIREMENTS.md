@@ -130,9 +130,9 @@ For dummies: keep the reliable modern engine and brakes, then restore the dashbo
 | Phase 200 — Iterative Planning | SYNTH-02, CEC-03, PLAN-01..06 | 8 |
 | Phase 201 — Queen-Led Work Cycle | SYNTH-03, CEC-06, WORK-01..08 | 10 |
 | Phase 202 — Swarm, Oracle, and Live Colony | SYNTH-04, CEC-05, LIVE-01..07 | 9 |
+| Phase 202.1 — Classic Visual Voice | CEC-09 | 1 |
 | Phase 203 — Biological Runtime | SYNTH-05, CEC-07, BIO-01..08 | 10 |
 | Phase 204 — Learning Governor | SYNTH-06, LEARN-01..08 | 9 |
-| Phase 204.1 — Classic Visual Voice | CEC-09 | 1 |
 | Phase 205 — Owner Acceptance and Restoration Seal | SYNTH-07, PROOF-02..06 | 6 |
 | **Total** | **65 requirements mapped exactly once** | **65** |
 

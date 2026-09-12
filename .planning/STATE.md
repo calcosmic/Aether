@@ -2,20 +2,20 @@
 gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
-current_phase: 203
-current_phase_name: Biological Runtime
+current_phase: 202.1
+current_phase_name: Classic Visual Voice
 status: ready_to_execute
-stopped_at: Phase 203 planned and verified (15 plans, 8 waves) — ready to execute
-last_updated: "2026-09-12T13:27:43.275Z"
+stopped_at: Phase 202.1 planned and verified (7 plans, 4 waves); owner ratified the voice standard — ready to execute
+last_updated: "2026-09-12T15:56:27.469Z"
 last_activity: 2026-09-12
-last_activity_desc: Phase 203 planned -- 15 plans across 8 waves, plan-checker passed on iteration 2, requirements 10/10 and decisions 12/12 covered
-state_head: 438b2bbe840852d960cadba901f759afacd34142
+last_activity_desc: Phase 202.1 planned -- 7 plans across 4 waves, plan-checker passed first pass; owner ratified one house-wide voice standard and the symbol vocabulary. Also shipped v1.0.71: five CosmicDashboard planning defects fixed and verified live
+state_head: 80da5018151456c5f0b871248b0efec580456e84
 progress:
-  total_phases: 7
+  total_phases: 8
   completed_phases: 2
-  total_plans: 141
+  total_plans: 148
   completed_plans: 125
-  percent: 29
+  percent: 25
 ---
 
 # Project State
@@ -25,17 +25,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-07)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 203 — Biological Runtime
+**Current focus:** Phase 202.1 — Classic Visual Voice
 **Previous milestone:** v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02 (48/48 requirements; audit `tech_debt`, no blockers)
 **Product version:** v1.0.66 (installed and source binaries agree in the 2026-09-02 local check)
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
 
 ## Current Position
 
-Phase: 203 (Biological Runtime) — READY TO EXECUTE
+Phase: 202.1 (Classic Visual Voice) — READY TO EXECUTE
 Next phase: 203 (Biological Runtime)
-Status: Phase 203 planned — run /gsd-execute-phase 203 next
-Last activity: 2026-09-12 — Planned Phase 203 (15 plans, 8 waves); checker passed after one revision; coverage gates green
+Status: Phase 202.1 planned — run /gsd-execute-phase 202.1 next
+Last activity: 2026-09-12 — Planned Phase 202.1 (7 plans, 4 waves); checker passed first pass; owner ratified the voice standard; Aether v1.0.71 published
 
 ## Performance Metrics
 
