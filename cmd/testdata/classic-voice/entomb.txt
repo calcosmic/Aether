@@ -1,0 +1,12 @@
+   E N T O M B   C O L O N Y
+══════════════════════════════════════════════════ 🏺
+
+Goal: {goal}
+Phases: {completed}/{total} completed
+Milestone: {milestone}
+
+Archive will include:
+  - COLONY_STATE.json
+  - manifest.json (pheromone trails)
+
+This will reset the active colony. Continue? (yes/no)

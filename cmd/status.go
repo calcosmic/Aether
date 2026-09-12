@@ -1821,7 +1821,6 @@ func renderPheromoneSummary(b *strings.Builder, s *storage.Store) {
 
 	// Classic house style: one emoji-prefixed line per signal, grouped by
 	// priority order — not a bordered machine table.
-	emojiFor := map[string]string{"FOCUS": "🎯", "REDIRECT": "🚫", "FEEDBACK": "💬"}
 	for _, row := range rows {
 		signal := row.Signal
 		if signal == "" {
@@ -1830,10 +1829,7 @@ func renderPheromoneSummary(b *strings.Builder, s *storage.Store) {
 		if len(signal) > 60 {
 			signal = signal[:57] + "..."
 		}
-		emoji := emojiFor[row.Type]
-		if emoji == "" {
-			emoji = "🐜"
-		}
+		emoji := signalTypeGlyph(row.Type)
 		fmt.Fprintf(b, "   %s [%d%%] %q — %s\n", emoji, int(math.Round(row.Strength*100)), signal, row.Life)
 	}
 	b.WriteString("   Strength fades over time; run `aether pheromone-display` for the full view.\n")
