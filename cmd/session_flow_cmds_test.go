@@ -1407,3 +1407,44 @@ func TestDetectStaleFocusSignals_PastPhaseFlagged(t *testing.T) {
 		t.Errorf("expected CurrentPhase 3, got %d", stale[0].CurrentPhase)
 	}
 }
+
+// TestStalePauseRefusalNamesTheWayOut pins a real dead end. A worker ran
+// `aether pause` mid-build (its own Stop hook told it to), the runtime kept
+// writing afterwards, and every later `aether resume` refused because the
+// handoff no longer described reality. The refusal told the owner to "resolve
+// the named transaction evidence" via `aether status` -- which names no such
+// evidence -- and no documented command could retire the handoff. The colony
+// was stuck with no supported way out until the escape was found by
+// experiment. Every refusal that fires because a NAMED handoff went stale must
+// name the command that retires it.
+func TestStalePauseRefusalNamesTheWayOut(t *testing.T) {
+	source, err := os.ReadFile("session_flow_cmds.go")
+	if err != nil {
+		t.Fatalf("read session flow source: %v", err)
+	}
+	text := string(source)
+
+	staleRefusals := []string{
+		"the pause transaction receipt does not validate",
+		"repository HEAD or working bytes changed after the handoff",
+		"state names a handoff but session does not",
+		"state and session name different handoff evidence",
+	}
+	const escape = "aether state-mutate --field pause_handoff --value null"
+
+	for _, refusal := range staleRefusals {
+		idx := strings.Index(text, refusal)
+		if idx < 0 {
+			t.Errorf("refusal %q no longer exists; if it was renamed, re-point this test at its replacement", refusal)
+			continue
+		}
+		end := strings.Index(text[idx:], "\n")
+		if end < 0 {
+			end = len(text) - idx
+		}
+		line := text[idx : idx+end]
+		if !strings.Contains(line, escape) {
+			t.Errorf("refusal %q dead-ends: it does not name %q, so an owner has no supported way to retire a stale handoff.\nline: %s", refusal, escape, line)
+		}
+	}
+}

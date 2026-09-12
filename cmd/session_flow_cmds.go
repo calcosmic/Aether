@@ -486,10 +486,10 @@ func resumeColonyAt(now time.Time) (pauseResumeLifecycleOutcome, error) {
 	reconstructed := false
 	if state.PauseHandoff != nil {
 		if facts.Session.Source.Provenance != LifecycleFactConfirmed || session.PauseHandoff == nil {
-			return pauseResumeConflictOutcome("Recovery evidence conflicts: state names a handoff but session does not. Run `aether status`, decide whether state or session evidence is authoritative, then run `aether resume`."), nil
+			return pauseResumeConflictOutcome("Recovery evidence conflicts: state names a handoff but session does not. Run `aether status`, decide whether state or session evidence is authoritative. If the handoff is genuinely stale because the runtime kept writing after the pause, retire it with `aether state-mutate --field pause_handoff --value null`, then `aether resume` will reconstruct a recovery point and label its provenance reconstructed."), nil
 		}
 		if !pauseHandoffReferencesEqual(*state.PauseHandoff, *session.PauseHandoff) {
-			return pauseResumeConflictOutcome("Recovery evidence conflicts: state and session name different handoff evidence. Run `aether status`, decide which handoff is authoritative, then run `aether resume`."), nil
+			return pauseResumeConflictOutcome("Recovery evidence conflicts: state and session name different handoff evidence. Run `aether status`, decide which handoff is authoritative. If the handoff is genuinely stale because the runtime kept writing after the pause, retire it with `aether state-mutate --field pause_handoff --value null`, then `aether resume` will reconstruct a recovery point and label its provenance reconstructed."), nil
 		}
 		handoff, err = loadValidatedPauseHandoff(*state.PauseHandoff)
 		if err != nil {
@@ -497,14 +497,14 @@ func resumeColonyAt(now time.Time) (pauseResumeLifecycleOutcome, error) {
 		}
 		pauseReceipt, receiptErr := resumeLifecycleTransaction(pauseResumeTransactionConfig(handoff.Transaction.ID, "pause"))
 		if receiptErr != nil || handoff.Receipt == nil || pauseReceipt.ReceiptID != handoff.Receipt.ID {
-			return pauseResumeConflictOutcome("Recovery evidence conflicts: the pause transaction receipt does not validate against state, session, and handoff bytes. Run `aether status` and resolve the named transaction evidence before resuming."), nil
+			return pauseResumeConflictOutcome("Recovery evidence conflicts: the pause transaction receipt does not validate against state, session, and handoff bytes. Run `aether status` to inspect what changed. If the handoff is genuinely stale because the runtime kept writing after the pause, retire it with `aether state-mutate --field pause_handoff --value null`, then `aether resume` will reconstruct a recovery point and label its provenance reconstructed."), nil
 		}
 		currentRepository, repoErr := pauseRepositoryEvidence(root)
 		if repoErr != nil {
 			return pauseResumeUnknownOutcome(fmt.Sprintf("Recovery evidence is unknown: repository evidence could not be read (%v). Run `aether status` and retry when repository evidence is available.", repoErr)), nil
 		}
 		if currentRepository.Head != handoff.Repository.Head || currentRepository.DirtyDigest != handoff.Repository.DirtyDigest {
-			return pauseResumeConflictOutcome("Recovery evidence conflicts: repository HEAD or working bytes changed after the handoff. Run `aether status`, decide whether to keep those changes, then create or select an honest recovery point before `aether resume`."), nil
+			return pauseResumeConflictOutcome("Recovery evidence conflicts: repository HEAD or working bytes changed after the handoff. Run `aether status`, decide whether to keep those changes. If the handoff is genuinely stale because the runtime kept writing after the pause, retire it with `aether state-mutate --field pause_handoff --value null`, then `aether resume` will reconstruct a recovery point and label its provenance reconstructed."), nil
 		}
 		if !reflectPauseWorktreesEqual(handoff.Worktrees, pauseWorktreeEvidence(root, state.Worktrees)) {
 			return pauseResumeConflictOutcome("Recovery evidence conflicts: worktree evidence changed after the handoff. Run `aether status`, inspect the named worktrees, and choose which work is authoritative before resuming."), nil
