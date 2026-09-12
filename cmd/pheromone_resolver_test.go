@@ -2,7 +2,13 @@ package cmd
 
 import (
 	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"io/fs"
 	"math"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -297,6 +303,84 @@ func TestImportedNoteIsQuarantinedAndExcludedFromWorkerBrief(t *testing.T) {
 
 func boolPtr(b bool) *bool { return &b }
 
+// TestPheromoneProvenanceRegistryIsComplete parses pkg/colony/pheromones.go
+// directly and proves every declared PheromoneProvenance* constant (other
+// than the read-time-only Unknown sentinel) is returned by
+// colony.PheromoneProvenances(), and vice versa. Adding a sixth provenance
+// constant without extending the accessor fails this test by name.
+func TestPheromoneProvenanceRegistryIsComplete(t *testing.T) {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "../pkg/colony/pheromones.go", nil, 0)
+	if err != nil {
+		t.Fatalf("parse pkg/colony/pheromones.go: %v", err)
+	}
+
+	declared := map[string]string{}
+	for _, decl := range file.Decls {
+		gen, ok := decl.(*ast.GenDecl)
+		if !ok || gen.Tok != token.CONST {
+			continue
+		}
+		for _, spec := range gen.Specs {
+			vs, ok := spec.(*ast.ValueSpec)
+			if !ok {
+				continue
+			}
+			for i, name := range vs.Names {
+				if !strings.HasPrefix(name.Name, "PheromoneProvenance") {
+					continue
+				}
+				if i >= len(vs.Values) {
+					continue
+				}
+				lit, ok := vs.Values[i].(*ast.BasicLit)
+				if !ok || lit.Kind != token.STRING {
+					continue
+				}
+				value, err := strconv.Unquote(lit.Value)
+				if err != nil {
+					continue
+				}
+				declared[name.Name] = value
+			}
+		}
+	}
+
+	if len(declared) == 0 {
+		t.Fatal("expected at least one PheromoneProvenance* constant in pkg/colony/pheromones.go")
+	}
+
+	accessorValues := map[string]bool{}
+	for _, v := range colony.PheromoneProvenances() {
+		accessorValues[v] = true
+	}
+
+	for name, value := range declared {
+		if name == "PheromoneProvenanceUnknown" {
+			if accessorValues[value] {
+				t.Errorf("%s (%q) is the legacy read-time fallback and must stay OUT of PheromoneProvenances()", name, value)
+			}
+			continue
+		}
+		if !accessorValues[value] {
+			t.Errorf("declared constant %s (%q) is missing from colony.PheromoneProvenances() -- a new provenance value must be added to the accessor", name, value)
+		}
+	}
+
+	for _, value := range colony.PheromoneProvenances() {
+		found := false
+		for name, v := range declared {
+			if v == value && name != "PheromoneProvenanceUnknown" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("colony.PheromoneProvenances() returns %q which is not a declared PheromoneProvenance* constant", value)
+		}
+	}
+}
+
 func TestWritePheromoneSignalStampsProvenanceAndQuarantinesImports(t *testing.T) {
 	saveGlobalsCmd(t)
 	s, tmpDir := newTestStoreCmd(t)
@@ -331,5 +415,105 @@ func TestWritePheromoneSignalStampsProvenanceAndQuarantinesImports(t *testing.T)
 	}
 	if imported.Quarantined == nil || !*imported.Quarantined {
 		t.Error("expected an import-provenance note to be quarantined")
+	}
+}
+
+// parseCmdPackageFuncs walks every non-test .go source file in the cmd
+// package directory and returns a map of top-level function name to its
+// *ast.FuncDecl. Shared by the AST-based singleness/governance guards.
+func parseCmdPackageFuncs(t *testing.T) map[string]*ast.FuncDecl {
+	t.Helper()
+	fset := token.NewFileSet()
+	pkgs, err := parser.ParseDir(fset, ".", func(fi fs.FileInfo) bool {
+		return !strings.HasSuffix(fi.Name(), "_test.go")
+	}, 0)
+	if err != nil {
+		t.Fatalf("parse cmd package: %v", err)
+	}
+
+	funcs := map[string]*ast.FuncDecl{}
+	for _, pkg := range pkgs {
+		for _, file := range pkg.Files {
+			for _, decl := range file.Decls {
+				fn, ok := decl.(*ast.FuncDecl)
+				if !ok || fn.Name == nil || fn.Body == nil || fn.Recv != nil {
+					continue
+				}
+				funcs[fn.Name.Name] = fn
+			}
+		}
+	}
+	return funcs
+}
+
+// looksLikePheromoneSignalReceiver is a narrow, name-based heuristic
+// distinguishing colony.PheromoneSignal's Quarantined field from an
+// unrelated Quarantined field on a different struct (e.g. the hive wisdom
+// entry in cmd/hive.go, which uses receiver name "entry"/"stored"/
+// "existing", never "sig"/"signal"). Pure AST inspection cannot type-check,
+// so this test intentionally trades perfect precision for staying scoped
+// to the field this plan actually governs.
+func looksLikePheromoneSignalReceiver(name string) bool {
+	lower := strings.ToLower(name)
+	return strings.Contains(lower, "sig")
+}
+
+func assignsQuarantinedField(fn *ast.FuncDecl) bool {
+	found := false
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		switch node := n.(type) {
+		case *ast.AssignStmt:
+			for _, lhs := range node.Lhs {
+				sel, ok := lhs.(*ast.SelectorExpr)
+				if !ok || sel.Sel == nil || sel.Sel.Name != "Quarantined" {
+					continue
+				}
+				if ident, ok := sel.X.(*ast.Ident); ok && looksLikePheromoneSignalReceiver(ident.Name) {
+					found = true
+				}
+			}
+		case *ast.CompositeLit:
+			selType, ok := node.Type.(*ast.SelectorExpr)
+			if !ok || selType.Sel == nil || selType.Sel.Name != "PheromoneSignal" {
+				return true
+			}
+			for _, elt := range node.Elts {
+				kv, ok := elt.(*ast.KeyValueExpr)
+				if !ok {
+					continue
+				}
+				if ident, ok := kv.Key.(*ast.Ident); ok && ident.Name == "Quarantined" {
+					found = true
+				}
+			}
+		}
+		return true
+	})
+	return found
+}
+
+// TestNoUngovernedQuarantineClear asserts that no function outside the
+// declared writer touches colony.PheromoneSignal.Quarantined at all. Since
+// no owner-facing release path exists yet in this codebase, the correct
+// state is that nothing sets or clears it except writePheromoneSignal
+// (which only ever sets it true, for an imported note) -- a future release
+// path must be added here deliberately, which is the review point D-10's
+// "only the owner can release" rule depends on.
+func TestNoUngovernedQuarantineClear(t *testing.T) {
+	allowed := map[string]bool{
+		"writePheromoneSignal": true,
+	}
+	funcs := parseCmdPackageFuncs(t)
+	var offenders []string
+	for name, fn := range funcs {
+		if allowed[name] {
+			continue
+		}
+		if assignsQuarantinedField(fn) {
+			offenders = append(offenders, name)
+		}
+	}
+	if len(offenders) > 0 {
+		t.Fatalf("found a function assigning PheromoneSignal.Quarantined outside the declared writer: %v -- clearing or setting quarantine must go through an explicit, owner-gated release path", offenders)
 	}
 }

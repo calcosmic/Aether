@@ -156,20 +156,21 @@ func pheromoneSignalMalformed(sig colony.PheromoneSignal) (bool, string) {
 }
 
 // pheromoneSignalQuarantined reports whether a signal is currently
-// quarantined. colony.PheromoneSignal has no Quarantined field yet -- this
-// stub always reports false until the field is added (BIO-07 provenance
-// task), at which point this body is extended to read it. No signal can be
-// quarantined before that field exists, so "never quarantined" is the
-// correct, honest answer today rather than a placeholder guess.
+// quarantined. A legacy signal with no Quarantined field (nil) reads as not
+// quarantined, so existing colonies keep working. Nothing in this file ever
+// clears a true Quarantined flag -- only an explicit, owner-gated release
+// path may (TestNoUngovernedQuarantineClear).
 func pheromoneSignalQuarantined(sig colony.PheromoneSignal) bool {
-	return false
+	return sig.Quarantined != nil && *sig.Quarantined
 }
 
-// pheromoneSignalProvenance reports the origin of a signal.
-// colony.PheromoneSignal has no Provenance field yet -- this stub always
-// reports empty until the field is added (BIO-07 provenance task), at which
-// point this body is extended to read it and fall back to
-// colony.PheromoneProvenanceUnknown for a legacy signal with no value.
+// pheromoneSignalProvenance reports the origin of a signal. A legacy signal
+// stored before this field existed (nil, or an explicitly empty string)
+// reads as colony.PheromoneProvenanceUnknown rather than being defaulted
+// into a specific category it never recorded.
 func pheromoneSignalProvenance(sig colony.PheromoneSignal) string {
-	return ""
+	if sig.Provenance == nil || *sig.Provenance == "" {
+		return colony.PheromoneProvenanceUnknown
+	}
+	return *sig.Provenance
 }
