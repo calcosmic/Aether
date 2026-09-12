@@ -534,7 +534,7 @@ Plans:
 
 For dummies: the colony went quiet-looking. The information is right, but the personality drained out of the screens between February and now. This phase puts it back on the screens you actually read, and adds a check that fails if it ever drains away again.
 
-**Plans:** 1/7 plans executed
+**Plans:** 5/7 plans executed
 
 Plans:
 **Wave 1**
@@ -543,10 +543,10 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 202.1-02-PLAN.md — The status card, full and compact, plus history that reads as sentences
-- [ ] 202.1-03-PLAN.md — The discussion and specification cards
-- [ ] 202.1-04-PLAN.md — Build, continue and seal section prose
-- [ ] 202.1-05-PLAN.md — The identifier leak closed at the writer, and the class closed with it
+- [x] 202.1-02-PLAN.md — The status card, full and compact, plus history that reads as sentences
+- [x] 202.1-03-PLAN.md — The discussion and specification cards
+- [x] 202.1-04-PLAN.md — Build, continue and seal section prose
+- [x] 202.1-05-PLAN.md — The identifier leak closed at the writer, and the class closed with it
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
