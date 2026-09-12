@@ -3219,6 +3219,9 @@ func validatePlanningRouteStageResultWithSession(root string, session *planningM
 	}
 	// Rehearse acceptance here rather than inside validatePlanProposalContract,
 	// which also rebuilds prior passes that a Route-Setter can no longer repair.
+	if err := validateProposalLinkSpelling(result.Proposal.Phases); err != nil {
+		return empty, fmt.Errorf("Route-Setter proposal contract: %w", err)
+	}
 	if err := planningRouteAcceptanceRehearsal(colonyState.Plan, colonyState.Specification, result.Proposal); err != nil {
 		return empty, fmt.Errorf("Route-Setter proposal would be refused when the owner accepts it: %w", err)
 	}
@@ -4758,8 +4761,40 @@ func planningRouteCandidateProposalInput(plan colony.Plan, input []colony.Phase)
 	return result, prefix, nil
 }
 
+// planningRouteRenumberPhases renumbers a Route proposal's tasks to phase.task
+// by position -- the IDs build and acceptance use -- after first rewriting every
+// dependency that names a task by its proposal-time ID through the same
+// old-to-new mapping. renumberRevisionPhases alone shifts only dependencies that
+// already look numeric, which left a Route-Setter's own task names (P1-T1)
+// pointing at nothing and silently re-pointed a plan numbered from phase 2; the
+// owner could then approve a plan acceptance refused. Dependencies that name a
+// task by its semantic ID are left alone: they resolve by that ID.
+func planningRouteRenumberPhases(input []colony.Phase) []colony.Phase {
+	phases := clonePhases(input)
+	renamed := make(map[string]string)
+	for phaseIndex := range phases {
+		for taskIndex := range phases[phaseIndex].Tasks {
+			if old := canonicalPlanningText(ptrStr(phases[phaseIndex].Tasks[taskIndex].ID)); old != "" {
+				renamed[old] = fmt.Sprintf("%d.%d", phaseIndex+1, taskIndex+1)
+			}
+		}
+	}
+	for phaseIndex := range phases {
+		for taskIndex := range phases[phaseIndex].Tasks {
+			task := &phases[phaseIndex].Tasks[taskIndex]
+			task.DependsOn = append([]string(nil), task.DependsOn...)
+			for dependencyIndex, dependency := range task.DependsOn {
+				if target, ok := renamed[canonicalPlanningText(dependency)]; ok {
+					task.DependsOn[dependencyIndex] = target
+				}
+			}
+		}
+	}
+	return renumberRevisionPhases(phases, 0)
+}
+
 func planningRouteCandidatePhases(input []colony.Phase, preservedPrefix int, candidateID, candidateHash string, specification planningStageSpecificationBinding, timeline colony.PlanningTimelineBinding, delta colony.PlanningSemanticDelta) []colony.Phase {
-	phases := renumberRevisionPhases(input, 0)
+	phases := planningRouteRenumberPhases(input)
 	if preservedPrefix > 0 && preservedPrefix < len(phases) {
 		phases[preservedPrefix].Status = colony.PhaseReady
 	}

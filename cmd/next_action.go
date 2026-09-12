@@ -547,6 +547,18 @@ func lifecycleAuthorityNextAction(facts LifecycleFacts, evidence []colony.Lifecy
 		), lifecycleInspectionChoices(), colony.OutcomeKindNoChange, true
 	}
 
+	if len(planning.WaitingCandidateIDs) > 1 {
+		// A planning restart leaves the earlier plan waiting beside the new
+		// one. The review names each and how to review it by name; no
+		// acceptance is offered here, because choosing is the owner's.
+		return lifecycleActionFromCandidate(
+			"review_plan_candidate",
+			candidatePlanCandidate,
+			fmt.Sprintf("%d plans are waiting for review. The review names each one and how to review it by name; neither becomes active until you accept one.", len(planning.WaitingCandidateIDs)),
+			evidence,
+		), lifecycleInspectionChoices(), colony.OutcomeKindNoChange, true
+	}
+
 	switch planning.PendingCandidateStanding {
 	case planCandidateStandingStale, planCandidateStandingExpired:
 		recovery := strings.TrimSpace(planning.PendingCandidateRecoveryCommand)

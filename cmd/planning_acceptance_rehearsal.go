@@ -34,7 +34,7 @@ func rehearsePlanningRouteAcceptance(plan colony.Plan, specification *colony.Spe
 	if err != nil {
 		return err
 	}
-	phases := renumberRevisionPhases(input, 0)
+	phases := planningRouteRenumberPhases(input)
 	requirements, acceptance, negative, recovery, publicPaths := planningRouteProposalProofLinks(phases)
 	if err := validatePlanWideProofLinks("active revision", requirements, acceptance, negative, recovery, publicPaths, current); err != nil {
 		return err
@@ -70,6 +70,37 @@ func rehearsePlanningRouteAcceptance(plan colony.Plan, specification *colony.Spe
 		Specification: &spec,
 	}); err != nil {
 		return fmt.Errorf("derive proposal semantics: %w", err)
+	}
+	return nil
+}
+
+// validateProposalLinkSpelling refuses a proof-link ID sent with stray
+// whitespace. Drafting trims IDs before resolving them, but the candidate
+// stores them as sent and acceptance compares them exactly, so a padded ID
+// would reach the owner as a plan acceptance refuses. Like the rehearsal it
+// judges fresh submissions only; a prior pass cannot be repaired.
+func validateProposalLinkSpelling(phases []colony.Phase) error {
+	check := func(path string, links map[string][]string) error {
+		for _, kind := range planningProofLinkKinds() {
+			for index, raw := range links[kind] {
+				if canonicalPlanningText(raw) != raw {
+					return fmt.Errorf("%s.%s[%d] %q must be copied exactly as the approved specification spells it, without extra spaces", path, planningProofField(kind), index, raw)
+				}
+			}
+		}
+		return nil
+	}
+	for phaseIndex, phase := range phases {
+		path := fmt.Sprintf("phases[%d]", phaseIndex)
+		if err := check(path, planningProofLinkSets(phase.RequirementProofLinks, phase.AcceptanceProofLinks, phase.NegativeProofLinks, phase.RecoveryProofLinks, phase.PublicPathProofLinks)); err != nil {
+			return err
+		}
+		for taskIndex, task := range phase.Tasks {
+			taskPath := fmt.Sprintf("%s.tasks[%d]", path, taskIndex)
+			if err := check(taskPath, planningProofLinkSets(task.RequirementProofLinks, task.AcceptanceProofLinks, task.NegativeProofLinks, task.RecoveryProofLinks, task.PublicPathProofLinks)); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

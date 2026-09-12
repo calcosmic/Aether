@@ -320,11 +320,26 @@ func ambiguousPlanCandidatesError(matches []planCandidateArtifact) error {
 		return matches[i].Candidate.ID < matches[j].Candidate.ID
 	})
 	choices := make([]string, len(matches))
+	ids := make([]string, len(matches))
 	for i, match := range matches {
+		ids[i] = match.Candidate.ID
 		choices[i] = fmt.Sprintf("%s (planned %s): `%s`", match.Candidate.ID, match.Candidate.CreatedAt.UTC().Format("2006-01-02 15:04 UTC"), planCandidateReviewByNameCommand(match.Candidate.ID))
 	}
-	return fmt.Errorf("multiple reviewable plan candidates are present; review one by name: %s", strings.Join(choices, "; "))
+	return &planCandidatesWaitingError{
+		CandidateIDs: ids,
+		message:      fmt.Sprintf("multiple reviewable plan candidates are present; review one by name: %s", strings.Join(choices, "; ")),
+	}
 }
+
+// planCandidatesWaitingError is the refusal when more than one plan waits for
+// review. It is typed so lifecycle status can tell "the owner must choose"
+// apart from planning evidence it cannot read.
+type planCandidatesWaitingError struct {
+	CandidateIDs []string
+	message      string
+}
+
+func (e *planCandidatesWaitingError) Error() string { return e.message }
 
 func resolvePlanCandidateOperation(inputs planCandidateCommandInputs) (planCandidateOperation, error) {
 	if inputs.DeprecatedAccept {

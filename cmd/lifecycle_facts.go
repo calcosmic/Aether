@@ -9,6 +9,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -133,6 +134,14 @@ type LifecyclePlanningFacts struct {
 	AcceptedPlan                        bool                                 `json:"accepted_plan"`
 	LegacyUnbound                       bool                                 `json:"legacy_unbound"`
 	AffectedUnresolvedSemanticIDs       []string                             `json:"affected_unresolved_semantic_ids,omitempty"`
+	WaitingCandidateIDs                 []string                             `json:"waiting_candidate_ids,omitempty"`
+}
+
+// lifecyclePlanningWithWaiting records every plan waiting for review when there
+// is more than one, so the next step can send the owner to choose between them.
+func lifecyclePlanningWithWaiting(fact LifecycleFact[LifecyclePlanningFacts], waiting []string) LifecycleFact[LifecyclePlanningFacts] {
+	fact.Value.WaitingCandidateIDs = waiting
+	return fact
 }
 
 type LifecycleActorFact struct {
@@ -732,7 +741,7 @@ func readLifecyclePlanningStage(root, dataDir string, state colony.ColonyState) 
 	return &stage, runID, source
 }
 
-func readLifecyclePlanCandidateArtifact(root string, state colony.ColonyState) (*planCandidateArtifact, LifecycleFactSource) {
+func readLifecyclePlanCandidateArtifact(root string, state colony.ColonyState) (*planCandidateArtifact, []string, LifecycleFactSource) {
 	requestedID := ""
 	if candidate, ok := lifecyclePlanCandidateForStanding(state.Plan); ok {
 		requestedID = candidate.ID
@@ -740,22 +749,29 @@ func readLifecyclePlanCandidateArtifact(root string, state colony.ColonyState) (
 	planningPath := filepath.Join(root, ".aether", "data", "planning")
 	if _, err := os.Lstat(planningPath); err != nil {
 		if os.IsNotExist(err) {
-			return nil, lifecycleSource("planning candidate", planningPath, LifecycleFactMissing, "source directory does not exist")
+			return nil, nil, lifecycleSource("planning candidate", planningPath, LifecycleFactMissing, "source directory does not exist")
 		}
-		return nil, lifecycleUnavailableSource("planning candidate", planningPath, err.Error())
+		return nil, nil, lifecycleUnavailableSource("planning candidate", planningPath, err.Error())
 	}
 	artifact, err := loadPlanCandidateArtifact(root, requestedID)
 	if err != nil {
+		// More than one plan waiting is a choice for the owner, not evidence
+		// that cannot be read: report it as confirmed with every waiting ID,
+		// so status sends the owner to the review instead of to recovery.
+		var waiting *planCandidatesWaitingError
+		if errors.As(err, &waiting) {
+			return nil, append([]string(nil), waiting.CandidateIDs...), lifecycleSource("planning candidate", planningPath, LifecycleFactConfirmed, "")
+		}
 		provenance := LifecycleFactUnavailable
 		if os.IsNotExist(err) || strings.Contains(err.Error(), "no reviewable plan candidate found") {
 			provenance = LifecycleFactMissing
 		} else if strings.Contains(err.Error(), "decode") || strings.Contains(err.Error(), "invalid") || strings.Contains(err.Error(), "requires") || strings.Contains(err.Error(), "must") {
 			provenance = LifecycleFactMalformed
 		}
-		return nil, lifecycleSource("planning candidate", planningPath, provenance, err.Error())
+		return nil, nil, lifecycleSource("planning candidate", planningPath, provenance, err.Error())
 	}
 	path := filepath.Join(root, filepath.FromSlash(planningRouteCandidateRepositoryPath(artifact.Candidate.Timeline.RunID)))
-	return &artifact, lifecycleSource("planning candidate", path, LifecycleFactConfirmed, "")
+	return &artifact, nil, lifecycleSource("planning candidate", path, LifecycleFactConfirmed, "")
 }
 
 func lifecycleStateWithCandidateArtifact(state colony.ColonyState, artifact *planCandidateArtifact) colony.ColonyState {
@@ -1081,8 +1097,9 @@ func loadLifecycleFactsWithStateReader(root string, factStore *storage.Store, no
 	pending, flags, pendingSource := readLifecyclePendingDecisions(filepath.Join(dataDir, pendingDecisionsFile))
 	var candidateArtifact *planCandidateArtifact
 	var candidateSource LifecycleFactSource
+	var waitingCandidateIDs []string
 	if stateSource.Provenance == LifecycleFactConfirmed {
-		candidateArtifact, candidateSource = readLifecyclePlanCandidateArtifact(root, state)
+		candidateArtifact, waitingCandidateIDs, candidateSource = readLifecyclePlanCandidateArtifact(root, state)
 	}
 	planningState := lifecycleStateWithCandidateArtifact(state, candidateArtifact)
 	stage, planningRunID, planningStageSource := readLifecyclePlanningStage(root, dataDir, planningState)
@@ -1103,7 +1120,7 @@ func loadLifecycleFactsWithStateReader(root string, factStore *storage.Store, no
 		Progress:      LifecycleFact[LifecycleProgressFacts]{Value: LifecycleProgressFacts{CurrentPhase: state.CurrentPhase, Phases: state.Plan.Phases}, Source: lifecycleDerivedSource("progress", stateSource)},
 		Intent:        lifecycleIntentFromSnapshot(state, stateSource, pending, pendingSource),
 		Specification: lifecycleSpecificationFromSnapshot(state, stateSource),
-		Planning:      lifecyclePlanningFromSnapshotAt(planningState, stateSource, stage, planningRunID, planningStageSource, now, candidateArtifact),
+		Planning:      lifecyclePlanningWithWaiting(lifecyclePlanningFromSnapshotAt(planningState, stateSource, stage, planningRunID, planningStageSource, now, candidateArtifact), waitingCandidateIDs),
 		Actors:        LifecycleFact[[]LifecycleActorFact]{Value: actors, Source: actorSource},
 		Signals:       LifecycleFact[[]colony.PheromoneSignal]{Value: pheromones.Signals, Source: signalSource},
 		Research:      LifecycleFact[LifecycleResearchFacts]{Value: research, Source: researchSource},
