@@ -1270,6 +1270,17 @@ func configureWorkerCommand(cmd *exec.Cmd) {
 	}
 }
 
+// ConfigureWorkerCommand exports configureWorkerCommand's process-group /
+// Cancel / WaitDelay hardening for callers outside this package that spawn
+// their own worker-shaped exec.Cmd -- e.g. cmd/recruitment_dispatch.go's
+// recruited-child dispatch (203-02, BIO-03). Every existing in-package
+// caller (worker.go, platform_dispatch.go) keeps calling the unexported
+// configureWorkerCommand directly; this is purely an additive seam so the
+// SAME already-tested fix is not duplicated for a cross-package caller.
+func ConfigureWorkerCommand(cmd *exec.Cmd) {
+	configureWorkerCommand(cmd)
+}
+
 func validateWorkerLaunchConfig(config WorkerConfig) error {
 	// Validate callback URL scheme if set (T-89-09: reject file://, javascript:, data:)
 	if strings.TrimSpace(config.CallbackURL) != "" {
