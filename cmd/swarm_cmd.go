@@ -549,7 +549,7 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 				"tests_written":       testsWritten,
 				"blockers":            []string{message},
 				"backup_path":         checkpoint.BackupDir,
-				"next":                "aether status",
+				"next":                swarmNextCommand(state, swarmRepairNotRestoredStatus),
 				"watch":               false,
 			}
 			return resultWithSwarmInterventionContract(result, contract), nil
