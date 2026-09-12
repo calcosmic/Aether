@@ -239,7 +239,11 @@ func TestPartialBuildDoesNotShowTheOrdinaryBuildDoneScreen(t *testing.T) {
 
 	out := stdout.(*bytes.Buffer).String()
 	for _, claim := range []string{
-		"Verification happens during",
+		// Widened to the exact voiced line (Phase "Classic Visual Voice" plan
+		// 04) rather than the bare fragment "Verification happens during" --
+		// a still-flat, unvoiced ordinary-build line would have satisfied the
+		// fragment too, proving nothing about which screen actually renders.
+		voiceLine("evidence", "Verification happens during `aether continue`."),
 		"follows after continue",
 		"after the work is implemented",
 	} {
