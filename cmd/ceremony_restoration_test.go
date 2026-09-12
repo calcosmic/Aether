@@ -190,7 +190,7 @@ func TestContinueFinalPhaseCelebratesProjectComplete(t *testing.T) {
 	for _, want := range []string{
 		"P R O J E C T   C O M P L E T E",
 		"👑 Goal Achieved: Ship the widget",
-		"🐜 The colony rests. Well done!",
+		"🐜 The project (this colony) rests. Well done!",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("final continue missing %q", want)
