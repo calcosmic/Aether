@@ -572,12 +572,12 @@ Plans:
 4. The terminal result returns exactly once, survives interruption/replay, reaches an acknowledged parent or named follow-on as a scoped packet, and changes a recorded downstream decision.
 5. Status, watch, recovery, cost, and depth cover the whole governed subtree, while evidence-backed pheromone proposals expose full action history and later outcomes govern their strengthening, weakening, or quarantine.
 
-**Plans:** 15 plans
+**Plans:** 1/15 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 203-01-PLAN.md — Classic recruitment/trophallaxis/pheromone mechanism synthesis and SYN-203 corpus registration
+- [x] 203-01-PLAN.md — Classic recruitment/trophallaxis/pheromone mechanism synthesis and SYN-203 corpus registration
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
