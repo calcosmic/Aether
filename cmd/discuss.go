@@ -1514,17 +1514,11 @@ func renderDiscussVisual(result map[string]interface{}) string {
 	b.WriteString(visualDividerStr())
 
 	if resolved, _ := result["resolved"].(bool); resolved {
-		b.WriteString("Clarification locked in.\n")
-		b.WriteString("Decision: ")
-		b.WriteString(stringValue(result["id"]))
-		b.WriteString("\n")
-		b.WriteString("Answer: ")
-		b.WriteString(stringValue(result["answer"]))
-		b.WriteString("\n")
+		b.WriteString(voiceLine("decision", "Clarification locked in.") + "\n")
+		b.WriteString(voiceLine("decision", "Decision: "+stringValue(result["id"])) + "\n")
+		b.WriteString(voiceLine("decision", "Answer: "+stringValue(result["answer"])) + "\n")
 		if emitted, _ := result["redirect_emitted"].(bool); emitted {
-			b.WriteString("REDIRECT emitted: ")
-			b.WriteString(stringValue(result["redirect_text"]))
-			b.WriteString("\n")
+			b.WriteString(signalTypeGlyph("REDIRECT") + " REDIRECT emitted: " + stringValue(result["redirect_text"]) + "\n")
 		}
 		if closeout, ok := discussSpecificationCloseoutFromResult(result); ok {
 			b.WriteString(renderDiscussSpecificationCloseout(closeout))
@@ -1533,46 +1527,44 @@ func renderDiscussVisual(result map[string]interface{}) string {
 		return b.String()
 	}
 
-	b.WriteString("Goal: ")
-	b.WriteString(stringValue(result["goal"]))
-	b.WriteString("\n")
-	b.WriteString(fmt.Sprintf("Questions: %d (%d new, %d existing)\n", intValue(result["question_count"]), intValue(result["created_count"]), intValue(result["existing_count"])))
+	b.WriteString(voiceLine("goal", "Goal: "+stringValue(result["goal"])) + "\n")
+	b.WriteString(voiceLine("question", fmt.Sprintf("Questions: %d (%d new, %d existing)", intValue(result["question_count"]), intValue(result["created_count"]), intValue(result["existing_count"]))) + "\n")
 	if intValue(result["resolved_count"]) > 0 {
-		b.WriteString(fmt.Sprintf("Resolved clarifications already on file: %d\n", intValue(result["resolved_count"])))
+		b.WriteString(voiceLine("question", fmt.Sprintf("Resolved clarifications already on file: %d", intValue(result["resolved_count"]))) + "\n")
 	}
 	if notice := stringValue(result["stale_state_notice"]); notice != "" {
-		b.WriteString(notice)
+		b.WriteString(voiceLine("warning", notice))
 		b.WriteString("\n")
 	}
 	b.WriteString("\n")
 
 	if questions, ok := result["questions"].([]discussQuestion); ok && len(questions) > 0 {
-		b.WriteString(fmt.Sprintf("⚠ Owner decisions required — %d material choice(s)\n", len(questions)))
-		b.WriteString("Planning is paused until every card has an exact owner answer.\n\n")
+		b.WriteString(voiceLine("warning", fmt.Sprintf("Owner decisions required — %d material choice(s)", len(questions))) + "\n")
+		b.WriteString(voiceLine("blocked", "Planning is paused until every card has an exact owner answer.") + "\n\n")
 		for _, question := range questions {
-			b.WriteString(fmt.Sprintf("Decision %s: %s\n", question.StableID, question.Question))
-			b.WriteString("Why now: " + question.WhyNow + "\n")
-			b.WriteString("Evidence: " + renderDiscussEvidenceRefs(question.Evidence) + "\n")
-			b.WriteString("Queen recommends: " + question.QueenRecommendation + "\n")
+			b.WriteString(voiceLine("question", fmt.Sprintf("Decision %s: %s", question.StableID, question.Question)) + "\n")
+			b.WriteString(voiceLine("status", "Why now: "+question.WhyNow) + "\n")
+			b.WriteString(voiceLine("evidence", "Evidence: "+renderDiscussEvidenceRefs(question.Evidence)) + "\n")
+			b.WriteString(voiceLine("decision", "Queen recommends: "+question.QueenRecommendation+" (Queen is this project's coordinator)") + "\n")
 			for _, choice := range question.Choices {
-				b.WriteString(fmt.Sprintf("If %s: %s\n", choice.Label, choice.Consequence))
+				b.WriteString(voiceLine("alternative", fmt.Sprintf("If %s: %s", choice.Label, choice.Consequence)) + "\n")
 			}
-			b.WriteString("Affected scope: " + strings.Join(question.AffectedSemanticIDs, ", ") + "\n")
+			b.WriteString(voiceLine("artifact", "Affected scope: "+strings.Join(question.AffectedSemanticIDs, ", ")) + "\n")
 			if strings.TrimSpace(question.PriorAnswer) == "" {
-				b.WriteString("Prior answer: none\n")
+				b.WriteString(voiceLine("history", "Prior answer: none") + "\n")
 			} else {
-				b.WriteString("Prior answer: " + question.PriorAnswer + "\n")
+				b.WriteString(voiceLine("history", "Prior answer: "+question.PriorAnswer) + "\n")
 			}
-			b.WriteString("Revalidation: " + question.Revalidation + "\n")
-			b.WriteString("Planning resumes: " + question.PlanningResumes + "\n")
-			b.WriteString("Answer exactly: " + question.ExactAnswerSyntax + "\n")
+			b.WriteString(voiceLine("checkpoint", "Revalidation: "+question.Revalidation) + "\n")
+			b.WriteString(voiceLine("next", "Planning resumes: "+question.PlanningResumes) + "\n")
+			b.WriteString(voiceLine("next", "Answer exactly: "+question.ExactAnswerSyntax) + "\n")
 			if question.HardConstraint {
-				b.WriteString("This answer becomes a hard constraint.\n")
+				b.WriteString(voiceLine("avoid", "This answer becomes a hard constraint.") + "\n")
 			}
 			b.WriteString("\n")
 		}
 	} else {
-		b.WriteString("No unresolved material owner questions remain; evidence answered the rest.\n\n")
+		b.WriteString(voiceLine("done", "No unresolved material owner questions remain; evidence answered the rest.") + "\n\n")
 		if closeout, ok := discussSpecificationCloseoutFromResult(result); ok {
 			b.WriteString(renderDiscussSpecificationCloseout(closeout))
 		}
@@ -1620,15 +1612,15 @@ func renderDiscussSpecificationCloseout(closeout discussSpecificationCloseout) s
 		builder.WriteString("The readable projection was restored from canonical state.\n")
 	}
 
-	renderSpecCommandVisualSection(&builder, "Outcome", specCommandOutcomeVisualItems(closeout.Body.Outcomes))
-	renderSpecCommandVisualSection(&builder, "Included behavior", specCommandIncludedVisualItems(closeout.Body.IncludedBehaviors))
-	renderSpecCommandVisualSection(&builder, "Explicit exclusions", specCommandExclusionVisualItems(closeout.Body.Exclusions))
-	renderSpecCommandVisualSection(&builder, "Binding decisions", specCommandDecisionVisualItems(closeout.Body.BindingDecisions))
-	renderSpecCommandVisualSection(&builder, "Requirements", specCommandRequirementVisualItems(closeout.Body.Requirements))
-	renderSpecCommandVisualSection(&builder, "Owner-checkable acceptance", specCommandAcceptanceVisualItems(closeout.Body.AcceptanceChecks))
-	renderSpecCommandVisualSection(&builder, "Negative expectations", specCommandNegativeVisualItems(closeout.Body.NegativeExpectations))
-	renderSpecCommandVisualSection(&builder, "Recovery expectations", specCommandRecoveryVisualItems(closeout.Body.RecoveryExpectations))
-	renderSpecCommandVisualSection(&builder, "Affected public paths", specCommandPublicPathVisualItems(closeout.Body.AffectedPublicPaths))
+	renderSpecCommandVisualSection(&builder, "goal", "Outcome", specCommandOutcomeVisualItems(closeout.Body.Outcomes))
+	renderSpecCommandVisualSection(&builder, "done", "Included behavior", specCommandIncludedVisualItems(closeout.Body.IncludedBehaviors))
+	renderSpecCommandVisualSection(&builder, "avoid", "Explicit exclusions", specCommandExclusionVisualItems(closeout.Body.Exclusions))
+	renderSpecCommandVisualSection(&builder, "decision", "Binding decisions", specCommandDecisionVisualItems(closeout.Body.BindingDecisions))
+	renderSpecCommandVisualSection(&builder, "requirement", "Requirements", specCommandRequirementVisualItems(closeout.Body.Requirements))
+	renderSpecCommandVisualSection(&builder, "evidence", "Owner-checkable acceptance", specCommandAcceptanceVisualItems(closeout.Body.AcceptanceChecks))
+	renderSpecCommandVisualSection(&builder, "avoid", "Negative expectations", specCommandNegativeVisualItems(closeout.Body.NegativeExpectations))
+	renderSpecCommandVisualSection(&builder, "checkpoint", "Recovery expectations", specCommandRecoveryVisualItems(closeout.Body.RecoveryExpectations))
+	renderSpecCommandVisualSection(&builder, "files", "Affected public paths", specCommandPublicPathVisualItems(closeout.Body.AffectedPublicPaths))
 
 	if closeout.WouldCreate {
 		builder.WriteString("Dry run only: this exact draft has not been committed.\n")
