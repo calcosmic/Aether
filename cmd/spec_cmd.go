@@ -691,28 +691,28 @@ type specCommandVisualItem struct {
 func renderSpecCommandVisual(result specCommandResult) string {
 	var builder strings.Builder
 	builder.WriteString(renderBanner("📜", "Specification"))
-	fmt.Fprintf(&builder, "Operation: %s\n", result.Operation)
-	fmt.Fprintf(&builder, "SPEC: %s revision %d\n", result.SpecificationID, result.RevisionNumber)
-	fmt.Fprintf(&builder, "Before: %s\n", result.BeforeRevisionID)
-	fmt.Fprintf(&builder, "After: %s\n", result.AfterRevisionID)
-	fmt.Fprintf(&builder, "Status: %s\n", strings.ToUpper(string(result.Status)))
-	fmt.Fprintf(&builder, "Scope: %s\n", result.Scope.Kind)
+	builder.WriteString(voiceLine("decision", fmt.Sprintf("Operation: %s", result.Operation)) + "\n")
+	builder.WriteString(voiceLine("requirement", fmt.Sprintf("SPEC: %s revision %d", result.SpecificationID, result.RevisionNumber)) + "\n")
+	builder.WriteString(voiceLine("history", fmt.Sprintf("Before: %s", result.BeforeRevisionID)) + "\n")
+	builder.WriteString(voiceLine("history", fmt.Sprintf("After: %s", result.AfterRevisionID)) + "\n")
+	builder.WriteString(voiceLine("status", fmt.Sprintf("Status: %s", strings.ToUpper(string(result.Status)))) + "\n")
+	builder.WriteString(voiceLine("artifact", fmt.Sprintf("Scope: %s", result.Scope.Kind)) + "\n")
 	if result.Scope.Kind == colony.SpecScopeFeature {
-		fmt.Fprintf(&builder, "Feature: %s\n", result.Scope.FeatureID)
+		builder.WriteString(voiceLine("artifact", fmt.Sprintf("Feature: %s", result.Scope.FeatureID)) + "\n")
 	}
 	if result.Replayed {
-		builder.WriteString("Already recorded; the exact revision and receipt were retained.\n")
+		builder.WriteString(voiceLine("done", "Already recorded; the exact revision and receipt were retained.") + "\n")
 	}
 
-	renderSpecCommandVisualSection(&builder, "What this goal delivers", specCommandOutcomeVisualItems(result.Outcomes))
-	renderSpecCommandVisualSection(&builder, "Included", specCommandIncludedVisualItems(result.IncludedBehaviors))
-	renderSpecCommandVisualSection(&builder, "Explicitly excluded", specCommandExclusionVisualItems(result.Exclusions))
-	renderSpecCommandVisualSection(&builder, "Binding decisions", specCommandDecisionVisualItems(result.BindingDecisions))
-	renderSpecCommandVisualSection(&builder, "Requirements", specCommandRequirementVisualItems(result.Requirements))
-	renderSpecCommandVisualSection(&builder, "Owner-checkable acceptance", specCommandAcceptanceVisualItems(result.AcceptanceChecks))
-	renderSpecCommandVisualSection(&builder, "Negative expectations", specCommandNegativeVisualItems(result.NegativeExpectations))
-	renderSpecCommandVisualSection(&builder, "Recovery expectations", specCommandRecoveryVisualItems(result.RecoveryExpectations))
-	renderSpecCommandVisualSection(&builder, "Affected public paths", specCommandPublicPathVisualItems(result.AffectedPublicPaths))
+	renderSpecCommandVisualSection(&builder, "goal", "What this goal delivers", specCommandOutcomeVisualItems(result.Outcomes))
+	renderSpecCommandVisualSection(&builder, "done", "Included", specCommandIncludedVisualItems(result.IncludedBehaviors))
+	renderSpecCommandVisualSection(&builder, "avoid", "Explicitly excluded", specCommandExclusionVisualItems(result.Exclusions))
+	renderSpecCommandVisualSection(&builder, "decision", "Binding decisions", specCommandDecisionVisualItems(result.BindingDecisions))
+	renderSpecCommandVisualSection(&builder, "requirement", "Requirements", specCommandRequirementVisualItems(result.Requirements))
+	renderSpecCommandVisualSection(&builder, "evidence", "Owner-checkable acceptance", specCommandAcceptanceVisualItems(result.AcceptanceChecks))
+	renderSpecCommandVisualSection(&builder, "avoid", "Negative expectations", specCommandNegativeVisualItems(result.NegativeExpectations))
+	renderSpecCommandVisualSection(&builder, "checkpoint", "Recovery expectations", specCommandRecoveryVisualItems(result.RecoveryExpectations))
+	renderSpecCommandVisualSection(&builder, "files", "Affected public paths", specCommandPublicPathVisualItems(result.AffectedPublicPaths))
 
 	builder.WriteString(renderStageMarker("Revision Impact"))
 	renderSpecCommandVisualDelta(&builder, "Outcome", result.ClassifiedDelta.Outcomes)
@@ -724,45 +724,49 @@ func renderSpecCommandVisual(result specCommandResult) string {
 	renderSpecCommandVisualDelta(&builder, "Negative", result.ClassifiedDelta.NegativeExpectations)
 	renderSpecCommandVisualDelta(&builder, "Recovery", result.ClassifiedDelta.RecoveryExpectations)
 	renderSpecCommandVisualDelta(&builder, "Public paths", result.ClassifiedDelta.AffectedPublicPaths)
-	fmt.Fprintf(&builder, "Affected specification IDs: %s\n", specCommandIDSummary(result.AffectedScope.SpecItemIDs))
-	fmt.Fprintf(&builder, "Affected task IDs: %s\n", specCommandIDSummary(result.AffectedScope.TaskIDs))
-	fmt.Fprintf(&builder, "Affected proof IDs: %s\n", specCommandIDSummary(result.AffectedScope.ProofLinkIDs))
+	builder.WriteString(voiceLine("artifact", fmt.Sprintf("Affected specification IDs: %s", specCommandIDSummary(result.AffectedScope.SpecItemIDs))) + "\n")
+	builder.WriteString(voiceLine("artifact", fmt.Sprintf("Affected task IDs: %s", specCommandIDSummary(result.AffectedScope.TaskIDs))) + "\n")
+	builder.WriteString(voiceLine("artifact", fmt.Sprintf("Affected proof IDs: %s", specCommandIDSummary(result.AffectedScope.ProofLinkIDs))) + "\n")
 	if result.ProjectionRepaired {
-		builder.WriteString("Projection: repaired from canonical state; specification authority was unchanged.\n")
+		builder.WriteString(voiceLine("status", "Projection: repaired from canonical state; specification authority was unchanged.") + "\n")
 	} else if result.Projection.Drifted {
-		builder.WriteString("Projection: DRIFTED; canonical state was not changed.\n")
+		builder.WriteString(voiceLine("warning", "Projection: DRIFTED; canonical state was not changed.") + "\n")
 	} else {
-		builder.WriteString("Projection: synchronized with canonical state.\n")
+		builder.WriteString(voiceLine("status", "Projection: synchronized with canonical state.") + "\n")
 	}
 	if result.Approval != nil {
-		fmt.Fprintf(&builder, "Approval receipt: %s\n", result.Approval.ID)
-		builder.WriteString("Specification approval does not accept or activate a plan.\n")
+		builder.WriteString(voiceLine("checkpoint", fmt.Sprintf("Approval receipt: %s", result.Approval.ID)) + "\n")
+		builder.WriteString(voiceLine("warning", "Specification approval does not accept or activate a plan.") + "\n")
 	}
 	if result.Receipt != nil {
-		fmt.Fprintf(&builder, "Transaction receipt: %s\n", result.Receipt.ReceiptID)
+		builder.WriteString(voiceLine("checkpoint", fmt.Sprintf("Transaction receipt: %s", result.Receipt.ReceiptID)) + "\n")
 	}
-	fmt.Fprintf(&builder, "State effect: %s\n", result.StateEffect)
+	builder.WriteString(voiceLine("status", fmt.Sprintf("State effect: %s", result.StateEffect)) + "\n")
 	builder.WriteString(renderNextUp(result.NextAction))
 	return builder.String()
 }
 
-func renderSpecCommandVisualSection(builder *strings.Builder, title string, items []specCommandVisualItem) {
+// renderSpecCommandVisualSection takes lineType as an explicit argument
+// rather than deriving it from title -- deriving from the title string would
+// make the glyph break the moment a section is renamed, which is precisely
+// the renamer-fragility failure mode CEC-09 criterion 5 exists to prevent.
+func renderSpecCommandVisualSection(builder *strings.Builder, lineType, title string, items []specCommandVisualItem) {
 	builder.WriteString(renderStageMarker(title))
 	for _, item := range items {
-		fmt.Fprintf(builder, "%s  %s\n", item.ID, item.Description)
+		builder.WriteString(voiceLine(lineType, fmt.Sprintf("%s  %s", item.ID, item.Description)) + "\n")
 		if item.Detail != "" {
-			fmt.Fprintf(builder, "   %s\n", item.Detail)
+			builder.WriteString(voiceLine(lineType, "   "+item.Detail) + "\n")
 		}
 	}
 }
 
 func renderSpecCommandVisualDelta(builder *strings.Builder, title string, delta colony.SpecItemDelta) {
-	fmt.Fprintf(builder, "%s: +%s ~%s -%s =%s\n", title,
+	builder.WriteString(voiceLine("history", fmt.Sprintf("%s: +%s ~%s -%s =%s", title,
 		specCommandIDSummary(delta.AddedIDs),
 		specCommandIDSummary(delta.ModifiedIDs),
 		specCommandIDSummary(delta.RemovedIDs),
 		specCommandIDSummary(delta.UnchangedIDs),
-	)
+	)) + "\n")
 }
 
 func specCommandIDSummary(values []string) string {

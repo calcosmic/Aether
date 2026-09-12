@@ -1,13 +1,14 @@
 package cmd
 
-// Phase "Classic Visual Voice" plan 03 -- the discussion card carries its
-// own symbols.
+// Phase "Classic Visual Voice" plan 03 -- the discussion card and the
+// specification card carry their own symbols.
 //
-// The discussion card has no February ancestor (RESEARCH.md Pitfall 5): its
-// per-question content is materially richer than anything Classic produced.
-// What it lacked was entirely presentational -- this task wires it through
-// voiceLine/voiceGlyph (plan 01's funnel) without touching a single field's
-// meaning or value.
+// Neither card has a February ancestor (RESEARCH.md Pitfall 5): the
+// discussion card's per-question content is materially richer than
+// anything Classic produced, and the specification command did not exist
+// before v1.28. What both lacked was entirely presentational -- this plan
+// wires both through voiceLine/voiceGlyph (plan 01's funnel) without
+// touching a single field's meaning or value.
 
 import (
 	"strings"
@@ -86,6 +87,69 @@ func classicVoiceDiscussResolvedFixture() map[string]interface{} {
 	}
 }
 
+// classicVoiceSpecFixture populates every section with at least one item, at
+// least one item carrying a detail (AcceptanceChecks/AffectedPublicPaths
+// naturally produce one), at least one empty section (Exclusions), a full
+// classified delta, an approval and a transaction receipt.
+func classicVoiceSpecFixture() specCommandResult {
+	return specCommandResult{
+		Command:          "spec",
+		Operation:        specCommandOperationInspect,
+		SpecificationID:  "SPEC-01",
+		BeforeRevisionID: "SPEC-REV-00",
+		AfterRevisionID:  "SPEC-REV-01",
+		RevisionNumber:   1,
+		Status:           colony.SpecStatusApproved,
+		Scope:            colony.SpecScope{Kind: colony.SpecScopeFeature, FeatureID: "FEATURE-01"},
+		Outcomes:         []colony.SpecOutcome{{ID: "OUT-01", Description: "A trusted plan"}},
+		IncludedBehaviors: []colony.SpecIncludedBehavior{
+			{ID: "BEH-01", Description: "Iterative research"},
+		},
+		Exclusions:       nil,
+		BindingDecisions: []colony.SpecBindingDecision{{ID: "DEC-01", Description: "Owner accepts plans"}},
+		Requirements:     []colony.SpecRequirement{{ID: "REQ-01", Description: "Keep stable identity"}},
+		AcceptanceChecks: []colony.SpecAcceptanceCheck{
+			{ID: "ACC-01", Description: "Shows evidence", Verification: "Inspect output"},
+		},
+		NegativeExpectations: []colony.SpecNegativeExpectation{{ID: "NEG-01", Description: "Never imply authority"}},
+		RecoveryExpectations: []colony.SpecRecoveryExpectation{{ID: "REC-01", Description: "Show one recovery action"}},
+		AffectedPublicPaths: []colony.SpecPublicPath{
+			{ID: "PATH-01", Path: "aether plan", Description: "Planning entrypoint"},
+		},
+		ClassifiedDelta: colony.SpecRevisionDelta{
+			Outcomes:             colony.SpecItemDelta{AddedIDs: []string{"OUT-01"}, UnchangedIDs: []string{}},
+			IncludedBehaviors:    colony.SpecItemDelta{ModifiedIDs: []string{"BEH-01"}},
+			Exclusions:           colony.SpecItemDelta{},
+			BindingDecisions:     colony.SpecItemDelta{AddedIDs: []string{"DEC-01"}},
+			Requirements:         colony.SpecItemDelta{AddedIDs: []string{"REQ-01"}},
+			AcceptanceChecks:     colony.SpecItemDelta{AddedIDs: []string{"ACC-01"}},
+			NegativeExpectations: colony.SpecItemDelta{AddedIDs: []string{"NEG-01"}},
+			RecoveryExpectations: colony.SpecItemDelta{AddedIDs: []string{"REC-01"}},
+			AffectedPublicPaths:  colony.SpecItemDelta{AddedIDs: []string{"PATH-01"}},
+		},
+		AffectedScope: specificationAffectedScope{
+			SpecItemIDs:  []string{"OUT-01"},
+			TaskIDs:      []string{"TASK-01"},
+			ProofLinkIDs: []string{"PROOF-01"},
+		},
+		Approval: &colony.SpecApprovalReceipt{
+			ID:              "APPROVAL-01",
+			SpecificationID: "SPEC-01",
+			RevisionID:      "SPEC-REV-01",
+		},
+		Receipt: &colony.LifecycleReceipt{
+			ReceiptID: "RECEIPT-01",
+			Command:   "spec",
+		},
+		Projection: specCommandProjection{
+			Path:       "spec-projection.json",
+			RevisionID: "SPEC-REV-01",
+		},
+		StateEffect: "none",
+		NextAction:  "aether plan",
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Corpus registration -- one init per screen, in this screen's own test file.
 // ---------------------------------------------------------------------------
@@ -98,6 +162,10 @@ func init() {
 	registerVoiceScreen("discuss-resolved", func(t *testing.T) string {
 		t.Helper()
 		return renderDiscussVisual(classicVoiceDiscussResolvedFixture())
+	})
+	registerVoiceScreen("spec", func(t *testing.T) string {
+		t.Helper()
+		return renderSpecCommandVisual(classicVoiceSpecFixture())
 	})
 }
 
@@ -181,4 +249,59 @@ func TestDiscussCardKeepsEveryQuestionField(t *testing.T) {
 			}
 		}
 	})
+}
+
+// ---------------------------------------------------------------------------
+// Task 2 -- the specification card.
+// ---------------------------------------------------------------------------
+
+// TestSpecScreenMeetsTheReferenceDensity asserts the specification card
+// measures at or above the figure derived from the reference commits.
+func TestSpecScreenMeetsTheReferenceDensity(t *testing.T) {
+	reference := classicReferenceDensity(t)
+	rendered := renderSpecCommandVisual(classicVoiceSpecFixture())
+
+	led, total, ratio := voiceDensity(rendered)
+	if total == 0 {
+		t.Fatalf("the spec card produced no content lines to measure:\n%s", rendered)
+	}
+	if ratio < reference {
+		t.Errorf("the spec card measures %v (led=%d total=%d), below the reference figure %v:\n%s",
+			ratio, led, total, reference, rendered)
+	}
+}
+
+// TestSpecCardLabelsEveryIdentifier asserts every identifier field the
+// fixture supplies -- the ones that let the owner tell one revision, one
+// approval, or one receipt from another -- still appears on a line carrying
+// a plain-English label beside it, rather than standing alone.
+func TestSpecCardLabelsEveryIdentifier(t *testing.T) {
+	result := classicVoiceSpecFixture()
+	rendered := renderSpecCommandVisual(result)
+	lines := strings.Split(rendered, "\n")
+
+	checks := []struct {
+		name  string
+		label string
+		id    string
+	}{
+		{"specification ID", "SPEC:", result.SpecificationID},
+		{"before revision ID", "Before:", result.BeforeRevisionID},
+		{"after revision ID", "After:", result.AfterRevisionID},
+		{"feature ID", "Feature:", result.Scope.FeatureID},
+		{"approval receipt ID", "Approval receipt:", result.Approval.ID},
+		{"transaction receipt ID", "Transaction receipt:", result.Receipt.ReceiptID},
+	}
+
+	for _, check := range checks {
+		check := check
+		t.Run(check.name, func(t *testing.T) {
+			for _, line := range lines {
+				if strings.Contains(line, check.label) && strings.Contains(line, check.id) {
+					return
+				}
+			}
+			t.Errorf("%s (%q) does not appear on a line labelled %q:\n%s", check.name, check.id, check.label, rendered)
+		})
+	}
 }

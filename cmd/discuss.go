@@ -1612,15 +1612,15 @@ func renderDiscussSpecificationCloseout(closeout discussSpecificationCloseout) s
 		builder.WriteString("The readable projection was restored from canonical state.\n")
 	}
 
-	renderSpecCommandVisualSection(&builder, "Outcome", specCommandOutcomeVisualItems(closeout.Body.Outcomes))
-	renderSpecCommandVisualSection(&builder, "Included behavior", specCommandIncludedVisualItems(closeout.Body.IncludedBehaviors))
-	renderSpecCommandVisualSection(&builder, "Explicit exclusions", specCommandExclusionVisualItems(closeout.Body.Exclusions))
-	renderSpecCommandVisualSection(&builder, "Binding decisions", specCommandDecisionVisualItems(closeout.Body.BindingDecisions))
-	renderSpecCommandVisualSection(&builder, "Requirements", specCommandRequirementVisualItems(closeout.Body.Requirements))
-	renderSpecCommandVisualSection(&builder, "Owner-checkable acceptance", specCommandAcceptanceVisualItems(closeout.Body.AcceptanceChecks))
-	renderSpecCommandVisualSection(&builder, "Negative expectations", specCommandNegativeVisualItems(closeout.Body.NegativeExpectations))
-	renderSpecCommandVisualSection(&builder, "Recovery expectations", specCommandRecoveryVisualItems(closeout.Body.RecoveryExpectations))
-	renderSpecCommandVisualSection(&builder, "Affected public paths", specCommandPublicPathVisualItems(closeout.Body.AffectedPublicPaths))
+	renderSpecCommandVisualSection(&builder, "goal", "Outcome", specCommandOutcomeVisualItems(closeout.Body.Outcomes))
+	renderSpecCommandVisualSection(&builder, "done", "Included behavior", specCommandIncludedVisualItems(closeout.Body.IncludedBehaviors))
+	renderSpecCommandVisualSection(&builder, "avoid", "Explicit exclusions", specCommandExclusionVisualItems(closeout.Body.Exclusions))
+	renderSpecCommandVisualSection(&builder, "decision", "Binding decisions", specCommandDecisionVisualItems(closeout.Body.BindingDecisions))
+	renderSpecCommandVisualSection(&builder, "requirement", "Requirements", specCommandRequirementVisualItems(closeout.Body.Requirements))
+	renderSpecCommandVisualSection(&builder, "evidence", "Owner-checkable acceptance", specCommandAcceptanceVisualItems(closeout.Body.AcceptanceChecks))
+	renderSpecCommandVisualSection(&builder, "avoid", "Negative expectations", specCommandNegativeVisualItems(closeout.Body.NegativeExpectations))
+	renderSpecCommandVisualSection(&builder, "checkpoint", "Recovery expectations", specCommandRecoveryVisualItems(closeout.Body.RecoveryExpectations))
+	renderSpecCommandVisualSection(&builder, "files", "Affected public paths", specCommandPublicPathVisualItems(closeout.Body.AffectedPublicPaths))
 
 	if closeout.WouldCreate {
 		builder.WriteString("Dry run only: this exact draft has not been committed.\n")
