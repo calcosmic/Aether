@@ -4,17 +4,17 @@ milestone: v1.28
 milestone_name: Classic Colony Restoration
 current_phase: 202.1
 current_phase_name: Classic Visual Voice
-status: ready_to_execute
+status: executing
 stopped_at: Phase 202.1 planned and verified (7 plans, 4 waves); owner ratified the voice standard — ready to execute
-last_updated: "2026-09-12T15:56:27.469Z"
+last_updated: "2026-09-12T16:07:44.578Z"
 last_activity: 2026-09-12
-last_activity_desc: Phase 202.1 planned -- 7 plans across 4 waves, plan-checker passed first pass; owner ratified one house-wide voice standard and the symbol vocabulary. Also shipped v1.0.71: five CosmicDashboard planning defects fixed and verified live
-state_head: 80da5018151456c5f0b871248b0efec580456e84
+last_activity_desc: Phase 202.1 execution started
+state_head: 2757534e2b8f35d4099ac1307786d3ed02598698
 progress:
   total_phases: 8
   completed_phases: 2
   total_plans: 148
-  completed_plans: 125
+  completed_plans: 126
   percent: 25
 ---
 
@@ -32,10 +32,10 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 
 ## Current Position
 
-Phase: 202.1 (Classic Visual Voice) — READY TO EXECUTE
+Phase: 202.1 (Classic Visual Voice) — EXECUTING
 Next phase: 203 (Biological Runtime)
-Status: Phase 202.1 planned — run /gsd-execute-phase 202.1 next
-Last activity: 2026-09-12 — Planned Phase 202.1 (7 plans, 4 waves); checker passed first pass; owner ratified the voice standard; Aether v1.0.71 published
+Status: Executing Phase 202.1
+Last activity: 2026-09-12 — Phase 202.1 execution started
 
 ## Performance Metrics
 

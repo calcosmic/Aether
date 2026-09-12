@@ -534,12 +534,12 @@ Plans:
 
 For dummies: the colony went quiet-looking. The information is right, but the personality drained out of the screens between February and now. This phase puts it back on the screens you actually read, and adds a check that fails if it ever drains away again.
 
-**Plans:** 7 plans
+**Plans:** 1/7 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 202.1-01-PLAN.md — Tracer: one glyph vocabulary, a reference-derived density figure, and the what-next card wired through both
+- [x] 202.1-01-PLAN.md — Tracer: one glyph vocabulary, a reference-derived density figure, and the what-next card wired through both
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
