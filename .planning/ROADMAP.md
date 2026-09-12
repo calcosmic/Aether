@@ -534,7 +534,7 @@ Plans:
 
 For dummies: the colony went quiet-looking. The information is right, but the personality drained out of the screens between February and now. This phase puts it back on the screens you actually read, and adds a check that fails if it ever drains away again.
 
-**Plans:** 6/7 plans executed
+**Plans:** 7/7 plans executed
 
 Plans:
 **Wave 1**
@@ -554,7 +554,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 202.1-07-PLAN.md — Coverage ratchet, corpus-wide density and token gates, synthesis record and shipped claim
+- [x] 202.1-07-PLAN.md — Coverage ratchet, corpus-wide density and token gates, synthesis record and shipped claim
 
 ### Phase 203: Biological Runtime
 
