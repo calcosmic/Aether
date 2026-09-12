@@ -42,6 +42,18 @@ phase and must NOT be absorbed into it.
 | `TestGoldenBuildVisualOutput` | golden stale: output emits a `── Colony ──` block the snapshot does not carry |
 | `TestGoldenContinueVisualOutput` | same stale `── Colony ──` drift |
 | `TestPhase199GateReceipt` | protected ownership fingerprint changed or receipt is stale |
+| `TestAuditCatalogGolden` | catalog golden stale: got 234193 bytes, want 234067 |
+| `TestNoWorkerWithoutStatedReason` | `measurer had a stated reason and must spawn; castes = [builder]` |
+| `TestHumanFacingOutputGoesThroughWriteVisualOutput` | `watch_live.go:runColonyLiveRefreshLoop` lines 425/426/440 write direct to stdout/stderr, bypassing `writeVisualOutput` |
+
+The last three were added on a second pass: the first full-suite reading was
+truncated by a `head -40` on the orchestrator's own grep and under-reported the
+set. All seven were re-run at `2757534e` and fail there with byte-identical
+messages.
+
+**`TestNoWorkerWithoutStatedReason` is worth the owner's attention separately.**
+It is one of the tests CLAUDE.md names as locking the Queen-Owned Orchestration
+contract, and it is currently red on this branch.
 
 **Gate rule for the remaining waves of 202.1:** the post-merge test gate is
 judged against this set. Only a failure *outside* these four counts as
@@ -63,3 +75,13 @@ into this phase's diff.
 3. Plan 01 gave the Goal line the `phase` glyph (📍). The owner ratified
    crown = the project's goal, and the February reference block this phase
    restores starts literally `👑 Goal:`. Changed to the `goal` glyph.
+
+## Orchestration lesson (recorded 2026-09-12)
+
+Do NOT run the whole-suite gate while executor agents are running. This repo's
+full-suite controller uses a `serial-shared-checkout` lane, and executors in
+their own worktrees still share the repo root and the `~/.aether/` hub. A
+confirmation run started alongside four Wave 2 executors reported
+`full-suite controller failed: lane serial-shared-checkout: exit status 1` and
+produced two failures that pass in isolation (`TestSkillIsUserCreatedShipped`
+and the controller lane itself). Gate runs must be serialised against dispatch.
