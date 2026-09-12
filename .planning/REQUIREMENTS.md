@@ -38,6 +38,7 @@ For dummies: keep the reliable modern engine and brakes, then restore the dashbo
 - [x] **CEC-06 — Evidence:** Claims, deterministic checks, independent findings, elapsed time, reported cost, changed files, provenance, and incomplete owner work remain linked to the exact attempt and visible at the decision that consumes them.
 - [ ] **CEC-07 — Colony Effect:** A recruitment result, pheromone, memory item, or specialist contribution earns credit only when the runtime records the decision it changed and the later verified outcome, including neutral or harmful results.
 - [x] **CEC-08 — Closure:** Completion, seal, archive, and delivery views distinguish verified work, residual risk, queued owner evidence, and future ideas, then preserve one honest summary and next action.
+- [ ] **CEC-09 — Voice:** Every ordinary lifecycle screen renders in the Classic colony voice, not only with a correct banner: content lines carry their own caste//status glyphs and colony vocabulary at the reference density of `3a5b81c2`, next-step menus name each option's effect beside its command, and no owner-facing line exposes a raw internal identifier, hash, or state token in place of a sentence. The rendered voice is asserted against the reference, so it cannot silently flatten again.
 
 ### Front Door and Lifecycle Grammar
 
@@ -131,13 +132,14 @@ For dummies: keep the reliable modern engine and brakes, then restore the dashbo
 | Phase 202 — Swarm, Oracle, and Live Colony | SYNTH-04, CEC-05, LIVE-01..07 | 9 |
 | Phase 203 — Biological Runtime | SYNTH-05, CEC-07, BIO-01..08 | 10 |
 | Phase 204 — Learning Governor | SYNTH-06, LEARN-01..08 | 9 |
+| Phase 204.1 — Classic Visual Voice | CEC-09 | 1 |
 | Phase 205 — Owner Acceptance and Restoration Seal | SYNTH-07, PROOF-02..06 | 6 |
-| **Total** | **64 requirements mapped exactly once** | **64** |
+| **Total** | **65 requirements mapped exactly once** | **65** |
 
 ## Coverage summary
 
 - Historical-to-Modern Synthesis: 7 requirements
-- Classic Experience Contract: 8 requirements
+- Classic Experience Contract: 9 requirements
 - Front Door and Lifecycle Grammar: 6 requirements
 - Iterative Planning: 6 requirements
 - Queen-Led Work Cycle: 8 requirements

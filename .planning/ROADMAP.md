@@ -65,6 +65,7 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 - [x] **Phase 202 — Swarm, Oracle, and Live Colony** — completed 2026-09-12
 - [ ] **Phase 203 — Biological Runtime**
 - [ ] **Phase 204 — Learning Governor**
+- [ ] **Phase 204.1 — Classic Visual Voice**
 - [ ] **Phase 205 — Owner Acceptance and Restoration Seal**
 
 ## Phase Details
@@ -587,11 +588,31 @@ Plans:
 4. A beneficial candidate beats its frozen baseline without hard-gate or holdout regression, while overfit or evaluator-tampering candidates are quarantined.
 5. Only allowed low-risk canaries promote and roll back atomically; preferences, skills, workflows, source, and security-sensitive policy retain required authority, and source changes remain independently verified branches/PRs that cannot self-approve, merge, publish, or deploy.
 
+### Phase 204.1: Classic Visual Voice
+
+**Goal:** Restore the Classic colony voice to every ordinary lifecycle screen, so the restored behavior also reads as Aether rather than as correct plain text.
+
+**Depends on:** Phases 199-204
+
+**Requirements:** CEC-09
+
+**Why this phase exists:** the milestone goal is an "understandable, visible" colony, and the synthesis protocol names `3a5b81c2` (the completed Classic visual system) as a reference to inspect — but no requirement owned the rendered voice, so CEC-01..08 restored what each screen *says* while the way it says it quietly flattened. Owner observation, 2026-09-12: after running init and discussing the spec, "it just didn't look good"; banners survived while per-line glyphs, colony vocabulary, and annotated next-step menus did not. This phase gives the voice an owner and a failing check, so it cannot flatten again unnoticed.
+
+**Success criteria:**
+
+1. A cited mechanism study compares the rendered voice at `3a5b81c2` against every current ordinary lifecycle screen, separates what genuinely improved (one honest next action, real state, no invented truth) from what merely thinned, and fixes the target density before any renderer is edited.
+2. Ordinary lifecycle screens — plan, discuss, spec, status, build, continue, seal, and the what-next card — render content lines in the Classic voice, with caste//status glyphs and colony vocabulary on the lines themselves rather than only in the banner, and the improvements from 199-204 preserved intact.
+3. Next-step menus name each option's real-world effect beside its command, so a choice is readable without running it.
+4. No owner-facing line exposes a raw internal identifier, hash, or state token where a sentence belongs; the known `handoff=<id> between_commands_boundary` leak on the what-next card is closed with a named test.
+5. The voice is asserted, not described: a named test fails if an ordinary screen's rendered voice falls below the reference density agreed in criterion 1, whatever a future renderer is called.
+
+For dummies: the colony went quiet-looking. The information is right, but the personality drained out of the screens between February and now. This phase puts it back on the screens you actually read, and adds a check that fails if it ever drains away again.
+
 ### Phase 205: Owner Acceptance and Restoration Seal
 
 **Goal:** Reconcile every promise to public evidence, prove the complete restored journey in real repositories, and obtain owner acceptance before sealing v1.28.
 
-**Depends on:** Phases 199-204
+**Depends on:** Phases 199-204.1
 
 **Requirements:** SYNTH-07, PROOF-02..06
 
@@ -613,8 +634,9 @@ Plans:
 | 202 | 9 | Swarm/Oracle/live synthesis and typed live colony visibility |
 | 203 | 10 | Biological synthesis, recruitment, result return, trophallaxis, operational pheromones |
 | 204 | 9 | Learning synthesis, truthful memory, outcome ledger, evaluation and rollback |
+| 204.1 | 1 | Classic rendered voice on ordinary lifecycle screens, asserted against the reference |
 | 205 | 6 | Research-to-execution ratchet, 72-row reconciliation, real UAT, owner acceptance |
-| **Total** | **64** | **All v1.28 requirements mapped exactly once** |
+| **Total** | **65** | **All v1.28 requirements mapped exactly once** |
 
 ## Pending Todo Routing
 
