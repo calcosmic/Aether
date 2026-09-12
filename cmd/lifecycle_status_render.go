@@ -39,6 +39,17 @@ func renderLifecycleStatus(projection LifecycleProjection, width int) string {
 	return colorLifecycleStatus(renderLifecycleStatusFull(projection, width))
 }
 
+// lifecycleStatusColonyTitle and lifecycleStatusPheromoneTitle/NoSignals are
+// the reworded section headings CLAUDE.md's own vocabulary table requires:
+// the plain-English word leads, the repo-invented word this project coined
+// follows in parentheses in the same sentence -- never deleted, never a
+// separate glossary line.
+const (
+	lifecycleStatusColonyTitle     = "This Project (Colony)"
+	lifecycleStatusPheromoneTitle  = "Standing Instructions (Pheromones)"
+	lifecycleStatusNoPheromoneLine = "No active steering notes (pheromones) are recorded"
+)
+
 func renderLifecycleStatusFull(projection LifecycleProjection, width int) string {
 	lines := []string{"━━ 🐜 C O L O N Y   S T A T U S ━━"}
 	identity := projection.Identity.Value
@@ -48,19 +59,19 @@ func renderLifecycleStatusFull(projection LifecycleProjection, width int) string
 
 	lines = append(lines,
 		"",
-		"Colony",
-		"Name: "+name,
-		"Goal: "+goal,
-		"Standing: "+standing,
+		voiceLine("colony", lifecycleStatusColonyTitle),
+		voiceLine("colony", "Name: "+name),
+		voiceLine("goal", "Goal: "+goal),
+		voiceLine("status", "Standing: "+standing),
 	)
 	if identity.Scope != "" || identity.Mode != "" {
-		lines = append(lines, fmt.Sprintf("Scope: %s | Mode: %s", emptyFallback(identity.Scope, "Not recorded"), emptyFallback(identity.Mode, "Not recorded")))
+		lines = append(lines, voiceLine("status", fmt.Sprintf("Scope: %s | Mode: %s", emptyFallback(identity.Scope, "Not recorded"), emptyFallback(identity.Mode, "Not recorded"))))
 	}
 
 	phase := projection.Phase.Value
-	lines = append(lines, "", "Phase & Tasks")
+	lines = append(lines, "", voiceLine("phase", "Phase & Tasks"))
 	if phase.TotalPhases == 0 {
-		lines = append(lines, "Phase: Not recorded")
+		lines = append(lines, voiceLine("phase", "Phase: Not recorded"))
 	} else {
 		phaseName := ""
 		phaseStatus := ""
@@ -75,14 +86,14 @@ func renderLifecycleStatusFull(projection LifecycleProjection, width int) string
 		if phaseStatus != "" {
 			phaseLine += " [" + phaseStatus + "]"
 		}
-		lines = append(lines, phaseLine)
+		lines = append(lines, voiceLine("phase", phaseLine))
 	}
-	lines = append(lines, fmt.Sprintf("Tasks: %d/%d complete", phase.CompletedTasks, phase.TotalTasks))
+	lines = append(lines, voiceLine("task", fmt.Sprintf("Tasks: %d/%d complete", phase.CompletedTasks, phase.TotalTasks)))
 
-	lines = append(lines, "", "Ants & Outcomes")
+	lines = append(lines, "", voiceLine("colony", "Ants & Outcomes"))
 	active, terminal := lifecycleStatusActors(projection.Actors.Value)
 	if len(active) == 0 {
-		lines = append(lines, "No ants are active")
+		lines = append(lines, voiceLine("colony", "No ants are active"))
 	} else {
 		for _, actorFact := range active {
 			lines = append(lines, lifecycleStatusActorLine("Active", actorFact))
@@ -95,10 +106,10 @@ func renderLifecycleStatusFull(projection LifecycleProjection, width int) string
 		if strings.TrimSpace(lineage.Parent) == "" || strings.TrimSpace(lineage.Actor) == "" {
 			continue
 		}
-		lines = append(lines, fmt.Sprintf("Lineage: %s → %s", lineage.Parent, lineage.Actor))
+		lines = append(lines, voiceLine("colony", fmt.Sprintf("Lineage: %s → %s", lifecycleStatusLineageActorLabel(lineage.Parent), lifecycleStatusLineageActorLabel(lineage.Actor))))
 	}
 
-	lines = append(lines, "", "Pheromones")
+	lines = append(lines, "", voiceLine("focus", lifecycleStatusPheromoneTitle))
 	activeSignals := 0
 	for _, signal := range projection.Signals.Value {
 		if !signal.Active {
@@ -109,28 +120,29 @@ func renderLifecycleStatusFull(projection LifecycleProjection, width int) string
 		if content == "" {
 			content = "Content not recorded"
 		}
-		lines = append(lines, fmt.Sprintf("%s: %s", emptyFallback(strings.TrimSpace(signal.Type), "Signal"), content))
+		line := fmt.Sprintf("%s: %s", emptyFallback(strings.TrimSpace(signal.Type), "Signal"), content)
+		lines = append(lines, signalTypeGlyph(signal.Type)+" "+line)
 	}
 	if activeSignals == 0 {
-		lines = append(lines, "No active pheromones recorded")
+		lines = append(lines, voiceLine("focus", lifecycleStatusNoPheromoneLine))
 	}
 
-	lines = append(lines, "", "Territory & Notes")
+	lines = append(lines, "", voiceLine("artifact", "Territory & Notes"))
 	research := projection.Research.Value
-	lines = append(lines, fmt.Sprintf("Research documents: %d", len(research.Docs)))
+	lines = append(lines, voiceLine("artifact", fmt.Sprintf("Research documents: %d", len(research.Docs))))
 	if latest := lifecycleStatusLatestPath(research.Docs); latest != "" {
-		lines = append(lines, "Latest research: "+latest)
+		lines = append(lines, voiceLine("artifact", "Latest research: "+latest))
 	}
-	lines = append(lines, fmt.Sprintf("Territory records: %d", len(research.Territory)))
+	lines = append(lines, voiceLine("artifact", fmt.Sprintf("Territory records: %d", len(research.Territory))))
 	if latest := lifecycleStatusLatestPath(research.Territory); latest != "" {
-		lines = append(lines, "Latest territory record: "+latest)
+		lines = append(lines, voiceLine("artifact", "Latest territory record: "+latest))
 	}
-	lines = append(lines, fmt.Sprintf("Dreams notes: %d", len(research.Dreams)))
+	lines = append(lines, voiceLine("artifact", fmt.Sprintf("Dreams notes: %d", len(research.Dreams))))
 	if latest := lifecycleStatusLatestPath(research.Dreams); latest != "" {
-		lines = append(lines, "Latest Dreams note (Unverified local note): "+latest)
+		lines = append(lines, voiceLine("artifact", "Latest Dreams note (Unverified local note): "+latest))
 	}
 
-	lines = append(lines, "", "Memory, Findings & Gates")
+	lines = append(lines, "", voiceLine("learning", "Memory, Findings & Gates"))
 	memory := projection.Memory.Value
 	openFindings := 0
 	for _, finding := range projection.Findings.Value {
@@ -138,94 +150,119 @@ func renderLifecycleStatusFull(projection LifecycleProjection, width int) string
 			openFindings++
 		}
 	}
-	lines = append(lines, fmt.Sprintf("Memory: %d instincts | %d observations", len(memory.Instincts), len(memory.Observations)))
-	lines = append(lines, fmt.Sprintf("Findings: %d open | %d recorded", openFindings, len(projection.Findings.Value)))
+	lines = append(lines, voiceLine("learning", fmt.Sprintf("Memory: %d instincts (lessons learned) | %d observations", len(memory.Instincts), len(memory.Observations))))
+	lines = append(lines, voiceLine("flag", fmt.Sprintf("Findings: %d open | %d recorded", openFindings, len(projection.Findings.Value))))
 	verificationLabel := "Unknown"
+	verificationKind := "status"
 	if len(projection.Verification) > 0 {
 		verificationLabel = "Verified"
+		verificationKind = "done"
 		for _, gate := range projection.Verification {
 			if !gate.Passed {
 				verificationLabel = "Blocked"
+				verificationKind = "failed"
 				break
 			}
 		}
 	}
-	lines = append(lines, "Verification: "+verificationLabel)
+	lines = append(lines, voiceLine(verificationKind, "Verification: "+verificationLabel))
 	for _, gate := range projection.Verification {
 		status := "Passed"
+		kind := "done"
 		if !gate.Passed {
 			status = "Failed"
+			kind = "failed"
 		}
 		line := fmt.Sprintf("Gate %s: %s", emptyFallback(strings.TrimSpace(gate.Name), "unnamed"), status)
 		if strings.TrimSpace(gate.Detail) != "" {
 			line += " — " + strings.TrimSpace(gate.Detail)
 		}
-		lines = append(lines, line)
+		lines = append(lines, voiceLine(kind, line))
 	}
 	for _, evidence := range projection.Evidence {
 		line := "Evidence: " + emptyFallback(strings.TrimSpace(evidence.ID), "unnamed")
 		if strings.TrimSpace(evidence.Summary) != "" {
 			line += " — " + strings.TrimSpace(evidence.Summary)
 		}
-		lines = append(lines, line)
+		lines = append(lines, voiceLine("evidence", line))
 	}
 
-	lines = append(lines, "", "Elapsed & Reported Cost")
+	lines = append(lines, "", voiceLine("elapsed", "Elapsed & Reported Cost"))
 	if projection.Elapsed.Source.Provenance == LifecycleFactConfirmed {
-		lines = append(lines, "Elapsed: "+lifecycleStatusDuration(projection.Elapsed.Value))
+		lines = append(lines, voiceLine("elapsed", "Elapsed: "+lifecycleStatusDuration(projection.Elapsed.Value)))
 	} else {
-		lines = append(lines, "Elapsed: Unknown")
+		lines = append(lines, voiceLine("elapsed", "Elapsed: Unknown"))
 	}
-	lines = append(lines, "Reported cost: "+lifecycleStatusReportedCost(projection.ReportedCost))
+	lines = append(lines, voiceLine("cost", "Reported cost: "+lifecycleStatusReportedCost(projection.ReportedCost)))
 
-	lines = append(lines, "", "Recent History")
-	if len(projection.History.Value) == 0 {
-		lines = append(lines, "No history is recorded")
+	lines = append(lines, "", voiceLine("history", "Recent History"))
+	historyLines := lifecycleStatusHistoryLines(projection.History.Value)
+	if len(historyLines) == 0 {
+		lines = append(lines, voiceLine("history", "No history is recorded"))
 	} else {
-		start := len(projection.History.Value) - 5
-		if start < 0 {
-			start = 0
-		}
-		for _, event := range projection.History.Value[start:] {
-			lines = append(lines, "• "+strings.TrimSpace(event))
-		}
+		lines = append(lines, historyLines...)
 	}
 
-	lines = append(lines, "", "Open Items")
+	lines = append(lines, "", voiceLine("flag", "Open Items"))
 	openCount := 0
 	for _, issue := range projection.Warnings {
 		openCount++
-		lines = append(lines, lifecycleStatusIssueLine("Warning", issue))
+		lines = append(lines, voiceLine("warning", lifecycleStatusIssueLine("Warning", issue)))
 	}
 	for _, issue := range projection.Debt {
 		openCount++
-		lines = append(lines, lifecycleStatusIssueLine("Debt", issue))
+		lines = append(lines, voiceLine("warning", lifecycleStatusIssueLine("Debt", issue)))
 	}
 	for _, issue := range projection.Blockers {
 		openCount++
-		lines = append(lines, lifecycleStatusIssueLine("Blocker", issue))
+		lines = append(lines, voiceLine("blocked", lifecycleStatusIssueLine("Blocker", issue)))
 	}
 	for _, decision := range projection.OwnerDecisions {
 		openCount++
 		line := fmt.Sprintf("Owner decision %s: %s", emptyFallback(strings.TrimSpace(decision.ID), "unnamed"), emptyFallback(strings.TrimSpace(decision.Summary), "Reason not recorded"))
-		lines = append(lines, line)
+		lines = append(lines, voiceLine("question", line))
 	}
 	if openCount == 0 {
-		lines = append(lines, "No open items recorded")
+		lines = append(lines, voiceLine("done", "No open items recorded"))
 	}
 
-	lines = append(lines, "", "Next Up")
+	lines = append(lines, "", voiceLine("next", "Next Up"))
 	command := lifecycleStatusActionCommand(projection.NextAction)
-	lines = append(lines, "Command: "+emptyFallback(command, "Not available"))
-	lines = append(lines, "Reason: "+emptyFallback(strings.TrimSpace(projection.NextAction.Reason), "Not recorded"))
+	lines = append(lines, voiceLine("next", "Command: "+emptyFallback(command, "Not available")))
+	lines = append(lines, voiceLine("status", "Reason: "+emptyFallback(strings.TrimSpace(projection.NextAction.Reason), "Not recorded")))
 	for _, choice := range projection.NextAction.Choices {
-		lines = append(lines, "Choice: "+lifecycleStatusChoiceLine(choice))
+		lines = append(lines, voiceLine("alternative", "Choice: "+lifecycleStatusChoiceLine(choice)))
 	}
 	for _, alternative := range projection.Alternatives {
-		lines = append(lines, "Alternative: "+lifecycleStatusChoiceLine(alternative))
+		lines = append(lines, voiceLine("alternative", "Alternative: "+lifecycleStatusChoiceLine(alternative)))
 	}
 
 	return lifecycleStatusJoin(lines, width, false)
+}
+
+// lifecycleStatusHistoryLines turns the raw stored history slice into
+// glyph-led owner-facing sentences via the existing nextActionEventSentence
+// reader (cmd/next_action.go) -- never a second parser of the
+// `timestamp|event_type|source|message` bookkeeping format. An event whose
+// sentence is empty contributes no line; the caller falls back to the
+// no-history line only when every event skipped.
+func lifecycleStatusHistoryLines(events []string) []string {
+	if len(events) == 0 {
+		return nil
+	}
+	start := len(events) - 5
+	if start < 0 {
+		start = 0
+	}
+	var lines []string
+	for _, event := range events[start:] {
+		sentence := nextActionEventSentence(event)
+		if sentence == "" {
+			continue
+		}
+		lines = append(lines, voiceLine("history", sentence))
+	}
+	return lines
 }
 
 func renderLifecycleStatusCompact(projection LifecycleProjection, width int) string {
@@ -239,24 +276,35 @@ func renderLifecycleStatusCompact(projection LifecycleProjection, width int) str
 
 	lines := []string{
 		"━━ 🐜 C O L O N Y   S T A T U S ━━",
-		fmt.Sprintf("%s — %s", name, standing),
-		"Goal: " + emptyFallback(strings.TrimSpace(projection.Goal.Value), "Not recorded"),
-		fmt.Sprintf("Phase %d/%d | Tasks %d/%d", phase.CurrentNumber, phase.TotalPhases, phase.CompletedTasks, phase.TotalTasks),
+		voiceLine("colony", fmt.Sprintf("%s — %s", name, standing)),
+		voiceLine("goal", "Goal: "+emptyFallback(strings.TrimSpace(projection.Goal.Value), "Not recorded")),
+		voiceLine("phase", fmt.Sprintf("Phase %d/%d | Tasks %d/%d", phase.CurrentNumber, phase.TotalPhases, phase.CompletedTasks, phase.TotalTasks)),
 	}
 	if len(active) == 0 {
-		lines = append(lines, "No ants are active")
+		lines = append(lines, voiceLine("colony", "No ants are active"))
 	} else {
-		lines = append(lines, fmt.Sprintf("Active ants: %d | %s", len(active), active[0].Name))
+		named := active[0]
+		caste := strings.TrimSpace(named.Caste)
+		body := fmt.Sprintf("Active ants: %d | %s", len(active), named.Name)
+		if caste != "" {
+			lines = append(lines, casteIdentity(caste)+" "+body)
+		} else {
+			lines = append(lines, voiceLine("colony", body))
+		}
 	}
 	if len(terminal) > 0 {
 		latest := terminal[len(terminal)-1]
-		lines = append(lines, fmt.Sprintf("Latest outcome: %s — %s", emptyFallback(latest.Name, "Unnamed ant"), emptyFallback(latest.Status, "status unknown")))
+		outcomeKind := "done"
+		if !strings.EqualFold(strings.TrimSpace(latest.Status), "completed") {
+			outcomeKind = "failed"
+		}
+		lines = append(lines, voiceLine(outcomeKind, fmt.Sprintf("Latest outcome: %s — %s", emptyFallback(latest.Name, "Unnamed ant"), emptyFallback(latest.Status, "status unknown"))))
 	}
 	lines = append(lines,
-		fmt.Sprintf("Territory: %d records | Research: %d docs | Notes: %d unverified", len(research.Territory), len(research.Docs), len(research.Dreams)),
-		fmt.Sprintf("Open items: %d | Blockers: %d | Owner decisions: %d", openCount, len(projection.Blockers), len(projection.OwnerDecisions)),
-		fmt.Sprintf("Elapsed: %s | Reported cost: %s", lifecycleStatusCompactElapsed(projection.Elapsed), lifecycleStatusReportedCost(projection.ReportedCost)),
-		"Next Up: "+emptyFallback(lifecycleStatusActionCommand(projection.NextAction), "Not available"),
+		voiceLine("artifact", fmt.Sprintf("Territory: %d records | Research: %d docs | Notes: %d unverified", len(research.Territory), len(research.Docs), len(research.Dreams))),
+		voiceLine("warning", fmt.Sprintf("Open items: %d | Blockers: %d | Owner decisions: %d", openCount, len(projection.Blockers), len(projection.OwnerDecisions))),
+		voiceLine("cost", fmt.Sprintf("Elapsed: %s | Reported cost: %s", lifecycleStatusCompactElapsed(projection.Elapsed), lifecycleStatusReportedCost(projection.ReportedCost))),
+		voiceLine("next", "Next Up: "+emptyFallback(lifecycleStatusActionCommand(projection.NextAction), "Not available")),
 	)
 	return lifecycleStatusJoin(lines, width, true)
 }
@@ -280,21 +328,41 @@ func lifecycleStatusTailActors(actors []LifecycleActorFact, limit int) []Lifecyc
 	return actors[len(actors)-limit:]
 }
 
+// lifecycleStatusActorLine opens with the helper's own identity -- the exact
+// casteIdentity() rendering the live cockpit (cmd/watch_dashboard.go) and the
+// spawn list (renderSpawnEntry, cmd/status.go) already use -- rather than a
+// bare prefix word followed by a parenthetical caste name. When no caste is
+// recorded, it falls back to the generic colony glyph so the line still
+// opens with a symbol. Reads only the actor fact it was handed; no file
+// read, no second lifecycle derivation.
 func lifecycleStatusActorLine(prefix string, actorFact LifecycleActorFact) string {
 	name := emptyFallback(strings.TrimSpace(actorFact.Name), "Unnamed ant")
 	caste := strings.TrimSpace(actorFact.Caste)
 	status := emptyFallback(strings.TrimSpace(actorFact.Status), "status unknown")
-	line := fmt.Sprintf("%s: %s", prefix, name)
-	if caste != "" {
-		line += " (" + caste + ")"
-	}
-	line += " — " + status
+	body := fmt.Sprintf("%s: %s", prefix, name)
+	body += " — " + status
 	if strings.TrimSpace(actorFact.Summary) != "" {
-		line += ": " + strings.TrimSpace(actorFact.Summary)
+		body += ": " + strings.TrimSpace(actorFact.Summary)
 	} else if strings.TrimSpace(actorFact.Task) != "" {
-		line += ": " + strings.TrimSpace(actorFact.Task)
+		body += ": " + strings.TrimSpace(actorFact.Task)
 	}
-	return line
+	if caste != "" {
+		return casteIdentity(caste) + " " + body
+	}
+	return voiceLine("colony", body)
+}
+
+// lifecycleStatusLineageActorLabel translates the one repo-invented actor
+// name a lineage row can carry -- "Queen", the root of every spawn tree
+// (pkg/agent/spawn.go's spawnRootParentNames) -- into CLAUDE.md's own
+// vocabulary shape: the ordinary word leads, the repo's name for it follows
+// in parentheses in the same line. Every other actor name (a helper's own
+// generated name) is not a repo-invented word and passes through unchanged.
+func lifecycleStatusLineageActorLabel(name string) string {
+	if strings.EqualFold(strings.TrimSpace(name), "Queen") {
+		return "Coordinator (Queen)"
+	}
+	return name
 }
 
 func lifecycleStatusLatestPath(paths []string) string {
@@ -393,17 +461,49 @@ func lifecycleStatusWrapLine(line string, width int) []string {
 	return result
 }
 
+// lifecycleStatusGlyphTokens splits line into printable units for width
+// fitting: a lone rune, or a base rune immediately followed by a variation
+// selector (U+FE0F, the modifier several voice/caste glyphs carry -- e.g.
+// "⏱️", "👁️"). Every fit or truncation below operates on these tokens, never
+// on raw runes, so a glyph and its selector are always kept or dropped
+// together -- never split mid-sequence.
+func lifecycleStatusGlyphTokens(line string) []string {
+	runes := []rune(line)
+	tokens := make([]string, 0, len(runes))
+	for i := 0; i < len(runes); i++ {
+		if i+1 < len(runes) && runes[i+1] == '️' {
+			tokens = append(tokens, string(runes[i])+string(runes[i+1]))
+			i++
+			continue
+		}
+		tokens = append(tokens, string(runes[i]))
+	}
+	return tokens
+}
+
 func lifecycleStatusFitLine(line string, width int) string {
 	if width < 1 || utf8.RuneCountInString(line) <= width {
 		return line
 	}
-	if width < 5 {
-		return string([]rune(line)[:width])
+	tokens := lifecycleStatusGlyphTokens(line)
+	if len(tokens) <= width {
+		return line
 	}
-	runes := []rune(line)
+	if width < 5 {
+		if width > len(tokens) {
+			width = len(tokens)
+		}
+		return strings.Join(tokens[:width], "")
+	}
 	left := (width - 1) / 2
 	right := width - 1 - left
-	return string(runes[:left]) + "…" + string(runes[len(runes)-right:])
+	if left > len(tokens) {
+		left = len(tokens)
+	}
+	if right > len(tokens)-left {
+		right = len(tokens) - left
+	}
+	return strings.Join(tokens[:left], "") + "…" + strings.Join(tokens[len(tokens)-right:], "")
 }
 
 func colorLifecycleStatus(output string) string {
@@ -411,9 +511,16 @@ func colorLifecycleStatus(output string) string {
 		return output
 	}
 	headings := map[string]bool{
-		"Colony": true, "Phase & Tasks": true, "Ants & Outcomes": true,
-		"Pheromones": true, "Territory & Notes": true, "Memory, Findings & Gates": true,
-		"Elapsed & Reported Cost": true, "Recent History": true, "Open Items": true, "Next Up": true,
+		voiceLine("colony", lifecycleStatusColonyTitle):   true,
+		voiceLine("phase", "Phase & Tasks"):               true,
+		voiceLine("colony", "Ants & Outcomes"):            true,
+		voiceLine("focus", lifecycleStatusPheromoneTitle): true,
+		voiceLine("artifact", "Territory & Notes"):        true,
+		voiceLine("learning", "Memory, Findings & Gates"): true,
+		voiceLine("elapsed", "Elapsed & Reported Cost"):   true,
+		voiceLine("history", "Recent History"):            true,
+		voiceLine("flag", "Open Items"):                   true,
+		voiceLine("next", "Next Up"):                      true,
 	}
 	lines := strings.Split(strings.TrimSuffix(output, "\n"), "\n")
 	for index, line := range lines {

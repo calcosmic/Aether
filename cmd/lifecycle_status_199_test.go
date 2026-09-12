@@ -96,9 +96,20 @@ func TestLifecycleStatus199FullOrder(t *testing.T) {
 	}
 
 	output := stripANSI(renderLifecycleStatus(projection, 100))
+	// Each heading is asserted as its exact voiced (glyph-led) form -- not the
+	// bare section name -- so this proves the title is glyph-led rather than
+	// merely present as a substring a flat (unvoiced) line would also satisfy.
 	wantHeadings := []string{
-		"Colony", "Phase & Tasks", "Ants & Outcomes", "Pheromones", "Territory & Notes",
-		"Memory, Findings & Gates", "Elapsed & Reported Cost", "Recent History", "Open Items", "Next Up",
+		voiceLine("colony", lifecycleStatusColonyTitle),
+		voiceLine("phase", "Phase & Tasks"),
+		voiceLine("colony", "Ants & Outcomes"),
+		voiceLine("focus", lifecycleStatusPheromoneTitle),
+		voiceLine("artifact", "Territory & Notes"),
+		voiceLine("learning", "Memory, Findings & Gates"),
+		voiceLine("elapsed", "Elapsed & Reported Cost"),
+		voiceLine("history", "Recent History"),
+		voiceLine("flag", "Open Items"),
+		voiceLine("next", "Next Up"),
 	}
 	last := -1
 	for _, heading := range wantHeadings {
@@ -113,7 +124,7 @@ func TestLifecycleStatus199FullOrder(t *testing.T) {
 	}
 
 	for _, want := range []string{
-		"Atlas", "Ship the complete status", "Mason-1", "Queen → Mason-1", "FOCUS",
+		"Atlas", "Ship the complete status", "Mason-1", "Coordinator (Queen) → Mason-1", "FOCUS",
 		"research/front-door.md", "dreams/2026-09-03-status.md", "Unverified local note",
 		"1500 tokens", "gate-tests", "history-entry", "owner-decision", "aether continue",
 	} {
