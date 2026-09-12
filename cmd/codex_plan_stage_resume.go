@@ -170,6 +170,22 @@ func buildPlanningStageResumeManifest(root string, state colony.ColonyState, res
 	dispatches := []codexPlanningDispatch{dispatch}
 	attachPlanningDispatchSkillAssignments(dispatches)
 	dispatches[0].Brief = renderPlanningWorkerBrief(root, survey, spec, &stageManifest)
+	if resume.Caste == planningStageCasteScout {
+		// This resume path issues every second and later research round, and it
+		// used to rebuild the Scout's brief without the research policy -- so
+		// those Scouts were never told how to record evidence or that they may
+		// never approve anything. The policy is run-wide; the weakest gap is
+		// this round's own.
+		header, err := loadPlanningScoutRunHeader(root, stageManifest)
+		if err != nil {
+			return codexPlanManifest{}, fmt.Errorf("load the research policy for the resumed Scout: %w", err)
+		}
+		policy := header.ResearchPolicy
+		if stageManifest.WeakestGap != nil {
+			policy.WeakestGapID = strings.TrimSpace(stageManifest.WeakestGap.ID)
+		}
+		dispatches[0].Brief += renderAutomaticPhaseResearchPolicy(policy)
+	}
 
 	manifest := codexPlanManifest{
 		Goal:               strings.TrimSpace(*state.Goal),

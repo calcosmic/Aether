@@ -2130,9 +2130,6 @@ func runCodexPlanPlanOnlyInSession(session *planningMutationSession, state colon
 	if err != nil {
 		return nil, err
 	}
-	for i := range dispatches {
-		dispatches[i].Brief += renderAutomaticPhaseResearchPolicy(header.ResearchPolicy)
-	}
 	var persistedState *colony.ColonyState
 	if persistState {
 		persistedState = &state
@@ -2151,6 +2148,10 @@ func runCodexPlanPlanOnlyInSession(session *planningMutationSession, state colon
 		if iterationAppendix != "" {
 			dispatches[i].Brief += iterationAppendix
 		}
+		// The research policy must follow the re-render: it used to be appended
+		// before it, so the re-render silently dropped the Scout's evidence
+		// rules -- record sources as typed evidence, never approve anything.
+		dispatches[i].Brief += renderAutomaticPhaseResearchPolicy(header.ResearchPolicy)
 	}
 	dispatchContract = planningScoutStageDispatchContract(dispatches, opts.WorkerTimeout)
 
