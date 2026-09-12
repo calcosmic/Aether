@@ -169,7 +169,7 @@ func buildPlanningStageResumeManifest(root string, state colony.ColonyState, res
 	}
 	dispatches := []codexPlanningDispatch{dispatch}
 	attachPlanningDispatchSkillAssignments(dispatches)
-	dispatches[0].Brief = renderPlanningWorkerBrief(root, survey, spec)
+	dispatches[0].Brief = renderPlanningWorkerBrief(root, survey, spec, &stageManifest)
 
 	manifest := codexPlanManifest{
 		Goal:               strings.TrimSpace(*state.Goal),

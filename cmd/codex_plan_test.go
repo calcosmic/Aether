@@ -3353,7 +3353,7 @@ func TestPlanningWorkerBriefIncludesCodegraphContext(t *testing.T) {
 
 	brief := renderPlanningWorkerBrief(root, codexSurveyContext{
 		EntryPoints: []string{"src/app.ts"},
-	}, planningWorkerSpecs[0])
+	}, planningWorkerSpecs[0], nil)
 
 	if !strings.Contains(brief, "## Codebase Graph Context") {
 		t.Fatalf("planning brief missing codegraph context:\n%s", brief)
@@ -3369,7 +3369,7 @@ func TestPlanningWorkerBriefIncludesLoopGuards(t *testing.T) {
 		SurveyDocs: []string{"BLUEPRINT.md", "PATHOGENS.md"},
 	}
 
-	scoutBrief := renderPlanningWorkerBrief(root, survey, planningWorkerSpecs[0])
+	scoutBrief := renderPlanningWorkerBrief(root, survey, planningWorkerSpecs[0], nil)
 	for _, want := range []string{
 		"Loop guard: read each file at most once",
 		"Scout read budget",
@@ -3382,7 +3382,7 @@ func TestPlanningWorkerBriefIncludesLoopGuards(t *testing.T) {
 		}
 	}
 
-	routeBrief := renderPlanningWorkerBrief(root, survey, planningWorkerSpecs[1])
+	routeBrief := renderPlanningWorkerBrief(root, survey, planningWorkerSpecs[1], nil)
 	for _, want := range []string{
 		"Loop guard: read each file at most once",
 		"Route-Setter read budget",
@@ -3409,7 +3409,7 @@ func TestPlanningWorkerBriefIncludesSurveyFindingsAsBuildableGuidance(t *testing
 		Issues:       []string{"Codex planning currently drops Scout results"},
 	}
 
-	brief := renderPlanningWorkerBrief(root, survey, planningWorkerSpecs[1])
+	brief := renderPlanningWorkerBrief(root, survey, planningWorkerSpecs[1], nil)
 	for _, want := range []string{
 		"## Scout Planning Guidance",
 		"Primary execution surfaces live around cmd/main.go",
@@ -3433,7 +3433,7 @@ func TestRenderPlanningWorkerBrief_SourceAnchors(t *testing.T) {
 			SurveyDocs:    []string{"BLUEPRINT.md"},
 			SourceAnchors: []string{"cmd/main.go", "pkg/storage/store.go", "cmd/codex_plan.go"},
 		}
-		brief := renderPlanningWorkerBrief(root, survey, planningWorkerSpecs[1])
+		brief := renderPlanningWorkerBrief(root, survey, planningWorkerSpecs[1], nil)
 		if !strings.Contains(brief, "Source anchors available: 3 repo-owned files from survey") {
 			t.Fatalf("route-setter brief missing source anchor hint:\n%s", brief)
 		}
@@ -3443,7 +3443,7 @@ func TestRenderPlanningWorkerBrief_SourceAnchors(t *testing.T) {
 		survey := codexSurveyContext{
 			SurveyDocs: []string{"BLUEPRINT.md"},
 		}
-		brief := renderPlanningWorkerBrief(root, survey, planningWorkerSpecs[1])
+		brief := renderPlanningWorkerBrief(root, survey, planningWorkerSpecs[1], nil)
 		if strings.Contains(brief, "Source anchors available") {
 			t.Fatalf("route-setter brief should not mention source anchors when empty:\n%s", brief)
 		}
@@ -3674,7 +3674,7 @@ func TestPlanningWorkerBriefGatekeeperNeverInstructsCLI(t *testing.T) {
 		t.Fatal("planningWorkerSpecForCaste(gatekeeper) should return a spec")
 	}
 
-	brief := renderPlanningWorkerBrief(root, survey, spec)
+	brief := renderPlanningWorkerBrief(root, survey, spec, nil)
 	// Gatekeeper has no Bash tool by design; an instruction to run
 	// `aether review-ledger-write` is unsatisfiable and made the caste
 	// self-report blocked (Pocket-Chopper field report).

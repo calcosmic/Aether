@@ -11,6 +11,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -2091,7 +2092,7 @@ func runCodexPlanPlanOnlyInSession(session *planningMutationSession, state colon
 	iterationAppendix := planningIterationAppendix(iterationSeed, iteration) + renderPlanRevisionWorkerAppendix(root, revisionContext)
 	for i := range dispatches {
 		dispatches[i].Status = "planned"
-		dispatches[i].Brief = renderPlanningWorkerBrief(root, survey, specs[i])
+		dispatches[i].Brief = renderPlanningWorkerBrief(root, survey, specs[i], nil)
 		if iterationAppendix != "" {
 			dispatches[i].Brief += iterationAppendix
 		}
@@ -2143,6 +2144,13 @@ func runCodexPlanPlanOnlyInSession(session *planningMutationSession, state colon
 		dispatches[i].Stage = string(planningStageScoutRunning)
 		dispatches[i].TaskID = stageManifest.AuthorizationID
 		dispatches[i].StageManifest = &stageManifest
+		// Re-render now that the stage manifest exists. The brief above was
+		// composed before it did, so it carried the legacy whole-chain
+		// contract -- which a staged worker cannot satisfy.
+		dispatches[i].Brief = renderPlanningWorkerBrief(root, survey, specs[i], &stageManifest)
+		if iterationAppendix != "" {
+			dispatches[i].Brief += iterationAppendix
+		}
 	}
 	dispatchContract = planningScoutStageDispatchContract(dispatches, opts.WorkerTimeout)
 
@@ -2553,7 +2561,7 @@ func dispatchRealPlanningWorkersWithIterationContext(ctx context.Context, root s
 			Timeout:           workerTimeout,
 			PermissionProfile: planned[i].PermissionProfile,
 		}
-		dispatch.TaskBrief = renderPlanningWorkerBrief(root, survey, spec, scoutGuidance)
+		dispatch.TaskBrief = renderPlanningWorkerBrief(root, survey, spec, nil, scoutGuidance)
 		if strings.TrimSpace(iterationAppendix) != "" {
 			dispatch.TaskBrief += iterationAppendix
 		}
@@ -3177,7 +3185,18 @@ func renderScoutPlanningGuidance(report codexScoutReport) string {
 	return strings.TrimSpace(b.String())
 }
 
-func renderPlanningWorkerBrief(root string, survey codexSurveyContext, spec planningWorkerSpec, scoutGuidanceOpt ...string) string {
+// renderPlanningWorkerBrief composes a planning worker's brief.
+//
+// stage is the staged run's manifest, or nil on the legacy whole-chain lane
+// (dispatchRealPlanningWorkersWithIterationContext), where a worker genuinely
+// does write ROUTE-SETTER.md and phase-plan.json into the repository. On the
+// staged lane neither is true: the worker's permission profile forbids
+// repository writes and the finalizer accepts ONLY the typed result payload,
+// strictly decoded with unknown fields rejected. Briefing a staged worker with
+// the legacy instructions told it to do work that would be refused -- a Scout
+// that followed its brief and returned `scout_report` was rejected outright --
+// so the two lanes must describe their own contracts rather than share one.
+func renderPlanningWorkerBrief(root string, survey codexSurveyContext, spec planningWorkerSpec, stage *planningStageManifest, scoutGuidanceOpt ...string) string {
 	planningDir := filepath.ToSlash(filepath.Join(".aether", "data", "planning"))
 	surveyDir := filepath.ToSlash(filepath.Join(".aether", "data", "survey"))
 	phaseResearchDir := filepath.ToSlash(filepath.Join(".aether", "data", "phase-research"))
@@ -3218,10 +3237,22 @@ func renderPlanningWorkerBrief(root string, survey codexSurveyContext, spec plan
 		b.WriteString("\n")
 	}
 	if spec.Caste == "route_setter" {
-		b.WriteString("- Read scout output before drafting phases if it exists: ")
-		b.WriteString(filepath.ToSlash(filepath.Join(planningDir, "SCOUT.md")))
-		b.WriteString("; if it is missing, proceed from the survey context and note the missing scout artifact in blockers only if it prevents a useful plan.")
-		b.WriteString("\n")
+		if stage != nil {
+			// The staged Scout's committed output, addressed the way the
+			// runtime addresses it. The old pointer named
+			// .aether/data/planning/SCOUT.md, which the staged lane never
+			// writes, so the Route-Setter was sent to a file that does not
+			// exist and told to treat its absence as a blocker.
+			b.WriteString("- The Scout's committed output for this run is under ")
+			b.WriteString(filepath.ToSlash(filepath.Join(planningDir, stage.RunID, "outputs")))
+			b.WriteString(" (one file per pass and caste). The wrapper also hands you the Scout's terminal result directly; prefer that.")
+			b.WriteString("\n")
+		} else {
+			b.WriteString("- Read scout output before drafting phases if it exists: ")
+			b.WriteString(filepath.ToSlash(filepath.Join(planningDir, "SCOUT.md")))
+			b.WriteString("; if it is missing, proceed from the survey context and note the missing scout artifact in blockers only if it prevents a useful plan.")
+			b.WriteString("\n")
+		}
 	}
 	b.WriteString("- Repo inspection rule: use targeted reads to confirm or extend survey findings; do not trawl the whole tree unless the survey lacks the needed detail.\n")
 	// Research the operator pointed this colony at. This is the only injection
@@ -3249,7 +3280,9 @@ func renderPlanningWorkerBrief(root string, survey codexSurveyContext, spec plan
 		b.WriteString(graphContext)
 		b.WriteString("\n\n")
 	}
-	if spec.Caste == "scout" {
+	if spec.Caste == "scout" && stage != nil {
+		b.WriteString(renderStagedResultContract(*stage, planningDir))
+	} else if spec.Caste == "scout" {
 		b.WriteString("Return planning findings in the final worker claims JSON only.\n")
 		b.WriteString("- Do not write files; Scout is read-only on every supported platform.\n")
 		b.WriteString("- Final result must include scout_report with findings, gaps, confidence, and study_files. Keep it compact enough for the Route-Setter to consume directly.\n")
@@ -3287,6 +3320,14 @@ func renderPlanningWorkerBrief(root string, survey codexSurveyContext, spec plan
 			b.WriteString("## Scout Planning Guidance\n")
 			b.WriteString(scoutGuidance)
 			b.WriteString("\n\n")
+		}
+		if stage != nil {
+			b.WriteString("- Route-Setter read budget: consume the manifest survey context and the Scout terminal result provided by the wrapper, then read at most 6 targeted repository files. Do not redo the Scout survey.\n")
+			b.WriteString("- If the Scout result is missing, continue from the manifest survey context and list that as a gap only if it blocks a useful plan.\n")
+			b.WriteString(renderStagedResultContract(*stage, planningDir))
+			b.WriteString("\nPlan the colony at ")
+			b.WriteString(root)
+			return b.String()
 		}
 		b.WriteString("Write planning outputs directly into the repository.\n")
 		b.WriteString("- Route-Setter read budget: consume the manifest survey context and the Scout terminal result provided by the wrapper, then read at most 6 targeted repository files. Do not redo the Scout survey.\n")
@@ -4748,4 +4789,99 @@ func renderResearchFailedWarning(failed []int) string {
 		return ""
 	}
 	return fmt.Sprintf("phase(s) %s planned WITHOUT its research — worker failed", joinInts(failed))
+}
+
+// renderStagedResultContract is the brief section telling a staged planning
+// worker exactly what to return.
+//
+// It names the schema, lists its required fields, and states plainly that
+// unknown fields are refused, because the finalizer decodes strictly
+// (DisallowUnknownFields) and accepts exactly one JSON value. Before this
+// existed the brief described a `scout_report` shape with `confidence` and
+// `study_files`, none of which the staged schema has -- so a Scout that
+// followed its own brief was rejected by the finalizer, which is the worst
+// kind of instruction: one that reads as authoritative and cannot succeed.
+//
+// The field list is derived from the result structs by reflection rather than
+// retyped here, so a schema change cannot leave this brief quietly describing
+// the old shape.
+func renderStagedResultContract(stage planningStageManifest, planningDir string) string {
+	resultType := expectedPlanningStageResult(stage.ExpectedCaste)
+	var target interface{}
+	switch stage.ExpectedCaste {
+	case planningStageCasteRouteSetter:
+		target = planningRouteStageResult{}
+	default:
+		target = planningScoutStageResult{}
+	}
+
+	var b strings.Builder
+	b.WriteString("Return exactly one JSON value: the ")
+	b.WriteString(string(resultType))
+	b.WriteString(" payload, as this worker's terminal result.\n")
+	b.WriteString("- Do not write planning files into the repository. This dispatch's permission profile forbids repository writes, and the finalizer accepts only the returned payload.\n")
+	b.WriteString("- Aether persists your artifact itself, under ")
+	b.WriteString(filepath.ToSlash(filepath.Join(planningDir, stage.RunID, "outputs")))
+	b.WriteString(", after the finalizer admits your result.\n")
+	required, optional := jsonFieldNames(target)
+	b.WriteString("- Required top-level fields: ")
+	b.WriteString(strings.Join(required, ", "))
+	b.WriteString("\n")
+	if len(optional) > 0 {
+		b.WriteString("- Optional fields (omit entirely when empty): ")
+		b.WriteString(strings.Join(optional, ", "))
+		b.WriteString("\n")
+	}
+	b.WriteString("- Unknown fields are REFUSED: the result is decoded strictly, so any field not listed above fails the whole submission. Send exactly one JSON value and nothing after it.\n")
+	b.WriteString("- Bind these to the manifest you were dispatched with: result_type=")
+	b.WriteString(string(resultType))
+	b.WriteString(", manifest_id=")
+	b.WriteString(stage.ID)
+	b.WriteString(", manifest_hash=")
+	b.WriteString(stage.ContentHash)
+	b.WriteString(", run_id=")
+	b.WriteString(stage.RunID)
+	b.WriteString(fmt.Sprintf(", pass=%d", stage.Pass))
+	b.WriteString(", caste=")
+	b.WriteString(string(stage.ExpectedCaste))
+	b.WriteString("\n")
+	return b.String()
+}
+
+// jsonFieldNames splits a struct's top-level JSON field names into required
+// and optional, in declaration order. `omitempty` is the optional marker.
+//
+// Deriving both lists from the struct is what stops the brief and the decoder
+// drifting apart, and the split matters: calling an omitempty field "required"
+// sends a worker hunting for a value it does not have, which is a softer
+// version of the same defect this contract exists to fix.
+func jsonFieldNames(value interface{}) (required []string, optional []string) {
+	t := reflect.TypeOf(value)
+	if t == nil || t.Kind() != reflect.Struct {
+		return nil, nil
+	}
+	for i := 0; i < t.NumField(); i++ {
+		tag := t.Field(i).Tag.Get("json")
+		if tag == "-" {
+			continue
+		}
+		parts := strings.Split(tag, ",")
+		name := strings.TrimSpace(parts[0])
+		if name == "" {
+			continue
+		}
+		isOptional := false
+		for _, opt := range parts[1:] {
+			if strings.TrimSpace(opt) == "omitempty" {
+				isOptional = true
+				break
+			}
+		}
+		if isOptional {
+			optional = append(optional, name)
+		} else {
+			required = append(required, name)
+		}
+	}
+	return required, optional
 }

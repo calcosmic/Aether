@@ -32,7 +32,7 @@ func printPlanningBriefs(root string, full bool) error {
 	fmt.Fprintf(&b, "  Phases so far: %d\n\n", len(state.Plan.Phases))
 
 	for _, spec := range planningWorkerSpecs {
-		brief := renderPlanningWorkerBrief(root, survey, spec)
+		brief := renderPlanningWorkerBrief(root, survey, spec, nil)
 		fmt.Fprintf(&b, "  %s\n", strings.ToUpper(spec.Caste))
 		for _, row := range []briefChecklistRow{
 			checklistRowFor(brief, "Territory Survey", "- Primary survey source:"),

@@ -333,7 +333,7 @@ func runPlanBriefCase198_2_06(t *testing.T, root string) string {
 		Task:      "Draft the phase plan",
 		Outputs:   []string{"phase-plan.json"},
 	}
-	return renderPlanningWorkerBrief(root, survey, spec)
+	return renderPlanningWorkerBrief(root, survey, spec, nil)
 }
 
 // runResearchBriefCase198_2_06 renders a real phase-research Scout brief the
