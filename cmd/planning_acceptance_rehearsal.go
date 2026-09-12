@@ -30,11 +30,11 @@ func rehearsePlanningRouteAcceptance(plan colony.Plan, specification *colony.Spe
 	if !ok {
 		return fmt.Errorf("specification has no current revision")
 	}
-	input, _, err := planningRouteCandidateProposalInput(plan, proposal.Phases)
+	input, prefix, err := planningRouteCandidateProposalInput(plan, proposal.Phases)
 	if err != nil {
 		return err
 	}
-	phases := planningRouteRenumberPhases(input)
+	phases := planningRouteRenumberPhases(input, prefix)
 	requirements, acceptance, negative, recovery, publicPaths := planningRouteProposalProofLinks(phases)
 	if err := validatePlanWideProofLinks("active revision", requirements, acceptance, negative, recovery, publicPaths, current); err != nil {
 		return err

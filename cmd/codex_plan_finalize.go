@@ -3212,7 +3212,11 @@ func validatePlanningRouteStageResultWithSession(root string, session *planningM
 	if err != nil {
 		return empty, err
 	}
-	proposalContract := planningRouteProposalContract(colonyState.Plan, colonyState.Specification, result.Proposal)
+	judged, err := planningRouteJudgedProposal(colonyState.Plan, result.Proposal)
+	if err != nil {
+		return empty, err
+	}
+	proposalContract := planningRouteProposalContract(colonyState.Plan, colonyState.Specification, judged)
 	proposalSnapshot, err := validatePlanProposalContract(proposalContract, &priorSnapshot)
 	if err != nil {
 		return empty, fmt.Errorf("Route-Setter proposal contract: %w", err)
@@ -3561,7 +3565,11 @@ func planningRoutePriorSnapshot(root string, state colony.ColonyState, manifest 
 		if err != nil {
 			return planningSemanticSnapshot{}, err
 		}
-		contract := planningRouteProposalContract(state.Plan, state.Specification, previousResult.Proposal)
+		judged, err := planningRouteJudgedProposal(state.Plan, previousResult.Proposal)
+		if err != nil {
+			return planningSemanticSnapshot{}, err
+		}
+		contract := planningRouteProposalContract(state.Plan, state.Specification, judged)
 		return validatePlanProposalContract(contract, nil)
 	}
 
@@ -4761,6 +4769,55 @@ func planningRouteCandidateProposalInput(plan colony.Plan, input []colony.Phase)
 	return result, prefix, nil
 }
 
+// planningRouteJudgedProposal is the proposal the drafting contract judges:
+// the exact phases the candidate will carry. During a replan the Route-Setter
+// is told to send only replacement work, numbered locally from 1.1, and Go
+// keeps the finished phases and places the new work after them. Judging that
+// suffix against a history that still held the finished phases demanded they
+// be removed -- and a finished phase removed at drafting but restored when the
+// candidate is built is a plan acceptance refuses. So the contract judges the
+// restored prefix plus the renumbered suffix: a preserved task gets a no-file
+// declaration when the Route-Setter sent none, and removals aimed at finished
+// work are dropped, because finished phases are immutable.
+func planningRouteJudgedProposal(plan colony.Plan, proposal planningRoutePlanProposal) (planningRoutePlanProposal, error) {
+	input, prefix, err := planningRouteCandidateProposalInput(plan, proposal.Phases)
+	if err != nil {
+		return proposal, err
+	}
+	if prefix == 0 {
+		return proposal, nil
+	}
+	judged := proposal
+	judged.Phases = planningRouteRenumberPhases(input, prefix)
+	declared := make(map[string]struct{}, len(proposal.TaskDeclarations))
+	for _, declaration := range proposal.TaskDeclarations {
+		declared[canonicalPlanningText(declaration.TaskSemanticID)] = struct{}{}
+	}
+	judged.TaskDeclarations = append([]planningRouteTaskDeclaration(nil), proposal.TaskDeclarations...)
+	finished := make(map[string]struct{})
+	for _, phase := range judged.Phases[:prefix] {
+		finished[canonicalPlanningText(phase.SemanticID)] = struct{}{}
+		for _, task := range phase.Tasks {
+			semanticID := canonicalPlanningText(task.SemanticID)
+			finished[semanticID] = struct{}{}
+			if _, ok := declared[semanticID]; !ok {
+				judged.TaskDeclarations = append(judged.TaskDeclarations, planningRouteTaskDeclaration{
+					TaskSemanticID: task.SemanticID,
+					NoFileReason:   "Completed work is preserved and is not redispatched by this revision.",
+				})
+			}
+		}
+	}
+	judged.Removals = nil
+	for _, removal := range proposal.Removals {
+		if _, isFinished := finished[canonicalPlanningText(removal.SemanticID)]; isFinished {
+			continue
+		}
+		judged.Removals = append(judged.Removals, removal)
+	}
+	return judged, nil
+}
+
 // planningRouteRenumberPhases renumbers a Route proposal's tasks to phase.task
 // by position -- the IDs build and acceptance use -- after first rewriting every
 // dependency that names a task by its proposal-time ID through the same
@@ -4769,17 +4826,20 @@ func planningRouteCandidateProposalInput(plan colony.Plan, input []colony.Phase)
 // pointing at nothing and silently re-pointed a plan numbered from phase 2; the
 // owner could then approve a plan acceptance refused. Dependencies that name a
 // task by its semantic ID are left alone: they resolve by that ID.
-func planningRouteRenumberPhases(input []colony.Phase) []colony.Phase {
+func planningRouteRenumberPhases(input []colony.Phase, preservedPrefix int) []colony.Phase {
 	phases := clonePhases(input)
+	// Only the Route-Setter's own work is renamed. The preserved prefix keeps
+	// its accepted IDs and dependencies; a replan numbers its replacement tasks
+	// locally from 1.1, which would otherwise collide with the prefix's own.
 	renamed := make(map[string]string)
-	for phaseIndex := range phases {
+	for phaseIndex := preservedPrefix; phaseIndex < len(phases); phaseIndex++ {
 		for taskIndex := range phases[phaseIndex].Tasks {
 			if old := canonicalPlanningText(ptrStr(phases[phaseIndex].Tasks[taskIndex].ID)); old != "" {
 				renamed[old] = fmt.Sprintf("%d.%d", phaseIndex+1, taskIndex+1)
 			}
 		}
 	}
-	for phaseIndex := range phases {
+	for phaseIndex := preservedPrefix; phaseIndex < len(phases); phaseIndex++ {
 		for taskIndex := range phases[phaseIndex].Tasks {
 			task := &phases[phaseIndex].Tasks[taskIndex]
 			task.DependsOn = append([]string(nil), task.DependsOn...)
@@ -4794,7 +4854,7 @@ func planningRouteRenumberPhases(input []colony.Phase) []colony.Phase {
 }
 
 func planningRouteCandidatePhases(input []colony.Phase, preservedPrefix int, candidateID, candidateHash string, specification planningStageSpecificationBinding, timeline colony.PlanningTimelineBinding, delta colony.PlanningSemanticDelta) []colony.Phase {
-	phases := planningRouteRenumberPhases(input)
+	phases := planningRouteRenumberPhases(input, preservedPrefix)
 	if preservedPrefix > 0 && preservedPrefix < len(phases) {
 		phases[preservedPrefix].Status = colony.PhaseReady
 	}
