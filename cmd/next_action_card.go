@@ -54,19 +54,26 @@ func renderNextActionCardForPlatform(answer nextAction, platform string) string 
 	}
 
 	// 2. What changed.
-	if list := renderIndentedList(answer.Changed); list != "" {
+	if list := renderIndentedList(voicedLines("history", answer.Changed)); list != "" {
 		b.WriteString("\n")
 		b.WriteString(renderStageMarker("What changed"))
 		b.WriteString(cardText(list, platform))
 	}
 
 	// 3. Anything open that is waiting on the owner.
-	if list := renderIndentedList(nextActionFlagLines(answer.Open.Flags)); list != "" {
+	if list := renderIndentedList(voicedLines("flag", nextActionFlagLines(answer.Open.Flags))); list != "" {
 		b.WriteString("\n")
 		b.WriteString(renderStageMarker("Waiting on you"))
 		b.WriteString(cardText(list, platform))
 	}
-	if list := renderIndentedList(answer.Open.Signals); list != "" {
+	// The signal-type glyph would require knowing each signal's FOCUS/
+	// REDIRECT/FEEDBACK type, but answer.Open.Signals is already flattened
+	// to plain text by the resolver (nextActionInputForState -> Signals
+	// []string) -- there is no type left to key a glyph by without a second
+	// read, which CEC-05/SYN-VOICE-05 forbids at this pure-rendering layer.
+	// `feedback` is the closest single category every standing instruction
+	// shares: it is steering guidance, the same concept FEEDBACK signals name.
+	if list := renderIndentedList(voicedLines("feedback", answer.Open.Signals)); list != "" {
 		b.WriteString("\n")
 		b.WriteString(renderStageMarker("Your standing instructions"))
 		b.WriteString(cardText(list, platform))
@@ -100,7 +107,7 @@ func renderNextActionCardForPlatform(answer nextAction, platform string) string 
 
 	// Any place the availability check substituted a command. The owner is
 	// never silently redirected to something other than what was decided.
-	if list := renderIndentedList(answer.Notes); list != "" {
+	if list := renderIndentedList(voicedLines("warning", answer.Notes)); list != "" {
 		b.WriteString("\n")
 		b.WriteString(renderStageMarker("Heads up"))
 		b.WriteString(cardText(list, platform))
@@ -195,23 +202,41 @@ func cardText(text, platform string) string {
 	return translateHintCommandsForPlatform(text, platform)
 }
 
+// voicedLines applies voiceLine(kind, ...) to every non-blank entry of lines,
+// dropping blanks, so the result can be handed straight to renderIndentedList
+// -- which stays untouched, since many other screens share it (RESEARCH.md's
+// "Pitfall 1": call the existing funnel, never hand-roll a second one).
+func voicedLines(kind string, lines []string) []string {
+	voiced := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		voiced = append(voiced, voiceLine(kind, line))
+	}
+	return voiced
+}
+
 // renderNextActionStanding is the "where things stand" block: the goal in the
 // owner's own words, how far along the work is, and how far through the plan.
+// Every line is glyph-led with `phase` -- this whole section is "where the
+// project stands right now", the phase-shaped fact.
 func renderNextActionStanding(standing nextActionStanding) string {
 	var b strings.Builder
 	if goal := strings.TrimSpace(standing.Goal); goal != "" {
-		b.WriteString("Goal: ")
-		b.WriteString(goal)
+		b.WriteString(voiceLine("phase", "Goal: "+goal))
 		b.WriteString("\n")
 	}
 	if explanation := strings.TrimSpace(standing.Explanation); explanation != "" {
-		b.WriteString(explanation)
+		b.WriteString(voiceLine("phase", explanation))
 		b.WriteString("\n")
 	}
 	if milestone := strings.TrimSpace(standing.Milestone); milestone != "" {
 		// The milestone is this project's own name for how far along it is, so
 		// it is labelled rather than dropped in bare.
-		b.WriteString(fmt.Sprintf("Stage reached: %s.\n", milestone))
+		b.WriteString(voiceLine("phase", fmt.Sprintf("Stage reached: %s.", milestone)))
+		b.WriteString("\n")
 	}
 	return b.String()
 }
@@ -222,11 +247,11 @@ func renderNextActionStanding(standing nextActionStanding) string {
 // is simply absent, never a "nothing learned yet" filler line (D-14). Every
 // sentence is written for someone who has never opened a file here: "learned
 // habit" and "the last helper left a note" stand in for this repo's own
-// words for those things.
+// words for those things. Every line is glyph-led with `memory`.
 func renderNextActionMemory(mem nextActionMemory) string {
 	var b strings.Builder
 	if pref := strings.TrimSpace(mem.Preferences); pref != "" {
-		b.WriteString(pref)
+		b.WriteString(voiceLine("memory", pref))
 		b.WriteString("\n")
 	}
 	for _, habit := range mem.Habits {
@@ -234,12 +259,11 @@ func renderNextActionMemory(mem nextActionMemory) string {
 		if habit == "" {
 			continue
 		}
-		b.WriteString("Learned habit: ")
-		b.WriteString(habit)
+		b.WriteString(voiceLine("memory", "Learned habit: "+habit))
 		b.WriteString("\n")
 	}
 	if note := strings.TrimSpace(mem.RelayNote); note != "" {
-		b.WriteString(note)
+		b.WriteString(voiceLine("memory", note))
 		b.WriteString("\n")
 	}
 	return b.String()
@@ -269,17 +293,17 @@ func nextActionFlagLines(flags []nextActionFlag) []string {
 func renderNextActionContextHealth(verdict nextActionContextVerdict) string {
 	switch verdict.Health {
 	case contextHealthSafe:
-		return "Everything needed to pick this back up is written down, so it is safe to close this chat."
+		return voiceLine("checkpoint", "Everything needed to pick this back up is written down, so it is safe to close this chat.")
 	case contextHealthClearRecommended:
-		return "This is a natural break, and everything is written down -- it is safe to close this chat, " +
-			"and starting a fresh one from here will work better than carrying this one on."
+		return voiceLine("checkpoint", "This is a natural break, and everything is written down -- it is safe to close this chat, "+
+			"and starting a fresh one from here will work better than carrying this one on.")
 	case contextHealthKeep:
 		switch verdict.Reason {
 		case contextReasonBuildInProgress:
-			return "Don't close this chat yet -- work is still running, and closing now would lose what is in flight."
+			return voiceLine("checkpoint", "Don't close this chat yet -- work is still running, and closing now would lose what is in flight.")
 		default:
-			return "Don't close this chat yet -- the handover note that lets you pick up where you left off " +
-				"has not been written to disk."
+			return voiceLine("checkpoint", "Don't close this chat yet -- the handover note that lets you pick up where you left off "+
+				"has not been written to disk.")
 		}
 	}
 	return ""
@@ -347,28 +371,27 @@ func nextActionFromResult(result map[string]interface{}) (nextAction, bool) {
 	return answer, ok
 }
 
-// renderNextActionRecovery is the paused-or-blocked block.
+// renderNextActionRecovery is the paused-or-blocked block. Every line is
+// glyph-led with `blocked`.
 func renderNextActionRecovery(recovery nextActionRecovery) string {
 	if !recovery.Paused && !recovery.Blocked {
 		return ""
 	}
 	var b strings.Builder
 	if explanation := strings.TrimSpace(recovery.Explanation); explanation != "" {
-		b.WriteString(explanation)
+		b.WriteString(voiceLine("blocked", explanation))
 		b.WriteString("\n")
 	}
 	if pausedAt := strings.TrimSpace(recovery.PausedAt); pausedAt != "" {
-		b.WriteString("Paused at: ")
-		b.WriteString(pausedAt)
+		b.WriteString(voiceLine("blocked", "Paused at: "+pausedAt))
 		b.WriteString("\n")
 	}
 	if summary := strings.TrimSpace(recovery.Summary); summary != "" {
-		b.WriteString(summary)
+		b.WriteString(voiceLine("blocked", summary))
 		b.WriteString("\n")
 	}
 	if path := strings.TrimSpace(recovery.ReportPath); path != "" {
-		b.WriteString("The report is saved at: ")
-		b.WriteString(path)
+		b.WriteString(voiceLine("blocked", "The report is saved at: "+path))
 		b.WriteString("\n")
 	}
 	return b.String()

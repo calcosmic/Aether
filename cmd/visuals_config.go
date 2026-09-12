@@ -23,6 +23,7 @@ type visualsConfig struct {
 	CasteColorMap   map[string]string   `yaml:"caste_color_map"`
 	CasteLabelMap   map[string]string   `yaml:"caste_label_map"`
 	CommandEmojiMap map[string]string   `yaml:"command_emoji_map"`
+	VoiceGlyphMap   map[string]string   `yaml:"voice_glyph_map"`
 	CastePrefixes   map[string][]string `yaml:"caste_prefixes"`
 	DefaultPrefixes []string            `yaml:"default_prefixes"`
 	AetherWordmark  string              `yaml:"aether_wordmark"`

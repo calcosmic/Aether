@@ -1,0 +1,52 @@
+{
+  "blocks": [
+    {
+      "name": "status",
+      "commit": "3a5b81c2",
+      "path": ".claude/commands/ant/status.md",
+      "start_marker": "👑 Goal:",
+      "end_marker": "Next:  <suggested_command>",
+      "sha256": "c115bf4c0f18282dc9e51cffe7c3211501cfffc6a9018d0d9feea117f6c4c6cc"
+    },
+    {
+      "name": "build-compact",
+      "commit": "3a5b81c2",
+      "path": ".claude/commands/ant/build.md",
+      "start_marker": "🔨 PHASE {id} {status_icon}",
+      "end_marker": "--verbose for spawn tree, TDD details, patterns",
+      "sha256": "f494d614d4cba342277a83c160729e9d4ab5a59c76d0d5fafa3038eff76407a9"
+    },
+    {
+      "name": "build-full",
+      "commit": "3a5b81c2",
+      "path": ".claude/commands/ant/build.md",
+      "start_marker": "P H A S E   {id}   C O M P L E T E",
+      "end_marker": "State persisted — safe to /clear, then run /ant:continue",
+      "sha256": "cf7730ae1f80fdc9558cad822a249751b0bfa3dc9304c4d6ba4e5ff5f78fd441"
+    },
+    {
+      "name": "council",
+      "commit": "3a5b81c2",
+      "path": ".claude/commands/ant/council.md",
+      "start_marker": "A N T   C O U N C I L",
+      "end_marker": "Phase: {current_phase}",
+      "sha256": "4633fd063f1a590f00f37e6320ea7617e2aaae015c4279c7b209d1e423f53239"
+    },
+    {
+      "name": "entomb",
+      "commit": "3a5b81c2",
+      "path": ".claude/commands/ant/entomb.md",
+      "start_marker": "E N T O M B   C O L O N Y",
+      "end_marker": "Continue? (yes/no)",
+      "sha256": "19a30f3450d314f09bee5deb77d9929377ef9514de8f167d6322160bdce8d52e"
+    },
+    {
+      "name": "plan",
+      "commit": "794fadfb",
+      "path": ".claude/commands/ant/plan.md",
+      "start_marker": "C O L O N Y   P L A N",
+      "end_marker": "Plan persisted — safe to /clear before building",
+      "sha256": "bc465baec0000a1a9304d83076aae86dac7626123e76b7281869cfc8fa503785"
+    }
+  ]
+}

@@ -176,6 +176,101 @@ var casteLabelMap = map[string]string{
 	"curator":   "Curator",
 }
 
+// voiceGlyphMap is the one semantic line-type glyph table (Phase 202.1,
+// CEC-09/SYN-VOICE-01): every non-caste glyph a rendered screen needs, keyed
+// by the kind of fact the line states, restoring the Classic house style
+// (github.com/calcosmic/Aether commit 3a5b81c2 "Open Chambers") where every
+// content line opened with a glyph naming its category. Every value below is
+// either lifted verbatim from a Classic display block quoted in
+// .planning/phases/202.1-classic-visual-voice/202.1-RESEARCH.md section 2, or
+// chosen by semantic analogy to the nearest Classic category, recorded here
+// (RESEARCH.md's Open Question 2 / Assumption A2 resolution):
+//
+//   - task:        Classic build-full used 🐜 for both worker-tree entries and
+//     completed-task lines ("🐜 {task_id}: done") -- the plain
+//     ant is the generic "one unit of colony work" glyph.
+//   - alternative: no Classic ancestor (Classic listed alternates under one
+//     "Next Steps" glyph with each command owning its own
+//     emoji). 🔀 (shuffle) reads as "a different path" without
+//     colliding with `next`'s ➡️.
+//   - colony:      Classic's own house symbol for the colony/its workers as a
+//     whole, used throughout ("🐜 Colony Work Tree:").
+//   - elapsed:     no Classic ancestor (no timing display existed in
+//     February). ⏱️ is the ordinary stopwatch glyph for time.
+//   - cost:        no Classic ancestor (spend/cost reporting is v1.27+). 💰
+//     is the ordinary glyph for money/cost.
+//   - evidence:    no Classic ancestor. 🔎 matches the existing
+//     `source-check` command's magnifying glass -- "look closer".
+//   - question:    no Classic ancestor. ❓ is the plain question mark.
+//   - artifact:    no Classic ancestor. 🗂️ matches the existing `artifacts`
+//     command glyph already used for saved output paths.
+//   - requirement: no Classic ancestor. Reuses 📋, the route_setter/plan
+//     planning-artifact glyph, per RESEARCH.md's own suggested
+//     analogy for a planning-shaped concept with no ancestor.
+//   - decision:    no Classic ancestor. 🧭 (compass) reads as "which way to
+//     go" for an owner decision point.
+//   - memory:      distinct from `learning` (🧠, Classic's instincts glyph):
+//     📖 (open book) for "what the colony remembers about you"
+//     (preferences/habits/relay notes), not learned patterns.
+//   - history:     Classic reused 📜 for both `history` and `council`
+//     commands (commandEmojiMap); reused here for the same
+//     "past events" concept.
+var voiceGlyphMap = map[string]string{
+	"goal":        "👑",
+	"phase":       "📍",
+	"task":        "🐜",
+	"focus":       "🎯",
+	"avoid":       "🚫",
+	"feedback":    "💬",
+	"learning":    "🧠",
+	"flag":        "🚩",
+	"milestone":   "🏆",
+	"dream":       "💭",
+	"status":      "📊",
+	"files":       "📁",
+	"checkpoint":  "💾",
+	"done":        "✅",
+	"failed":      "❌",
+	"next":        "➡️",
+	"alternative": "🔀",
+	"colony":      "🐜",
+	"elapsed":     "⏱️",
+	"cost":        "💰",
+	"evidence":    "🔎",
+	"question":    "❓",
+	"warning":     "⚠️",
+	"blocked":     "⛔",
+	"artifact":    "🗂️",
+	"requirement": "📋",
+	"decision":    "🧭",
+	"archive":     "⚰️",
+	"memory":      "📖",
+	"history":     "📜",
+}
+
+// voiceGlyph resolves a semantic line-type to its glyph, following
+// commandEmoji's exact override shape: an operator override in
+// loadVisualsConfig() first, then voiceGlyphMap, then the generic ant --
+// never an empty string, so a missing key never produces a leading space.
+func voiceGlyph(kind string) string {
+	if loaded := loadVisualsConfig(); loaded != nil {
+		if glyph, ok := loaded.VoiceGlyphMap[kind]; ok {
+			return glyph
+		}
+	}
+	if glyph, ok := voiceGlyphMap[kind]; ok {
+		return glyph
+	}
+	return "🐜"
+}
+
+// voiceLine is the single funnel composing a glyph and a line of text. No
+// renderer may compose a glyph and a line by string concatenation of its
+// own -- every glyph-led content line goes through this function.
+func voiceLine(kind, text string) string {
+	return voiceGlyph(kind) + " " + text
+}
+
 var commandEmojiMap = map[string]string{
 	"init":                   "🥚",
 	"colonize":               "🗺️",
@@ -557,8 +652,7 @@ func renderNextUp(primary string, alternatives ...string) string {
 		if alt == "" {
 			continue
 		}
-		b.WriteString("Alternative: ")
-		b.WriteString(translateHintCommandsForPlatform(alt, platform))
+		b.WriteString(voiceLine("alternative", translateHintCommandsForPlatform(alt, platform)))
 		b.WriteString("\n")
 	}
 	return b.String()
@@ -757,12 +851,14 @@ func nextActionSuggestionLine(command, explanation string) string {
 	command = strings.TrimSpace(command)
 	explanation = strings.TrimSpace(explanation)
 	switch {
+	case command == "" && explanation == "":
+		return ""
 	case command == "":
-		return explanation
+		return voiceLine("next", explanation)
 	case explanation == "":
-		return "Run `" + command + "`"
+		return voiceLine("next", "Run `"+command+"`")
 	default:
-		return "Run `" + command + "` — " + explanation
+		return voiceLine("next", "Run `"+command+"` — "+explanation)
 	}
 }
 
