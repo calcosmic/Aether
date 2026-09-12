@@ -63,7 +63,7 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 - [x] **Phase 200 — Iterative Planning**
 - [x] **Phase 201 — Queen-Led Work Cycle** (completed 2026-09-10)
 - [x] **Phase 202 — Swarm, Oracle, and Live Colony** — completed 2026-09-12
-- [ ] **Phase 202.1 — Classic Visual Voice**
+- [x] **Phase 202.1 — Classic Visual Voice** (completed 2026-09-12)
 - [ ] **Phase 203 — Biological Runtime**
 - [ ] **Phase 204 — Learning Governor**
 - [ ] **Phase 205 — Owner Acceptance and Restoration Seal**
@@ -534,7 +534,7 @@ Plans:
 
 For dummies: the colony went quiet-looking. The information is right, but the personality drained out of the screens between February and now. This phase puts it back on the screens you actually read, and adds a check that fails if it ever drains away again.
 
-**Plans:** 7/7 plans executed
+**Plans:** 7/7 plans complete
 
 Plans:
 **Wave 1**

@@ -361,7 +361,7 @@ func lifecycleStatusActorLine(prefix string, actorFact LifecycleActorFact) strin
 
 // lifecycleStatusLineageActorLabel translates the one repo-invented actor
 // name a lineage row can carry -- "Queen", the root of every spawn tree
-// (pkg/agent/spawn.go's spawnRootParentNames) -- into CLAUDE.md's own
+// (cmd/spawn.go's spawnRootParentNames) -- into CLAUDE.md's own
 // vocabulary shape: the ordinary word leads, the repo's name for it follows
 // in parentheses in the same line. Every other actor name (a helper's own
 // generated name) is not a repo-invented word and passes through unchanged.
