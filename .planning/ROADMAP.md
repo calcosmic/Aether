@@ -63,9 +63,9 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 - [x] **Phase 200 — Iterative Planning**
 - [x] **Phase 201 — Queen-Led Work Cycle** (completed 2026-09-10)
 - [x] **Phase 202 — Swarm, Oracle, and Live Colony** — completed 2026-09-12
+- [ ] **Phase 202.1 — Classic Visual Voice**
 - [ ] **Phase 203 — Biological Runtime**
 - [ ] **Phase 204 — Learning Governor**
-- [ ] **Phase 204.1 — Classic Visual Voice**
 - [ ] **Phase 205 — Owner Acceptance and Restoration Seal**
 
 ## Phase Details
@@ -514,6 +514,48 @@ Plans:
 
 - [x] 202-17-PLAN.md — A running Oracle round is genuinely live, and an abandoned one honestly is not (CR-01)
 
+### Phase 202.1: Classic Visual Voice
+
+**Goal:** Restore the Classic colony voice to every ordinary lifecycle screen, so the restored behavior also reads as Aether rather than as correct plain text.
+
+**Depends on:** Phases 199-202
+
+**Requirements:** CEC-09
+
+**Why this phase exists:** the milestone goal is an "understandable, visible" colony, and the synthesis protocol names `3a5b81c2` (the completed Classic visual system) as a reference to inspect — but no requirement owned the rendered voice, so CEC-01..08 restored what each screen *says* while the way it says it quietly flattened. Owner observation, 2026-09-12: after running init and discussing the spec, "it just didn't look good"; banners survived while per-line glyphs, colony vocabulary, and annotated next-step menus did not. This phase gives the voice an owner and a failing check, so it cannot flatten again unnoticed.
+
+**Success criteria:**
+
+1. A cited mechanism study compares the rendered voice at `3a5b81c2` against every current ordinary lifecycle screen, separates what genuinely improved (one honest next action, real state, no invented truth) from what merely thinned, and fixes the target density before any renderer is edited.
+2. Ordinary lifecycle screens — plan, discuss, spec, status, build, continue, seal, and the what-next card — render content lines in the Classic voice, with caste//status glyphs and colony vocabulary on the lines themselves rather than only in the banner, and the improvements from 199-204 preserved intact.
+3. Next-step menus name each option's real-world effect beside its command, so a choice is readable without running it.
+4. No owner-facing line exposes a raw internal identifier, hash, or state token where a sentence belongs; the known `handoff=<id> between_commands_boundary` leak on the what-next card is closed with a named test.
+5. The voice is asserted, not described: a named test fails if an ordinary screen's rendered voice falls below the reference density agreed in criterion 1, whatever a future renderer is called.
+
+For dummies: the colony went quiet-looking. The information is right, but the personality drained out of the screens between February and now. This phase puts it back on the screens you actually read, and adds a check that fails if it ever drains away again.
+
+**Plans:** 7 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 202.1-01-PLAN.md — Tracer: one glyph vocabulary, a reference-derived density figure, and the what-next card wired through both
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 202.1-02-PLAN.md — The status card, full and compact, plus history that reads as sentences
+- [ ] 202.1-03-PLAN.md — The discussion and specification cards
+- [ ] 202.1-04-PLAN.md — Build, continue and seal section prose
+- [ ] 202.1-05-PLAN.md — The identifier leak closed at the writer, and the class closed with it
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 202.1-06-PLAN.md — The planning cards, primary path and repair fallback
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 202.1-07-PLAN.md — Coverage ratchet, corpus-wide density and token gates, synthesis record and shipped claim
+
 ### Phase 203: Biological Runtime
 
 **Goal:** Complete the real worker-discovery → governed recruitment → child result → knowledge transfer → downstream decision loop, then make pheromones operational decision inputs.
@@ -588,31 +630,11 @@ Plans:
 4. A beneficial candidate beats its frozen baseline without hard-gate or holdout regression, while overfit or evaluator-tampering candidates are quarantined.
 5. Only allowed low-risk canaries promote and roll back atomically; preferences, skills, workflows, source, and security-sensitive policy retain required authority, and source changes remain independently verified branches/PRs that cannot self-approve, merge, publish, or deploy.
 
-### Phase 204.1: Classic Visual Voice
-
-**Goal:** Restore the Classic colony voice to every ordinary lifecycle screen, so the restored behavior also reads as Aether rather than as correct plain text.
-
-**Depends on:** Phases 199-204
-
-**Requirements:** CEC-09
-
-**Why this phase exists:** the milestone goal is an "understandable, visible" colony, and the synthesis protocol names `3a5b81c2` (the completed Classic visual system) as a reference to inspect — but no requirement owned the rendered voice, so CEC-01..08 restored what each screen *says* while the way it says it quietly flattened. Owner observation, 2026-09-12: after running init and discussing the spec, "it just didn't look good"; banners survived while per-line glyphs, colony vocabulary, and annotated next-step menus did not. This phase gives the voice an owner and a failing check, so it cannot flatten again unnoticed.
-
-**Success criteria:**
-
-1. A cited mechanism study compares the rendered voice at `3a5b81c2` against every current ordinary lifecycle screen, separates what genuinely improved (one honest next action, real state, no invented truth) from what merely thinned, and fixes the target density before any renderer is edited.
-2. Ordinary lifecycle screens — plan, discuss, spec, status, build, continue, seal, and the what-next card — render content lines in the Classic voice, with caste//status glyphs and colony vocabulary on the lines themselves rather than only in the banner, and the improvements from 199-204 preserved intact.
-3. Next-step menus name each option's real-world effect beside its command, so a choice is readable without running it.
-4. No owner-facing line exposes a raw internal identifier, hash, or state token where a sentence belongs; the known `handoff=<id> between_commands_boundary` leak on the what-next card is closed with a named test.
-5. The voice is asserted, not described: a named test fails if an ordinary screen's rendered voice falls below the reference density agreed in criterion 1, whatever a future renderer is called.
-
-For dummies: the colony went quiet-looking. The information is right, but the personality drained out of the screens between February and now. This phase puts it back on the screens you actually read, and adds a check that fails if it ever drains away again.
-
 ### Phase 205: Owner Acceptance and Restoration Seal
 
 **Goal:** Reconcile every promise to public evidence, prove the complete restored journey in real repositories, and obtain owner acceptance before sealing v1.28.
 
-**Depends on:** Phases 199-204.1
+**Depends on:** Phases 199-204
 
 **Requirements:** SYNTH-07, PROOF-02..06
 
@@ -632,9 +654,9 @@ For dummies: the colony went quiet-looking. The information is right, but the pe
 | 200 | 8 | Planning mechanism synthesis, iterative Scout/Route-Setter planning and confidence |
 | 201 | 10 | Work-cycle synthesis, Queen judgment, proportionate team, build/continue/run, recovery, turnaround |
 | 202 | 9 | Swarm/Oracle/live synthesis and typed live colony visibility |
+| 202.1 | 1 | Classic rendered voice on ordinary lifecycle screens, asserted against the reference |
 | 203 | 10 | Biological synthesis, recruitment, result return, trophallaxis, operational pheromones |
 | 204 | 9 | Learning synthesis, truthful memory, outcome ledger, evaluation and rollback |
-| 204.1 | 1 | Classic rendered voice on ordinary lifecycle screens, asserted against the reference |
 | 205 | 6 | Research-to-execution ratchet, 72-row reconciliation, real UAT, owner acceptance |
 | **Total** | **65** | **All v1.28 requirements mapped exactly once** |
 
