@@ -631,22 +631,41 @@ func isWindowsAbsolutePlanProposalPath(value string) bool {
 }
 
 func validateProposalNodeContract(path string, requirements, acceptance, negative, recovery, publicPaths, criteria []string, evidence []colony.CriterionEvidenceRequirement, userFacing bool, lookup planningSpecLookup) error {
-	if err := validateProposalProofLinks(path, planningSemanticRequirement, requirements, true, lookup); err != nil {
-		return err
-	}
-	if err := validateProposalProofLinks(path, planningSemanticAcceptance, acceptance, true, lookup); err != nil {
-		return err
-	}
-	if err := validateProposalProofLinks(path, planningSemanticNegative, negative, true, lookup); err != nil {
-		return err
-	}
-	if err := validateProposalProofLinks(path, planningSemanticRecovery, recovery, true, lookup); err != nil {
-		return err
-	}
-	if err := validateProposalProofLinks(path, planningSemanticPublicPath, publicPaths, userFacing, lookup); err != nil {
-		return err
+	links := planningProofLinkSets(requirements, acceptance, negative, recovery, publicPaths)
+	for _, kind := range planningProofLinkKinds() {
+		if err := validateProposalProofLinks(path, kind, links[kind], planningProofLinkRequired(kind, userFacing), lookup); err != nil {
+			return err
+		}
 	}
 	return validateProposalAcceptanceContract(path, criteria, evidence)
+}
+
+// planningProofLinkKinds is every proof-link kind a plan node carries, in the
+// order drafting and acceptance check them.
+func planningProofLinkKinds() []string {
+	return []string{planningSemanticRequirement, planningSemanticAcceptance, planningSemanticNegative, planningSemanticRecovery, planningSemanticPublicPath}
+}
+
+// planningProofLinkRequired is the one rule drafting and acceptance share for a
+// single phase or task. Every node proves requirement, acceptance, negative and
+// recovery links; public-path proof is owed only by work declared user-facing,
+// because a housekeeping task touches no public path and forcing a link onto it
+// would make the Route-Setter invent one. Acceptance cannot see the user-facing
+// declaration (it is not persisted), so it asks with userFacing=false and relies
+// on drafting having enforced the stricter case.
+func planningProofLinkRequired(kind string, userFacing bool) bool {
+	return kind != planningSemanticPublicPath || userFacing
+}
+
+// planningProofLinkSets keys one node's proof links by kind.
+func planningProofLinkSets(requirements, acceptance, negative, recovery, publicPaths []string) map[string][]string {
+	return map[string][]string{
+		planningSemanticRequirement: requirements,
+		planningSemanticAcceptance:  acceptance,
+		planningSemanticNegative:    negative,
+		planningSemanticRecovery:    recovery,
+		planningSemanticPublicPath:  publicPaths,
+	}
 }
 
 func validateProposalProofLinks(path, kind string, values []string, required bool, lookup planningSpecLookup) error {

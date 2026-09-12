@@ -4845,6 +4845,35 @@ func renderStagedResultContract(stage planningStageManifest, planningDir string)
 	b.WriteString(", caste=")
 	b.WriteString(string(stage.ExpectedCaste))
 	b.WriteString("\n")
+	if stage.ExpectedCaste == planningStageCasteRouteSetter {
+		b.WriteString(renderRouteProofLinkRule())
+	}
+	return b.String()
+}
+
+// renderRouteProofLinkRule states the proof-link rule drafting and acceptance
+// both enforce, generated from planningProofLinkRequired itself, so the
+// Route-Setter is told the rule it will be held to instead of meeting it as a
+// refusal -- or, before the two checks agreed, as a plan the owner could not
+// accept.
+func renderRouteProofLinkRule() string {
+	var everyNode, userFacing []string
+	for _, kind := range planningProofLinkKinds() {
+		switch {
+		case planningProofLinkRequired(kind, false):
+			everyNode = append(everyNode, planningProofField(kind))
+		case planningProofLinkRequired(kind, true):
+			userFacing = append(userFacing, planningProofField(kind))
+		}
+	}
+	var b strings.Builder
+	b.WriteString("- Proof links are checked when you hand the plan in and again when the owner accepts it; one wrong link refuses the whole plan.\n")
+	b.WriteString("  - Every phase and every task must carry " + strings.Join(everyNode, ", ") + ".\n")
+	if len(userFacing) > 0 {
+		b.WriteString("  - " + strings.Join(userFacing, ", ") + ": required on work you declare user-facing (list it in user_facing_semantic_ids, or set user_facing on its task declaration). Leave them off behind-the-scenes work rather than inventing one.\n")
+	}
+	b.WriteString("  - Across the whole plan, at least one phase or task must carry each kind.\n")
+	b.WriteString("  - Copy each ID exactly as the approved specification spells it.\n")
 	return b.String()
 }
 

@@ -3217,6 +3217,11 @@ func validatePlanningRouteStageResultWithSession(root string, session *planningM
 	if err != nil {
 		return empty, fmt.Errorf("Route-Setter proposal contract: %w", err)
 	}
+	// Rehearse acceptance here rather than inside validatePlanProposalContract,
+	// which also rebuilds prior passes that a Route-Setter can no longer repair.
+	if err := planningRouteAcceptanceRehearsal(colonyState.Plan, colonyState.Specification, result.Proposal); err != nil {
+		return empty, fmt.Errorf("Route-Setter proposal would be refused when the owner accepts it: %w", err)
+	}
 	delta, err := comparePlanningSemanticSnapshots(priorSnapshot, proposalSnapshot)
 	if err != nil {
 		return empty, err

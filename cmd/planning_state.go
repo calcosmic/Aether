@@ -371,7 +371,7 @@ func validateCurrentPlanRevisionBindings(revision colony.PlanRevision, specifica
 			return err
 		}
 	}
-	return validateProofLinks("active revision", revision.RequirementProofLinks, revision.AcceptanceProofLinks, revision.NegativeProofLinks, revision.RecoveryProofLinks, revision.PublicPathProofLinks, specification)
+	return validatePlanWideProofLinks("active revision", revision.RequirementProofLinks, revision.AcceptanceProofLinks, revision.NegativeProofLinks, revision.RecoveryProofLinks, revision.PublicPathProofLinks, specification)
 }
 
 func validateCurrentPlanNodes(phases []colony.Phase, revision colony.PlanRevision, specification colony.SpecRevision) error {
@@ -430,30 +430,51 @@ func validateBoundPlanNode(label, semanticID, specID, specHash, candidateID, can
 	return nil
 }
 
+// validateProofLinks checks one phase or task's proof links under the rule
+// drafting shares (planningProofLinkRequired). Acceptance cannot see which
+// nodes were declared user-facing, so each node is held to the kinds all work
+// owes; validatePlanWideProofLinks holds the plan as a whole to every kind.
 func validateProofLinks(label string, requirementIDs, acceptanceIDs, negativeIDs, recoveryIDs, publicPathIDs []string, specification colony.SpecRevision) error {
-	sets := []struct {
-		name   string
-		values []string
-		known  map[string]struct{}
-	}{
-		{name: "requirement_proof_links", values: requirementIDs, known: specRequirementIDs(specification.Requirements)},
-		{name: "acceptance_proof_links", values: acceptanceIDs, known: specAcceptanceCheckIDs(specification.AcceptanceChecks)},
-		{name: "negative_proof_links", values: negativeIDs, known: specNegativeExpectationIDs(specification.NegativeExpectations)},
-		{name: "recovery_proof_links", values: recoveryIDs, known: specRecoveryExpectationIDs(specification.RecoveryExpectations)},
-		{name: "public_path_proof_links", values: publicPathIDs, known: specPublicPathIDs(specification.AffectedPublicPaths)},
+	links := planningProofLinkSets(requirementIDs, acceptanceIDs, negativeIDs, recoveryIDs, publicPathIDs)
+	return validateProofLinkSets(label, links, specification, func(kind string) bool {
+		return planningProofLinkRequired(kind, false)
+	})
+}
+
+// validatePlanWideProofLinks checks a revision's aggregated links, which must
+// carry every kind: every approved specification names at least one item of
+// each, and drafting's acceptance rehearsal refuses a plan proving none
+// (rehearsePlanningRouteAcceptance).
+func validatePlanWideProofLinks(label string, requirementIDs, acceptanceIDs, negativeIDs, recoveryIDs, publicPathIDs []string, specification colony.SpecRevision) error {
+	links := planningProofLinkSets(requirementIDs, acceptanceIDs, negativeIDs, recoveryIDs, publicPathIDs)
+	return validateProofLinkSets(label, links, specification, func(string) bool { return true })
+}
+
+func validateProofLinkSets(label string, links map[string][]string, specification colony.SpecRevision, required func(kind string) bool) error {
+	known := map[string]map[string]struct{}{
+		planningSemanticRequirement: specRequirementIDs(specification.Requirements),
+		planningSemanticAcceptance:  specAcceptanceCheckIDs(specification.AcceptanceChecks),
+		planningSemanticNegative:    specNegativeExpectationIDs(specification.NegativeExpectations),
+		planningSemanticRecovery:    specRecoveryExpectationIDs(specification.RecoveryExpectations),
+		planningSemanticPublicPath:  specPublicPathIDs(specification.AffectedPublicPaths),
 	}
-	for _, set := range sets {
-		if len(set.values) == 0 {
-			return fmt.Errorf("%s.%s is required for current accepted plan", label, set.name)
+	for _, kind := range planningProofLinkKinds() {
+		name := planningProofField(kind)
+		values := links[kind]
+		if len(values) == 0 {
+			if required(kind) {
+				return fmt.Errorf("%s.%s is required for current accepted plan", label, name)
+			}
+			continue
 		}
-		seen := make(map[string]struct{}, len(set.values))
-		for _, id := range set.values {
+		seen := make(map[string]struct{}, len(values))
+		for _, id := range values {
 			if _, duplicate := seen[id]; duplicate {
-				return fmt.Errorf("%s.%s contains duplicate stable ID %q", label, set.name, id)
+				return fmt.Errorf("%s.%s contains duplicate stable ID %q", label, name, id)
 			}
 			seen[id] = struct{}{}
-			if _, ok := set.known[id]; !ok {
-				return fmt.Errorf("%s.%s references absent specification ID %q", label, set.name, id)
+			if _, ok := known[kind][id]; !ok {
+				return fmt.Errorf("%s.%s references absent specification ID %q", label, name, id)
 			}
 		}
 	}
