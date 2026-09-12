@@ -72,6 +72,7 @@ var planCmd = &cobra.Command{
 		maxIterations, _ := cmd.Flags().GetInt("max-iterations")
 		acceptBelowTarget, _ := cmd.Flags().GetBool("accept")
 		candidate, _ := cmd.Flags().GetBool("candidate")
+		candidateID, _ := cmd.Flags().GetString("candidate-id")
 		showIteration, _ := cmd.Flags().GetInt("show-iteration")
 		details, _ := cmd.Flags().GetBool("details")
 		acceptCandidate, _ := cmd.Flags().GetString("accept-candidate")
@@ -86,7 +87,7 @@ var planCmd = &cobra.Command{
 		revisionEvidence, _ := cmd.Flags().GetStringArray("revision-evidence")
 		researchDocs, _ := cmd.Flags().GetStringArray("research")
 		candidateInputs := planCandidateCommandInputs{
-			DeprecatedAccept: acceptBelowTarget, Candidate: candidate,
+			DeprecatedAccept: acceptBelowTarget, Candidate: candidate, CandidateID: candidateID,
 			ShowIteration: showIteration, ShowIterationSet: cmd.Flags().Changed("show-iteration"), Details: details,
 			AcceptCandidate: acceptCandidate, SpecificationRevisionID: specificationRevisionID,
 			SpecificationRevisionHash: specificationRevisionHash, BasePlanRevisionID: basePlanRevisionID,
@@ -2506,6 +2507,7 @@ func init() {
 	planCmd.Flags().Int("max-iterations", 0, "Exact preset pass cap; requires matching --target")
 	planCmd.Flags().Bool("accept", false, "Deprecated: use --accept-candidate with the exact pending candidate ID")
 	planCmd.Flags().Bool("candidate", false, "Review the exact stopped plan candidate without changing state")
+	planCmd.Flags().String("candidate-id", "", "With --candidate or --show-iteration: name which waiting plan to review when more than one is waiting")
 	planCmd.Flags().Int("show-iteration", 0, "Show one immutable candidate timeline pass by ordinal; requires --details")
 	planCmd.Flags().Bool("details", false, "Return the complete immutable card selected by --show-iteration")
 	planCmd.Flags().String("accept-candidate", "", "Accept the exact candidate ID shown by --candidate")

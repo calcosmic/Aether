@@ -1256,12 +1256,7 @@ func loadPlanCandidateArtifactInSession(session *planningMutationSession, reques
 		return planCandidateArtifact{}, fmt.Errorf("plan candidate %q was not found at a reviewable boundary", wanted)
 	}
 	if len(matches) > 1 {
-		sort.Slice(matches, func(i, j int) bool { return matches[i].Candidate.CreatedAt.Before(matches[j].Candidate.CreatedAt) })
-		ids := make([]string, len(matches))
-		for i := range matches {
-			ids[i] = matches[i].Candidate.ID
-		}
-		return planCandidateArtifact{}, fmt.Errorf("multiple reviewable plan candidates are present (%s); refuse ambiguous review until obsolete runs are resolved", strings.Join(ids, ", "))
+		return planCandidateArtifact{}, ambiguousPlanCandidatesError(matches)
 	}
 	return matches[0], nil
 }

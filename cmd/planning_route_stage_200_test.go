@@ -565,9 +565,25 @@ func planningRouteStageTestFixture(t *testing.T) (string, planningStageManifest,
 		ApprovalReceiptHash: approvalHash,
 	}
 
-	seedRecord := planningRouteStageEvidence(t, binding, baseID, "route-seed", "Seed evidence authorizes the Scout frontier.", time.Date(2026, time.September, 7, 18, 0, 0, 0, time.UTC))
+	manifest, result := planningRouteStageTestRun(t, root, approved.Revision, binding, baseID, baseHash, "planning-route-stage-run")
+	return root, manifest, result
+}
+
+// planningRouteStageTestRun drives one planning run in an existing repository
+// from a fresh Scout to a Route-Setter manifest and a complete Route result.
+// Runs other than the default use their own evidence origins, so two runs in
+// one repository -- the state a planning restart leaves -- never share evidence.
+func planningRouteStageTestRun(t *testing.T, root string, spec colony.SpecRevision, binding planningStageSpecificationBinding, baseID, baseHash, runID string) (planningStageManifest, planningRouteStageResult) {
+	t.Helper()
+	origin := func(name string) string {
+		if runID == "planning-route-stage-run" {
+			return name
+		}
+		return name + "-" + runID
+	}
+	seedRecord := planningRouteStageEvidence(t, binding, baseID, origin("route-seed"), "Seed evidence authorizes the Scout frontier.", time.Date(2026, time.September, 7, 18, 0, 0, 0, time.UTC))
 	state := planningStageState{
-		Stage: planningStageScoutReady, RunID: "planning-route-stage-run", Pass: 1,
+		Stage: planningStageScoutReady, RunID: runID, Pass: 1,
 		Preset: planningStagePresetBalanced, Specification: binding,
 		BasePlanRevisionID: baseID, BasePlanRevisionHash: baseHash,
 		PriorCardHash: planningStageTestHash("d"), InputFrontierHash: planningStageTestHash("e"),
@@ -588,7 +604,7 @@ func planningRouteStageTestFixture(t *testing.T) (string, planningStageManifest,
 	header := planningRouteStageRunHeader(t, *scoutManifest, seedRecord)
 	planningStageReceiptTestWriteJSON(t, filepath.Join(root, ".aether", "data", "planning", scoutManifest.RunID, "run-header.json"), header)
 
-	freshRecord := planningRouteStageEvidence(t, binding, baseID, "route-fresh", "Fresh evidence supports the complete Route proposal.", time.Date(2026, time.September, 7, 18, 5, 0, 0, time.UTC))
+	freshRecord := planningRouteStageEvidence(t, binding, baseID, origin("route-fresh"), "Fresh evidence supports the complete Route proposal.", time.Date(2026, time.September, 7, 18, 5, 0, 0, time.UTC))
 	scoutGap := planningRouteStageGap("scout-route-gap", colony.PlanningDimensionKnowledge, freshRecord.Reference.ID, colony.PlanningGapNonMaterial, 25)
 	scoutResult := planningScoutStageResult{
 		ResultType: planningStageResultScout, ManifestID: scoutManifest.ID, ManifestHash: scoutManifest.ContentHash,
@@ -609,7 +625,7 @@ func planningRouteStageTestFixture(t *testing.T) (string, planningStageManifest,
 	}
 	routeManifest := coordinated.RouteDispatch.Manifest
 
-	proposal := planningRouteStageProposal(approved.Revision)
+	proposal := planningRouteStageProposal(spec)
 	assessments := make([]colony.PlanningDimensionAssessment, 0, len(colony.PlanningDimensions()))
 	for index, dimension := range colony.PlanningDimensions() {
 		gap := planningRouteStageGap("route-gap-"+string(dimension), dimension, freshRecord.Reference.ID, colony.PlanningGapNonMaterial, 10+index)
@@ -622,7 +638,7 @@ func planningRouteStageTestFixture(t *testing.T) (string, planningStageManifest,
 			ProducerReceiptID: routeManifest.ID,
 		})
 	}
-	return root, routeManifest, planningRouteStageResult{
+	return routeManifest, planningRouteStageResult{
 		ResultType: planningStageResultRouteSetter, ManifestID: routeManifest.ID, ManifestHash: routeManifest.ContentHash,
 		RunID: routeManifest.RunID, Pass: routeManifest.Pass, Caste: planningStageCasteRouteSetter,
 		Specification: binding, BasePlanRevisionID: baseID, BasePlanRevisionHash: baseHash,

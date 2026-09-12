@@ -296,7 +296,34 @@ type planCandidateCommandInputs struct {
 	TimelineDigest            string
 	ProposalHash              string
 	AcceptanceToken           string
+	CandidateID               string
 	ConflictingPlanFlags      []string
+}
+
+// planCandidateReviewByNameCommand is the exact command that reviews one named
+// waiting plan, for when more than one is waiting.
+func planCandidateReviewByNameCommand(candidateID string) string {
+	return "aether plan --candidate --candidate-id " + candidateID
+}
+
+// ambiguousPlanCandidatesError still refuses to guess between waiting plans,
+// but names each one with the exact command that reviews it, so more than one
+// waiting plan is a choice for the owner rather than a dead end. A planning
+// restart leaves the earlier plan waiting beside the new one; before this the
+// refusal offered no way on and neither plan could be accepted. The wording
+// avoids the words lifecycle status reads as a malformed source.
+func ambiguousPlanCandidatesError(matches []planCandidateArtifact) error {
+	sort.Slice(matches, func(i, j int) bool {
+		if !matches[i].Candidate.CreatedAt.Equal(matches[j].Candidate.CreatedAt) {
+			return matches[i].Candidate.CreatedAt.Before(matches[j].Candidate.CreatedAt)
+		}
+		return matches[i].Candidate.ID < matches[j].Candidate.ID
+	})
+	choices := make([]string, len(matches))
+	for i, match := range matches {
+		choices[i] = fmt.Sprintf("%s (planned %s): `%s`", match.Candidate.ID, match.Candidate.CreatedAt.UTC().Format("2006-01-02 15:04 UTC"), planCandidateReviewByNameCommand(match.Candidate.ID))
+	}
+	return fmt.Errorf("multiple reviewable plan candidates are present; review one by name: %s", strings.Join(choices, "; "))
 }
 
 func resolvePlanCandidateOperation(inputs planCandidateCommandInputs) (planCandidateOperation, error) {
@@ -337,6 +364,9 @@ func resolvePlanCandidateOperation(inputs planCandidateCommandInputs) (planCandi
 	}
 	if selected > 0 && len(inputs.ConflictingPlanFlags) > 0 {
 		return planCandidateOperationNone, fmt.Errorf("candidate operations cannot combine with planning flags %s", strings.Join(inputs.ConflictingPlanFlags, ", "))
+	}
+	if strings.TrimSpace(inputs.CandidateID) != "" && !inputs.Candidate && !detailRequested {
+		return planCandidateOperationNone, fmt.Errorf("--candidate-id names which waiting plan to review; use it with --candidate")
 	}
 
 	if detailRequested {
@@ -559,13 +589,13 @@ func runPlanCandidateCommand(root string, inputs planCandidateCommandInputs) (ma
 	switch operation {
 	case planCandidateOperationReview:
 		now := planCandidateNow().UTC()
-		review, reviewErr := reviewPlanCandidateAt(root, now)
+		review, reviewErr := reviewPlanCandidateNamedAt(root, inputs.CandidateID, now)
 		if reviewErr != nil {
 			return nil, true, reviewErr
 		}
 		return planCandidateReviewResult(review), true, nil
 	case planCandidateOperationDetail:
-		detail, detailErr := reviewPlanCandidateIteration(root, inputs.ShowIteration)
+		detail, detailErr := reviewPlanCandidateIterationNamed(root, inputs.CandidateID, inputs.ShowIteration)
 		if detailErr != nil {
 			return nil, true, detailErr
 		}
@@ -621,7 +651,14 @@ func reviewPlanCandidate(root string) (planCandidateReview, error) {
 }
 
 func reviewPlanCandidateAt(root string, now time.Time) (planCandidateReview, error) {
-	artifact, err := loadPlanCandidateArtifact(root, "")
+	return reviewPlanCandidateNamedAt(root, "", now)
+}
+
+// reviewPlanCandidateNamedAt reviews one waiting plan. An empty candidateID
+// means the only plan waiting; naming one is how the owner chooses when a
+// planning restart has left more than one.
+func reviewPlanCandidateNamedAt(root, candidateID string, now time.Time) (planCandidateReview, error) {
+	artifact, err := loadPlanCandidateArtifact(root, candidateID)
 	if err != nil {
 		return planCandidateReview{}, err
 	}
@@ -711,10 +748,14 @@ func planCandidateAuthorityFromState(state colony.ColonyState, artifact planCand
 }
 
 func reviewPlanCandidateIteration(root string, iteration int) (planCandidateIterationDetail, error) {
+	return reviewPlanCandidateIterationNamed(root, "", iteration)
+}
+
+func reviewPlanCandidateIterationNamed(root, candidateID string, iteration int) (planCandidateIterationDetail, error) {
 	if iteration <= 0 {
 		return planCandidateIterationDetail{}, fmt.Errorf("planning iteration must be positive")
 	}
-	artifact, err := loadPlanCandidateArtifact(root, "")
+	artifact, err := loadPlanCandidateArtifact(root, candidateID)
 	if err != nil {
 		return planCandidateIterationDetail{}, err
 	}
@@ -792,12 +833,7 @@ func loadPlanCandidateArtifact(root, requestedID string) (planCandidateArtifact,
 		return planCandidateArtifact{}, fmt.Errorf("plan candidate %q was not found at a reviewable boundary", wanted)
 	}
 	if len(matches) > 1 {
-		sort.Slice(matches, func(i, j int) bool { return matches[i].Candidate.CreatedAt.Before(matches[j].Candidate.CreatedAt) })
-		ids := make([]string, len(matches))
-		for i := range matches {
-			ids[i] = matches[i].Candidate.ID
-		}
-		return planCandidateArtifact{}, fmt.Errorf("multiple reviewable plan candidates are present (%s); refuse ambiguous review until obsolete runs are resolved", strings.Join(ids, ", "))
+		return planCandidateArtifact{}, ambiguousPlanCandidatesError(matches)
 	}
 	return matches[0], nil
 }
