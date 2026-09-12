@@ -165,8 +165,11 @@ func TestSealRendersCrownedAnthill(t *testing.T) {
 		"|  CROWNED |",
 		"| ANTHILL  |",
 		"C R O W N E D   A N T H I L L   v3",
-		"The colony stands crowned and sealed.",
-		"Its wisdom lives on in QUEEN.md.",
+		// Widened for Phase "Classic Visual Voice" plan 04: the seal summary
+		// now names "project" beside "colony" and "finished" beside
+		// "sealed"/"Queen" (the widened plain-English scan).
+		"The project (this colony) stands crowned and finished (sealed).",
+		"The coordinator (Queen) that decides your team keeps this wisdom in QUEEN.md for next time.",
 		"The anthill has reached its final form.",
 	} {
 		if !strings.Contains(output, want) {

@@ -3562,19 +3562,22 @@ func renderSealVisual(result map[string]interface{}, state colony.ColonyState, s
 	b.WriteString(fmt.Sprintf("   %s   v%d\n", spacedTitle("Crowned Anthill"), state.ColonyVersion))
 	b.WriteString(rule + "\n\n")
 	b.WriteString(renderStageMarker("Summary"))
-	b.WriteString("Colony sealed at Crowned Anthill.\n")
+	b.WriteString(voiceLine("milestone", "This project (the colony) is now finished — sealed at Crowned Anthill."))
+	b.WriteString("\n")
 	if state.Goal != nil {
-		b.WriteString("Goal: ")
-		b.WriteString(*state.Goal)
+		b.WriteString(voiceLine("goal", "Goal: "+*state.Goal))
 		b.WriteString("\n")
 	}
-	b.WriteString(fmt.Sprintf("Completed phases: %d\n", len(state.Plan.Phases)))
-	b.WriteString("Summary: ")
-	b.WriteString(summaryPath)
+	b.WriteString(voiceLine("phase", fmt.Sprintf("Completed phases: %d", len(state.Plan.Phases))))
+	b.WriteString("\n")
+	b.WriteString(voiceLine("artifact", "Summary: "+summaryPath))
 	b.WriteString("\n\n")
-	b.WriteString("The colony stands crowned and sealed.\n")
-	b.WriteString("Its wisdom lives on in QUEEN.md.\n")
-	b.WriteString("The anthill has reached its final form.\n")
+	b.WriteString(voiceLine("milestone", "The project (this colony) stands crowned and finished (sealed)."))
+	b.WriteString("\n")
+	b.WriteString(voiceLine("learning", "The coordinator (Queen) that decides your team keeps this wisdom in QUEEN.md for next time."))
+	b.WriteString("\n")
+	b.WriteString(voiceLine("archive", "The anthill has reached its final form."))
+	b.WriteString("\n")
 	// The card below is the one resolver's answer for a just-sealed project:
 	// it explains, in plain words, what finishing means and what archiving it
 	// would do (S-05) -- state was saved with the final milestone before this

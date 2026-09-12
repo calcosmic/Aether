@@ -386,3 +386,105 @@ func TestContinueScreenFactsUnchanged(t *testing.T) {
 		t.Errorf("continue screen no longer reports %q:\n%s", wantSignalsLine, rendered)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Task 3 -- the seal screen: the summary beneath the crowning art.
+// ---------------------------------------------------------------------------
+
+// sealScreenFixture returns the colony state and summary path every
+// seal-screen test in this file renders over: a goal, a plan with several
+// phases, and a version.
+func sealScreenFixture() (colony.ColonyState, string) {
+	goal := "Restore the Classic voice across the work cycle"
+	state := colony.ColonyState{
+		Version:       "3.0",
+		Goal:          &goal,
+		State:         colony.StateCOMPLETED,
+		ColonyVersion: 128,
+		Plan: colony.Plan{Phases: []colony.Phase{
+			{ID: 1, Name: "Front Door", Status: colony.PhaseCompleted},
+			{ID: 2, Name: "Classic Visual Voice", Status: colony.PhaseCompleted},
+			{ID: 3, Name: "Biological Runtime", Status: colony.PhaseCompleted},
+		}},
+	}
+	return state, ".aether/data/CROWNED-ANTHILL.md"
+}
+
+// renderVoiceSealScreen renders the seal screen over the shared fixture.
+// The state is also saved to disk: renderSealVisual's closing card
+// (renderLifecycleClosing) resolves its answer from the saved project
+// rather than from the state argument, so an unsaved fixture would render
+// the empty "no project" branch instead of this genuinely sealed one.
+func renderVoiceSealScreen(t *testing.T) string {
+	t.Helper()
+	dataDir := setupBuildFlowTest(t)
+	state, summaryPath := sealScreenFixture()
+	createTestColonyState(t, dataDir, state)
+	return renderSealVisual(map[string]interface{}{}, state, summaryPath)
+}
+
+func init() {
+	registerVoiceScreen("seal", renderVoiceSealScreen)
+}
+
+// TestSealScreenMeetsTheReferenceDensity measures the seal screen against
+// the figure derived from the reference commits.
+func TestSealScreenMeetsTheReferenceDensity(t *testing.T) {
+	reference := classicReferenceDensity(t)
+	assertVoiceDensityAtLeastReference(t, reference, "seal", renderVoiceSealScreen(t))
+}
+
+// TestSealCeremonyArtIsUnchanged asserts the rendered seal screen contains
+// the crowning art constant verbatim, the two rule lines at their original
+// length, and the letter-spaced title with the version -- so a future edit
+// to the summary beneath it cannot erode the ceremony above it.
+func TestSealCeremonyArtIsUnchanged(t *testing.T) {
+	rendered := renderVoiceSealScreen(t)
+	state, _ := sealScreenFixture()
+
+	if !strings.Contains(rendered, crownedAnthillArt) {
+		t.Errorf("seal screen no longer contains the crowning art verbatim:\n%s", rendered)
+	}
+	rule := strings.Repeat("━", 50)
+	if strings.Count(rendered, rule) < 2 {
+		t.Errorf("seal screen no longer carries both 50-rune rule lines:\n%s", rendered)
+	}
+	wantTitle := fmt.Sprintf("%s   v%d", spacedTitle("Crowned Anthill"), state.ColonyVersion)
+	if !strings.Contains(rendered, wantTitle) {
+		t.Errorf("seal screen no longer carries the letter-spaced title with its version %q:\n%s", wantTitle, rendered)
+	}
+}
+
+// TestSealScreenFactsUnchanged asserts the voiced seal screen still names
+// the same completed-phase count and the same summary path as before.
+func TestSealScreenFactsUnchanged(t *testing.T) {
+	rendered := renderVoiceSealScreen(t)
+	state, summaryPath := sealScreenFixture()
+
+	wantPhasesLine := fmt.Sprintf("Completed phases: %d", len(state.Plan.Phases))
+	if !strings.Contains(rendered, wantPhasesLine) {
+		t.Errorf("seal screen no longer reports %q:\n%s", wantPhasesLine, rendered)
+	}
+	if !strings.Contains(rendered, summaryPath) {
+		t.Errorf("seal screen no longer names the summary path %q:\n%s", summaryPath, rendered)
+	}
+}
+
+// TestSealScreenOmitsEmptyGoalLine asserts a project with no recorded goal
+// still renders the rest of the summary, without an empty goal line.
+func TestSealScreenOmitsEmptyGoalLine(t *testing.T) {
+	setupBuildFlowTest(t)
+	state, summaryPath := sealScreenFixture()
+	state.Goal = nil
+
+	rendered := renderSealVisual(map[string]interface{}{}, state, summaryPath)
+	for _, line := range strings.Split(rendered, "\n") {
+		if strings.Contains(line, "Goal:") {
+			t.Errorf("seal screen rendered a goal line with no recorded goal: %q", line)
+		}
+	}
+	wantPhasesLine := fmt.Sprintf("Completed phases: %d", len(state.Plan.Phases))
+	if !strings.Contains(rendered, wantPhasesLine) {
+		t.Errorf("seal screen without a goal lost the rest of the summary:\n%s", rendered)
+	}
+}

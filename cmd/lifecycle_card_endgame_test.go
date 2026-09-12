@@ -67,7 +67,10 @@ func TestSealEndsWithTheCard(t *testing.T) {
 		t.Errorf("seal does not end with the shared card.\n--- the card the resolver produced ---\n%s\n--- what was printed ---\n%s",
 			run.card, run.visual)
 	}
-	for _, keep := range []string{"The colony stands crowned and sealed.", "Its wisdom lives on in QUEEN.md."} {
+	for _, keep := range []string{
+		"The project (this colony) stands crowned and finished (sealed).",
+		"The coordinator (Queen) that decides your team keeps this wisdom in QUEEN.md for next time.",
+	} {
 		if !strings.Contains(run.visual, keep) {
 			t.Errorf("seal lost %q from above the closing block", keep)
 		}
