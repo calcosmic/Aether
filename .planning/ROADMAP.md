@@ -534,7 +534,7 @@ Plans:
 
 For dummies: the colony went quiet-looking. The information is right, but the personality drained out of the screens between February and now. This phase puts it back on the screens you actually read, and adds a check that fails if it ever drains away again.
 
-**Plans:** 5/7 plans executed
+**Plans:** 6/7 plans executed
 
 Plans:
 **Wave 1**
@@ -550,7 +550,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 202.1-06-PLAN.md — The planning cards, primary path and repair fallback
+- [x] 202.1-06-PLAN.md — The planning cards, primary path and repair fallback
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
