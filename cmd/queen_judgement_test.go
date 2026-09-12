@@ -5,7 +5,9 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
@@ -238,7 +240,17 @@ func TestQueenChoiceReachesTheDispatchList(t *testing.T) {
 	}
 	state := colony.ColonyState{Plan: colony.Plan{Phases: []colony.Phase{phase}}}
 
-	dispatches := testPlannedBuildDispatchesWithJudgement(
+	// Owner ruling 2026-09-12: a specialist the Queen names runs at the CHECK,
+	// not during the build. Two contracts contradicted each other here for two
+	// days -- this test asserted the measurer on the BUILD dispatch list while
+	// cmd/codex_build_test.go:1987 asserted it must NOT be there without a
+	// recorded build-end boundary decision (201-05, D-05). The guarantee this
+	// test exists to protect is unchanged and still absolute: the Queen's
+	// decision must reach the ACTUAL spawn list, never stop at an intermediate
+	// record a later step can silently override. Only the boundary it is
+	// asserted at moved, to the one the owner chose and the runtime implements.
+	// D11 rule 4 (a phase is verified once) is why it is one boundary, not both.
+	buildDispatches := testPlannedBuildDispatchesWithJudgement(
 		phase, state, nil, colony.VerificationDepthStandard,
 		[]string{"builder", "measurer"},
 		"the complaint is latency even though the phase never says so",
@@ -246,12 +258,29 @@ func TestQueenChoiceReachesTheDispatchList(t *testing.T) {
 	)
 
 	spawned := map[string]bool{}
-	for _, dispatch := range dispatches {
+	for _, dispatch := range buildDispatches {
 		spawned[dispatch.Caste] = true
 	}
 
-	if !spawned["measurer"] {
-		t.Errorf("Queen asked for a Measurer and none spawned; castes = %v", casteKeys(spawned))
+	checkDispatches := plannedContinueReviewDispatches(
+		t.TempDir(), phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{},
+		&codex.FakeInvoker{}, time.Minute, colony.VerificationDepthStandard,
+		[]string{"builder", "measurer"},
+		"the complaint is latency even though the phase never says so",
+		map[string]string{"measurer": "the complaint is latency even though the phase never says so"},
+	)
+	checkSpawned := map[string]bool{}
+	for _, dispatch := range checkDispatches {
+		checkSpawned[dispatch.Caste] = true
+	}
+
+	if !checkSpawned["measurer"] {
+		t.Errorf("Queen asked for a Measurer and none spawned at the check; castes = %v", casteKeys(checkSpawned))
+	}
+	// The other half of the same ruling: it runs once, at the check -- never
+	// also at the build, which is the double-dispatch D-08 removed.
+	if spawned["measurer"] {
+		t.Errorf("Measurer must run at the check, not also during the build; build castes = %v", casteKeys(spawned))
 	}
 	// Phase 193 (D-08) stopped the build's own verification-stage dispatch
 	// from firing without an explicit Queen proposal naming the watcher --

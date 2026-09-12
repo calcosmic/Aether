@@ -251,6 +251,18 @@ phase), and `TestQueenChoiceReachesTheDispatchList` (a Queen decision is
 asserted on the actual spawn list, never an intermediate record a later step
 could silently override).
 
+**Which spawn list — owner's ruling, 2026-09-12.** A specialist the Queen names
+runs at the **check**, not during the build. This had been ambiguous in the worst
+possible way: two tests asserted opposite behaviour for the identical scenario, so
+one of them was necessarily red, and it stayed red for two days while reading as a
+code bug. It was never a code bug — the runtime already ran the specialist at the
+check, matching the rule above that a forced reviewer "joins at the check, not the
+build" and D11 rule 4 (a phase is verified once). `TestQueenChoiceReachesTheDispatchList`
+and `TestNoWorkerWithoutStatedReason` now assert on the continue dispatch list, and
+both also assert the specialist does NOT additionally run during the build. The
+guarantee is unchanged and still absolute — the Queen's decision must reach a real
+spawn list, never stop at a record — only the boundary is now named.
+
 These numbers are asserted by `TestBuildWorkerCapHonoursVerificationDepth` and
 `TestCLAUDEMDDepthTableEvaluates`. They were previously documented but not
 implemented: the build branch consulted only mode and risk, so a *light*

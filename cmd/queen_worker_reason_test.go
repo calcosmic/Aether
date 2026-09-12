@@ -5,7 +5,9 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
@@ -25,8 +27,6 @@ func TestNoWorkerWithoutStatedReason(t *testing.T) {
 		Status:      colony.PhaseReady,
 		Tasks:       []colony.Task{{Goal: "Speed up the list rendering"}},
 	}
-	state := colony.ColonyState{Plan: colony.Plan{Phases: []colony.Phase{phase}}}
-
 	judgement := queenApplyJudgement(
 		[]string{"measurer", "chaos"},
 		"",
@@ -47,8 +47,14 @@ func TestNoWorkerWithoutStatedReason(t *testing.T) {
 	}
 
 	// The claim that matters is on the dispatch list, not the judgement.
-	dispatches := testPlannedBuildDispatchesWithJudgement(
-		phase, state, nil, colony.VerificationDepthStandard,
+	// Owner ruling 2026-09-12: a named specialist runs at the CHECK, not during
+	// the build, so that is the spawn list this claim is asserted against. The
+	// claim itself is unchanged -- a worker with a stated reason goes, a worker
+	// without one is refused by name, and both facts are proved where workers
+	// are actually spawned rather than on the judgement struct alone.
+	dispatches := plannedContinueReviewDispatches(
+		t.TempDir(), phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{},
+		&codex.FakeInvoker{}, time.Minute, colony.VerificationDepthStandard,
 		[]string{"measurer", "chaos"}, "",
 		map[string]string{"measurer": "the complaint is latency even though the phase never says so"},
 	)
@@ -57,7 +63,7 @@ func TestNoWorkerWithoutStatedReason(t *testing.T) {
 		spawned[d.Caste] = true
 	}
 	if !spawned["measurer"] {
-		t.Errorf("measurer had a stated reason and must spawn; castes = %v", casteKeys(spawned))
+		t.Errorf("measurer had a stated reason and must spawn at the check; castes = %v", casteKeys(spawned))
 	}
 	if spawned["chaos"] {
 		t.Errorf("chaos had no stated reason and must not spawn; castes = %v", casteKeys(spawned))
