@@ -146,8 +146,7 @@ func renderLifecycleProjectionNextUp(projection LifecycleProjection, platform st
 			if command == "" {
 				continue
 			}
-			b.WriteString("Choice: ")
-			b.WriteString(nextActionSuggestionLine(command, choice.Reason))
+			b.WriteString(voiceLine("next", "Choice: "+nextActionSuggestionBody(command, choice.Reason)))
 			b.WriteString("\n")
 		}
 	} else if line := nextActionSuggestionLine(
@@ -175,15 +174,14 @@ func renderLifecycleProjectionNextUp(projection LifecycleProjection, platform st
 	}
 
 	for _, alternative := range projection.Alternatives {
-		line := nextActionSuggestionLine(
+		body := nextActionSuggestionBody(
 			lifecycleProjectionCommand(alternative.RuntimeCommand, platform),
 			alternative.Reason,
 		)
-		if line == "" {
+		if body == "" {
 			continue
 		}
-		b.WriteString("Alternative: ")
-		b.WriteString(line)
+		b.WriteString(voiceLine("alternative", "Alternative: "+body))
 		b.WriteString("\n")
 	}
 	return b.String()
@@ -225,7 +223,7 @@ func voicedLines(kind string, lines []string) []string {
 func renderNextActionStanding(standing nextActionStanding) string {
 	var b strings.Builder
 	if goal := strings.TrimSpace(standing.Goal); goal != "" {
-		b.WriteString(voiceLine("phase", "Goal: "+goal))
+		b.WriteString(voiceLine("goal", "Goal: "+goal))
 		b.WriteString("\n")
 	}
 	if explanation := strings.TrimSpace(standing.Explanation); explanation != "" {

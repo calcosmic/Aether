@@ -867,19 +867,32 @@ func colonyStateIsUnstarted(state colony.ColonyState) bool {
 // nextActionSuggestionLine renders one runtime command with the plain-English
 // reason for it. The command stays in its platform-neutral runtime form;
 // translateHintCommandsForPlatform rewrites it on the way to the terminal.
-func nextActionSuggestionLine(command, explanation string) string {
+// nextActionSuggestionBody composes a next-step line WITHOUT its glyph, so a
+// caller that puts its own label in front (Choice:, Alternative:) can lead the
+// whole line with the glyph instead of wedging it between the label and the
+// command. Keeping the command text adjacent to its label is what the existing
+// next-action guardrails assert (golden_workflow_test.go).
+func nextActionSuggestionBody(command, explanation string) string {
 	command = strings.TrimSpace(command)
 	explanation = strings.TrimSpace(explanation)
 	switch {
 	case command == "" && explanation == "":
 		return ""
 	case command == "":
-		return voiceLine("next", explanation)
+		return explanation
 	case explanation == "":
-		return voiceLine("next", "Run `"+command+"`")
+		return "Run `" + command + "`"
 	default:
-		return voiceLine("next", "Run `"+command+"` — "+explanation)
+		return "Run `" + command + "` — " + explanation
 	}
+}
+
+func nextActionSuggestionLine(command, explanation string) string {
+	body := nextActionSuggestionBody(command, explanation)
+	if body == "" {
+		return ""
+	}
+	return voiceLine("next", body)
 }
 
 // nextActionPrimarySuggestion is the recommendation as one sentence.

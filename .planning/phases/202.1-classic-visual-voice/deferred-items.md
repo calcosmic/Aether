@@ -26,3 +26,40 @@ hardcode ratchet as a new, unrecorded hand-typed command-advice site.
 unrelated file). Every other test named in Plan 01 Task 1's `<verify>` block
 passes. Route this through the normal continue/verify cycle for
 `swarm_cmd.go`'s owning phase, or open a follow-up plan.
+
+---
+
+## Known-red baseline at phase start (recorded 2026-09-12, orchestrator)
+
+Verified by checking out the phase base commit `2757534e` into a scratch
+worktree and running these tests there. All four fail identically at that
+commit, before any Phase 202.1 work existed. They are NOT caused by this
+phase and must NOT be absorbed into it.
+
+| Test | Failure at base |
+|---|---|
+| `TestCurrentVocabulary199` (`tracked-occurrences-are-exhaustively-classified`) | 195 tracked keys vs 193 inventory keys; `199-PATTERNS.md` `legacy_pause`/`legacy_resume` unclassified |
+| `TestGoldenBuildVisualOutput` | golden stale: output emits a `── Colony ──` block the snapshot does not carry |
+| `TestGoldenContinueVisualOutput` | same stale `── Colony ──` drift |
+| `TestPhase199GateReceipt` | protected ownership fingerprint changed or receipt is stale |
+
+**Gate rule for the remaining waves of 202.1:** the post-merge test gate is
+judged against this set. Only a failure *outside* these four counts as
+breakage introduced by a wave. The two golden snapshots are deliberately NOT
+refreshed here — refreshing them would silently absorb pre-existing drift
+into this phase's diff.
+
+## Fixed during Wave 1 close-out (orchestrator)
+
+1. `cmd/swarm_cmd.go` — the hardcoded next-action literal above. Fixed;
+   `TestNextActionNeverHardcoded` failed before and passes after.
+2. Plan 01 placed the next-step glyph *between* the `Choice: ` label and the
+   command (`Choice: ➡️ Run ...`), breaking the existing guardrail in
+   `golden_workflow_test.go` that requires `Choice: Run \`/ant-build 2\`` to
+   appear intact — violating plan 01's own must-have that the existing
+   next-action guardrails pass unmodified. Split `nextActionSuggestionBody`
+   out of `nextActionSuggestionLine` so the glyph leads the whole line
+   (`➡️ Choice: Run ...`) with `voiceLine` still the single funnel.
+3. Plan 01 gave the Goal line the `phase` glyph (📍). The owner ratified
+   crown = the project's goal, and the February reference block this phase
+   restores starts literally `👑 Goal:`. Changed to the `goal` glyph.
