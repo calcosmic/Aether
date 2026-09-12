@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
-current_phase: 202
-current_phase_name: Swarm, Oracle, and Live Colony
-status: phase_complete
-stopped_at: Phase 202 verified and complete (UAT closed 2026-09-12; human checks deferred by owner)
-last_updated: "2026-09-12T13:45:00.000Z"
+current_phase: 203
+current_phase_name: Biological Runtime
+status: ready_to_execute
+stopped_at: Phase 203 planned and verified (15 plans, 8 waves) — ready to execute
+last_updated: "2026-09-12T13:27:43.275Z"
 last_activity: 2026-09-12
-last_activity_desc: Phase 202 complete -- UAT closed (3 human checks skipped/deferred by owner), VERIFICATION passed
-state_head: 1a4a4265d2df36b6e50d257ade668f480eb6915a
+last_activity_desc: Phase 203 planned -- 15 plans across 8 waves, plan-checker passed on iteration 2, requirements 10/10 and decisions 12/12 covered
+state_head: 438b2bbe840852d960cadba901f759afacd34142
 progress:
   total_phases: 7
   completed_phases: 2
-  total_plans: 126
+  total_plans: 141
   completed_plans: 125
   percent: 29
 ---
@@ -25,17 +25,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-07)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 202 — Swarm, Oracle, and Live Colony
+**Current focus:** Phase 203 — Biological Runtime
 **Previous milestone:** v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02 (48/48 requirements; audit `tech_debt`, no blockers)
 **Product version:** v1.0.66 (installed and source binaries agree in the 2026-09-02 local check)
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
 
 ## Current Position
 
-Phase: 202 (Swarm, Oracle, and Live Colony) — COMPLETE (verified 2026-09-12; human UAT items deferred by owner)
+Phase: 203 (Biological Runtime) — READY TO EXECUTE
 Next phase: 203 (Biological Runtime)
-Status: Phase 202 done — run /gsd-plan-phase 203 next
-Last activity: 2026-09-12 — Closed 202 UAT (owner skipped second-terminal watch tests, deferred voice check) and marked phase complete
+Status: Phase 203 planned — run /gsd-execute-phase 203 next
+Last activity: 2026-09-12 — Planned Phase 203 (15 plans, 8 waves); checker passed after one revision; coverage gates green
 
 ## Performance Metrics
 
