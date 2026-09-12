@@ -157,3 +157,11 @@ None - no external service configuration required.
 ---
 *Phase: 203-biological-runtime*
 *Completed: 2026-09-13*
+
+## Self-Check: PASSED
+
+- FOUND: `.planning/phases/203-biological-runtime/203-CLASSIC-SYNTHESIS.md`
+- FOUND: `.planning/phases/203-biological-runtime/203-01-SUMMARY.md`
+- FOUND: commit `12879af4` (docs: publish synthesis) in `git log --oneline`
+- FOUND: commit `33536b01` (test: register SYN-203 mechanisms) in `git log --oneline`
+- Re-ran plan-level `<verification>`: `go test ./cmd -run 'TestClassicContract|TestClassicMechanism' -count=1` — PASS (all Phase 199-203 corpus tests green)
