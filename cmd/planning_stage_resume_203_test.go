@@ -338,3 +338,94 @@ func TestResumeResolvesInsideAHeldLock(t *testing.T) {
 		t.Fatal("resolving a resume deadlocked while the caller already held the planning lock: the process waits on a lock it is holding, which is how `aether plan` hung against a real colony")
 	}
 }
+
+// planningStageResumeTestSecondScoutPass drives a parked run one step further
+// than the route fixture: through the Route-Setter pass, so the run lands at
+// scout_running with a Scout that a Route-Setter pass authorized. This is the
+// state a real colony reached after its first pass scored below target and the
+// loop asked for a second research round.
+func planningStageResumeTestSecondScoutPass(t *testing.T) (string, string, int) {
+	t.Helper()
+	// Use the established route-stage fixture: it builds an approved
+	// specification, drives a real Scout pass, and hands back a route manifest
+	// with a result the runtime genuinely accepts. Driving the real coordinator
+	// is what makes the resulting scout_running state a shape the runtime can
+	// actually produce, rather than one hand-written to satisfy the assertion.
+	root, routeManifest, routeResult := planningRouteStageTestFixture(t)
+
+	coordinated, err := coordinatePlanningRouteStage(root, routeManifest, planningRouteStageTestBytes(t, routeResult))
+	if err != nil {
+		t.Fatalf("coordinate Route-Setter pass: %v", err)
+	}
+	if coordinated.ScoutDispatch == nil {
+		t.Skip("this route pass did not ask for a second research round; nothing to exercise")
+	}
+	state, err := loadPlanningStageState(root, routeManifest.RunID)
+	if err != nil {
+		t.Fatalf("load stage state after route pass: %v", err)
+	}
+	if state.Stage != planningStageScoutRunning {
+		t.Skipf("run landed at %q rather than scout_running", state.Stage)
+	}
+	// Prove the fixture really is the reported shape before asserting on it.
+	if _, err := loadPlanningRouteScoutDispatch(root, state.RunID, state.Pass); err != nil {
+		t.Fatalf("second-round Scout carries no route-authored authorization (%v); the fixture is not the reported state", err)
+	}
+	return root, routeManifest.RunID, state.Pass
+}
+
+// TestSecondRoundScoutIsResumable is the regression test for the stall one step
+// past the first fix: a run that scored below target, moved to scout_running for
+// a second research round, and could not be picked up because discovery counted
+// only route_running runs. Rerunning would have started a brand-new run and
+// abandoned the committed pass-1 work.
+func TestSecondRoundScoutIsResumable(t *testing.T) {
+	root, runID, pass := planningStageResumeTestSecondScoutPass(t)
+
+	// Remove the pointer so discovery is the only path, matching the colony.
+	_ = os.Remove(filepath.Join(root, ".aether", "data", planningIterationStateRel))
+
+	resume, err := resolvePlanningStageResumeForTest(t, root)
+	if err != nil {
+		t.Fatalf("resolve planning stage resume: %v", err)
+	}
+	if resume == nil {
+		t.Fatalf("run %s parked at scout_running pass %d was not resumable: rerunning would abandon the committed first pass", runID, pass)
+	}
+	if resume.RunID != runID {
+		t.Fatalf("resumed run = %q, want the parked run %q", resume.RunID, runID)
+	}
+	if resume.Caste != planningStageCasteScout {
+		t.Fatalf("resumed caste = %q, want Scout for a second research round", resume.Caste)
+	}
+}
+
+// TestAbandonedFirstPassScoutIsNotResumed is the other half: a run whose Scout
+// stage was merely opened, with no Route-Setter pass having authorized it, must
+// never be mistaken for work in progress. Two such strays sat beside the real
+// run on the reporting colony.
+func TestAbandonedFirstPassScoutIsNotResumed(t *testing.T) {
+	binding := bindCommandTestRepository(t)
+	root := binding.Root
+	seedState := planningStageTestState(planningStageScoutReady)
+	_, scoutManifest, _ := planningScoutStageTestFixtureInRoot(t, root, 1, seedState.Specification)
+
+	state, err := loadPlanningStageState(root, scoutManifest.RunID)
+	if err != nil {
+		t.Fatalf("load stage state: %v", err)
+	}
+	if state.Stage != planningStageScoutRunning {
+		t.Fatalf("fixture stage = %q, want scout_running to exercise the stray case", state.Stage)
+	}
+	if _, err := loadPlanningRouteScoutDispatch(root, state.RunID, state.Pass); err == nil {
+		t.Fatal("fixture unexpectedly carries a route-authored Scout authorization; it is not a stray")
+	}
+
+	resume, err := resolvePlanningStageResumeForTest(t, root)
+	if err != nil {
+		t.Fatalf("resolve planning stage resume: %v", err)
+	}
+	if resume != nil {
+		t.Fatalf("an abandoned first-pass Scout run was treated as resumable (%q); it holds no authorized work", resume.RunID)
+	}
+}

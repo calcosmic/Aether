@@ -262,10 +262,10 @@ func planningStageResumeWorkerSpec(caste string) (planningWorkerSpec, bool) {
 // stray-run damage this whole path exists to prevent, so ambiguity falls back
 // to the ordinary "start a run" behaviour the caller already has.
 func discoverParkedPlanningRun(session *planningMutationSession) (string, error) {
-	if store == nil {
-		return "", nil
-	}
-	entries, err := os.ReadDir(filepath.Join(store.BasePath(), "planning"))
+	// The session's own data root, not the global store: the session IS the
+	// authority here, and depending on a package-level store made discovery
+	// silently do nothing whenever that global was not bound.
+	entries, err := os.ReadDir(filepath.Join(session.DataRoot(), "planning"))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return "", nil
@@ -283,7 +283,10 @@ func discoverParkedPlanningRun(session *planningMutationSession) (string, error)
 			// A directory without a readable stage file is not a parked run.
 			continue
 		}
-		if state.Stage == planningStageRouteRunning && strings.TrimSpace(state.RunID) != "" {
+		if strings.TrimSpace(state.RunID) == "" {
+			continue
+		}
+		if planningStageAwaitsAWorker(session, state) {
 			parked = append(parked, candidate)
 		}
 	}
@@ -291,4 +294,32 @@ func discoverParkedPlanningRun(session *planningMutationSession) (string, error)
 		return "", nil
 	}
 	return parked[0], nil
+}
+
+// planningStageAwaitsAWorker reports whether a run's own durable stage state
+// says it is genuinely waiting on a worker that was authorized for it.
+//
+// route_running always qualifies: reaching it means a Scout pass committed and
+// authorized Route-Setter.
+//
+// scout_running qualifies ONLY when a Route-Setter pass authorized that Scout,
+// which is exactly when a scout-authorizations/pass-NNNN.json exists for it.
+// That distinction is structural rather than a heuristic, and it is what keeps
+// abandoned first-pass runs out: a run whose Scout stage was merely opened by
+// `aether plan` has no such authorization on disk, so it is never mistaken for
+// work in progress. The real colony that reported this had one genuine run at
+// scout_running pass 2 carrying scout-authorizations/pass-0002.json, beside two
+// abandoned pass-1 runs holding nothing but a manifest and a run header;
+// preferring "pass > 1" would have worked on that colony by luck, while this
+// asks the question that actually matters.
+func planningStageAwaitsAWorker(session *planningMutationSession, state planningStageState) bool {
+	switch state.Stage {
+	case planningStageRouteRunning:
+		return true
+	case planningStageScoutRunning:
+		_, err := loadPlanningRouteScoutDispatchInSession(session, state.RunID, state.Pass)
+		return err == nil
+	default:
+		return false
+	}
 }
