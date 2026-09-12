@@ -63,3 +63,24 @@ into this phase's diff.
 3. Plan 01 gave the Goal line the `phase` glyph (📍). The owner ratified
    crown = the project's goal, and the February reference block this phase
    restores starts literally `👑 Goal:`. Changed to the `goal` glyph.
+
+## Pre-existing failures discovered during Plan 03 full-suite verification
+
+Neither touches a file this plan modified (`cmd/discuss.go`, `cmd/spec_cmd.go`,
+`cmd/classic_voice_discuss_spec_test.go`) — confirmed by `git status --short`
+showing no other files changed. Not auto-fixed (Scope Boundary). Recorded in
+`.planning/WINDOWS.md`.
+
+1. `TestHumanFacingOutputGoesThroughWriteVisualOutput` — `cmd/watch_live.go`'s
+   `runColonyLiveRefreshLoop` writes directly to stdout/stderr at lines
+   425/426/440, bypassing `writeVisualOutput`. Pre-existing; consistently
+   reproducible in isolation.
+2. `TestNoWorkerWithoutStatedReason` — already tracked as WINDOWS entry #11
+   (Phase 201, `cmd/queen_judgement_test.go`): a Queen-requested Measurer with
+   a stated reason is dropped before spawn. Reconfirmed still open.
+
+Every test named in either task's `<acceptance_criteria>`/`<verify>` block
+passes; every test directly touching the three files this plan changed
+passes (`TestDiscuss*`, `TestSpec*`, `TestVoicedScreensSpeakPlainEnglish`,
+`TestCodexVisualsSpecIdentityContract`, `TestMigratedLifecycleSurfaces*`,
+`TestTheSevenClosingsSpeakPlainEnglish`).
