@@ -303,15 +303,15 @@ func renderPlanningSpecificationVisual(result specCommandResult, options plannin
 	fmt.Fprintf(&builder, "SPEC: %s revision %d\n", projection.SpecificationID, projection.RevisionNumber)
 	fmt.Fprintf(&builder, "Before: %s\nAfter: %s\n", projection.BeforeRevisionID, projection.AfterRevisionID)
 	fmt.Fprintf(&builder, "Status: %s\nScope: %s\n", strings.ToUpper(string(projection.Status)), projection.Scope.Kind)
-	renderPlanningSpecSection(&builder, "What this goal delivers", specCommandOutcomeVisualItems(projection.Outcomes))
-	renderPlanningSpecSection(&builder, "Included", specCommandIncludedVisualItems(projection.IncludedBehaviors))
-	renderPlanningSpecSection(&builder, "Explicitly excluded", specCommandExclusionVisualItems(projection.Exclusions))
-	renderPlanningSpecSection(&builder, "Binding decisions", specCommandDecisionVisualItems(projection.BindingDecisions))
-	renderPlanningSpecSection(&builder, "Requirements", specCommandRequirementVisualItems(projection.Requirements))
-	renderPlanningSpecSection(&builder, "Owner-checkable acceptance", specCommandAcceptanceVisualItems(projection.AcceptanceChecks))
-	renderPlanningSpecSection(&builder, "Negative expectations", specCommandNegativeVisualItems(projection.NegativeExpectations))
-	renderPlanningSpecSection(&builder, "Recovery expectations", specCommandRecoveryVisualItems(projection.RecoveryExpectations))
-	renderPlanningSpecSection(&builder, "Affected public paths", specCommandPublicPathVisualItems(projection.AffectedPublicPaths))
+	renderPlanningSpecSection(&builder, "goal", "What this goal delivers", specCommandOutcomeVisualItems(projection.Outcomes))
+	renderPlanningSpecSection(&builder, "done", "Included", specCommandIncludedVisualItems(projection.IncludedBehaviors))
+	renderPlanningSpecSection(&builder, "avoid", "Explicitly excluded", specCommandExclusionVisualItems(projection.Exclusions))
+	renderPlanningSpecSection(&builder, "decision", "Binding decisions", specCommandDecisionVisualItems(projection.BindingDecisions))
+	renderPlanningSpecSection(&builder, "requirement", "Requirements", specCommandRequirementVisualItems(projection.Requirements))
+	renderPlanningSpecSection(&builder, "evidence", "Owner-checkable acceptance", specCommandAcceptanceVisualItems(projection.AcceptanceChecks))
+	renderPlanningSpecSection(&builder, "avoid", "Negative expectations", specCommandNegativeVisualItems(projection.NegativeExpectations))
+	renderPlanningSpecSection(&builder, "checkpoint", "Recovery expectations", specCommandRecoveryVisualItems(projection.RecoveryExpectations))
+	renderPlanningSpecSection(&builder, "files", "Affected public paths", specCommandPublicPathVisualItems(projection.AffectedPublicPaths))
 	builder.WriteString(renderStageMarker("Revision Impact"))
 	renderSpecCommandVisualDelta(&builder, "Outcome", result.ClassifiedDelta.Outcomes)
 	renderSpecCommandVisualDelta(&builder, "Included", result.ClassifiedDelta.IncludedBehaviors)
@@ -343,47 +343,48 @@ func renderPlanningIterationVisual(card colony.PlanningIterationCard, options pl
 	var builder strings.Builder
 	builder.WriteString(renderBanner(commandEmoji("plan"), "Planning Iteration"))
 	builder.WriteString("Card: Planning Iteration\n")
-	builder.WriteString("Identity: ")
 	builder.WriteString(casteIdentity("scout"))
 	builder.WriteString(" → ")
 	builder.WriteString(casteIdentity("route_setter"))
 	builder.WriteString("\n")
-	fmt.Fprintf(&builder, "Pass: %d\n", projection.Iteration)
-	renderPlanningValueList(&builder, "Fresh evidence", projection.EvidenceIDs)
+	builder.WriteString(voiceLine("phase", fmt.Sprintf("Pass: %d", projection.Iteration)) + "\n")
+	renderPlanningValueList(&builder, "evidence", "Fresh evidence", projection.EvidenceIDs)
 	builder.WriteString(renderStageMarker("Planning readiness"))
 	for _, score := range projection.Scores {
 		delta := score.After - score.Before
 		switch planningVisualBandForWidth(options.Width) {
 		case planningVisualBandStacked:
-			fmt.Fprintf(&builder, "%s\n  Before: %d%%\n  After: %d%% (%+d)\n", score.Dimension, score.Before, score.After, delta)
+			builder.WriteString(voiceLine("evidence", score.Dimension) + "\n")
+			builder.WriteString(voiceLine("evidence", fmt.Sprintf("  Before: %d%%", score.Before)) + "\n")
+			builder.WriteString(voiceLine("evidence", fmt.Sprintf("  After: %d%% (%+d)", score.After, delta)) + "\n")
 		case planningVisualBandCompact:
-			fmt.Fprintf(&builder, "%s  %d%% → %d%%\n", score.Dimension, score.Before, score.After)
+			builder.WriteString(voiceLine("evidence", fmt.Sprintf("%s  %d%% → %d%%", score.Dimension, score.Before, score.After)) + "\n")
 		case planningVisualBandTable:
-			fmt.Fprintf(&builder, "%s | Before %d%% | After %d%% | %+d\n", score.Dimension, score.Before, score.After, delta)
+			builder.WriteString(voiceLine("evidence", fmt.Sprintf("%s | Before %d%% | After %d%% | %+d", score.Dimension, score.Before, score.After, delta)) + "\n")
 		default:
-			fmt.Fprintf(&builder, "%-12s %d%% → %d%% (%+d)\n", score.Dimension, score.Before, score.After, delta)
+			builder.WriteString(voiceLine("evidence", fmt.Sprintf("%-12s %d%% → %d%% (%+d)", score.Dimension, score.Before, score.After, delta)) + "\n")
 		}
 	}
-	fmt.Fprintf(&builder, "Overall: %d%% → %d%%\n", projection.OverallBefore, projection.OverallAfter)
+	builder.WriteString(voiceLine("evidence", fmt.Sprintf("Overall: %d%% → %d%%", projection.OverallBefore, projection.OverallAfter)) + "\n")
 	builder.WriteString(renderStageMarker("Weakest gap"))
-	fmt.Fprintf(&builder, "%s (%s): %s\n", projection.WeakestGap.ID, projection.WeakestGap.Materiality, projection.WeakestGap.Description)
-	fmt.Fprintf(&builder, "Evidence that would change it: %s\n", projection.WeakestGap.EvidenceThatWouldChange)
+	builder.WriteString(voiceLine("blocked", fmt.Sprintf("%s (%s): %s", projection.WeakestGap.ID, projection.WeakestGap.Materiality, projection.WeakestGap.Description)) + "\n")
+	builder.WriteString(voiceLine("question", fmt.Sprintf("Evidence that would change it: %s", projection.WeakestGap.EvidenceThatWouldChange)) + "\n")
 	builder.WriteString(renderStageMarker("Plan delta"))
-	renderPlanningValueList(&builder, "Added", projection.SemanticDelta.Added)
-	renderPlanningValueList(&builder, "Changed", projection.SemanticDelta.Changed)
-	renderPlanningValueList(&builder, "Removed", projection.SemanticDelta.Removed)
-	renderPlanningValueList(&builder, "Dependencies", projection.SemanticDelta.Dependencies)
-	renderPlanningValueList(&builder, "Acceptance", projection.SemanticDelta.Acceptance)
+	renderPlanningValueList(&builder, "history", "Added", projection.SemanticDelta.Added)
+	renderPlanningValueList(&builder, "history", "Changed", projection.SemanticDelta.Changed)
+	renderPlanningValueList(&builder, "history", "Removed", projection.SemanticDelta.Removed)
+	renderPlanningValueList(&builder, "history", "Dependencies", projection.SemanticDelta.Dependencies)
+	renderPlanningValueList(&builder, "history", "Acceptance", projection.SemanticDelta.Acceptance)
 	combinedPaths := append(append(append([]string(nil), projection.SemanticDelta.Negative...), projection.SemanticDelta.Recovery...), projection.SemanticDelta.PublicPaths...)
-	renderPlanningValueList(&builder, "Negative / recovery / public paths", combinedPaths)
-	renderPlanningValueList(&builder, "Authority impact", projection.SemanticDelta.AuthorityImpact)
+	renderPlanningValueList(&builder, "history", "Negative / recovery / public paths", combinedPaths)
+	renderPlanningValueList(&builder, "history", "Authority impact", projection.SemanticDelta.AuthorityImpact)
 	builder.WriteString(renderStageMarker("Decision"))
-	fmt.Fprintf(&builder, "%s — %s\n", projection.Decision, projection.StopReasonPublicLabel)
-	fmt.Fprintf(&builder, "Evidence that would change: %s\n", projection.EvidenceThatWouldChange)
+	builder.WriteString(voiceLine("blocked", fmt.Sprintf("%s — %s", projection.Decision, projection.StopReasonPublicLabel)) + "\n")
+	builder.WriteString(voiceLine("question", fmt.Sprintf("Evidence that would change: %s", projection.EvidenceThatWouldChange)) + "\n")
 	if projection.Decision == "CONTINUE" {
-		fmt.Fprintf(&builder, "Next research: %s\n", projection.EvidenceThatWouldChange)
+		builder.WriteString(voiceLine("evidence", fmt.Sprintf("Next research: %s", projection.EvidenceThatWouldChange)) + "\n")
 	}
-	fmt.Fprintf(&builder, "Details: %s\n", projection.DetailCommand)
+	builder.WriteString(voiceLine("next", fmt.Sprintf("Details: %s", projection.DetailCommand)) + "\n")
 	return finalizePlanningVisual(builder.String(), options)
 }
 
@@ -391,25 +392,24 @@ func renderPlanningDecisionVisual(card planningDecisionCard, options planningVis
 	projection := projectPlanningDecision(card)
 	var builder strings.Builder
 	builder.WriteString(renderBanner(commandEmoji("plan"), "Planning Decision"))
-	builder.WriteString("Identity: ")
 	builder.WriteString(casteIdentity("queen"))
-	builder.WriteString("\n")
-	fmt.Fprintf(&builder, "Decision: %s — %s\n", projection.DecisionID, projection.Decision)
-	fmt.Fprintf(&builder, "Why now: %s\n", projection.WhyNow)
-	renderPlanningValueList(&builder, "Evidence", projection.EvidenceIDs)
-	fmt.Fprintf(&builder, "Queen recommends: %s\n", projection.QueenRecommendation)
+	builder.WriteString(" (Queen is this project's coordinator)\n")
+	builder.WriteString(voiceLine("decision", fmt.Sprintf("Decision: %s — %s", projection.DecisionID, projection.Decision)) + "\n")
+	builder.WriteString(voiceLine("decision", fmt.Sprintf("Why now: %s", projection.WhyNow)) + "\n")
+	renderPlanningValueList(&builder, "evidence", "Evidence", projection.EvidenceIDs)
+	builder.WriteString(voiceLine("decision", fmt.Sprintf("Queen recommends (this project's coordinator): %s", projection.QueenRecommendation)) + "\n")
 	builder.WriteString(renderStageMarker("Choices"))
 	for _, choice := range projection.Choices {
-		fmt.Fprintf(&builder, "%s: %s\n", choice.ID, choice.Label)
-		fmt.Fprintf(&builder, "Consequence: %s\n", choice.Consequence)
+		builder.WriteString(voiceLine("alternative", fmt.Sprintf("%s: %s", choice.ID, choice.Label)) + "\n")
+		builder.WriteString(voiceLine("alternative", fmt.Sprintf("Consequence: %s", choice.Consequence)) + "\n")
 		if choice.Impact.material() {
-			fmt.Fprintf(&builder, "Contract impact: behavior=%s authority=%s scope=%s risk=%s acceptance=%s\n", choice.Impact.Behavior, choice.Impact.Authority, choice.Impact.Scope, choice.Impact.Risk, choice.Impact.Acceptance)
+			builder.WriteString(voiceLine("alternative", fmt.Sprintf("Contract impact: behavior=%s authority=%s scope=%s risk=%s acceptance=%s", choice.Impact.Behavior, choice.Impact.Authority, choice.Impact.Scope, choice.Impact.Risk, choice.Impact.Acceptance)) + "\n")
 		}
 	}
-	renderPlanningValueList(&builder, "Affected scope", projection.AffectedSemanticIDs)
-	fmt.Fprintf(&builder, "Prior answer: %s\n", emptyFallback(projection.PriorAnswer, "none"))
-	fmt.Fprintf(&builder, "Revalidation: %s\n", projection.Revalidation)
-	fmt.Fprintf(&builder, "Planning resumes: %s\n", projection.PlanningResumes)
+	renderPlanningValueList(&builder, "history", "Affected scope", projection.AffectedSemanticIDs)
+	builder.WriteString(voiceLine("history", fmt.Sprintf("Prior answer: %s", emptyFallback(projection.PriorAnswer, "none"))) + "\n")
+	builder.WriteString(voiceLine("question", fmt.Sprintf("Revalidation: %s", projection.Revalidation)) + "\n")
+	builder.WriteString(voiceLine("next", fmt.Sprintf("Planning resumes: %s", projection.PlanningResumes)) + "\n")
 	return finalizePlanningVisual(builder.String(), options)
 }
 
@@ -418,67 +418,67 @@ func renderPlanningCandidateVisual(review planCandidateReview, options planningV
 	var builder strings.Builder
 	builder.WriteString(renderBanner(commandEmoji("plan"), "Plan Candidate"))
 	builder.WriteString("Review: Plan Candidate\n")
-	builder.WriteString("Identity: ")
 	builder.WriteString(casteIdentity("queen"))
-	builder.WriteString("\n")
+	builder.WriteString(" (Queen is this project's coordinator)\n")
 	if projection.CandidateActive {
-		builder.WriteString("ACCEPTED PLAN — ACTIVE\n")
+		builder.WriteString(voiceLine("done", "ACCEPTED PLAN — ACTIVE") + "\n")
 	} else {
-		builder.WriteString("CANDIDATE — NOT ACTIVE\n")
+		builder.WriteString(voiceLine("status", "CANDIDATE — NOT ACTIVE") + "\n")
 	}
-	fmt.Fprintf(&builder, "Candidate: %s (%s)\n", projection.CandidateID, projection.CandidateStatus)
-	fmt.Fprintf(&builder, "Candidate hash: %s\n", projection.CandidateContentHash)
-	fmt.Fprintf(&builder, "Approved specification: %s\n", projection.SpecificationRevisionID)
-	fmt.Fprintf(&builder, "SPEC hash: %s\n", projection.SpecificationRevisionHash)
-	fmt.Fprintf(&builder, "Base plan: %s\n", projection.BasePlanRevisionID)
-	fmt.Fprintf(&builder, "Base plan hash: %s\n", projection.BasePlanRevisionHash)
-	fmt.Fprintf(&builder, "Proposal hash: %s\n", projection.ProposalHash)
-	fmt.Fprintf(&builder, "Standing: %s\n", projection.Standing)
-	fmt.Fprintf(&builder, "Expires: %s\n", projection.ExpiresAt.Format(time.RFC3339Nano))
-	fmt.Fprintf(&builder, "Active plan: %s\n", projection.ActivePlanEffect)
-	fmt.Fprintf(&builder, "Preset: target %d%%\n", projection.TargetConfidence)
-	fmt.Fprintf(&builder, "Stopped because: %s\n", projection.StopReasonPublicLabel)
+	builder.WriteString(voiceLine("history", fmt.Sprintf("Candidate: %s (%s)", projection.CandidateID, projection.CandidateStatus)) + "\n")
+	builder.WriteString(voiceLine("history", fmt.Sprintf("Candidate hash: %s", projection.CandidateContentHash)) + "\n")
+	builder.WriteString(voiceLine("history", fmt.Sprintf("Approved specification: %s", projection.SpecificationRevisionID)) + "\n")
+	builder.WriteString(voiceLine("history", fmt.Sprintf("SPEC hash: %s", projection.SpecificationRevisionHash)) + "\n")
+	builder.WriteString(voiceLine("history", fmt.Sprintf("Base plan: %s", projection.BasePlanRevisionID)) + "\n")
+	builder.WriteString(voiceLine("history", fmt.Sprintf("Base plan hash: %s", projection.BasePlanRevisionHash)) + "\n")
+	builder.WriteString(voiceLine("history", fmt.Sprintf("Proposal hash: %s", projection.ProposalHash)) + "\n")
+	builder.WriteString(voiceLine("status", fmt.Sprintf("Standing: %s", projection.Standing)) + "\n")
+	builder.WriteString(voiceLine("elapsed", fmt.Sprintf("Expires: %s", projection.ExpiresAt.Format(time.RFC3339Nano))) + "\n")
+	builder.WriteString(voiceLine("status", fmt.Sprintf("Active plan: %s", projection.ActivePlanEffect)) + "\n")
+	builder.WriteString(voiceLine("decision", fmt.Sprintf("Preset: target %d%%", projection.TargetConfidence)) + "\n")
+	builder.WriteString(voiceLine("blocked", fmt.Sprintf("Stopped because: %s", projection.StopReasonPublicLabel)) + "\n")
 	if projection.StopRationale != "" {
-		fmt.Fprintf(&builder, "Reason: %s\n", projection.StopRationale)
+		builder.WriteString(voiceLine("blocked", fmt.Sprintf("Reason: %s", projection.StopRationale)) + "\n")
 	}
 	builder.WriteString(renderStageMarker("Planning readiness"))
 	for _, score := range projection.Scores {
-		fmt.Fprintf(&builder, "%s: %d%%\n", score.Dimension, score.After)
+		builder.WriteString(voiceLine("evidence", fmt.Sprintf("%s: %d%%", score.Dimension, score.After)) + "\n")
 	}
-	fmt.Fprintf(&builder, "Overall: %d%% (target %d%%)\n", projection.ActualConfidence, projection.TargetConfidence)
+	builder.WriteString(voiceLine("evidence", fmt.Sprintf("Overall: %d%% (target %d%%)", projection.ActualConfidence, projection.TargetConfidence)) + "\n")
 	builder.WriteString(renderStageMarker("Remaining gaps"))
 	if len(projection.ResidualGaps) == 0 {
-		builder.WriteString("none\n")
+		builder.WriteString(voiceLine("blocked", "none") + "\n")
 	}
 	for _, gap := range projection.ResidualGaps {
-		fmt.Fprintf(&builder, "%s (%s): %s\n", gap.ID, gap.Materiality, gap.Description)
-		fmt.Fprintf(&builder, "Evidence that would change it: %s\n", gap.EvidenceThatWouldChange)
+		builder.WriteString(voiceLine("blocked", fmt.Sprintf("%s (%s): %s", gap.ID, gap.Materiality, gap.Description)) + "\n")
+		builder.WriteString(voiceLine("question", fmt.Sprintf("Evidence that would change it: %s", gap.EvidenceThatWouldChange)) + "\n")
 	}
-	fmt.Fprintf(&builder, "Evidence that would change it: %s\n", projection.EvidenceThatWouldChange)
+	builder.WriteString(voiceLine("question", fmt.Sprintf("Evidence that would change it: %s", projection.EvidenceThatWouldChange)) + "\n")
 	builder.WriteString(renderStageMarker("Planning timeline"))
-	fmt.Fprintf(&builder, "Timeline: %s\nDigest: %s\n", emptyFallback(projection.TimelineID, "not recorded"), emptyFallback(projection.TimelineDigest, "not recorded"))
+	builder.WriteString(voiceLine("history", fmt.Sprintf("Timeline: %s", emptyFallback(projection.TimelineID, "not recorded"))) + "\n")
+	builder.WriteString(voiceLine("history", fmt.Sprintf("Digest: %s", emptyFallback(projection.TimelineDigest, "not recorded"))) + "\n")
 	builder.WriteString(renderStageMarker("Proposed plan"))
-	fmt.Fprintf(&builder, "Revision: %s\n", projection.ProposalRevisionID)
+	builder.WriteString(voiceLine("history", fmt.Sprintf("Revision: %s", projection.ProposalRevisionID)) + "\n")
 	for _, phase := range review.Candidate.Proposal.Phases {
-		fmt.Fprintf(&builder, "Phase %d: %s\n", phase.ID, phase.Name)
+		builder.WriteString(voiceLine("phase", fmt.Sprintf("Phase %d: %s", phase.ID, phase.Name)) + "\n")
 	}
-	builder.WriteString(renderStageMarker("Queen recommendation"))
-	fmt.Fprintf(&builder, "%s — %s\n", strings.ToUpper(projection.RecommendationDisposition), projection.RecommendationRationale)
-	renderPlanningValueList(&builder, "Evidence", projection.RecommendationEvidenceIDs)
-	fmt.Fprintf(&builder, "Producer: %s (%s)\n", projection.RecommendationProducer, projection.RecommendationProducerID)
+	builder.WriteString(renderStageMarker("Queen recommendation (this project's coordinator)"))
+	builder.WriteString(voiceLine("decision", fmt.Sprintf("%s — %s", strings.ToUpper(projection.RecommendationDisposition), projection.RecommendationRationale)) + "\n")
+	renderPlanningValueList(&builder, "evidence", "Evidence", projection.RecommendationEvidenceIDs)
+	builder.WriteString(voiceLine("history", fmt.Sprintf("Producer: %s (%s) — this project's coordinator decides the recommendation", projection.RecommendationProducer, projection.RecommendationProducerID)) + "\n")
 	if projection.CandidateActive {
-		builder.WriteString("Owner acceptance is recorded; build and run are equal execution choices.\n")
-		fmt.Fprintf(&builder, "Next: %s\n", projection.Next)
+		builder.WriteString(voiceLine("done", "Owner acceptance is recorded; build and run are equal execution choices.") + "\n")
+		builder.WriteString(voiceLine("next", fmt.Sprintf("Next: %s", projection.Next)) + "\n")
 	} else if projection.AcceptanceAvailable {
-		builder.WriteString("Candidate remains inactive until explicit owner acceptance.\n")
-		builder.WriteString("Accept this candidate?\n")
-		fmt.Fprintf(&builder, "Acceptance command: %s\n", projection.AcceptanceCommand)
-		fmt.Fprintf(&builder, "Next: %s\n", projection.Next)
+		builder.WriteString(voiceLine("blocked", "Candidate remains inactive until explicit owner acceptance.") + "\n")
+		builder.WriteString(voiceLine("decision", "Accept this candidate?") + "\n")
+		builder.WriteString(voiceLine("decision", fmt.Sprintf("Acceptance command: %s", projection.AcceptanceCommand)) + "\n")
+		builder.WriteString(voiceLine("next", fmt.Sprintf("Next: %s", projection.Next)) + "\n")
 	} else {
-		fmt.Fprintf(&builder, "Why unavailable: %s\n", projection.WhyUnavailable)
-		renderPlanningValueList(&builder, "Evidence", projection.Evidence)
-		fmt.Fprintf(&builder, "State: %s\n", projection.StateEffect)
-		fmt.Fprintf(&builder, "Next: %s\n", projection.Next)
+		builder.WriteString(voiceLine("avoid", fmt.Sprintf("Why unavailable: %s", projection.WhyUnavailable)) + "\n")
+		renderPlanningValueList(&builder, "evidence", "Evidence", projection.Evidence)
+		builder.WriteString(voiceLine("status", fmt.Sprintf("State: %s", projection.StateEffect)) + "\n")
+		builder.WriteString(voiceLine("next", fmt.Sprintf("Next: %s", projection.Next)) + "\n")
 	}
 	return finalizePlanningVisual(builder.String(), options)
 }
@@ -486,25 +486,24 @@ func renderPlanningCandidateVisual(review planCandidateReview, options planningV
 func renderPlanningPresetVisual(goal, specificationRevisionID string, selection planningPresetSelection, options planningVisualOptions) string {
 	var builder strings.Builder
 	builder.WriteString(renderBanner(commandEmoji("plan"), "Plan"))
-	builder.WriteString("Identity: ")
 	builder.WriteString(casteIdentity("queen"))
-	builder.WriteString("\n")
-	fmt.Fprintf(&builder, "Goal: %s\n", emptyFallback(goal, "Unreported"))
-	fmt.Fprintf(&builder, "Planning contract: SPEC %s [APPROVED]\n", emptyFallback(specificationRevisionID, "Unreported"))
+	builder.WriteString(" (Queen is this project's coordinator)\n")
+	builder.WriteString(voiceLine("goal", fmt.Sprintf("Goal: %s", emptyFallback(goal, "Unreported"))) + "\n")
+	builder.WriteString(voiceLine("requirement", fmt.Sprintf("Planning contract: SPEC %s [APPROVED]", emptyFallback(specificationRevisionID, "Unreported"))) + "\n")
 	if selection.PresetRequired {
 		builder.WriteString(renderStageMarker("Choose Planning Preset"))
 		for _, option := range selection.Options {
-			fmt.Fprintf(&builder, "%-10s Target %-3d Up to %d passes\n", option.Label, option.TargetConfidence, option.PassCap)
+			builder.WriteString(voiceLine("alternative", fmt.Sprintf("%-10s Target %-3d Up to %d passes", option.Label, option.TargetConfidence, option.PassCap)) + "\n")
 		}
-		builder.WriteString("Choose the planning preset: Fast, Balanced, Deep, or Exhaustive.\n")
-		builder.WriteString("Planning did not start. State: unchanged.\n")
+		builder.WriteString(voiceLine("decision", "Choose the planning preset: Fast, Balanced, Deep, or Exhaustive.") + "\n")
+		builder.WriteString(voiceLine("status", "Planning did not start. State: unchanged.") + "\n")
 		return finalizePlanningVisual(builder.String(), options)
 	}
-	fmt.Fprintf(&builder, "Preset: %s — target %d, up to %d passes", selection.Policy.Label, selection.Policy.TargetConfidence, selection.Policy.PassCap)
+	presetLine := fmt.Sprintf("Preset: %s — target %d, up to %d passes", selection.Policy.Label, selection.Policy.TargetConfidence, selection.Policy.PassCap)
 	if selection.SelectionSource == planningPresetSourceNamed || selection.SelectionSource == planningPresetSourceExplicitPair {
-		builder.WriteString(" — supplied by owner flag")
+		presetLine += " — supplied by owner flag"
 	}
-	builder.WriteString(".\n")
+	builder.WriteString(voiceLine("decision", presetLine+".") + "\n")
 	return finalizePlanningVisual(builder.String(), options)
 }
 
@@ -525,7 +524,6 @@ func renderPlanningStageVisual(manifest planningStageManifest, status string, wo
 	}
 	var builder strings.Builder
 	builder.WriteString(renderBanner(commandEmoji("plan"), fmt.Sprintf("Pass %d · %s", manifest.Pass, label)))
-	builder.WriteString("Identity: ")
 	builder.WriteString(casteIdentity(caste))
 	if strings.TrimSpace(workerName) != "" {
 		builder.WriteString(" ")
@@ -533,16 +531,16 @@ func renderPlanningStageVisual(manifest planningStageManifest, status string, wo
 	}
 	builder.WriteString("\n")
 	if completed {
-		fmt.Fprintf(&builder, "✓ %s %s [completed]\n", label, emptyFallback(workerName, "worker"))
-		fmt.Fprintf(&builder, "Fresh evidence: %d\n", freshEvidence)
-		fmt.Fprintf(&builder, "Remaining material questions: %d\n", remainingQuestions)
+		builder.WriteString(voiceLine("done", fmt.Sprintf("%s %s [completed]", label, emptyFallback(workerName, "worker"))) + "\n")
+		builder.WriteString(voiceLine("evidence", fmt.Sprintf("Fresh evidence: %d", freshEvidence)) + "\n")
+		builder.WriteString(voiceLine("question", fmt.Sprintf("Remaining material questions: %d", remainingQuestions)) + "\n")
 	} else {
-		fmt.Fprintf(&builder, "%s — %s [%s]\n", label, verb, emptyFallback(status, "started"))
+		builder.WriteString(voiceLine("status", fmt.Sprintf("%s — %s [%s]", label, verb, emptyFallback(status, "started"))) + "\n")
 		bindings := make([]string, 0, len(manifest.EvidenceFrontier))
 		for _, evidence := range manifest.EvidenceFrontier {
 			bindings = append(bindings, evidence.ID)
 		}
-		renderPlanningValueList(&builder, "Evidence sources", bindings)
+		renderPlanningValueList(&builder, "evidence", "Evidence sources", bindings)
 	}
 	return finalizePlanningVisual(builder.String(), options)
 }
@@ -550,26 +548,25 @@ func renderPlanningStageVisual(manifest planningStageManifest, status string, wo
 func renderPlanningStopVisual(decision colony.PlanningStopDecision, residualGaps []colony.PlanningGap, score, target int, preset string, options planningVisualOptions) string {
 	var builder strings.Builder
 	builder.WriteString(renderBanner(commandEmoji("plan"), "Planning Stop"))
-	builder.WriteString("Identity: ")
 	builder.WriteString(casteIdentity("route_setter"))
 	builder.WriteString("\n")
-	fmt.Fprintf(&builder, "%s: %s — %s\n", planningDecisionMode(decision.Reason), planningStopReasonPublicLabel(decision.Reason), decision.Rationale)
+	builder.WriteString(voiceLine("blocked", fmt.Sprintf("%s: %s — %s", planningDecisionMode(decision.Reason), planningStopReasonPublicLabel(decision.Reason), decision.Rationale)) + "\n")
 	if score < target && decision.Reason != colony.PlanningStopContinue && decision.Reason != colony.PlanningStopOwnerDecision {
-		fmt.Fprintf(&builder, "Below target: %d/%d. Remaining gaps are non-material because %s.\n", score, target, decision.Rationale)
+		builder.WriteString(voiceLine("blocked", fmt.Sprintf("Below target: %d/%d. Remaining gaps are non-material because %s.", score, target, decision.Rationale)) + "\n")
 	}
 	builder.WriteString(renderStageMarker("Residual gaps"))
 	if len(residualGaps) == 0 {
-		builder.WriteString("none\n")
+		builder.WriteString(voiceLine("blocked", "none") + "\n")
 	}
 	for _, gap := range residualGaps {
-		fmt.Fprintf(&builder, "%s (%s): %s\n", gap.ID, gap.Materiality, gap.Description)
-		fmt.Fprintf(&builder, "Evidence that would change it: %s\n", gap.EvidenceThatWouldChange)
+		builder.WriteString(voiceLine("blocked", fmt.Sprintf("%s (%s): %s", gap.ID, gap.Materiality, gap.Description)) + "\n")
+		builder.WriteString(voiceLine("question", fmt.Sprintf("Evidence that would change it: %s", gap.EvidenceThatWouldChange)) + "\n")
 	}
-	fmt.Fprintf(&builder, "Evidence that would change this decision: %s\n", decision.EvidenceThatWouldChange)
+	builder.WriteString(voiceLine("question", fmt.Sprintf("Evidence that would change this decision: %s", decision.EvidenceThatWouldChange)) + "\n")
 	if preset != "" {
-		fmt.Fprintf(&builder, "Preset: %s\n", preset)
+		builder.WriteString(voiceLine("decision", fmt.Sprintf("Preset: %s", preset)) + "\n")
 	}
-	builder.WriteString("Stopping creates a candidate only; the active plan is unchanged.\n")
+	builder.WriteString(voiceLine("status", "Stopping creates a candidate only; the active plan is unchanged.") + "\n")
 	return finalizePlanningVisual(builder.String(), options)
 }
 
@@ -588,40 +585,38 @@ func renderPlanningAcceptanceVisual(candidate colony.PlanCandidate, revision col
 	projection := projectPlanningAcceptance(candidate, revision, receipt, replayed)
 	var builder strings.Builder
 	builder.WriteString(renderBanner(commandEmoji("plan"), "Plan Accepted"))
-	builder.WriteString("Identity: ")
 	builder.WriteString(casteIdentity("queen"))
-	builder.WriteString("\n")
+	builder.WriteString(" (Queen is this project's coordinator)\n")
 	if projection.Replayed {
-		builder.WriteString("Already accepted; the existing plan revision and receipt were retained.\n")
+		builder.WriteString(voiceLine("done", "Already accepted; the existing plan revision and receipt were retained.") + "\n")
 	} else {
-		builder.WriteString("✓ Plan accepted\n")
+		builder.WriteString(voiceLine("done", "Plan accepted") + "\n")
 	}
-	fmt.Fprintf(&builder, "Plan revision: %s\n", projection.PlanRevisionID)
-	fmt.Fprintf(&builder, "Candidate: %s (%s)\n", projection.CandidateID, planningVisualShortIdentity(projection.CandidateContentHash))
-	fmt.Fprintf(&builder, "SPEC: %s\n", projection.SpecificationRevisionID)
-	fmt.Fprintf(&builder, "Timeline: %d pass(es), digest %s\n", projection.TimelinePasses, planningVisualShortIdentity(projection.TimelineDigest))
-	builder.WriteString("State: accepted plan is READY\n")
-	builder.WriteString("Next Up: choose an operating mode\n")
-	builder.WriteString("  aether build\n")
-	builder.WriteString("  aether run\n")
+	builder.WriteString(voiceLine("history", fmt.Sprintf("Plan revision: %s", projection.PlanRevisionID)) + "\n")
+	builder.WriteString(voiceLine("history", fmt.Sprintf("Candidate: %s (%s)", projection.CandidateID, planningVisualShortIdentity(projection.CandidateContentHash))) + "\n")
+	builder.WriteString(voiceLine("requirement", fmt.Sprintf("SPEC: %s", projection.SpecificationRevisionID)) + "\n")
+	builder.WriteString(voiceLine("history", fmt.Sprintf("Timeline: %d pass(es), digest %s", projection.TimelinePasses, planningVisualShortIdentity(projection.TimelineDigest))) + "\n")
+	builder.WriteString(voiceLine("status", "State: accepted plan is READY") + "\n")
+	builder.WriteString(voiceLine("next", "Next Up: choose an operating mode") + "\n")
+	builder.WriteString(voiceLine("alternative", "aether build") + "\n")
+	builder.WriteString(voiceLine("alternative", "aether run") + "\n")
 	return finalizePlanningVisual(builder.String(), options)
 }
 
 func renderPlanningRevisionImpactVisual(reason string, evidence, requirements, tasks, proofs, completed, unaffected []string, historicalRevision, authority string, options planningVisualOptions) string {
 	var builder strings.Builder
 	builder.WriteString(renderBanner(commandEmoji("plan"), "Living Plan Impact"))
-	builder.WriteString("Identity: ")
 	builder.WriteString(casteIdentity("queen"))
-	builder.WriteString("\n")
-	fmt.Fprintf(&builder, "Why reality changed the route: %s\n", reason)
-	renderPlanningValueList(&builder, "Evidence", evidence)
-	renderPlanningValueList(&builder, "Affected requirements", requirements)
-	renderPlanningValueList(&builder, "Affected unfinished tasks", tasks)
-	renderPlanningValueList(&builder, "Affected proof links", proofs)
-	renderPlanningValueList(&builder, "Preserved completed work", completed)
-	renderPlanningValueList(&builder, "Preserved unaffected work", unaffected)
-	fmt.Fprintf(&builder, "Historical revision: retained as %s\n", historicalRevision)
-	fmt.Fprintf(&builder, "Authority required: %s\n", emptyFallback(authority, "none"))
+	builder.WriteString(" (Queen is this project's coordinator)\n")
+	builder.WriteString(voiceLine("decision", fmt.Sprintf("Why reality changed the route: %s", reason)) + "\n")
+	renderPlanningValueList(&builder, "evidence", "Evidence", evidence)
+	renderPlanningValueList(&builder, "requirement", "Affected requirements", requirements)
+	renderPlanningValueList(&builder, "task", "Affected unfinished tasks", tasks)
+	renderPlanningValueList(&builder, "checkpoint", "Affected proof links", proofs)
+	renderPlanningValueList(&builder, "done", "Preserved completed work", completed)
+	renderPlanningValueList(&builder, "done", "Preserved unaffected work", unaffected)
+	builder.WriteString(voiceLine("history", fmt.Sprintf("Historical revision: retained as %s", historicalRevision)) + "\n")
+	builder.WriteString(voiceLine("decision", fmt.Sprintf("Authority required: %s", emptyFallback(authority, "none"))) + "\n")
 	return finalizePlanningVisual(builder.String(), options)
 }
 
@@ -894,13 +889,12 @@ func renderPlanningRefusalVisual(action, because, state, next string, options pl
 	projection := projectPlanningRefusal(action, because, state, next)
 	var builder strings.Builder
 	builder.WriteString(renderBanner(commandEmoji("plan"), "Planning Refusal"))
-	builder.WriteString("Identity: ")
 	builder.WriteString(casteIdentity("queen"))
-	builder.WriteString("\n")
-	fmt.Fprintf(&builder, "⛔ %s\n", projection.Action)
-	fmt.Fprintf(&builder, "Because: %s\n", projection.Because)
-	fmt.Fprintf(&builder, "State: %s\n", projection.State)
-	fmt.Fprintf(&builder, "Next: %s\n", projection.Next)
+	builder.WriteString(" (Queen is this project's coordinator)\n")
+	builder.WriteString(voiceLine("blocked", projection.Action) + "\n")
+	builder.WriteString(voiceLine("avoid", fmt.Sprintf("Because: %s", projection.Because)) + "\n")
+	builder.WriteString(voiceLine("status", fmt.Sprintf("State: %s", projection.State)) + "\n")
+	builder.WriteString(voiceLine("next", fmt.Sprintf("Next: %s", projection.Next)) + "\n")
 	return finalizePlanningVisual(builder.String(), options)
 }
 
@@ -908,18 +902,17 @@ func renderPlanningCandidateRefusalVisual(details planCandidateRefusalDetails, o
 	state := strings.ReplaceAll(string(details.StateEffect), "_", " ")
 	var builder strings.Builder
 	builder.WriteString(renderBanner(commandEmoji("plan"), "Plan Candidate Unavailable"))
-	builder.WriteString("Identity: ")
 	builder.WriteString(casteIdentity("queen"))
-	builder.WriteString("\n")
-	fmt.Fprintf(&builder, "Candidate: %s\n", details.CandidateID)
-	fmt.Fprintf(&builder, "Candidate status: %s\n", details.CandidateStatus)
-	fmt.Fprintf(&builder, "Standing: %s\n", details.Standing)
-	fmt.Fprintf(&builder, "Expires: %s\n", details.ExpiresAt.UTC().Format(time.RFC3339Nano))
-	fmt.Fprintf(&builder, "Why unavailable: %s\n", details.WhyUnavailable)
-	renderPlanningValueList(&builder, "Evidence", details.Evidence)
-	fmt.Fprintf(&builder, "State: %s\n", state)
-	fmt.Fprintf(&builder, "Active plan: %s\n", details.ActivePlanEffect)
-	fmt.Fprintf(&builder, "Next: %s\n", details.RecoveryCommand)
+	builder.WriteString(" (Queen is this project's coordinator)\n")
+	builder.WriteString(voiceLine("history", fmt.Sprintf("Candidate: %s", details.CandidateID)) + "\n")
+	builder.WriteString(voiceLine("status", fmt.Sprintf("Candidate status: %s", details.CandidateStatus)) + "\n")
+	builder.WriteString(voiceLine("status", fmt.Sprintf("Standing: %s", details.Standing)) + "\n")
+	builder.WriteString(voiceLine("elapsed", fmt.Sprintf("Expires: %s", details.ExpiresAt.UTC().Format(time.RFC3339Nano))) + "\n")
+	builder.WriteString(voiceLine("avoid", fmt.Sprintf("Why unavailable: %s", details.WhyUnavailable)) + "\n")
+	renderPlanningValueList(&builder, "evidence", "Evidence", details.Evidence)
+	builder.WriteString(voiceLine("status", fmt.Sprintf("State: %s", state)) + "\n")
+	builder.WriteString(voiceLine("status", fmt.Sprintf("Active plan: %s", details.ActivePlanEffect)) + "\n")
+	builder.WriteString(voiceLine("next", fmt.Sprintf("Next: %s", details.RecoveryCommand)) + "\n")
 	return finalizePlanningVisual(builder.String(), options)
 }
 
@@ -1104,6 +1097,14 @@ func planningSplitVisibleWord(word string, firstWidth int) []string {
 	limit := firstWidth
 	for _, character := range word {
 		characterWidth := planningRuneWidth(character)
+		// A zero-width rune (variation selector, ZWJ, combining mark) never
+		// starts its own chunk and is never split away from the rune before
+		// it -- doing so would cut a single glyph (e.g. "➡️" = U+27A1 +
+		// U+FE0F) across two wrapped lines.
+		if characterWidth == 0 && current.Len() > 0 {
+			current.WriteRune(character)
+			continue
+		}
 		if currentWidth > 0 && currentWidth+characterWidth > limit {
 			chunks = append(chunks, current.String())
 			current.Reset()
@@ -1138,6 +1139,15 @@ func planningVisualLineMayOverflow(line string) bool {
 	if !utf8.ValidString(plain) {
 		return false
 	}
+	// A voiceLine-composed content line carries a leading glyph the
+	// prefixes below never accounted for ("🔎 Candidate hash: ..." rather
+	// than "Candidate hash: ..."). Strip it before matching so an
+	// indivisible identifier line is still recognized after this plan
+	// routes every planning card renderer through voiceLine -- otherwise
+	// every one of these lines would silently lose its overflow exemption
+	// and start wrapping mid-hash, a correctness regression this change
+	// would otherwise introduce.
+	plain = planningStripLeadingVoiceGlyph(plain)
 	for _, prefix := range []string{
 		"Identifier: sha256:", "Candidate: ", "Candidate hash: ", "SPEC hash: ",
 		"Base plan hash: ", "Proposal hash: ", "Expires: ",
@@ -1151,22 +1161,43 @@ func planningVisualLineMayOverflow(line string) bool {
 	return false
 }
 
-func renderPlanningSpecSection(builder *strings.Builder, title string, items []specCommandVisualItem) {
+// planningStripLeadingVoiceGlyph removes a single leading voice glyph (and
+// the space voiceLine always places after it) from an already-trimmed line,
+// so a prefix check written against the pre-glyph text still recognizes the
+// line's semantic content. A line with no leading glyph passes through
+// unchanged.
+func planningStripLeadingVoiceGlyph(plain string) string {
+	for _, glyph := range voiceGlyphMap {
+		if candidate := strings.TrimPrefix(plain, glyph+" "); candidate != plain {
+			return candidate
+		}
+	}
+	return plain
+}
+
+// renderPlanningSpecSection takes lineType as an explicit argument rather
+// than deriving it from title -- deriving from the title string would make
+// the glyph break the moment a section is renamed, mirroring
+// renderSpecCommandVisualSection's identical fix in spec_cmd.go (Phase
+// 202.1 plan 03) for the same renamer-fragility failure mode.
+func renderPlanningSpecSection(builder *strings.Builder, lineType, title string, items []specCommandVisualItem) {
 	builder.WriteString(renderStageMarker(title))
 	if len(items) == 0 {
-		builder.WriteString("none\n")
+		builder.WriteString(voiceLine(lineType, "none") + "\n")
 		return
 	}
 	for _, item := range items {
-		fmt.Fprintf(builder, "%s  %s\n", item.ID, item.Description)
+		builder.WriteString(voiceLine(lineType, fmt.Sprintf("%s  %s", item.ID, item.Description)) + "\n")
 		if item.Detail != "" {
-			fmt.Fprintf(builder, "  %s\n", item.Detail)
+			builder.WriteString(voiceLine(lineType, "  "+item.Detail) + "\n")
 		}
 	}
 }
 
-func renderPlanningValueList(builder *strings.Builder, label string, values []string) {
-	fmt.Fprintf(builder, "%s: %s\n", label, planningValueSummary(values))
+// renderPlanningValueList takes lineType as an explicit argument for the same
+// renamer-fragility reason as renderPlanningSpecSection above.
+func renderPlanningValueList(builder *strings.Builder, lineType, label string, values []string) {
+	builder.WriteString(voiceLine(lineType, fmt.Sprintf("%s: %s", label, planningValueSummary(values))) + "\n")
 }
 
 func planningValueSummary(values []string) string {
