@@ -271,6 +271,26 @@ func voiceLine(kind, text string) string {
 	return voiceGlyph(kind) + " " + text
 }
 
+// signalTypeGlyph resolves a pheromone signal type (FOCUS/REDIRECT/FEEDBACK)
+// to its glyph through voiceGlyphMap, absorbing the three local literal
+// `map[string]string{"FOCUS": ..., "REDIRECT": ..., "FEEDBACK": ...}`
+// tables that used to be hand-rolled separately in renderSuggestedSteering,
+// renderSteeringSignals and renderSignalVisual. An unknown or empty signal
+// type falls back to the generic ant, exactly as the three local literals
+// did.
+func signalTypeGlyph(signalType string) string {
+	switch strings.ToUpper(strings.TrimSpace(signalType)) {
+	case "FOCUS":
+		return voiceGlyph("focus")
+	case "REDIRECT":
+		return voiceGlyph("avoid")
+	case "FEEDBACK":
+		return voiceGlyph("feedback")
+	default:
+		return "🐜"
+	}
+}
+
 var commandEmojiMap = map[string]string{
 	"init":                   "🥚",
 	"colonize":               "🗺️",
@@ -1965,15 +1985,11 @@ func renderSuggestedSteering(state colony.ColonyState) string {
 	if len(active) == 0 {
 		return ""
 	}
-	emojiFor := map[string]string{"FOCUS": "🎯", "REDIRECT": "🚫", "FEEDBACK": "💬"}
 	var b strings.Builder
 	b.WriteString(renderStageMarker("Suggested Steering"))
 	b.WriteString("The colony noticed patterns worth steering on — proposals only, nothing is written until you approve it:\n")
 	for i, suggestion := range active {
-		emoji := emojiFor[strings.ToUpper(strings.TrimSpace(suggestion.Type))]
-		if emoji == "" {
-			emoji = "🐜"
-		}
+		emoji := signalTypeGlyph(suggestion.Type)
 		b.WriteString(fmt.Sprintf("  %d. %s [%s] %s\n", i+1, emoji, strings.ToUpper(strings.TrimSpace(suggestion.Type)), strings.TrimSpace(suggestion.Content)))
 		if reason := strings.TrimSpace(suggestion.Reason); reason != "" {
 			b.WriteString("     └── " + reason + "\n")
@@ -2007,7 +2023,6 @@ func renderSteeringSignals() string {
 		return signalPriority(active[i].Type) < signalPriority(active[j].Type)
 	})
 
-	emojiFor := map[string]string{"FOCUS": "🎯", "REDIRECT": "🚫", "FEEDBACK": "💬"}
 	now := time.Now().UTC()
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("Steering signals: %d active — injected into every worker prompt\n", len(active)))
@@ -2017,10 +2032,7 @@ func renderSteeringSignals() string {
 			b.WriteString(fmt.Sprintf("  … and %d more — `aether pheromone-display` for the full view\n", len(active)-shown))
 			break
 		}
-		emoji := emojiFor[sig.Type]
-		if emoji == "" {
-			emoji = "🐜"
-		}
+		emoji := signalTypeGlyph(sig.Type)
 		text := strings.TrimSpace(extractText(sig.Content))
 		if text == "" {
 			text = "(no content)"
@@ -3503,14 +3515,7 @@ func renderSealVisual(result map[string]interface{}, state colony.ColonyState, s
 }
 
 func renderSignalVisual(sigType, content, priority string, replaced bool) string {
-	emoji := map[string]string{
-		"FOCUS":    "🎯",
-		"REDIRECT": "🚫",
-		"FEEDBACK": "💬",
-	}[sigType]
-	if emoji == "" {
-		emoji = "🐜"
-	}
+	emoji := signalTypeGlyph(sigType)
 
 	status := "New signal laid."
 	if replaced {
