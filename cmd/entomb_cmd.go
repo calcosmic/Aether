@@ -316,7 +316,7 @@ func prepareEntombPreflight(input entombTransactionInput, state colony.ColonySta
 		return entombPreflight{}, fmt.Errorf("sealed colony goal is unavailable")
 	}
 	if state.SealOutcome == nil {
-		return entombPreflight{}, fmt.Errorf("COLONY_STATE.json has no verifiable seal outcome")
+		return entombPreflight{}, fmt.Errorf("COLONY_STATE.json has no verifiable seal outcome — this colony was sealed by an older runtime that never wrote one. Re-seal it under this runtime to write the verifiable record, then retry: aether seal --force --reason \"re-seal legacy colony for archive\"")
 	}
 	outcome := *state.SealOutcome
 	if err := outcome.Validate(); err != nil {
