@@ -8,6 +8,19 @@ import (
 	"testing"
 )
 
+// init registers the what-next card into the shared voice screen corpus
+// (classic_voice_corpus_test.go), rendered through the same fixture answer
+// Task 1 measured -- the pattern every later plan copies: one init per
+// screen, in that screen's own test file, so two plans never edit the same
+// file.
+func init() {
+	registerVoiceScreen("what-next card", func(t *testing.T) string {
+		t.Helper()
+		t.Setenv("AETHER_PLATFORM", "claude")
+		return renderNextActionCardForPlatform(fullNextActionAnswer(), "claude")
+	})
+}
+
 // TestWhatNextCardMeetsTheReferenceDensity renders the what-next card through
 // the same platform funnel production uses, over the existing fullest
 // fixture answer (next_action_card_test.go's fullNextActionAnswer), and
