@@ -189,3 +189,4 @@ last_updated: 2026-09-12T17:42:11.287Z
   }
 ]
 ````
+| 14 | 202.1 | unmet-truth | pkg/codex/platform_dispatch.go |  | `workerProcessEnv` (pkg/codex/process_tracker.go) had NO caller, so AETHER_WORKER_NAME never reached a spawned worker. `aether hook-stop` therefore could not tell an Aether build worker from a person: it blocked worker Weld-32 mid-build and advised `aether pause`, the worker ran it, and a live CosmicDashboard Autopilot colony was paused mid-phase. Wired the env at the spawn site and exempted Aether-spawned workers from hook-stop. Proven by a REAL spawned subprocess reading back its own environment (TestSpawnedWorkerCarriesItsIdentityInTheEnvironment) rather than by testing the builder in isolation — an isolated builder test passed for the entire time the wiring was missing. | fixed |  | 2026-09-12T21:30:00.000Z | 2026-09-12T21:30:00.000Z |
