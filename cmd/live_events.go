@@ -273,6 +273,67 @@ func emitColonyLiveSignalConsulted(episodeID, episodeKind string, signals []stri
 	})
 }
 
+// emitColonyLiveRecruitAdmitted records one admitted recruitment (203-02,
+// BIO-01/02/06). childName is the deterministic name the caller just
+// recorded in the spawn tree. Reason carries the worker's own stated why for
+// wanting help -- never invented, always the caller's own intent.Reason.
+func emitColonyLiveRecruitAdmitted(intent recruitmentIntent, childName string) {
+	episodeID, episodeKind := currentLiveRecruitmentEpisode()
+	emitColonyLive(events.LiveTopicRecruitAdmitted, events.ColonyLivePayload{
+		EpisodeID:      episodeID,
+		EpisodeKind:    episodeKind,
+		ParentWorkerID: intent.ParentName,
+		Caste:          intent.Caste,
+		WorkerName:     childName,
+		Workspace:      intent.Workspace,
+		Reason:         intent.Reason,
+		Status:         "admitted",
+	})
+}
+
+// emitColonyLiveRecruitRefused records one refused recruitment attempt
+// (203-02, BIO-02). No child identity is invented for a refusal -- WorkerName
+// stays empty, matching this codebase's "absent field means unknown, never a
+// zero measurement" convention. reasonClass/detail are spawnDecisionResult's
+// own Reason/Detail from the single spawnCanSpawnDecision call this
+// recruitment made.
+func emitColonyLiveRecruitRefused(intent recruitmentIntent, reasonClass, detail string) {
+	episodeID, episodeKind := currentLiveRecruitmentEpisode()
+	reason := strings.TrimSpace(reasonClass)
+	if trimmedDetail := strings.TrimSpace(detail); trimmedDetail != "" {
+		if reason != "" {
+			reason = reason + ": " + trimmedDetail
+		} else {
+			reason = trimmedDetail
+		}
+	}
+	emitColonyLive(events.LiveTopicRecruitRefused, events.ColonyLivePayload{
+		EpisodeID:      episodeID,
+		EpisodeKind:    episodeKind,
+		ParentWorkerID: intent.ParentName,
+		Caste:          intent.Caste,
+		Workspace:      intent.Workspace,
+		Reason:         reason,
+		Status:         "refused",
+	})
+}
+
+// currentLiveRecruitmentEpisode resolves which already-open episode (a
+// build, a check) a recruitment happening mid-task should render inside --
+// mirroring currentLiveRecoveryEpisode's own build-then-continue precedence,
+// but with no synthetic phase-derived fallback: a recruitment issued outside
+// any open episode (a worker invoked directly via Bash, at top level) simply
+// carries an empty EpisodeID, which is "unknown", never a fabricated one.
+func currentLiveRecruitmentEpisode() (string, string) {
+	if id := currentLiveBuildEpisode(); id != "" {
+		return id, events.EpisodeKindBuild
+	}
+	if id := currentLiveContinueEpisode(); id != "" {
+		return id, events.EpisodeKindContinue
+	}
+	return "", ""
+}
+
 // activeLiveBuildEpisode carries the current build's live-episode ID across
 // the direct build lane's own call chain (cmd/codex_build.go's
 // runCodexBuildWithOptions down into cmd/codex_build_worktree.go's per-wave

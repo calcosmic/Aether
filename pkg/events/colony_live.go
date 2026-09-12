@@ -32,6 +32,17 @@ const (
 	// LiveTopicContradictionFound already uses, emitted immediately beside
 	// it at Oracle's state.OpenGaps merge point.
 	LiveTopicGapTargeted = "live.gap.targeted"
+	// LiveTopicRecruitAdmitted (203-02, BIO-01/02/06) is emitted exactly
+	// once per admitted recruitment, through emitColonyLive's one boundary
+	// (cmd/live_events.go) -- never a second live-event family. Rendered
+	// inline in the same terminal every other live event already renders
+	// through (D-04, carried from Phase 202's D-01/D-02).
+	LiveTopicRecruitAdmitted = "live.recruit.admitted"
+	// LiveTopicRecruitRefused (203-02, BIO-02) is emitted exactly once per
+	// refused recruitment attempt. A refusal never blocks or pauses the
+	// caller (D-03); this topic is how the owner sees it happen, both
+	// inline and later in the end-of-run summary (D-06).
+	LiveTopicRecruitRefused = "live.recruit.refused"
 )
 
 // Episode-kind vocabulary. EpisodeKind on ColonyLivePayload is a free-form
@@ -119,6 +130,11 @@ type ColonyLivePayload struct {
 	RecoveryState      string   `json:"recovery_state,omitempty"`
 	Status             string   `json:"status,omitempty"`
 	ElapsedSeconds     float64  `json:"elapsed_seconds,omitempty"`
+	// Reason (203-02, BIO-01/02) carries the worker's own stated why on a
+	// live.recruit.admitted event, and the refusal reason class plus detail
+	// on a live.recruit.refused event. Never a currency amount -- see this
+	// struct's own doc comment above.
+	Reason string `json:"reason,omitempty"`
 }
 
 // RawMessage marshals the payload for events.Bus.Publish, mirroring
@@ -154,5 +170,7 @@ func ColonyLiveTopics() []string {
 		LiveTopicCheckFailed,
 		LiveTopicRecoveryChanged,
 		LiveTopicGapTargeted,
+		LiveTopicRecruitAdmitted,
+		LiveTopicRecruitRefused,
 	}
 }
