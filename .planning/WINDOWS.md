@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 16
+open_count: 18
 waived_count: 0
 fixed_count: 5
-total_count: 21
-last_updated: 2026-09-13T15:12:32.588Z
+total_count: 23
+last_updated: 2026-09-13T15:58:28.351Z
 ---
 
 # Broken Windows Ledger
@@ -36,6 +36,8 @@ last_updated: 2026-09-13T15:12:32.588Z
 | 19 | 203 | unmet-truth | cmd/testdata/orphan_allowlist.json |  | EXPECTED-RED, OWNED BY 203-15: TestNoRegisteredSubcommandIsUnreferenced fails with 'aether recruit is registered but nothing calls it (searched: wrappers, menu specs, hooks, scripts)'. Five plans (203-02/03/04/06/07) built the recruitment command and no wrapper, menu spec, hook or script invokes it yet. This is real and is exactly the orphan failure CLAUDE.md names as the project's signature defect -- it is NOT silenced. Plan 203-15 is the closer: it rewrites .aether/workers.md, which today documents a spawning protocol in convincing detail for a mechanism no caste was ever granted, and replaces it with the real path plus a test. DELIBERATELY NOT ALLOWLISTED: testdata/orphan_allowlist.json is shrink-only against a frozen baseline (TestOrphanAllowlistOnlyShrinks, WIRE-01/D-11), so adding an entry would widen a ratchet to hide a true finding. Leaving it red means the test itself proves 203-15 did its job, and going green is the acceptance signal. If 203-15 lands and this is still red, the phase shipped an orphan. Recorded 2026-09-13 at the wave-4 gate; cmd/testdata/regression_snapshot.json was separately refreshed 390->389 commands, the honest net effect of 203-10 retiring two dead trophallaxis commands. | open |  | 2026-09-13T13:36:11.546Z |  |
 | 20 | 203 | deviation | cmd/swarm_scope_199_test.go |  | 203-12 Task 2 deleted SwarmPhase202Limitation, forcing an update to this pre-existing test's stale phase-202 assertions (fixed in the same commit, not deferred) | open |  | 2026-09-13T15:12:22.623Z |  |
 | 21 | 203 | deviation | cmd/codex_verify_advance.go |  | Inherited from 203-10, still open after 203-12: recordTrophallaxisDecision's colony.LifecycleDecision is never threaded into runContinueAcceptVerifyAdvance (the single phase-level accept/verify/advance boundary, cmd/codex_verify_advance.go). 203-12 populated the CEC-07 credit join it actually owns (AgencyReceiptEvidence.ChangedDecision/EffectEvidence, cmd/agency_contract.go) from real trophallaxis+credit data, which is a different boundary from runContinueAcceptVerifyAdvance and fully satisfies this plan's own objective text. Whether a trophallaxis decision should ALSO reach the phase-level accept/verify/advance decision remains unresolved and cmd/codex_verify_advance.go is outside 203-12's declared file scope; a follow-up plan (203-14/203-15) should confirm intent. | open |  | 2026-09-13T15:12:32.588Z |  |
+| 22 | 202.1 | unmet-truth | cmd/status.go |  | SEVERE / OWNER-REPORTED 2026-09-13: Phase 202.1's Classic-voice guarantee for 'aether status' is proved against a renderer the status command does not call. TestStatusScreenMeetsTheReferenceDensity and TestEveryVoicedScreenMeetsTheReferenceDensity measure renderLifecycleStatus (cmd/lifecycle_status_render.go) fed by classicVoiceStatusFixtureProjection, a hand-built projection. The real 'aether status' RunE calls renderDashboard (cmd/status.go:~60, via outputWorkflow), and renderLifecycleStatus's only non-test caller is cmd/compatibility_cmds.go:473. Measured on the live screen: 22 of 92 content lines symbol-led (~24%) against a reference bar of 41.3% -- the whole top block (Goal, Runtime, Signals, Progress, Focus, Instincts, Flags, Scope, Colony Mode, Depth, Granularity, Parallel) carries no leading symbol, while the memory/signals/worker sections below do. All five voice tests pass. The owner reported not seeing the Classic visuals they commissioned in 202.1; this is why. OPEN QUESTION not yet investigated: the same corpus registers build, continue, plan, discuss, spec, seal and the what-next card -- each needs the same check that its registered render function is the one its command actually calls. A green density test proves nothing about the screen if it measures a different function. | open |  | 2026-09-13T15:56:48.392Z |  |
+| 23 | 202.1 | unmet-truth | cmd/planning_visuals.go |  | SCOPE ANSWERED 2026-09-13 (the open question from the status finding): all 21 screens registered in the Classic-voice corpus were traced from their registered render function to its production call sites. EXACTLY TWO are proved against code no command runs. (1) status-full/status-compact measure renderLifecycleStatus, which has ZERO non-test callers; the real 'aether status' renders via renderDashboard (cmd/status.go) -- this is the screen the owner looks at daily and it measures ~24% symbol-led against a 41.3% bar. (2) plan-stop measures renderPlanningStopVisual (cmd/planning_visuals.go:550), which has zero callers of any kind outside tests -- a fully orphaned renderer, so that screen is never drawn by anything. The other NINETEEN are genuinely wired and their density tests measure the function the command actually calls: build (renderBuildVisualWithDispatches, 2 sites), build-partial (renderBuildPartialCreditVisual, 1), continue-final + continue-midphase (renderContinueVisual, 3), seal (renderSealVisual, 1), discuss-questions + discuss-resolved (renderDiscussVisual, 2), spec (renderSpecCommandVisual, 1), what-next card (renderNextActionCardForPlatform, 2), and 8 of 9 planning screens. So 202.1 largely DID deliver; the damage is bounded to the status screen plus one dead renderer. | open |  | 2026-09-13T15:58:28.351Z |  |
 
 ````json
 [
@@ -289,6 +291,30 @@ last_updated: 2026-09-13T15:12:32.588Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-09-13T15:12:32.588Z",
+    "resolved_at": null
+  },
+  {
+    "id": 22,
+    "kind": "unmet-truth",
+    "phase": "202.1",
+    "file": "cmd/status.go",
+    "line": null,
+    "description": "SEVERE / OWNER-REPORTED 2026-09-13: Phase 202.1's Classic-voice guarantee for 'aether status' is proved against a renderer the status command does not call. TestStatusScreenMeetsTheReferenceDensity and TestEveryVoicedScreenMeetsTheReferenceDensity measure renderLifecycleStatus (cmd/lifecycle_status_render.go) fed by classicVoiceStatusFixtureProjection, a hand-built projection. The real 'aether status' RunE calls renderDashboard (cmd/status.go:~60, via outputWorkflow), and renderLifecycleStatus's only non-test caller is cmd/compatibility_cmds.go:473. Measured on the live screen: 22 of 92 content lines symbol-led (~24%) against a reference bar of 41.3% -- the whole top block (Goal, Runtime, Signals, Progress, Focus, Instincts, Flags, Scope, Colony Mode, Depth, Granularity, Parallel) carries no leading symbol, while the memory/signals/worker sections below do. All five voice tests pass. The owner reported not seeing the Classic visuals they commissioned in 202.1; this is why. OPEN QUESTION not yet investigated: the same corpus registers build, continue, plan, discuss, spec, seal and the what-next card -- each needs the same check that its registered render function is the one its command actually calls. A green density test proves nothing about the screen if it measures a different function.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-13T15:56:48.392Z",
+    "resolved_at": null
+  },
+  {
+    "id": 23,
+    "kind": "unmet-truth",
+    "phase": "202.1",
+    "file": "cmd/planning_visuals.go",
+    "line": null,
+    "description": "SCOPE ANSWERED 2026-09-13 (the open question from the status finding): all 21 screens registered in the Classic-voice corpus were traced from their registered render function to its production call sites. EXACTLY TWO are proved against code no command runs. (1) status-full/status-compact measure renderLifecycleStatus, which has ZERO non-test callers; the real 'aether status' renders via renderDashboard (cmd/status.go) -- this is the screen the owner looks at daily and it measures ~24% symbol-led against a 41.3% bar. (2) plan-stop measures renderPlanningStopVisual (cmd/planning_visuals.go:550), which has zero callers of any kind outside tests -- a fully orphaned renderer, so that screen is never drawn by anything. The other NINETEEN are genuinely wired and their density tests measure the function the command actually calls: build (renderBuildVisualWithDispatches, 2 sites), build-partial (renderBuildPartialCreditVisual, 1), continue-final + continue-midphase (renderContinueVisual, 3), seal (renderSealVisual, 1), discuss-questions + discuss-resolved (renderDiscussVisual, 2), spec (renderSpecCommandVisual, 1), what-next card (renderNextActionCardForPlatform, 2), and 8 of 9 planning screens. So 202.1 largely DID deliver; the damage is bounded to the status screen plus one dead renderer.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-13T15:58:28.351Z",
     "resolved_at": null
   }
 ]
