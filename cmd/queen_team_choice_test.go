@@ -220,7 +220,7 @@ func TestStatusHealthLineReflectsComputedVitals(t *testing.T) {
 	if line == "" {
 		t.Fatal("status renders no colony health line from computed vitals")
 	}
-	if !strings.Contains(line, "Colony health:") {
+	if !strings.Contains(line, "Colony health (this project's health):") {
 		t.Errorf("health line missing its label: %q", line)
 	}
 	wantLabel := stringValue(vitals["health_label"])

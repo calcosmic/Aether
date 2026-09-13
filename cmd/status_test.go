@@ -336,7 +336,7 @@ func TestStatusOutput_ColonyModeDisplay(t *testing.T) {
 	}
 
 	output := buf.String()
-	if !strings.Contains(output, "Colony Mode: orchestrator") {
+	if !strings.Contains(output, "Colony Mode (how this project runs): orchestrator") {
 		t.Fatalf("expected orchestrator colony mode in output, got:\n%s", output)
 	}
 
@@ -1047,7 +1047,7 @@ func TestStatusShowsProofSummaryAndRoute(t *testing.T) {
 	}
 
 	output := buf.String()
-	for _, want := range []string{"Proof", "Context:", "Inspect: aether proof", "aether proof"} {
+	for _, want := range []string{"Proof", "Context assembled for this project:", "Inspect: aether proof", "aether proof"} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("status output missing %q\n%s", want, output)
 		}
@@ -1209,8 +1209,13 @@ func TestStatus_ReviewFindings_PartialData(t *testing.T) {
 	// Find the end of the Review Findings section (next section header)
 	afterRF := output[rfIdx:]
 	nextSection := len(afterRF)
+	// Section headings are now glyph-led (Phase 202.1's Classic voice, applied
+	// to the real status screen), so a heading no longer sits at the start of
+	// its line -- "\nActive Pheromones" stopped matching and this scan ran
+	// past the section it was meant to bound, picking up words from later
+	// content. Match the heading text itself rather than its line position.
 	for _, section := range []string{"Active Pheromones", "Spawn Activity", "State:", "Strongest Instincts", "Recovery"} {
-		if idx := strings.Index(afterRF, "\n"+section); idx >= 0 && idx < nextSection {
+		if idx := strings.Index(afterRF, section); idx > 0 && idx < nextSection {
 			nextSection = idx
 		}
 	}
