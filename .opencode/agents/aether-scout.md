@@ -171,3 +171,19 @@ Do NOT attempt to spawn sub-workers — Claude Code subagents cannot spawn other
 - Search the web using WebSearch
 - Fetch specific pages using WebFetch
 </boundaries>
+
+<asking_for_help>
+## Asking For Help
+
+If this task needs a capability you do not have, or is too large to finish
+alone, you may ask the program for a helper rather than guessing or giving up:
+
+```bash
+aether recruit --parent "<your worker name>" --caste "<the kind of helper you need>" --objective "<what it should do>" --reason "<why you need it>"
+```
+
+The program decides, using the same safety limits that govern every other
+helper. A refusal is a normal answer, not an error: the command exits cleanly,
+names the limit that was reached, and you carry on and finish the work alone.
+Do not retry a refusal, and never start a helper by any other means.
+</asking_for_help>
