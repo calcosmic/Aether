@@ -840,12 +840,24 @@ func buildStatusResult(state colony.ColonyState, s *storage.Store) map[string]in
 	return result
 }
 
+// statusLiveSpawnView is the one rule for "may this screen present workers as
+// live". A worker is live only while the colony is genuinely executing an
+// unpaused build. Every section that shows workers -- the Active Workers list,
+// the JSON envelope, and the BIO-06 governed family tree -- reads this single
+// function, so two sections can never disagree about whether a paused or
+// finished colony has anyone running. Phase 203 added the family tree without
+// consulting it, which put a previous session's worker on a paused colony's
+// status screen (TestStatusPausedColonyIgnoresStaleSpawnTreeWorkers).
+func statusLiveSpawnView(state colony.ColonyState) bool {
+	return state.State == colony.StateEXECUTING && !state.Paused && state.BuildStartedAt != nil
+}
+
 // statusActiveWorkers is the same "are workers genuinely still running"
 // check renderDashboard makes, factored out so both the JSON envelope and
 // the screen resolve their answer from the identical fact.
 func statusActiveWorkers(s *storage.Store, state colony.ColonyState) []agent.SpawnEntry {
 	spawnSummary := loadSpawnActivitySummaryForState(s, &state)
-	liveSpawnView := state.State == colony.StateEXECUTING && !state.Paused && state.BuildStartedAt != nil
+	liveSpawnView := statusLiveSpawnView(state)
 	if !liveSpawnView {
 		return nil
 	}
@@ -1120,7 +1132,7 @@ func renderDashboard(state colony.ColonyState, s *storage.Store, result map[stri
 	renderPheromoneSummary(&b, s)
 
 	spawnSummary := loadSpawnActivitySummaryForState(s, &state)
-	liveSpawnView := state.State == colony.StateEXECUTING && !state.Paused && state.BuildStartedAt != nil
+	liveSpawnView := statusLiveSpawnView(state)
 	if !liveSpawnView {
 		spawnSummary = withoutLiveSpawnEntries(spawnSummary)
 	}
@@ -1141,9 +1153,14 @@ func renderDashboard(state colony.ColonyState, s *storage.Store, result map[stri
 		b.WriteString("\nRecent Outcomes\n")
 		renderRecentWorkerOutcomes(&b, spawnSummary.RecentOutcomeEntries)
 	}
-	if subtreeSection := renderGovernedSubtreeStatusSection(state); subtreeSection != "" {
-		b.WriteString("\n")
-		b.WriteString(subtreeSection)
+	// The governed family tree presents workers as live, so it is gated by the
+	// same statusLiveSpawnView rule the Active Workers list above uses rather
+	// than by a second rule of its own.
+	if liveSpawnView {
+		if subtreeSection := renderGovernedSubtreeStatusSection(state); subtreeSection != "" {
+			b.WriteString("\n")
+			b.WriteString(subtreeSection)
+		}
 	}
 	if _, attempt, ok := loadRelevantBuildAttempt(state); ok {
 		b.WriteString("\nBuild Attempt\n")
