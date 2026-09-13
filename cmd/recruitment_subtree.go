@@ -326,6 +326,25 @@ func renderGovernedSubtreeStatusSection(state colony.ColonyState) string {
 	if store == nil {
 		return ""
 	}
+	// Scope to the CURRENT run. projectGovernedSubtree walks the whole
+	// spawn tree across every run, which is right for callers that want the
+	// full history — but the status screen must not present a worker from a
+	// finished run as if it were live. TestStatusPrefersCurrentRunWorkersOverStaleHistory
+	// caught exactly that: the family tree added here showed Ghost-41, a
+	// worker from an older run, beside the current one.
+	//
+	// No current run means no filter rather than an empty screen: a colony
+	// with history but nothing running should still show what it has.
+	currentRunNames := map[string]bool{}
+	tree := agent.NewSpawnTree(store, "spawn-tree.txt")
+	if run, ok, runErr := tree.CurrentRun(); runErr == nil && ok {
+		if entries, entErr := tree.EntriesForRun(run.ID); entErr == nil {
+			for _, e := range entries {
+				currentRunNames[e.AgentName] = true
+			}
+		}
+	}
+
 	seen := map[string]bool{}
 	var rows []governedSubtreeRow
 	for _, root := range spawnRootParentNames {
@@ -334,6 +353,9 @@ func renderGovernedSubtreeStatusSection(state colony.ColonyState) string {
 			continue
 		}
 		for _, row := range subtree {
+			if len(currentRunNames) > 0 && !currentRunNames[row.Name] {
+				continue
+			}
 			if seen[row.Name] {
 				continue
 			}
