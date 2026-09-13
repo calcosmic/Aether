@@ -83,34 +83,19 @@ func recruitmentRecoveryNextAction(class recruitmentRecoveryClass, q recruitment
 	if child == "" {
 		child = "the recruited helper"
 	}
-	switch class {
-	case recruitmentRecoveryMissing:
-		return fmt.Sprintf(
-			"recruitment %s never returned a result and no live process is recorded for %s -- run `aether recruit --status %s` again to confirm nothing changed, then re-submit the original recruitment request if the work still needs doing",
-			recruitmentID, child, recruitmentID,
-		)
-	case recruitmentRecoveryDuplicated:
-		return fmt.Sprintf(
-			"recruitment %s received a second, conflicting completion report -- the stored result is kept and nothing was rewritten; run `aether recruit --status %s` to inspect it before resolving the conflict by hand",
-			recruitmentID, recruitmentID,
-		)
-	case recruitmentRecoveryAltered:
-		return fmt.Sprintf(
-			"recruitment %s's stored evidence no longer matches the file(s) on disk -- restore the original evidence file, or re-run the recruitment to produce fresh evidence, then run `aether recruit --status %s` again",
-			recruitmentID, recruitmentID,
-		)
-	case recruitmentRecoveryTimedOut:
-		return fmt.Sprintf(
-			"%s exceeded its bounded timeout on recruitment %s -- its partial evidence is preserved, not discarded; inspect it, then run `aether recruit --status %s` before deciding whether to retry",
-			child, recruitmentID, recruitmentID,
-		)
-	case recruitmentRecoveryReplayed:
-		return fmt.Sprintf(
-			"recruitment %s already completed -- `aether recruit --status %s` is safe to run again at any time; no action is needed",
-			recruitmentID, recruitmentID,
-		)
-	default:
+	// The sentences themselves live in cmd/next_action.go, the single file
+	// TestNextActionNeverHardcoded exempts as "the one place a command may be
+	// named". This function decides WHICH advice applies; it never writes the
+	// command into the advice itself.
+	template := recruitmentRecoveryAdviceTemplate(string(class))
+	if template == "" {
 		return ""
+	}
+	switch class {
+	case recruitmentRecoveryMissing, recruitmentRecoveryTimedOut:
+		return fmt.Sprintf(template, child, recruitmentID, recruitmentID)
+	default:
+		return fmt.Sprintf(template, recruitmentID, recruitmentID)
 	}
 }
 

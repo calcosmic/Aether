@@ -901,6 +901,46 @@ func legacyAlternativesFromProjection(projection LifecycleProjection) []nextActi
 
 // resolveNextAction retains the established reporting envelope while delegating
 // the lifecycle decision itself to projectLifecycle. It reads nothing.
+// recruitmentRecoveryAdviceTemplate returns the next-step sentence for one
+// recruitment recovery class, with %s placeholders the caller fills.
+//
+// It lives HERE, in the resolver file, because this file is the single stated
+// exemption of TestNextActionNeverHardcoded (cmd/next_action_hardcode_ratchet_test.go):
+// "cmd/next_action.go, the resolver, the one place a command may be named".
+// Phase 203 plan 07 originally hand-typed these five sentences inside
+// cmd/recruitment_recovery.go's recruitmentRecoveryNextAction, which the
+// ratchet caught as five new hardcoded command-advice sites. Moving the text
+// here -- rather than renaming that function out of the ratchet's reach, or
+// widening the baseline -- keeps every "aether ..." string an owner is ever
+// told to run inside one file.
+//
+// Placeholders, per class:
+//
+//	missing     child, recruitmentID, recruitmentID
+//	duplicated  recruitmentID, recruitmentID
+//	altered     recruitmentID, recruitmentID
+//	timed-out   child, recruitmentID, recruitmentID
+//	replayed    recruitmentID, recruitmentID
+//
+// An unknown class returns "", which the caller surfaces as no advice rather
+// than inventing some.
+func recruitmentRecoveryAdviceTemplate(class string) string {
+	switch class {
+	case "missing":
+		return "recruitment %[2]s never returned a result and no live process is recorded for %[1]s -- run `aether recruit --status %[3]s` again to confirm nothing changed, then re-submit the original recruitment request if the work still needs doing"
+	case "duplicated":
+		return "recruitment %[1]s received a second, conflicting completion report -- the stored result is kept and nothing was rewritten; run `aether recruit --status %[2]s` to inspect it before resolving the conflict by hand"
+	case "altered":
+		return "recruitment %[1]s's stored evidence no longer matches the file(s) on disk -- restore the original evidence file, or re-run the recruitment to produce fresh evidence, then run `aether recruit --status %[2]s` again"
+	case "timed-out":
+		return "%[1]s exceeded its bounded timeout on recruitment %[2]s -- its partial evidence is preserved, not discarded; inspect it, then run `aether recruit --status %[3]s` before deciding whether to retry"
+	case "replayed":
+		return "recruitment %[1]s already completed -- `aether recruit --status %[2]s` is safe to run again at any time; no action is needed"
+	default:
+		return ""
+	}
+}
+
 func resolveNextAction(in nextActionInput) nextAction {
 	facts := nextActionFacts(in)
 	state := facts.State.Value
