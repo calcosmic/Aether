@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -23,6 +24,14 @@ const (
 	recruitmentMaxEvidence       = 20
 	recruitmentMaxDeclaredPaths  = 50
 )
+
+// recruitmentIntentRetention bounds recruitment/intents.json exactly the way
+// pkg/agent/spawn_tree.go's trimSpawnRuns bounds spawn-runs.json and
+// cmd/codex_dispatch_contract.go's pruneWorkerHandoffRecords bounds
+// worker-handoffs.json -- a fixed entry-count cap enforced on every write,
+// oldest pruned first, so an append-only intent ledger never grows without
+// bound.
+const recruitmentIntentRetention = 200
 
 // The two accepted Urgency values (BIO-01). recruitmentUrgencies is the
 // completeness accessor, mirroring ColonyLiveTopics()'s own
@@ -357,4 +366,122 @@ func sanitizedRecruitmentIntentCopy(in recruitmentIntent) recruitmentIntent {
 		out.Capability = v
 	}
 	return out
+}
+
+// recruitmentIntentsPath is the store-relative path recordRecruitmentIntent
+// persists to. New data file, per this plan's frontmatter.
+const recruitmentIntentsPath = "recruitment/intents.json"
+
+// recruitmentIntentRecord is the durable envelope recordRecruitmentIntent
+// writes: the validated (and, when allowed, sanitized) intent, when it was
+// created, and -- once known -- the admission decision and when it was
+// decided. must_haves: "Every emitted intent is durably recorded with its
+// identifier before any admission decision is taken, so a refusal is as
+// recoverable as an admission" -- Decision/DecidedAt therefore start empty
+// and are attached afterward by recordRecruitmentDecision, never by
+// re-calling recordRecruitmentIntent itself.
+type recruitmentIntentRecord struct {
+	Intent    recruitmentIntent          `json:"intent"`
+	Decision  *recruitmentDecisionResult `json:"decision,omitempty"`
+	CreatedAt string                     `json:"created_at"`
+	DecidedAt string                     `json:"decided_at,omitempty"`
+}
+
+// recruitmentIntentsFile is the on-disk container at recruitmentIntentsPath.
+type recruitmentIntentsFile struct {
+	Entries []recruitmentIntentRecord `json:"entries"`
+}
+
+// errRecruitmentIntentAlreadyRecorded is the internal replay sentinel
+// recordRecruitmentIntent returns from its own UpdateJSONAtomically mutate
+// closure to abort the write on a replay -- UpdateJSONAtomically's contract
+// is "if mutate returns an error, no write occurs" (pkg/storage), which is
+// exactly the "leaves the file byte-identical" guarantee a replay requires.
+// Mirrors cmd/recruitment_result.go's errRecruitmentResultAlreadyBound.
+var errRecruitmentIntentAlreadyRecorded = errors.New("recruitment intent already recorded")
+
+// recordRecruitmentIntent stores record under recruitment/intents.json,
+// keyed on record.Intent.IntentID. A second call carrying an already-stored
+// IntentID returns the STORED record and mutates nothing -- recording an
+// intent is a pure, idempotent create; attaching a decision afterward is
+// recordRecruitmentDecision's separate job. Entries beyond
+// recruitmentIntentRetention are pruned, oldest first, on every write that
+// actually appends.
+func recordRecruitmentIntent(record recruitmentIntentRecord) (recruitmentIntentRecord, error) {
+	if store == nil {
+		return recruitmentIntentRecord{}, fmt.Errorf("no store initialized")
+	}
+	if strings.TrimSpace(record.Intent.IntentID) == "" {
+		return recruitmentIntentRecord{}, fmt.Errorf("recruitment intent requires a non-empty IntentID")
+	}
+
+	var bound recruitmentIntentRecord
+	var file recruitmentIntentsFile
+	err := store.UpdateJSONAtomically(recruitmentIntentsPath, &file, func() error {
+		for _, existing := range file.Entries {
+			if existing.Intent.IntentID == record.Intent.IntentID {
+				bound = existing
+				return errRecruitmentIntentAlreadyRecorded
+			}
+		}
+		file.Entries = append(file.Entries, record)
+		file.Entries = trimRecruitmentIntents(file.Entries)
+		bound = record
+		return nil
+	})
+	if err != nil && !errors.Is(err, errRecruitmentIntentAlreadyRecorded) {
+		return recruitmentIntentRecord{}, err
+	}
+	return bound, nil
+}
+
+// recordRecruitmentDecision attaches decision to the already-recorded intent
+// named by intentID, completing task2's "validate, record, then decide,
+// then update the record with the decision" sequence. The FIRST decision
+// recorded for a given IntentID is final: a second call for the same
+// IntentID leaves the stored decision untouched, matching
+// recordRecruitmentIntent's own idempotent-create discipline one layer up.
+// An IntentID with no recorded intent yet is an error, not a silent create
+// -- recordRecruitmentIntent must always run first, on this exact IntentID,
+// before this is ever reached.
+func recordRecruitmentDecision(intentID string, decision recruitmentDecisionResult, decidedAt string) (recruitmentIntentRecord, error) {
+	if store == nil {
+		return recruitmentIntentRecord{}, fmt.Errorf("no store initialized")
+	}
+	if strings.TrimSpace(intentID) == "" {
+		return recruitmentIntentRecord{}, fmt.Errorf("recruitment decision requires a non-empty IntentID")
+	}
+
+	var bound recruitmentIntentRecord
+	var file recruitmentIntentsFile
+	err := store.UpdateJSONAtomically(recruitmentIntentsPath, &file, func() error {
+		for i := range file.Entries {
+			if file.Entries[i].Intent.IntentID != intentID {
+				continue
+			}
+			if file.Entries[i].Decision == nil {
+				d := decision
+				file.Entries[i].Decision = &d
+				file.Entries[i].DecidedAt = decidedAt
+			}
+			bound = file.Entries[i]
+			return nil
+		}
+		return fmt.Errorf("no recorded intent for IntentID %q", intentID)
+	})
+	if err != nil {
+		return recruitmentIntentRecord{}, err
+	}
+	return bound, nil
+}
+
+// trimRecruitmentIntents keeps at most the most recent recruitmentIntentRetention
+// entries, oldest first dropped -- mirrors pkg/agent/spawn_tree.go's
+// trimSpawnRuns exactly (entries are appended in chronological order, so the
+// tail slice is the most recent N).
+func trimRecruitmentIntents(entries []recruitmentIntentRecord) []recruitmentIntentRecord {
+	if len(entries) <= recruitmentIntentRetention {
+		return entries
+	}
+	return append([]recruitmentIntentRecord{}, entries[len(entries)-recruitmentIntentRetention:]...)
 }

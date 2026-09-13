@@ -1,12 +1,15 @@
 package cmd
 
 import (
+	"bytes"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/codex"
 )
 
@@ -278,4 +281,207 @@ func TestRecruitmentIntentValidation(t *testing.T) {
 			t.Fatalf("reason = %q, want %q", decision.Reason, recruitmentReasonCaste)
 		}
 	})
+}
+
+// TestRecruitmentIntentRecordCreatesAndIsIdempotent proves
+// recordRecruitmentIntent's own create-once discipline: a second call
+// carrying an already-stored IntentID -- even with a mutated payload --
+// leaves recruitment/intents.json byte-identical to the first write.
+func TestRecruitmentIntentRecordCreatesAndIsIdempotent(t *testing.T) {
+	saveGlobals(t)
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	intent := baseValidRecruitmentIntent()
+	intent.IntentID = "record-fixture-1"
+	record := recruitmentIntentRecord{Intent: intent, CreatedAt: "2026-09-13T00:00:00Z"}
+
+	first, err := recordRecruitmentIntent(record)
+	if err != nil {
+		t.Fatalf("first record: %v", err)
+	}
+	before, err := store.ReadFile(recruitmentIntentsPath)
+	if err != nil {
+		t.Fatalf("read intents file after first record: %v", err)
+	}
+
+	second, err := recordRecruitmentIntent(record)
+	if err != nil {
+		t.Fatalf("second record: %v", err)
+	}
+	after, err := store.ReadFile(recruitmentIntentsPath)
+	if err != nil {
+		t.Fatalf("read intents file after second record: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatalf("recruitment/intents.json changed on replay:\nbefore=%q\nafter=%q", before, after)
+	}
+	if first.Intent.IntentID != second.Intent.IntentID {
+		t.Fatalf("replay did not return the stored record: first=%+v second=%+v", first, second)
+	}
+
+	// Replaying with a mutated payload (a Decision attached) for the SAME
+	// IntentID must still leave the file byte-identical -- recordRecruitmentIntent
+	// never updates an existing entry; only recordRecruitmentDecision does
+	// that, and only once.
+	mutated := record
+	d := recruitmentDecisionResult{Allowed: false, Reason: recruitmentReasonCost, Detail: "should never be written by recordRecruitmentIntent"}
+	mutated.Decision = &d
+	if _, err := recordRecruitmentIntent(mutated); err != nil {
+		t.Fatalf("third record (mutated payload, same IntentID): %v", err)
+	}
+	afterMutated, err := store.ReadFile(recruitmentIntentsPath)
+	if err != nil {
+		t.Fatalf("read intents file after third record: %v", err)
+	}
+	if !bytes.Equal(before, afterMutated) {
+		t.Fatalf("recruitment/intents.json changed after replaying with a mutated payload:\nbefore=%q\nafter=%q", before, afterMutated)
+	}
+}
+
+// TestRecruitmentIntentRecordRefusalIsAsDurableAsAnAdmission proves a
+// refused intent's reason class lands in recruitment/intents.json, and that
+// the FIRST decision recorded for an IntentID is final.
+func TestRecruitmentIntentRecordRefusalIsAsDurableAsAnAdmission(t *testing.T) {
+	saveGlobals(t)
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	intent := baseValidRecruitmentIntent()
+	intent.IntentID = "refusal-fixture-1"
+	if _, err := recordRecruitmentIntent(recruitmentIntentRecord{Intent: intent, CreatedAt: "2026-09-13T00:00:00Z"}); err != nil {
+		t.Fatalf("record intent: %v", err)
+	}
+
+	decision := recruitmentDecisionResult{Allowed: false, Reason: recruitmentReasonCost, Detail: "cost-slots too high"}
+	if _, err := recordRecruitmentDecision(intent.IntentID, decision, "2026-09-13T00:00:01Z"); err != nil {
+		t.Fatalf("record decision: %v", err)
+	}
+
+	raw, err := store.ReadFile(recruitmentIntentsPath)
+	if err != nil {
+		t.Fatalf("read intents file: %v", err)
+	}
+	if !strings.Contains(string(raw), recruitmentReasonCost) {
+		t.Fatalf("recruitment/intents.json does not contain the refusal's reason class %q: %s", recruitmentReasonCost, raw)
+	}
+
+	// The first decision recorded is final -- a second attempt must not
+	// overwrite it.
+	second := recruitmentDecisionResult{Allowed: true}
+	updated, err := recordRecruitmentDecision(intent.IntentID, second, "2026-09-13T00:00:02Z")
+	if err != nil {
+		t.Fatalf("second decision record: %v", err)
+	}
+	if updated.Decision == nil || updated.Decision.Allowed {
+		t.Fatalf("expected the FIRST decision to remain final, got %+v", updated.Decision)
+	}
+}
+
+// TestRecruitmentIntentRecordRetentionPrunesTheOldestEntry proves
+// recruitmentIntentRetention is genuinely referenced by the pruning code:
+// writing one more than the retention count drops the oldest entry.
+func TestRecruitmentIntentRecordRetentionPrunesTheOldestEntry(t *testing.T) {
+	saveGlobals(t)
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	for i := 0; i < recruitmentIntentRetention+1; i++ {
+		intent := baseValidRecruitmentIntent()
+		intent.IntentID = fmt.Sprintf("retention-fixture-%d", i)
+		if _, err := recordRecruitmentIntent(recruitmentIntentRecord{Intent: intent, CreatedAt: "2026-09-13T00:00:00Z"}); err != nil {
+			t.Fatalf("record intent %d: %v", i, err)
+		}
+	}
+
+	var file recruitmentIntentsFile
+	if err := store.LoadJSON(recruitmentIntentsPath, &file); err != nil {
+		t.Fatalf("load intents file: %v", err)
+	}
+	if len(file.Entries) != recruitmentIntentRetention {
+		t.Fatalf("expected exactly %d retained entries, got %d", recruitmentIntentRetention, len(file.Entries))
+	}
+	for _, entry := range file.Entries {
+		if entry.Intent.IntentID == "retention-fixture-0" {
+			t.Fatal("expected the oldest entry (retention-fixture-0) to have been pruned")
+		}
+	}
+	wantNewest := fmt.Sprintf("retention-fixture-%d", recruitmentIntentRetention)
+	if got := file.Entries[len(file.Entries)-1].Intent.IntentID; got != wantNewest {
+		t.Fatalf("expected the newest entry %q to be retained, got %q", wantNewest, got)
+	}
+}
+
+// TestRecruitmentIntentRecordUnwritableStoreRefusesTheCommand drives the
+// REAL recruitCmd through rootCmd with recruitment/intents.json's own path
+// occupied by a directory (os.Rename onto an existing directory fails) --
+// proving an unrecordable ask never silently becomes a granted one: the
+// command refuses, names the store error, and starts no process.
+func TestRecruitmentIntentRecordUnwritableStoreRefusesTheCommand(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	var buf, errBuf bytes.Buffer
+	stdout = &buf
+	stderr = &errBuf
+
+	st := agent.NewSpawnTree(store, "spawn-tree.txt")
+	if err := st.RecordSpawn("Queen", "builder", "A1", "do a thing", 1); err != nil {
+		t.Fatalf("seed parent spawn: %v", err)
+	}
+
+	dataDir := os.Getenv("COLONY_DATA_DIR")
+	intentsPath := filepath.Join(dataDir, recruitmentIntentsPath)
+	if err := os.MkdirAll(intentsPath, 0755); err != nil {
+		t.Fatalf("seed unwritable intents path: %v", err)
+	}
+
+	// If dispatchRecruitment is ever reached, invoking this nonexistent
+	// binary makes that failure loud rather than silently passing.
+	t.Setenv("AETHER_RECRUIT_BINARY", "aether-recruit-must-not-be-invoked-"+t.Name())
+
+	rootCmd.SetArgs([]string{
+		"recruit",
+		"--parent", "A1",
+		"--caste", "builder",
+		"--objective", "help with x",
+		"--reason", "stuck on y",
+	})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("recruit command returned an error: %v", err)
+	}
+	if code := int(renderedCommandExitCode.Load()); code != 0 {
+		t.Fatalf("expected exit 0 even when refusing, got %d: stdout=%s stderr=%s", code, buf.String(), errBuf.String())
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result, _ := env["result"].(map[string]interface{})
+	if result == nil {
+		t.Fatalf("expected a result object in output: %s", buf.String())
+	}
+	if admitted, _ := result["admitted"].(bool); admitted {
+		t.Fatalf("expected admitted=false when the store is unwritable: %s", buf.String())
+	}
+	if reason, _ := result["reason"].(string); reason != recruitmentReasonScope {
+		t.Fatalf("expected reason class %q, got %q: %s", recruitmentReasonScope, reason, buf.String())
+	}
+	if detail, _ := result["detail"].(string); !strings.Contains(detail, "record") {
+		t.Fatalf("expected the detail to name the recording failure: %s", buf.String())
+	}
+
+	entries, err := st.Parse()
+	if err != nil {
+		t.Fatalf("parse spawn tree: %v", err)
+	}
+	for _, e := range entries {
+		if e.AgentName != "A1" {
+			t.Fatalf("expected no additional spawn recorded when the store is unwritable, found %q", e.AgentName)
+		}
+	}
 }
