@@ -483,6 +483,17 @@ func importPheromonesData(inputPath string, xmlData []byte, sourcePrefix string)
 		return nil, fmt.Errorf("save pheromones: %w", err)
 	}
 
+	// D-07/D-10: an imported note waits for the owner's tick in the SAME
+	// queue a runtime-proposed suggestion does -- never a second "quarantine
+	// inbox" (203-CLASSIC-SYNTHESIS.md SYN-203-11). One queued item per
+	// accepted import, linked by SignalID to the stored, already-quarantined
+	// signal above so approving it can find and release that exact signal.
+	for _, sig := range sanitized {
+		if _, _, err := enqueuePendingNote(sig.Type, extractText(sig.Content), "imported from another project", colony.PendingOriginImport, sig.ID); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not queue imported signal %q for owner approval: %v\n", sig.ID, err)
+		}
+	}
+
 	emitPromptIntegrityEvents("import.pheromones", integrity)
 	result := map[string]interface{}{
 		"imported":  len(sanitized),
