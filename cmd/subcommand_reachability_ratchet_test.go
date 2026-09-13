@@ -74,6 +74,24 @@ var hookScriptCorpora = []struct {
 	{filepath.Join(".claude"), ".json"},
 }
 
+// workerDisciplineCallerFiles are the D-01(d) "shipped worker discipline
+// document" caller-evidence source, added for the same reason Phase 197
+// added hookScriptCorpora's third entry (see that var's own comment): a real
+// caller existed outside the scan. Unlike callerWrapperCorpora (platform
+// wrapper commands the ASSISTANT runs) and hookScriptCorpora (commands the
+// PLATFORM runs), these are documents every worker this program dispatches
+// is instructed to read before acting -- `.claude/agents/ant/*.md`'s own
+// "Read .aether/workers.md for {caste} discipline" line makes a command
+// documented here exactly as genuinely executed as a command a wrapper doc
+// tells the assistant to run. Phase 203's `aether recruit` is a worker-run
+// command with no wrapper or hook caller by design (a worker asks for help
+// from inside its own task, never the orchestrator) -- .aether/workers.md is
+// its one true, honest caller, and this is the narrow, individually-named
+// list (never a whole directory) that lets the ratchet see it.
+var workerDisciplineCallerFiles = []string{
+	filepath.Join(".aether", "workers.md"),
+}
+
 // buildConstraintRe matches a real Go build-constraint directive, which is
 // only recognised by the toolchain at column 0 of a line (never indented).
 // Anchoring this way is what lets TestWiringGuardsHaveNoRuntimeEscapeHatch
@@ -946,6 +964,19 @@ func collectCallerEvidence(t *testing.T, root string, skipFiles map[string]bool)
 		}
 	}
 
+	for _, f := range workerDisciplineCallerFiles {
+		p := filepath.Join(root, f)
+		if _, statErr := os.Stat(p); statErr != nil {
+			continue
+		}
+		if skipFiles[callerFileKey(root, p)] {
+			continue
+		}
+		for name := range singleFileCallerNames(t, p) {
+			evidence[name] = true
+		}
+	}
+
 	defIndex := buildCommandDefinitionIndex(t, filepath.Join(root, "cmd"))
 	for name := range collectGoSelfInvocationCallers(t, root, defIndex, skipFiles) {
 		evidence[name] = true
@@ -991,6 +1022,13 @@ func listCallerCorpusFiles(root string) []string {
 			}
 			files = append(files, callerFileKey(root, filepath.Join(dir, e.Name())))
 		}
+	}
+	for _, f := range workerDisciplineCallerFiles {
+		p := filepath.Join(root, f)
+		if _, statErr := os.Stat(p); statErr != nil {
+			continue
+		}
+		files = append(files, callerFileKey(root, p))
 	}
 	sort.Strings(files)
 	return files
