@@ -555,8 +555,9 @@ func emitVisualLine(line string) {
 // decision mid-run each print exactly one line through emitVisualLine --
 // the SAME inline funnel worker start/finish lines already print through
 // (cmd/codex_build_progress.go's emitCodexDispatchWorkerStarted/Finished),
-// never a separate watch process (the owner's own standing instruction:
-// "never render colony liveness in a second terminal window"). Every line
+// never a separate watch process -- the owner's own standing instruction is
+// that colony liveness is never rendered anywhere but the one terminal they
+// are already looking at (SEE-03). Every line
 // reuses casteIdentity/casteLabel so a recruit looks like every other
 // worker in the colony's own voice, and the cost figure always comes from
 // the spend ledger authority (cmd/recruitment_subtree.go's
