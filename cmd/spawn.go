@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/agent"
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/spf13/cobra"
 )
@@ -111,6 +112,7 @@ var spawnLogCmd = &cobra.Command{
 			DepthIsAuthoritative: true,
 			Caste:                caste,
 			Task:                 task,
+			Origin:               spawnOriginSpawnLog,
 		})
 		if !decision.Allowed {
 			outputError(1, decision.Detail, nil)
@@ -273,6 +275,33 @@ func latestSpawnEntryByName(st *agent.SpawnTree, name string) *agent.SpawnEntry 
 // refused, so the refusal test is prospectiveDepth > spawnMaxDelegationDepth.
 const spawnMaxDelegationDepth = 2
 
+// spawnDecisionOrigin names which call site produced a spawnDecisionInput,
+// so recruitmentAdmissionChecks (cmd/recruitment_admission.go) can declare
+// exactly which of BIO-02's five additional dimensions apply to that
+// caller, rather than a check silently skipping itself because a field
+// happens to be unpopulated. spawn-log and spawn-can-spawn never populate
+// the new fields below (Permission, Workspace, CostSlots, IntentID,
+// AttemptID) and are deliberately mapped to an EMPTY check set in
+// recruitmentAdmissionChecks -- only a real recruitment carries the data
+// those five checks need.
+type spawnDecisionOrigin string
+
+const (
+	spawnOriginSpawnLog      spawnDecisionOrigin = "spawn-log"
+	spawnOriginSpawnCanSpawn spawnDecisionOrigin = "spawn-can-spawn"
+	spawnOriginRecruit       spawnDecisionOrigin = "recruit"
+)
+
+// spawnDecisionOrigins returns every declared origin, mirroring
+// recruitmentAdapterKinds()'s/ColonyLiveTopics()'s completeness convention:
+// TestRecruitmentAdmissionChecksCoverEveryOrigin
+// (cmd/recruitment_admission_test.go) derives its inventory from this
+// function's RUNTIME output, so a new origin added here with no row in
+// recruitmentAdmissionChecks fails that test by name.
+func spawnDecisionOrigins() []spawnDecisionOrigin {
+	return []spawnDecisionOrigin{spawnOriginSpawnLog, spawnOriginSpawnCanSpawn, spawnOriginRecruit}
+}
+
 // spawnDecisionInput is what a caller (or the recorder itself) knows about a
 // prospective spawn at decision time. RequesterName/RequesterDepth describe
 // the WOULD-BE PARENT, not the child being proposed — the decision computes
@@ -291,24 +320,51 @@ type spawnDecisionInput struct {
 	DepthIsAuthoritative bool
 	Caste                string
 	Task                 string
+
+	// Origin declares which call site produced this input (spawnDecisionOrigin
+	// above). It decides which of BIO-02's five additional checks apply, via
+	// recruitmentAdmissionChecks. The zero value (empty string) matches no
+	// declared origin and applies none of the five new checks -- exactly
+	// what every pre-existing test and call site that never set Origin
+	// continues to get, unchanged.
+	Origin spawnDecisionOrigin
+	// Permission is the resolved (never caller-trusted) permission profile
+	// for the requested caste -- BIO-02's permission dimension.
+	Permission codex.PermissionProfile
+	// Workspace is the workspace lease this recruitment declares -- BIO-02's
+	// path-containment dimension.
+	Workspace string
+	// CostSlots is the number of whole-run helper-budget slots this request
+	// counts against -- BIO-02's cost dimension. D-12: read against the SAME
+	// spawnTreeBudgetState() ledger, never a second counter.
+	CostSlots int
+	// IntentID/AttemptID identify this specific recruitment request, so the
+	// duplicate-intent check can name the pending intent it matched and
+	// exclude the request being decided from matching itself.
+	IntentID  string
+	AttemptID string
 }
 
 // spawnDecisionResult is the outcome of a spawnCanSpawnDecision call. Reason
-// is one of the exact strings "depth", "budget", "ancestor-cycle",
-// "unresolved", or empty when Allowed is true. Detail is the human-readable
-// sentence D-10 requires — naming which helper, whose child, and why — and is
-// what reaches the operator through --enforce's error message.
+// is one of the exact strings "depth", "budget", "ancestor-cycle", "parent",
+// "permission", "path", "cost", "duplicate", "unresolved", or empty when
+// Allowed is true. Detail is the human-readable sentence D-10 requires —
+// naming which helper, whose child, and why — and is what reaches the
+// operator through --enforce's error message.
 type spawnDecisionResult struct {
 	Allowed bool
 	Reason  string
 	Detail  string
 }
 
-// spawnCanSpawnDecision is the single chokepoint SPAWN-01 makes real: depth,
-// then whole-run budget, then ancestor-cycle, each named and each denying on
-// the first hit. It is a package-level function variable (not a plain func)
-// specifically so a test can substitute a deny answer for the duration of a
-// single test case, driving --enforce's deny-to-non-zero-exit path.
+// spawnCanSpawnDecision is the single chokepoint SPAWN-01/BIO-02 makes real:
+// depth, then whole-run budget, then ancestor-cycle, then -- for a real
+// recruitment only, per recruitmentAdmissionChecks' declared table -- parent
+// authority, permission, path containment, cost, and duplicate intent, each
+// named and each denying on the first hit. It is a package-level function
+// variable (not a plain func) specifically so a test can substitute a deny
+// answer for the duration of a single test case, driving --enforce's
+// deny-to-non-zero-exit path.
 var spawnCanSpawnDecision = func(in spawnDecisionInput) spawnDecisionResult {
 	prospectiveDepth := in.RequesterDepth + 1
 	if prospectiveDepth > spawnMaxDelegationDepth {
@@ -332,6 +388,37 @@ var spawnCanSpawnDecision = func(in spawnDecisionInput) spawnDecisionResult {
 
 	if reason := spawnAncestorCycleReason(in); reason != "" {
 		return spawnDecisionResult{Allowed: false, Reason: "ancestor-cycle", Detail: reason}
+	}
+
+	// BIO-02's four* new dimensions, layered onto the same chokepoint rather
+	// than a parallel one (SYN-203-02). *Five: parent authority, permission,
+	// path, cost, duplicate -- applying only to the origin(s) declared in
+	// recruitmentAdmissionChecks (cmd/recruitment_admission.go), never
+	// implicitly to a caller whose input lacks the data a check needs.
+	if recruitmentCheckApplies(in.Origin, recruitmentReasonParent) {
+		if reason := recruitmentParentAuthorityReason(in); reason != "" {
+			return spawnDecisionResult{Allowed: false, Reason: recruitmentReasonParent, Detail: reason}
+		}
+	}
+	if recruitmentCheckApplies(in.Origin, recruitmentReasonPermission) {
+		if reason := recruitmentPermissionReason(in); reason != "" {
+			return spawnDecisionResult{Allowed: false, Reason: recruitmentReasonPermission, Detail: reason}
+		}
+	}
+	if recruitmentCheckApplies(in.Origin, recruitmentReasonPath) {
+		if reason := recruitmentPathReason(in); reason != "" {
+			return spawnDecisionResult{Allowed: false, Reason: recruitmentReasonPath, Detail: reason}
+		}
+	}
+	if recruitmentCheckApplies(in.Origin, recruitmentReasonCost) {
+		if reason := recruitmentCostReason(in); reason != "" {
+			return spawnDecisionResult{Allowed: false, Reason: recruitmentReasonCost, Detail: reason}
+		}
+	}
+	if recruitmentCheckApplies(in.Origin, recruitmentReasonDuplicate) {
+		if reason := recruitmentDuplicateReason(in); reason != "" {
+			return spawnDecisionResult{Allowed: false, Reason: recruitmentReasonDuplicate, Detail: reason}
+		}
 	}
 
 	return spawnDecisionResult{Allowed: true}
@@ -360,7 +447,7 @@ var spawnCanSpawnCmd = &cobra.Command{
 		enforce, _ := cmd.Flags().GetBool("enforce")
 		name, _ := cmd.Flags().GetString("name")
 
-		in := spawnDecisionInput{RequesterDepth: depth}
+		in := spawnDecisionInput{RequesterDepth: depth, Origin: spawnOriginSpawnCanSpawn}
 		// Set RequesterName from --name whenever --name is non-empty,
 		// whether or not it resolves to a recorded entry: the ancestor
 		// check keys off RequesterName, so dropping it on a failed lookup

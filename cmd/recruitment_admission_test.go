@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/agent"
 )
@@ -429,12 +430,16 @@ func TestRecruitmentAdmissionDuplicateFailsClosedOnUnreadableIntents(t *testing.
 	defer os.RemoveAll(tmpDir)
 	store = s
 
-	intentsPath := filepath.Join(store.BasePath(), filepath.FromSlash(recruitmentIntentsPath))
-	if err := os.MkdirAll(filepath.Dir(intentsPath), 0755); err != nil {
-		t.Fatalf("create recruitment dir: %v", err)
-	}
-	if err := os.MkdirAll(intentsPath, 0755); err != nil {
-		t.Fatalf("create directory at intents path: %v", err)
+	// A regular file where the "recruitment" directory belongs makes
+	// os.Stat(".../recruitment/intents.json") fail with ENOTDIR -- a real
+	// stat error distinct from "does not exist", which is the fault
+	// store.FileExists actually surfaces as an error rather than a plain
+	// false. (A directory placed directly at intents.json's own path is
+	// NOT sufficient: FileExists reports "not a regular file" as exists=false,
+	// err=nil, which reads as an ordinary absent-file allow, not a fault.)
+	recruitmentDirPath := filepath.Join(store.BasePath(), "recruitment")
+	if err := os.WriteFile(recruitmentDirPath, []byte("not a directory"), 0644); err != nil {
+		t.Fatalf("create file blocking the recruitment directory: %v", err)
 	}
 
 	reason := recruitmentDuplicateReason(spawnDecisionInput{RequesterName: "Queen", Origin: spawnOriginRecruit, Caste: "builder", Task: "x"})
@@ -620,8 +625,18 @@ func TestRecruitmentAdmissionExistingChecksUnchanged(t *testing.T) {
 		t.Fatalf("ancestor-cycle detail changed: reason=%q detail=%q, want reason=ancestor-cycle detail=%q", cycleResult.Reason, cycleResult.Detail, wantCycle)
 	}
 
-	// Budget.
-	recruitmentAdmissionFillBudget(t, st, spawnTreeBudgetMax)
+	// Budget -- an isolated fresh store and an explicit run window, so this
+	// assertion exercises the plain "in this run" sentence rather than the
+	// whole-ledger fallback's differently-worded one (both are real,
+	// separately-tested paths; this is specifically the ordinary one).
+	budgetStore, budgetTmpDir := newTestStore(t)
+	defer os.RemoveAll(budgetTmpDir)
+	store = budgetStore
+	budgetSt := agent.NewSpawnTree(store, "spawn-tree.txt")
+	if _, err := budgetSt.BeginRun("test-run", time.Time{}); err != nil {
+		t.Fatalf("begin run: %v", err)
+	}
+	recruitmentAdmissionFillBudget(t, budgetSt, spawnTreeBudgetMax)
 	budgetResult := spawnCanSpawnDecision(spawnDecisionInput{RequesterName: "C1", RequesterDepth: 0, Caste: "builder", Task: "y"})
 	wantBudget := fmt.Sprintf("whole-run helper budget exhausted: %d of %d helpers already spawned in this run; C1 may not spawn another", spawnTreeBudgetMax, spawnTreeBudgetMax)
 	if budgetResult.Reason != "budget" || budgetResult.Detail != wantBudget {

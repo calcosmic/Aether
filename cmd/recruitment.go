@@ -156,6 +156,8 @@ var recruitCmd = &cobra.Command{
 		// overall decision when it fails; only a validation pass reaches
 		// the SAME spawnCanSpawnDecision chokepoint every ordinary spawn
 		// already uses -- SYN-203-02, no second admission authority.
+		maxDepthFlag, _ := cmd.Flags().GetInt("max-depth")
+		depthRaised := false
 		decision := validation
 		if decision.Allowed {
 			admission := spawnCanSpawnDecision(spawnDecisionInput{
@@ -164,7 +166,24 @@ var recruitCmd = &cobra.Command{
 				DepthIsAuthoritative: intent.DepthIsAuthoritative,
 				Caste:                intent.Caste,
 				Task:                 intent.Objective,
+				Origin:               spawnOriginRecruit,
+				Permission:           intent.Permission,
+				Workspace:            intent.Workspace,
+				CostSlots:            intent.CostSlots,
+				IntentID:             intent.IntentID,
+				AttemptID:            intent.AttemptID,
 			})
+			if !admission.Allowed && admission.Reason == "depth" {
+				// D-11: the owner's per-run flag may raise the effective
+				// depth cap for this one recruitment. Every other denial
+				// reason is untouched by this flag -- it raises only the
+				// depth ceiling, never budget, permission, path, cost, or
+				// duplicate.
+				if cap, raised := recruitmentDepthOverride(maxDepthFlag); raised && intent.ParentDepth+1 <= cap {
+					admission = spawnDecisionResult{Allowed: true}
+					depthRaised = true
+				}
+			}
 			decision = recruitmentDecisionResult{Allowed: admission.Allowed, Reason: admission.Reason, Detail: admission.Detail}
 		}
 
@@ -207,7 +226,16 @@ var recruitCmd = &cobra.Command{
 
 		childName := deterministicAntName(dispatchIntent.Caste, dispatchIntent.AttemptID)
 		childDepth := dispatchIntent.ParentDepth + 1
-		if err := st.RecordSpawn(dispatchIntent.ParentName, dispatchIntent.Caste, childName, dispatchIntent.Objective, childDepth); err != nil {
+
+		task := dispatchIntent.Objective
+		if depthRaised {
+			// D-11: the raise is written onto the spawn-tree entry it permits,
+			// so the append-only ledger carries the fact even though this
+			// ledger's fixed pipe format (pkg/agent/spawn_tree.go, outside
+			// this plan's file ownership) has no dedicated field for it.
+			task = fmt.Sprintf("%s [depth-raise:max-depth=%d]", task, maxDepthFlag)
+		}
+		if err := st.RecordSpawn(dispatchIntent.ParentName, dispatchIntent.Caste, childName, task, childDepth); err != nil {
 			outputError(2, fmt.Sprintf("failed to record recruitment spawn: %v", err), nil)
 			return nil
 		}
@@ -292,6 +320,7 @@ func init() {
 	recruitCmd.Flags().StringArray("declared-path", nil, "A path this recruitment declares it will touch (repeatable)")
 	recruitCmd.Flags().Int("cost-slots", 1, "Helper slots this recruitment counts against the whole-run budget")
 	recruitCmd.Flags().Int("cost-seconds", 0, "Wall-clock seconds this recruitment is allowed (default: the dispatch timeout)")
+	recruitCmd.Flags().Int("max-depth", 0, "Raise the effective depth cap for this one recruitment above the default of 2 (D-11); 0 or the default value means no raise")
 
 	rootCmd.AddCommand(recruitCmd)
 }
