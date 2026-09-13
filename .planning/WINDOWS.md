@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 12
+open_count: 13
 waived_count: 0
 fixed_count: 5
-total_count: 17
-last_updated: 2026-09-13T10:57:40.741Z
+total_count: 18
+last_updated: 2026-09-13T13:11:36.373Z
 ---
 
 # Broken Windows Ledger
@@ -32,6 +32,7 @@ last_updated: 2026-09-13T10:57:40.741Z
 | 15 | 203 | deviation | cmd/exchange.go |  | 203-05 edited cmd/exchange.go, cmd/exchange_import_sanitize_test.go, cmd/hook_cmds.go and cmd/signal_housekeeping.go, none of which were in its declared files_modified. cmd/exchange.go was required: the real 'aether import pheromones' path never stamped provenance, so the plan's own quarantine must_have would have been decoration without it. The other three carried the strength-floor constant fix. All documented in 203-05-SUMMARY.md Deviations; the plan's files_modified header was incomplete rather than the executor overreaching. | open |  | 2026-09-13T00:07:16.488Z |  |
 | 16 | 203 | unrun-verify | cmd/testing_main_test.go |  | A full 'go test ./cmd -count=1' run can silently NOT execute a test while still reporting a lane result. Observed 2026-09-13: TestPlatformParityGolden appeared only in lane parallel-046's own 'missing executed tests' accounting line and never ran, so the wave-2 gate reported no regression while 203-02's new 'aether recruit' command had in fact broken the parity golden. The suite already detects and prints this condition; nothing treats it as a failure, so a reader comparing FAIL lines against a known-red list gets a false all-clear. The parity break itself is fixed (22149a3e); this entry is about the accounting, not that test. | open |  | 2026-09-13T10:00:01.055Z |  |
 | 17 | 203 | unrun-verify | .aether/ts-host/test |  | The TypeScript host test suite has 29 failing tests that pre-date Phase 203, in test/lifecycle.test.ts, test/go-bridge.test.ts, test/golden-workflow.test.ts and the classic command parity matrix. Verified 2026-09-13 by running the suite at c9ebe0b1 in a detached worktree and diffing failure names against the post-wave-3 run: 29 before, the same 29 after, zero new. Most assert a pending-planning boundary and now receive 'an approved specification is missing. Run aether spec' instead, so they look like a spec-gate change the TS lane never absorbed. Recorded so a future wave-3-style gate can diff against a known set instead of re-deriving it; NOT investigated or fixed here. | open |  | 2026-09-13T10:57:40.741Z |  |
+| 18 | 203 | unmet-truth | cmd/spawn.go |  | SECURITY (fail-open authorization bypass, PRE-EXISTING since phase 173, surfaced 2026-09-13 by a commit security review of cmd/recruitment.go): the delegation depth cap is bypassable by self-assertion. spawnParentIsRoot matches an unauthenticated caller-supplied name against the fixed sentinel list spawnRootParentNames = {Queen, Prime-1, Swarm} (cmd/spawn.go:22) and grants depth 0 with DepthIsAuthoritative=true and no spawn-tree entry required. Both 'aether spawn-can-spawn --name Queen' and the new 'aether recruit --parent Queen' therefore pass the depth check regardless of the caller's real depth, defeating spawnMaxDelegationDepth (the runaway-spawn and cost control). Everything ELSE in that path is correctly fail-closed: depth is read from the recorded spawn tree via latestSpawnEntryByName, never from a flag, and validateRecruitmentIntent (cmd/recruitment_intent.go:153) explicitly refuses a non-sentinel parent whose depth is not authoritative, with the reason 'a parent's depth is never trusted from a self-declared claim'. The sentinel exemption is the single hole. 203-03 mirrored spawn-can-spawn's existing behaviour deliberately and documented it; this is inherited, not introduced. Routed live to plan 203-06, which owns cmd/spawn.go + cmd/recruitment.go + cmd/recruitment_admission.go this wave and whose objective is extending that chokepoint with dimensions it does not yet check. Not fixed here: 203-06 is mid-flight in those exact files and an orchestrator edit would collide. | open |  | 2026-09-13T13:11:36.373Z |  |
 
 ````json
 [
@@ -237,6 +238,18 @@ last_updated: 2026-09-13T10:57:40.741Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-09-13T10:57:40.741Z",
+    "resolved_at": null
+  },
+  {
+    "id": 18,
+    "kind": "unmet-truth",
+    "phase": "203",
+    "file": "cmd/spawn.go",
+    "line": null,
+    "description": "SECURITY (fail-open authorization bypass, PRE-EXISTING since phase 173, surfaced 2026-09-13 by a commit security review of cmd/recruitment.go): the delegation depth cap is bypassable by self-assertion. spawnParentIsRoot matches an unauthenticated caller-supplied name against the fixed sentinel list spawnRootParentNames = {Queen, Prime-1, Swarm} (cmd/spawn.go:22) and grants depth 0 with DepthIsAuthoritative=true and no spawn-tree entry required. Both 'aether spawn-can-spawn --name Queen' and the new 'aether recruit --parent Queen' therefore pass the depth check regardless of the caller's real depth, defeating spawnMaxDelegationDepth (the runaway-spawn and cost control). Everything ELSE in that path is correctly fail-closed: depth is read from the recorded spawn tree via latestSpawnEntryByName, never from a flag, and validateRecruitmentIntent (cmd/recruitment_intent.go:153) explicitly refuses a non-sentinel parent whose depth is not authoritative, with the reason 'a parent's depth is never trusted from a self-declared claim'. The sentinel exemption is the single hole. 203-03 mirrored spawn-can-spawn's existing behaviour deliberately and documented it; this is inherited, not introduced. Routed live to plan 203-06, which owns cmd/spawn.go + cmd/recruitment.go + cmd/recruitment_admission.go this wave and whose objective is extending that chokepoint with dimensions it does not yet check. Not fixed here: 203-06 is mid-flight in those exact files and an orchestrator edit would collide.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-13T13:11:36.373Z",
     "resolved_at": null
   }
 ]
