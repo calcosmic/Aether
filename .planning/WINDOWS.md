@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 8
+open_count: 10
 waived_count: 0
 fixed_count: 5
-total_count: 13
-last_updated: 2026-09-12T17:42:11.287Z
+total_count: 15
+last_updated: 2026-09-13T00:07:16.488Z
 ---
 
 # Broken Windows Ledger
@@ -25,9 +25,11 @@ last_updated: 2026-09-12T17:42:11.287Z
 | 8 | 198.2 | deviation | cmd/codex_continue_finalize.go |  | externalContinueReviewReport does not append a 'review wave skipped' narration step when no reviewers were dispatched, unlike the direct lane's runCodexContinueReview -- discovered by 198.2-05's dual-lane outcome-text parity test, out of that plan's scope to fix | open |  | 2026-08-30T14:49:33.437Z |  |
 | 9 | 201 | deviation | cmd/golden_workflow_test.go |  | TestGoldenBuildVisualOutput/TestGoldenContinueVisualOutput: stale golden fixtures missing the 'Cost: not known...' line; pre-existing, last touched by Phase 200, discovered during 201-15 full-suite run | open |  | 2026-09-10T19:49:27.735Z |  |
 | 10 | 201 | deviation | cmd/phase199_gate_receipt_test.go |  | TestPhase199GateReceipt fails on pre-existing untracked .gsd/ directory present before 201-15 started | open |  | 2026-09-10T19:49:27.844Z |  |
-| 11 | 201 | deviation | cmd/queen_judgement_test.go |  | TestQueenChoiceReachesTheDispatchList / TestNoWorkerWithoutStatedReason: a Queen-requested Measurer with a stated reason is dropped before spawn. ROOT CAUSE FOUND 2026-09-12 (phase 202.1 close-out): this is NOT a code bug, it is two mutually exclusive contracts. queenBuildPostWaveDispatches returns nil unless a prior build attempt recorded a verification-boundary decision naming build-end, so on a phase's FIRST build an explicitly requested measurer/auditor/chaos is silently dropped. Making it dispatch turns cmd/codex_build_test.go:1987 (TestBuildCLINormalPathForwardsQueenTeamFlags) red, which asserts the exact opposite for the identical scenario -- 'with no recorded verification-boundary decision, measurer should not be dispatched at build end', written by 201-05 (D-05). A fix was written, proven to flip exactly these tests, and REVERTED: it trades one red guarantee for another. RESOLVED 2026-09-12: owner ruled the specialist runs at the CHECK. Both tests repointed to the continue dispatch list, proven able to fail by disabling the runtime's measurer branch; TestBuildCLINormalPathForwardsQueenTeamFlags stays green. No runtime change was needed. The watcher already resolves this the other way (gated on queenAskedFor, dispatches unconditionally). | fixed |  | 2026-09-10T19:49:27.959Z |  |
+| 11 | 201 | deviation | cmd/queen_judgement_test.go |  | TestQueenChoiceReachesTheDispatchList / TestNoWorkerWithoutStatedReason: a Queen-requested Measurer with a stated reason is dropped before spawn; pre-existing, discovered during 201-15, out of scope (queen_judgement.go not a declared file) | open |  | 2026-09-10T19:49:27.959Z |  |
 | 12 | 202 | unrun-verify | cmd/ (~15 tests, see 202-15-SUMMARY.md Issues Encountered) |  | Full unscoped 'go test ./cmd -count=1' could not be confirmed clean: pre-existing failures unrelated to plan 202-15 (TestNextActionNeverHardcoded, TestPhase199GateReceipt, TestQueenChoiceReachesTheDispatchList, TestNoWorkerWithoutStatedReason, TestCurrentVocabulary199, TestHumanFacingOutputGoesThroughWriteVisualOutput, TestGoldenBuildVisualOutput, TestGoldenContinueVisualOutput, TestAuditCatalogGolden, TestBuildStartLegacyHelpersRetired200, TestGoSourceHintsMatchCobraContracts, TestCompletionPacketSchemaMatchesStructs, TestPlanningAdversarial200, TestSkillManifestReadEmpty, TestSkillManifestReadFromHub, TestCodexBuildPlanOnlySpawnBudgetSeparatesCasteBudgetFromWorkerCount, TestFailedCheckSendsExactlyOneBuilderFixAttempt, TestFixAttemptIsCountedSeparately, TestFixAttemptNeverOverwritesTheFirstResult, TestNoSecondAutomaticFixAttempt) plus a documented ~20min machine-specific suite ceiling; every test touching a file this plan changed passes, including under -race. | open |  | 2026-09-11T15:35:47.524Z |  |
 | 13 | 202.1 | deviation | cmd/watch_live.go | 425 | Pre-existing (unrelated to this plan) TestHumanFacingOutputGoesThroughWriteVisualOutput failure: runColonyLiveRefreshLoop writes directly to stdout/stderr, bypassing writeVisualOutput | open |  | 2026-09-12T17:42:11.287Z |  |
+| 14 | 203 | deviation | pkg/codex/worker.go |  | 203-02 added a one-line exported helper in pkg/codex/worker.go, outside its declared files_modified, so cmd/recruitment_dispatch.go could reuse the existing tested process-group termination logic instead of writing a second copy. Deliberate and documented in 203-02-SUMMARY.md Deviations; the alternative was duplicating kill-the-whole-process-tree logic in new code. | open |  | 2026-09-13T00:07:16.386Z |  |
+| 15 | 203 | deviation | cmd/exchange.go |  | 203-05 edited cmd/exchange.go, cmd/exchange_import_sanitize_test.go, cmd/hook_cmds.go and cmd/signal_housekeeping.go, none of which were in its declared files_modified. cmd/exchange.go was required: the real 'aether import pheromones' path never stamped provenance, so the plan's own quarantine must_have would have been decoration without it. The other three carried the strength-floor constant fix. All documented in 203-05-SUMMARY.md Deviations; the plan's files_modified header was incomplete rather than the executor overreaching. | open |  | 2026-09-13T00:07:16.488Z |  |
 
 ````json
 [
@@ -185,6 +187,30 @@ last_updated: 2026-09-12T17:42:11.287Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-09-12T17:42:11.287Z",
+    "resolved_at": null
+  },
+  {
+    "id": 14,
+    "kind": "deviation",
+    "phase": "203",
+    "file": "pkg/codex/worker.go",
+    "line": null,
+    "description": "203-02 added a one-line exported helper in pkg/codex/worker.go, outside its declared files_modified, so cmd/recruitment_dispatch.go could reuse the existing tested process-group termination logic instead of writing a second copy. Deliberate and documented in 203-02-SUMMARY.md Deviations; the alternative was duplicating kill-the-whole-process-tree logic in new code.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-13T00:07:16.386Z",
+    "resolved_at": null
+  },
+  {
+    "id": 15,
+    "kind": "deviation",
+    "phase": "203",
+    "file": "cmd/exchange.go",
+    "line": null,
+    "description": "203-05 edited cmd/exchange.go, cmd/exchange_import_sanitize_test.go, cmd/hook_cmds.go and cmd/signal_housekeeping.go, none of which were in its declared files_modified. cmd/exchange.go was required: the real 'aether import pheromones' path never stamped provenance, so the plan's own quarantine must_have would have been decoration without it. The other three carried the strength-floor constant fix. All documented in 203-05-SUMMARY.md Deviations; the plan's files_modified header was incomplete rather than the executor overreaching.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-13T00:07:16.488Z",
     "resolved_at": null
   }
 ]

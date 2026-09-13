@@ -572,7 +572,7 @@ Plans:
 4. The terminal result returns exactly once, survives interruption/replay, reaches an acknowledged parent or named follow-on as a scoped packet, and changes a recorded downstream decision.
 5. Status, watch, recovery, cost, and depth cover the whole governed subtree, while evidence-backed pheromone proposals expose full action history and later outcomes govern their strengthening, weakening, or quarantine.
 
-**Plans:** 1/15 plans executed
+**Plans:** 3/15 plans executed
 
 Plans:
 **Wave 1**
@@ -581,13 +581,13 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 203-02-PLAN.md — Tracer: one worker asks, Go decides, a real helper runs, its result binds once
+- [x] 203-02-PLAN.md — Tracer: one worker asks, Go decides, a real helper runs, its result binds once
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
 - [ ] 203-03-PLAN.md — The full typed recruitment intent, validated, sanitised and durably recorded
 - [ ] 203-04-PLAN.md — A bounded, isolated, session-cached nesting probe and a named dispatch adapter
-- [ ] 203-05-PLAN.md — One canonical note resolver, recorded provenance, and quarantine for imports
+- [x] 203-05-PLAN.md — One canonical note resolver, recorded provenance, and quarantine for imports
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
