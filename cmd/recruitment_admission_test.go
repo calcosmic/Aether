@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -641,5 +642,229 @@ func TestRecruitmentAdmissionExistingChecksUnchanged(t *testing.T) {
 	wantBudget := fmt.Sprintf("whole-run helper budget exhausted: %d of %d helpers already spawned in this run; C1 may not spawn another", spawnTreeBudgetMax, spawnTreeBudgetMax)
 	if budgetResult.Reason != "budget" || budgetResult.Detail != wantBudget {
 		t.Fatalf("budget detail changed: reason=%q detail=%q, want reason=budget detail=%q", budgetResult.Reason, budgetResult.Detail, wantBudget)
+	}
+}
+
+// Plan 203-06 Task 2 (BIO-02/BIO-04): the admitted child is recorded
+// atomically before any process starts, and a failed manifest write denies
+// launch rather than proceeding unrecorded.
+
+// TestRecruitmentManifestAmendmentDeniesLaunchOnWriteFailure forces the
+// manifest write to fail (a regular file blocking the "recruitment"
+// directory, the same real stat-error fault used elsewhere in this file)
+// and asserts the whole recruitment is refused, naming the write error, and
+// that no spawn-tree entry and no recruitment result were ever created --
+// the launch never happened.
+func TestRecruitmentManifestAmendmentDeniesLaunchOnWriteFailure(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	var buf, errBuf bytes.Buffer
+	stdout = &buf
+	stderr = &errBuf
+
+	st := agent.NewSpawnTree(store, "spawn-tree.txt")
+	if err := st.RecordSpawn("Queen", "builder", "A1", "top task", 1); err != nil {
+		t.Fatalf("seed A1: %v", err)
+	}
+	before, err := store.ReadFile("spawn-tree.txt")
+	if err != nil {
+		t.Fatalf("read spawn-tree.txt before attempt: %v", err)
+	}
+
+	// Block the "recruitment" directory with a regular file so
+	// amendRecruitmentManifest's own write fails with a real stat error.
+	recruitmentDirPath := filepath.Join(store.BasePath(), "recruitment")
+	if err := os.WriteFile(recruitmentDirPath, []byte("not a directory"), 0644); err != nil {
+		t.Fatalf("create file blocking the recruitment directory: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{
+		"recruit",
+		"--parent", "A1",
+		"--caste", "builder",
+		"--objective", "help with x",
+		"--reason", "stuck on y",
+	})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("recruit command returned an error: %v", err)
+	}
+
+	env := parseEnvelope(t, buf.String())
+	result, _ := env["result"].(map[string]interface{})
+	if result == nil {
+		t.Fatalf("expected a result object: %s", buf.String())
+	}
+	if result["admitted"] != false {
+		t.Fatalf("expected a manifest write failure to refuse the recruitment, got: %s", buf.String())
+	}
+	if reason, _ := result["reason"].(string); reason != recruitmentReasonUnresolved {
+		t.Fatalf("expected reason %q, got %q: %s", recruitmentReasonUnresolved, reason, buf.String())
+	}
+	detail, _ := result["detail"].(string)
+	if detail == "" {
+		t.Fatalf("expected a non-empty detail naming the write failure: %s", buf.String())
+	}
+
+	after, err := store.ReadFile("spawn-tree.txt")
+	if err != nil {
+		t.Fatalf("read spawn-tree.txt after refused attempt: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatalf("spawn-tree.txt bytes changed after a launch denied by a failed manifest write:\nbefore=%q\nafter=%q", before, after)
+	}
+
+	if exists, _ := store.FileExists(recruitmentResultsPath); exists {
+		t.Fatal("expected no recruitment result to exist -- the child never launched")
+	}
+}
+
+// TestRecruitmentManifestAmendmentAtomicWithSpawnTreeEntry drives an
+// ADMITTED recruitment end to end and asserts exactly one manifest entry and
+// exactly one new spawn-tree entry exist afterward.
+func TestRecruitmentManifestAmendmentAtomicWithSpawnTreeEntry(t *testing.T) {
+	if os.Getenv("AETHER_RECRUIT_CHILD") == "1" {
+		fmt.Println("recruited-child-ok")
+		return
+	}
+
+	saveGlobals(t)
+	resetRootCmd(t)
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	var buf, errBuf bytes.Buffer
+	stdout = &buf
+	stderr = &errBuf
+
+	st := agent.NewSpawnTree(store, "spawn-tree.txt")
+	if err := st.RecordSpawn("Queen", "builder", "A1", "top task", 1); err != nil {
+		t.Fatalf("seed A1: %v", err)
+	}
+
+	t.Setenv("AETHER_RECRUIT_BINARY", os.Args[0])
+	t.Setenv("AETHER_RECRUIT_ARGS", "-test.run=^TestRecruitmentManifestAmendmentAtomicWithSpawnTreeEntry$")
+	t.Setenv("AETHER_RECRUIT_TIMEOUT", "30s")
+
+	rootCmd.SetArgs([]string{
+		"recruit",
+		"--parent", "A1",
+		"--caste", "builder",
+		"--objective", "help with x",
+		"--reason", "stuck on y",
+	})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("recruit command returned an error: %v", err)
+	}
+	env := parseEnvelope(t, buf.String())
+	result, _ := env["result"].(map[string]interface{})
+	if result == nil || result["admitted"] != true {
+		t.Fatalf("expected an admitted recruitment: %s", buf.String())
+	}
+	childName, _ := result["child"].(string)
+
+	var manifestFile recruitmentManifestFile
+	if err := store.LoadJSON(recruitmentManifestPath, &manifestFile); err != nil {
+		t.Fatalf("load recruitment manifest: %v", err)
+	}
+	if len(manifestFile.Entries) != 1 {
+		t.Fatalf("expected exactly one manifest entry, got %d", len(manifestFile.Entries))
+	}
+	if manifestFile.Entries[0].ChildName != childName {
+		t.Fatalf("manifest entry child name = %q, want %q", manifestFile.Entries[0].ChildName, childName)
+	}
+
+	entries, err := st.Parse()
+	if err != nil {
+		t.Fatalf("parse spawn tree: %v", err)
+	}
+	found := 0
+	for _, e := range entries {
+		if e.AgentName == childName {
+			found++
+		}
+	}
+	if found != 1 {
+		t.Fatalf("expected exactly one spawn-tree entry for %q, found %d", childName, found)
+	}
+}
+
+// TestRecruitmentManifestAmendmentStateTransitionsAdmittedToDispatched
+// proves the amendment's State reads "admitted" before dispatch and
+// "dispatched" after, by reading the file at both points -- unit-level,
+// directly against amendRecruitmentManifest/recruitmentManifestEntryByIntentID,
+// which is the exact sequence recruitCmd's own RunE performs.
+func TestRecruitmentManifestAmendmentStateTransitionsAdmittedToDispatched(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	const intentID = "intent-state-transition"
+	if _, err := amendRecruitmentManifest(recruitmentManifestRecord{
+		IntentID:  intentID,
+		ChildName: "C1",
+		State:     recruitmentManifestStateAdmitted,
+	}); err != nil {
+		t.Fatalf("amend (admitted): %v", err)
+	}
+
+	entry, err := recruitmentManifestEntryByIntentID(intentID)
+	if err != nil {
+		t.Fatalf("read manifest entry: %v", err)
+	}
+	if entry.State != recruitmentManifestStateAdmitted {
+		t.Fatalf("expected state %q before dispatch, got %q", recruitmentManifestStateAdmitted, entry.State)
+	}
+
+	if _, err := amendRecruitmentManifest(recruitmentManifestRecord{
+		IntentID: intentID,
+		State:    recruitmentManifestStateDispatched,
+	}); err != nil {
+		t.Fatalf("amend (dispatched): %v", err)
+	}
+
+	entry, err = recruitmentManifestEntryByIntentID(intentID)
+	if err != nil {
+		t.Fatalf("read manifest entry: %v", err)
+	}
+	if entry.State != recruitmentManifestStateDispatched {
+		t.Fatalf("expected state %q after dispatch, got %q", recruitmentManifestStateDispatched, entry.State)
+	}
+	// The child identity recorded at admission time must survive the later
+	// state-only update -- an upsert that only touches State/AdapterKind.
+	if entry.ChildName != "C1" {
+		t.Fatalf("expected ChildName to survive the state transition, got %q", entry.ChildName)
+	}
+}
+
+// TestRecruitmentManifestAmendmentUnknownSchemaVersion proves an entry
+// written under a schema version this runtime does not recognise is
+// reported as unknown rather than a fabricated zero-value read.
+func TestRecruitmentManifestAmendmentUnknownSchemaVersion(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	file := recruitmentManifestFile{Entries: []recruitmentManifestRecord{
+		{SchemaVersion: "recruitment-manifest/v999", IntentID: "old-intent", State: "admitted"},
+	}}
+	if err := store.SaveJSON(recruitmentManifestPath, file); err != nil {
+		t.Fatalf("seed manifest file: %v", err)
+	}
+
+	_, err := recruitmentManifestEntryByIntentID("old-intent")
+	if err == nil {
+		t.Fatal("expected an unrecognised schema version to be reported as an error, got a successful read")
+	}
+	if !errors.Is(err, errRecruitmentManifestUnknownSchema) {
+		t.Fatalf("expected errRecruitmentManifestUnknownSchema, got: %v", err)
 	}
 }
