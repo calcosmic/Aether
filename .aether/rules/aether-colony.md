@@ -188,3 +188,36 @@ Signals guide colony behavior without hard-coding instructions:
 - **FEEDBACK** — calibrates behavior based on observation (low priority)
 
 Use FOCUS + REDIRECT before builds to steer. Use FEEDBACK after builds to adjust.
+
+## Biological Runtime (v1.28, Phase 203)
+
+A helper stuck on its task can ask the program for backup with the real
+`aether recruit` command, and the program — never the assistant — decides
+whether the request is granted, through the same one gate every ordinary
+helper assignment already goes through. The check looks at how deep the
+chain of asks has gone (capped at two hops), how many helpers the whole run
+has already used, whether the new helper is allowed near what it wants to
+touch, and whether someone is already doing that exact job.
+
+A refusal never stops the work — the helper carries on and finishes the task
+alone, and the command still reports success, not a failure. The owner never
+approves a routine backup request; the program's own limits are the leash.
+What the owner does see, live, in the one window they are already using: one
+line when a helper joins, one line when a request is refused, and — once the
+run ends — the whole family tree of who asked for backup, what each branch
+cost, and every refusal along the way.
+
+The program's own steering notes now get more trusted the more they actually
+help and less trusted — or set aside — the more they don't, based on what a
+note genuinely did afterward, never merely on whether a helper saw it. A note
+the owner pinned in place is never moved by this automatic tuning.
+
+None of this costs anything on an ordinary run that never asks for backup —
+that has been measured, not just promised.
+
+**One honest limit, left open rather than hidden:** the depth check trusts a
+short, fixed list of coordinator names on its own word alone, with nothing
+yet proving that a caller claiming one of those names really is the
+coordinator. This gap predates this phase and is tracked, not silently
+fixed, in `.planning/WINDOWS.md`. See CLAUDE.md's "Biological Runtime"
+section for the full account and the tests that lock every claim above.
