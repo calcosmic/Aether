@@ -273,11 +273,7 @@ then either starts a real helper or refuses.
 **Ask for help:**
 
 ```bash
-aether recruit \
-  --parent "{your_name}" \
-  --caste "{child_caste}" \
-  --objective "{a bounded description of what the helper should do}" \
-  --reason "{why you need help}"
+aether recruit --parent "{your_name}" --caste "{child_caste}" --objective "{a bounded description of what the helper should do}" --reason "{why you need help}"
 ```
 
 - `--parent` is your own recorded name.

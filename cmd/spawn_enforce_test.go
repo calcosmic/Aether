@@ -48,26 +48,33 @@ func documentedCoordinatorSourceFiles(repoRoot string) ([]string, error) {
 
 // WIRE-02 / D-13 / D-14.
 //
-// .aether/workers.md:292 instructs every worker to run
-// `aether spawn-can-spawn {your_depth} --enforce` before spawning a child
-// agent. Before this plan, that exact invocation errored twice over:
-// `Args: cobra.NoArgs` rejected the positional depth, and `--enforce` was not
-// registered at all. This file proves the fix two ways: that the manual's
-// own string now resolves and executes (not a copy of the string — the file
-// itself), and that --enforce's deny path is real machinery reachable by a
-// test, not a flag that parses and does nothing (D-13's explicit rejection
-// of an inert accepted-but-ignored flag).
+// .aether/workers.md's "Spawning Sub-Workers" section originally instructed
+// every worker to run `aether spawn-can-spawn {your_depth} --enforce` before
+// spawning a child agent, and this file proved that exact invocation
+// resolved and executed. Phase 203 (plan 203-15) retired that manual,
+// voluntary check in favour of `aether recruit` -- one atomic command that
+// validates, records, and decides admission itself, so a worker can no
+// longer skip the check the way a `spawn-can-spawn` call could always be
+// omitted. workers.md no longer documents a bare `spawn-can-spawn`
+// invocation for workers to run directly (it remains a real, separately
+// tested command used internally by the TS host bridge and by
+// `aether recruit` itself), so this test now pins to the CURRENT documented
+// invocation instead: the same "read the real file, do not duplicate its
+// string; resolve through cobra; execute in-process; confirm the promised
+// exit code" protections, pointed at `aether recruit`.
 
-// spawnCanSpawnInvocationRe finds the documented invocation line in
-// workers.md and captures everything after `aether spawn-can-spawn`.
-var spawnCanSpawnInvocationRe = regexp.MustCompile(`aether\s+spawn-can-spawn(\s+.*)?$`)
+// recruitInvocationRe finds the documented invocation line in workers.md and
+// captures everything after `aether recruit`.
+var recruitInvocationRe = regexp.MustCompile(`aether\s+recruit(\s+.*)?$`)
 
-// extractSpawnCanSpawnInvocation reads workers.md at the given repo root,
-// finds the line documenting the spawn-can-spawn invocation, and returns its
-// argument tokens (excluding the command name itself). It tracks the manual
-// instead of hardcoding a copy of it: if workers.md's wording ever changes,
-// this test starts validating the new string, not a stale duplicate.
-func extractSpawnCanSpawnInvocation(t *testing.T, root string) []string {
+// extractRecruitInvocation reads workers.md at the given repo root, finds
+// the line documenting the recruit invocation with flags (not the bare
+// "aether recruit" mention in the Step-by-Step Spawn Protocol section), and
+// returns its argument tokens (excluding the command name itself). It
+// tracks the manual instead of hardcoding a copy of it: if workers.md's
+// wording ever changes, this test starts validating the new string, not a
+// stale duplicate.
+func extractRecruitInvocation(t *testing.T, root string) []string {
 	t.Helper()
 	path := filepath.Join(root, ".aether", "workers.md")
 	data, err := os.ReadFile(path)
@@ -76,29 +83,31 @@ func extractSpawnCanSpawnInvocation(t *testing.T, root string) []string {
 	}
 
 	for _, line := range strings.Split(string(data), "\n") {
-		m := spawnCanSpawnInvocationRe.FindStringSubmatch(line)
+		m := recruitInvocationRe.FindStringSubmatch(line)
 		if m == nil {
 			continue
 		}
-		rest := m[1]
-		// The documented form is inside a shell command substitution:
-		// `result=$(aether spawn-can-spawn {your_depth} --enforce)` — strip a
-		// trailing close-paren/backtick that belongs to the shell wrapper,
-		// not to the invocation itself.
-		rest = strings.TrimRight(rest, ")` \t")
-		tokens := tokenizeShellLike(strings.TrimSpace(rest))
+		rest := strings.TrimSpace(m[1])
+		if rest == "" {
+			// The bare `aether recruit` mention in prose (no flags) -- keep
+			// scanning for the line that documents the real invocation.
+			continue
+		}
+		rest = strings.TrimRight(rest, "` \t")
+		tokens := tokenizeShellLike(rest)
 		return tokens
 	}
 
-	t.Fatalf("no line in %s contains `aether spawn-can-spawn` — a test that finds nothing to check would pass vacuously forever", path)
+	t.Fatalf("no line in %s documents an `aether recruit` invocation with arguments — a test that finds nothing to check would pass vacuously forever", path)
 	return nil
 }
 
-// TestSpawnCanSpawnAcceptsDocumentedInvocation is the WIRE-02 criterion,
-// pinned to the manual: the exact invocation .aether/workers.md:292
-// documents must resolve against the real cobra command tree and execute
-// successfully.
-func TestSpawnCanSpawnAcceptsDocumentedInvocation(t *testing.T) {
+// TestRecruitAcceptsDocumentedInvocation is the WIRE-02 criterion, pinned to
+// the manual: the exact invocation .aether/workers.md documents for asking
+// the program for help must resolve against the real cobra command tree and
+// execute successfully (exit 0), whether the program admits or refuses the
+// request -- both are the documented, non-error outcomes (D-03).
+func TestRecruitAcceptsDocumentedInvocation(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -107,35 +116,43 @@ func TestSpawnCanSpawnAcceptsDocumentedInvocation(t *testing.T) {
 		t.Fatalf("resolve repo root: %v", err)
 	}
 
-	tokens := extractSpawnCanSpawnInvocation(t, root)
+	tokens := extractRecruitInvocation(t, root)
 	if len(tokens) == 0 {
 		t.Fatalf("extracted invocation from workers.md has no arguments: tokens=%v", tokens)
 	}
 
 	// Resolve the extracted argument vector through cobra's own Find, the
 	// same machinery the CLI uses, rather than assuming the command name.
-	fullArgs := append([]string{"spawn-can-spawn"}, tokens...)
+	fullArgs := append([]string{"recruit"}, tokens...)
 	target, remaining, err := rootCmd.Find(fullArgs)
 	if err != nil {
 		t.Fatalf("rootCmd.Find(%v) failed: %v", fullArgs, err)
 	}
-	if target == nil || target != spawnCanSpawnCmd {
-		t.Fatalf("rootCmd.Find(%v) resolved to %v, want spawnCanSpawnCmd", fullArgs, target)
+	if target == nil || target != recruitCmd {
+		t.Fatalf("rootCmd.Find(%v) resolved to %v, want recruitCmd", fullArgs, target)
 	}
 
 	// Every --flag in the extracted call must be registered on the resolved
 	// command, and every remaining positional must satisfy its own Args
-	// validator — the exact two failure modes workers.md:292 hit before this
-	// plan (unknown flag, and a rejected positional).
+	// validator. A non-boolean flag's value is its OWN following token
+	// (`--parent "{your_name}"` is two tokens), not a positional -- skip it
+	// rather than misclassifying every flag's value as a stray positional.
 	var positionals []string
-	for _, tok := range remaining {
+	for i := 0; i < len(remaining); i++ {
+		tok := remaining[i]
 		if strings.HasPrefix(tok, "--") {
 			name := strings.TrimPrefix(tok, "--")
+			hasInlineValue := false
 			if eq := strings.Index(name, "="); eq >= 0 {
 				name = name[:eq]
+				hasInlineValue = true
 			}
-			if target.Flags().Lookup(name) == nil {
+			flag := target.Flags().Lookup(name)
+			if flag == nil {
 				t.Fatalf("documented invocation uses --%s, which is not registered on %s", name, target.Name())
+			}
+			if !hasInlineValue && flag.Value.Type() != "bool" && i+1 < len(remaining) {
+				i++
 			}
 			continue
 		}
@@ -148,14 +165,10 @@ func TestSpawnCanSpawnAcceptsDocumentedInvocation(t *testing.T) {
 		t.Fatalf("documented positional args %v rejected by %s's own Args validator: %v", positionals, target.Name(), err)
 	}
 
-	// Now actually execute it in-process, with the concrete depth the
-	// placeholder {your_depth} stands in for, and confirm the observable
-	// behaviour workers.md:292 promises: it runs and exits 0. Depth 1 is
-	// used (not the pre-Task-1-cap value of 5) because it is a real,
-	// legal requester depth under D-01's cap (spawnMaxDelegationDepth=2):
-	// this test proves the documented invocation SHAPE resolves, not any
-	// particular depth value, and a value the real cap would now deny
-	// would make this test indistinguishable from a cap regression.
+	// Now actually execute it in-process, exactly as documented (the
+	// placeholder values stand in for real ones a worker would substitute),
+	// and confirm the observable behaviour the document promises: it runs
+	// and exits 0, whether the program admits or refuses the request.
 	var buf, errBuf bytes.Buffer
 	stdout = &buf
 	stderr = &errBuf
@@ -165,24 +178,24 @@ func TestSpawnCanSpawnAcceptsDocumentedInvocation(t *testing.T) {
 	store = s
 
 	renderedCommandExitCode.Store(0)
-	rootCmd.SetArgs([]string{"spawn-can-spawn", "1", "--enforce"})
+	rootCmd.SetArgs(fullArgs)
 	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("documented invocation (depth 1, --enforce) failed: %v\nstderr: %s", err, errBuf.String())
+		t.Fatalf("documented invocation failed: %v\nstderr: %s", err, errBuf.String())
 	}
 	if code := int(renderedCommandExitCode.Load()); code != 0 {
-		t.Fatalf("documented invocation set exit code %d; workers.md:292 promises it exits 0: %s", code, errBuf.String())
+		t.Fatalf("documented invocation set exit code %d; the document promises it always exits 0: %s", code, errBuf.String())
 	}
 
 	env := parseEnvelope(t, buf.String())
 	if env["ok"] != true {
 		t.Fatalf("documented invocation not ok: %s", buf.String())
 	}
-	result := env["result"].(map[string]interface{})
-	if result["can_spawn"] != true {
-		t.Fatalf("expected can_spawn true, got: %s", buf.String())
+	result, _ := env["result"].(map[string]interface{})
+	if result == nil {
+		t.Fatalf("documented invocation returned no result: %s", buf.String())
 	}
-	if depth, _ := result["depth"].(float64); depth != 1 {
-		t.Fatalf("expected depth 1, got: %s", buf.String())
+	if _, ok := result["admitted"]; !ok {
+		t.Fatalf("documented invocation's result carries no \"admitted\" field: %s", buf.String())
 	}
 }
 
