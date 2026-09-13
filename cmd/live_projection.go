@@ -45,6 +45,11 @@ type colonyLiveWorkerRow struct {
 	Question       string   `json:"question,omitempty"`
 	Findings       []string `json:"findings,omitempty"`
 	Status         string   `json:"status,omitempty"`
+	// Reason (203-14, D-04) carries a recruited descendant's own stated why
+	// -- ColonyLivePayload.Reason on a live.recruit.admitted event -- never
+	// invented for an ordinary dispatched worker, which has no Reason field
+	// to fold.
+	Reason string `json:"reason,omitempty"`
 
 	// StartedAt is this worker's own worker.started event timestamp -- the
 	// only source an "elapsed time" figure for this specific worker may
@@ -65,6 +70,17 @@ type colonyLiveWorkerRow struct {
 	InterruptedReason string `json:"interrupted_reason,omitempty"`
 }
 
+// colonyLiveRefusalEntry is one refused recruitment attempt (203-14, D-06):
+// a live.recruit.refused event folded into the snapshot, never as a second
+// snapshot type -- an additive field on the existing colonyLiveSnapshot,
+// exactly like Contradictions or Signals above it.
+type colonyLiveRefusalEntry struct {
+	ParentWorkerID string `json:"parent_worker_id,omitempty"`
+	Caste          string `json:"caste,omitempty"`
+	Reason         string `json:"reason,omitempty"`
+	Timestamp      string `json:"timestamp,omitempty"`
+}
+
 // colonyLiveTickerEntry is one entry in the bounded most-recent-events tail
 // carried on the snapshot for cockpit rendering.
 type colonyLiveTickerEntry struct {
@@ -83,20 +99,25 @@ type colonyLiveTickerEntry struct {
 // must reproduce the same snapshot field for field as the live path that
 // emitted the events.
 type colonyLiveSnapshot struct {
-	SchemaVersion    string                  `json:"schema_version"`
-	EpisodeID        string                  `json:"episode_id"`
-	EpisodeKind      string                  `json:"episode_kind,omitempty"`
-	Open             bool                    `json:"open"`
-	StartedAt        string                  `json:"started_at,omitempty"`
-	ElapsedSeconds   float64                 `json:"elapsed_seconds,omitempty"`
-	Wave             int                     `json:"wave,omitempty"`
-	Workers          []colonyLiveWorkerRow   `json:"workers,omitempty"`
-	Confidence       float64                 `json:"confidence,omitempty"`
-	TargetConfidence float64                 `json:"target_confidence,omitempty"`
-	Contradictions   []string                `json:"contradictions,omitempty"`
-	Signals          []string                `json:"signals,omitempty"`
-	RecoveryState    string                  `json:"recovery_state,omitempty"`
-	Ticker           []colonyLiveTickerEntry `json:"ticker,omitempty"`
+	SchemaVersion    string                `json:"schema_version"`
+	EpisodeID        string                `json:"episode_id"`
+	EpisodeKind      string                `json:"episode_kind,omitempty"`
+	Open             bool                  `json:"open"`
+	StartedAt        string                `json:"started_at,omitempty"`
+	ElapsedSeconds   float64               `json:"elapsed_seconds,omitempty"`
+	Wave             int                   `json:"wave,omitempty"`
+	Workers          []colonyLiveWorkerRow `json:"workers,omitempty"`
+	Confidence       float64               `json:"confidence,omitempty"`
+	TargetConfidence float64               `json:"target_confidence,omitempty"`
+	Contradictions   []string              `json:"contradictions,omitempty"`
+	Signals          []string              `json:"signals,omitempty"`
+	RecoveryState    string                `json:"recovery_state,omitempty"`
+	// Refusals (203-14, D-06) is every refused recruitment attempt folded
+	// from live.recruit.refused events -- shown both inline (D-04/D-06,
+	// cmd/codex_visuals.go) and here, in the same snapshot every other live
+	// fact already rides.
+	Refusals []colonyLiveRefusalEntry `json:"refusals,omitempty"`
+	Ticker   []colonyLiveTickerEntry  `json:"ticker,omitempty"`
 
 	// SkippedEventCount / SkippedSchemaVersions record events whose schema
 	// version this reducer does not recognize -- skipped, never fatal.
@@ -450,6 +471,36 @@ func foldColonyLiveEvents(snapshot colonyLiveSnapshot, entries []colonyLiveDecod
 				workerIndex[key] = len(snapshot.Workers)
 				snapshot.Workers = append(snapshot.Workers, row)
 			}
+		case events.LiveTopicRecruitAdmitted:
+			// 203-14 (D-04/BIO-06): a recruited descendant folds into the
+			// SAME workers slice every ordinary worker.started event already
+			// populates -- no second snapshot type, no second reducer.
+			key := firstNonEmpty(payload.WorkerID, payload.WorkerName)
+			row := colonyLiveWorkerRow{
+				WorkerID:       key,
+				ParentWorkerID: payload.ParentWorkerID,
+				Caste:          payload.Caste,
+				WorkerName:     payload.WorkerName,
+				Workspace:      payload.Workspace,
+				Reason:         payload.Reason,
+				Status:         firstNonEmpty(payload.Status, "admitted"),
+				StartedAt:      evt.Timestamp,
+			}
+			if idx, ok := workerIndex[key]; ok {
+				snapshot.Workers[idx] = row
+			} else {
+				workerIndex[key] = len(snapshot.Workers)
+				snapshot.Workers = append(snapshot.Workers, row)
+			}
+		case events.LiveTopicRecruitRefused:
+			// 203-14 (D-06): folded as its own refusal entry -- a refusal
+			// never has a child identity to fold into the workers slice.
+			snapshot.Refusals = append(snapshot.Refusals, colonyLiveRefusalEntry{
+				ParentWorkerID: payload.ParentWorkerID,
+				Caste:          payload.Caste,
+				Reason:         payload.Reason,
+				Timestamp:      evt.Timestamp,
+			})
 		case events.LiveTopicWorkerProgress, events.LiveTopicWorkerFinished, events.LiveTopicQuestionChanged, events.LiveTopicFindingRecorded:
 			key := firstNonEmpty(payload.WorkerID, payload.WorkerName)
 			if idx, ok := workerIndex[key]; ok {

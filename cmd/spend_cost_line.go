@@ -375,5 +375,22 @@ func appendSpendCostLine(visual string, phase int) string {
 	if visual != "" && !strings.HasSuffix(visual, "\n") {
 		visual += "\n"
 	}
+	// 203-14 (D-05/D-08): the end-of-run family tree and the closing
+	// "notes that changed a decision" list are inserted here, before the
+	// cost block, so the cost block stays the LAST thing on every ending
+	// screen -- the Phase 196 placement rule this function's own doc
+	// comment above already states, unchanged. This is the single funnel
+	// every closing screen (cmd/ceremony_cmd.go, cmd/codex_workflow_cmds.go,
+	// cmd/lifecycle_closeout.go, cmd/work_closeout.go) already calls, so
+	// threading the two new sections through it covers every one of those
+	// call sites without editing any of them individually
+	// (203-14-SUMMARY.md Deviations: none of those four files are in
+	// 203-14's declared files_modified).
+	if familyTree := renderRecruitmentFamilyTree(phase); familyTree != "" {
+		visual += "\n" + familyTree
+	}
+	if notes := renderNotesThatChangedDecisions(); notes != "" {
+		visual += "\n" + notes
+	}
 	return visual + "\n" + block
 }
