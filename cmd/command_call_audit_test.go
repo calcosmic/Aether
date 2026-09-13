@@ -705,29 +705,44 @@ func TestAuditDetectsPositionalDrift(t *testing.T) {
 
 // TestAetherCorpusCatchesAnUnregisteredFlag is WIRE-03's permanent proof.
 // Success criterion 3 required the audit to be "seeded to fail today against
-// --enforce" — but once 172-01 registered --enforce on the real
-// spawn-can-spawn, that seed is gone from the live tree. This test replaces
-// the seed with something that runs forever: a function-local fixture
-// mirroring the PRE-172-01 spawn-can-spawn contract (no --enforce, no
-// positional depth), fed the REAL `.aether/workers.md:292` text (name
-// swapped to the fixture's), proving the corpus, the extractor and the
-// validator together still catch exactly the bug this phase was created for
-// — on every CI run, without a red commit ever landing on this branch.
+// a flag the real command does not register" — but a seed placed on a real
+// command disappears the moment that command registers the flag. This test
+// replaces the seed with something that runs forever: a function-local
+// fixture deliberately missing one flag the live corpus text actually
+// passes, fed the REAL `.aether/workers.md` invocation (name swapped to the
+// fixture's), proving the corpus, the extractor and the validator together
+// still catch exactly that bug on every CI run, without a red commit ever
+// landing on this branch.
+//
+// Anchored on `aether recruit`, not `spawn-can-spawn`: plan 203-15 rewrote
+// .aether/workers.md and replaced the documented spawn-can-spawn invocation
+// with the recruit one, which left this test searching for a call the live
+// corpus no longer contains. It refused to pass vacuously — correctly — and
+// repointing it here is what that refusal was for. Its sibling positive
+// case is TestRecruitAcceptsDocumentedInvocation (cmd/spawn_enforce_test.go),
+// which asserts the same live text IS valid against the real command; this
+// one asserts the chain still rejects an invalid one.
 //
 // The fixture is registered and removed inside this function body only
 // (never at package scope): a package-scope registration would become a
 // real, permanent orphan requiring an entry in 172-02's shrink-only
 // allowlist, and "test fixture" is not debt.
 func TestAetherCorpusCatchesAnUnregisteredFlag(t *testing.T) {
-	preFixSpawnCanSpawn := &cobra.Command{
-		Use:  "audit-selftest-preenforce-spawn-can-spawn",
-		Args: cobra.NoArgs, // the pre-172-01 contract: no positional depth
+	// A fixture mirroring `aether recruit`'s contract with exactly one flag
+	// missing. --reason is the omission under test: the live workers.md
+	// invocation passes it, the real recruitCmd registers it, and this
+	// fixture deliberately does not.
+	missingReasonRecruit := &cobra.Command{
+		Use:  "audit-selftest-noreason-recruit",
+		Args: cobra.NoArgs, // recruit takes no positionals
 		Run:  func(*cobra.Command, []string) {},
 	}
-	preFixSpawnCanSpawn.Flags().Int("depth", 0, "Spawn depth to check (required)")
-	// Deliberately no --enforce flag: this is the exact absence 172-01 fixed.
-	rootCmd.AddCommand(preFixSpawnCanSpawn)
-	defer rootCmd.RemoveCommand(preFixSpawnCanSpawn)
+	missingReasonRecruit.Flags().String("parent", "", "Parent worker's recorded name")
+	missingReasonRecruit.Flags().String("caste", "", "Requested helper caste")
+	missingReasonRecruit.Flags().String("objective", "", "Bounded objective for the helper")
+	// Deliberately no --reason flag: this is the absence the chain must catch.
+	rootCmd.AddCommand(missingReasonRecruit)
+	defer rootCmd.RemoveCommand(missingReasonRecruit)
 
 	root, err := repoRootForCommandSourceTest()
 	if err != nil {
@@ -741,13 +756,16 @@ func TestAetherCorpusCatchesAnUnregisteredFlag(t *testing.T) {
 
 	var real *documentedCall
 	for i := range calls {
-		if calls[i].Command == "spawn-can-spawn" {
+		if calls[i].Command == "recruit" {
 			real = &calls[i]
 			break
 		}
 	}
 	if real == nil {
-		t.Fatal("the extractor found no `spawn-can-spawn` invocation in .aether/workers.md — a fixture test that silently found nothing to validate is the vacuous pass this whole phase exists to make impossible")
+		t.Fatal("the extractor found no `recruit` invocation in .aether/workers.md — a fixture test that silently found nothing to validate is the vacuous pass this whole phase exists to make impossible")
+	}
+	if !containsFlagToken(real.Args, "--reason") {
+		t.Fatalf("the live .aether/workers.md recruit invocation no longer passes --reason (args=%v); this test's omission must name a flag the corpus actually uses, or it proves nothing", real.Args)
 	}
 
 	// Swap the command name to the fixture's so resolution hits the pre-fix
@@ -755,19 +773,31 @@ func TestAetherCorpusCatchesAnUnregisteredFlag(t *testing.T) {
 	// re-parse through the real extractor rather than hand-constructing the
 	// documentedCall struct — a hand-built struct would prove only that the
 	// validator works, which was never in doubt.
-	fixtureRaw := strings.Replace(real.Raw, "spawn-can-spawn", preFixSpawnCanSpawn.Use, 1)
+	fixtureRaw := strings.Replace(real.Raw, "recruit", missingReasonRecruit.Use, 1)
 	fixtureCall, ok := parseFencedInvocation(real.File, real.Line, fixtureRaw)
 	if !ok {
-		t.Fatalf("could not re-parse the name-swapped .aether/workers.md:292 text (%q) through the real extractor", fixtureRaw)
+		t.Fatalf("could not re-parse the name-swapped .aether/workers.md text (%q) through the real extractor", fixtureRaw)
 	}
 
 	v := validateCallAgainstCobra(fixtureCall)
 	if v == "" {
-		t.Fatal("the corpus + extractor + validator chain did not flag the pre-172-01 fixture at all — the .aether/workers.md:292 shape must be caught as it was before 172-01 fixed the real command")
+		t.Fatal("the corpus + extractor + validator chain did not flag the missing-flag fixture at all — the live .aether/workers.md recruit shape must be caught against a command that does not register --reason")
 	}
-	if !strings.Contains(v, "--enforce") {
-		t.Errorf("violation = %q, want it to name --enforce", v)
+	if !strings.Contains(v, "--reason") {
+		t.Errorf("violation = %q, want it to name --reason", v)
 	}
+}
+
+// containsFlagToken reports whether an extracted argument vector passes the
+// named --flag. Kept local to this file's audit tests; a flag's value is its
+// own following token, so an exact token match is the right test.
+func containsFlagToken(args []string, flag string) bool {
+	for _, a := range args {
+		if a == flag || strings.HasPrefix(a, flag+"=") {
+			return true
+		}
+	}
+	return false
 }
 
 // The extractor is the part most likely to rot into vacuous success: if its
