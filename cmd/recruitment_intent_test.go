@@ -446,6 +446,14 @@ func TestRecruitmentIntentRecordUnwritableStoreRefusesTheCommand(t *testing.T) {
 	// binary makes that failure loud rather than silently passing.
 	t.Setenv("AETHER_RECRUIT_BINARY", "aether-recruit-must-not-be-invoked-"+t.Name())
 
+	// renderedCommandExitCode is package-level state that only Execute()
+	// (cmd/root.go) resets, and this test drives rootCmd.Execute() directly.
+	// Without this reset the assertion below reads whatever an earlier test in
+	// the same binary left behind, so it passes or fails by test ORDER rather
+	// than by this command's behaviour -- it went red the first time this file
+	// ran alongside its wave siblings. Matches the established idiom used by
+	// ~70 other assertions on this counter.
+	renderedCommandExitCode.Store(0)
 	rootCmd.SetArgs([]string{
 		"recruit",
 		"--parent", "A1",
