@@ -992,6 +992,12 @@ func saveGlobals(t *testing.T) {
 	origNarratorRuntimePath := narratorRuntimePath
 	origResumeNoHandoff := resumeNoHandoff
 	origColonyPrimeTemplatesPathOverride := colonyPrimeTemplatesPathOverride
+	// root.go sets this on every command execution and nothing resets it, so a
+	// test that ran a quiet command (anything *-finalize, spawn-log, version...)
+	// left every later test's emitVisualLine silently emitting nothing. That is
+	// how TestOracleStatusFollowStreamsExistingRoundsAndExitsOnRunEnd could pass
+	// alone and fail in the full suite depending on lane order.
+	origCurrentStreamingCommand := currentStreamingCommand
 	t.Cleanup(func() {
 		// A Store and its tracer are repository authorities, not ordinary test
 		// values. Never resurrect one after its temporary repository may have
@@ -1012,6 +1018,7 @@ func saveGlobals(t *testing.T) {
 		continueSignalHousekeeper = origContinueSignalHousekeeper
 		newCodexWorkerInvoker = origNewCodexWorkerInvoker
 		activeBuildCeremony = origActiveBuildCeremony
+		currentStreamingCommand = origCurrentStreamingCommand
 		narratorLookPath = origNarratorLookPath
 		narratorCommandContext = origNarratorCommandContext
 		narratorRuntimePath = origNarratorRuntimePath
