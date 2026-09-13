@@ -887,11 +887,28 @@ func buildWorkerHandoffRecord(dispatch codex.WorkerDispatch, result codex.Dispat
 		// third hand-copied definition.
 		if codex.IsEmptyWorkerHandoffIncludingFreshness(handoff) {
 			handoff = codex.WorkerHandoff{
-				ChangedFiles:       append(append(append([]string{}, result.WorkerResult.FilesCreated...), result.WorkerResult.FilesModified...), result.WorkerResult.TestsWritten...),
 				KnownFailures:      append([]string{}, result.WorkerResult.Blockers...),
 				VerificationStatus: verificationStatusForWorkerStatus(status),
 			}
 		}
+		// ChangedFiles is the UNION of every place a worker can name a path
+		// -- top-level lists, each task receipt, and the worker's own handoff
+		// -- never whichever single one happened to be populated.
+		//
+		// The phase commit stages exactly this list
+		// (phaseChangedFilesFromHandoffs, cmd/phase_commit.go), so a path
+		// missing here is finished, verified work left silently uncommitted.
+		// That is what happened downstream on v1.0.75: a builder asked to
+		// correct one task resent a report whose top-level lists AND handoff
+		// both named only the follow-up, its earlier completed work
+		// surviving only in task_receipts, and seven files were dropped from
+		// the commit with no warning.
+		//
+		// This assignment is deliberately unconditional rather than a repair
+		// of the fallback branch above: the reported failure supplied a
+		// NON-empty handoff, so that branch never ran and mending it would
+		// have fixed nothing. Both paths now converge on the same union.
+		handoff.ChangedFiles = codex.AllClaimedFiles(*result.WorkerResult)
 	}
 	if result.Error != nil {
 		handoff.KnownFailures = append(handoff.KnownFailures, result.Error.Error())
