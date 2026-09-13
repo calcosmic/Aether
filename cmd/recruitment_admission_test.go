@@ -4,8 +4,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -869,5 +873,416 @@ func TestRecruitmentManifestAmendmentUnknownSchemaVersion(t *testing.T) {
 	}
 	if !errors.Is(err, errRecruitmentManifestUnknownSchema) {
 		t.Fatalf("expected errRecruitmentManifestUnknownSchema, got: %v", err)
+	}
+}
+
+// Plan 203-06 Task 3: lock the single admission authority so a second gate
+// cannot be added without a test naming it.
+
+// recruitmentAdmissionAuthorityAllowlist is the exact, exhaustive set of
+// functions in cmd/ permitted to return spawnDecisionResult or
+// recruitmentDecisionResult -- the ONE admission chokepoint
+// (spawnCanSpawnDecision, a package-level var), its five declared check
+// helpers, and two functions that return the SAME struct shape for a
+// genuinely different concern (intent-shape validation and adapter choice,
+// neither of which decides whether a spawn or recruitment may proceed).
+// Adding a name here is the explicit, reviewed act TestOneAdmissionAuthority
+// exists to force.
+var recruitmentAdmissionAuthorityAllowlist = map[string]bool{
+	"spawnCanSpawnDecision":            true, // the one chokepoint (package-level var)
+	"spawnTreeBudgetReason":            true,
+	"spawnAncestorCycleReason":         true,
+	"recruitmentParentAuthorityReason": true,
+	"recruitmentPermissionReason":      true,
+	"recruitmentPathReason":            true,
+	"recruitmentCostReason":            true,
+	"recruitmentDuplicateReason":       true,
+	"validateRecruitmentIntent":        true, // intent-shape validation, not spawn admission
+	"chooseRecruitmentAdapter":         true, // adapter choice, not admission
+}
+
+// recruitmentAdmissionAuthorityResultTypes names the two result shapes a
+// second admission authority could plausibly reuse.
+var recruitmentAdmissionAuthorityResultTypes = map[string]bool{
+	"spawnDecisionResult":       true,
+	"recruitmentDecisionResult": true,
+}
+
+// TestOneAdmissionAuthority walks every non-test .go file in cmd/ and fails
+// by name for any function -- a regular declaration, or a package-level var
+// assigned a func literal (the shape spawnCanSpawnDecision itself uses) --
+// that returns spawnDecisionResult or recruitmentDecisionResult and is not
+// on the declared allowlist above.
+func TestOneAdmissionAuthority(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("find repo root: %v", err)
+	}
+	cmdDir := filepath.Join(repoRoot, "cmd")
+	entries, err := os.ReadDir(cmdDir)
+	if err != nil {
+		t.Fatalf("read cmd dir: %v", err)
+	}
+
+	resultTypeMatches := func(fields *ast.FieldList) bool {
+		if fields == nil || len(fields.List) != 1 {
+			return false
+		}
+		ident, ok := fields.List[0].Type.(*ast.Ident)
+		return ok && recruitmentAdmissionAuthorityResultTypes[ident.Name]
+	}
+
+	fset := token.NewFileSet()
+	var violations []string
+	filesInspected := 0
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		path := filepath.Join(cmdDir, name)
+		file, parseErr := parser.ParseFile(fset, path, nil, 0)
+		if parseErr != nil {
+			t.Fatalf("parse %s: %v", path, parseErr)
+		}
+		filesInspected++
+
+		ast.Inspect(file, func(n ast.Node) bool {
+			switch decl := n.(type) {
+			case *ast.FuncDecl:
+				if decl.Recv != nil {
+					return true
+				}
+				if resultTypeMatches(decl.Type.Results) && !recruitmentAdmissionAuthorityAllowlist[decl.Name.Name] {
+					violations = append(violations, fmt.Sprintf(
+						"%s: func %q returns an admission-shaped result and is not on recruitmentAdmissionAuthorityAllowlist",
+						fset.Position(decl.Pos()).String(), decl.Name.Name,
+					))
+				}
+			case *ast.ValueSpec:
+				for i, value := range decl.Values {
+					lit, ok := value.(*ast.FuncLit)
+					if !ok || i >= len(decl.Names) {
+						continue
+					}
+					if resultTypeMatches(lit.Type.Results) && !recruitmentAdmissionAuthorityAllowlist[decl.Names[i].Name] {
+						violations = append(violations, fmt.Sprintf(
+							"%s: var %q is a func literal returning an admission-shaped result and is not on recruitmentAdmissionAuthorityAllowlist",
+							fset.Position(decl.Pos()).String(), decl.Names[i].Name,
+						))
+					}
+				}
+			}
+			return true
+		})
+	}
+	if filesInspected == 0 {
+		t.Fatal("fixture is broken: no non-test .go files found in cmd/")
+	}
+	if len(violations) != 0 {
+		t.Fatalf(
+			"a second admission authority was found -- only spawnCanSpawnDecision and its declared check helpers may return an admission decision:\n%s",
+			strings.Join(violations, "\n"),
+		)
+	}
+}
+
+// recruitmentDispatchSourceFiles is the declared universe
+// TestEveryChildDispatchPassesAdmission's call-graph scan covers: every
+// site in this plan's own recruitment path that can launch a real child
+// process for a recruit. Scoped to these two files (not the whole cmd
+// package) because a package-wide scan would also catch unrelated child
+// processes (git, npm, gh, ...) this plan's admission gate was never meant
+// to govern -- BIO-02's chokepoint is specifically the recruitment path.
+var recruitmentDispatchSourceFiles = []string{"recruitment.go", "recruitment_dispatch.go"}
+
+// recruitmentProcessLaunchSentinel/recruitmentAdmissionSentinel are the two
+// external targets the call graph below detects without expanding further:
+// an actual process launch (exec.Command/exec.CommandContext) and a real
+// admission decision (spawnCanSpawnDecision). The launch sentinel starts
+// with a NUL byte so it can never collide with a real Go identifier.
+const recruitmentProcessLaunchSentinel = "\x00process-launch"
+const recruitmentAdmissionSentinel = "spawnCanSpawnDecision"
+
+// recruitmentBuildCallGraph parses the declared source files and returns a
+// name -> set-of-called-names graph. A top-level func declaration and a
+// top-level var whose initializer contains a call are both nodes -- the
+// latter covers a cobra command declaration like recruitCmd, whose real
+// work lives inside its RunE field's closure; ast.Inspect walks into that
+// closure regardless, so a bare call anywhere in the whole var initializer
+// (including inside a nested func literal) becomes an edge from that var's
+// name. Every bare call (`foo(...)`) becomes an edge to "foo"; every
+// exec.Command/CommandContext selector call becomes an edge to
+// recruitmentProcessLaunchSentinel.
+func recruitmentBuildCallGraph(t *testing.T, repoRoot string) map[string]map[string]bool {
+	t.Helper()
+	graph := map[string]map[string]bool{}
+	fset := token.NewFileSet()
+
+	addEdge := func(from, to string) {
+		if graph[from] == nil {
+			graph[from] = map[string]bool{}
+		}
+		graph[from][to] = true
+	}
+
+	collectCalls := func(node ast.Node, from string) {
+		if node == nil {
+			return
+		}
+		ast.Inspect(node, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			switch fn := call.Fun.(type) {
+			case *ast.Ident:
+				addEdge(from, fn.Name)
+			case *ast.SelectorExpr:
+				if pkgIdent, ok := fn.X.(*ast.Ident); ok && pkgIdent.Name == "exec" &&
+					(fn.Sel.Name == "Command" || fn.Sel.Name == "CommandContext") {
+					addEdge(from, recruitmentProcessLaunchSentinel)
+				}
+			}
+			return true
+		})
+	}
+
+	filesInspected := 0
+	for _, name := range recruitmentDispatchSourceFiles {
+		path := filepath.Join(repoRoot, "cmd", name)
+		file, err := parser.ParseFile(fset, path, nil, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", path, err)
+		}
+		filesInspected++
+
+		ast.Inspect(file, func(n ast.Node) bool {
+			switch decl := n.(type) {
+			case *ast.FuncDecl:
+				if decl.Recv != nil {
+					return true
+				}
+				collectCalls(decl.Body, decl.Name.Name)
+			case *ast.ValueSpec:
+				for i, value := range decl.Values {
+					if i >= len(decl.Names) {
+						continue
+					}
+					collectCalls(value, decl.Names[i].Name)
+				}
+			}
+			return true
+		})
+	}
+	if filesInspected != len(recruitmentDispatchSourceFiles) {
+		t.Fatalf("inspected %d file(s), expected exactly %d -- a shrunk walk would silently narrow this check", filesInspected, len(recruitmentDispatchSourceFiles))
+	}
+	return graph
+}
+
+// recruitmentGraphReaches reports whether target is reachable from from via
+// any chain of edges in graph.
+func recruitmentGraphReaches(graph map[string]map[string]bool, from, target string) bool {
+	visited := map[string]bool{}
+	var walk func(string) bool
+	walk = func(node string) bool {
+		if visited[node] {
+			return false
+		}
+		visited[node] = true
+		for callee := range graph[node] {
+			if callee == target {
+				return true
+			}
+			if walk(callee) {
+				return true
+			}
+		}
+		return false
+	}
+	return walk(from)
+}
+
+// TestEveryChildDispatchPassesAdmission derives, from the real call graph of
+// this plan's own recruitment source files, every ROOT entrypoint (a
+// declared node nothing else in this scan calls -- a cobra command
+// declaration, in practice) and asserts that any root whose call tree
+// reaches a real process launch also reaches spawnCanSpawnDecision
+// somewhere in that same tree. Checking roots rather than every node avoids
+// flagging dispatchRecruitment in isolation: admission happens in its
+// CALLER (recruitCmd), by design, not inside dispatchRecruitment itself.
+func TestEveryChildDispatchPassesAdmission(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("find repo root: %v", err)
+	}
+	graph := recruitmentBuildCallGraph(t, repoRoot)
+
+	called := map[string]bool{}
+	for _, callees := range graph {
+		for callee := range callees {
+			called[callee] = true
+		}
+	}
+
+	var roots []string
+	for node := range graph {
+		if !called[node] {
+			roots = append(roots, node)
+		}
+	}
+	sort.Strings(roots)
+
+	launchingRoots := 0
+	for _, root := range roots {
+		if !recruitmentGraphReaches(graph, root, recruitmentProcessLaunchSentinel) {
+			continue
+		}
+		launchingRoots++
+		if !recruitmentGraphReaches(graph, root, recruitmentAdmissionSentinel) {
+			t.Errorf("%q launches a child process somewhere in its call tree but never reaches spawnCanSpawnDecision first", root)
+		}
+	}
+	if launchingRoots == 0 {
+		t.Fatal("fixture is broken: no root entrypoint in the recruitment dispatch source files reaches a process launch")
+	}
+}
+
+// recruitmentAdmissionReasonEmitters maps each declared reason string
+// (recruitmentAdmissionReasons()) to a fixture that LIVE-reproduces it by
+// calling the real function that emits it, restoring the package-level
+// store afterward. TestEveryAdmissionReasonIsReachable fails by name when a
+// declared reason has no entry here (unreachable) or when an entry's live
+// result does not actually confirm the reason it claims to prove.
+var recruitmentAdmissionReasonEmitters = map[string]func(t *testing.T) bool{
+	"depth": func(t *testing.T) bool {
+		result := spawnCanSpawnDecision(spawnDecisionInput{RequesterDepth: spawnMaxDelegationDepth})
+		return result.Reason == "depth"
+	},
+	"budget": func(t *testing.T) bool {
+		orig := store
+		defer func() { store = orig }()
+		s, tmpDir := newTestStore(t)
+		defer os.RemoveAll(tmpDir)
+		store = s
+		st := agent.NewSpawnTree(store, "spawn-tree.txt")
+		if _, err := st.BeginRun("test-run", time.Time{}); err != nil {
+			t.Fatalf("begin run: %v", err)
+		}
+		recruitmentAdmissionFillBudget(t, st, spawnTreeBudgetMax)
+		result := spawnCanSpawnDecision(spawnDecisionInput{RequesterName: "Y"})
+		return result.Reason == "budget"
+	},
+	"ancestor-cycle": func(t *testing.T) bool {
+		orig := store
+		defer func() { store = orig }()
+		s, tmpDir := newTestStore(t)
+		defer os.RemoveAll(tmpDir)
+		store = s
+		st := agent.NewSpawnTree(store, "spawn-tree.txt")
+		if err := st.RecordSpawn("Queen", "builder", "Z1", "task z", 1); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+		result := spawnCanSpawnDecision(spawnDecisionInput{RequesterName: "Z1", RequesterDepth: 1, DepthIsAuthoritative: true, Caste: "builder", Task: "task z"})
+		return result.Reason == "ancestor-cycle"
+	},
+	recruitmentReasonParent: func(t *testing.T) bool {
+		orig := store
+		defer func() { store = orig }()
+		s, tmpDir := newTestStore(t)
+		defer os.RemoveAll(tmpDir)
+		store = s
+		reason := recruitmentParentAuthorityReason(spawnDecisionInput{RequesterName: "Ghost"})
+		return reason != ""
+	},
+	recruitmentReasonPermission: func(t *testing.T) bool {
+		reason := recruitmentPermissionReason(spawnDecisionInput{Caste: "includer"})
+		return reason != ""
+	},
+	recruitmentReasonPath: func(t *testing.T) bool {
+		reason := recruitmentPathReason(spawnDecisionInput{Workspace: ""})
+		return reason != ""
+	},
+	recruitmentReasonCost: func(t *testing.T) bool {
+		reason := recruitmentCostReason(spawnDecisionInput{CostSlots: 0})
+		return reason != ""
+	},
+	recruitmentReasonDuplicate: func(t *testing.T) bool {
+		orig := store
+		defer func() { store = orig }()
+		store = nil
+		reason := recruitmentDuplicateReason(spawnDecisionInput{RequesterName: "Queen"})
+		return reason != ""
+	},
+	recruitmentReasonUnresolved: func(t *testing.T) bool {
+		orig := store
+		defer func() { store = orig }()
+		s, tmpDir := newTestStore(t)
+		defer os.RemoveAll(tmpDir)
+		store = s
+
+		origStdout, origStderr := stdout, stderr
+		defer func() { stdout, stderr = origStdout, origStderr }()
+		var buf, errBuf bytes.Buffer
+		stdout = &buf
+		stderr = &errBuf
+
+		saveGlobals(t)
+		resetRootCmd(t)
+		store = s
+
+		st := agent.NewSpawnTree(store, "spawn-tree.txt")
+		if err := st.RecordSpawn("Queen", "builder", "A1", "top task", 1); err != nil {
+			t.Fatalf("seed A1: %v", err)
+		}
+		manifestDirPath := filepath.Join(store.BasePath(), filepath.FromSlash(recruitmentManifestPath))
+		if err := os.MkdirAll(manifestDirPath, 0755); err != nil {
+			t.Fatalf("create directory at manifest path: %v", err)
+		}
+
+		rootCmd.SetArgs([]string{
+			"recruit",
+			"--parent", "A1",
+			"--caste", "builder",
+			"--objective", "help with x",
+			"--reason", "stuck on y",
+		})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("recruit command returned an error: %v", err)
+		}
+		env := parseEnvelope(t, buf.String())
+		result, _ := env["result"].(map[string]interface{})
+		reason, _ := result["reason"].(string)
+		return reason == recruitmentReasonUnresolved
+	},
+}
+
+// TestEveryAdmissionReasonIsReachable cross-checks recruitmentAdmissionReasons()
+// against recruitmentAdmissionReasonEmitters in both directions: a declared
+// reason with no emitter (or an emitter that fails to reproduce it live)
+// fails by name, and an emitter registered for a reason
+// recruitmentAdmissionReasons() does not declare also fails by name.
+func TestEveryAdmissionReasonIsReachable(t *testing.T) {
+	declared := recruitmentAdmissionReasons()
+	declaredSet := map[string]bool{}
+	for _, r := range declared {
+		declaredSet[r] = true
+	}
+
+	for _, reason := range declared {
+		emit, ok := recruitmentAdmissionReasonEmitters[reason]
+		if !ok {
+			t.Errorf("declared reason %q has no registered emitter in recruitmentAdmissionReasonEmitters", reason)
+			continue
+		}
+		if !emit(t) {
+			t.Errorf("declared reason %q has a registered emitter, but it did not reproduce that reason live", reason)
+		}
+	}
+	for reason := range recruitmentAdmissionReasonEmitters {
+		if !declaredSet[reason] {
+			t.Errorf("recruitmentAdmissionReasonEmitters has an entry for %q, but recruitmentAdmissionReasons() does not declare it", reason)
+		}
 	}
 }
