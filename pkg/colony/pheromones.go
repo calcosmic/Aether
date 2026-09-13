@@ -44,6 +44,18 @@ type PheromoneSignal struct {
 	// a fabricated category.
 	Provenance  *string `json:"provenance,omitempty"`
 	Quarantined *bool   `json:"quarantined,omitempty"`
+
+	// DeferredUntil and RevokedAt are pointer-backed and omitempty, following
+	// the same Phase 199 rule (BIO-08, plan 203-11): a legacy signal written
+	// before these fields existed has both nil and reads as neither deferred
+	// nor revoked (pheromoneSignalDeferred/pheromoneSignalRevoked in
+	// cmd/pheromone_resolver.go). DeferredUntil holds an RFC3339 timestamp;
+	// the note returns to effect on its own once that time passes -- nothing
+	// clears the field. RevokedAt, once set, is permanent: nothing in this
+	// runtime may clear it back to nil except a fresh, recorded owner action
+	// (cmd/pheromone_influence.go's revokeNote is the only writer).
+	DeferredUntil *string `json:"deferred_until,omitempty"`
+	RevokedAt     *string `json:"revoked_at,omitempty"`
 }
 
 // Write-time provenance categories a stored pheromone signal may declare.

@@ -21,6 +21,8 @@ const pheromoneEffectiveFloor = 0.1
 const (
 	pheromoneExcludedInactive   = "inactive"
 	pheromoneExcludedQuarantine = "quarantined"
+	pheromoneExcludedRevoked    = "revoked"
+	pheromoneExcludedDeferred   = "deferred"
 	pheromoneExcludedExpired    = "expired"
 	pheromoneExcludedBelowFloor = "below-floor"
 	pheromoneExcludedMalformed  = "malformed"
@@ -78,6 +80,20 @@ func resolveEffectivePheromones(pf *colony.PheromoneFile, now time.Time) []resol
 		if pheromoneSignalQuarantined(sig) {
 			resolved = append(resolved, resolvedPheromone{
 				Signal: sig, InEffect: false, ExcludedReason: pheromoneExcludedQuarantine, Provenance: provenance,
+			})
+			continue
+		}
+
+		if pheromoneSignalRevoked(sig) {
+			resolved = append(resolved, resolvedPheromone{
+				Signal: sig, InEffect: false, ExcludedReason: pheromoneExcludedRevoked, Provenance: provenance,
+			})
+			continue
+		}
+
+		if pheromoneSignalDeferred(sig, now) {
+			resolved = append(resolved, resolvedPheromone{
+				Signal: sig, InEffect: false, ExcludedReason: pheromoneExcludedDeferred, Provenance: provenance,
 			})
 			continue
 		}
@@ -173,4 +189,34 @@ func pheromoneSignalProvenance(sig colony.PheromoneSignal) string {
 		return colony.PheromoneProvenanceUnknown
 	}
 	return *sig.Provenance
+}
+
+// pheromoneSignalRevoked reports whether a signal has been permanently taken
+// out of effect by revokeNote (cmd/pheromone_influence.go, BIO-08). A legacy
+// signal with no RevokedAt field (nil) reads as not revoked. Nothing in this
+// runtime ever clears a non-empty RevokedAt back to nil -- revocation is
+// permanent, matching the plan's own "cannot be undone by the runtime"
+// requirement.
+func pheromoneSignalRevoked(sig colony.PheromoneSignal) bool {
+	return sig.RevokedAt != nil && *sig.RevokedAt != ""
+}
+
+// pheromoneSignalDeferred reports whether a signal is currently inside a
+// defer window set by deferNote (cmd/pheromone_influence.go, BIO-08). A note
+// with no DeferredUntil field, an empty one, or one that fails to parse as
+// RFC3339 is never treated as deferred -- an unreadable defer window must
+// not hold a note out of effect forever, matching this file's existing
+// malformed-timestamp discipline (a malformed field excludes toward "not in
+// effect" only through the dedicated malformed check, never toward a
+// silent, indefinite deferral). Once the parsed time has passed, the note
+// returns to effect on its own -- no command needs to run.
+func pheromoneSignalDeferred(sig colony.PheromoneSignal, now time.Time) bool {
+	if sig.DeferredUntil == nil || *sig.DeferredUntil == "" {
+		return false
+	}
+	until, err := time.Parse(time.RFC3339, *sig.DeferredUntil)
+	if err != nil {
+		return false
+	}
+	return until.After(now)
 }
