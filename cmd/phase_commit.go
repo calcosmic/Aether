@@ -48,6 +48,25 @@ type phaseCommitResult struct {
 	Files      int    `json:"files,omitempty"`
 	SkipReason string `json:"skip_reason,omitempty"`
 	Err        string `json:"error,omitempty"`
+	// Unaccounted names every worker-claimed path this commit could NOT
+	// record: the file is absent from the working tree AND untracked, so
+	// git can express neither a change nor a deletion for it. A warning,
+	// never a gate -- the phase has already advanced by the time this runs.
+	//
+	// Before this, such a path was dropped from the commit set in silence,
+	// and silence meant two different things: "everything claimed is saved"
+	// and "something a worker claimed cannot be found at all". The second is
+	// a worker claiming credit for a file it never wrote, which is exactly
+	// the case worth hearing about.
+	//
+	// This is deliberately NOT "claimed paths still dirty after the commit".
+	// That check could only ask about paths already in the claimed set, so
+	// it could never have detected the v1.0.75 downstream failure (files
+	// missing FROM that set) -- it would have been a warning that cannot
+	// fire. The cause there is closed by the union in
+	// buildWorkerHandoffRecord (cmd/codex_dispatch_contract.go); this covers
+	// the different, reachable gap.
+	Unaccounted []string `json:"unaccounted,omitempty"`
 }
 
 // phaseCommitGitRunner is the exec seam: tests swap it to record argv and to
@@ -139,6 +158,7 @@ func commitPhaseAdvance(root string, state colony.ColonyState, phase colony.Phas
 	// record; pathspec commit errors on paths git knows nothing about, so
 	// filter to what the working tree or index can actually express.
 	commitable := make([]string, 0, len(files))
+	var unaccounted []string
 	for _, rel := range files {
 		if _, err := os.Stat(filepath.Join(root, rel)); err == nil {
 			commitable = append(commitable, rel)
@@ -148,8 +168,13 @@ func commitPhaseAdvance(root string, state colony.ColonyState, phase colony.Phas
 		// pathspec commit records the deletion — honest tree state.
 		if _, err := phaseCommitGitRunner(root, "ls-files", "--error-unmatch", "--", rel); err == nil {
 			commitable = append(commitable, rel)
+			continue
 		}
+		// Neither on disk nor tracked: git can say nothing about it. It was
+		// dropped in silence before; it is named now.
+		unaccounted = append(unaccounted, rel)
 	}
+	sort.Strings(unaccounted)
 	if len(commitable) == 0 {
 		return phaseCommitResult{SkipReason: "no recorded file changes exist on disk"}
 	}
@@ -200,7 +225,12 @@ func commitPhaseAdvance(root string, state colony.ColonyState, phase colony.Phas
 	if store != nil {
 		_ = os.Remove(filepath.Join(store.BasePath(), uncommittedChangesMarkerFile))
 	}
-	return phaseCommitResult{Committed: true, SHA: sha, Files: len(commitable)}
+	return phaseCommitResult{
+		Committed:   true,
+		SHA:         sha,
+		Files:       len(commitable),
+		Unaccounted: unaccounted,
+	}
 }
 
 // attachPhaseCommitResult surfaces the outcome on the command result map —
@@ -221,6 +251,12 @@ func attachPhaseCommitResult(result map[string]interface{}, commit phaseCommitRe
 	}
 	if commit.Err != "" {
 		entry["error"] = commit.Err
+	}
+	if len(commit.Unaccounted) > 0 {
+		entry["unaccounted"] = commit.Unaccounted
+		entry["unaccounted_warning"] = fmt.Sprintf(
+			"%d file(s) a worker claimed could not be saved: not present in the project and not known to git. Check whether that work was actually done: %s",
+			len(commit.Unaccounted), strings.Join(commit.Unaccounted, ", "))
 	}
 	result["phase_commit"] = entry
 }
