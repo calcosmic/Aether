@@ -1461,6 +1461,73 @@ true.*
 
 ---
 
+## Biological Runtime (v1.28, Phase 203)
+
+A helper working on a piece of the job can now ask the program for backup,
+instead of only the instructions describing that ability. The program itself
+decides whether the request is granted, through the exact same one gate
+every ordinary helper assignment already goes through (`TestOneAdmissionAuthority`,
+`TestRecruitmentTracerEndToEnd`). The check looks at how deep the chain of
+asks has already gone (a hard cap of two hops, `TestSpawnCanSpawnDeniesPastDepthCap`),
+how many helpers the whole run has already used in total
+(`TestRecruitmentAdmissionCostAllowsWhenWithinRemaining`), whether the new
+helper is even allowed near what it says it needs to touch
+(`TestRecruitmentAdmissionPermissionDeniesReadOnlyCaste`,
+`TestRecruitmentAdmissionPathDeniesOutsideColonyRoot`), and whether someone
+is already doing that exact job
+(`TestRecruitmentAdmissionDuplicateDeniesPendingSameSubtree`).
+
+A "no" never stops the work: the helper carries on and finishes the task
+alone, and the command itself still reports success, not a failure
+(`TestRecruitmentTracerEndToEnd`). The owner never approves a routine backup
+request — the program's own limits are the leash, not an approval prompt.
+What the owner does see, live, in the one window they are already using,
+never a second screen: one line the moment a helper joins
+(`TestInlineRecruitLine`), one line the moment a request is refused
+(`TestInlineRefusalLine`), and — once the run ends — the whole family tree of
+who asked for backup, what each branch cost, and every refusal along the way
+(`TestRecruitmentFamilyTree`, `TestFamilyTreeAndCostBlockAgree`).
+
+The steering notes this program leaves for itself (short reminders like
+"focus here" or "never do this again") now get more trusted the more they
+turn out to actually help, and less trusted — or shelved entirely — the more
+they turn out not to, based on what a note genuinely did afterward, never
+merely on whether a helper saw it
+(`TestNoteStrengthTuningHelpfulNeutralHarmfulMovements`,
+`TestNoteStrengthTuningQuarantinesOnHarmfulThreshold`). A note the owner
+pinned in place is never moved by this automatic tuning, in either direction
+(`TestPinnedNoteIsNeverTuned`).
+
+None of this costs anything on an ordinary run that never asks for backup:
+the check that would decide a request, the file that would record one, and
+the pass that tunes notes afterward all measurably do nothing when there is
+nothing to do (`TestNoRecruitmentPathCostsNothing`, `TestNoNewMandatoryStep`,
+`TestTuningPassIsFreeWithoutCredit`).
+
+**One honest limit, left open rather than hidden.** The depth check above
+trusts a short, fixed list of coordinator names on its own word alone, with
+nothing yet proving that a caller claiming one of those names really is the
+coordinator. This gap predates this phase and is tracked, not silently
+fixed, here (`.planning/WINDOWS.md`).
+
+*For dummies: a helper that gets stuck can now ask the program for backup,
+and the program — never the assistant — decides yes or no, using real
+limits: how deep the chain of asks has gone, how many helpers the whole job
+has already used, whether the new helper is allowed near what it wants, and
+whether someone is already on it. A "no" never stops the work — the helper
+just carries on alone — and either way you see it happen live, right in the
+one window you're already using, plus a full family tree with costs once the
+run finishes. The short reminders the program leaves for itself get more
+trusted the more they genuinely help and less trusted (or set aside) the
+more they don't — unless you pinned one yourself, which nothing else can
+move. And none of this slows down an ordinary run where nobody asks for
+backup — that has been measured, not just promised. One gap is recorded
+rather than hidden: the depth check currently takes a short list of
+coordinator names on trust, with no way yet to prove a caller really is
+who it claims to be.*
+
+---
+
 ## The Core Insight
 
 The system's pieces are now **connected**:
