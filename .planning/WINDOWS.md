@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 10
+open_count: 11
 waived_count: 0
 fixed_count: 5
-total_count: 15
-last_updated: 2026-09-13T00:07:16.488Z
+total_count: 16
+last_updated: 2026-09-13T10:00:01.055Z
 ---
 
 # Broken Windows Ledger
@@ -30,6 +30,7 @@ last_updated: 2026-09-13T00:07:16.488Z
 | 13 | 202.1 | deviation | cmd/watch_live.go | 425 | Pre-existing (unrelated to this plan) TestHumanFacingOutputGoesThroughWriteVisualOutput failure: runColonyLiveRefreshLoop writes directly to stdout/stderr, bypassing writeVisualOutput | open |  | 2026-09-12T17:42:11.287Z |  |
 | 14 | 203 | deviation | pkg/codex/worker.go |  | 203-02 added a one-line exported helper in pkg/codex/worker.go, outside its declared files_modified, so cmd/recruitment_dispatch.go could reuse the existing tested process-group termination logic instead of writing a second copy. Deliberate and documented in 203-02-SUMMARY.md Deviations; the alternative was duplicating kill-the-whole-process-tree logic in new code. | open |  | 2026-09-13T00:07:16.386Z |  |
 | 15 | 203 | deviation | cmd/exchange.go |  | 203-05 edited cmd/exchange.go, cmd/exchange_import_sanitize_test.go, cmd/hook_cmds.go and cmd/signal_housekeeping.go, none of which were in its declared files_modified. cmd/exchange.go was required: the real 'aether import pheromones' path never stamped provenance, so the plan's own quarantine must_have would have been decoration without it. The other three carried the strength-floor constant fix. All documented in 203-05-SUMMARY.md Deviations; the plan's files_modified header was incomplete rather than the executor overreaching. | open |  | 2026-09-13T00:07:16.488Z |  |
+| 16 | 203 | unrun-verify | cmd/testing_main_test.go |  | A full 'go test ./cmd -count=1' run can silently NOT execute a test while still reporting a lane result. Observed 2026-09-13: TestPlatformParityGolden appeared only in lane parallel-046's own 'missing executed tests' accounting line and never ran, so the wave-2 gate reported no regression while 203-02's new 'aether recruit' command had in fact broken the parity golden. The suite already detects and prints this condition; nothing treats it as a failure, so a reader comparing FAIL lines against a known-red list gets a false all-clear. The parity break itself is fixed (22149a3e); this entry is about the accounting, not that test. | open |  | 2026-09-13T10:00:01.055Z |  |
 
 ````json
 [
@@ -211,6 +212,18 @@ last_updated: 2026-09-13T00:07:16.488Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-09-13T00:07:16.488Z",
+    "resolved_at": null
+  },
+  {
+    "id": 16,
+    "kind": "unrun-verify",
+    "phase": "203",
+    "file": "cmd/testing_main_test.go",
+    "line": null,
+    "description": "A full 'go test ./cmd -count=1' run can silently NOT execute a test while still reporting a lane result. Observed 2026-09-13: TestPlatformParityGolden appeared only in lane parallel-046's own 'missing executed tests' accounting line and never ran, so the wave-2 gate reported no regression while 203-02's new 'aether recruit' command had in fact broken the parity golden. The suite already detects and prints this condition; nothing treats it as a failure, so a reader comparing FAIL lines against a known-red list gets a false all-clear. The parity break itself is fixed (22149a3e); this entry is about the accounting, not that test.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-13T10:00:01.055Z",
     "resolved_at": null
   }
 ]
