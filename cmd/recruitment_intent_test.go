@@ -485,3 +485,180 @@ func TestRecruitmentIntentRecordUnwritableStoreRefusesTheCommand(t *testing.T) {
 		}
 	}
 }
+
+// TestRecruitCommandFlags proves 203-03-PLAN.md Task 3's four acceptance
+// criteria: all twelve flags are documented in --help alongside the
+// non-technical carry-on-alone sentence, a refusal's envelope carries the
+// same reason/detail vocabulary spawn-can-spawn already gives, an unlisted
+// --urgency is refused by validation BEFORE the admission gate ever runs,
+// and --cost-slots 0 is refused with reason cost.
+func TestRecruitCommandFlags(t *testing.T) {
+	t.Run("--help lists all twelve flags and the refusal sentence carries a plain carry-on phrase", func(t *testing.T) {
+		saveGlobals(t)
+		resetRootCmd(t)
+		var buf bytes.Buffer
+		rootCmd.SetOut(&buf)
+		rootCmd.SetArgs([]string{"recruit", "--help"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("recruit --help returned an error: %v", err)
+		}
+		output := buf.String()
+		wantFlags := []string{
+			"--parent", "--caste", "--objective", "--reason", "--workspace",
+			"--capability", "--attempt", "--evidence", "--urgency",
+			"--declared-path", "--cost-slots", "--cost-seconds",
+		}
+		for _, flag := range wantFlags {
+			if !strings.Contains(output, flag) {
+				t.Fatalf("--help output does not list flag %q:\n%s", flag, output)
+			}
+		}
+		if !strings.Contains(output, "carry on") && !strings.Contains(output, "finish the work") {
+			t.Fatalf("--help output does not carry the plain-English refusal sentence: %s", output)
+		}
+	})
+
+	t.Run("a refusal's JSON envelope carries reason and detail keys matching spawn-can-spawn's vocabulary", func(t *testing.T) {
+		saveGlobals(t)
+		resetRootCmd(t)
+		s, tmpDir := newTestStore(t)
+		defer os.RemoveAll(tmpDir)
+		store = s
+
+		var buf, errBuf bytes.Buffer
+		stdout = &buf
+		stderr = &errBuf
+
+		st := agent.NewSpawnTree(store, "spawn-tree.txt")
+		if err := st.RecordSpawn("Queen", "builder", "A1", "do a thing", 1); err != nil {
+			t.Fatalf("seed parent spawn: %v", err)
+		}
+		// A2 is recorded at depth 2 -- a helper spawned from it would be
+		// depth 3, past spawnMaxDelegationDepth (2), so validation passes
+		// and the refusal comes from the admission gate instead.
+		if err := st.RecordSpawn("A1", "builder", "A2", "do a deeper thing", 2); err != nil {
+			t.Fatalf("seed depth-cap parent: %v", err)
+		}
+
+		t.Setenv("AETHER_RECRUIT_BINARY", "aether-recruit-must-not-be-invoked-"+t.Name())
+
+		rootCmd.SetArgs([]string{
+			"recruit",
+			"--parent", "A2",
+			"--caste", "builder",
+			"--objective", "help deeper",
+			"--reason", "stuck",
+		})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("recruit command returned an error: %v", err)
+		}
+		env := parseEnvelope(t, buf.String())
+		result, _ := env["result"].(map[string]interface{})
+		if result == nil {
+			t.Fatalf("expected a result object in output: %s", buf.String())
+		}
+		if _, ok := result["reason"]; !ok {
+			t.Fatalf("expected a reason key in the refusal envelope: %s", buf.String())
+		}
+		if _, ok := result["detail"]; !ok {
+			t.Fatalf("expected a detail key in the refusal envelope: %s", buf.String())
+		}
+	})
+
+	t.Run("--urgency with an unlisted value is refused with reason urgency before any admission decision", func(t *testing.T) {
+		saveGlobals(t)
+		resetRootCmd(t)
+		s, tmpDir := newTestStore(t)
+		defer os.RemoveAll(tmpDir)
+		store = s
+
+		var buf, errBuf bytes.Buffer
+		stdout = &buf
+		stderr = &errBuf
+
+		st := agent.NewSpawnTree(store, "spawn-tree.txt")
+		if err := st.RecordSpawn("Queen", "builder", "A1", "do a thing", 1); err != nil {
+			t.Fatalf("seed parent spawn: %v", err)
+		}
+
+		// This binary must NEVER be invoked -- reaching dispatch would prove
+		// the admission gate ran despite the invalid urgency, when
+		// validation should have refused first.
+		t.Setenv("AETHER_RECRUIT_BINARY", "aether-recruit-must-not-be-invoked-"+t.Name())
+
+		rootCmd.SetArgs([]string{
+			"recruit",
+			"--parent", "A1",
+			"--caste", "builder",
+			"--objective", "help with x",
+			"--reason", "stuck on y",
+			"--urgency", "immediate",
+		})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("recruit command returned an error: %v", err)
+		}
+		env := parseEnvelope(t, buf.String())
+		result, _ := env["result"].(map[string]interface{})
+		if result == nil {
+			t.Fatalf("expected a result object in output: %s", buf.String())
+		}
+		if admitted, _ := result["admitted"].(bool); admitted {
+			t.Fatalf("expected admitted=false for an unlisted urgency: %s", buf.String())
+		}
+		if reason, _ := result["reason"].(string); reason != recruitmentReasonUrgency {
+			t.Fatalf("expected reason class %q, got %q: %s", recruitmentReasonUrgency, reason, buf.String())
+		}
+
+		entries, err := st.Parse()
+		if err != nil {
+			t.Fatalf("parse spawn tree: %v", err)
+		}
+		for _, e := range entries {
+			if e.AgentName != "A1" {
+				t.Fatalf("expected no spawn to be recorded when urgency validation refuses first, found %q", e.AgentName)
+			}
+		}
+	})
+
+	t.Run("--cost-slots 0 is refused with reason cost", func(t *testing.T) {
+		saveGlobals(t)
+		resetRootCmd(t)
+		s, tmpDir := newTestStore(t)
+		defer os.RemoveAll(tmpDir)
+		store = s
+
+		var buf, errBuf bytes.Buffer
+		stdout = &buf
+		stderr = &errBuf
+
+		st := agent.NewSpawnTree(store, "spawn-tree.txt")
+		if err := st.RecordSpawn("Queen", "builder", "A1", "do a thing", 1); err != nil {
+			t.Fatalf("seed parent spawn: %v", err)
+		}
+
+		t.Setenv("AETHER_RECRUIT_BINARY", "aether-recruit-must-not-be-invoked-"+t.Name())
+
+		rootCmd.SetArgs([]string{
+			"recruit",
+			"--parent", "A1",
+			"--caste", "builder",
+			"--objective", "help with x",
+			"--reason", "stuck on y",
+			"--cost-slots", "0",
+		})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("recruit command returned an error: %v", err)
+		}
+		env := parseEnvelope(t, buf.String())
+		result, _ := env["result"].(map[string]interface{})
+		if result == nil {
+			t.Fatalf("expected a result object in output: %s", buf.String())
+		}
+		if admitted, _ := result["admitted"].(bool); admitted {
+			t.Fatalf("expected admitted=false for cost-slots=0: %s", buf.String())
+		}
+		if reason, _ := result["reason"].(string); reason != recruitmentReasonCost {
+			t.Fatalf("expected reason class %q, got %q: %s", recruitmentReasonCost, reason, buf.String())
+		}
+	})
+}

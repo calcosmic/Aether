@@ -15,13 +15,15 @@ import (
 // only Bash can carry a recruitment intent from a real public command
 // through Go's existing admission chokepoint to a real dispatched child and
 // back. 203-02-PLAN.md proved the minimal end-to-end path; 203-03-PLAN.md
-// Task 2 adds durable, decision-before-any-outcome recording -- the
-// remaining BIO-01 fields (capability, evidence, urgency, scope, cost) gain
-// their own CLI flags in Task 3.
+// grows the intent to BIO-01's full field set, adds a by-name validator, and
+// records every intent durably before any decision is taken.
 var recruitCmd = &cobra.Command{
 	Use:   "recruit",
 	Short: "Ask the program to admit a helper for the current task",
-	Args:  cobra.NoArgs,
+	Long: "Ask the program to admit a helper for the current task. " +
+		"A refusal here is not an error -- it means the program's own limits " +
+		"denied the request, and the caller should carry on and finish the work alone.",
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if store == nil {
 			outputErrorMessage("no store initialized")
@@ -52,16 +54,42 @@ var recruitCmd = &cobra.Command{
 			workspace = repoRootFromStore(store)
 		}
 
+		capability, _ := cmd.Flags().GetString("capability")
+		parentAttemptID, _ := cmd.Flags().GetString("attempt")
+		evidence, _ := cmd.Flags().GetStringArray("evidence")
+		urgency, _ := cmd.Flags().GetString("urgency")
+		declaredPaths, _ := cmd.Flags().GetStringArray("declared-path")
+		costSlots, _ := cmd.Flags().GetInt("cost-slots")
+		costSeconds, _ := cmd.Flags().GetInt("cost-seconds")
+		if costSeconds <= 0 {
+			// BIO-01's own cost-seconds default: the same value
+			// resolvedRecruitmentTimeout (cmd/recruitment_dispatch.go)
+			// yields, so an unset --cost-seconds never disagrees with the
+			// timeout the child actually runs under.
+			costSeconds = int(resolvedRecruitmentTimeout().Seconds())
+		}
+
 		// Resolve the parent's authoritative depth exactly the way
 		// spawnCanSpawnCmd already does (cmd/spawn.go): a name that resolves
-		// to a recorded spawn-tree entry is authoritative; an unresolved
-		// name falls back to depth 0, not authoritative.
+		// to a recorded spawn-tree entry is authoritative; a coordinator
+		// sentinel (spawnParentIsRoot) is authoritative at depth 0 with no
+		// spawn-tree entry of its own; anything else is not authoritative,
+		// and validateRecruitmentIntent refuses that case rather than
+		// trusting a self-declared depth of 0.
 		st := agent.NewSpawnTree(store, "spawn-tree.txt")
 		depth := 0
 		authoritative := false
 		if entry := latestSpawnEntryByName(st, parent); entry != nil {
 			depth = entry.Depth
 			authoritative = true
+		} else if spawnParentIsRoot(parent) {
+			depth = 0
+			authoritative = true
+		}
+
+		parentRunID := ""
+		if run, ok, err := st.CurrentRun(); err == nil && ok {
+			parentRunID = run.ID
 		}
 
 		attemptID := fmt.Sprintf("recruit_%d", time.Now().UTC().UnixNano())
@@ -77,14 +105,16 @@ var recruitCmd = &cobra.Command{
 			Reason:               reason,
 			Workspace:            workspace,
 
-			IntentID: attemptID,
-			// Task 3 exposes these on flags; until then, the same defaults
-			// Task 3 will pass explicitly keep this command fully
-			// functional end to end.
-			Permission:  codex.PermissionProfileForCaste(caste),
-			Urgency:     recruitmentUrgencyRoutine,
-			CostSlots:   1,
-			CostSeconds: int(resolvedRecruitmentTimeout().Seconds()),
+			IntentID:        attemptID,
+			ParentAttemptID: parentAttemptID,
+			ParentRunID:     parentRunID,
+			Capability:      capability,
+			Evidence:        evidence,
+			Permission:      codex.PermissionProfileForCaste(caste),
+			Urgency:         urgency,
+			DeclaredPaths:   declaredPaths,
+			CostSlots:       costSlots,
+			CostSeconds:     costSeconds,
 		}
 
 		// must_haves: every field BIO-01 names is refused by name when
@@ -255,6 +285,13 @@ func init() {
 	recruitCmd.Flags().String("objective", "", "Bounded objective for the helper (required)")
 	recruitCmd.Flags().String("reason", "", "Why help is needed (required)")
 	recruitCmd.Flags().String("workspace", "", "Workspace lease for the child (default: colony root)")
+	recruitCmd.Flags().String("capability", "", "The specific ability needed from the requested caste (optional)")
+	recruitCmd.Flags().String("attempt", "", "The parent's own recorded attempt ID, if any (optional)")
+	recruitCmd.Flags().StringArray("evidence", nil, "An identifier naming recorded lifecycle evidence supporting this request (repeatable)")
+	recruitCmd.Flags().String("urgency", recruitmentUrgencyRoutine, "How urgent this request is: routine or blocking")
+	recruitCmd.Flags().StringArray("declared-path", nil, "A path this recruitment declares it will touch (repeatable)")
+	recruitCmd.Flags().Int("cost-slots", 1, "Helper slots this recruitment counts against the whole-run budget")
+	recruitCmd.Flags().Int("cost-seconds", 0, "Wall-clock seconds this recruitment is allowed (default: the dispatch timeout)")
 
 	rootCmd.AddCommand(recruitCmd)
 }
