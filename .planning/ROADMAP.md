@@ -572,7 +572,7 @@ Plans:
 4. The terminal result returns exactly once, survives interruption/replay, reaches an acknowledged parent or named follow-on as a scoped packet, and changes a recorded downstream decision.
 5. Status, watch, recovery, cost, and depth cover the whole governed subtree, while evidence-backed pheromone proposals expose full action history and later outcomes govern their strengthening, weakening, or quarantine.
 
-**Plans:** 3/15 plans executed
+**Plans:** 7/15 plans executed
 
 Plans:
 **Wave 1**
@@ -585,15 +585,15 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 203-03-PLAN.md — The full typed recruitment intent, validated, sanitised and durably recorded
-- [ ] 203-04-PLAN.md — A bounded, isolated, session-cached nesting probe and a named dispatch adapter
+- [x] 203-03-PLAN.md — The full typed recruitment intent, validated, sanitised and durably recorded
+- [x] 203-04-PLAN.md — A bounded, isolated, session-cached nesting probe and a named dispatch adapter
 - [x] 203-05-PLAN.md — One canonical note resolver, recorded provenance, and quarantine for imports
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
 - [ ] 203-06-PLAN.md — Atomic admission: parent authority, permission, path, cost and duplicate on the one chokepoint
-- [ ] 203-07-PLAN.md — The durable child result and its five named recovery classes
-- [ ] 203-08-PLAN.md — One tick-to-approve surface for suggested notes and quarantined imports
+- [x] 203-07-PLAN.md — The durable child result and its five named recovery classes
+- [x] 203-08-PLAN.md — One tick-to-approve surface for suggested notes and quarantined imports
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
