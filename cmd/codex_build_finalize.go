@@ -2381,6 +2381,41 @@ func persistExternalBuildHandoffs(root string, phaseNum int, dispatches []codexB
 		if err != nil {
 			return err
 		}
+		// Carry the submitted task receipts onto the runtime result.
+		//
+		// Without this the wrapper lane silently loses them here: the direct
+		// lane copies receipts across (cmd/internal_worker_adapter.go,
+		// cmd/build_worker_run.go), this lane did not, so every receipt-only
+		// file was already gone by the time codex.AllClaimedFiles ran in
+		// buildWorkerHandoffRecord. The union fix for the v1.0.75 downstream
+		// file-loss report was therefore live on the direct path and inert on
+		// the wrapper path -- which is the path that report came from.
+		//
+		// Receipt paths go through the SAME containment validation as the
+		// top-level lists. They are about to be staged by the phase commit,
+		// so an unvalidated receipt path would be a way to name a file
+		// outside the repository root.
+		receipts := make([]codex.TaskReceipt, 0, len(result.TaskReceipts))
+		for ri, receipt := range result.TaskReceipts {
+			label := fmt.Sprintf("worker %s task_receipts[%d]", resultName, ri)
+			receiptCreated, err := validateAndNormalizeClaimPathsToRoot(root, label+" files_created", receipt.FilesCreated)
+			if err != nil {
+				return err
+			}
+			receiptModified, err := validateAndNormalizeClaimPathsToRoot(root, label+" files_modified", receipt.FilesModified)
+			if err != nil {
+				return err
+			}
+			receiptTests, err := validateAndNormalizeClaimPathsToRoot(root, label+" tests_written", receipt.TestsWritten)
+			if err != nil {
+				return err
+			}
+			receipt.FilesCreated = receiptCreated
+			receipt.FilesModified = receiptModified
+			receipt.TestsWritten = receiptTests
+			receipt.Handoff = codex.NormalizeWorkerHandoff(root, receipt.Handoff)
+			receipts = append(receipts, receipt)
+		}
 		workerResult := &codex.WorkerResult{
 			WorkerName:    dispatch.Name,
 			Caste:         dispatch.Caste,
@@ -2390,6 +2425,7 @@ func persistExternalBuildHandoffs(root string, phaseNum int, dispatches []codexB
 			FilesCreated:  filesCreated,
 			FilesModified: filesModified,
 			TestsWritten:  testsWritten,
+			TaskReceipts:  receipts,
 			Blockers:      result.Blockers,
 			Handoff:       codex.NormalizeWorkerHandoff(root, result.Handoff),
 		}

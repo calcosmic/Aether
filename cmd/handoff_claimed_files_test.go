@@ -233,3 +233,62 @@ func TestAntipatternGateReportsEverySecretInAFile(t *testing.T) {
 		}
 	}
 }
+
+// TestWrapperLaneCarriesReceiptFilesIntoTheHandoff proves the receipt-only
+// files survive on the WRAPPER lane -- the path build-completion-stage and
+// build-finalize take, and the path the v1.0.75 downstream report came from.
+//
+// This test exists because the first fix was live on the wrong lane. The
+// direct lane copies task receipts onto the runtime worker result
+// (cmd/internal_worker_adapter.go, cmd/build_worker_run.go);
+// persistExternalBuildHandoffs did not, so codex.AllClaimedFiles had no
+// receipts to union here and the union fix was inert on exactly the path that
+// lost the files. CLAUDE.md's rule is explicit: when a guarantee has more than
+// one lane, both get proved, because one that holds only on the path nobody
+// uses is worth nothing.
+func TestWrapperLaneCarriesReceiptFilesIntoTheHandoff(t *testing.T) {
+	saveGlobals(t)
+	root := initPhaseCommitRepo(t)
+
+	// Claim validation requires the paths to exist inside the repository --
+	// correctly, since the phase commit is about to stage them. Create every
+	// claimed path, top-level and receipt-only alike.
+	for _, rel := range boltStyleAllPaths() {
+		full := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
+			t.Fatalf("mkdir for %s: %v", rel, err)
+		}
+		if err := os.WriteFile(full, []byte("// worker output\n"), 0644); err != nil {
+			t.Fatalf("write %s: %v", rel, err)
+		}
+	}
+
+	bolt := boltStyleWorkerResult()
+	external := codexExternalBuildWorkerResult{
+		Name:          "Bolt-68",
+		Caste:         "builder",
+		Status:        "completed",
+		Summary:       "resent after correction",
+		FilesModified: append([]string{}, bolt.FilesModified...),
+		TaskReceipts:  append([]codex.TaskReceipt{}, bolt.TaskReceipts...),
+		Handoff:       bolt.Handoff,
+	}
+	dispatches := []codexBuildDispatch{{Name: "Bolt-68", Caste: "builder", Status: "completed"}}
+
+	if err := persistExternalBuildHandoffs(root, 2, dispatches, []codexExternalBuildWorkerResult{external}); err != nil {
+		t.Fatalf("persist external handoffs: %v", err)
+	}
+
+	// Assert on what the phase commit actually reads, not on an intermediate.
+	committed := phaseChangedFilesFromHandoffs(2)
+	have := make(map[string]bool, len(committed))
+	for _, p := range committed {
+		have[p] = true
+	}
+	for _, want := range boltStyleAllPaths() {
+		if !have[want] {
+			t.Fatalf("wrapper lane dropped claimed file %q before the phase commit could see it; got %d paths: %v",
+				want, len(committed), committed)
+		}
+	}
+}
