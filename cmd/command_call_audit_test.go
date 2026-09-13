@@ -1044,6 +1044,14 @@ var knownEnrichmentSubcommands = map[string]bool{
 	"help":        true,
 	"maintenance": true,
 	"abandon":     true,
+	// recruit (Phase 203, plan 203-15): the worker-facing "ask the program
+	// for a helper" command documented in .aether/workers.md. Its own
+	// contract (D-03) is explicit that a refused OR failed recruitment
+	// never stops the caller's work -- the worker carries on and finishes
+	// the task alone either way, and no verification result, security
+	// scan, or gate outcome depends on a recruitment succeeding. Enrichment,
+	// not a gate.
+	"recruit": true,
 	// spend (Phase 196): a read-only per-worker token view. It renders the
 	// ledger and changes nothing (TestSpendDoesNotMutate). If it cannot run,
 	// the owner loses a cost breakdown -- no verification result, security
