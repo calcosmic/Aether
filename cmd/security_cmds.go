@@ -138,23 +138,49 @@ func scanFileForAntipatterns(filePath string) (criticals []AntipatternFinding, w
 	// Keyword may sit anywhere in the variable name: the old pattern
 	// required it immediately before "=", so `aws_secret_access_key = "…"`
 	// — the most common real-world leak — scanned clean.
+	// EVERY hit in the file is reported, not just the first.
+	//
+	// This loop used to `break` after one hit per file. Because the continue
+	// gate re-runs the scan each time, fixing the flagged line only revealed
+	// the next one -- a downstream file with 22 lookalike values needed 22
+	// sequential runs of `aether continue` to clear. Line numbers are the
+	// whole value of this finding, so each hit is its own entry rather than
+	// one aggregate count in the style of the TODO check below.
+	//
+	// Bounded so a pathological file cannot flood the gate: beyond the cap
+	// the remainder is reported as one honest count rather than silently
+	// dropped, which is the mistake the break made in the first place.
+	const maxSecretFindingsPerFile = 50
 	secretRe := regexp.MustCompile(`(?i)[a-z0-9_-]*(api_?key|secret|password|token|access_key)[a-z0-9_-]*\s*[:=]\s*['"][^'"]+['"]`)
+	secretHits := 0
 	for i, line := range lines {
-		if secretRe.MatchString(line) {
-			lowerLine := strings.ToLower(line)
-			if !strings.Contains(lowerLine, "example") &&
-				!strings.Contains(lowerLine, "test") &&
-				!strings.Contains(lowerLine, "mock") &&
-				!strings.Contains(lowerLine, "fake") {
-				criticals = append(criticals, AntipatternFinding{
-					Pattern: "exposed-secret",
-					File:    filePath,
-					Line:    i + 1,
-					Message: "Potential hardcoded secret or credential",
-				})
-				break
-			}
+		if !secretRe.MatchString(line) {
+			continue
 		}
+		lowerLine := strings.ToLower(line)
+		if strings.Contains(lowerLine, "example") ||
+			strings.Contains(lowerLine, "test") ||
+			strings.Contains(lowerLine, "mock") ||
+			strings.Contains(lowerLine, "fake") {
+			continue
+		}
+		secretHits++
+		if secretHits <= maxSecretFindingsPerFile {
+			criticals = append(criticals, AntipatternFinding{
+				Pattern: "exposed-secret",
+				File:    filePath,
+				Line:    i + 1,
+				Message: "Potential hardcoded secret or credential",
+			})
+		}
+	}
+	if secretHits > maxSecretFindingsPerFile {
+		criticals = append(criticals, AntipatternFinding{
+			Pattern: "exposed-secret",
+			File:    filePath,
+			Count:   secretHits - maxSecretFindingsPerFile,
+			Message: fmt.Sprintf("%d further potential secrets in this file beyond the first %d listed above", secretHits-maxSecretFindingsPerFile, maxSecretFindingsPerFile),
+		})
 	}
 
 	// TODO/FIXME check (warning)
