@@ -346,6 +346,7 @@
     "name": "build",
     "short_description": "Dispatch a real Codex build packet with worker briefs, claims, and spawn tracking",
     "flags": [
+      "boundary-why",
       "caste-reason",
       "caste-why",
       "castes",
@@ -363,6 +364,7 @@
       "synthetic",
       "task",
       "verbose",
+      "verification-boundary",
       "verification-depth",
       "worker",
       "worker-timeout"
@@ -2957,6 +2959,7 @@
     "flags": [
       "filter",
       "json",
+      "kind",
       "limit"
     ],
     "parent_command": "",
@@ -5148,6 +5151,7 @@
       "acceptance-token",
       "base-plan-revision",
       "candidate",
+      "candidate-id",
       "depth",
       "details",
       "force",
@@ -5813,6 +5817,29 @@
       "v5.4.0": false
     },
     "stability_score": 10
+  },
+  {
+    "name": "recruit",
+    "short_description": "Ask the program to admit a helper for the current task",
+    "flags": [
+      "attempt",
+      "capability",
+      "caste",
+      "child",
+      "cost-seconds",
+      "cost-slots",
+      "declared-path",
+      "evidence",
+      "objective",
+      "parent",
+      "reason",
+      "status",
+      "urgency",
+      "workspace"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
   },
   {
     "name": "redirect",
@@ -7685,12 +7712,13 @@
   },
   {
     "name": "suggest-approve",
-    "short_description": "Review and approve pheromone suggestions from suggest-analyze",
+    "short_description": "Review, edit, and approve pheromone suggestions and quarantined imports",
     "flags": [
       "approve",
       "dismiss",
       "dismiss-all",
-      "dry-run"
+      "dry-run",
+      "edit"
     ],
     "parent_command": "",
     "has_subcommands": false,
@@ -8245,59 +8273,6 @@
     "short_description": "Summarize trace entries for a run",
     "flags": [
       "run-id"
-    ],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
-    "name": "trophallaxis-diagnose",
-    "short_description": "Analyze error and suggest retry strategy",
-    "flags": [
-      "error"
-    ],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
-    "name": "trophallaxis-retry",
-    "short_description": "Record retry attempt with backoff info",
-    "flags": [
-      "attempt",
-      "command"
     ],
     "parent_command": "",
     "has_subcommands": false,
@@ -8929,7 +8904,7 @@
   },
   {
     "name": "watch",
-    "short_description": "Show the honest idle watch fallback",
+    "short_description": "Show the live colony cockpit, a replay of the most recent episode, or the honest idle fallback",
     "flags": [
       "interval",
       "once"

@@ -1135,16 +1135,6 @@
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether trophallaxis-diagnose",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether trophallaxis-retry",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
     "name": "aether trust-score-compute",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
