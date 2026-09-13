@@ -4715,6 +4715,35 @@ func composeBuildManifestBrief(root string, phase colony.Phase, dispatch codexBu
 		}
 	}
 
+	// Every dispatched worker is told, in its own brief, how to ask for help.
+	//
+	// This is the wiring that makes `aether recruit` reachable. Phase 203
+	// built the whole mechanism across five plans and nothing invoked it:
+	// TestNoRegisteredSubcommandIsUnreferenced reported it as an orphan for
+	// four waves, correctly. Documenting it in .aether/workers.md does not
+	// fix that -- no agent definition instructs a worker to read that file
+	// and no runtime code loads it into a prompt, so a command named there is
+	// the "a doc mention is not an execution" case the reachability rules
+	// (D-02/D-06) already exclude playbooks for.
+	//
+	// A brief section IS execution: this text lands in the prompt of every
+	// worker the program dispatches. Proven by
+	// TestEveryDispatchedWorkerIsToldHowToAskForHelp, which asserts on the
+	// composed brief rather than on this source line.
+	b.WriteString(renderRecruitmentInvitation())
+
+	return b.String()
+}
+
+// renderRecruitmentInvitation is the one place a worker is told it may ask for
+// help, and how. Kept as its own function so the brief composer has a single
+// seam to test and so no second, drifting copy of the instruction appears.
+func renderRecruitmentInvitation() string {
+	var b strings.Builder
+	b.WriteString("\n## Asking For Help\n\n")
+	b.WriteString("If this task needs a capability you do not have, or is too large to finish alone, you may ask the program for a helper instead of guessing or giving up. Run:\n\n")
+	b.WriteString("    aether recruit --parent \"<your worker name>\" --caste \"<the kind of helper you need>\" --objective \"<what it should do>\" --reason \"<why you need it>\"\n\n")
+	b.WriteString("The program decides. A refusal is a normal answer, not an error: it exits cleanly, tells you which limit was reached, and you carry on and finish the work alone. Do not retry a refusal, and do not try to start a helper any other way.\n")
 	return b.String()
 }
 
