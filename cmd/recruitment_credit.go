@@ -264,6 +264,18 @@ func recordRecruitmentCredit(contributionID string, kind recruitmentContribution
 	if updateErr != nil && !errors.Is(updateErr, errRecruitmentCreditNoChange) {
 		return recruitmentCreditRecord{}, false, updateErr
 	}
+	// 203-14 (D-08, first half): a NOTE contribution that genuinely changed
+	// a decision -- never a replay of one already recorded -- prints one
+	// inline line at the moment it bites (cmd/codex_visuals.go). This is
+	// the ONE function that writes credit/records.json (see this
+	// function's own doc comment above), so wiring the inline line here
+	// covers every caller without a second call site (203-14-SUMMARY.md
+	// Deviations: cmd/recruitment_credit.go is outside 203-14's declared
+	// files_modified).
+	isNewRecord := updateErr == nil
+	if isNewRecord && kind == recruitmentContributionNote && strings.TrimSpace(result.ChangedDecisionID) != "" {
+		emitInlineDecisionChangedLine(result.ContributionID, result.ChangedDecisionID, string(result.Outcome))
+	}
 	return result, true, nil
 }
 

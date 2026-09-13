@@ -1141,6 +1141,10 @@ func renderDashboard(state colony.ColonyState, s *storage.Store, result map[stri
 		b.WriteString("\nRecent Outcomes\n")
 		renderRecentWorkerOutcomes(&b, spawnSummary.RecentOutcomeEntries)
 	}
+	if subtreeSection := renderGovernedSubtreeStatusSection(state); subtreeSection != "" {
+		b.WriteString("\n")
+		b.WriteString(subtreeSection)
+	}
 	if _, attempt, ok := loadRelevantBuildAttempt(state); ok {
 		b.WriteString("\nBuild Attempt\n")
 		b.WriteString(renderBuildAttemptStatus(attempt))

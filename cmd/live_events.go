@@ -289,6 +289,14 @@ func emitColonyLiveRecruitAdmitted(intent recruitmentIntent, childName string) {
 		Reason:         intent.Reason,
 		Status:         "admitted",
 	})
+	// 203-14 (D-04): one inline line in the working session, at the SAME
+	// moment the live event is published -- this is the ONE funnel both the
+	// native `aether recruit` lane (cmd/recruitment.go) and the Go in-repo
+	// build lane (cmd/recruitment_lane.go) already call, so wiring the
+	// inline line here covers both lanes without adding a second call site
+	// to either file (both outside 203-14's declared files_modified; see
+	// 203-14-SUMMARY.md Deviations).
+	emitInlineRecruitLine(intent.Caste, childName, intent.Reason, recruitmentInlineCostFigure(childName))
 }
 
 // emitColonyLiveRecruitRefused records one refused recruitment attempt
@@ -316,6 +324,9 @@ func emitColonyLiveRecruitRefused(intent recruitmentIntent, reasonClass, detail 
 		Reason:         reason,
 		Status:         "refused",
 	})
+	// 203-14 (D-03/D-06): one inline line the moment the refusal happens --
+	// same single-funnel rationale as emitColonyLiveRecruitAdmitted above.
+	emitInlineRefusalLine(intent.Caste, reasonClass, detail)
 }
 
 // currentLiveRecruitmentEpisode resolves which already-open episode (a

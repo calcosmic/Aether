@@ -303,12 +303,25 @@ func renderLiveWatchVisual(snapshot colonyLiveSnapshot) string {
 	} else {
 		for _, w := range snapshot.Workers {
 			fmt.Fprintf(&b, "%s (%s) -- wave %d -- %s\n", casteIdentity(w.Caste), w.WorkerName, w.Wave, emptyFallback(w.Status, "active"))
+			if w.Reason != "" {
+				fmt.Fprintf(&b, "  reason: %s\n", w.Reason)
+			}
 			if w.Question != "" {
 				fmt.Fprintf(&b, "  question: %s\n", w.Question)
 			}
 			for _, finding := range w.Findings {
 				fmt.Fprintf(&b, "  finding: %s\n", finding)
 			}
+		}
+	}
+
+	// 203-14 (D-06): a refusal never blocks or pauses the run, but the owner
+	// still sees it happen here -- the same replayed snapshot every other
+	// live fact rides.
+	if len(snapshot.Refusals) > 0 {
+		b.WriteString("\nRefusals:\n")
+		for _, refusal := range snapshot.Refusals {
+			fmt.Fprintf(&b, "  %s recruitment refused (%s) -- the worker carried on alone\n", casteLabel(refusal.Caste), emptyFallback(refusal.Reason, "refused"))
 		}
 	}
 

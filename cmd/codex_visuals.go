@@ -215,6 +215,15 @@ var casteLabelMap = map[string]string{
 //   - history:     Classic reused 📜 for both `history` and `council`
 //     commands (commandEmojiMap); reused here for the same
 //     "past events" concept.
+//   - family:      no Classic ancestor (recruitment is Phase 203). 🧬 reads
+//     as "lineage" for a governed-subtree/family-tree row --
+//     distinct from `task`'s plain ant, which is one unit of
+//     colony work rather than a recruiting relationship.
+//   - refusal:     no Classic ancestor. 🙅 (a person gesturing "no") reads
+//     as "this was declined" for a recruitment refusal line --
+//     distinct from `blocked`'s ⛔, which names a stalled state
+//     rather than an ordinary, expected refusal (D-03: a refusal
+//     is never a failure).
 var voiceGlyphMap = map[string]string{
 	"goal":        "👑",
 	"phase":       "📍",
@@ -246,6 +255,8 @@ var voiceGlyphMap = map[string]string{
 	"archive":     "⚰️",
 	"memory":      "📖",
 	"history":     "📜",
+	"family":      "🧬",
+	"refusal":     "🙅",
 }
 
 // voiceGlyph resolves a semantic line-type to its glyph, following
@@ -536,6 +547,76 @@ func emitVisualLine(line string) {
 		return
 	}
 	writeVisualOutput(stdout, line+"\n")
+}
+
+// --- Inline recruitment lines (203-14, D-04/D-06/D-08) ---
+//
+// A recruit joining, a recruitment refused, and a note that changed a
+// decision mid-run each print exactly one line through emitVisualLine --
+// the SAME inline funnel worker start/finish lines already print through
+// (cmd/codex_build_progress.go's emitCodexDispatchWorkerStarted/Finished),
+// never a separate watch process (the owner's own standing instruction:
+// "never render colony liveness in a second terminal window"). Every line
+// reuses casteIdentity/casteLabel so a recruit looks like every other
+// worker in the colony's own voice, and the cost figure always comes from
+// the spend ledger authority (cmd/recruitment_subtree.go's
+// recruitmentInlineCostFigure), never the event payload.
+
+// emitInlineRecruitLine prints one line naming the caste, the deterministic
+// worker name, the stated reason and the run cost so far, at the moment a
+// recruitment is admitted.
+func emitInlineRecruitLine(caste, workerName, reason, costFigure string) {
+	emitVisualLine(renderInlineRecruitLine(caste, workerName, reason, costFigure))
+}
+
+func renderInlineRecruitLine(caste, workerName, reason, costFigure string) string {
+	var b strings.Builder
+	b.WriteString("+ ")
+	b.WriteString(casteIdentity(caste))
+	b.WriteString(" ")
+	b.WriteString(workerName)
+	b.WriteString(" joined")
+	if reason = strings.TrimSpace(reason); reason != "" {
+		b.WriteString(" -- ")
+		b.WriteString(reason)
+	}
+	b.WriteString(fmt.Sprintf("  (cost so far: %s)", costFigure))
+	return b.String()
+}
+
+// emitInlineRefusalLine prints one line naming the caste, the reason class
+// and a plain sentence that the worker is carrying on alone, at the moment
+// a recruitment is refused (D-03/D-06: a refusal is never a failure).
+func emitInlineRefusalLine(caste, reasonClass, detail string) {
+	emitVisualLine(renderInlineRefusalLine(caste, reasonClass, detail))
+}
+
+func renderInlineRefusalLine(caste, reasonClass, detail string) string {
+	var b strings.Builder
+	b.WriteString("x ")
+	b.WriteString(casteLabel(caste))
+	b.WriteString(" recruitment refused")
+	if reasonClass = strings.TrimSpace(reasonClass); reasonClass != "" {
+		b.WriteString(fmt.Sprintf(" (%s)", reasonClass))
+	}
+	if detail = strings.TrimSpace(detail); detail != "" {
+		b.WriteString(": ")
+		b.WriteString(detail)
+	}
+	b.WriteString(" -- the worker is carrying on alone")
+	return b.String()
+}
+
+// emitInlineDecisionChangedLine prints one line naming the note and the
+// decision it changed, at the moment the credit record recording that
+// change is written (D-08's first half; the closing list is
+// cmd/recruitment_subtree.go's renderNotesThatChangedDecisions).
+func emitInlineDecisionChangedLine(contributionID, changedDecisionID, outcome string) {
+	emitVisualLine(renderInlineDecisionChangedLine(contributionID, changedDecisionID, outcome))
+}
+
+func renderInlineDecisionChangedLine(contributionID, changedDecisionID, outcome string) string {
+	return fmt.Sprintf("A note changed a decision: %s changed %s (%s)", contributionID, changedDecisionID, outcome)
 }
 
 func emitVisualProgress(visual string) {
