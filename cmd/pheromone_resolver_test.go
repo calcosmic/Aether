@@ -508,6 +508,14 @@ func TestNoUngovernedQuarantineClear(t *testing.T) {
 		// sets it, matching the same one-directional discipline
 		// writePheromoneSignal already follows.
 		"importPheromonesData": true,
+		// tuneNoteStrengthFromOutcomes (plan 203-13, cmd/pheromone_outcome.go)
+		// sets Quarantined true when a note accumulates
+		// noteHarmfulQuarantineThreshold harmful credit records -- it never
+		// clears the flag, the same one-directional discipline as the two
+		// entries above. Nothing in this codebase clears Quarantined once
+		// set; that remains an explicit, owner-gated release path this
+		// plan deliberately does not build.
+		"tuneNoteStrengthFromOutcomes": true,
 	}
 	funcs := parseCmdPackageFuncs(t)
 	var offenders []string

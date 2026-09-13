@@ -1206,6 +1206,12 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	// an instinct this phase's consolidation pass just promoted is also
 	// considered for the shared store this same phase.
 	hiveEligible, hivePromoted := promotePhaseEndInstinctsToHive(phase.ID)
+	// 203-13 (BIO-08/CEC-07): outcome-weighted strength tuning runs right
+	// after hive promotion, on both continue lanes -- the same
+	// non-blocking discipline as consolidation and hive promotion above. A
+	// tuning failure is recorded in the summary, never propagated as an
+	// error.
+	outcomeTuning := runPheromoneOutcomeTuning()
 	workerFlow = append(workerFlow, continueLearningFlowStep(consolidationSummary))
 	// The phase save-point: one git commit of exactly the files this phase's
 	// workers reported changing, so repo history mirrors colony history.
@@ -1285,6 +1291,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	}
 	attachConsolidationSummary(result, consolidationSummary)
 	attachHivePromotionSummary(result, hiveEligible, hivePromoted)
+	attachPheromoneOutcomeTuningSummary(result, outcomeTuning)
 	attachPhaseCommitResult(result, phaseCommit)
 	runStatus = "completed"
 	// One closing answer for the screen and the wrapper (Phase 197 plan 04).

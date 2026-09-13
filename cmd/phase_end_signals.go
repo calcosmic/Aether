@@ -160,6 +160,48 @@ func emitMiddenThresholdRedirect() int {
 	return crossed
 }
 
+// runPheromoneOutcomeTuning is the ONE caller of
+// cmd/pheromone_outcome.go's tuneNoteStrengthFromOutcomes (plan 203-13,
+// BIO-08/CEC-07's outcome-weighted strength tuning) -- both continue lanes
+// (cmd/codex_continue.go, cmd/codex_continue_finalize.go) call THIS wrapper,
+// immediately after promotePhaseEndInstinctsToHive, never
+// tuneNoteStrengthFromOutcomes directly. This is what makes
+// TestBothCheckLanesTuneNotes and TestTuningIsNotOnTheBuildPath able to name
+// exactly one chokepoint.
+//
+// Never propagates a panic or an error to the check that called it -- the
+// same non-blocking discipline promotePhaseEndInstinctsToHive already
+// follows for hive promotion. A tuning failure is recorded in the returned
+// result and never fails, pauses, or alters the phase advance that produced
+// this call.
+func runPheromoneOutcomeTuning() (result pheromoneOutcomeTuningResult) {
+	defer func() {
+		if r := recover(); r != nil {
+			result = pheromoneOutcomeTuningResult{Error: fmt.Sprintf("panic: %v", r)}
+		}
+	}()
+	return tuneNoteStrengthFromOutcomes()
+}
+
+// attachPheromoneOutcomeTuningSummary stores the outcome-weighted tuning
+// pass's result under result["pheromone_outcome_tuning"], mirroring
+// attachHivePromotionSummary's shape so both continue lanes report tuning
+// the same way.
+func attachPheromoneOutcomeTuningSummary(result map[string]interface{}, tuning pheromoneOutcomeTuningResult) {
+	if result == nil {
+		return
+	}
+	result["pheromone_outcome_tuning"] = map[string]interface{}{
+		"ran":                tuning.Ran,
+		"records_considered": tuning.RecordsConsidered,
+		"notes_tuned":        tuning.NotesTuned,
+		"quarantined":        tuning.Quarantined,
+		"skipped_pinned":     tuning.SkippedPinned,
+		"skipped_revoked":    tuning.SkippedRevoked,
+		"error":              tuning.Error,
+	}
+}
+
 // signalIsWorthKeeping reports whether an expiring signal is valuable enough
 // to survive its own expiry in long-term (eternal) memory (198.1-04,
 // FEED-04): true when the signal is a REDIRECT (a hard constraint, by

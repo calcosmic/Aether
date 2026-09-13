@@ -58,14 +58,32 @@ const (
 	pheromoneActionExpired    = "expired"
 	pheromoneActionRevoked    = "revoked"
 	pheromoneActionAppealed   = "appealed"
+	// pheromoneActionWeakened is plan 203-13's own addition (BIO-08/CEC-07):
+	// the symmetric opposite of reinforced. A real owner-facing action
+	// (weakenNote, --weaken on pheromoneDisplayCmd) AND the action name
+	// cmd/pheromone_outcome.go's tuneNoteStrengthFromOutcomes uses for every
+	// learning-actor strength decrease (neutral or harmful outcome) --
+	// direction is named by the action, magnitude is named in the history
+	// entry's own before/after text, which legitimately differs between a
+	// manual full weaken and an automatic partial step.
+	pheromoneActionWeakened = "weakened"
+	// pheromoneActionPinned/-Unpinned are plan 203-13's own addition: an
+	// owner action recorded in the history with actor kind owner, after
+	// which tuneNoteStrengthFromOutcomes never touches the note's strength
+	// again in either direction until unpinned. The runtime cannot pin or
+	// unpin -- pheromoneInfluenceActorAllowed below enforces owner-only,
+	// exactly like revoked/appealed.
+	pheromoneActionPinned   = "pinned"
+	pheromoneActionUnpinned = "unpinned"
 )
 
-// pheromoneInfluenceActions is the closed set of all eight declared action
+// pheromoneInfluenceActions is the closed set of all eleven declared action
 // names a note's history may record -- the three that already landed with
-// the approval surface, plus the five this plan builds.
+// the approval surface, the five plan 203-11 built, and the three plan
+// 203-13 adds (weakened, pinned, unpinned).
 // TestEveryDeclaredActionIsReachable derives its inventory from
 // pheromoneInfluenceActionNames() rather than a hand-typed list, so adding a
-// ninth name here without a matching entry in pheromoneInfluenceActionSurface
+// new name here without a matching entry in pheromoneInfluenceActionSurface
 // fails that test by name.
 var pheromoneInfluenceActions = []string{
 	pheromoneActionAccepted,
@@ -76,6 +94,9 @@ var pheromoneInfluenceActions = []string{
 	pheromoneActionExpired,
 	pheromoneActionRevoked,
 	pheromoneActionAppealed,
+	pheromoneActionWeakened,
+	pheromoneActionPinned,
+	pheromoneActionUnpinned,
 }
 
 // pheromoneInfluenceActionNames returns a copy of the closed set of declared
@@ -113,6 +134,9 @@ var pheromoneInfluenceActionSurface = map[string]pheromoneInfluenceActionSurface
 	pheromoneActionExpired:    {Implementation: "expireNote", Command: "pheromoneDisplayCmd", Flag: "expire"},
 	pheromoneActionRevoked:    {Implementation: "revokeNote", Command: "pheromoneDisplayCmd", Flag: "revoke"},
 	pheromoneActionAppealed:   {Implementation: "appealNote", Command: "pheromoneDisplayCmd", Flag: "appeal"},
+	pheromoneActionWeakened:   {Implementation: "weakenNote", Command: "pheromoneDisplayCmd", Flag: "weaken"},
+	pheromoneActionPinned:     {Implementation: "pinNote", Command: "pheromoneDisplayCmd", Flag: "pin"},
+	pheromoneActionUnpinned:   {Implementation: "unpinNote", Command: "pheromoneDisplayCmd", Flag: "unpin"},
 }
 
 // ---------------------------------------------------------------------------
@@ -336,7 +360,13 @@ func pheromoneInfluenceActorAllowed(action, actorKind string) (bool, string) {
 		return false, fmt.Sprintf("actor kind %q is not declared: must be one of %v", actorKind, pheromoneActors())
 	}
 	switch action {
-	case pheromoneActionRevoked, pheromoneActionAppealed:
+	case pheromoneActionRevoked, pheromoneActionAppealed, pheromoneActionPinned, pheromoneActionUnpinned:
+		// Revoke/appeal change what the owner meant; pin/unpin decide
+		// whether the owner's own meaning is ever automatically re-tuned at
+		// all (plan 203-13's own must_haves truth: "a note the owner
+		// pinned is never automatically tuned, in either direction"). All
+		// four are owner-only -- the runtime cannot pin or unpin any more
+		// than it can revoke or appeal.
 		if actorKind != pheromoneActorOwner {
 			return false, fmt.Sprintf("actor %q may not %s a note -- only the owner may", actorKind, action)
 		}
@@ -603,4 +633,139 @@ func appealNote(id, actorKind, actorName, reason string, dryRun bool) (pheromone
 		return pheromoneInfluenceOutcome{}, err
 	}
 	return pheromoneInfluenceOutcome{Found: true, Entry: &entry}, nil
+}
+
+// ---------------------------------------------------------------------------
+// Plan 203-13's three additions: a manual, symmetric-to-reinforce weaken
+// action, and owner-only pin/unpin.
+// ---------------------------------------------------------------------------
+
+// weakenNote lowers a note's strength to the declared floor (0.0, the exact
+// symmetric opposite of reinforceNote's ceiling), the real owner-facing
+// action behind --weaken. cmd/pheromone_outcome.go's tuneNoteStrengthFromOutcomes
+// records its own, smaller, automatic decreases under this SAME declared
+// action name -- the action names the direction (down); the history entry's
+// own before/after text names the actual magnitude, which legitimately
+// differs between this manual full weaken and an automatic partial step.
+// Refuses an unknown note identifier by name; performs no write when dryRun
+// is true.
+func weakenNote(id, actorKind, actorName, reason string, dryRun bool) (pheromoneInfluenceOutcome, error) {
+	id = strings.TrimSpace(id)
+	if store == nil {
+		return pheromoneInfluenceOutcome{}, fmt.Errorf("no store initialized")
+	}
+	if allowed, why := pheromoneInfluenceActorAllowed(pheromoneActionWeakened, actorKind); !allowed {
+		return pheromoneInfluenceOutcome{}, fmt.Errorf("%s", why)
+	}
+	pf, idx, found := findPheromoneSignalByID(id)
+	if !found {
+		return pheromoneInfluenceOutcome{}, fmt.Errorf("note %q not found", id)
+	}
+	sig := pf.Signals[idx]
+
+	oldStrength := 0.0
+	if sig.Strength != nil {
+		oldStrength = *sig.Strength
+	}
+	const weakenFloor = 0.0
+	before := fmt.Sprintf("strength=%.2f", oldStrength)
+	after := fmt.Sprintf("strength=%.2f", weakenFloor)
+
+	if dryRun {
+		return pheromoneInfluenceOutcome{Found: true, WouldApply: true, Signal: &sig}, nil
+	}
+
+	floor := weakenFloor
+	pf.Signals[idx].Strength = &floor
+	if err := pheromoneInfluenceSaveSignals(pf); err != nil {
+		return pheromoneInfluenceOutcome{}, err
+	}
+	entry, err := appendInfluenceHistory(id, pheromoneActionWeakened, actorKind, actorName, before, after, reason)
+	if err != nil {
+		return pheromoneInfluenceOutcome{}, err
+	}
+	updated := pf.Signals[idx]
+	return pheromoneInfluenceOutcome{Found: true, Signal: &updated, Entry: &entry}, nil
+}
+
+// pinNote marks a note as owner-pinned: cmd/pheromone_outcome.go's
+// tuneNoteStrengthFromOutcomes skips a pinned note entirely, in either
+// direction, until unpinNote clears it. Owner-only
+// (pheromoneInfluenceActorAllowed); refuses an unknown note identifier by
+// name; performs no write when dryRun is true.
+func pinNote(id, actorKind, actorName, reason string, dryRun bool) (pheromoneInfluenceOutcome, error) {
+	id = strings.TrimSpace(id)
+	if store == nil {
+		return pheromoneInfluenceOutcome{}, fmt.Errorf("no store initialized")
+	}
+	if allowed, why := pheromoneInfluenceActorAllowed(pheromoneActionPinned, actorKind); !allowed {
+		return pheromoneInfluenceOutcome{}, fmt.Errorf("%s", why)
+	}
+	pf, idx, found := findPheromoneSignalByID(id)
+	if !found {
+		return pheromoneInfluenceOutcome{}, fmt.Errorf("note %q not found", id)
+	}
+	sig := pf.Signals[idx]
+
+	before := "pinned=false"
+	if sig.Pinned != nil && *sig.Pinned {
+		before = "pinned=true"
+	}
+	after := "pinned=true"
+
+	if dryRun {
+		return pheromoneInfluenceOutcome{Found: true, WouldApply: true, Signal: &sig}, nil
+	}
+
+	pinned := true
+	pf.Signals[idx].Pinned = &pinned
+	if err := pheromoneInfluenceSaveSignals(pf); err != nil {
+		return pheromoneInfluenceOutcome{}, err
+	}
+	entry, err := appendInfluenceHistory(id, pheromoneActionPinned, actorKind, actorName, before, after, reason)
+	if err != nil {
+		return pheromoneInfluenceOutcome{}, err
+	}
+	updated := pf.Signals[idx]
+	return pheromoneInfluenceOutcome{Found: true, Signal: &updated, Entry: &entry}, nil
+}
+
+// unpinNote clears a note's owner-pinned flag, letting
+// tuneNoteStrengthFromOutcomes tune it again. Owner-only; refuses an unknown
+// note identifier by name; performs no write when dryRun is true.
+func unpinNote(id, actorKind, actorName, reason string, dryRun bool) (pheromoneInfluenceOutcome, error) {
+	id = strings.TrimSpace(id)
+	if store == nil {
+		return pheromoneInfluenceOutcome{}, fmt.Errorf("no store initialized")
+	}
+	if allowed, why := pheromoneInfluenceActorAllowed(pheromoneActionUnpinned, actorKind); !allowed {
+		return pheromoneInfluenceOutcome{}, fmt.Errorf("%s", why)
+	}
+	pf, idx, found := findPheromoneSignalByID(id)
+	if !found {
+		return pheromoneInfluenceOutcome{}, fmt.Errorf("note %q not found", id)
+	}
+	sig := pf.Signals[idx]
+
+	before := "pinned=false"
+	if sig.Pinned != nil && *sig.Pinned {
+		before = "pinned=true"
+	}
+	after := "pinned=false"
+
+	if dryRun {
+		return pheromoneInfluenceOutcome{Found: true, WouldApply: true, Signal: &sig}, nil
+	}
+
+	unpinned := false
+	pf.Signals[idx].Pinned = &unpinned
+	if err := pheromoneInfluenceSaveSignals(pf); err != nil {
+		return pheromoneInfluenceOutcome{}, err
+	}
+	entry, err := appendInfluenceHistory(id, pheromoneActionUnpinned, actorKind, actorName, before, after, reason)
+	if err != nil {
+		return pheromoneInfluenceOutcome{}, err
+	}
+	updated := pf.Signals[idx]
+	return pheromoneInfluenceOutcome{Found: true, Signal: &updated, Entry: &entry}, nil
 }

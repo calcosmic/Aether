@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 18
+open_count: 19
 waived_count: 0
 fixed_count: 5
-total_count: 23
-last_updated: 2026-09-13T15:58:28.351Z
+total_count: 24
+last_updated: 2026-09-13T17:25:11.044Z
 ---
 
 # Broken Windows Ledger
@@ -38,6 +38,7 @@ last_updated: 2026-09-13T15:58:28.351Z
 | 21 | 203 | deviation | cmd/codex_verify_advance.go |  | Inherited from 203-10, still open after 203-12: recordTrophallaxisDecision's colony.LifecycleDecision is never threaded into runContinueAcceptVerifyAdvance (the single phase-level accept/verify/advance boundary, cmd/codex_verify_advance.go). 203-12 populated the CEC-07 credit join it actually owns (AgencyReceiptEvidence.ChangedDecision/EffectEvidence, cmd/agency_contract.go) from real trophallaxis+credit data, which is a different boundary from runContinueAcceptVerifyAdvance and fully satisfies this plan's own objective text. Whether a trophallaxis decision should ALSO reach the phase-level accept/verify/advance decision remains unresolved and cmd/codex_verify_advance.go is outside 203-12's declared file scope; a follow-up plan (203-14/203-15) should confirm intent. | open |  | 2026-09-13T15:12:32.588Z |  |
 | 22 | 202.1 | unmet-truth | cmd/status.go |  | SEVERE / OWNER-REPORTED 2026-09-13: Phase 202.1's Classic-voice guarantee for 'aether status' is proved against a renderer the status command does not call. TestStatusScreenMeetsTheReferenceDensity and TestEveryVoicedScreenMeetsTheReferenceDensity measure renderLifecycleStatus (cmd/lifecycle_status_render.go) fed by classicVoiceStatusFixtureProjection, a hand-built projection. The real 'aether status' RunE calls renderDashboard (cmd/status.go:~60, via outputWorkflow), and renderLifecycleStatus's only non-test caller is cmd/compatibility_cmds.go:473. Measured on the live screen: 22 of 92 content lines symbol-led (~24%) against a reference bar of 41.3% -- the whole top block (Goal, Runtime, Signals, Progress, Focus, Instincts, Flags, Scope, Colony Mode, Depth, Granularity, Parallel) carries no leading symbol, while the memory/signals/worker sections below do. All five voice tests pass. The owner reported not seeing the Classic visuals they commissioned in 202.1; this is why. OPEN QUESTION not yet investigated: the same corpus registers build, continue, plan, discuss, spec, seal and the what-next card -- each needs the same check that its registered render function is the one its command actually calls. A green density test proves nothing about the screen if it measures a different function. | open |  | 2026-09-13T15:56:48.392Z |  |
 | 23 | 202.1 | unmet-truth | cmd/planning_visuals.go |  | SCOPE ANSWERED 2026-09-13 (the open question from the status finding): all 21 screens registered in the Classic-voice corpus were traced from their registered render function to its production call sites. EXACTLY TWO are proved against code no command runs. (1) status-full/status-compact measure renderLifecycleStatus, which has ZERO non-test callers; the real 'aether status' renders via renderDashboard (cmd/status.go) -- this is the screen the owner looks at daily and it measures ~24% symbol-led against a 41.3% bar. (2) plan-stop measures renderPlanningStopVisual (cmd/planning_visuals.go:550), which has zero callers of any kind outside tests -- a fully orphaned renderer, so that screen is never drawn by anything. The other NINETEEN are genuinely wired and their density tests measure the function the command actually calls: build (renderBuildVisualWithDispatches, 2 sites), build-partial (renderBuildPartialCreditVisual, 1), continue-final + continue-midphase (renderContinueVisual, 3), seal (renderSealVisual, 1), discuss-questions + discuss-resolved (renderDiscussVisual, 2), spec (renderSpecCommandVisual, 1), what-next card (renderNextActionCardForPlatform, 2), and 8 of 9 planning screens. So 202.1 largely DID deliver; the damage is bounded to the status screen plus one dead renderer. | open |  | 2026-09-13T15:58:28.351Z |  |
+| 24 | 203 | deviation | .planning/REQUIREMENTS.md |  | BIO-08 and CEC-07 are ready (every declaring plan has a SUMMARY) but requirements.mark-complete returns not_found and writes nothing -- this repo's checkbox format (- [ ] **REQ-ID -- Title:**) doesn't match the tool's regex (- [ ] **REQ-ID**); re-run mark-complete after reconciling the format | open |  | 2026-09-13T17:25:11.044Z |  |
 
 ````json
 [
@@ -315,6 +316,18 @@ last_updated: 2026-09-13T15:58:28.351Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-09-13T15:58:28.351Z",
+    "resolved_at": null
+  },
+  {
+    "id": 24,
+    "kind": "deviation",
+    "phase": "203",
+    "file": ".planning/REQUIREMENTS.md",
+    "line": null,
+    "description": "BIO-08 and CEC-07 are ready (every declaring plan has a SUMMARY) but requirements.mark-complete returns not_found and writes nothing -- this repo's checkbox format (- [ ] **REQ-ID -- Title:**) doesn't match the tool's regex (- [ ] **REQ-ID**); re-run mark-complete after reconciling the format",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-13T17:25:11.044Z",
     "resolved_at": null
   }
 ]

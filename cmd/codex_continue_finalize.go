@@ -649,8 +649,13 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	// immediately after consolidation and before attachConsolidationSummary,
 	// mirroring the default continue lane above.
 	hiveEligible, hivePromoted := promotePhaseEndInstinctsToHive(phase.ID)
+	// 203-13 (BIO-08/CEC-07): outcome-weighted strength tuning runs right
+	// after hive promotion, mirroring the default continue lane above --
+	// same non-blocking discipline.
+	outcomeTuning := runPheromoneOutcomeTuning()
 	attachConsolidationSummary(result, consolidationSummary)
 	attachHivePromotionSummary(result, hiveEligible, hivePromoted)
+	attachPheromoneOutcomeTuningSummary(result, outcomeTuning)
 	if reviewFindingsPersisted > 0 && result != nil {
 		result["review_findings_persisted"] = reviewFindingsPersisted
 	}

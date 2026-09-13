@@ -56,6 +56,15 @@ type PheromoneSignal struct {
 	// (cmd/pheromone_influence.go's revokeNote is the only writer).
 	DeferredUntil *string `json:"deferred_until,omitempty"`
 	RevokedAt     *string `json:"revoked_at,omitempty"`
+
+	// Pinned is pointer-backed and omitempty, following the same Phase 199
+	// rule (BIO-08/CEC-07, plan 203-13): a legacy signal written before this
+	// field existed reads as not pinned. Once true, an automatic tuning
+	// pass (cmd/pheromone_outcome.go's tuneNoteStrengthFromOutcomes) skips
+	// the note entirely, in either direction -- only an explicit owner
+	// action (cmd/pheromone_influence.go's pinNote/unpinNote) may ever set
+	// or clear it; the runtime cannot.
+	Pinned *bool `json:"pinned,omitempty"`
 }
 
 // Write-time provenance categories a stored pheromone signal may declare.
