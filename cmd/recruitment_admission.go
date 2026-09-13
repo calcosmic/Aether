@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -278,4 +279,126 @@ func recruitmentDepthOverride(maxDepthFlag int) (cap int, raised bool) {
 		return spawnMaxDelegationDepth, false
 	}
 	return maxDepthFlag, true
+}
+
+// recruitmentManifestPath is the store-relative path amendRecruitmentManifest
+// persists to. New data file, per this plan's frontmatter.
+const recruitmentManifestPath = "recruitment/manifest.json"
+
+// recruitmentManifestSchemaVersion is the wire-shape version every
+// amendment record carries.
+const recruitmentManifestSchemaVersion = "recruitment-manifest/v1"
+
+// The two manifest lifecycle states. recruitmentManifestStateAdmitted is
+// the recoverable signature of a crash between admission and dispatch;
+// recruitmentManifestStateDispatched marks that the runtime has committed
+// to starting the child -- see amendRecruitmentManifest's own doc comment
+// for the exact boundary this transition is written at.
+const (
+	recruitmentManifestStateAdmitted   = "admitted"
+	recruitmentManifestStateDispatched = "dispatched"
+)
+
+// recruitmentManifestRecord is the amendment record: an admitted child,
+// recorded atomically before that child ever runs.
+type recruitmentManifestRecord struct {
+	SchemaVersion string `json:"schema_version"`
+	IntentID      string `json:"intent_id"`
+	ChildName     string `json:"child_name,omitempty"`
+	ParentName    string `json:"parent_name,omitempty"`
+	Depth         int    `json:"depth,omitempty"`
+	AdapterKind   string `json:"adapter_kind,omitempty"`
+	Workspace     string `json:"workspace,omitempty"`
+	AdmittedAt    string `json:"admitted_at,omitempty"`
+	State         string `json:"state"`
+}
+
+// recruitmentManifestFile is the on-disk container at recruitmentManifestPath.
+type recruitmentManifestFile struct {
+	Entries []recruitmentManifestRecord `json:"entries"`
+}
+
+// errRecruitmentManifestUnknownSchema is returned by
+// recruitmentManifestEntryByIntentID when a stored entry's SchemaVersion
+// does not match recruitmentManifestSchemaVersion -- reported as unknown
+// rather than the reader fabricating a field that version may not share.
+var errRecruitmentManifestUnknownSchema = errors.New("recruitment manifest entry carries an unrecognised schema version")
+
+// amendRecruitmentManifest writes or updates the manifest entry named by
+// record.IntentID through store.UpdateJSONAtomically. BIO-02's rule that a
+// failed manifest write must deny launch rather than proceed unrecorded is
+// enforced at recruitCmd's own call site (cmd/recruitment.go): this
+// function's only job is to return the write error honestly, never to
+// swallow it.
+//
+// Timing note on the "admitted"->"dispatched" transition: BIO-04's
+// behaviour spec asks for this write "after the child process actually
+// starts". cmd/recruitment_dispatch.go's dispatchRecruitment is a
+// synchronous call this plan does not own and cannot instrument
+// mid-execution, so recruitCmd writes the "dispatched" transition
+// immediately before invoking dispatchRecruitment -- the closest
+// observable point to "the runtime has committed to starting this child"
+// available without editing a file outside this plan's declared ownership.
+// This is a considered, documented boundary, not a silent reinterpretation
+// of the requirement.
+func amendRecruitmentManifest(record recruitmentManifestRecord) (recruitmentManifestRecord, error) {
+	if store == nil {
+		return recruitmentManifestRecord{}, fmt.Errorf("no store initialized")
+	}
+	if strings.TrimSpace(record.IntentID) == "" {
+		return recruitmentManifestRecord{}, fmt.Errorf("recruitment manifest amendment requires a non-empty IntentID")
+	}
+	if strings.TrimSpace(record.SchemaVersion) == "" {
+		record.SchemaVersion = recruitmentManifestSchemaVersion
+	}
+
+	var bound recruitmentManifestRecord
+	var file recruitmentManifestFile
+	err := store.UpdateJSONAtomically(recruitmentManifestPath, &file, func() error {
+		for i := range file.Entries {
+			if file.Entries[i].IntentID != record.IntentID {
+				continue
+			}
+			if strings.TrimSpace(record.State) != "" {
+				file.Entries[i].State = record.State
+			}
+			if strings.TrimSpace(record.AdapterKind) != "" {
+				file.Entries[i].AdapterKind = record.AdapterKind
+			}
+			bound = file.Entries[i]
+			return nil
+		}
+		file.Entries = append(file.Entries, record)
+		bound = record
+		return nil
+	})
+	if err != nil {
+		return recruitmentManifestRecord{}, err
+	}
+	return bound, nil
+}
+
+// recruitmentManifestEntryByIntentID is the read-side counterpart:
+// TestRecruitmentManifestAmendmentUnknownSchemaVersion
+// (cmd/recruitment_admission_test.go) proves an entry written under a
+// schema version this runtime does not recognise is reported as unknown
+// rather than a fabricated zero-value read.
+func recruitmentManifestEntryByIntentID(intentID string) (recruitmentManifestRecord, error) {
+	if store == nil {
+		return recruitmentManifestRecord{}, fmt.Errorf("no store initialized")
+	}
+	var file recruitmentManifestFile
+	if err := store.LoadJSON(recruitmentManifestPath, &file); err != nil {
+		return recruitmentManifestRecord{}, err
+	}
+	for _, entry := range file.Entries {
+		if entry.IntentID != intentID {
+			continue
+		}
+		if entry.SchemaVersion != recruitmentManifestSchemaVersion {
+			return recruitmentManifestRecord{}, fmt.Errorf("%w: %q", errRecruitmentManifestUnknownSchema, entry.SchemaVersion)
+		}
+		return entry, nil
+	}
+	return recruitmentManifestRecord{}, fmt.Errorf("no recruitment manifest entry for IntentID %q", intentID)
 }

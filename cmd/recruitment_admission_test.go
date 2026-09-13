@@ -675,11 +675,14 @@ func TestRecruitmentManifestAmendmentDeniesLaunchOnWriteFailure(t *testing.T) {
 		t.Fatalf("read spawn-tree.txt before attempt: %v", err)
 	}
 
-	// Block the "recruitment" directory with a regular file so
-	// amendRecruitmentManifest's own write fails with a real stat error.
-	recruitmentDirPath := filepath.Join(store.BasePath(), "recruitment")
-	if err := os.WriteFile(recruitmentDirPath, []byte("not a directory"), 0644); err != nil {
-		t.Fatalf("create file blocking the recruitment directory: %v", err)
+	// Block ONLY manifest.json's own path with a directory -- "recruitment/"
+	// itself stays a real directory so the sibling recruitment/intents.json
+	// write (recordRecruitmentIntent, which runs earlier in recruitCmd)
+	// still succeeds; this fault is scoped to amendRecruitmentManifest's own
+	// write specifically.
+	manifestDirPath := filepath.Join(store.BasePath(), filepath.FromSlash(recruitmentManifestPath))
+	if err := os.MkdirAll(manifestDirPath, 0755); err != nil {
+		t.Fatalf("create directory at manifest path: %v", err)
 	}
 
 	rootCmd.SetArgs([]string{

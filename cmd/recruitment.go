@@ -227,6 +227,31 @@ var recruitCmd = &cobra.Command{
 		childName := deterministicAntName(dispatchIntent.Caste, dispatchIntent.AttemptID)
 		childDepth := dispatchIntent.ParentDepth + 1
 
+		// Task 2 (BIO-02's manifest-amendment rule): the admitted child is
+		// recorded atomically BEFORE any process starts, and a failed write
+		// denies launch rather than proceeding unrecorded.
+		manifestRecord := recruitmentManifestRecord{
+			SchemaVersion: recruitmentManifestSchemaVersion,
+			IntentID:      dispatchIntent.IntentID,
+			ChildName:     childName,
+			ParentName:    dispatchIntent.ParentName,
+			Depth:         childDepth,
+			Workspace:     dispatchIntent.Workspace,
+			AdmittedAt:    time.Now().UTC().Format(time.RFC3339),
+			State:         recruitmentManifestStateAdmitted,
+		}
+		if _, err := amendRecruitmentManifest(manifestRecord); err != nil {
+			detail := fmt.Sprintf("could not durably record this recruitment's admission (%v)", err)
+			outputOK(map[string]interface{}{
+				"admitted": false,
+				"parent":   dispatchIntent.ParentName,
+				"reason":   recruitmentReasonUnresolved,
+				"detail":   detail,
+				"message":  fmt.Sprintf("%s -- carry on with the task alone", detail),
+			})
+			return nil
+		}
+
 		task := dispatchIntent.Objective
 		if depthRaised {
 			// D-11: the raise is written onto the spawn-tree entry it permits,
@@ -241,6 +266,15 @@ var recruitCmd = &cobra.Command{
 		}
 
 		emitColonyLiveRecruitAdmitted(dispatchIntent, childName)
+
+		// The manifest transitions to "dispatched" as close to the real
+		// process start as this plan's file ownership allows -- see
+		// amendRecruitmentManifest's own doc comment for the exact boundary.
+		_, _ = amendRecruitmentManifest(recruitmentManifestRecord{
+			SchemaVersion: recruitmentManifestSchemaVersion,
+			IntentID:      dispatchIntent.IntentID,
+			State:         recruitmentManifestStateDispatched,
+		})
 
 		dispatchResult, dispatchErr := dispatchRecruitment(dispatchIntent, childName)
 
