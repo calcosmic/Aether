@@ -208,7 +208,7 @@ func TestPendingNoteApproval(t *testing.T) {
 		_, s := setupExchangeTest(t)
 		item := seedQueuedSuggestion(t, s)
 
-		result, err := approvePendingNote(item.ID, false)
+		result, err := approvePendingNote(item.ID, pheromoneActorOwner, "tester", false)
 		if err != nil {
 			t.Fatalf("approvePendingNote: %v", err)
 		}
@@ -287,7 +287,7 @@ func TestPendingNoteApproval(t *testing.T) {
 			t.Fatalf("expected the signal excluded with reason %q before approval, got %+v", pheromoneExcludedQuarantine, resolvedBefore)
 		}
 
-		result, err := approvePendingNote(queuedID, false)
+		result, err := approvePendingNote(queuedID, pheromoneActorOwner, "tester", false)
 		if err != nil {
 			t.Fatalf("approvePendingNote: %v", err)
 		}
@@ -315,7 +315,7 @@ func TestPendingNoteApproval(t *testing.T) {
 		_, s := setupExchangeTest(t)
 		item := seedQueuedSuggestion(t, s)
 
-		result, err := editPendingNote(item.ID, "the owner's replacement wording", false)
+		result, err := editPendingNote(item.ID, pheromoneActorOwner, "tester", "the owner's replacement wording", false)
 		if err != nil {
 			t.Fatalf("editPendingNote: %v", err)
 		}
@@ -362,7 +362,7 @@ func TestPendingNoteApproval(t *testing.T) {
 			t.Fatalf("seed colony state: %v", err)
 		}
 
-		result, err := rejectPendingNote(item.ID, false)
+		result, err := rejectPendingNote(item.ID, pheromoneActorOwner, "tester", false)
 		if err != nil {
 			t.Fatalf("rejectPendingNote: %v", err)
 		}
@@ -391,7 +391,7 @@ func TestApprovalDryRunDoesNotMutate(t *testing.T) {
 	hashBefore := hashDirFilesForTest(t, dataDir)
 	writesBefore := pendingNoteWriteCount
 
-	result, err := approvePendingNote(item.ID, true)
+	result, err := approvePendingNote(item.ID, pheromoneActorOwner, "tester", true)
 	if err != nil {
 		t.Fatalf("approvePendingNote (dry-run): %v", err)
 	}

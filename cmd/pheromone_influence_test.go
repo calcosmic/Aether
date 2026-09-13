@@ -238,6 +238,69 @@ func TestInfluenceHistoryAppendOnly(t *testing.T) {
 	})
 }
 
+// TestPendingNoteActionsAppendRatherThanOverwriteHistory is CR-03's
+// append-only proof for the three approval-surface actions specifically:
+// repeatedly editing and then rejecting the SAME queued note must accumulate
+// entries, never rewrite or drop an earlier one -- driven through the real
+// editPendingNote/rejectPendingNote functions, not just the AST-structural
+// checks above (which only prove nothing ELSE in the package writes the
+// file, not that these three specific functions behave append-only in
+// practice).
+func TestPendingNoteActionsAppendRatherThanOverwriteHistory(t *testing.T) {
+	setupExchangeTest(t)
+	id := "append-only-behavioral"
+	now := time.Now().UTC().Format(time.RFC3339)
+	origin := colony.PendingOriginSuggestion
+	item := colony.PendingSuggestion{
+		ID:          id,
+		Type:        "FOCUS",
+		Content:     "first wording",
+		ContentHash: "sha256:" + sha256Sum("first wording"),
+		CreatedAt:   now,
+		Origin:      &origin,
+	}
+	items := []colony.PendingSuggestion{item}
+	if err := store.SaveJSON("COLONY_STATE.json", colony.ColonyState{PendingSuggestions: &items}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	if _, err := editPendingNote(id, pheromoneActorOwner, "first-editor", "second wording", false); err != nil {
+		t.Fatalf("first edit: %v", err)
+	}
+	firstHistory, err := readInfluenceHistory(id)
+	if err != nil {
+		t.Fatalf("read after first edit: %v", err)
+	}
+	if len(firstHistory) != 1 {
+		t.Fatalf("expected 1 entry after first edit, got %d: %+v", len(firstHistory), firstHistory)
+	}
+	firstEntrySnapshot := firstHistory[0]
+
+	if _, err := editPendingNote(id, pheromoneActorOwner, "second-editor", "third wording", false); err != nil {
+		t.Fatalf("second edit: %v", err)
+	}
+	if _, err := rejectPendingNote(id, pheromoneActorOwner, "rejector", false); err != nil {
+		t.Fatalf("reject: %v", err)
+	}
+
+	finalHistory, err := readInfluenceHistory(id)
+	if err != nil {
+		t.Fatalf("read after further actions: %v", err)
+	}
+	if len(finalHistory) != 3 {
+		t.Fatalf("expected 3 accumulated entries, got %d: %+v", len(finalHistory), finalHistory)
+	}
+	if finalHistory[0] != firstEntrySnapshot {
+		t.Fatalf("the first entry was mutated by a later action:\noriginal: %+v\nnow:      %+v", firstEntrySnapshot, finalHistory[0])
+	}
+	if finalHistory[1].Action != pheromoneActionEdited || finalHistory[1].ActorName != "second-editor" {
+		t.Fatalf("second entry wrong: %+v", finalHistory[1])
+	}
+	if finalHistory[2].Action != pheromoneActionRejected || finalHistory[2].ActorName != "rejector" {
+		t.Fatalf("third entry wrong: %+v", finalHistory[2])
+	}
+}
+
 func TestInfluenceHistoryActor(t *testing.T) {
 	t.Run("declared_set", func(t *testing.T) {
 		actors := pheromoneActors()
@@ -676,6 +739,181 @@ func TestEveryDeclaredActionIsReachable(t *testing.T) {
 	}
 }
 
+// declaredActionFixture seeds whatever precondition an action needs (a plain
+// signal, an already-rejected queued note, or a freshly queued suggestion)
+// under the given note id, then performs the declared action through its
+// REAL implementation function, reporting whether the note was found.
+type declaredActionFixture struct {
+	setup  func(t *testing.T, id string)
+	invoke func(id, actorKind, actorName string) (found bool, err error)
+}
+
+// seedFreshQueuedNote seeds a plain, not-yet-decided queued suggestion under
+// id -- the precondition accept/edit/reject each need. Unlike
+// seedRejectedPendingNote, the item carries no Action/ActionAt yet.
+func seedFreshQueuedNote(t *testing.T, id string) {
+	t.Helper()
+	now := time.Now().UTC().Format(time.RFC3339)
+	origin := colony.PendingOriginSuggestion
+	item := colony.PendingSuggestion{
+		ID:          id,
+		Type:        "FOCUS",
+		Content:     "declared action fixture content",
+		ContentHash: "sha256:" + sha256Sum("declared action fixture content"),
+		CreatedAt:   now,
+		Origin:      &origin,
+	}
+	items := []colony.PendingSuggestion{item}
+	// Goal must be set: suggestApproveCmd's RunE (loadActiveColonyState)
+	// silently short-circuits every flag -- approve, edit, dismiss alike --
+	// to an empty listing when Goal is unset, matching a genuinely
+	// uninitialized colony. A direct approvePendingNote/editPendingNote/
+	// rejectPendingNote call bypasses that gate entirely, but this fixture
+	// is also driven through the real suggest-approve command
+	// (TestSuggestApproveRecordsActorThroughTheRealCommand), which does not.
+	goal := "declared action fixture goal"
+	cs := colony.ColonyState{Goal: &goal, PendingSuggestions: &items}
+	if err := store.SaveJSON("COLONY_STATE.json", cs); err != nil {
+		t.Fatalf("seed fresh queued note %q: %v", id, err)
+	}
+}
+
+// declaredActionFixtures wires every one of pheromoneInfluenceActionNames()
+// to a real precondition and a real invocation of its declared
+// implementation function (pheromoneInfluenceActionSurface). A declared
+// action with no entry here fails
+// TestEveryDeclaredActionAppendsHistoryWithAnActor by name, so a future
+// addition to pheromoneInfluenceActions cannot pass silently uncovered.
+func declaredActionFixtures() map[string]declaredActionFixture {
+	untilSoon := func() string { return time.Now().Add(time.Hour).UTC().Format(time.RFC3339) }
+	signalFixture := func(invoke func(id, actorKind, actorName string) (bool, error)) declaredActionFixture {
+		return declaredActionFixture{
+			setup:  func(t *testing.T, id string) { seedPheromoneInfluenceSignal(t, id) },
+			invoke: invoke,
+		}
+	}
+	return map[string]declaredActionFixture{
+		pheromoneActionAccepted: {
+			setup: seedFreshQueuedNote,
+			invoke: func(id, actorKind, actorName string) (bool, error) {
+				r, err := approvePendingNote(id, actorKind, actorName, false)
+				return r.Found, err
+			},
+		},
+		pheromoneActionEdited: {
+			setup: seedFreshQueuedNote,
+			invoke: func(id, actorKind, actorName string) (bool, error) {
+				r, err := editPendingNote(id, actorKind, actorName, "edited wording", false)
+				return r.Found, err
+			},
+		},
+		pheromoneActionRejected: {
+			setup: seedFreshQueuedNote,
+			invoke: func(id, actorKind, actorName string) (bool, error) {
+				r, err := rejectPendingNote(id, actorKind, actorName, false)
+				return r.Found, err
+			},
+		},
+		pheromoneActionReinforced: signalFixture(func(id, actorKind, actorName string) (bool, error) {
+			o, err := reinforceNote(id, actorKind, actorName, "reason", false)
+			return o.Found, err
+		}),
+		pheromoneActionDeferred: signalFixture(func(id, actorKind, actorName string) (bool, error) {
+			o, err := deferNote(id, actorKind, actorName, untilSoon(), "reason", false)
+			return o.Found, err
+		}),
+		pheromoneActionExpired: signalFixture(func(id, actorKind, actorName string) (bool, error) {
+			o, err := expireNote(id, actorKind, actorName, "reason", false)
+			return o.Found, err
+		}),
+		pheromoneActionRevoked: signalFixture(func(id, actorKind, actorName string) (bool, error) {
+			o, err := revokeNote(id, actorKind, actorName, "reason", false)
+			return o.Found, err
+		}),
+		pheromoneActionAppealed: {
+			setup: func(t *testing.T, id string) { seedRejectedPendingNote(t, id) },
+			invoke: func(id, actorKind, actorName string) (bool, error) {
+				o, err := appealNote(id, actorKind, actorName, "reason", false)
+				return o.Found, err
+			},
+		},
+		pheromoneActionWeakened: signalFixture(func(id, actorKind, actorName string) (bool, error) {
+			o, err := weakenNote(id, actorKind, actorName, "reason", false)
+			return o.Found, err
+		}),
+		pheromoneActionPinned: signalFixture(func(id, actorKind, actorName string) (bool, error) {
+			o, err := pinNote(id, actorKind, actorName, "reason", false)
+			return o.Found, err
+		}),
+		pheromoneActionUnpinned: signalFixture(func(id, actorKind, actorName string) (bool, error) {
+			o, err := unpinNote(id, actorKind, actorName, "reason", false)
+			return o.Found, err
+		}),
+	}
+}
+
+// TestEveryDeclaredActionAppendsHistoryWithAnActor is CR-03's core proof.
+// TestEveryDeclaredActionIsReachable above only proves a function and a flag
+// exist for each declared action -- it never proves performing the action
+// leaves a durable record. This test drives the REAL implementation function
+// for every one of pheromoneInfluenceActionNames() (never a hand-typed
+// subset, so a future action added to that list is picked up automatically
+// and fails loudly if nobody has wired a fixture for it yet) and asserts the
+// one property BIO-08 actually promises: exactly one append-only history
+// entry, naming that action and a declared actor.
+func TestEveryDeclaredActionAppendsHistoryWithAnActor(t *testing.T) {
+	const actorName = "reachability-test"
+	fixtures := declaredActionFixtures()
+
+	for _, action := range pheromoneInfluenceActionNames() {
+		action := action
+		t.Run(action, func(t *testing.T) {
+			setupExchangeTest(t)
+			fixture, ok := fixtures[action]
+			if !ok {
+				t.Fatalf("declared action %q has no fixture wired in TestEveryDeclaredActionAppendsHistoryWithAnActor -- add one so the history+actor guarantee is proven for it too", action)
+			}
+			id := "declared-history-" + action
+
+			fixture.setup(t, id)
+
+			before, err := readInfluenceHistory(id)
+			if err != nil {
+				t.Fatalf("read history before %q: %v", action, err)
+			}
+			if len(before) != 0 {
+				t.Fatalf("expected no history before performing %q, got %+v", action, before)
+			}
+
+			found, err := fixture.invoke(id, pheromoneActorOwner, actorName)
+			if err != nil {
+				t.Fatalf("performing %q: %v", action, err)
+			}
+			if !found {
+				t.Fatalf("performing %q: note %q was not found", action, id)
+			}
+
+			history, err := readInfluenceHistory(id)
+			if err != nil {
+				t.Fatalf("read history after %q: %v", action, err)
+			}
+			if len(history) != 1 {
+				t.Fatalf("expected exactly one history entry after %q, got %d: %+v", action, len(history), history)
+			}
+			entry := history[0]
+			if entry.Action != action {
+				t.Fatalf("history entry action = %q, want %q", entry.Action, action)
+			}
+			if entry.ActorKind == "" || !pheromoneActorDeclared(entry.ActorKind) {
+				t.Fatalf("history entry for %q recorded actor kind %q, want one of the declared kinds", action, entry.ActorKind)
+			}
+			if entry.ActorName != actorName {
+				t.Fatalf("history entry for %q recorded actor name %q, want %q", action, entry.ActorName, actorName)
+			}
+		})
+	}
+}
+
 // appendInfluenceHistoryLiteralActionCallSites returns the name of fn if it
 // calls appendInfluenceHistory with a raw string literal as the action
 // argument (the second parameter) instead of a declared constant.
@@ -767,6 +1005,97 @@ func TestInfluenceSurfaceIsOwnerFacing(t *testing.T) {
 		}
 		if pf.Signals[0].RevokedAt == nil {
 			t.Fatalf("expected the default actor (owner) to succeed at revoking through the real command, got %+v", pf.Signals[0])
+		}
+	})
+}
+
+// TestSuggestApproveRecordsActorThroughTheRealCommand closes the loop CR-03
+// requires end to end: suggest-approve's --actor/--actor-name flags (added
+// alongside this fix, mirroring pheromoneDisplayCmd's existing five-action
+// mechanism) actually reach the history entry, not just the internal
+// approvePendingNote/editPendingNote/rejectPendingNote functions this file's
+// other tests call directly.
+func TestSuggestApproveRecordsActorThroughTheRealCommand(t *testing.T) {
+	t.Run("approve_records_the_named_actor", func(t *testing.T) {
+		setupExchangeTest(t)
+		id := "note-suggest-approve-actor"
+		seedFreshQueuedNote(t, id)
+
+		rootCmd.SetArgs([]string{"suggest-approve", "--approve", id, "--actor", pheromoneActorRuntime, "--actor-name", "phase-end"})
+		defer rootCmd.SetArgs([]string{})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("suggest-approve --approve returned a Go error: %v", err)
+		}
+
+		history, err := readInfluenceHistory(id)
+		if err != nil {
+			t.Fatalf("read history: %v", err)
+		}
+		if len(history) != 1 {
+			t.Fatalf("expected exactly one history entry, got %d: %+v", len(history), history)
+		}
+		if history[0].Action != pheromoneActionAccepted {
+			t.Fatalf("action = %q, want %q", history[0].Action, pheromoneActionAccepted)
+		}
+		if history[0].ActorKind != pheromoneActorRuntime {
+			t.Fatalf("actor kind = %q, want %q", history[0].ActorKind, pheromoneActorRuntime)
+		}
+		if history[0].ActorName != "phase-end" {
+			t.Fatalf("actor name = %q, want %q", history[0].ActorName, "phase-end")
+		}
+	})
+
+	t.Run("dismiss_defaults_to_the_owner_when_no_actor_flag_is_given", func(t *testing.T) {
+		setupExchangeTest(t)
+		id := "note-suggest-approve-default-actor"
+		seedFreshQueuedNote(t, id)
+
+		rootCmd.SetArgs([]string{"suggest-approve", "--dismiss", id})
+		defer rootCmd.SetArgs([]string{})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("suggest-approve --dismiss returned a Go error: %v", err)
+		}
+
+		history, err := readInfluenceHistory(id)
+		if err != nil {
+			t.Fatalf("read history: %v", err)
+		}
+		if len(history) != 1 {
+			t.Fatalf("expected exactly one history entry, got %d: %+v", len(history), history)
+		}
+		if history[0].Action != pheromoneActionRejected {
+			t.Fatalf("action = %q, want %q", history[0].Action, pheromoneActionRejected)
+		}
+		if history[0].ActorKind != pheromoneActorOwner {
+			t.Fatalf("expected the default actor to be owner, got %q", history[0].ActorKind)
+		}
+	})
+
+	t.Run("approve_with_edit_records_both_actions_with_the_actor", func(t *testing.T) {
+		setupExchangeTest(t)
+		id := "note-suggest-approve-edit-then-accept"
+		seedFreshQueuedNote(t, id)
+
+		rootCmd.SetArgs([]string{"suggest-approve", "--approve", id, "--edit", "owner's rewording", "--actor", pheromoneActorOwner, "--actor-name", "the-owner"})
+		defer rootCmd.SetArgs([]string{})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("suggest-approve --approve --edit returned a Go error: %v", err)
+		}
+
+		history, err := readInfluenceHistory(id)
+		if err != nil {
+			t.Fatalf("read history: %v", err)
+		}
+		if len(history) != 2 {
+			t.Fatalf("expected exactly two history entries (edited then accepted), got %d: %+v", len(history), history)
+		}
+		if history[0].Action != pheromoneActionEdited || history[1].Action != pheromoneActionAccepted {
+			t.Fatalf("expected [edited, accepted] in order, got %+v", history)
+		}
+		for _, e := range history {
+			if e.ActorName != "the-owner" {
+				t.Fatalf("entry %+v did not record the actor name", e)
+			}
 		}
 	})
 }

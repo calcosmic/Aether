@@ -195,17 +195,19 @@ func clearSignalQuarantine(signalID string) (colony.PheromoneSignal, bool, error
 	return colony.PheromoneSignal{}, false, nil
 }
 
-// stampPendingNoteAction records the owner's decision on a queued item with
-// a timestamp, then marks it no longer pending. This is deliberately the
-// first entry in what plan 203-11 extends into a full immutable action
-// history (BIO-08's remaining verbs: reinforce/defer/expire/revoke/appeal) --
-// today it is one action, one timestamp, kept on the item rather than
-// deleted, so that later history has something to build on instead of
-// starting empty. Marking Dismissed alongside the action preserves
-// suggest-approve's pre-existing "no longer pending" listing behavior
-// unchanged: filterActiveSuggestions already excludes dismissed items, so an
-// actioned item stops appearing as pending exactly as it did before this
-// plan.
+// stampPendingNoteAction records the owner's decision on a queued item's own
+// convenience scalar (Action/ActionAt) and marks it no longer pending. This
+// scalar is deliberately NOT the durable history: every caller of this
+// function (approvePendingNote, rejectPendingNote) separately records the
+// SAME decision, together with the acting identity BIO-08 requires, in the
+// append-only history appendInfluenceHistory maintains in
+// pheromones-history.json (cmd/pheromone_influence.go) -- one action, one
+// timestamp, kept on the item as a fast last-decision lookup; the full
+// ordered sequence with every actor lives in that history file instead.
+// Marking Dismissed alongside the action preserves suggest-approve's
+// pre-existing "no longer pending" listing behavior unchanged:
+// filterActiveSuggestions already excludes dismissed items, so an actioned
+// item stops appearing as pending exactly as it did before this plan.
 func stampPendingNoteAction(item *colony.PendingSuggestion, action string) {
 	item.Dismissed = true
 	a := action
@@ -223,6 +225,19 @@ type pendingNoteActionResult struct {
 	Signal     *colony.PheromoneSignal
 }
 
+// pendingNoteActionSummary renders a queued item's own decision scalars
+// (Dismissed/Action) as the short, human-readable "before"/"after" string
+// recorded on its influence-history entry -- the same "key=value" summary
+// style cmd/pheromone_influence.go's signal-level actions already use (e.g.
+// reinforceNote's "strength=%.2f reinforcement_count=%d").
+func pendingNoteActionSummary(item colony.PendingSuggestion) string {
+	action := "none"
+	if item.Action != nil && *item.Action != "" {
+		action = *item.Action
+	}
+	return fmt.Sprintf("dismissed=%t action=%s", item.Dismissed, action)
+}
+
 // approvePendingNote is the only function that approves a queued item,
 // whether it originated as a runtime suggestion or a cross-project import.
 // Approving a suggestion writes it as an active note through the existing
@@ -231,8 +246,16 @@ type pendingNoteActionResult struct {
 // created it -- it only clears that stored note's quarantine flag through
 // clearSignalQuarantine, the one function permitted to do so. A --dry-run
 // call returns a preview and performs no store write at all (no queue
-// update, no signal write, no quarantine clear).
-func approvePendingNote(id string, dryRun bool) (pendingNoteActionResult, error) {
+// update, no signal write, no quarantine clear, no history entry).
+//
+// Records the decision through the SAME append-only history writer
+// cmd/pheromone_influence.go's other seven BIO-08 actions already use
+// (appendInfluenceHistory) -- accept is not a second, parallel record.
+// actorKind/actorName are recorded exactly as the caller supplies them
+// (suggestApproveCmd's --actor/--actor-name flags, defaulting to the owner)
+// -- the identical mechanism the other five actions already use on
+// pheromoneDisplayCmd.
+func approvePendingNote(id, actorKind, actorName string, dryRun bool) (pendingNoteActionResult, error) {
 	if store == nil {
 		return pendingNoteActionResult{}, fmt.Errorf("no store initialized")
 	}
@@ -244,6 +267,7 @@ func approvePendingNote(id string, dryRun bool) (pendingNoteActionResult, error)
 		return pendingNoteActionResult{Found: true, WouldApply: true, Item: item}, nil
 	}
 
+	before := pendingNoteActionSummary(item)
 	result := pendingNoteActionResult{Found: true}
 
 	if pendingNoteOrigin(item) == colony.PendingOriginImport {
@@ -278,6 +302,9 @@ func approvePendingNote(id string, dryRun bool) (pendingNoteActionResult, error)
 		return pendingNoteActionResult{}, err
 	}
 	pendingNoteWriteCount++
+	if _, err := appendInfluenceHistory(id, pheromoneActionAccepted, actorKind, actorName, before, pendingNoteActionSummary(item), ""); err != nil {
+		return pendingNoteActionResult{}, err
+	}
 	result.Item = item
 	return result, nil
 }
@@ -287,8 +314,15 @@ func approvePendingNote(id string, dryRun bool) (pendingNoteActionResult, error)
 // item was edited. Editing never approves or writes a pheromone signal
 // itself and never touches Dismissed -- accepting or rejecting the (now
 // edited) item is still a separate, later decision. A --dry-run call
-// returns a preview and writes nothing.
-func editPendingNote(id, newContent string, dryRun bool) (pendingNoteActionResult, error) {
+// returns a preview and writes nothing (no queue update, no history entry).
+//
+// Records the edit through the same append-only history writer
+// appendInfluenceHistory (BIO-08). The before/after summary names the
+// content hash rather than the full wording -- the same "key=value" summary
+// style the other actions already use, rather than replaying arbitrary
+// owner-authored text back into the history unsanitized. actorKind/actorName
+// are recorded exactly as the caller supplies them.
+func editPendingNote(id, actorKind, actorName, newContent string, dryRun bool) (pendingNoteActionResult, error) {
 	if store == nil {
 		return pendingNoteActionResult{}, fmt.Errorf("no store initialized")
 	}
@@ -303,6 +337,7 @@ func editPendingNote(id, newContent string, dryRun bool) (pendingNoteActionResul
 		return pendingNoteActionResult{Found: true, WouldApply: true, Item: preview}, nil
 	}
 
+	before := fmt.Sprintf("content_hash=%s", item.ContentHash)
 	item.Content = newContent
 	item.ContentHash = "sha256:" + sha256Sum(newContent)
 	edited := colony.PendingActionEdited
@@ -314,14 +349,23 @@ func editPendingNote(id, newContent string, dryRun bool) (pendingNoteActionResul
 		return pendingNoteActionResult{}, err
 	}
 	pendingNoteWriteCount++
+	after := fmt.Sprintf("content_hash=%s", item.ContentHash)
+	if _, err := appendInfluenceHistory(id, pheromoneActionEdited, actorKind, actorName, before, after, ""); err != nil {
+		return pendingNoteActionResult{}, err
+	}
 	return pendingNoteActionResult{Found: true, Item: item}, nil
 }
 
 // rejectPendingNote marks a queued item dismissed and rejected. It never
 // touches a linked stored signal: a rejected import's quarantine flag is
 // left exactly as it was -- only approvePendingNote's clearSignalQuarantine
-// call may clear it. A --dry-run call returns a preview and writes nothing.
-func rejectPendingNote(id string, dryRun bool) (pendingNoteActionResult, error) {
+// call may clear it. A --dry-run call returns a preview and writes nothing
+// (no queue update, no history entry).
+//
+// Records the decision through the same append-only history writer
+// appendInfluenceHistory (BIO-08) that approvePendingNote and editPendingNote
+// use. actorKind/actorName are recorded exactly as the caller supplies them.
+func rejectPendingNote(id, actorKind, actorName string, dryRun bool) (pendingNoteActionResult, error) {
 	if store == nil {
 		return pendingNoteActionResult{}, fmt.Errorf("no store initialized")
 	}
@@ -333,11 +377,15 @@ func rejectPendingNote(id string, dryRun bool) (pendingNoteActionResult, error) 
 		return pendingNoteActionResult{Found: true, WouldApply: true, Item: item}, nil
 	}
 
+	before := pendingNoteActionSummary(item)
 	stampPendingNoteAction(&item, colony.PendingActionRejected)
 	if err := savePendingNoteAtomically(item); err != nil {
 		return pendingNoteActionResult{}, err
 	}
 	pendingNoteWriteCount++
+	if _, err := appendInfluenceHistory(id, pheromoneActionRejected, actorKind, actorName, before, pendingNoteActionSummary(item), ""); err != nil {
+		return pendingNoteActionResult{}, err
+	}
 	return pendingNoteActionResult{Found: true, Item: item}, nil
 }
 

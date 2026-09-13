@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"strings"
+
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/spf13/cobra"
 )
@@ -26,6 +28,17 @@ var suggestApproveCmd = &cobra.Command{
 		editText, _ := cmd.Flags().GetString("edit")
 		dismissID, _ := cmd.Flags().GetString("dismiss")
 		dismissAll, _ := cmd.Flags().GetBool("dismiss-all")
+
+		// BIO-08 (CR-03): accept/edit/reject record their acting identity
+		// through the SAME --actor/--actor-name mechanism
+		// pheromoneDisplayCmd's five other influence actions already use,
+		// defaulting to the owner exactly as that command does.
+		actorFlag, _ := cmd.Flags().GetString("actor")
+		actorName, _ := cmd.Flags().GetString("actor-name")
+		actor := pheromoneActorOwner
+		if strings.TrimSpace(actorFlag) != "" {
+			actor = actorFlag
+		}
 
 		// Load active colony state. Non-blocking: return ok:true with empty
 		// list on error (e.g. no colony initialized yet), matching the
@@ -88,7 +101,7 @@ var suggestApproveCmd = &cobra.Command{
 
 		// --- Dismiss single (reject) ---
 		if dismissID != "" {
-			result, err := rejectPendingNote(dismissID, dryRun)
+			result, err := rejectPendingNote(dismissID, actor, actorName, dryRun)
 			if err != nil {
 				outputErrorMessage(err.Error())
 				return nil
@@ -110,7 +123,7 @@ var suggestApproveCmd = &cobra.Command{
 		// --- Approve single (optionally preceded by an edit) ---
 		if approveID != "" {
 			if editText != "" {
-				editResult, err := editPendingNote(approveID, editText, dryRun)
+				editResult, err := editPendingNote(approveID, actor, actorName, editText, dryRun)
 				if err != nil {
 					outputErrorMessage(err.Error())
 					return nil
@@ -124,7 +137,7 @@ var suggestApproveCmd = &cobra.Command{
 				}
 			}
 
-			result, err := approvePendingNote(approveID, dryRun)
+			result, err := approvePendingNote(approveID, actor, actorName, dryRun)
 			if err != nil {
 				outputErrorMessage(err.Error())
 				return nil
@@ -186,6 +199,8 @@ func init() {
 	suggestApproveCmd.Flags().String("edit", "", "Replace the wording of the item named by --approve before approving it")
 	suggestApproveCmd.Flags().String("dismiss", "", "Reject a suggestion or quarantined import by ID")
 	suggestApproveCmd.Flags().Bool("dismiss-all", false, "Dismiss all pending suggestions")
+	suggestApproveCmd.Flags().String("actor", "", "Actor performing --approve/--edit/--dismiss: owner (default), runtime, or learning")
+	suggestApproveCmd.Flags().String("actor-name", "", "Name of the actor performing the action (optional, recorded in the history)")
 	rootCmd.AddCommand(suggestApproveCmd)
 }
 

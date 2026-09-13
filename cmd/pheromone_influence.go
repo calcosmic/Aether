@@ -15,10 +15,16 @@ import (
 
 // Actor kinds a pheromoneInfluenceEntry may declare. This is a closed set --
 // an entry naming any other value is refused by name (appendInfluenceHistory).
-// accept/edit/reject/revoke/appeal change what the owner meant and are
-// owner-only (pheromoneInfluenceActorAllowed); reinforce/defer/expire change
-// only how long or how strongly an existing meaning applies and may also be
-// performed by the runtime or a learning pass.
+// pheromoneInfluenceActorAllowed enforces owner-only for exactly four of the
+// declared actions: revoke/appeal (change what the owner meant) and pin/unpin
+// (change whether the runtime may ever re-tune a note at all). Reinforce/
+// defer/expire/weaken change only how long or how strongly an existing
+// meaning applies and may also be performed by the runtime or a learning
+// pass. Accept/edit/reject (cmd/pheromone_approval.go, CR-03) record
+// whatever actor kind their caller supplies with no restriction of their
+// own -- in practice always the owner today, since suggestApproveCmd is
+// their one reachable surface (TestOneApprovalSurface) and nothing else
+// calls them.
 const (
 	pheromoneActorOwner    = "owner"
 	pheromoneActorRuntime  = "runtime"

@@ -347,11 +347,17 @@ type PendingSuggestion struct {
 	Origin   *string `json:"origin,omitempty"`
 	SignalID *string `json:"signal_id,omitempty"`
 
-	// Action and ActionAt record the owner's decision -- accepted, edited,
-	// or rejected -- with a timestamp. This is deliberately a single scalar
-	// record, not a list: it is the first entry plan 203-11 extends into a
-	// full immutable action history (BIO-08's remaining verbs), not that
-	// history itself.
+	// Action and ActionAt record the owner's most recent decision --
+	// accepted, edited, or rejected -- with a timestamp, as a fast
+	// convenience scalar kept directly on the item (e.g. for
+	// suggest-approve's own listing). This is deliberately NOT the durable
+	// history: every one of BIO-08's declared actions -- including these
+	// three -- is separately recorded, together with the acting identity
+	// that performed it, in the append-only history
+	// cmd/pheromone_influence.go's appendInfluenceHistory maintains in
+	// pheromones-history.json. Action/ActionAt reflect only the LAST
+	// decision on this item; the full ordered sequence, with every actor,
+	// lives in that history file instead.
 	Action   *string `json:"action,omitempty"`
 	ActionAt *string `json:"action_at,omitempty"`
 }
