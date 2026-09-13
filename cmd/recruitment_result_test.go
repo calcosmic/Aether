@@ -3,6 +3,7 @@ package cmd
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -415,4 +416,256 @@ func TestRecruitmentRecovery(t *testing.T) {
 			t.Fatalf("expected output to carry one exact command, got: %s", out)
 		}
 	})
+}
+
+// TestOneRecruitmentIdempotencyMechanism is an AST-based scan of the cmd
+// package that fails by name for any function, map type, or map-typed
+// variable other than bindRecruitmentResult's own comparison whose name
+// suggests it deduplicates, tracks "seen", or idempotency-checks a
+// recruitment completion report.
+func TestOneRecruitmentIdempotencyMechanism(t *testing.T) {
+	violations := scanForSecondRecruitmentIdempotencyMechanism(t, ".")
+	if len(violations) != 0 {
+		t.Fatalf("found a possible second recruitment idempotency mechanism:\n%s", strings.Join(violations, "\n"))
+	}
+
+	t.Run("a synthetic second dedupe map is caught", func(t *testing.T) {
+		fixtureSrc := `package cmd
+
+var recruitmentSeenSet = map[string]bool{}
+`
+		violations := scanSourceForSecondRecruitmentIdempotencyMechanism(t, "fixture_recruitment_dedupe.go", fixtureSrc)
+		if len(violations) == 0 {
+			t.Fatal("scanner failed to detect a synthetic second recruitment dedupe map")
+		}
+	})
+
+	t.Run("a synthetic second dedupe function is caught", func(t *testing.T) {
+		fixtureSrc := `package cmd
+
+func recruitmentAlreadySeen(id string) bool {
+	return false
+}
+`
+		violations := scanSourceForSecondRecruitmentIdempotencyMechanism(t, "fixture_recruitment_dedupe_func.go", fixtureSrc)
+		if len(violations) == 0 {
+			t.Fatal("scanner failed to detect a synthetic second recruitment dedupe function")
+		}
+	})
+}
+
+func scanForSecondRecruitmentIdempotencyMechanism(t *testing.T, dir string) []string {
+	t.Helper()
+	names, err := filepath.Glob(filepath.Join(dir, "*.go"))
+	if err != nil {
+		t.Fatalf("glob cmd package files: %v", err)
+	}
+	if len(names) == 0 {
+		t.Fatal("fixture is broken: no .go files found in the cmd package directory")
+	}
+	var violations []string
+	for _, name := range names {
+		if strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		data, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		violations = append(violations, scanSourceForSecondRecruitmentIdempotencyMechanism(t, name, string(data))...)
+	}
+	return violations
+}
+
+var recruitmentIdempotencyAllowedNames = map[string]bool{
+	"bindRecruitmentResult":            true,
+	"errRecruitmentResultAlreadyBound": true,
+	"recruitmentResultContentDiff":     true,
+	"recruitmentResultsFile":           true,
+	"recruitmentResultsPath":           true,
+	"loadRecruitmentResultByID":        true,
+}
+
+func scanSourceForSecondRecruitmentIdempotencyMechanism(t *testing.T, filename, src string) []string {
+	t.Helper()
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, filename, src, 0)
+	if err != nil {
+		t.Fatalf("parse %s: %v", filename, err)
+	}
+	var violations []string
+	ast.Inspect(file, func(n ast.Node) bool {
+		switch decl := n.(type) {
+		case *ast.TypeSpec:
+			if decl.Name == nil {
+				return true
+			}
+			if _, isMap := decl.Type.(*ast.MapType); isMap && looksLikeRecruitmentDedupeName(decl.Name.Name) {
+				violations = append(violations, fmt.Sprintf("%s: map type %q may be a second recruitment dedupe structure", fset.Position(decl.Pos()).String(), decl.Name.Name))
+			}
+		case *ast.ValueSpec:
+			for i, valueName := range decl.Names {
+				if !looksLikeRecruitmentDedupeName(valueName.Name) {
+					continue
+				}
+				if _, isMap := decl.Type.(*ast.MapType); isMap {
+					violations = append(violations, fmt.Sprintf("%s: variable %q declares a map type -- may be a second recruitment dedupe structure", fset.Position(valueName.Pos()).String(), valueName.Name))
+					continue
+				}
+				if i < len(decl.Values) && isMapValueExpr(decl.Values[i]) {
+					violations = append(violations, fmt.Sprintf("%s: variable %q is initialized from a map -- may be a second recruitment dedupe structure", fset.Position(valueName.Pos()).String(), valueName.Name))
+				}
+			}
+		case *ast.FuncDecl:
+			if decl.Name == nil || recruitmentIdempotencyAllowedNames[decl.Name.Name] {
+				return true
+			}
+			lower := strings.ToLower(decl.Name.Name)
+			if !strings.Contains(lower, "recruit") {
+				return true
+			}
+			for _, suspicious := range []string{"dedup", "idempot", "alreadybound", "alreadyseen", "seen"} {
+				if strings.Contains(lower, suspicious) {
+					violations = append(violations, fmt.Sprintf("%s: function %q looks like a second recruitment idempotency mechanism", fset.Position(decl.Pos()).String(), decl.Name.Name))
+					break
+				}
+			}
+		}
+		return true
+	})
+	return violations
+}
+
+func looksLikeRecruitmentDedupeName(name string) bool {
+	lower := strings.ToLower(name)
+	return strings.Contains(lower, "recruit") && (strings.Contains(lower, "seen") || strings.Contains(lower, "dedup") || strings.Contains(lower, "cache"))
+}
+
+func isMapValueExpr(expr ast.Expr) bool {
+	switch v := expr.(type) {
+	case *ast.CompositeLit:
+		_, isMap := v.Type.(*ast.MapType)
+		return isMap
+	case *ast.CallExpr:
+		ident, ok := v.Fun.(*ast.Ident)
+		if !ok || ident.Name != "make" || len(v.Args) == 0 {
+			return false
+		}
+		_, isMap := v.Args[0].(*ast.MapType)
+		return isMap
+	}
+	return false
+}
+
+// TestEveryResultWriteGoesThroughTheBinding derives, from the parsed syntax
+// tree of every non-test file in the cmd package, every call that writes to
+// recruitmentResultsPath through the store, and asserts bindRecruitmentResult
+// is the only enclosing function that ever does so.
+func TestEveryResultWriteGoesThroughTheBinding(t *testing.T) {
+	writeMethods := map[string]bool{
+		"UpdateJSONAtomically": true,
+		"UpdateFile":           true,
+		"SaveJSON":             true,
+		"AtomicWrite":          true,
+		"WriteFile":            true,
+	}
+
+	names, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatalf("glob cmd package files: %v", err)
+	}
+	if len(names) == 0 {
+		t.Fatal("fixture is broken: no .go files found in the cmd package directory")
+	}
+
+	fset := token.NewFileSet()
+	found := false
+	var violations []string
+	for _, name := range names {
+		if strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(fset, name, nil, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", name, err)
+		}
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Body == nil {
+				continue
+			}
+			ast.Inspect(fn.Body, func(n ast.Node) bool {
+				call, ok := n.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				sel, ok := call.Fun.(*ast.SelectorExpr)
+				if !ok || !writeMethods[sel.Sel.Name] {
+					return true
+				}
+				if len(call.Args) == 0 {
+					return true
+				}
+				ident, ok := call.Args[0].(*ast.Ident)
+				if !ok || ident.Name != "recruitmentResultsPath" {
+					return true
+				}
+				found = true
+				if fn.Name == nil || fn.Name.Name != "bindRecruitmentResult" {
+					fnName := "<unknown>"
+					if fn.Name != nil {
+						fnName = fn.Name.Name
+					}
+					violations = append(violations, fmt.Sprintf(
+						"%s: %s writes recruitmentResultsPath via store.%s -- only bindRecruitmentResult may write it",
+						fset.Position(call.Pos()).String(), fnName, sel.Sel.Name,
+					))
+				}
+				return true
+			})
+		}
+	}
+	if !found {
+		t.Fatal("fixture is broken: no write call referencing recruitmentResultsPath was found anywhere in the cmd package")
+	}
+	if len(violations) != 0 {
+		t.Fatalf("found a recruitment result write outside bindRecruitmentResult:\n%s", strings.Join(violations, "\n"))
+	}
+}
+
+// TestReplayPerformsNoWrite proves a verified replay is genuinely read-only
+// by comparing the on-disk file's modification time before and after the
+// replay call -- a stronger signal than byte-equality alone, since even a
+// no-op rewrite of identical bytes would still bump the file's mtime.
+func TestReplayPerformsNoWrite(t *testing.T) {
+	saveGlobals(t)
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	result := newRecruitmentResultFixture("no-write-replay-1")
+	if _, err := bindRecruitmentResult(result); err != nil {
+		t.Fatalf("seed bind: %v", err)
+	}
+
+	resultsFilePath := filepath.Join(store.BasePath(), recruitmentResultsPath)
+	before, err := os.Stat(resultsFilePath)
+	if err != nil {
+		t.Fatalf("stat results file before replay: %v", err)
+	}
+
+	if _, err := bindRecruitmentResult(result); err != nil {
+		t.Fatalf("replay bind: %v", err)
+	}
+
+	after, err := os.Stat(resultsFilePath)
+	if err != nil {
+		t.Fatalf("stat results file after replay: %v", err)
+	}
+	if !before.ModTime().Equal(after.ModTime()) {
+		t.Fatalf("recruitment/results.json's modification time changed on a verified replay: before=%v after=%v -- a write occurred", before.ModTime(), after.ModTime())
+	}
+	if before.Size() != after.Size() {
+		t.Fatalf("recruitment/results.json's size changed on a verified replay: before=%d after=%d", before.Size(), after.Size())
+	}
 }
