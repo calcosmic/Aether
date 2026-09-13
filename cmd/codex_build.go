@@ -2679,6 +2679,14 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 			// as persistDispatchWorkerHandoff always did, then feeds the
 			// failure log and the observation log from the same facts.
 			_ = recordDispatchWorkerOutcome(dispatch, result)
+			// 203-09 Task 2 (SYN-203-02 ruling (b)): a worker's spawn claims
+			// on this lane no longer go unread. routeInRepoSpawnClaims
+			// (cmd/recruitment_lane.go) is a no-op when the worker returned
+			// no claims, so a plain build that never asks for help reaches
+			// no new code here.
+			if result.WorkerResult != nil && len(result.WorkerResult.Spawns) > 0 {
+				routeInRepoSpawnClaims(root, parallelMode, dispatch, *result.WorkerResult)
+			}
 		}
 	}
 	if err != nil {

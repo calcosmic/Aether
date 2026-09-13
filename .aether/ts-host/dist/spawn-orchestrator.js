@@ -1,47 +1,39 @@
 /**
  * Spawn orchestrator for the TypeScript orchestration host.
  *
- * Validates worker spawn claims against budget and depth limits, synthesizes
- * child worker dispatch objects for the wave orchestrator, and logs rejected
- * spawns to stderr. This is the policy engine that decides which spawn requests
- * are allowed and which are rejected.
+ * Bridges worker spawn claims to the ONE Go admission chokepoint
+ * (spawnCanSpawnDecision, exposed via `aether spawn-can-spawn`) instead of
+ * deciding depth/budget itself. Before 203-09 this file held its own budget
+ * total, consumed count, and depth constant -- a second, uncoordinated
+ * admission authority running alongside the Go safety kernel on the
+ * autopilot/host lane. That arithmetic is deleted here, not merely bypassed
+ * (SYN-203-02): every claim is decided by the same Go ledger the interactive
+ * `aether recruit` lane already consults, so a host-lane recruitment and a
+ * native-lane recruitment against the same spawn-tree state produce the
+ * same allow/deny answer, with the same reason vocabulary.
  *
- * Satisfies SPAWN-02 (depth=2 max), SPAWN-03 (budget tracking), and
- * SPAWN-06 (fail-closed: over-budget spawns are skipped, never queued).
+ * A bridge call that fails, times out, or returns an unparseable envelope
+ * denies the claim and names the bridge failure -- it never falls back to
+ * local admission arithmetic (the same fail-closed discipline the Go side's
+ * own unreadable-state branches already follow).
  */
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-/** Maximum spawn depth. Workers at depth >= 2 cannot spawn children. */
-const MAX_SPAWN_DEPTH = 2;
-/** Default total budget when not specified. */
-const DEFAULT_TOTAL_BUDGET = 20;
+import { callGoJSON } from "./go-bridge.js";
 // ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
 /**
- * Create a new SpawnOrchestrator with the given options.
+ * Create a new SpawnOrchestrator bridging every admission decision to the
+ * Go binary's `spawn-can-spawn` command -- the same chokepoint
+ * (spawnCanSpawnDecision) the interactive `aether recruit` lane and every
+ * ordinary spawn already use. This orchestrator holds no budget total, no
+ * consumed count and no depth constant of its own.
  *
- * The orchestrator is stateful: each call to processClaims consumes budget
- * from the remaining pool. Callers should create one orchestrator per build
- * and pass it through the wave execution pipeline.
- *
- * @param opts - Orchestrator configuration
+ * @param opts - Orchestrator configuration (Go binary path and cwd)
  * @returns A SpawnOrchestrator instance
  */
-export function createSpawnOrchestrator(opts = {}) {
-    const totalBudget = opts.totalBudget ?? DEFAULT_TOTAL_BUDGET;
-    let consumedBudget = opts.consumedBudget ?? 0;
+export function createSpawnOrchestrator(opts) {
+    const bridge = { goBinaryPath: opts.goBinaryPath, cwd: opts.cwd };
     return {
-        get remainingBudget() {
-            return totalBudget - consumedBudget;
-        },
-        get totalBudget() {
-            return totalBudget;
-        },
-        get consumedBudget() {
-            return consumedBudget;
-        },
         processClaims(parentName, parentDepth, claims) {
             // Guard against undefined/null claims
             const safeClaims = Array.isArray(claims) ? claims : [];
@@ -49,21 +41,38 @@ export function createSpawnOrchestrator(opts = {}) {
             const rejected = [];
             for (let i = 0; i < safeClaims.length; i++) {
                 const claim = safeClaims[i];
-                // SPAWN-02: depth check
-                if (parentDepth >= MAX_SPAWN_DEPTH) {
-                    const reason = "max spawn depth exceeded (limit: 2)";
+                let decision;
+                try {
+                    decision = callGoJSON(bridge, [
+                        "spawn-can-spawn",
+                        "--name", parentName,
+                        "--depth", String(parentDepth),
+                        "--caste", claim.caste,
+                        "--task", claim.task,
+                        "--workspace", opts.cwd,
+                    ]);
+                }
+                catch (err) {
+                    // Fail-closed: a bridge call that fails, times out, returns a
+                    // non-zero exit, or returns an unparseable envelope denies the
+                    // claim and names the bridge failure -- never a local
+                    // recomputation of depth or budget.
+                    const msg = err instanceof Error ? err.message : String(err);
+                    const reason = `spawn admission gate unreachable: ${msg}`;
                     rejected.push({ claim, reason });
                     process.stderr.write(`Spawn rejected for ${parentName}: ${reason}\n`);
                     continue;
                 }
-                // SPAWN-06: budget check (fail-closed)
-                if (accepted.length >= (totalBudget - consumedBudget)) {
-                    const reason = "spawn budget exhausted";
+                if (!decision || decision.can_spawn !== true) {
+                    // The gate's own detail sentence, verbatim -- never a locally
+                    // composed rejection string.
+                    const reason = (decision && (decision.detail || decision.reason)) ||
+                        "spawn denied by the admission gate";
                     rejected.push({ claim, reason });
                     process.stderr.write(`Spawn rejected for ${parentName}: ${reason}\n`);
                     continue;
                 }
-                // Both checks passed: synthesize the child worker
+                // The gate admitted this claim: synthesize the child worker.
                 const childDepth = parentDepth + 1;
                 const childName = `${parentName}-spawn-${accepted.length}`;
                 const spawnedWorker = {
@@ -75,8 +84,6 @@ export function createSpawnOrchestrator(opts = {}) {
                 };
                 accepted.push(spawnedWorker);
             }
-            // Update consumed budget by accepted count
-            consumedBudget += accepted.length;
             return { accepted, rejected };
         },
     };

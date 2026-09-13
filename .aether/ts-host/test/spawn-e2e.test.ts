@@ -24,6 +24,10 @@ import {
   createSpawnOrchestrator,
   type SpawnOrchestrator,
 } from "../src/spawn-orchestrator.js";
+// 203-09: admission decisions come from the Go bridge, not local budget
+// arithmetic. Each test below stubs the bridge to a fixed allow/deny answer
+// matching what the original simulated budget numbers intended.
+import { __setCallGoJSON, __restoreCallGoJSON } from "../src/go-bridge.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -77,6 +81,7 @@ async function captureStderrAsync<T>(fn: () => Promise<T>): Promise<{ result: T;
 describe("end-to-end spawn pipeline (SPAWN-01)", () => {
   afterEach(() => {
     __restoreDispatchSingleWorker();
+    __restoreCallGoJSON();
   });
 
   it("manifest worker spawns child, child completes, result in parent handoff", async () => {
@@ -107,9 +112,10 @@ describe("end-to-end spawn pipeline (SPAWN-01)", () => {
       }
     );
 
+    __setCallGoJSON(() => ({ can_spawn: true } as never));
     const orchestrator = createSpawnOrchestrator({
-      totalBudget: 10,
-      consumedBudget: 1, // Builder-01 already consumed
+      goBinaryPath: "/usr/bin/true",
+      cwd: "/tmp",
     });
 
     const { result: waveResults, stderr } = await captureStderrAsync(() =>
@@ -182,9 +188,10 @@ describe("end-to-end spawn pipeline (SPAWN-01)", () => {
       }
     );
 
+    __setCallGoJSON(() => ({ can_spawn: true } as never));
     const orchestrator = createSpawnOrchestrator({
-      totalBudget: 10,
-      consumedBudget: 2, // Two manifest workers
+      goBinaryPath: "/usr/bin/true",
+      cwd: "/tmp",
     });
 
     const { result: waveResults } = await captureStderrAsync(() =>
@@ -219,6 +226,7 @@ describe("end-to-end spawn pipeline (SPAWN-01)", () => {
 describe("budget enforcement end-to-end (SPAWN-03, SPAWN-06)", () => {
   afterEach(() => {
     __restoreDispatchSingleWorker();
+    __restoreCallGoJSON();
   });
 
   it("total workers (manifest + spawned) never exceed budget", async () => {
@@ -243,9 +251,20 @@ describe("budget enforcement end-to-end (SPAWN-03, SPAWN-06)", () => {
       }
     );
 
+    // Simulate the Go ledger having exactly 1 slot left: the gate allows
+    // the first admission call across all claims and denies every one
+    // after it with reason "budget".
+    let goCallCount3 = 0;
+    __setCallGoJSON(() => {
+      goCallCount3++;
+      if (goCallCount3 === 1) {
+        return { can_spawn: true } as never;
+      }
+      return { can_spawn: false, reason: "budget", detail: "spawn budget exhausted" } as never;
+    });
     const orchestrator = createSpawnOrchestrator({
-      totalBudget: 3,
-      consumedBudget: 2, // 2 manifest workers consumed
+      goBinaryPath: "/usr/bin/true",
+      cwd: "/tmp",
     });
 
     const { result: waveResults, stderr } = await captureStderrAsync(() =>
@@ -267,11 +286,12 @@ describe("budget enforcement end-to-end (SPAWN-03, SPAWN-06)", () => {
       );
     }
 
-    // Verify budget is fully consumed (no remaining slots)
-    assert.equal(
-      orchestrator.remainingBudget,
-      0,
-      "Budget should be fully consumed after accepting at most 1 spawn"
+    // The Go gate, not this orchestrator, is what decides remaining budget
+    // now (SYN-203-02) -- verify the SAME counter shrank as claims were
+    // processed by checking every claim after the first was denied.
+    assert.ok(
+      goCallCount3 >= 2,
+      "Every claim after the first admitted one must have reached the gate"
     );
 
     // Rejected spawns should be logged
@@ -298,10 +318,11 @@ describe("budget enforcement end-to-end (SPAWN-03, SPAWN-06)", () => {
       }
     );
 
-    // Budget fully consumed
+    // Budget fully consumed: the gate denies every claim with reason "budget".
+    __setCallGoJSON(() => ({ can_spawn: false, reason: "budget", detail: "spawn budget exhausted" } as never));
     const orchestrator = createSpawnOrchestrator({
-      totalBudget: 1,
-      consumedBudget: 1,
+      goBinaryPath: "/usr/bin/true",
+      cwd: "/tmp",
     });
 
     const { result: waveResults } = await captureStderrAsync(() =>
@@ -327,6 +348,7 @@ describe("budget enforcement end-to-end (SPAWN-03, SPAWN-06)", () => {
 describe("depth enforcement end-to-end (SPAWN-02)", () => {
   afterEach(() => {
     __restoreDispatchSingleWorker();
+    __restoreCallGoJSON();
   });
 
   it("grandchild spawns are rejected", async () => {
@@ -335,9 +357,14 @@ describe("depth enforcement end-to-end (SPAWN-02)", () => {
     // so spawned children at depth 2 would never have their claims processed.
     // This test verifies at the orchestrator level that depth=2 claims are rejected.
 
+    __setCallGoJSON(() => ({
+      can_spawn: false,
+      reason: "depth",
+      detail: "Builder-01-spawn-0 is at depth 2; a helper spawned from here would be depth 3, past the cap of 2",
+    } as never));
     const orchestrator = createSpawnOrchestrator({
-      totalBudget: 10,
-      consumedBudget: 0,
+      goBinaryPath: "/usr/bin/true",
+      cwd: "/tmp",
     });
 
     // A child worker at depth 2 tries to spawn a grandchild
@@ -362,9 +389,10 @@ describe("depth enforcement end-to-end (SPAWN-02)", () => {
   });
 
   it("manifest workers at depth 1 can spawn children at depth 2", async () => {
+    __setCallGoJSON(() => ({ can_spawn: true } as never));
     const orchestrator = createSpawnOrchestrator({
-      totalBudget: 10,
-      consumedBudget: 0,
+      goBinaryPath: "/usr/bin/true",
+      cwd: "/tmp",
     });
 
     const childClaim: SpawnClaim = {
@@ -395,6 +423,7 @@ describe("depth enforcement end-to-end (SPAWN-02)", () => {
 describe("spawn tree parent references (SPAWN-05)", () => {
   afterEach(() => {
     __restoreDispatchSingleWorker();
+    __restoreCallGoJSON();
   });
 
   it("child spawn records correct parent in spawn tree", async () => {
@@ -425,9 +454,10 @@ describe("spawn tree parent references (SPAWN-05)", () => {
       }
     );
 
+    __setCallGoJSON(() => ({ can_spawn: true } as never));
     const orchestrator = createSpawnOrchestrator({
-      totalBudget: 10,
-      consumedBudget: 1,
+      goBinaryPath: "/usr/bin/true",
+      cwd: "/tmp",
     });
 
     await dispatchWaves(
@@ -495,6 +525,7 @@ describe("spawn tree parent references (SPAWN-05)", () => {
 describe("ceremony output", () => {
   afterEach(() => {
     __restoreDispatchSingleWorker();
+    __restoreCallGoJSON();
   });
 
   it("spawn wave appears in ceremony output", async () => {
@@ -514,9 +545,10 @@ describe("ceremony output", () => {
       }
     );
 
+    __setCallGoJSON(() => ({ can_spawn: true } as never));
     const orchestrator = createSpawnOrchestrator({
-      totalBudget: 10,
-      consumedBudget: 1,
+      goBinaryPath: "/usr/bin/true",
+      cwd: "/tmp",
     });
 
     const { stderr } = await captureStderrAsync(() =>
@@ -547,9 +579,10 @@ describe("ceremony output", () => {
       })
     );
 
+    __setCallGoJSON(() => ({ can_spawn: true } as never));
     const orchestrator = createSpawnOrchestrator({
-      totalBudget: 10,
-      consumedBudget: 1,
+      goBinaryPath: "/usr/bin/true",
+      cwd: "/tmp",
     });
 
     const { stderr } = await captureStderrAsync(() =>

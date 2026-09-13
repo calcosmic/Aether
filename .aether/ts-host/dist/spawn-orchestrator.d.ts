@@ -1,27 +1,29 @@
 /**
  * Spawn orchestrator for the TypeScript orchestration host.
  *
- * Validates worker spawn claims against budget and depth limits, synthesizes
- * child worker dispatch objects for the wave orchestrator, and logs rejected
- * spawns to stderr. This is the policy engine that decides which spawn requests
- * are allowed and which are rejected.
+ * Bridges worker spawn claims to the ONE Go admission chokepoint
+ * (spawnCanSpawnDecision, exposed via `aether spawn-can-spawn`) instead of
+ * deciding depth/budget itself. Before 203-09 this file held its own budget
+ * total, consumed count, and depth constant -- a second, uncoordinated
+ * admission authority running alongside the Go safety kernel on the
+ * autopilot/host lane. That arithmetic is deleted here, not merely bypassed
+ * (SYN-203-02): every claim is decided by the same Go ledger the interactive
+ * `aether recruit` lane already consults, so a host-lane recruitment and a
+ * native-lane recruitment against the same spawn-tree state produce the
+ * same allow/deny answer, with the same reason vocabulary.
  *
- * Satisfies SPAWN-02 (depth=2 max), SPAWN-03 (budget tracking), and
- * SPAWN-06 (fail-closed: over-budget spawns are skipped, never queued).
+ * A bridge call that fails, times out, or returns an unparseable envelope
+ * denies the claim and names the bridge failure -- it never falls back to
+ * local admission arithmetic (the same fail-closed discipline the Go side's
+ * own unreadable-state branches already follow).
  */
 import type { SpawnClaim, SpawnedWorker, BuildDispatch } from "./types.js";
 /** Options for creating a spawn orchestrator instance. */
 export interface SpawnOrchestratorOptions {
-    /** Path to the Go binary. Unused by the orchestrator itself but kept for future use. */
-    goBinaryPath?: string;
-    /** Working directory. Unused by the orchestrator itself but kept for future use. */
-    cwd?: string;
-    /** Maximum total workers allowed (max_workers from manifest QueenSpawnBudget). Default: 20. */
-    totalBudget?: number;
-    /** Workers already dispatched before this orchestrator was created. Default: 0. */
-    consumedBudget?: number;
-    /** Depth of the workers currently being dispatched. Default: 1. */
-    currentDepth?: number;
+    /** Path to the Go binary this orchestrator asks for every admission decision. */
+    goBinaryPath: string;
+    /** Working directory for the Go subprocess (also used as the declared workspace). */
+    cwd: string;
 }
 /** Result of processing a batch of spawn claims. */
 export interface SpawnProcessingResult {
@@ -35,18 +37,14 @@ export interface SpawnProcessingResult {
 }
 /** Spawn orchestrator interface. */
 export interface SpawnOrchestrator {
-    /** Read-only: how many worker slots remain in the budget. */
-    readonly remainingBudget: number;
-    /** Read-only: total budget capacity. */
-    readonly totalBudget: number;
-    /** Read-only: how many workers have been consumed so far. */
-    readonly consumedBudget: number;
     /**
      * Process a batch of spawn claims from a parent worker.
      *
-     * Validates each claim against depth and budget limits. Accepted claims
-     * are converted to SpawnedWorker entries. Rejected claims are logged to
-     * stderr with a generic reason.
+     * Calls the Go admission gate (`aether spawn-can-spawn`) once per claim,
+     * passing the parent name, the parent depth, the requested caste, the
+     * objective and the declared workspace. The gate's own `allowed` (as
+     * `can_spawn`), `reason` and `detail` fields are returned unchanged --
+     * this orchestrator computes no admission decision of its own.
      *
      * @param parentName - Name of the parent worker issuing the claims
      * @param parentDepth - Depth of the parent worker
@@ -56,16 +54,16 @@ export interface SpawnOrchestrator {
     processClaims(parentName: string, parentDepth: number, claims: SpawnClaim[]): SpawnProcessingResult;
 }
 /**
- * Create a new SpawnOrchestrator with the given options.
+ * Create a new SpawnOrchestrator bridging every admission decision to the
+ * Go binary's `spawn-can-spawn` command -- the same chokepoint
+ * (spawnCanSpawnDecision) the interactive `aether recruit` lane and every
+ * ordinary spawn already use. This orchestrator holds no budget total, no
+ * consumed count and no depth constant of its own.
  *
- * The orchestrator is stateful: each call to processClaims consumes budget
- * from the remaining pool. Callers should create one orchestrator per build
- * and pass it through the wave execution pipeline.
- *
- * @param opts - Orchestrator configuration
+ * @param opts - Orchestrator configuration (Go binary path and cwd)
  * @returns A SpawnOrchestrator instance
  */
-export declare function createSpawnOrchestrator(opts?: SpawnOrchestratorOptions): SpawnOrchestrator;
+export declare function createSpawnOrchestrator(opts: SpawnOrchestratorOptions): SpawnOrchestrator;
 /**
  * Synthesize a BuildDispatch object from a spawn claim for child worker execution.
  *

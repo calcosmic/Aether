@@ -12,7 +12,7 @@
  * Uses __setDispatchSingleWorker to inject a mock.
  */
 
-import { describe, it } from "node:test";
+import { describe, it, afterEach } from "node:test";
 import assert from "node:assert/strict";
 
 import type { BuildDispatch, SpawnClaim } from "../src/types.js";
@@ -26,6 +26,16 @@ import {
   type WaveOrchestratorOptions,
 } from "../src/wave-orchestrator.js";
 import { createSpawnOrchestrator, type SpawnOrchestrator } from "../src/spawn-orchestrator.js";
+// 203-09: the spawn orchestrator bridges every admission decision to the Go
+// binary (`aether spawn-can-spawn`) instead of computing depth/budget
+// itself. These wave-orchestrator tests exercise spawn-wave dispatch, not
+// admission logic, so they stub the Go bridge to a fixed allow/deny answer
+// rather than asserting on a (now-deleted) local budget counter.
+import { __setCallGoJSON, __restoreCallGoJSON } from "../src/go-bridge.js";
+
+afterEach(() => {
+  __restoreCallGoJSON();
+});
 
 // ---------------------------------------------------------------------------
 // Mock helpers
@@ -298,11 +308,11 @@ describe("spawn processing (SPAWN-01, SPAWN-04)", () => {
       };
     };
     __setDispatchSingleWorker(spawnAwareMock);
+    __setCallGoJSON(() => ({ can_spawn: true } as never));
 
     const orchestrator = createSpawnOrchestrator({
-      totalBudget: 10,
-      consumedBudget: 1,
-      currentDepth: 1,
+      goBinaryPath: "/usr/bin/true",
+      cwd: "/tmp",
     });
 
     const dispatches = [makeDispatch("Builder-01", 1)];
@@ -348,11 +358,11 @@ describe("spawn processing (SPAWN-01, SPAWN-04)", () => {
       };
     };
     __setDispatchSingleWorker(spawnAwareMock);
+    __setCallGoJSON(() => ({ can_spawn: true } as never));
 
     const orchestrator = createSpawnOrchestrator({
-      totalBudget: 10,
-      consumedBudget: 1,
-      currentDepth: 1,
+      goBinaryPath: "/usr/bin/true",
+      cwd: "/tmp",
     });
 
     const dispatches = [makeDispatch("Builder-01", 1)];
@@ -440,11 +450,25 @@ describe("spawn processing (SPAWN-01, SPAWN-04)", () => {
     };
     __setDispatchSingleWorker(spawnAwareMock);
 
-    // Budget of 5, but 4 already consumed, so only 1 slot left
+    // Simulate the Go ledger having only 1 slot left: the gate allows the
+    // first admission call and denies every one after it with reason
+    // "budget" -- the same fixed vocabulary spawnCanSpawnDecision uses.
+    let goCallCount = 0;
+    __setCallGoJSON(() => {
+      goCallCount++;
+      if (goCallCount === 1) {
+        return { can_spawn: true } as never;
+      }
+      return {
+        can_spawn: false,
+        reason: "budget",
+        detail: "spawn budget exhausted",
+      } as never;
+    });
+
     const orchestrator = createSpawnOrchestrator({
-      totalBudget: 5,
-      consumedBudget: 4,
-      currentDepth: 1,
+      goBinaryPath: "/usr/bin/true",
+      cwd: "/tmp",
     });
 
     const dispatches = [makeDispatch("Builder-01", 1)];
@@ -455,6 +479,7 @@ describe("spawn processing (SPAWN-01, SPAWN-04)", () => {
 
     __restoreDispatchSingleWorker();
 
+    assert.equal(goCallCount, 3, "one Go admission call per claim");
     // Should have a spawn wave with only 1 child (the others were rejected by budget)
     if (results.length > 1) {
       // At most 1 child was accepted (budget had 1 slot)
@@ -463,8 +488,6 @@ describe("spawn processing (SPAWN-01, SPAWN-04)", () => {
         `Expected at most 1 child, got ${results[1]!.results.length}`
       );
     }
-    // The orchestrator should have consumed its budget
-    assert.equal(orchestrator.remainingBudget, 0, "Budget should be fully consumed");
   });
 
   it("rejects spawns exceeding depth", async () => {
@@ -481,12 +504,16 @@ describe("spawn processing (SPAWN-01, SPAWN-04)", () => {
       return { name: dispatch.name, status: "completed", summary: "Done" };
     };
     __setDispatchSingleWorker(spawnAwareMock);
+    // The Go gate denies a depth-2 parent's spawn attempt with reason "depth".
+    __setCallGoJSON(() => ({
+      can_spawn: false,
+      reason: "depth",
+      detail: "Builder-01 is at depth 2; a helper spawned from here would be depth 3, past the cap of 2",
+    } as never));
 
-    // Create orchestrator with depth already at 2 (max)
     const orchestrator = createSpawnOrchestrator({
-      totalBudget: 20,
-      consumedBudget: 0,
-      currentDepth: 2,
+      goBinaryPath: "/usr/bin/true",
+      cwd: "/tmp",
     });
 
     // Process claims directly - parent at depth 2 should be rejected

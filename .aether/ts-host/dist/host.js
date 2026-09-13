@@ -898,14 +898,16 @@ async function runDispatchedBuildCommand(bridge, parsed, definition) {
     // Step 3: Render spawn-plan and wave-start ceremony
     const ceremonyEnvelope = { dispatch_manifest: buildManifest };
     renderManifestCeremony(ceremony, "build", ceremonyEnvelope, dispatches);
-    // Step 5: Initialize spawn budget from manifest QueenSpawnBudget.max_workers (SPAWN-03)
+    // Step 5: spawnBudget still feeds the ConfidenceLoop's own iteration
+    // budget below (an unrelated concept). The spawn orchestrator itself no
+    // longer takes a budget/consumed/depth of its own (SYN-203-02): every
+    // admission decision is asked of the Go binary's spawn-can-spawn command,
+    // against the SAME whole-run ledger the interactive `aether recruit` lane
+    // already consults -- one counter, not two.
     const spawnBudget = buildManifest.queen_execution_policy?.spawn_budget?.max_workers ?? 20;
     const spawnOrchestrator = createSpawnOrchestrator({
         goBinaryPath: bridge.goBinaryPath,
         cwd: bridge.cwd,
-        totalBudget: spawnBudget,
-        consumedBudget: dispatches.length,
-        currentDepth: 1,
     });
     // Step 6: Initialize ConfidenceLoop and ConfidenceEvaluator
     const loopOpts = {

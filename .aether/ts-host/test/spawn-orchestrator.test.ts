@@ -1,20 +1,23 @@
 /**
  * Spawn orchestrator tests.
  *
- * Verifies budget enforcement (SPAWN-03, SPAWN-06), depth limits (SPAWN-02),
- * child dispatch synthesis, rejection logging, and edge cases.
+ * 203-09: the orchestrator no longer computes admission itself. Every test
+ * here stubs the Go bridge (`__setCallGoJSON`) and asserts processClaims
+ * bridges to it correctly -- one call per claim, the gate's own detail
+ * returned verbatim, and every bridge-failure shape denying fail-closed.
+ * Local budget/depth arithmetic tests are gone with the arithmetic itself.
  */
 
-import { describe, it } from "node:test";
+import { describe, it, afterEach } from "node:test";
 import assert from "node:assert/strict";
 
 import {
   createSpawnOrchestrator,
   synthesizeChildDispatch,
   type SpawnOrchestrator,
-  type SpawnProcessingResult,
 } from "../src/spawn-orchestrator.js";
 import type { SpawnClaim } from "../src/types.js";
+import { __setCallGoJSON, __restoreCallGoJSON, type GoBridgeOptions } from "../src/go-bridge.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -48,136 +51,152 @@ function captureStderr(fn: () => void): string {
   return chunks.join("");
 }
 
-/** Convenience: create an orchestrator with specific budget/consumed values. */
-function makeOrchestrator(
-  totalBudget: number,
-  consumedBudget = 0
-): SpawnOrchestrator {
+function makeOrchestrator(): SpawnOrchestrator {
   return createSpawnOrchestrator({
     goBinaryPath: "/usr/local/bin/aether",
     cwd: "/tmp/test",
-    totalBudget,
-    consumedBudget,
-    currentDepth: 1,
   });
 }
+
+afterEach(() => {
+  __restoreCallGoJSON();
+});
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("budget enforcement (SPAWN-03, SPAWN-06)", () => {
-  it("accepts spawns within remaining budget", () => {
-    const orch = makeOrchestrator(5, 3);
+describe("bridges every claim to the Go admission gate (SYN-203-02)", () => {
+  it("calls the Go binary once per claim with parent/depth/caste/task/workspace", () => {
+    const calls: { args: string[]; opts: GoBridgeOptions }[] = [];
+    __setCallGoJSON((opts: GoBridgeOptions, args: string[]) => {
+      calls.push({ args, opts });
+      return { can_spawn: true } as never;
+    });
+
+    const orch = makeOrchestrator();
     const claims: SpawnClaim[] = [
       { caste: "scout", task: "Research X" },
       { caste: "builder", task: "Build Y" },
     ];
     const result = orch.processClaims("Builder-01", 1, claims);
-    assert.equal(result.accepted.length, 2, "both claims should be accepted");
-    assert.equal(result.rejected.length, 0, "no rejections expected");
-    assert.equal(orch.remainingBudget, 0, "budget should be fully consumed");
+
+    assert.equal(calls.length, 2, "one Go call per claim");
+    assert.equal(result.accepted.length, 2);
+    assert.equal(result.rejected.length, 0);
+
+    const [first] = calls;
+    assert.equal(first!.args[0], "spawn-can-spawn");
+    assert.ok(first!.args.includes("--name"));
+    assert.ok(first!.args.includes("Builder-01"));
+    assert.ok(first!.args.includes("--depth"));
+    assert.ok(first!.args.includes("1"));
+    assert.ok(first!.args.includes("--caste"));
+    assert.ok(first!.args.includes("scout"));
+    assert.ok(first!.args.includes("--task"));
+    assert.ok(first!.args.includes("Research X"));
+    assert.ok(first!.args.includes("--workspace"));
   });
 
-  it("rejects spawns exceeding budget", () => {
-    const orch = makeOrchestrator(5, 4);
-    const claims: SpawnClaim[] = [
-      { caste: "scout", task: "Research A" },
-      { caste: "builder", task: "Build B" },
-      { caste: "watcher", task: "Test C" },
-    ];
-    const result = orch.processClaims("Builder-01", 1, claims);
-    assert.equal(result.accepted.length, 1, "only 1 claim should fit in budget");
-    assert.equal(result.rejected.length, 2, "2 claims should be rejected");
-    assert.equal(
-      result.rejected[0]!.reason,
-      "spawn budget exhausted",
-      "first rejection reason"
-    );
-    assert.equal(
-      result.rejected[1]!.reason,
-      "spawn budget exhausted",
-      "second rejection reason"
-    );
-  });
+  it("returns the gate's detail verbatim on a deny", () => {
+    __setCallGoJSON(() => ({
+      can_spawn: false,
+      reason: "depth",
+      detail: "Builder-01 is at depth 2; a helper spawned from here would be depth 3, past the cap of 2",
+    } as never));
 
-  it("tracks consumed budget across multiple processClaims calls", () => {
-    const orch = makeOrchestrator(5, 2);
-
-    // First call: 2 claims accepted (budget remaining: 5 - 2 - 2 = 1)
-    const result1 = orch.processClaims("Builder-01", 1, [
-      { caste: "scout", task: "Research A" },
-      { caste: "scout", task: "Research B" },
-    ]);
-    assert.equal(result1.accepted.length, 2);
-    assert.equal(orch.remainingBudget, 1);
-
-    // Second call: 3 claims, but only 1 slot left
-    const result2 = orch.processClaims("Builder-02", 1, [
-      { caste: "builder", task: "Build C" },
-      { caste: "builder", task: "Build D" },
-      { caste: "builder", task: "Build E" },
-    ]);
-    assert.equal(result2.accepted.length, 1, "only 1 more fits");
-    assert.equal(result2.rejected.length, 2, "2 rejected on second call");
-  });
-
-  it("zero budget rejects all spawns", () => {
-    const orch = makeOrchestrator(0, 0);
-    const claims: SpawnClaim[] = [
-      { caste: "scout", task: "Research X" },
-    ];
-    const result = orch.processClaims("Builder-01", 1, claims);
-    assert.equal(result.accepted.length, 0, "nothing accepted with zero budget");
-    assert.equal(result.rejected.length, 1);
-    assert.equal(result.rejected[0]!.reason, "spawn budget exhausted");
-  });
-});
-
-describe("depth limits (SPAWN-02)", () => {
-  it("allows depth-1 workers to spawn depth-2 children", () => {
-    const orch = makeOrchestrator(20, 0);
-    const result = orch.processClaims("Builder-01", 1, [
-      { caste: "scout", task: "Research dependencies" },
-    ]);
-    assert.equal(result.accepted.length, 1);
-    assert.equal(result.accepted[0]!.depth, 2, "child should be at depth 2");
-    assert.equal(result.accepted[0]!.parent, "Builder-01");
-  });
-
-  it("rejects depth-2 workers from spawning depth-3 grandchildren", () => {
-    const orch = makeOrchestrator(20, 0);
-    const result = orch.processClaims("Builder-01-spawn-0", 2, [
+    const orch = makeOrchestrator();
+    const result = orch.processClaims("Builder-01", 2, [
       { caste: "watcher", task: "Test edge cases" },
     ]);
-    assert.equal(result.accepted.length, 0, "depth-2 parent cannot spawn");
+
+    assert.equal(result.accepted.length, 0);
     assert.equal(result.rejected.length, 1);
     assert.equal(
       result.rejected[0]!.reason,
-      "max spawn depth exceeded (limit: 2)"
+      "Builder-01 is at depth 2; a helper spawned from here would be depth 3, past the cap of 2",
+      "rejection reason must equal the gate's own detail sentence exactly"
     );
   });
 
-  it("manifest workers (depth=1) can spawn, their children (depth=2) cannot", () => {
-    const orch = makeOrchestrator(20, 0);
+  it("falls back to the gate's reason when no detail is present", () => {
+    __setCallGoJSON(() => ({ can_spawn: false, reason: "budget" } as never));
 
-    // First call: manifest worker at depth 1
-    const result1 = orch.processClaims("Builder-01", 1, [
+    const orch = makeOrchestrator();
+    const result = orch.processClaims("Builder-01", 1, [
       { caste: "scout", task: "Research" },
     ]);
-    assert.equal(result1.accepted.length, 1);
-    assert.equal(result1.accepted[0]!.depth, 2);
 
-    // Second call: spawned child at depth 2 tries to spawn
-    const result2 = orch.processClaims("Builder-01-spawn-0", 2, [
-      { caste: "builder", task: "Build more" },
-    ]);
-    assert.equal(result2.accepted.length, 0, "depth-2 worker cannot spawn");
-    assert.equal(result2.rejected.length, 1);
+    assert.equal(result.rejected.length, 1);
+    assert.equal(result.rejected[0]!.reason, "budget");
+  });
+
+  it("no exported or module-level value holds a budget total, consumed count or depth limit", async () => {
+    const mod: Record<string, unknown> = await import("../src/spawn-orchestrator.js");
+    assert.equal(mod.DEFAULT_TOTAL_BUDGET, undefined);
+    assert.equal(mod.MAX_SPAWN_DEPTH, undefined);
+    const orch = makeOrchestrator();
+    assert.equal((orch as unknown as Record<string, unknown>).totalBudget, undefined);
+    assert.equal((orch as unknown as Record<string, unknown>).consumedBudget, undefined);
+    assert.equal((orch as unknown as Record<string, unknown>).remainingBudget, undefined);
   });
 });
 
-describe("child dispatch synthesis", () => {
+describe("bridge failure shapes all deny (fail-closed, never local recomputation)", () => {
+  it("denies on a non-zero exit", () => {
+    __setCallGoJSON(() => {
+      throw new Error("Go command failed: spawn-can-spawn: exit status 1");
+    });
+    const orch = makeOrchestrator();
+    const result = orch.processClaims("Builder-01", 1, [
+      { caste: "scout", task: "Research" },
+    ]);
+    assert.equal(result.accepted.length, 0);
+    assert.equal(result.rejected.length, 1);
+    assert.match(result.rejected[0]!.reason, /spawn admission gate unreachable/);
+  });
+
+  it("denies on a timeout", () => {
+    __setCallGoJSON(() => {
+      throw new Error("Go subprocess failed for spawn-can-spawn: signal SIGTERM; subprocess output omitted");
+    });
+    const orch = makeOrchestrator();
+    const result = orch.processClaims("Builder-01", 1, [
+      { caste: "scout", task: "Research" },
+    ]);
+    assert.equal(result.accepted.length, 0);
+    assert.equal(result.rejected.length, 1);
+    assert.match(result.rejected[0]!.reason, /spawn admission gate unreachable/);
+  });
+
+  it("denies on a malformed envelope", () => {
+    __setCallGoJSON(() => {
+      throw new Error("Go subprocess returned invalid JSON for spawn-can-spawn; subprocess output omitted");
+    });
+    const orch = makeOrchestrator();
+    const result = orch.processClaims("Builder-01", 1, [
+      { caste: "scout", task: "Research" },
+    ]);
+    assert.equal(result.accepted.length, 0);
+    assert.equal(result.rejected.length, 1);
+    assert.match(result.rejected[0]!.reason, /spawn admission gate unreachable/);
+  });
+
+  it("denies on a missing binary", () => {
+    __setCallGoJSON(() => {
+      throw new Error("Go subprocess failed for spawn-can-spawn: binary not found; subprocess output omitted");
+    });
+    const orch = makeOrchestrator();
+    const result = orch.processClaims("Builder-01", 1, [
+      { caste: "scout", task: "Research" },
+    ]);
+    assert.equal(result.accepted.length, 0);
+    assert.equal(result.rejected.length, 1);
+    assert.match(result.rejected[0]!.reason, /spawn admission gate unreachable/);
+  });
+});
+
+describe("child dispatch synthesis (unchanged)", () => {
   it("synthesizes BuildDispatch with correct name, caste, task", () => {
     const claim: SpawnClaim = { caste: "scout", task: "Research" };
     const dispatch = synthesizeChildDispatch(claim, "Builder-01", 2, 0);
@@ -203,8 +222,13 @@ describe("child dispatch synthesis", () => {
 });
 
 describe("rejection logging", () => {
-  it("logs rejected spawns to stderr", () => {
-    const orch = makeOrchestrator(1, 1);
+  it("logs rejected spawns to stderr with the gate's own detail", () => {
+    __setCallGoJSON(() => ({
+      can_spawn: false,
+      reason: "budget",
+      detail: "spawn budget exhausted",
+    } as never));
+    const orch = makeOrchestrator();
     const stderr = captureStderr(() => {
       orch.processClaims("Builder-01", 1, [
         { caste: "scout", task: "Research X" },
@@ -221,7 +245,12 @@ describe("rejection logging", () => {
   });
 
   it("logs depth rejection to stderr", () => {
-    const orch = makeOrchestrator(20, 0);
+    __setCallGoJSON(() => ({
+      can_spawn: false,
+      reason: "depth",
+      detail: "max spawn depth exceeded (limit: 2)",
+    } as never));
+    const orch = makeOrchestrator();
     const stderr = captureStderr(() => {
       orch.processClaims("Builder-01-spawn-0", 2, [
         { caste: "scout", task: "Research X" },
@@ -239,15 +268,22 @@ describe("rejection logging", () => {
 });
 
 describe("edge cases", () => {
-  it("empty claims array returns empty accepted and rejected", () => {
-    const orch = makeOrchestrator(20, 0);
+  it("empty claims array returns empty accepted and rejected, with zero Go calls", () => {
+    let callCount = 0;
+    __setCallGoJSON(() => {
+      callCount++;
+      return { can_spawn: true } as never;
+    });
+    const orch = makeOrchestrator();
     const result = orch.processClaims("Builder-01", 1, []);
     assert.equal(result.accepted.length, 0);
     assert.equal(result.rejected.length, 0);
+    assert.equal(callCount, 0, "no admission call for an empty claim list");
   });
 
   it("handles undefined claims gracefully", () => {
-    const orch = makeOrchestrator(20, 0);
+    __setCallGoJSON(() => ({ can_spawn: true } as never));
+    const orch = makeOrchestrator();
     // Explicitly pass undefined to test the guard
     const result = orch.processClaims(
       "Builder-01",
@@ -256,12 +292,5 @@ describe("edge cases", () => {
     );
     assert.equal(result.accepted.length, 0);
     assert.equal(result.rejected.length, 0);
-  });
-
-  it("remainingBudget reflects defaults when no options provided", () => {
-    const orch = createSpawnOrchestrator();
-    assert.equal(orch.remainingBudget, 20, "default budget is 20");
-    assert.equal(orch.totalBudget, 20);
-    assert.equal(orch.consumedBudget, 0);
   });
 });

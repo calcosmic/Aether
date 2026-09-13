@@ -446,6 +446,9 @@ var spawnCanSpawnCmd = &cobra.Command{
 
 		enforce, _ := cmd.Flags().GetBool("enforce")
 		name, _ := cmd.Flags().GetString("name")
+		caste, _ := cmd.Flags().GetString("caste")
+		task, _ := cmd.Flags().GetString("task")
+		workspace, _ := cmd.Flags().GetString("workspace")
 
 		in := spawnDecisionInput{RequesterDepth: depth, Origin: spawnOriginSpawnCanSpawn}
 		// Set RequesterName from --name whenever --name is non-empty,
@@ -462,6 +465,24 @@ var spawnCanSpawnCmd = &cobra.Command{
 					in.DepthIsAuthoritative = true
 				}
 			}
+		}
+		// --caste/--task/--workspace are optional, additive advisory context
+		// (203-09/SYN-203-02): they let a caller such as the TypeScript
+		// host's spawn-orchestrator bridge ask this same chokepoint about a
+		// specific prospective child rather than a bare depth number,
+		// strengthening the ancestor-cycle check (which keys off
+		// Caste+Task) for that caller. Origin stays spawnOriginSpawnCanSpawn,
+		// so none of BIO-02's five additional recruitment-only dimensions
+		// (permission/path/cost/duplicate/parent-authority) apply here --
+		// unchanged from before these flags existed.
+		if caste != "" {
+			in.Caste = caste
+		}
+		if task != "" {
+			in.Task = task
+		}
+		if workspace != "" {
+			in.Workspace = workspace
 		}
 
 		decision := spawnCanSpawnDecision(in)
@@ -765,6 +786,9 @@ func init() {
 	spawnCanSpawnCmd.Flags().Int("depth", 0, "Spawn depth to check (required)")
 	spawnCanSpawnCmd.Flags().Bool("enforce", false, "Exit non-zero when spawning is denied")
 	spawnCanSpawnCmd.Flags().String("name", "", "Requester's recorded agent name; when it resolves, the recorded depth overrides --depth")
+	spawnCanSpawnCmd.Flags().String("caste", "", "Requested helper caste for the prospective child (optional; strengthens the ancestor-cycle check)")
+	spawnCanSpawnCmd.Flags().String("task", "", "Bounded task/objective for the prospective child (optional; strengthens the ancestor-cycle check)")
+	spawnCanSpawnCmd.Flags().String("workspace", "", "Declared workspace for the prospective child (optional, advisory only for this origin)")
 
 	validateWorkerResponseCmd.Flags().String("response", "", "Response to validate (required)")
 	validateWorkerResponseCmd.Flags().Bool("expect-json", false, "Check if response is valid JSON")
