@@ -422,8 +422,13 @@ func sealSpecificationStatus(status colony.SpecRevisionStatus) string {
 }
 
 func sealPlanRecoveryCommand(planning LifecyclePlanningFacts) string {
-	if strings.TrimSpace(planning.PendingCandidateID) != "" {
-		return "aether plan --candidate"
+	// Naming review alone walked the owner into a dead end: reviewing a stale
+	// candidate shows it, and the only other offered action was accepting it,
+	// which replaces a good active plan with a stale one. Name the retire
+	// action too, so sealing with a candidate still waiting is a choice rather
+	// than the only thing left.
+	if pending := strings.TrimSpace(planning.PendingCandidateID); pending != "" {
+		return "aether plan --candidate (then accept it, or retire it with `aether plan --retire-candidate " + pending + "`)"
 	}
 	return "aether plan"
 }

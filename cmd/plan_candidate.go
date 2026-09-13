@@ -23,6 +23,7 @@ const (
 	planCandidateOperationReview planCandidateOperation = "candidate_review"
 	planCandidateOperationDetail planCandidateOperation = "candidate_iteration_detail"
 	planCandidateOperationAccept planCandidateOperation = "candidate_accept"
+	planCandidateOperationRetire planCandidateOperation = "candidate_retire"
 )
 
 // planCandidateAcceptanceRequest names every owner-controlled input required
@@ -290,6 +291,7 @@ type planCandidateCommandInputs struct {
 	ShowIterationSet          bool
 	Details                   bool
 	AcceptCandidate           string
+	RetireCandidate           string
 	SpecificationRevisionID   string
 	SpecificationRevisionHash string
 	BasePlanRevisionID        string
@@ -364,8 +366,13 @@ func resolvePlanCandidateOperation(inputs planCandidateCommandInputs) (planCandi
 		acceptanceRequested = acceptanceRequested || strings.TrimSpace(field.value) != ""
 	}
 
+	retireRequested := strings.TrimSpace(inputs.RetireCandidate) != ""
+
 	selected := 0
 	if inputs.Candidate {
+		selected++
+	}
+	if retireRequested {
 		selected++
 	}
 	if detailRequested {
@@ -375,7 +382,7 @@ func resolvePlanCandidateOperation(inputs planCandidateCommandInputs) (planCandi
 		selected++
 	}
 	if selected > 1 {
-		return planCandidateOperationNone, fmt.Errorf("candidate review, iteration detail, and acceptance cannot combine; run exactly one operation")
+		return planCandidateOperationNone, fmt.Errorf("candidate review, iteration detail, acceptance, and retirement cannot combine; run exactly one operation")
 	}
 	if selected > 0 && len(inputs.ConflictingPlanFlags) > 0 {
 		return planCandidateOperationNone, fmt.Errorf("candidate operations cannot combine with planning flags %s", strings.Join(inputs.ConflictingPlanFlags, ", "))
@@ -398,6 +405,9 @@ func resolvePlanCandidateOperation(inputs planCandidateCommandInputs) (planCandi
 	}
 	if inputs.Candidate {
 		return planCandidateOperationReview, nil
+	}
+	if retireRequested {
+		return planCandidateOperationRetire, nil
 	}
 	if acceptanceRequested {
 		if strings.TrimSpace(inputs.AcceptCandidate) == "" {
@@ -630,6 +640,24 @@ func runPlanCandidateCommand(root string, inputs planCandidateCommandInputs) (ma
 		return map[string]interface{}{
 			"operation": planCandidateOperationAccept, "candidate": accepted.Candidate,
 			"revision": accepted.Revision, "acceptance_receipt": accepted.Receipt, "replayed": accepted.Replayed,
+		}, true, nil
+	case planCandidateOperationRetire:
+		now := planCandidateNow().UTC()
+		retired, retireErr := retirePlanCandidate(root,
+			planCandidateAcceptanceRequest{CandidateID: strings.TrimSpace(inputs.RetireCandidate)},
+			planCandidateAcceptanceOptions{AcceptedBy: "owner", AcceptedAt: now})
+		if retireErr != nil {
+			if retired.Refusal == nil {
+				return nil, true, retireErr
+			}
+			return map[string]interface{}{
+				"operation": planCandidateOperationRetire, "candidate": retired.Candidate,
+				"refusal": *retired.Refusal,
+			}, true, retireErr
+		}
+		return map[string]interface{}{
+			"operation": planCandidateOperationRetire, "candidate": retired.Candidate,
+			"message": "Plan candidate retired. It is no longer waiting for review, and `aether insert-phase` is no longer blocked by it.",
 		}, true, nil
 	default:
 		return nil, false, nil

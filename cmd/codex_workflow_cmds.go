@@ -76,6 +76,7 @@ var planCmd = &cobra.Command{
 		showIteration, _ := cmd.Flags().GetInt("show-iteration")
 		details, _ := cmd.Flags().GetBool("details")
 		acceptCandidate, _ := cmd.Flags().GetString("accept-candidate")
+		retireCandidate, _ := cmd.Flags().GetString("retire-candidate")
 		specificationRevisionID, _ := cmd.Flags().GetString("spec-revision")
 		specificationRevisionHash, _ := cmd.Flags().GetString("spec-hash")
 		basePlanRevisionID, _ := cmd.Flags().GetString("base-plan-revision")
@@ -89,7 +90,7 @@ var planCmd = &cobra.Command{
 		candidateInputs := planCandidateCommandInputs{
 			DeprecatedAccept: acceptBelowTarget, Candidate: candidate, CandidateID: candidateID,
 			ShowIteration: showIteration, ShowIterationSet: cmd.Flags().Changed("show-iteration"), Details: details,
-			AcceptCandidate: acceptCandidate, SpecificationRevisionID: specificationRevisionID,
+			AcceptCandidate: acceptCandidate, RetireCandidate: retireCandidate, SpecificationRevisionID: specificationRevisionID,
 			SpecificationRevisionHash: specificationRevisionHash, BasePlanRevisionID: basePlanRevisionID,
 			TimelineDigest: timelineDigest, ProposalHash: proposalHash, AcceptanceToken: acceptanceToken,
 		}
@@ -2511,6 +2512,7 @@ func init() {
 	planCmd.Flags().Int("show-iteration", 0, "Show one immutable candidate timeline pass by ordinal; requires --details")
 	planCmd.Flags().Bool("details", false, "Return the complete immutable card selected by --show-iteration")
 	planCmd.Flags().String("accept-candidate", "", "Accept the exact candidate ID shown by --candidate")
+	planCmd.Flags().String("retire-candidate", "", "Retire the exact waiting candidate `id` shown by --candidate, without accepting it: it stops waiting for review and stops blocking phase insertion")
 	planCmd.Flags().String("spec-revision", "", "Approved specification revision bound to candidate acceptance")
 	planCmd.Flags().String("spec-hash", "", "Approved specification content hash bound to candidate acceptance")
 	planCmd.Flags().String("base-plan-revision", "", "Active base plan revision bound to candidate acceptance")

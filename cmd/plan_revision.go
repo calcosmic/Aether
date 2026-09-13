@@ -112,10 +112,10 @@ func createPhaseInsertCandidateInSession(session *planningMutationSession, reque
 		return empty, fmt.Errorf("cannot insert a phase while build attempt %s is active for phase %d", attempt.ID, attempt.Phase)
 	}
 	if strings.TrimSpace(state.Plan.PendingCandidateID) != "" {
-		return empty, fmt.Errorf("cannot insert a phase while candidate %s is already pending review", state.Plan.PendingCandidateID)
+		return empty, fmt.Errorf("cannot insert a phase while candidate %s is already pending review. Review it with `aether plan --candidate`, then either accept it or retire it with `aether plan --retire-candidate %s`", state.Plan.PendingCandidateID, state.Plan.PendingCandidateID)
 	}
 	if artifact, loadErr := loadPlanCandidateArtifactInSession(session, ""); loadErr == nil {
-		return empty, fmt.Errorf("cannot insert a phase while candidate %s is already pending review", artifact.Candidate.ID)
+		return empty, fmt.Errorf("cannot insert a phase while candidate %s is already pending review. Review it with `aether plan --candidate`, then either accept it or retire it with `aether plan --retire-candidate %s`", artifact.Candidate.ID, artifact.Candidate.ID)
 	} else if !strings.Contains(loadErr.Error(), "no reviewable plan candidate found") {
 		return empty, fmt.Errorf("inspect pending plan candidates: %w", loadErr)
 	}
@@ -777,6 +777,24 @@ func phaseInsertPlanningBoundary(state colony.ColonyState, approved approvedPlan
 // acceptPlanCandidate is the sole pending_review -> accepted authority. The
 // Plan 28 repository session is acquired before any authority read and remains
 // held through derivation, atomic apply, rollback, or exact read-only replay.
+// retirePlanCandidate is the owner-invoked entry point for retiring a waiting
+// plan candidate by exact ID. Mirrors acceptPlanCandidate's session handling so
+// retirement is as transactional as acceptance.
+func retirePlanCandidate(root string, request planCandidateAcceptanceRequest, opts planCandidateAcceptanceOptions) (planCandidateAcceptanceResult, error) {
+	// Direct internal callers predating the command clock seam may omit the
+	// timestamp. Preserve that API while still sampling the same seam exactly
+	// once; runPlanCandidateCommand always supplies its already-sampled value.
+	if opts.AcceptedAt.IsZero() {
+		opts.AcceptedAt = planCandidateNow().UTC()
+	}
+	var result planCandidateAcceptanceResult
+	err := withPlanningMutationSession(root, "plan-candidate-accept", func(session *planningMutationSession) error {
+		var err error
+		result, err = retirePlanCandidateNamedInSession(session, request, opts)
+		return err
+	})
+	return result, err
+}
 func acceptPlanCandidate(root string, request planCandidateAcceptanceRequest, opts planCandidateAcceptanceOptions) (planCandidateAcceptanceResult, error) {
 	// Direct internal callers predating the command clock seam may omit the
 	// timestamp. Preserve that API while still sampling the same seam exactly
@@ -1092,6 +1110,164 @@ func loadPlanCandidateTimelineAuthorityInSession(session *planningMutationSessio
 	}, nil
 }
 
+// retirePlanCandidateNamedInSession resolves the exact candidate the owner
+// named and retires it. The ID is REQUIRED -- retirement discards work, so it
+// is never inferred from "whichever one is waiting", the same discipline
+// --accept-candidate follows.
+func retirePlanCandidateNamedInSession(session *planningMutationSession, request planCandidateAcceptanceRequest, opts planCandidateAcceptanceOptions) (planCandidateAcceptanceResult, error) {
+	wanted := strings.TrimSpace(request.CandidateID)
+	if wanted == "" {
+		return planCandidateAcceptanceResult{}, fmt.Errorf("candidate_id: retiring a plan candidate requires its exact id; run `aether plan --candidate` to see it")
+	}
+	artifact, err := loadPlanCandidateArtifactInSession(session, wanted)
+	if err != nil {
+		return planCandidateAcceptanceResult{}, err
+	}
+	state, err := loadSpecificationColonyStateInSession(session)
+	if err != nil {
+		return planCandidateAcceptanceResult{}, err
+	}
+	if artifact.Candidate.Status == colony.PlanCandidateAccepted {
+		return planCandidateAcceptanceResult{}, fmt.Errorf("candidate_id: candidate %q was already accepted and is the active plan; retiring it is not possible", artifact.Candidate.ID)
+	}
+	assessment := planCandidateStandingAssessment{Standing: planCandidateStandingCurrent}
+	return retirePlanCandidateInSession(session, artifact, state, assessment, opts)
+}
+
+// retirePlanCandidateInSession retires a waiting plan candidate the owner has
+// decided not to accept, by naming its exact ID.
+//
+// Before this existed there was NO way out: `insert-phase` refuses while any
+// candidate is reviewable (plan_revision.go's guard), the pending marker is
+// only ever cleared on an acceptance path, and `aether plan` offered review and
+// accept and nothing else. A stale candidate therefore blocked corrective
+// phases permanently, and the only offered action -- accepting it -- would have
+// replaced a good active plan with a stale one. Reported from a downstream
+// project that hit exactly that after a phase audit raised findings the owner
+// wanted to fix.
+//
+// Waiting does not help either: loadPlanCandidateArtifactInSession treats an
+// EXPIRED candidate as still reviewable, so the built-in expiry date never
+// releases the guard.
+//
+// The terminal status this writes, colony.PlanCandidateRejected, was declared
+// in pkg/colony/planning.go from the beginning and had never been set by any
+// code path -- it appeared only in its own definition and a validity list. The
+// design always anticipated retirement; nothing ever reached it. This is the
+// writer that was missing, not a new concept.
+//
+// Deliberately mirrors expirePlanCandidateInSession rather than inventing a
+// second shape: same stage-guard, same atomic transaction over the same three
+// targets, same retained-candidate conflict check. The only differences are the
+// terminal status and that retirement is legal from `expired` as well as
+// `pending_review`, because an expired candidate is exactly the one a caller
+// most needs to clear.
+func retirePlanCandidateInSession(session *planningMutationSession, artifact planCandidateArtifact, state colony.ColonyState, assessment planCandidateStandingAssessment, opts planCandidateAcceptanceOptions) (planCandidateAcceptanceResult, error) {
+	candidate := artifact.Candidate
+	if artifact.Stage.Stage != planningStageCandidateReady {
+		assessment = unavailablePlanCandidateStanding("planning_stage_changed",
+			fmt.Sprintf("candidate retirement expected stage %s, current stage is %s", planningStageCandidateReady, artifact.Stage.Stage))
+		return refusePlanCandidateAcceptance(candidate, assessment, fmt.Errorf("candidate %s cannot be retired from stage %s", candidate.ID, artifact.Stage.Stage))
+	}
+
+	candidate.Status = colony.PlanCandidateRejected
+	candidate.Acceptance = nil
+	if err := validatePlanningRecordHashes(candidate); err != nil {
+		return planCandidateAcceptanceResult{}, fmt.Errorf("retired candidate: %w", err)
+	}
+	if err := candidate.Validate(); err != nil {
+		return planCandidateAcceptanceResult{}, fmt.Errorf("retired candidate: %w", err)
+	}
+	nextStage, _, err := reducePlanningStage(artifact.Stage, planningStageTransition{
+		To: planningStageFailed, FailureReason: planningStageFailureCandidateExpired,
+	})
+	if err != nil {
+		return planCandidateAcceptanceResult{}, err
+	}
+
+	nextState := state
+	nextState.Plan.Candidates = append([]colony.PlanCandidate(nil), state.Plan.Candidates...)
+	stateChanged := false
+	for index := range nextState.Plan.Candidates {
+		retained := nextState.Plan.Candidates[index]
+		if retained.ID != candidate.ID {
+			continue
+		}
+		if retained.ContentHash != candidate.ContentHash ||
+			(retained.Status != colony.PlanCandidatePendingReview && retained.Status != colony.PlanCandidateExpired) {
+			return planCandidateAcceptanceResult{}, fmt.Errorf("candidate_id: retained candidate %q conflicts with retirement", candidate.ID)
+		}
+		nextState.Plan.Candidates[index] = candidate
+		stateChanged = true
+	}
+	if nextState.Plan.PendingCandidateID == candidate.ID {
+		nextState.Plan.PendingCandidateID = ""
+		stateChanged = true
+	}
+	if stateChanged {
+		if err := validatePlanningState(nextState); err != nil {
+			return planCandidateAcceptanceResult{}, fmt.Errorf("validate retired candidate state: %w", err)
+		}
+	}
+
+	candidateBytes, err := marshalPlanningStageJSON(candidate)
+	if err != nil {
+		return planCandidateAcceptanceResult{}, err
+	}
+	stageBytes, err := marshalPlanningStageJSON(nextStage)
+	if err != nil {
+		return planCandidateAcceptanceResult{}, err
+	}
+	targets := []struct {
+		path    string
+		content []byte
+	}{
+		{path: planningStageDataRelativePath(planningRouteCandidateRepositoryPath(candidate.Timeline.RunID)), content: candidateBytes},
+		{path: planningStageDataRelativePath(planningStageStateRepositoryPath(candidate.Timeline.RunID)), content: stageBytes},
+	}
+	if stateChanged {
+		stateBytes, marshalErr := marshalSpecificationState(nextState)
+		if marshalErr != nil {
+			return planCandidateAcceptanceResult{}, marshalErr
+		}
+		targets = append(targets, struct {
+			path    string
+			content []byte
+		}{path: "COLONY_STATE.json", content: stateBytes})
+	}
+
+	tx, err := beginLifecycleTransaction(lifecycleTransactionConfig{
+		TransactionID: "plan-candidate-retire-" + candidate.ContentHash[:24],
+		Command:       "plan-candidate-retire",
+		Allowlist: lifecycleTransactionAllowlist{
+			RepositoryRoot: session.RepositoryRoot(), LifecycleDataRoot: session.DataRoot(),
+		},
+		Session: session, Fault: opts.Fault, Rename: opts.Rename,
+	})
+	if err != nil {
+		return planCandidateAcceptanceResult{}, err
+	}
+	for _, target := range targets {
+		if err := tx.DeclareWrite(lifecycleTransactionRootData, target.path, target.content); err != nil {
+			return planCandidateAcceptanceResult{}, err
+		}
+	}
+	if err := tx.Validate(); err != nil {
+		return planCandidateAcceptanceResult{}, err
+	}
+	if _, err := tx.Commit(); err != nil {
+		if rollbackErr := tx.rollbackPreparedTargets(); rollbackErr != nil {
+			return planCandidateAcceptanceResult{}, errors.Join(err, fmt.Errorf("rollback candidate expiry: %w", rollbackErr))
+		}
+		return planCandidateAcceptanceResult{}, err
+	}
+
+	// Retirement SUCCEEDS. The expiry path this mirrors ends in a refusal
+	// because expiry only ever happens as a side effect of an acceptance
+	// attempt that must then be denied; retirement is the owner's own
+	// deliberate action and has nothing to refuse.
+	return planCandidateAcceptanceResult{Candidate: candidate}, nil
+}
 func expirePlanCandidateInSession(session *planningMutationSession, artifact planCandidateArtifact, state colony.ColonyState, assessment planCandidateStandingAssessment, opts planCandidateAcceptanceOptions) (planCandidateAcceptanceResult, error) {
 	candidate := artifact.Candidate
 	if artifact.Stage.Stage != planningStageCandidateReady {
