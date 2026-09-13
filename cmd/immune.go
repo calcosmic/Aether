@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
@@ -23,105 +22,6 @@ type scarsData struct {
 }
 
 const maxScars = 100
-
-// --- trophallaxis-diagnose ---
-
-var trophallaxisDiagnoseCmd = &cobra.Command{
-	Use:   "trophallaxis-diagnose",
-	Short: "Analyze error and suggest retry strategy",
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		errMsg := mustGetString(cmd, "error")
-		if errMsg == "" {
-			return nil
-		}
-
-		diagnosis := diagnoseError(errMsg)
-
-		outputOK(diagnosis)
-		return nil
-	},
-}
-
-func diagnoseError(errMsg string) map[string]interface{} {
-	errLower := strings.ToLower(errMsg)
-	var strategy string
-	var retryable bool
-
-	switch {
-	case strings.Contains(errLower, "permission denied") || strings.Contains(errLower, "eacces"):
-		strategy = "check_file_permissions"
-		retryable = false
-	case strings.Contains(errLower, "file not found") || strings.Contains(errLower, "enoent"):
-		strategy = "check_file_exists"
-		retryable = false
-	case strings.Contains(errLower, "timeout") || strings.Contains(errLower, "deadline exceeded"):
-		strategy = "retry_with_backoff"
-		retryable = true
-	case strings.Contains(errLower, "connection refused") || strings.Contains(errLower, "econnrefused"):
-		strategy = "retry_with_backoff"
-		retryable = true
-	case strings.Contains(errLower, "lock") || strings.Contains(errLower, "busy"):
-		strategy = "retry_after_delay"
-		retryable = true
-	case strings.Contains(errLower, "invalid json") || strings.Contains(errLower, "unmarshal"):
-		strategy = "check_data_integrity"
-		retryable = false
-	default:
-		strategy = "manual_review"
-		retryable = false
-	}
-
-	backoff := 0
-	if retryable {
-		backoff = 5 // default 5 seconds
-	}
-
-	return map[string]interface{}{
-		"error":     errMsg,
-		"strategy":  strategy,
-		"retryable": retryable,
-		"backoff_s": backoff,
-		"diagnosed": time.Now().UTC().Format(time.RFC3339),
-	}
-}
-
-// --- trophallaxis-retry ---
-
-var trophallaxisRetryCmd = &cobra.Command{
-	Use:   "trophallaxis-retry",
-	Short: "Record retry attempt with backoff info",
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		commandName := mustGetString(cmd, "command")
-		if commandName == "" {
-			return nil
-		}
-		attempt := mustGetInt(cmd, "attempt")
-
-		maxAttempts := 3
-		if attempt >= maxAttempts {
-			outputOK(map[string]interface{}{
-				"retry":   false,
-				"reason":  "max_attempts_reached",
-				"attempt": attempt,
-				"max":     maxAttempts,
-			})
-			return nil
-		}
-
-		// Exponential backoff: 2^attempt * base
-		backoff := int(math.Pow(2, float64(attempt)) * 2)
-
-		outputOK(map[string]interface{}{
-			"retry":     true,
-			"attempt":   attempt + 1,
-			"backoff_s": backoff,
-			"max":       maxAttempts,
-		})
-		return nil
-	},
-}
 
 // --- scar-add ---
 
@@ -311,15 +211,11 @@ var immuneAutoScarCmd = &cobra.Command{
 }
 
 func init() {
-	trophallaxisDiagnoseCmd.Flags().String("error", "", "Error message to diagnose (required)")
-	trophallaxisRetryCmd.Flags().String("command", "", "Command name (required)")
-	trophallaxisRetryCmd.Flags().Int("attempt", 0, "Current attempt number (required)")
 	scarAddCmd.Flags().String("error", "", "Error message (required)")
 	scarAddCmd.Flags().String("pattern", "", "Pattern to match (required)")
 	scarCheckCmd.Flags().String("command", "", "Command to check (required)")
 
 	for _, c := range []*cobra.Command{
-		trophallaxisDiagnoseCmd, trophallaxisRetryCmd,
 		scarAddCmd, scarListCmd, scarCheckCmd, immuneAutoScarCmd,
 	} {
 		rootCmd.AddCommand(c)

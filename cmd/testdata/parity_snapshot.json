@@ -588,8 +588,6 @@
     "trace-replay",
     "trace-rotate",
     "trace-summary",
-    "trophallaxis-diagnose",
-    "trophallaxis-retry",
     "trust-score-compute",
     "trust-score-decay",
     "trust-tier",
