@@ -199,6 +199,11 @@ chain of asks has gone (capped at two hops), how many helpers the whole run
 has already used, whether the new helper is allowed near what it wants to
 touch, and whether someone is already doing that exact job.
 
+Every dispatched helper is told the ability exists, on every lane and on all
+three assistant platforms, from one shared source so the lanes cannot drift
+apart. Two deliberate exceptions: the security reviewer and the quality
+reviewer hold no shell at all, so they are never told to run any command.
+
 A refusal never stops the work — the helper carries on and finishes the task
 alone, and the command still reports success, not a failure. The owner never
 approves a routine backup request; the program's own limits are the leash.

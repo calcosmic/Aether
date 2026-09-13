@@ -1477,6 +1477,21 @@ helper is even allowed near what it says it needs to touch
 is already doing that exact job
 (`TestRecruitmentAdmissionDuplicateDeniesPendingSameSubtree`).
 
+Every dispatched helper is told the ability exists, on every lane: the
+wrapper build lane, the direct/autopilot build lane, the check lane's
+reviewers, and all three assistant platforms' own helper definitions
+(`TestEveryDispatchedWorkerIsToldHowToAskForHelp`,
+`TestNativeBuildLaneWorkerIsToldHowToAskForHelp`,
+`TestContinueLaneWorkersAreToldHowToAskForHelp`,
+`TestCodexAgentDefinitionsCarryTheRecruitInvitation`), from exactly one
+source so the lanes cannot drift apart (`TestTheRecruitInstructionHasOneSource`).
+Two exceptions, and they are deliberate: the security reviewer and the
+quality reviewer hold no shell at all, so they are never told to run any
+command — an earlier attempt to do that with a different command blocked a
+phase outright (`TestReviewSpecsDoNotInstructBashlessCastes`). Both lanes
+reach the same verdict on the same request, including the four checks the
+autopilot lane used to skip (`TestBothLanesUseOneReasonVocabulary`).
+
 A "no" never stops the work: the helper carries on and finishes the task
 alone, and the command itself still reports success, not a failure
 (`TestRecruitmentTracerEndToEnd`). The owner never approves a routine backup
