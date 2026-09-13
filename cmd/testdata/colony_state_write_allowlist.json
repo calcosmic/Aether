@@ -96,12 +96,6 @@
     "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
   },
   {
-    "file": "cmd/suggest_approve.go",
-    "function": "cobra:suggest-approve",
-    "primitive": "AtomicWrite",
-    "reason": "pre-existing, not migrated by phase 188 (see 188-CONTEXT.md D-07)"
-  },
-  {
     "file": "cmd/worktree.go",
     "function": "cobra:worktree-allocate",
     "primitive": "SaveJSON",

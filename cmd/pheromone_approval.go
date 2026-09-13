@@ -111,6 +111,44 @@ func enqueuePendingNote(sigType, content, reason, origin, signalID string) (colo
 // findPendingNote loads the current colony state and returns the pending
 // item with the given ID plus its index in cs.PendingSuggestions, or
 // ok=false if the item (or the colony state) cannot be found.
+// savePendingNoteAtomically re-reads COLONY_STATE.json under the store's own
+// lock and replaces the queued item carrying the same ID, then writes the
+// whole file atomically.
+//
+// It replaces a bare store.SaveJSON, which marshalled a snapshot this file
+// had read EARLIER and overwrote the entire state file with it -- so any
+// unrelated colony-state change committed between that read and this write
+// was silently discarded, and an interrupted write could leave the file
+// torn. Caught by TestColonyStateWriteAllowlistOnlyShrinks, which recorded
+// four new non-atomic write sites where the pre-203-08 code had one
+// allowlisted atomic one; the ratchet offers an escape hatch (regenerate the
+// allowlist) and taking it would have widened the exception instead of
+// closing it.
+//
+// Matching by ID rather than by the caller's index is required, not
+// cosmetic: the index came from the earlier read and need not still address
+// the same item in the freshly-loaded state.
+func savePendingNoteAtomically(item colony.PendingSuggestion) error {
+	if store == nil {
+		return fmt.Errorf("no store initialized")
+	}
+	var fresh colony.ColonyState
+	return store.UpdateJSONAtomically("COLONY_STATE.json", &fresh, func() error {
+		if fresh.PendingSuggestions == nil {
+			return fmt.Errorf("queued note %q is no longer present in colony state", item.ID)
+		}
+		pending := *fresh.PendingSuggestions
+		for i := range pending {
+			if pending[i].ID == item.ID {
+				pending[i] = item
+				fresh.PendingSuggestions = &pending
+				return nil
+			}
+		}
+		return fmt.Errorf("queued note %q is no longer present in colony state", item.ID)
+	})
+}
+
 func findPendingNote(id string) (cs colony.ColonyState, item colony.PendingSuggestion, idx int, ok bool) {
 	if store == nil {
 		return colony.ColonyState{}, colony.PendingSuggestion{}, -1, false
@@ -198,7 +236,7 @@ func approvePendingNote(id string, dryRun bool) (pendingNoteActionResult, error)
 	if store == nil {
 		return pendingNoteActionResult{}, fmt.Errorf("no store initialized")
 	}
-	cs, item, idx, ok := findPendingNote(id)
+	_, item, _, ok := findPendingNote(id)
 	if !ok {
 		return pendingNoteActionResult{Found: false}, nil
 	}
@@ -236,10 +274,7 @@ func approvePendingNote(id string, dryRun bool) (pendingNoteActionResult, error)
 	}
 
 	stampPendingNoteAction(&item, colony.PendingActionAccepted)
-	pending := *cs.PendingSuggestions
-	pending[idx] = item
-	cs.PendingSuggestions = &pending
-	if err := store.SaveJSON("COLONY_STATE.json", cs); err != nil {
+	if err := savePendingNoteAtomically(item); err != nil {
 		return pendingNoteActionResult{}, err
 	}
 	pendingNoteWriteCount++
@@ -257,7 +292,7 @@ func editPendingNote(id, newContent string, dryRun bool) (pendingNoteActionResul
 	if store == nil {
 		return pendingNoteActionResult{}, fmt.Errorf("no store initialized")
 	}
-	cs, item, idx, ok := findPendingNote(id)
+	_, item, _, ok := findPendingNote(id)
 	if !ok {
 		return pendingNoteActionResult{Found: false}, nil
 	}
@@ -275,10 +310,7 @@ func editPendingNote(id, newContent string, dryRun bool) (pendingNoteActionResul
 	now := time.Now().UTC().Format(time.RFC3339)
 	item.ActionAt = &now
 
-	pending := *cs.PendingSuggestions
-	pending[idx] = item
-	cs.PendingSuggestions = &pending
-	if err := store.SaveJSON("COLONY_STATE.json", cs); err != nil {
+	if err := savePendingNoteAtomically(item); err != nil {
 		return pendingNoteActionResult{}, err
 	}
 	pendingNoteWriteCount++
@@ -293,7 +325,7 @@ func rejectPendingNote(id string, dryRun bool) (pendingNoteActionResult, error) 
 	if store == nil {
 		return pendingNoteActionResult{}, fmt.Errorf("no store initialized")
 	}
-	cs, item, idx, ok := findPendingNote(id)
+	_, item, _, ok := findPendingNote(id)
 	if !ok {
 		return pendingNoteActionResult{Found: false}, nil
 	}
@@ -302,10 +334,7 @@ func rejectPendingNote(id string, dryRun bool) (pendingNoteActionResult, error) 
 	}
 
 	stampPendingNoteAction(&item, colony.PendingActionRejected)
-	pending := *cs.PendingSuggestions
-	pending[idx] = item
-	cs.PendingSuggestions = &pending
-	if err := store.SaveJSON("COLONY_STATE.json", cs); err != nil {
+	if err := savePendingNoteAtomically(item); err != nil {
 		return pendingNoteActionResult{}, err
 	}
 	pendingNoteWriteCount++

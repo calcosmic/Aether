@@ -42,18 +42,38 @@ var suggestApproveCmd = &cobra.Command{
 		// --- Dismiss-all mode ---
 		if dismissAll {
 			count := 0
-			if cs.PendingSuggestions != nil {
-				for i := range *cs.PendingSuggestions {
-					if !(*cs.PendingSuggestions)[i].Dismissed {
-						count++
-						if !dryRun {
-							(*cs.PendingSuggestions)[i].Dismissed = true
+			if dryRun {
+				if cs.PendingSuggestions != nil {
+					for i := range *cs.PendingSuggestions {
+						if !(*cs.PendingSuggestions)[i].Dismissed {
+							count++
 						}
 					}
 				}
-			}
-			if !dryRun && count > 0 {
-				if err := store.SaveJSON("COLONY_STATE.json", cs); err != nil {
+			} else {
+				// Re-read under the store's own lock and count what is
+				// actually dismissed there, rather than marshalling the
+				// snapshot loaded above over the whole file: a bare
+				// SaveJSON discarded any unrelated colony-state change
+				// committed since that read, and could leave the file torn
+				// if interrupted. Caught by
+				// TestColonyStateWriteAllowlistOnlyShrinks.
+				var fresh colony.ColonyState
+				if err := store.UpdateJSONAtomically("COLONY_STATE.json", &fresh, func() error {
+					count = 0
+					if fresh.PendingSuggestions == nil {
+						return nil
+					}
+					pending := *fresh.PendingSuggestions
+					for i := range pending {
+						if !pending[i].Dismissed {
+							pending[i].Dismissed = true
+							count++
+						}
+					}
+					fresh.PendingSuggestions = &pending
+					return nil
+				}); err != nil {
 					outputErrorMessage("failed to save: " + err.Error())
 					return nil
 				}
