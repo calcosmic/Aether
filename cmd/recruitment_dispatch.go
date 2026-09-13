@@ -71,6 +71,73 @@ func recruitmentDispatchArgv(intent recruitmentIntent) []string {
 	return []string{"--caste", intent.Caste, "--objective", intent.Objective}
 }
 
+// recruitmentAdapterKind is the closed enum of dispatch mechanisms a
+// recruitment can be carried by (SYN-203-04). recruitmentAdapterRootMediated
+// is the declared v1 default and, per the synthesis ruling on SYN-203-04
+// (native nesting is a probed, non-launch-blocking enhancement only), the
+// only mechanism this phase's dispatch path actually uses; native-bind
+// exists as a fully-tested, available choice for a future plan that adds a
+// requested-adapter field to recruitmentIntent.
+type recruitmentAdapterKind string
+
+const (
+	recruitmentAdapterRootMediated recruitmentAdapterKind = "root-mediated"
+	recruitmentAdapterNativeBind   recruitmentAdapterKind = "native-bind"
+)
+
+// recruitmentAdapterKinds returns every declared adapter kind -- the same
+// completeness convention ColonyLiveEpisodeKinds() uses (pkg/events/colony_live.go),
+// and for the same reason: TestEveryDeclaredAdapterCanDispatch derives its
+// inventory from this function's RUNTIME output, never a hand-typed list,
+// so a kind declared here with no dispatch branch fails that test by name.
+func recruitmentAdapterKinds() []recruitmentAdapterKind {
+	return []recruitmentAdapterKind{
+		recruitmentAdapterRootMediated,
+		recruitmentAdapterNativeBind,
+	}
+}
+
+// chooseRecruitmentAdapter decides which adapter carries one recruitment.
+// Candidates are evaluated in the fixed order recruitmentAdapterKinds()
+// declares (root-mediated then native-bind), so the same probe state always
+// selects the same adapter. root-mediated is the declared default and wins
+// unless native-bind was explicitly requested; native-bind is chosen only
+// when it was requested AND probe.Supported is true. Any other native-bind
+// request -- including one carrying the zero-value recruitmentProbeResult,
+// i.e. no probe result recorded at all -- refuses with reason "platform"
+// rather than silently defaulting to native (this plan's own must_have).
+func chooseRecruitmentAdapter(probe recruitmentProbeResult, requested recruitmentAdapterKind) (recruitmentAdapterKind, recruitmentDecisionResult) {
+	for _, candidate := range recruitmentAdapterKinds() {
+		switch candidate {
+		case recruitmentAdapterRootMediated:
+			if requested != recruitmentAdapterNativeBind {
+				return recruitmentAdapterRootMediated, recruitmentDecisionResult{
+					Allowed: true,
+					Reason:  "default",
+					Detail:  "root-mediated subprocess dispatch (declared default, SYN-203-04)",
+				}
+			}
+		case recruitmentAdapterNativeBind:
+			if requested != recruitmentAdapterNativeBind {
+				continue
+			}
+			if probe.Supported {
+				return recruitmentAdapterNativeBind, recruitmentDecisionResult{
+					Allowed: true,
+					Reason:  "probed",
+					Detail:  fmt.Sprintf("native nesting probe reported available on %q", probe.Platform),
+				}
+			}
+			detail := fmt.Sprintf("native-bind requested but platform %q does not support native nesting (probe verdict: %s)", probe.Platform, probe.Verdict)
+			if strings.TrimSpace(probe.Platform) == "" {
+				detail = "native-bind requested but no probe result was recorded; unsupported nesting assumed"
+			}
+			return "", recruitmentDecisionResult{Allowed: false, Reason: "platform", Detail: detail}
+		}
+	}
+	return "", recruitmentDecisionResult{Allowed: false, Reason: "platform", Detail: "no adapter candidate matched the request"}
+}
+
 // recruitmentDispatchResult is dispatchRecruitment's own outcome shape --
 // deliberately smaller than recruitmentResult (cmd/recruitment_result.go):
 // this is what actually happened to the process, before that outcome is
@@ -78,6 +145,13 @@ func recruitmentDispatchArgv(intent recruitmentIntent) []string {
 type recruitmentDispatchResult struct {
 	TerminalStatus string
 	Summary        string
+	// AdapterKind names the mechanism that carried this dispatch
+	// (SYN-203-04's "every dispatch names which mechanism carried it").
+	// Threading this onto the durable recruitmentResult
+	// (cmd/recruitment_result.go) is a follow-up wiring step owned by
+	// whichever plan owns that file in this wave -- see this plan's own
+	// SUMMARY for the cross-plan note.
+	AdapterKind recruitmentAdapterKind
 }
 
 // dispatchRecruitment runs the admitted child in a leased workspace under a
@@ -137,5 +211,16 @@ func dispatchRecruitment(intent recruitmentIntent, childName string) (*recruitme
 	if summary == "" && runErr != nil {
 		summary = runErr.Error()
 	}
-	return &recruitmentDispatchResult{TerminalStatus: status, Summary: summary}, nil
+
+	// recruitmentIntent carries no requested-adapter field yet (that is a
+	// future plan's job, once native-bind has a real caller) -- until then,
+	// every dispatch explicitly requests the synthesis-declared default so
+	// the mechanism is always named on the record by going THROUGH
+	// chooseRecruitmentAdapter, never by hand-writing the literal string.
+	// Because the default branch never reads probe, this never launches
+	// probeNativeNestingOnce -- a plain recruitment pays nothing for a probe
+	// it never needed (SYN-203-05's own must_have).
+	adapter, _ := chooseRecruitmentAdapter(recruitmentProbeResult{}, recruitmentAdapterRootMediated)
+
+	return &recruitmentDispatchResult{TerminalStatus: status, Summary: summary, AdapterKind: adapter}, nil
 }

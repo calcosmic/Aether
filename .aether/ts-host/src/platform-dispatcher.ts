@@ -349,10 +349,13 @@ export function __restoreDetectAvailablePlatforms(): void {
 export async function isPlatformAvailable(platform: Platform): Promise<boolean> {
   const binary = resolveBinaryName(platform);
 
-  // Check binary exists on PATH
+  // Check binary exists on PATH. A `which` lookup is a local, always-fast
+  // filesystem check -- not a provider round-trip -- so it deliberately does
+  // NOT share resolveProbeTimeoutMs's readiness budget; it gets its own
+  // small, named constant instead of a bare, unexplained literal.
   try {
     const { spawnSync } = await import("node:child_process");
-    const result = spawnSync("which", [binary], { encoding: "utf-8", timeout: 5000 });
+    const result = spawnSync("which", [binary], { encoding: "utf-8", timeout: WHICH_LOOKUP_TIMEOUT_MS });
     if (result.status !== 0 || !result.stdout.trim()) {
       return false;
     }
@@ -590,21 +593,104 @@ export function buildArgs(config: WorkerConfig): string[] {
   }
 }
 
+/**
+ * Resolve the cheap auth-probe's budget.
+ *
+ * This deliberately does NOT introduce a new AETHER_PROBE_TIMEOUT
+ * environment variable, even though the folded todo
+ * (.planning/todos/pending/2026-08-01-ts-host-preflight-hardcoded-timeout.md)
+ * originally suggested that name: this project already ran two
+ * disagreeing readiness-timeout knobs (AETHER_PREFLIGHT_TIMEOUT and
+ * AETHER_PROBE_TIMEOUT) and consolidated them on the Go side onto the one
+ * shared setting -- locked by
+ * TestLiveReadinessSourceHasOneTimeoutEnvironmentVariable
+ * (pkg/codex/preflight_phase_198_3_test.go), which fails if
+ * platform_dispatch.go (the Go file) ever mentions AETHER_PROBE_TIMEOUT
+ * again. Declaring a second, TS-only AETHER_PROBE_TIMEOUT here would reopen
+ * exactly that defect on one host only. This probe answers the same
+ * "is the provider ready" question the model round-trip preflight answers,
+ * just more cheaply, so it shares that one setting -- mirroring the Go
+ * side's own resolvedAvailabilityProbeTimeout, which is literally
+ * `return resolvedPreflightTimeout()`.
+ */
+export function resolveProbeTimeoutMs(): number {
+  return resolvePreflightTimeoutMs();
+}
+
+// A plain `which` lookup is a local filesystem check, not a provider
+// round-trip -- it does not share the readiness budget above.
+const WHICH_LOOKUP_TIMEOUT_MS = 5_000;
+
+// One retry, and only for timeouts -- mirrors availabilityProbeAttempts
+// (Go): a timeout is the transient case, while missing credentials or a bad
+// subcommand fail identically twice and should surface immediately.
+const PROBE_ATTEMPTS = 2;
+
 /** Run a short-lived probe command and return combined output. */
 async function runProbe(binary: string, args: string[]): Promise<string> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < PROBE_ATTEMPTS; attempt++) {
+    try {
+      return await runProbeOnce(binary, args);
+    } catch (err) {
+      lastError = err;
+      const timedOut = err instanceof Error && /^probe timed out/.test(err.message);
+      if (!timedOut) {
+        throw err;
+      }
+      // Only a timeout retries; a genuine cancellation from the caller's own
+      // budget expiring here (rather than being retried forever) is bounded
+      // by PROBE_ATTEMPTS.
+    }
+  }
+  throw lastError;
+}
+
+/**
+ * Run a single probe attempt with a real process-group-safe timeout.
+ *
+ * Node's `spawn(..., { timeout })` option cancels only the direct child; a
+ * wrapper CLI that leaves a grandchild holding the pipes open is not
+ * actually bounded by it (the exact defect the folded todo names). detached:
+ * true plus a manual `process.kill(-pid)` on timeout signals the whole
+ * process group instead -- Node has no direct process-group option, so this
+ * is the port of the Go side's configureWorkerCommand behaviour.
+ */
+function runProbeOnce(binary: string, args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn(binary, args, { timeout: 5000 });
+    const timeoutMs = resolveProbeTimeoutMs();
+    const child = spawn(binary, args, { detached: true });
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      if (typeof child.pid === "number") {
+        try {
+          process.kill(-child.pid, "SIGKILL");
+        } catch {
+          // process group may already be gone
+        }
+      }
+    }, timeoutMs);
+
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
 
     child.stdout?.on("data", (chunk: Buffer) => stdout.push(chunk));
     child.stderr?.on("data", (chunk: Buffer) => stderr.push(chunk));
 
-    child.on("error", reject);
+    child.on("error", (err: Error) => {
+      clearTimeout(timer);
+      reject(err);
+    });
     child.on("close", (exitCode) => {
+      clearTimeout(timer);
       const output =
         Buffer.concat(stdout).toString("utf-8") +
         Buffer.concat(stderr).toString("utf-8");
+      if (timedOut) {
+        reject(new Error(`probe timed out after ${timeoutMs}ms`));
+        return;
+      }
       if (exitCode === 0) {
         resolve(output);
         return;
