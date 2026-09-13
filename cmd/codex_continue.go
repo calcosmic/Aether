@@ -2597,6 +2597,53 @@ func validateContinueReconcileTasks(phase colony.Phase, reconcileTaskIDs []strin
 	return nil
 }
 
+// priorAttemptDispatchStatuses fills per-task dispatch-evidence gaps from the
+// phase's append-only attempt journal (build/phase-<N>/attempts/*.json).
+//
+// build/phase-<N>/manifest.json carries only the CURRENT attempt's dispatches
+// -- every build overwrites it -- so a task proven in an EARLIER partial
+// attempt has no status there at all, classifies as "missing", and produces a
+// recovery command naming exactly the tasks the other attempt already proved.
+// Alternating two partial redispatches then loops forever, which is precisely
+// what was reported downstream on v1.0.74. The journal is the durable
+// cross-attempt record and already exists; nothing consulted it here.
+//
+// Gap-fill ONLY: a task the current manifest has any status for is left
+// completely untouched, so a current failure can never be masked by an older
+// success. Simulated/synthetic attempts contribute nothing -- simulated
+// evidence must not become credit by outliving its own manifest.
+//
+// Returns the statuses to merge, and the set of task IDs whose evidence came
+// from a real (non-synthetic) earlier attempt, so the caller can trust those
+// statuses per task rather than reading trust off the current manifest alone.
+func priorAttemptDispatchStatuses(phaseID int, current map[string][]string) (map[string][]string, map[string]struct{}) {
+	filled := map[string][]string{}
+	trusted := map[string]struct{}{}
+	if phaseID < 1 {
+		return filled, trusted
+	}
+	for _, record := range listBuildAttemptsForPhase(phaseID) {
+		mode := strings.ToLower(strings.TrimSpace(record.DispatchMode))
+		if mode == "simulated" || mode == "synthetic" {
+			continue
+		}
+		for _, dispatch := range record.Dispatches {
+			status := strings.TrimSpace(dispatch.Status)
+			if status == "" {
+				continue
+			}
+			for _, taskID := range dispatchCoveredTaskIDs(dispatch) {
+				if len(current[taskID]) > 0 {
+					continue
+				}
+				filled[taskID] = append(filled[taskID], status)
+				trusted[taskID] = struct{}{}
+			}
+		}
+	}
+	return filled, trusted
+}
+
 func assessCodexContinue(phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, options codexContinueOptions, now time.Time) codexContinueAssessment {
 	reconciled := make(map[string]struct{}, len(options.ReconcileTaskIDs))
 	for _, taskID := range options.ReconcileTaskIDs {
@@ -2616,6 +2663,14 @@ func assessCodexContinue(phase colony.Phase, manifest codexContinueManifest, ver
 	}
 	operationalIssues = uniqueSortedStrings(operationalIssues)
 
+	// A phase can be built across several partial attempts. Credit every
+	// attempt's evidence, not just the latest manifest's -- see
+	// priorAttemptDispatchStatuses.
+	priorStatuses, priorTrusted := priorAttemptDispatchStatuses(phase.ID, dispatchStatuses)
+	for taskID, statuses := range priorStatuses {
+		dispatchStatuses[taskID] = append(dispatchStatuses[taskID], statuses...)
+	}
+
 	requiresBuilderClaims := manifestRequiresBuilderClaims(manifest)
 	dispatchEvidenceTrusted := !manifestUsesSyntheticDispatch(manifest)
 	claimsSatisfied := verification.Claims.Passed || verification.Claims.Skipped
@@ -2627,7 +2682,13 @@ func assessCodexContinue(phase colony.Phase, manifest codexContinueManifest, ver
 		statuses := uniqueSortedStrings(dispatchStatuses[taskID])
 		_, reconciledTask := reconciled[taskID]
 		taskArtifactEvidenceTrusted := !requiresBuilderClaims || claimsSatisfied
-		outcome, summary, recovery := classifyContinueTaskAssessment(taskID, statuses, verification.ChecksPassed, reconciledTask, dispatchEvidenceTrusted, taskArtifactEvidenceTrusted)
+		// Trust is per task: statuses recovered from a real earlier attempt
+		// are real evidence even when the CURRENT manifest is synthetic.
+		taskDispatchEvidenceTrusted := dispatchEvidenceTrusted
+		if _, fromPriorAttempt := priorTrusted[taskID]; fromPriorAttempt {
+			taskDispatchEvidenceTrusted = true
+		}
+		outcome, summary, recovery := classifyContinueTaskAssessment(taskID, statuses, verification.ChecksPassed, reconciledTask, taskDispatchEvidenceTrusted, taskArtifactEvidenceTrusted)
 		taskAssessment := codexContinueTaskAssessment{
 			TaskID:           taskID,
 			Goal:             strings.TrimSpace(task.Goal),
