@@ -1478,8 +1478,9 @@ is already doing that exact job
 (`TestRecruitmentAdmissionDuplicateDeniesPendingSameSubtree`).
 
 Every dispatched helper is told the ability exists, on every lane: the
-wrapper build lane, the direct/autopilot build lane, the check lane's
-reviewers, and all three assistant platforms' own helper definitions
+menu-command build lane you type into, the direct build lane autopilot uses,
+the check lane's reviewers, and all three assistant platforms' own helper
+definitions
 (`TestEveryDispatchedWorkerIsToldHowToAskForHelp`,
 `TestNativeBuildLaneWorkerIsToldHowToAskForHelp`,
 `TestContinueLaneWorkersAreToldHowToAskForHelp`,

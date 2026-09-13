@@ -73,6 +73,14 @@ func skipSubcommandNames() map[string]bool {
 // .aether/docs/command-playbooks/*.md for "aether <subcommand> --flag value"
 // patterns, then verifies each subcommand and flag exists in the Go runtime.
 func TestCLIFlagAudit(t *testing.T) {
+	// Cobra adds `help` lazily, inside Execute. rootCmd.Commands() therefore
+	// omits it until something in this process has run a command, so whether
+	// this audit sees `help` registered depended on which other tests happened
+	// to share its lane -- it passed for years and went red the moment the
+	// suite re-sharded. Initialise it explicitly so the audit compares the
+	// markdown corpus against the complete command tree every time.
+	rootCmd.InitDefaultHelpCmd()
+
 	root, err := repoRootForCommandSourceTest()
 	if err != nil {
 		t.Fatalf("resolve repo root: %v", err)
@@ -259,6 +267,7 @@ func TestCLIFlagAuditSubcommandsRegistered(t *testing.T) {
 		"council":         "council (parent command, called from council.md)",
 	}
 
+	rootCmd.InitDefaultHelpCmd() // see TestCLIFlagAudit: cobra adds `help` lazily
 	registered := make(map[string]bool)
 	for _, c := range rootCmd.Commands() {
 		registered[c.Name()] = true
