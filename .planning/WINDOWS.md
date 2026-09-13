@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 13
+open_count: 14
 waived_count: 0
 fixed_count: 5
-total_count: 18
-last_updated: 2026-09-13T13:11:36.373Z
+total_count: 19
+last_updated: 2026-09-13T13:36:11.546Z
 ---
 
 # Broken Windows Ledger
@@ -33,6 +33,7 @@ last_updated: 2026-09-13T13:11:36.373Z
 | 16 | 203 | unrun-verify | cmd/testing_main_test.go |  | A full 'go test ./cmd -count=1' run can silently NOT execute a test while still reporting a lane result. Observed 2026-09-13: TestPlatformParityGolden appeared only in lane parallel-046's own 'missing executed tests' accounting line and never ran, so the wave-2 gate reported no regression while 203-02's new 'aether recruit' command had in fact broken the parity golden. The suite already detects and prints this condition; nothing treats it as a failure, so a reader comparing FAIL lines against a known-red list gets a false all-clear. The parity break itself is fixed (22149a3e); this entry is about the accounting, not that test. | open |  | 2026-09-13T10:00:01.055Z |  |
 | 17 | 203 | unrun-verify | .aether/ts-host/test |  | The TypeScript host test suite has 29 failing tests that pre-date Phase 203, in test/lifecycle.test.ts, test/go-bridge.test.ts, test/golden-workflow.test.ts and the classic command parity matrix. Verified 2026-09-13 by running the suite at c9ebe0b1 in a detached worktree and diffing failure names against the post-wave-3 run: 29 before, the same 29 after, zero new. Most assert a pending-planning boundary and now receive 'an approved specification is missing. Run aether spec' instead, so they look like a spec-gate change the TS lane never absorbed. Recorded so a future wave-3-style gate can diff against a known set instead of re-deriving it; NOT investigated or fixed here. | open |  | 2026-09-13T10:57:40.741Z |  |
 | 18 | 203 | unmet-truth | cmd/spawn.go |  | SECURITY (fail-open authorization bypass, PRE-EXISTING since phase 173, surfaced 2026-09-13 by a commit security review of cmd/recruitment.go): the delegation depth cap is bypassable by self-assertion. spawnParentIsRoot matches an unauthenticated caller-supplied name against the fixed sentinel list spawnRootParentNames = {Queen, Prime-1, Swarm} (cmd/spawn.go:22) and grants depth 0 with DepthIsAuthoritative=true and no spawn-tree entry required. Both 'aether spawn-can-spawn --name Queen' and the new 'aether recruit --parent Queen' therefore pass the depth check regardless of the caller's real depth, defeating spawnMaxDelegationDepth (the runaway-spawn and cost control). Everything ELSE in that path is correctly fail-closed: depth is read from the recorded spawn tree via latestSpawnEntryByName, never from a flag, and validateRecruitmentIntent (cmd/recruitment_intent.go:153) explicitly refuses a non-sentinel parent whose depth is not authoritative, with the reason 'a parent's depth is never trusted from a self-declared claim'. The sentinel exemption is the single hole. 203-03 mirrored spawn-can-spawn's existing behaviour deliberately and documented it; this is inherited, not introduced. Routed live to plan 203-06, which owns cmd/spawn.go + cmd/recruitment.go + cmd/recruitment_admission.go this wave and whose objective is extending that chokepoint with dimensions it does not yet check. Not fixed here: 203-06 is mid-flight in those exact files and an orchestrator edit would collide. | open |  | 2026-09-13T13:11:36.373Z |  |
+| 19 | 203 | unmet-truth | cmd/testdata/orphan_allowlist.json |  | EXPECTED-RED, OWNED BY 203-15: TestNoRegisteredSubcommandIsUnreferenced fails with 'aether recruit is registered but nothing calls it (searched: wrappers, menu specs, hooks, scripts)'. Five plans (203-02/03/04/06/07) built the recruitment command and no wrapper, menu spec, hook or script invokes it yet. This is real and is exactly the orphan failure CLAUDE.md names as the project's signature defect -- it is NOT silenced. Plan 203-15 is the closer: it rewrites .aether/workers.md, which today documents a spawning protocol in convincing detail for a mechanism no caste was ever granted, and replaces it with the real path plus a test. DELIBERATELY NOT ALLOWLISTED: testdata/orphan_allowlist.json is shrink-only against a frozen baseline (TestOrphanAllowlistOnlyShrinks, WIRE-01/D-11), so adding an entry would widen a ratchet to hide a true finding. Leaving it red means the test itself proves 203-15 did its job, and going green is the acceptance signal. If 203-15 lands and this is still red, the phase shipped an orphan. Recorded 2026-09-13 at the wave-4 gate; cmd/testdata/regression_snapshot.json was separately refreshed 390->389 commands, the honest net effect of 203-10 retiring two dead trophallaxis commands. | open |  | 2026-09-13T13:36:11.546Z |  |
 
 ````json
 [
@@ -250,6 +251,18 @@ last_updated: 2026-09-13T13:11:36.373Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-09-13T13:11:36.373Z",
+    "resolved_at": null
+  },
+  {
+    "id": 19,
+    "kind": "unmet-truth",
+    "phase": "203",
+    "file": "cmd/testdata/orphan_allowlist.json",
+    "line": null,
+    "description": "EXPECTED-RED, OWNED BY 203-15: TestNoRegisteredSubcommandIsUnreferenced fails with 'aether recruit is registered but nothing calls it (searched: wrappers, menu specs, hooks, scripts)'. Five plans (203-02/03/04/06/07) built the recruitment command and no wrapper, menu spec, hook or script invokes it yet. This is real and is exactly the orphan failure CLAUDE.md names as the project's signature defect -- it is NOT silenced. Plan 203-15 is the closer: it rewrites .aether/workers.md, which today documents a spawning protocol in convincing detail for a mechanism no caste was ever granted, and replaces it with the real path plus a test. DELIBERATELY NOT ALLOWLISTED: testdata/orphan_allowlist.json is shrink-only against a frozen baseline (TestOrphanAllowlistOnlyShrinks, WIRE-01/D-11), so adding an entry would widen a ratchet to hide a true finding. Leaving it red means the test itself proves 203-15 did its job, and going green is the acceptance signal. If 203-15 lands and this is still red, the phase shipped an orphan. Recorded 2026-09-13 at the wave-4 gate; cmd/testdata/regression_snapshot.json was separately refreshed 390->389 commands, the honest net effect of 203-10 retiring two dead trophallaxis commands.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-13T13:36:11.546Z",
     "resolved_at": null
   }
 ]
