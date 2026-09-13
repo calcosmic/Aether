@@ -322,7 +322,12 @@ type AcceptedCharter struct {
 // Pending suggestion (suggest-analyze)
 // ---------------------------------------------------------------------------
 
-// PendingSuggestion holds an unreviewed pheromone suggestion from suggest-analyze.
+// PendingSuggestion holds an unreviewed item in the shared tick-to-approve
+// queue: either a runtime-proposed pheromone suggestion (from
+// suggest-analyze) or a cross-project import quarantined on arrival. Both
+// kinds share this one struct and one queue (D-07/D-10,
+// 203-CLASSIC-SYNTHESIS.md SYN-203-11) -- there is deliberately no second
+// "quarantine inbox" type.
 type PendingSuggestion struct {
 	ID          string `json:"id"`
 	Type        string `json:"type"` // FOCUS, REDIRECT, or FEEDBACK
@@ -331,7 +336,45 @@ type PendingSuggestion struct {
 	ContentHash string `json:"content_hash"`
 	CreatedAt   string `json:"created_at"`
 	Dismissed   bool   `json:"dismissed"`
+
+	// Origin and SignalID are pointer-backed and omitempty, per the Phase
+	// 199 rule that new evidence fields stay readable on a legacy colony: an
+	// item written before this field existed has Origin == nil and reads as
+	// PendingOriginSuggestion (pendingNoteOrigin in
+	// cmd/pheromone_approval.go), never a fabricated import. SignalID links
+	// an import's queued item to the already-quarantined colony.PheromoneSignal
+	// it names, so approving/rejecting it can find that signal.
+	Origin   *string `json:"origin,omitempty"`
+	SignalID *string `json:"signal_id,omitempty"`
+
+	// Action and ActionAt record the owner's decision -- accepted, edited,
+	// or rejected -- with a timestamp. This is deliberately a single scalar
+	// record, not a list: it is the first entry plan 203-11 extends into a
+	// full immutable action history (BIO-08's remaining verbs), not that
+	// history itself.
+	Action   *string `json:"action,omitempty"`
+	ActionAt *string `json:"action_at,omitempty"`
 }
+
+// Origin values a queued item may declare. PendingOriginSuggestion is also
+// the read-time fallback for a legacy item with no Origin field.
+const (
+	PendingOriginSuggestion = "suggestion"
+	PendingOriginImport     = "import"
+)
+
+// PendingOrigins returns the two origin categories a queued item may
+// declare.
+func PendingOrigins() []string {
+	return []string{PendingOriginSuggestion, PendingOriginImport}
+}
+
+// Action values recorded on a queued item once the owner has decided it.
+const (
+	PendingActionAccepted = "accepted"
+	PendingActionEdited   = "edited"
+	PendingActionRejected = "rejected"
+)
 
 // ---------------------------------------------------------------------------
 // Top-level state

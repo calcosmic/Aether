@@ -87,7 +87,7 @@ For dummies: keep the reliable modern engine and brakes, then restore the dashbo
 - [ ] **BIO-04 — Durable child result:** `RecruitmentResult` binds the child, intent, dispatch, execution generation, terminal status, evidence, artifacts, handoff, and usage exactly once; missing, duplicated, altered, timed-out, or replayed results drive explicit recovery.
 - [ ] **BIO-05 — Trophallaxis and follow-on:** A scoped `TrophallaxisPacket` carries the useful child result to an acknowledged parent continuation or one named follow-on consumer, which records the downstream decision it made from that packet.
 - [ ] **BIO-06 — Whole-subtree truth:** Status, watch, recovery, worktree handling, and cost/depth accounting include every governed descendant and follow-on edge without weakening immutable build-attempt authorization.
-- [ ] **BIO-07 — Canonical pheromone bus:** User, runtime, import, and learning paths share one sanitizer, normalizer, deduplicating writer, provenance model, and effective scope/expiry/strength resolver; cross-project input starts quarantined.
+- [x] **BIO-07 — Canonical pheromone bus:** User, runtime, import, and learning paths share one sanitizer, normalizer, deduplicating writer, provenance model, and effective scope/expiry/strength resolver; cross-project input starts quarantined.
 - [ ] **BIO-08 — Evidence-backed influence:** Suggested pheromones support accept, edit, reject, reinforce, defer, expire, revoke, and appeal with immutable history; declared decision-domain adapters record influence and outcome-weighted strengthening, weakening, or quarantine.
 
 ### Learning Governor
