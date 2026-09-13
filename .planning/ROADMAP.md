@@ -572,7 +572,7 @@ Plans:
 4. The terminal result returns exactly once, survives interruption/replay, reaches an acknowledged parent or named follow-on as a scoped packet, and changes a recorded downstream decision.
 5. Status, watch, recovery, cost, and depth cover the whole governed subtree, while evidence-backed pheromone proposals expose full action history and later outcomes govern their strengthening, weakening, or quarantine.
 
-**Plans:** 7/15 plans executed
+**Plans:** 10/15 plans executed
 
 Plans:
 **Wave 1**
@@ -591,15 +591,15 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 203-06-PLAN.md — Atomic admission: parent authority, permission, path, cost and duplicate on the one chokepoint
+- [x] 203-06-PLAN.md — Atomic admission: parent authority, permission, path, cost and duplicate on the one chokepoint
 - [x] 203-07-PLAN.md — The durable child result and its five named recovery classes
 - [x] 203-08-PLAN.md — One tick-to-approve surface for suggested notes and quarantined imports
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
 - [ ] 203-09-PLAN.md — Go becomes the only admission authority on both dispatch lanes
-- [ ] 203-10-PLAN.md — Scoped knowledge handback, acknowledgement and the decision it changed
-- [ ] 203-11-PLAN.md — Eight influence actions on an append-only history with a recorded actor
+- [x] 203-10-PLAN.md — Scoped knowledge handback, acknowledgement and the decision it changed
+- [x] 203-11-PLAN.md — Eight influence actions on an append-only history with a recorded actor
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
