@@ -83,7 +83,7 @@ func renderColonyHealthLine(vitals map[string]interface{}) string {
 	if section, ok := vitals["memory_pressure"].(map[string]interface{}); ok {
 		instincts = intValue(section["instinct_count"])
 	}
-	return fmt.Sprintf("\nColony health: %s (%d/100) — %d signal(s) active, %d instinct(s) learned\n", label, score, signals, instincts)
+	return fmt.Sprintf("\nColony health (this project's health): %s (%d/100) — %d signal(s) active, %d instinct(s) learned\n", label, score, signals, instincts)
 }
 
 // renderColonyHealthBreakdown renders the five component signals beneath the
@@ -100,7 +100,7 @@ func renderColonyHealthBreakdown(vitals map[string]interface{}) string {
 		b.WriteString(fmt.Sprintf("   Signal health:  %d active (%s)\n", intValue(section["active_count"]), stringValue(section["status"])))
 	}
 	if section, ok := vitals["memory_pressure"].(map[string]interface{}); ok {
-		b.WriteString(fmt.Sprintf("   Memory:         %d instinct(s) (%s)\n", intValue(section["instinct_count"]), stringValue(section["status"])))
+		b.WriteString(fmt.Sprintf("   Memory:         %d instinct(s) — lessons learned (%s)\n", intValue(section["instinct_count"]), stringValue(section["status"])))
 	}
 	ageHours := 0.0
 	switch v := vitals["colony_age_hours"].(type) {
@@ -110,9 +110,9 @@ func renderColonyHealthBreakdown(vitals map[string]interface{}) string {
 		ageHours = float64(v)
 	}
 	if ageHours >= 48 {
-		b.WriteString(fmt.Sprintf("   Colony age:     %.0fd\n", ageHours/24))
+		b.WriteString(fmt.Sprintf("   Colony age (how long this project has run): %.0fd\n", ageHours/24))
 	} else if ageHours > 0 {
-		b.WriteString(fmt.Sprintf("   Colony age:     %.0fh\n", ageHours))
+		b.WriteString(fmt.Sprintf("   Colony age (how long this project has run): %.0fh\n", ageHours))
 	}
 	return b.String()
 }
@@ -147,10 +147,10 @@ func computeWarnings(state colony.ColonyState, s *storage.Store) []string {
 
 	// 1. Stale state warning
 	if state.InitializedAt != nil && time.Since(*state.InitializedAt) > 7*24*time.Hour {
-		warnings = append(warnings, "Stale: colony was last active more than 7 days ago. Recent work may not be reflected.")
+		warnings = append(warnings, "Stale: this project was last active more than 7 days ago. Recent work may not be reflected.")
 	}
 	if state.Plan.GeneratedAt != nil && time.Since(*state.Plan.GeneratedAt) > 7*24*time.Hour {
-		warnings = append(warnings, "Stale: colony plan was generated more than 7 days ago. Recent work may not be reflected.")
+		warnings = append(warnings, "Stale: this project's plan was generated more than 7 days ago. Recent work may not be reflected.")
 	}
 
 	// 2. Failed phases warning
@@ -377,7 +377,7 @@ func renderWarningsSection(warnings []string) string {
 	b.WriteString(renderBanner("\u26A0\uFE0F", "Warnings"))
 	b.WriteString(visualDividerStr())
 	for _, w := range warnings {
-		b.WriteString(w)
+		b.WriteString(voiceLine("warning", w))
 		b.WriteString("\n")
 	}
 	b.WriteString("\n")
@@ -691,12 +691,12 @@ func renderGuidedActions(actions []guidedAction) string {
 		b.WriteString(action.Summary)
 		b.WriteString("\n")
 		if strings.TrimSpace(action.Command) != "" {
-			b.WriteString("      Next: `")
+			b.WriteString("      " + voiceGlyph("next") + " Next: `")
 			b.WriteString(action.Command)
 			b.WriteString("`\n")
 		}
 		if strings.TrimSpace(action.AlternativeCommand) != "" {
-			b.WriteString("      Swarm: `")
+			b.WriteString("      " + voiceGlyph("colony") + " Swarm: `")
 			b.WriteString(action.AlternativeCommand)
 			b.WriteString("`\n")
 		}
@@ -875,6 +875,31 @@ func statusOverrideFacts(activeWorkers []agent.SpawnEntry, guidedActions []guide
 // the same map buildStatusResult produced for the JSON envelope, carrying the
 // one resolver's already-folded answer -- so the screen and the
 // machine-readable result can never disagree about what to do next.
+// skillSourceSentence turns the internal skill-source key into ordinary words
+// at the moment it becomes text.
+//
+// The raw key (e.g. "phase_plan") used to be printed straight onto the status
+// screen. TestVoicedScreensCarryNoRawStateToken forbids exactly that -- an
+// internal state name or a raw key=value pair is never shown to the owner
+// where a sentence belongs -- and it caught this the moment the real status
+// screen joined the voice corpus. An unrecognised key degrades to its own
+// underscores-to-spaces reading rather than being hidden, so a new source
+// shows up readable instead of silently blank.
+func skillSourceSentence(source string) string {
+	switch strings.TrimSpace(source) {
+	case "":
+		return "none recorded"
+	case "phase_plan":
+		return "the phase plan"
+	case "colony_prime":
+		return "the shared context pack"
+	case "worker_brief":
+		return "the worker brief"
+	default:
+		return strings.ReplaceAll(strings.TrimSpace(source), "_", " ")
+	}
+}
+
 func renderDashboard(state colony.ColonyState, s *storage.Store, result map[string]interface{}) string {
 	var b strings.Builder
 
@@ -887,7 +912,7 @@ func renderDashboard(state colony.ColonyState, s *storage.Store, result map[stri
 	if len(goal) > 60 {
 		goal = goal[:57] + "..."
 	}
-	fmt.Fprintf(&b, "Goal: %s\n\n", goal)
+	fmt.Fprintf(&b, "%s\n\n", voiceLine("goal", fmt.Sprintf("Goal: %s", goal)))
 
 	// Version line
 	renderVersionLine(&b)
@@ -930,7 +955,7 @@ func renderDashboard(state colony.ColonyState, s *storage.Store, result map[stri
 		phasePosition = totalPhases
 	}
 	phaseBar := generateProgressBar(phasePosition, totalPhases, 20)
-	fmt.Fprintf(&b, "Progress\n")
+	fmt.Fprintf(&b, "%s\n", voiceLine("phase", "Progress"))
 	phasePercent := 0
 	if totalPhases > 0 {
 		cappedPhase := phasePosition
@@ -942,7 +967,7 @@ func renderDashboard(state colony.ColonyState, s *storage.Store, result map[stri
 		}
 		phasePercent = cappedPhase * 100 / totalPhases
 	}
-	fmt.Fprintf(&b, "   Phase: [Phase %d/%d] %s %d%%\n", phasePosition, totalPhases, phaseBar, phasePercent)
+	fmt.Fprintf(&b, "   %s\n", voiceLine("phase", fmt.Sprintf("Phase: [Phase %d/%d] %s %d%%", phasePosition, totalPhases, phaseBar, phasePercent)))
 
 	// Task progress in current phase
 	var tasksCompleted, tasksTotal int
@@ -978,14 +1003,14 @@ func renderDashboard(state colony.ColonyState, s *storage.Store, result map[stri
 		taskPercent = cappedTasks * 100 / tasksTotal
 	}
 	if phaseName != "" {
-		fmt.Fprintf(&b, "   Tasks: [Tasks %d/%d] %s %d%% in Phase %d (%s)\n\n", tasksCompleted, tasksTotal, taskBar, taskPercent, displayPhaseNum, phaseName)
+		fmt.Fprintf(&b, "   %s\n\n", voiceLine("task", fmt.Sprintf("Tasks: [Tasks %d/%d] %s %d%% in Phase %d (%s)", tasksCompleted, tasksTotal, taskBar, taskPercent, displayPhaseNum, phaseName)))
 	} else {
-		fmt.Fprintf(&b, "   Tasks: [Tasks %d/%d] %s %d%% in Phase %d\n\n", tasksCompleted, tasksTotal, taskBar, taskPercent, displayPhaseNum)
+		fmt.Fprintf(&b, "   %s\n\n", voiceLine("task", fmt.Sprintf("Tasks: [Tasks %d/%d] %s %d%% in Phase %d", tasksCompleted, tasksTotal, taskBar, taskPercent, displayPhaseNum)))
 	}
 
 	// Constraints
 	focusCount, avoidCount := countConstraints(s)
-	fmt.Fprintf(&b, "Focus: %d areas | Avoid: %d patterns\n", focusCount, avoidCount)
+	fmt.Fprintf(&b, "%s\n", voiceLine("focus", fmt.Sprintf("Focus: %d areas | Avoid: %d patterns", focusCount, avoidCount)))
 
 	// Instincts
 	instincts := loadRuntimeInstincts(s, &state)
@@ -996,7 +1021,7 @@ func renderDashboard(state colony.ColonyState, s *storage.Store, result map[stri
 			highConf++
 		}
 	}
-	fmt.Fprintf(&b, "Instincts: %d learned (%d strong)\n", totalInstincts, highConf)
+	fmt.Fprintf(&b, "%s\n", voiceLine("learning", fmt.Sprintf("Instincts: %d learned (%d strong)", totalInstincts, highConf)))
 
 	// Flags. These values were captured once when buildStatusResult assembled
 	// the JSON result, so visual and machine-readable status cannot disagree.
@@ -1007,8 +1032,8 @@ func renderDashboard(state colony.ColonyState, s *storage.Store, result map[stri
 	} else {
 		blockers := intValue(result["blockers"])
 		escalatedBlockers := intValue(result["escalated_blockers"])
-		fmt.Fprintf(&b, "Flags: %d blockers | %d issues | %d notes\n", blockers, issues, notes)
-		fmt.Fprintf(&b, "Existing blocker work: %d active (%d escalated)\n", blockers, escalatedBlockers)
+		fmt.Fprintf(&b, "%s\n", voiceLine("flag", fmt.Sprintf("Flags: %d blockers | %d issues | %d notes", blockers, issues, notes)))
+		fmt.Fprintf(&b, "%s\n", voiceLine("blocked", fmt.Sprintf("Existing blocker work: %d active (%d escalated)", blockers, escalatedBlockers)))
 	}
 	if report := renderAutopilotReportFromResult(result); report != "" {
 		b.WriteString("\n")
@@ -1017,8 +1042,8 @@ func renderDashboard(state colony.ColonyState, s *storage.Store, result map[stri
 	}
 
 	// Scope
-	fmt.Fprintf(&b, "Scope: %s\n", state.EffectiveScope())
-	fmt.Fprintf(&b, "Colony Mode: %s\n", state.EffectiveColonyMode())
+	fmt.Fprintf(&b, "%s\n", voiceLine("status", fmt.Sprintf("Scope: %s", state.EffectiveScope())))
+	fmt.Fprintf(&b, "%s\n", voiceLine("colony", fmt.Sprintf("Colony Mode (how this project runs): %s", state.EffectiveColonyMode())))
 	if revision, ok := activePlanRevision(state.Plan); ok {
 		fmt.Fprintf(&b, "Plan Revision: r%d (%s) - %s\n", revision.Number, revision.ReasonType, revision.Reason)
 	} else if len(state.Plan.Phases) > 0 {
@@ -1036,7 +1061,7 @@ func renderDashboard(state colony.ColonyState, s *storage.Store, result map[stri
 		depth = "standard"
 	}
 	depthLbl := depthLabel(depth)
-	fmt.Fprintf(&b, "Depth: %s\n", depthLbl)
+	fmt.Fprintf(&b, "%s\n", voiceLine("decision", fmt.Sprintf("Depth: %s", depthLbl)))
 
 	// Granularity
 	granularity := string(state.PlanGranularity)
@@ -1044,14 +1069,14 @@ func renderDashboard(state colony.ColonyState, s *storage.Store, result map[stri
 		granularity = "not set"
 	}
 	granLbl := granularityLabel(granularity)
-	fmt.Fprintf(&b, "Granularity: %s\n", granLbl)
+	fmt.Fprintf(&b, "%s\n", voiceLine("decision", fmt.Sprintf("Granularity: %s", granLbl)))
 
 	// Parallel mode
 	parallelMode := string(state.ParallelMode)
 	if parallelMode == "" {
 		parallelMode = "in-repo"
 	}
-	fmt.Fprintf(&b, "Parallel: %s\n\n", parallelMode)
+	fmt.Fprintf(&b, "%s\n\n", voiceLine("colony", fmt.Sprintf("Parallel: %s", parallelMode)))
 
 	guidedActions := loadGuidedActions(s, skillWorkspaceRoot())
 	b.WriteString(renderGuidedActions(guidedActions))
@@ -1060,8 +1085,8 @@ func renderDashboard(state colony.ColonyState, s *storage.Store, result map[stri
 	}
 
 	proof := buildProofOutput(skillWorkspaceRoot(), state)
-	b.WriteString("Proof\n")
-	fmt.Fprintf(&b, "   Context: %s | %d included | %d preserved | %d trimmed | %d blocked\n",
+	b.WriteString(voiceLine("evidence", "Proof") + "\n")
+	fmt.Fprintf(&b, "   "+voiceGlyph("memory")+" Context assembled for this project: %s | %d included | %d preserved | %d trimmed | %d blocked\n",
 		proof.Summary.ContextSurface,
 		proof.Summary.ContextIncluded,
 		proof.Summary.ContextPreserved,
@@ -1069,19 +1094,19 @@ func renderDashboard(state colony.ColonyState, s *storage.Store, result map[stri
 		proof.Summary.ContextBlocked,
 	)
 	if proof.Summary.SkillDispatches > 0 {
-		fmt.Fprintf(&b, "   Skills: %s | %d dispatches | %d matched skills\n",
-			proof.Summary.SkillSource,
+		fmt.Fprintf(&b, "   "+voiceGlyph("artifact")+" Skills: %s | %d dispatches | %d matched skills\n",
+			skillSourceSentence(proof.Summary.SkillSource),
 			proof.Summary.SkillDispatches,
 			proof.Summary.SkillMatchedTotal,
 		)
 	} else {
 		b.WriteString("   Skills: no phase-aware skill proof yet\n")
 	}
-	b.WriteString("   Inspect: aether proof\n")
+	b.WriteString("   " + voiceLine("evidence", "Inspect: aether proof") + "\n")
 	b.WriteString("\n")
 
 	// Memory Health table
-	b.WriteString("Memory Health\n")
+	b.WriteString(voiceLine("memory", "Memory Health") + "\n")
 	renderMemoryHealthTable(&b, s)
 
 	// Review Findings (only if data exists)
@@ -1091,7 +1116,7 @@ func renderDashboard(state colony.ColonyState, s *storage.Store, result map[stri
 	}
 
 	// Pheromone Summary
-	b.WriteString("\nActive Pheromones\n")
+	b.WriteString("\n" + voiceLine("focus", "Active Pheromones (steering notes in effect)") + "\n")
 	renderPheromoneSummary(&b, s)
 
 	spawnSummary := loadSpawnActivitySummaryForState(s, &state)
@@ -1152,7 +1177,7 @@ func renderDashboard(state colony.ColonyState, s *storage.Store, result map[stri
 	if totalInstincts > 0 {
 		strongestInstincts := loadStrongestRuntimeInstincts(s, &state, 3)
 		if len(strongestInstincts) > 0 {
-			b.WriteString("\nStrongest Instincts\n")
+			b.WriteString("\n" + voiceLine("learning", "Strongest Instincts (lessons learned)") + "\n")
 			renderStrongestInstincts(&b, strongestInstincts)
 		}
 	}
@@ -1737,7 +1762,7 @@ func renderMemoryHealthTable(b *strings.Builder, s *storage.Store) {
 	}
 	writeLine("🧠", "Wisdom entries", summary.WisdomTotal, summary.LastLearning)
 	writeLine("📤", "Pending promotions", summary.PendingPromotions, summary.LastLearning)
-	writeLine("🐜", "Applied instincts", summary.AppliedInstincts, summary.LastInstinctTouched)
+	writeLine("🐜", "Applied instincts (lessons learned)", summary.AppliedInstincts, summary.LastInstinctTouched)
 	writeLine("👀", "Needs review", summary.ReviewCandidates+summary.RereadCandidates, summary.LastInstinctTouched)
 	writeLine("🗑", "Recent failures", summary.RecentFailures, summary.LastFailure)
 }
@@ -1851,9 +1876,9 @@ func renderVersionLine(b *strings.Builder) {
 	hubVersion := readInstalledHubVersion()
 	if hubVersion != "" {
 		if binaryVersion != hubVersion {
-			fmt.Fprintf(b, "Runtime: %s | Hub: %s  MISMATCH\n\n", binaryVersion, hubVersion)
+			fmt.Fprintf(b, "%s\n\n", voiceLine("warning", fmt.Sprintf("Runtime: %s | Hub (the installed copy on this machine): %s  MISMATCH", binaryVersion, hubVersion)))
 		} else {
-			fmt.Fprintf(b, "Runtime: %s | Hub: %s\n\n", binaryVersion, hubVersion)
+			fmt.Fprintf(b, "%s\n\n", voiceLine("status", fmt.Sprintf("Runtime: %s | Hub (the installed copy on this machine): %s", binaryVersion, hubVersion)))
 		}
 	} else {
 		fmt.Fprintf(b, "Runtime: %s\n\n", binaryVersion)
@@ -1894,7 +1919,7 @@ func renderSignalSummaryLine(b *strings.Builder, s *storage.Store) {
 	if feedbackCount > 0 {
 		parts = append(parts, fmt.Sprintf("%d FEEDBACK", feedbackCount))
 	}
-	fmt.Fprintf(b, "Signals: %d active (%s)\n", total, strings.Join(parts, ", "))
+	fmt.Fprintf(b, "%s\n", voiceLine("focus", fmt.Sprintf("Signals: %d active (%s)", total, strings.Join(parts, ", "))))
 }
 
 // extractContentText extracts the text field from a json.RawMessage content.

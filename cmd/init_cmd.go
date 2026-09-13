@@ -372,7 +372,7 @@ var initCmd = &cobra.Command{
 			CurrentMilestone: "",
 			SuggestedNext:    suggestedNext,
 			ActiveTodos:      promotedShelfTodos(store, goal),
-			Summary:          "Colony initialized",
+			Summary:          "Project initialized",
 		}
 
 		if err := store.SaveJSON("session.json", session); err != nil {
@@ -383,7 +383,7 @@ var initCmd = &cobra.Command{
 		if _, err := syncColonyArtifacts(state, colonyArtifactOptions{
 			CommandName:   "init",
 			SuggestedNext: suggestedNext,
-			Summary:       "Colony initialized",
+			Summary:       "Project initialized",
 			HandoffTitle:  "Initialized Colony",
 			WriteHandoff:  true,
 		}); err != nil {

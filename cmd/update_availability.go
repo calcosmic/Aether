@@ -178,8 +178,8 @@ func renderUpdateAvailableWarning(availability updateAvailability) string {
 		return ""
 	}
 	if availability.NeverStamped {
-		return fmt.Sprintf("Aether update available: the hub is at %s and this repo has no record of its last sync. Run `aether update --force` to refresh it.", availability.HubVersion)
+		return fmt.Sprintf("Aether update available: the hub (the installed copy on this machine) is at %s and this repo has no record of its last sync. Run `aether update --force` to refresh it.", availability.HubVersion)
 	}
-	return fmt.Sprintf("Aether update available: this repo is on %s, the hub is at %s. Run `aether update --force` to refresh it.",
+	return fmt.Sprintf("Aether update available: this repo is on %s, the hub (the installed copy on this machine) is at %s. Run `aether update --force` to refresh it.",
 		availability.RepoVersion, availability.HubVersion)
 }
