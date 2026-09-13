@@ -449,6 +449,8 @@ var spawnCanSpawnCmd = &cobra.Command{
 		caste, _ := cmd.Flags().GetString("caste")
 		task, _ := cmd.Flags().GetString("task")
 		workspace, _ := cmd.Flags().GetString("workspace")
+		asRecruitment, _ := cmd.Flags().GetBool("recruitment")
+		costSlots, _ := cmd.Flags().GetInt("cost-slots")
 
 		in := spawnDecisionInput{RequesterDepth: depth, Origin: spawnOriginSpawnCanSpawn}
 		// Set RequesterName from --name whenever --name is non-empty,
@@ -467,14 +469,26 @@ var spawnCanSpawnCmd = &cobra.Command{
 			}
 		}
 		// --caste/--task/--workspace are optional, additive advisory context
-		// (203-09/SYN-203-02): they let a caller such as the TypeScript
-		// host's spawn-orchestrator bridge ask this same chokepoint about a
-		// specific prospective child rather than a bare depth number,
-		// strengthening the ancestor-cycle check (which keys off
-		// Caste+Task) for that caller. Origin stays spawnOriginSpawnCanSpawn,
-		// so none of BIO-02's five additional recruitment-only dimensions
-		// (permission/path/cost/duplicate/parent-authority) apply here --
+		// (203-09/SYN-203-02) for an ORDINARY (non-recruitment) check: they
+		// let a caller ask this same chokepoint about a specific prospective
+		// child rather than a bare depth number, strengthening the
+		// ancestor-cycle check (which keys off Caste+Task) for that caller.
+		// Origin stays spawnOriginSpawnCanSpawn in that case, so none of
+		// BIO-02's five additional recruitment-only dimensions
+		// (permission/path/cost/duplicate/parent-authority) apply --
 		// unchanged from before these flags existed.
+		//
+		// --recruitment changes this (CR-01's fix, 203-REVIEW.md): when set,
+		// this command is asked about a REAL recruitment claim, not a bare
+		// advisory question, and --caste/--task become required in practice
+		// (recruitmentClaimAdmission's own validateRecruitmentIntent call
+		// denies a missing one by name). The decision is then made by
+		// recruitmentClaimAdmission under spawnOriginRecruit -- the exact
+		// same gate and the exact same five extra dimensions the in-repo
+		// build lane and `aether recruit` already apply -- instead of this
+		// command's own narrow default. spawnOriginSpawnCanSpawn's declared
+		// check table (recruitmentAdmissionChecks) is untouched either way:
+		// it stays empty for every caller that does not pass this flag.
 		if caste != "" {
 			in.Caste = caste
 		}
@@ -485,7 +499,15 @@ var spawnCanSpawnCmd = &cobra.Command{
 			in.Workspace = workspace
 		}
 
-		decision := spawnCanSpawnDecision(in)
+		var decision spawnDecisionResult
+		var recruitIntentID string
+		if asRecruitment {
+			var admitDecision recruitmentDecisionResult
+			recruitIntentID, admitDecision = recruitmentClaimAdmission(in.RequesterName, in.RequesterDepth, in.DepthIsAuthoritative, caste, task, workspace, costSlots)
+			decision = spawnDecisionResult{Allowed: admitDecision.Allowed, Reason: admitDecision.Reason, Detail: admitDecision.Detail}
+		} else {
+			decision = spawnCanSpawnDecision(in)
+		}
 
 		if enforce && !decision.Allowed {
 			msg := fmt.Sprintf("spawn denied at depth %d", depth)
@@ -500,6 +522,9 @@ var spawnCanSpawnCmd = &cobra.Command{
 			"can_spawn":     decision.Allowed,
 			"depth":         depth,
 			"authoritative": in.DepthIsAuthoritative,
+		}
+		if recruitIntentID != "" {
+			result["intent_id"] = recruitIntentID
 		}
 		if !decision.Allowed {
 			result["reason"] = decision.Reason
@@ -789,6 +814,8 @@ func init() {
 	spawnCanSpawnCmd.Flags().String("caste", "", "Requested helper caste for the prospective child (optional; strengthens the ancestor-cycle check)")
 	spawnCanSpawnCmd.Flags().String("task", "", "Bounded task/objective for the prospective child (optional; strengthens the ancestor-cycle check)")
 	spawnCanSpawnCmd.Flags().String("workspace", "", "Declared workspace for the prospective child (optional, advisory only for this origin)")
+	spawnCanSpawnCmd.Flags().Bool("recruitment", false, "Treat this as a real recruitment claim: decide under spawnOriginRecruit (the same gate and the same five extra admission dimensions `aether recruit` applies -- parent authority, permission, path, cost, duplicate) instead of this command's default narrow depth/budget/ancestor-cycle check. Requires --name, --caste, and --task. CR-01 fix, 203-REVIEW.md.")
+	spawnCanSpawnCmd.Flags().Int("cost-slots", 1, "Helper slots this recruitment counts against the whole-run budget; only consulted with --recruitment (mirrors `aether recruit`'s own --cost-slots default)")
 
 	validateWorkerResponseCmd.Flags().String("response", "", "Response to validate (required)")
 	validateWorkerResponseCmd.Flags().Bool("expect-json", false, "Check if response is valid JSON")

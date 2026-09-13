@@ -87,6 +87,12 @@ describe("bridges every claim to the Go admission gate (SYN-203-02)", () => {
 
     const [first] = calls;
     assert.equal(first!.args[0], "spawn-can-spawn");
+    assert.ok(
+      first!.args.includes("--recruitment"),
+      "CR-01 fix (203-REVIEW.md): every claim must ask the gate to decide " +
+        "under spawnOriginRecruit (the same five admission dimensions " +
+        "`aether recruit` applies), not the bare depth/budget check"
+    );
     assert.ok(first!.args.includes("--name"));
     assert.ok(first!.args.includes("Builder-01"));
     assert.ok(first!.args.includes("--depth"));

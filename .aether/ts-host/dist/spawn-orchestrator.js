@@ -8,9 +8,22 @@
  * admission authority running alongside the Go safety kernel on the
  * autopilot/host lane. That arithmetic is deleted here, not merely bypassed
  * (SYN-203-02): every claim is decided by the same Go ledger the interactive
- * `aether recruit` lane already consults, so a host-lane recruitment and a
- * native-lane recruitment against the same spawn-tree state produce the
- * same allow/deny answer, with the same reason vocabulary.
+ * `aether recruit` lane already consults.
+ *
+ * CR-01 fix (203-REVIEW.md): every call also passes `--recruitment`, so the
+ * Go side decides under spawnOriginRecruit -- the SAME origin, and the SAME
+ * five extra admission dimensions (parent authority, permission, path,
+ * cost, duplicate) the in-repo build lane and `aether recruit` already
+ * apply -- instead of the bare depth/budget/ancestor-cycle check
+ * `spawn-can-spawn` applies without that flag. Before this flag existed, a
+ * host-lane recruitment and a native-lane recruitment against the same
+ * ledger state could disagree: a read-only caste requesting a write
+ * workspace was refused via `aether recruit` and silently admitted here.
+ * Now both lanes decide through recruitmentClaimAdmission's one code path
+ * (cmd/recruitment_admission.go), so a host-lane recruitment and a
+ * native-lane recruitment against the same spawn-tree and
+ * recruitment-intent state produce the same allow/deny answer, with the
+ * same reason vocabulary.
  *
  * A bridge call that fails, times out, or returns an unparseable envelope
  * denies the claim and names the bridge failure -- it never falls back to
@@ -45,6 +58,7 @@ export function createSpawnOrchestrator(opts) {
                 try {
                     decision = callGoJSON(bridge, [
                         "spawn-can-spawn",
+                        "--recruitment",
                         "--name", parentName,
                         "--depth", String(parentDepth),
                         "--caste", claim.caste,

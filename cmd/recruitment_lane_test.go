@@ -289,79 +289,248 @@ func TestBothLanesShareOneAdmissionCounter(t *testing.T) {
 	}
 }
 
-// TestBothLanesUseOneReasonVocabulary asserts that spawnOriginSpawnCanSpawn
-// (the origin the TS bridge's every call uses) can only ever produce the
-// three reason strings its declared check table
-// (recruitmentAdmissionChecks) actually wires up for it -- never one of
-// BIO-02's five recruitment-only reasons, which the SAME table declares
-// inapplicable to this origin.
+// assertSameLaneAnswer fails the test unless native and host agree on both
+// allow/deny and, when both deny, the exact reason string.
+func assertSameLaneAnswer(t *testing.T, dimension string, native, host recruitmentDecisionResult) {
+	t.Helper()
+	if native.Allowed != host.Allowed {
+		t.Fatalf("%s: native.Allowed=%v host.Allowed=%v -- the two lanes disagree on whether this claim is admitted", dimension, native.Allowed, host.Allowed)
+	}
+	if native.Reason != host.Reason {
+		t.Fatalf("%s: native reason = %q, host reason = %q -- the two lanes must speak the same reason vocabulary", dimension, native.Reason, host.Reason)
+	}
+}
+
+// TestBothLanesUseOneReasonVocabulary is CR-01's parity fix (203-REVIEW.md).
+//
+// spawnOriginSpawnCanSpawn's OWN declared check table stays empty (the
+// first assertion below): an ORDINARY spawn-can-spawn advisory call -- no
+// --recruitment flag -- still applies none of BIO-02's five recruitment-only
+// dimensions, exactly as before this fix, because spawn-log and an ordinary
+// spawn-can-spawn call never populate Permission/Workspace/CostSlots/
+// IntentID, and applying these checks to them would deny every ordinary
+// spawn on missing data rather than skip a check that does not apply.
+//
+// But a REAL recruitment claim on the host/autopilot lane no longer asks
+// under that bare origin. recruitmentClaimAdmission (cmd/recruitment_admission.go)
+// -- the function spawnCanSpawnCmd's --recruitment flag calls, and the
+// function the TypeScript host's spawn-orchestrator bridge now drives
+// through that flag -- carries a claim through the SAME spawnOriginRecruit
+// gate the in-repo build lane (cmd/recruitment_lane.go) and the interactive
+// `aether recruit` command already use.
+//
+// For each of the four dimensions CR-01 found missing on the host lane
+// (permission, path, cost, duplicate), this test seeds the SAME ledger
+// state the way the runtime actually produces it -- a real RecordSpawn
+// call, a real recordRecruitmentIntent call, a real budget fill, never a
+// hand-typed literal pretending to be one -- and asserts that BOTH a direct
+// spawnOriginRecruit decision (the reference every native-lane caller --
+// recruitCmd, dispatchOneInRepoRecruitment -- already reaches) and
+// recruitmentClaimAdmission (the host lane's own new gate call) return the
+// identical allow/deny answer and the identical reason string.
 func TestBothLanesUseOneReasonVocabulary(t *testing.T) {
 	applicable := recruitmentAdmissionChecks[spawnOriginSpawnCanSpawn]
 	if len(applicable) != 0 {
-		t.Fatalf("spawnOriginSpawnCanSpawn must be declared with an empty check set (never BIO-02's five recruitment-only dimensions), got %v", applicable)
+		t.Fatalf("spawnOriginSpawnCanSpawn must be declared with an empty check set (an ORDINARY advisory check must never gain BIO-02's five recruitment-only dimensions), got %v", applicable)
 	}
-
-	saveGlobals(t)
-	resetRootCmd(t)
-	s, tmpDir := newTestStore(t)
-	defer os.RemoveAll(tmpDir)
-	store = s
-	_ = tmpDir
-
-	st := agent.NewSpawnTree(store, "spawn-tree.txt")
-
-	cases := []struct {
-		name       string
-		input      spawnDecisionInput
-		wantReason string
-	}{
-		{
-			name: "depth",
-			input: spawnDecisionInput{
-				RequesterDepth:       2,
-				DepthIsAuthoritative: true,
-				Origin:               spawnOriginSpawnCanSpawn,
-			},
-			wantReason: "depth",
-		},
-	}
-
-	for _, tc := range cases {
-		got := spawnCanSpawnDecision(tc.input)
-		if got.Allowed {
-			t.Fatalf("%s: expected a denial, got allowed", tc.name)
-		}
-		if got.Reason != tc.wantReason {
-			t.Fatalf("%s: reason = %q, want %q", tc.name, got.Reason, tc.wantReason)
-		}
-	}
-
-	// Budget: fill the ledger, then ask.
-	recruitmentAdmissionFillBudget(t, st, spawnTreeBudgetMax)
-	budgetResult := spawnCanSpawnDecision(spawnDecisionInput{
-		RequesterName:        "Queen",
-		RequesterDepth:       0,
-		DepthIsAuthoritative: true,
-		Origin:               spawnOriginSpawnCanSpawn,
-	})
-	if budgetResult.Allowed || budgetResult.Reason != "budget" {
-		t.Fatalf("expected reason %q with a full ledger, got allowed=%v reason=%q", "budget", budgetResult.Allowed, budgetResult.Reason)
-	}
-
-	// None of BIO-02's five recruitment-only reasons can ever surface for
-	// this origin -- confirmed structurally above, and reinforced here: a
-	// request carrying data that WOULD trip permission/path/cost/duplicate
-	// under origin=recruit changes nothing under this origin, because the
-	// declared table applies none of those checks to it.
-	unreachable := []string{
+	// None of BIO-02's five recruitment-only reasons can ever surface for an
+	// ordinary (non-recruitment) spawn-can-spawn call -- confirmed
+	// structurally above, and reinforced here by asking recruitmentCheckApplies
+	// directly.
+	for _, reason := range []string{
 		recruitmentReasonParent, recruitmentReasonPermission, recruitmentReasonPath,
 		recruitmentReasonCost, recruitmentReasonDuplicate,
-	}
-	for _, reason := range unreachable {
+	} {
 		if recruitmentCheckApplies(spawnOriginSpawnCanSpawn, reason) {
 			t.Fatalf("recruitmentCheckApplies(spawnOriginSpawnCanSpawn, %q) = true, want false", reason)
 		}
 	}
+
+	t.Run("ordinary_advisory_check_is_unaffected", func(t *testing.T) {
+		saveGlobals(t)
+		resetRootCmd(t)
+		s, tmpDir := newTestStore(t)
+		defer os.RemoveAll(tmpDir)
+		store = s
+
+		st := agent.NewSpawnTree(store, "spawn-tree.txt")
+
+		got := spawnCanSpawnDecision(spawnDecisionInput{
+			RequesterDepth:       2,
+			DepthIsAuthoritative: true,
+			Origin:               spawnOriginSpawnCanSpawn,
+		})
+		if got.Allowed || got.Reason != "depth" {
+			t.Fatalf("depth: allowed=%v reason=%q, want denied with reason %q", got.Allowed, got.Reason, "depth")
+		}
+
+		recruitmentAdmissionFillBudget(t, st, spawnTreeBudgetMax)
+		budgetResult := spawnCanSpawnDecision(spawnDecisionInput{
+			RequesterName:        "Queen",
+			RequesterDepth:       0,
+			DepthIsAuthoritative: true,
+			Origin:               spawnOriginSpawnCanSpawn,
+		})
+		if budgetResult.Allowed || budgetResult.Reason != "budget" {
+			t.Fatalf("expected reason %q with a full ledger, got allowed=%v reason=%q", "budget", budgetResult.Allowed, budgetResult.Reason)
+		}
+	})
+
+	t.Run("permission", func(t *testing.T) {
+		saveGlobals(t)
+		resetRootCmd(t)
+		s, tmpDir := newTestStore(t)
+		defer os.RemoveAll(tmpDir)
+		store = s
+
+		st := agent.NewSpawnTree(store, "spawn-tree.txt")
+		if err := st.RecordSpawn("Queen", "builder", "A1", "top-level task", 1); err != nil {
+			t.Fatalf("seed parent: %v", err)
+		}
+
+		// "includer" resolves to the repository-read-only permission
+		// profile (TestRecruitmentAdmissionPermissionDeniesReadOnlyCaste) --
+		// every recruitment dispatches a real, write-capable child process,
+		// so this caste must be refused on BOTH lanes.
+		native := spawnCanSpawnDecision(spawnDecisionInput{
+			RequesterName:        "A1",
+			RequesterDepth:       1,
+			DepthIsAuthoritative: true,
+			Caste:                "includer",
+			Task:                 "audit the accessibility of the new form",
+			Origin:               spawnOriginRecruit,
+			Workspace:            tmpDir,
+			CostSlots:            1,
+			IntentID:             "native-permission-check",
+			AttemptID:            "native-permission-check",
+		})
+		_, host := recruitmentClaimAdmission("A1", 1, true, "includer", "audit the accessibility of the new form", tmpDir, 1)
+
+		assertSameLaneAnswer(t, "permission", recruitmentDecisionResult{Allowed: native.Allowed, Reason: native.Reason}, host)
+		if host.Allowed || host.Reason != recruitmentReasonPermission {
+			t.Fatalf("expected the host lane to refuse a read-only caste with reason %q, got allowed=%v reason=%q", recruitmentReasonPermission, host.Allowed, host.Reason)
+		}
+	})
+
+	t.Run("path", func(t *testing.T) {
+		saveGlobals(t)
+		resetRootCmd(t)
+		s, tmpDir := newTestStore(t)
+		defer os.RemoveAll(tmpDir)
+		store = s
+
+		st := agent.NewSpawnTree(store, "spawn-tree.txt")
+		if err := st.RecordSpawn("Queen", "builder", "A1", "top-level task", 1); err != nil {
+			t.Fatalf("seed parent: %v", err)
+		}
+
+		outside := t.TempDir()
+
+		native := spawnCanSpawnDecision(spawnDecisionInput{
+			RequesterName:        "A1",
+			RequesterDepth:       1,
+			DepthIsAuthoritative: true,
+			Caste:                "builder",
+			Task:                 "fix the pagination bug",
+			Origin:               spawnOriginRecruit,
+			Workspace:            outside,
+			CostSlots:            1,
+			IntentID:             "native-path-check",
+			AttemptID:            "native-path-check",
+		})
+		_, host := recruitmentClaimAdmission("A1", 1, true, "builder", "fix the pagination bug", outside, 1)
+
+		assertSameLaneAnswer(t, "path", recruitmentDecisionResult{Allowed: native.Allowed, Reason: native.Reason}, host)
+		if host.Allowed || host.Reason != recruitmentReasonPath {
+			t.Fatalf("expected the host lane to refuse a workspace outside the colony root with reason %q, got allowed=%v reason=%q", recruitmentReasonPath, host.Allowed, host.Reason)
+		}
+	})
+
+	t.Run("cost", func(t *testing.T) {
+		saveGlobals(t)
+		resetRootCmd(t)
+		s, tmpDir := newTestStore(t)
+		defer os.RemoveAll(tmpDir)
+		store = s
+
+		st := agent.NewSpawnTree(store, "spawn-tree.txt")
+		if err := st.RecordSpawn("Queen", "builder", "A1", "top-level task", 1); err != nil {
+			t.Fatalf("seed parent: %v", err)
+		}
+		// Leave exactly 2 slots remaining (spawnTreeBudgetMax - 2 fillers,
+		// minus the 1 the parent above already consumed) -- ENOUGH that the
+		// generic whole-run spawnTreeBudgetReason check (shared by every
+		// origin, checked before BIO-02's five dimensions) still passes, so
+		// a request for 5 slots is denied specifically by
+		// recruitmentCostReason's own "this request exceeds what remains"
+		// dimension, not merely re-proving the already-shared budget check.
+		recruitmentAdmissionFillBudget(t, st, spawnTreeBudgetMax-3)
+
+		native := spawnCanSpawnDecision(spawnDecisionInput{
+			RequesterName:        "A1",
+			RequesterDepth:       1,
+			DepthIsAuthoritative: true,
+			Caste:                "builder",
+			Task:                 "fix the pagination bug",
+			Origin:               spawnOriginRecruit,
+			Workspace:            tmpDir,
+			CostSlots:            5,
+			IntentID:             "native-cost-check",
+			AttemptID:            "native-cost-check",
+		})
+		_, host := recruitmentClaimAdmission("A1", 1, true, "builder", "fix the pagination bug", tmpDir, 5)
+
+		assertSameLaneAnswer(t, "cost", recruitmentDecisionResult{Allowed: native.Allowed, Reason: native.Reason}, host)
+		if host.Allowed || host.Reason != recruitmentReasonCost {
+			t.Fatalf("expected the host lane to refuse a request exceeding the remaining budget with reason %q, got allowed=%v reason=%q", recruitmentReasonCost, host.Allowed, host.Reason)
+		}
+	})
+
+	t.Run("duplicate", func(t *testing.T) {
+		saveGlobals(t)
+		resetRootCmd(t)
+		s, tmpDir := newTestStore(t)
+		defer os.RemoveAll(tmpDir)
+		store = s
+
+		st := agent.NewSpawnTree(store, "spawn-tree.txt")
+		if err := st.RecordSpawn("Queen", "builder", "A1", "top-level task", 1); err != nil {
+			t.Fatalf("seed parent: %v", err)
+		}
+
+		pending := recruitmentIntentRecord{
+			Intent: recruitmentIntent{
+				SchemaVersion: recruitmentSchemaVersion,
+				IntentID:      "pending-shared",
+				ParentName:    "A1",
+				Caste:         "builder",
+				Objective:     "Fix the login form.",
+			},
+			CreatedAt: "2026-01-01T00:00:00Z",
+		}
+		if _, err := recordRecruitmentIntent(pending); err != nil {
+			t.Fatalf("record pending intent: %v", err)
+		}
+
+		native := spawnCanSpawnDecision(spawnDecisionInput{
+			RequesterName:        "A1",
+			RequesterDepth:       1,
+			DepthIsAuthoritative: true,
+			Caste:                "builder",
+			Task:                 "fix the login form", // normalizes to the same text as "Fix the login form."
+			Origin:               spawnOriginRecruit,
+			Workspace:            tmpDir,
+			CostSlots:            1,
+			IntentID:             "native-duplicate-check",
+			AttemptID:            "native-duplicate-check",
+		})
+		_, host := recruitmentClaimAdmission("A1", 1, true, "builder", "fix the login form", tmpDir, 1)
+
+		assertSameLaneAnswer(t, "duplicate", recruitmentDecisionResult{Allowed: native.Allowed, Reason: native.Reason}, host)
+		if host.Allowed || host.Reason != recruitmentReasonDuplicate {
+			t.Fatalf("expected the host lane to refuse a claim matching an already-pending intent in the same subtree with reason %q, got allowed=%v reason=%q", recruitmentReasonDuplicate, host.Allowed, host.Reason)
+		}
+	})
 }
 
 // TestNoBudgetArithmeticOutsideGo is a source scan of .aether/ts-host/src

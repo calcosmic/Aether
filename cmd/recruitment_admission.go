@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/codex"
@@ -401,4 +402,134 @@ func recruitmentManifestEntryByIntentID(intentID string) (recruitmentManifestRec
 		return entry, nil
 	}
 	return recruitmentManifestRecord{}, fmt.Errorf("no recruitment manifest entry for IntentID %q", intentID)
+}
+
+// recruitmentClaimAdmission is the host/autopilot lane's own entry into the
+// exact sequence dispatchOneInRepoRecruitment (cmd/recruitment_lane.go)
+// already uses to carry a worker's spawn claim through a real recruitment:
+// build a full recruitmentIntent, validate its shape
+// (validateRecruitmentIntent), durably record it BEFORE any decision is
+// taken, decide through spawnCanSpawnDecision under spawnOriginRecruit --
+// the SAME origin, and the SAME five extra admission dimensions (parent
+// authority, permission, path, cost, duplicate) the in-repo lane and
+// `aether recruit` already apply -- and durably record the decision.
+//
+// This is CR-01's fix (203-REVIEW.md). spawn-orchestrator.ts's own header
+// comment and 203-CLASSIC-SYNTHESIS.md's SYN-203-02 both asserted that a
+// host-lane recruitment and a native-lane recruitment against the same
+// ledger state produce the same allow/deny answer with the same reason
+// vocabulary. Before this function existed, the TypeScript host's
+// spawn-orchestrator bridge asked ONLY under spawnOriginSpawnCanSpawn --
+// whose declared check table (recruitmentAdmissionChecks) is EMPTY -- so
+// permission/path/cost/duplicate were never evaluated for a host-lane
+// recruitment even though the native lane enforced all five. A read-only
+// caste requesting a write workspace was refused via `aether recruit` and
+// silently admitted via the host/autopilot lane.
+//
+// spawnCanSpawnCmd's --recruitment flag (cmd/spawn.go) calls this function
+// instead of the bare spawnCanSpawnDecision(in) call it otherwise makes --
+// the one caller today, reached from the TypeScript host's
+// spawn-orchestrator bridge. spawnOriginSpawnCanSpawn's OWN declared check
+// table stays empty either way: an ordinary advisory spawn-can-spawn call
+// (no --recruitment flag) is completely unaffected by this function's
+// existence, exactly as recruitmentAdmissionChecks' own comment requires --
+// spawn-log and an ordinary spawn-can-spawn call never populate
+// Permission/Workspace/CostSlots/IntentID, and applying these checks to
+// them would deny every ordinary spawn on missing data.
+//
+// parentName/parentDepth/depthIsAuthoritative are taken as already resolved
+// by the caller: spawnCanSpawnCmd already derives them from --name against
+// the spawn tree (a coordinator sentinel, or a recorded spawn-tree entry's
+// own depth + 1 -- D-05, a caller's claimed depth is never trusted on its
+// own), exactly the way recruitCmd and dispatchOneInRepoRecruitment resolve
+// the same fact for their own callers. This function does not re-derive
+// them, so there is exactly one place per caller that resolves a claimed
+// parent's authority, never two that could quietly disagree.
+//
+// costSlots mirrors `aether recruit`'s own --cost-slots flag (default 1,
+// one helper slot per recruitment -- the same default
+// dispatchOneInRepoRecruitment hardcodes for the in-repo lane) rather than
+// being fixed in this function: a whole-run budget already exhausted denies
+// via the SAME generic spawnTreeBudgetReason check every origin shares
+// (reason "budget") before this dimension is ever reached, so exercising
+// recruitmentCostReason itself (reason "cost") -- this request's OWN
+// declared slot count exceeding what remains, while slots still remain --
+// requires a caller-suppliable value here, not a constant.
+//
+// It deliberately stops at the decision: it never writes a spawn-tree entry
+// and never amends the recruitment manifest. Both the in-repo lane and the
+// interactive `aether recruit` command record the spawn and dispatch the
+// child themselves immediately after an identical admission call -- the
+// host/autopilot lane already has its OWN mechanism for that
+// (worker-dispatch.ts's own spawn-log call, immediately before the worker
+// process actually starts), which performs the equivalent spawn-tree
+// registration for EVERY worker it dispatches, recruited or not. Recording
+// a second spawn-tree entry here would double-count this same child against
+// the whole-run budget the moment worker-dispatch.ts's own spawn-log call
+// runs -- so this function's contract is admission only, the one piece of
+// the sequence the two lanes cannot already share.
+func recruitmentClaimAdmission(parentName string, parentDepth int, depthIsAuthoritative bool, caste, task, workspace string, costSlots int) (intentID string, decision recruitmentDecisionResult) {
+	ws := strings.TrimSpace(workspace)
+	if ws == "" && store != nil {
+		ws = repoRootFromStore(store)
+	}
+	if costSlots <= 0 {
+		costSlots = 1
+	}
+
+	attemptID := fmt.Sprintf("hostrecruit_%d", time.Now().UTC().UnixNano())
+	intent := recruitmentIntent{
+		SchemaVersion:        recruitmentSchemaVersion,
+		ParentName:           parentName,
+		ParentDepth:          parentDepth,
+		DepthIsAuthoritative: depthIsAuthoritative,
+		AttemptID:            attemptID,
+		Caste:                caste,
+		Objective:            task,
+		Reason:               "worker-requested backup on the host/autopilot build lane",
+		Workspace:            ws,
+		IntentID:             attemptID,
+		Permission:           codex.PermissionProfileForCaste(caste),
+		Urgency:              recruitmentUrgencyRoutine,
+		CostSlots:            costSlots,
+		CostSeconds:          int(resolvedRecruitmentTimeout().Seconds()),
+	}
+
+	validation := validateRecruitmentIntent(intent)
+	storedIntent := intent
+	if validation.Allowed {
+		storedIntent = sanitizedRecruitmentIntentCopy(intent)
+	}
+
+	createdAt := time.Now().UTC().Format(time.RFC3339)
+	if _, err := recordRecruitmentIntent(recruitmentIntentRecord{Intent: storedIntent, CreatedAt: createdAt}); err != nil {
+		return intent.IntentID, recruitmentDecisionResult{
+			Allowed: false,
+			Reason:  recruitmentReasonUnresolved,
+			Detail:  fmt.Sprintf("could not durably record this recruitment intent (%v)", err),
+		}
+	}
+
+	result := validation
+	if result.Allowed {
+		admission := spawnCanSpawnDecision(spawnDecisionInput{
+			RequesterName:        intent.ParentName,
+			RequesterDepth:       intent.ParentDepth,
+			DepthIsAuthoritative: intent.DepthIsAuthoritative,
+			Caste:                intent.Caste,
+			Task:                 intent.Objective,
+			Origin:               spawnOriginRecruit,
+			Permission:           intent.Permission,
+			Workspace:            intent.Workspace,
+			CostSlots:            intent.CostSlots,
+			IntentID:             intent.IntentID,
+			AttemptID:            intent.AttemptID,
+		})
+		result = recruitmentDecisionResult{Allowed: admission.Allowed, Reason: admission.Reason, Detail: admission.Detail}
+	}
+
+	decidedAt := time.Now().UTC().Format(time.RFC3339)
+	_, _ = recordRecruitmentDecision(intent.IntentID, result, decidedAt)
+
+	return intent.IntentID, result
 }
