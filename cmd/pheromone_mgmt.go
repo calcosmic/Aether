@@ -333,10 +333,13 @@ func init() {
 	pheromoneDisplayCmd.Flags().String("expire", "", "Expire a note by ID now, recording the previous expiry")
 	pheromoneDisplayCmd.Flags().String("revoke", "", "Revoke a note by ID permanently -- owner only")
 	pheromoneDisplayCmd.Flags().String("appeal", "", "Appeal a rejected note by ID, surfacing it for reconsideration -- owner only")
-	pheromoneDisplayCmd.Flags().String("reason", "", "Reason recorded alongside --reinforce/--defer/--expire/--revoke/--appeal")
-	pheromoneDisplayCmd.Flags().String("actor", "", "Actor performing --reinforce/--defer/--expire/--revoke/--appeal: owner (default), runtime, or learning")
+	pheromoneDisplayCmd.Flags().String("weaken", "", "Weaken a note by ID: lower its strength to the floor and record the action")
+	pheromoneDisplayCmd.Flags().String("pin", "", "Pin a note by ID: exempt it from automatic outcome-weighted tuning -- owner only")
+	pheromoneDisplayCmd.Flags().String("unpin", "", "Unpin a note by ID: let automatic outcome-weighted tuning consider it again -- owner only")
+	pheromoneDisplayCmd.Flags().String("reason", "", "Reason recorded alongside --reinforce/--defer/--expire/--revoke/--appeal/--weaken/--pin/--unpin")
+	pheromoneDisplayCmd.Flags().String("actor", "", "Actor performing --reinforce/--defer/--expire/--revoke/--appeal/--weaken/--pin/--unpin: owner (default), runtime, or learning")
 	pheromoneDisplayCmd.Flags().String("actor-name", "", "Name of the actor performing the action (optional, recorded in the history)")
-	pheromoneDisplayCmd.Flags().Bool("dry-run", false, "Preview --reinforce/--defer/--expire/--revoke/--appeal without persisting")
+	pheromoneDisplayCmd.Flags().Bool("dry-run", false, "Preview --reinforce/--defer/--expire/--revoke/--appeal/--weaken/--pin/--unpin without persisting")
 	pheromoneSnapshotInjectCmd.Flags().String("source-root", "", "Repo or worktree root to copy active pheromones from (default current AETHER_ROOT)")
 	pheromoneSnapshotInjectCmd.Flags().String("target-root", "", "Repo or worktree root to inject active pheromones into")
 	pheromoneMergeBackCmd.Flags().String("source-root", "", "Repo or worktree root to merge pheromones from")
@@ -403,6 +406,9 @@ func runPheromoneInfluenceFlags(cmd *cobra.Command) (error, bool) {
 	expireID, _ := cmd.Flags().GetString("expire")
 	revokeID, _ := cmd.Flags().GetString("revoke")
 	appealID, _ := cmd.Flags().GetString("appeal")
+	weakenID, _ := cmd.Flags().GetString("weaken")
+	pinID, _ := cmd.Flags().GetString("pin")
+	unpinID, _ := cmd.Flags().GetString("unpin")
 	reason, _ := cmd.Flags().GetString("reason")
 	actorFlag, _ := cmd.Flags().GetString("actor")
 	actorName, _ := cmd.Flags().GetString("actor-name")
@@ -424,6 +430,12 @@ func runPheromoneInfluenceFlags(cmd *cobra.Command) (error, bool) {
 		return renderPheromoneInfluenceResult(revokeNote(revokeID, actor, actorName, reason, dryRun)), true
 	case appealID != "":
 		return renderPheromoneInfluenceResult(appealNote(appealID, actor, actorName, reason, dryRun)), true
+	case weakenID != "":
+		return renderPheromoneInfluenceResult(weakenNote(weakenID, actor, actorName, reason, dryRun)), true
+	case pinID != "":
+		return renderPheromoneInfluenceResult(pinNote(pinID, actor, actorName, reason, dryRun)), true
+	case unpinID != "":
+		return renderPheromoneInfluenceResult(unpinNote(unpinID, actor, actorName, reason, dryRun)), true
 	}
 	return nil, false
 }
