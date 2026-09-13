@@ -1,12 +1,18 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
@@ -287,5 +293,205 @@ func TestRecruitmentCreditDecisionOnlyIsPendingNotHelpful(t *testing.T) {
 	}
 	if record.Outcome != recruitmentCreditOutcomePending {
 		t.Fatalf("decision-only outcome = %q, want pending", record.Outcome)
+	}
+}
+
+// --- Task 3: prove credit cannot be inferred ---
+
+// TestDeliveredPlusPassingIsNotCredit drives a real note into a real worker
+// brief and a real (trivially passing) verification step, then asserts zero
+// credit records exist -- the precise failure mode CEC-07 names.
+func TestDeliveredPlusPassingIsNotCredit(t *testing.T) {
+	saveGlobals(t)
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	signal, _, err := writePheromoneSignal("FOCUS", "pay attention to the credit boundary", "normal", "test", "", "", 0, nil)
+	if err != nil {
+		t.Fatalf("write a real note: %v", err)
+	}
+
+	brief := resolvePheromoneSection()
+	if !strings.Contains(brief, "pay attention to the credit boundary") {
+		t.Fatalf("note was not actually delivered into the resolved worker brief:\n%s", brief)
+	}
+
+	step := runVerificationStep(context.Background(), tmpDir, "credit-boundary-check", true, "true", 5*time.Second)
+	if !step.Passed {
+		t.Fatalf("expected the phase's own check to pass, got %+v", step)
+	}
+
+	all, err := recruitmentCreditAll()
+	if err != nil {
+		t.Fatalf("recruitmentCreditAll: %v", err)
+	}
+	if len(all) != 0 {
+		t.Fatalf("a delivered note plus a passing phase must never itself produce credit, got %+v (signal %s)", all, signal.ID)
+	}
+}
+
+// TestCreditRequiresBothFacts is an AST-based scan of the cmd package
+// mirroring cmd/recruitment_result_test.go's TestEveryResultWriteGoesThroughTheBinding:
+// it derives every function whose body writes credit/records.json via the
+// store, and asserts recordRecruitmentCredit is the only one -- and that its
+// own signature carries both a changed-decision identifier and an
+// effect-evidence identifier parameter, so no future write into the credit
+// store can be guarded by only one of the two facts CEC-07 requires.
+func TestCreditRequiresBothFacts(t *testing.T) {
+	violations := scanForCreditWritesOutsideRecordRecruitmentCredit(t, ".")
+	if len(violations) != 0 {
+		t.Fatalf("found a credit-store write guarded by fewer than both required facts:\n%s", strings.Join(violations, "\n"))
+	}
+
+	t.Run("a synthetic single-identifier write is caught", func(t *testing.T) {
+		fixtureSrc := `package cmd
+
+func writeCreditWithOnlyOneFact(changedDecisionID string) error {
+	var file recruitmentCreditFile
+	return store.UpdateJSONAtomically(recruitmentCreditPath, &file, func() error {
+		file.Entries = append(file.Entries, recruitmentCreditRecord{ChangedDecisionID: changedDecisionID})
+		return nil
+	})
+}
+`
+		violations := scanSourceForCreditWritesOutsideRecordRecruitmentCredit(t, "fixture_credit_single_fact.go", fixtureSrc)
+		if len(violations) == 0 {
+			t.Fatal("scanner failed to detect a synthetic single-identifier credit write")
+		}
+	})
+}
+
+func scanForCreditWritesOutsideRecordRecruitmentCredit(t *testing.T, dir string) []string {
+	t.Helper()
+	names, err := filepath.Glob(filepath.Join(dir, "*.go"))
+	if err != nil {
+		t.Fatalf("glob cmd package files: %v", err)
+	}
+	if len(names) == 0 {
+		t.Fatal("fixture is broken: no .go files found in the cmd package directory")
+	}
+	fset := token.NewFileSet()
+	var violations []string
+	found := false
+	for _, name := range names {
+		if strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(fset, name, nil, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", name, err)
+		}
+		fileFound, fileViolations := creditWriteViolationsInFile(fset, file)
+		found = found || fileFound
+		violations = append(violations, fileViolations...)
+	}
+	if !found {
+		t.Fatal("fixture is broken: no write call referencing recruitmentCreditPath was found anywhere in the cmd package")
+	}
+	return violations
+}
+
+func scanSourceForCreditWritesOutsideRecordRecruitmentCredit(t *testing.T, filename, src string) []string {
+	t.Helper()
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, filename, src, 0)
+	if err != nil {
+		t.Fatalf("parse fixture source: %v", err)
+	}
+	_, violations := creditWriteViolationsInFile(fset, file)
+	return violations
+}
+
+// creditWriteViolationsInFile walks file for every call writing
+// recruitmentCreditPath through the store, and requires the enclosing
+// function to be literally named recordRecruitmentCredit AND to declare
+// parameters naming both a changed-decision identifier and an
+// effect-evidence identifier -- so a second write function, even one
+// wrongly reusing the same name's shape, is still caught if it drops either
+// parameter.
+func creditWriteViolationsInFile(fset *token.FileSet, file *ast.File) (found bool, violations []string) {
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Body == nil {
+			continue
+		}
+		ast.Inspect(fn.Body, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok || sel.Sel.Name != "UpdateJSONAtomically" {
+				return true
+			}
+			if len(call.Args) == 0 {
+				return true
+			}
+			ident, ok := call.Args[0].(*ast.Ident)
+			if !ok || ident.Name != "recruitmentCreditPath" {
+				return true
+			}
+			found = true
+			fnName := "<unknown>"
+			if fn.Name != nil {
+				fnName = fn.Name.Name
+			}
+			if fnName != "recordRecruitmentCredit" {
+				violations = append(violations, fmt.Sprintf(
+					"%s: %s writes recruitmentCreditPath via store.%s -- only recordRecruitmentCredit may write it",
+					fset.Position(call.Pos()).String(), fnName, sel.Sel.Name,
+				))
+				return true
+			}
+			hasChangedDecisionParam := false
+			hasEffectEvidenceParam := false
+			for _, field := range fn.Type.Params.List {
+				for _, paramName := range field.Names {
+					lower := strings.ToLower(paramName.Name)
+					if strings.Contains(lower, "changeddecision") {
+						hasChangedDecisionParam = true
+					}
+					if strings.Contains(lower, "effectevidence") {
+						hasEffectEvidenceParam = true
+					}
+				}
+			}
+			if !hasChangedDecisionParam || !hasEffectEvidenceParam {
+				violations = append(violations, fmt.Sprintf(
+					"%s: %s writes recruitmentCreditPath without declaring both a changed-decision and an effect-evidence parameter",
+					fset.Position(call.Pos()).String(), fnName,
+				))
+			}
+			return true
+		})
+	}
+	return found, violations
+}
+
+// TestHarmfulOutcomeIsReachable drives the real public path -- a packed,
+// acknowledged trophallaxis packet with a recorded decision, then a credit
+// record -- to prove a harmful outcome is reachable end to end, not only
+// from a unit fixture constructing a struct literal directly.
+func TestHarmfulOutcomeIsReachable(t *testing.T) {
+	saveGlobals(t)
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+	packetID, decisionID := newCreditTrophallaxisFixture(t, "public-harmful")
+
+	if _, _, err := recordRecruitmentCredit("contrib-public-harmful", recruitmentContributionRecruitmentResult, decisionID, packetID, recruitmentCreditOutcomeHarmful, ""); err != nil {
+		t.Fatalf("record harmful credit via the public path: %v", err)
+	}
+
+	stored, ok, err := recruitmentCreditForContribution("contrib-public-harmful", decisionID)
+	if err != nil {
+		t.Fatalf("query stored record: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected a stored credit record for the public-path contribution")
+	}
+	if stored.Outcome != recruitmentCreditOutcomeHarmful {
+		t.Fatalf("stored outcome = %q, want harmful", stored.Outcome)
 	}
 }
