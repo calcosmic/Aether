@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 21
+open_count: 22
 waived_count: 0
 fixed_count: 5
-total_count: 26
-last_updated: 2026-09-13T19:35:51.149Z
+total_count: 27
+last_updated: 2026-09-13T19:50:56.397Z
 ---
 
 # Broken Windows Ledger
@@ -41,6 +41,7 @@ last_updated: 2026-09-13T19:35:51.149Z
 | 24 | 203 | deviation | .planning/REQUIREMENTS.md |  | BIO-08 and CEC-07 are ready (every declaring plan has a SUMMARY) but requirements.mark-complete returns not_found and writes nothing -- this repo's checkbox format (- [ ] **REQ-ID -- Title:**) doesn't match the tool's regex (- [ ] **REQ-ID**); re-run mark-complete after reconciling the format | open |  | 2026-09-13T17:25:11.044Z |  |
 | 25 | 203 | unmet-truth | cmd/subcommand_reachability_ratchet_test.go |  | SEVERE — THE PHASE'S ACCEPTANCE SIGNAL IS GREEN FOR A FALSE REASON. Plan 203-15 turned TestNoRegisteredSubcommandIsUnreferenced green by adding workerDisciplineCallerFiles (commit 824be303), a FOURTH caller-evidence source admitting .aether/workers.md, so documenting 'aether recruit' there counts as a caller. Its justifying comment states: ".claude/agents/ant/*.md's own 'Read .aether/workers.md for {caste} discipline' line makes a command documented here exactly as genuinely executed as a command a wrapper doc tells the assistant to run." THAT LINE DOES NOT EXIST. Verified 2026-09-13: zero of the 27 files in .claude/agents/ant/ reference workers.md; zero across .claude/agents, .opencode/agents and .codex/agents in any form; and NO runtime code reads workers.md into a prompt or brief (every cmd/ reference is install/platform-sync/source-check distribution or a comment). So workers.md is a document nobody is instructed to read and nothing loads — precisely the 'a doc mention is not an execution' case D-02/D-06 excluded .aether/docs/command-playbooks for. The orphan is REAL and still open: 'aether recruit', built across five plans, has no caller. This is the exact defect the phase existed to eliminate, committed by the plan whose job was to eliminate it, and it is worse than the original red because a future reader sees a passing test. DECISION REQUIRED: either wire it for real (agent definitions, or inject workers.md into the assembled brief) or accept that the mechanism ships unreachable and restore the honest red. Everything else 203-15 did — deleting the false spawning protocol, the latency measurement, locking CLAUDE.md claims to tests — is independent and sound. | open |  | 2026-09-13T18:34:24.429Z |  |
 | 26 | 203 | unmet-truth | cmd/subcommand_reachability_ratchet_test.go |  | RESOLVED 2026-09-13, same session as the finding above. The false acceptance signal is corrected and the orphan is genuinely closed. THREE changes, none of them a widened allowlist: (1) renderRecruitmentInvitation (cmd/codex_build.go) writes the recruit instruction into EVERY dispatched worker's composed brief — the text that lands in the worker's own prompt, which is execution, proven by TestEveryDispatchedWorkerIsToldHowToAskForHelp across builder/watcher/scout and by TestTheRecruitInstructionHasOneSource (exactly one emitter, so the lanes cannot drift). (2) The instruction was added to the Claude AND OpenCode agent definitions for aether-builder/watcher/scout, in fenced form so the documented-call extractor sees it; TestClaudeOpenCodeAgentContentParity and TestCrossPlatformAgentParity still pass. (3) workerDisciplineCallerFiles was repointed from .aether/workers.md (which no agent names and no runtime loads) to those three agent definitions, which ARE the worker's prompt, the same class as the wrapper docs callerWrapperCorpora already accepts; the false justifying comment is replaced with the corrected record. PROVEN ABLE TO FAIL: removing the asking_for_help block from the three Claude agent files turns TestNoRegisteredSubcommandIsUnreferenced red naming aether recruit, and restoring it turns it green — the signal now tracks the wiring rather than the checker's generosity. Also fixed .github/workflows/ci.yml line 100, which still named TestSpawnCanSpawnAcceptsDocumentedInvocation after 203-15 renamed it to TestRecruitAcceptsDocumentedInvocation; the executor was sandboxed out of .github/workflows and correctly escalated rather than forcing it. TestWiringGateStepRunsEveryWiringTest now passes. | open |  | 2026-09-13T19:35:51.149Z |  |
+| 27 | 203 | deviation | cmd/recruitment_subtree.go |  | Wave 6 (plan 203-14) introduced a user-visible regression its own gate MISSED: renderGovernedSubtreeStatusSection called projectGovernedSubtree, which walks the whole spawn tree across every run, so the new inline family tree presented workers from FINISHED runs on the status screen as if they were live. Caught only by the phase-closing full suite via TestStatusPrefersCurrentRunWorkersOverStaleHistory. That test SILENTLY DID NOT RUN in the wave-5 and wave-6 gates (it appears only in a 'missing executed tests:' accounting line), which is why both gates reported clean. Bisected across four commits to pin wave 6 as the origin: passes at 508e5096 and f348fbdc, fails at dab02fbe. Fixed by scoping the status caller to the current run via SpawnTree.CurrentRun/EntriesForRun rather than changing projectGovernedSubtree, whose whole-history behaviour other callers legitimately want; no current run means no filter, so a colony with history but nothing running still shows what it has. Proven by removing the filter and watching the test name the stale worker. THE STANDING LESSON: this is the seventh silent skip observed on 2026-09-13, and the second time a skipped test was the one that mattered. A suite that can omit a test while reporting a lane result is not a gate; comparing FAIL lines against a known-red list gives a false all-clear for anything that never ran. | open |  | 2026-09-13T19:50:56.397Z |  |
 
 ````json
 [
@@ -354,6 +355,18 @@ last_updated: 2026-09-13T19:35:51.149Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-09-13T19:35:51.149Z",
+    "resolved_at": null
+  },
+  {
+    "id": 27,
+    "kind": "deviation",
+    "phase": "203",
+    "file": "cmd/recruitment_subtree.go",
+    "line": null,
+    "description": "Wave 6 (plan 203-14) introduced a user-visible regression its own gate MISSED: renderGovernedSubtreeStatusSection called projectGovernedSubtree, which walks the whole spawn tree across every run, so the new inline family tree presented workers from FINISHED runs on the status screen as if they were live. Caught only by the phase-closing full suite via TestStatusPrefersCurrentRunWorkersOverStaleHistory. That test SILENTLY DID NOT RUN in the wave-5 and wave-6 gates (it appears only in a 'missing executed tests:' accounting line), which is why both gates reported clean. Bisected across four commits to pin wave 6 as the origin: passes at 508e5096 and f348fbdc, fails at dab02fbe. Fixed by scoping the status caller to the current run via SpawnTree.CurrentRun/EntriesForRun rather than changing projectGovernedSubtree, whose whole-history behaviour other callers legitimately want; no current run means no filter, so a colony with history but nothing running still shows what it has. Proven by removing the filter and watching the test name the stale worker. THE STANDING LESSON: this is the seventh silent skip observed on 2026-09-13, and the second time a skipped test was the one that mattered. A suite that can omit a test while reporting a lane result is not a gate; comparing FAIL lines against a known-red list gives a false all-clear for anything that never ran.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-13T19:50:56.397Z",
     "resolved_at": null
   }
 ]
