@@ -1995,6 +1995,15 @@ func renderCodexContinueReviewBrief(root string, phase colony.Phase, manifest co
 		b.WriteString("\n")
 	}
 	b.WriteString(renderVerificationCommandSection())
+	// CR-05/WR-08 (203-REVIEW.md): the continue lane's review castes were
+	// dispatched with no way to ask the program for backup at all -- the
+	// invitation only ever reached the build lane. Gatekeeper and Auditor are
+	// excluded, matching the branch above: they have no Bash tool by design,
+	// so telling them to run a CLI command would be an instruction they
+	// cannot follow, not a normal refusal.
+	if spec.Caste != "gatekeeper" && spec.Caste != "auditor" {
+		b.WriteString(renderRecruitmentInvitation())
+	}
 	return b.String()
 }
 
@@ -2502,6 +2511,11 @@ func renderCodexContinueWatcherBrief(root string, phase colony.Phase, manifest c
 		}
 	}
 	b.WriteString(renderVerificationCommandSection())
+	// CR-05/WR-08 (203-REVIEW.md): the continue lane's Watcher -- the most
+	// expensive single worker in the whole flow -- never received the
+	// recruit invitation either. Watcher has a Bash tool, so unlike
+	// Gatekeeper/Auditor above there is no reason to withhold it.
+	b.WriteString(renderRecruitmentInvitation())
 	return b.String()
 }
 

@@ -2563,7 +2563,16 @@ func buildCodexWorkerDispatches(
 			AgentTOMLPath:     dispatchAgentPath(root, invoker, agentName),
 			Caste:             dispatch.Caste,
 			TaskID:            normalizedDispatchTaskID(dispatch),
-			TaskBrief:         renderCodexBuildWorkerBrief(root, phase, dispatch, startedAt),
+			// CR-05/203-REVIEW.md: renderCodexBuildWorkerBrief alone never told
+			// this lane's workers the recruit invitation -- only the
+			// plan-only/wrapper lane's composeBuildManifestBrief did, so every
+			// autopilot (`aether run`) and direct `aether build <phase>` worker
+			// was dispatched without it. Appended here rather than folded into
+			// renderCodexBuildWorkerBrief itself so TestBuildWorkerBriefIsMostlyTask
+			// keeps measuring that renderer's own task-vs-scaffolding ratio
+			// unchanged; this is a second, named call site for the one shared
+			// renderRecruitmentInvitation source (TestTheRecruitInstructionHasOneSource).
+			TaskBrief:         renderCodexBuildWorkerBrief(root, phase, dispatch, startedAt) + renderRecruitmentInvitation(),
 			ContextCapsule:    capsule,
 			HandoffSection:    dispatch.HandoffSection,
 			Workflow:          "build",
@@ -4717,14 +4726,23 @@ func composeBuildManifestBrief(root string, phase colony.Phase, dispatch codexBu
 
 	// Every dispatched worker is told, in its own brief, how to ask for help.
 	//
-	// This is the wiring that makes `aether recruit` reachable. Phase 203
-	// built the whole mechanism across five plans and nothing invoked it:
-	// TestNoRegisteredSubcommandIsUnreferenced reported it as an orphan for
-	// four waves, correctly. Documenting it in .aether/workers.md does not
-	// fix that -- no agent definition instructs a worker to read that file
-	// and no runtime code loads it into a prompt, so a command named there is
-	// the "a doc mention is not an execution" case the reachability rules
-	// (D-02/D-06) already exclude playbooks for.
+	// This is the wiring that makes `aether recruit` reachable on the
+	// plan-only/wrapper build lane. Phase 203 built the whole mechanism
+	// across five plans and nothing invoked it: TestNoRegisteredSubcommandIsUnreferenced
+	// reported it as an orphan for four waves, correctly. Documenting it in
+	// .aether/workers.md does not fix that -- no agent definition instructs a
+	// worker to read that file and no runtime code loads it into a prompt, so
+	// a command named there is the "a doc mention is not an execution" case
+	// the reachability rules (D-02/D-06) already exclude playbooks for.
+	//
+	// CR-05 (203-REVIEW.md) found this call site alone was not enough: the
+	// native/direct build lane (buildCodexWorkerDispatches) and the continue
+	// lane (renderCodexContinueReviewBrief, renderCodexContinueWatcherBrief)
+	// each compose their own brief independently and never reached this one.
+	// Those three now call the same renderRecruitmentInvitation directly --
+	// still one TEXT source, several named callers -- and
+	// TestTheRecruitInstructionHasOneSource enumerates the full set by name so
+	// a lane silently losing this call fails there.
 	//
 	// A brief section IS execution: this text lands in the prompt of every
 	// worker the program dispatches. Proven by
@@ -4735,9 +4753,13 @@ func composeBuildManifestBrief(root string, phase colony.Phase, dispatch codexBu
 	return b.String()
 }
 
-// renderRecruitmentInvitation is the one place a worker is told it may ask for
-// help, and how. Kept as its own function so the brief composer has a single
-// seam to test and so no second, drifting copy of the instruction appears.
+// renderRecruitmentInvitation is the one place the invitation TEXT is
+// written -- kept as its own function so every lane's brief composer has a
+// single seam to call and so no second, drifting copy of the instruction
+// appears. Multiple lanes each call it directly (composeBuildManifestBrief,
+// buildCodexWorkerDispatches, renderCodexContinueReviewBrief,
+// renderCodexContinueWatcherBrief); TestTheRecruitInstructionHasOneSource
+// enumerates that exact set by name.
 func renderRecruitmentInvitation() string {
 	var b strings.Builder
 	b.WriteString("\n## Asking For Help\n\n")

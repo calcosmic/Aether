@@ -95,9 +95,25 @@ var hookScriptCorpora = []struct {
 //
 // Belt and braces, and the stronger half: the runtime also writes the
 // invitation into every dispatched worker's brief
-// (renderRecruitmentInvitation, cmd/codex_build.go), proven by
-// TestEveryDispatchedWorkerIsToldHowToAskForHelp. That is execution the
-// scanner cannot see, so it is tested directly rather than asserted here.
+// (renderRecruitmentInvitation, cmd/codex_build.go), proven on the
+// plan-only/wrapper build lane by TestEveryDispatchedWorkerIsToldHowToAskForHelp
+// and, since 203-REVIEW.md's CR-05/WR-08, on the two lanes that fix closed
+// too: TestNativeBuildLaneWorkerIsToldHowToAskForHelp (native/direct build,
+// the lane autopilot's `aether run` uses) and
+// TestContinueLaneWorkersAreToldHowToAskForHelp (the check step's review
+// castes and Watcher). That is execution the scanner cannot see, so it is
+// tested directly rather than asserted here.
+//
+// The Codex platform's own agent definitions (.codex/agents/*.toml) are
+// deliberately NOT added to this list, even though they now carry the same
+// invitation text (TestCodexAgentDefinitionsCarryTheRecruitInvitation): this
+// list exists to credit OTHER subcommands an agent definition happens to
+// mention as orphan-scanner caller evidence, and singleFileCallerNames has no
+// ".toml" case at all -- adding a path here that the scanner cannot parse
+// would be inert, the same "looks covered, proves nothing" mistake this
+// file's own CORRECTED note above already found once with workers.md. Codex
+// reachability for `aether recruit` specifically is proven the stronger way,
+// directly, by the test named above.
 var workerDisciplineCallerFiles = []string{
 	filepath.Join(".claude", "agents", "ant", "aether-builder.md"),
 	filepath.Join(".claude", "agents", "ant", "aether-watcher.md"),
