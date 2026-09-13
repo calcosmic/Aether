@@ -123,6 +123,17 @@ type trophallaxisPacket struct {
 
 	Acknowledgement *colony.SignalAcknowledgement `json:"acknowledgement,omitempty"`
 	AcknowledgedAt  string                        `json:"acknowledged_at,omitempty"`
+
+	// Decision (Task 3) is the downstream colony.LifecycleDecision the
+	// receiver recorded from this packet -- the SAME typed decision currency
+	// that flows through this codebase's other durable receipts
+	// (colony.LifecycleReceipt.Decisions, cmd/agency_contract.go's
+	// AgencyReceiptEvidence.ChangedDecision), never a bespoke
+	// trophallaxis-only decision shape. Its own EvidenceIDs always names
+	// this packet's PacketID (recordTrophallaxisDecision's own guarantee).
+	Decision           *colony.LifecycleDecision `json:"decision,omitempty"`
+	DecisionRecordedBy string                    `json:"decision_recorded_by,omitempty"`
+	DecisionRecordedAt string                    `json:"decision_recorded_at,omitempty"`
 }
 
 // trophallaxisPacketsFile is the on-disk container at trophallaxisPacketsPath.
@@ -442,4 +453,122 @@ func trophallaxisPacketAcknowledgementState(packet trophallaxisPacket) string {
 		return AgencyAcknowledgementPending
 	}
 	return fmt.Sprintf("%s (evidence %s)", packet.Acknowledgement.ActorID, packet.Acknowledgement.EvidenceID)
+}
+
+// errTrophallaxisDecisionNotAcknowledged and errTrophallaxisDecisionNoChange
+// are the internal sentinels recordTrophallaxisDecision returns from its own
+// UpdateJSONAtomically mutate closure to abort a write that must not
+// happen, matching acknowledgeTrophallaxisPacket's own sentinel pair above.
+var (
+	errTrophallaxisDecisionNotAcknowledged = fmt.Errorf("trophallaxis packet is not yet acknowledged")
+	errTrophallaxisDecisionNoChange        = fmt.Errorf("trophallaxis packet already has a recorded decision")
+)
+
+// recordTrophallaxisDecision records the downstream colony.LifecycleDecision
+// a receiver made from an acknowledged packet. It writes into the SAME
+// packet record Task 2 already established (recruitment/packets.json) --
+// never a parallel decisions ledger of its own -- and always names packetID
+// in the decision's own EvidenceIDs, adding it if the caller did not.
+//
+// A decision claiming a packet that does not exist, or an unacknowledged
+// packet (CEC-07 requires a RECORDED downstream decision from a receiver
+// that has actually received the packet -- an unconfirmed handback cannot
+// yet have changed anything), is refused by name. A second call for the
+// same packet is read-only: the store is left byte-identical and the FIRST
+// recorded decision is returned, matching the replay discipline
+// bindRecruitmentResult and acknowledgeTrophallaxisPacket already use --
+// this is not a second replay mechanism.
+func recordTrophallaxisDecision(packetID, receiver, summary string, evidenceIDs []string) (trophallaxisPacket, error) {
+	if store == nil {
+		return trophallaxisPacket{}, fmt.Errorf("no store initialized")
+	}
+	packetID = strings.TrimSpace(packetID)
+	if packetID == "" {
+		return trophallaxisPacket{}, fmt.Errorf("trophallaxis packet id is required")
+	}
+	receiver = strings.TrimSpace(receiver)
+	if receiver == "" {
+		return trophallaxisPacket{}, fmt.Errorf("trophallaxis decision requires a non-empty receiver")
+	}
+	summary = strings.TrimSpace(summary)
+	if summary == "" {
+		return trophallaxisPacket{}, fmt.Errorf("trophallaxis decision requires a non-empty summary of what changed")
+	}
+	sanitizedSummary, err := trophallaxisSanitizeField("decision summary", summary)
+	if err != nil {
+		return trophallaxisPacket{}, err
+	}
+
+	ids := append([]string{}, evidenceIDs...)
+	if !trophallaxisContainsID(ids, packetID) {
+		ids = append([]string{packetID}, ids...)
+	}
+
+	var result trophallaxisPacket
+	var file trophallaxisPacketsFile
+	updateErr := store.UpdateJSONAtomically(trophallaxisPacketsPath, &file, func() error {
+		for i := range file.Entries {
+			if file.Entries[i].PacketID != packetID {
+				continue
+			}
+			if file.Entries[i].Decision != nil {
+				result = file.Entries[i]
+				return errTrophallaxisDecisionNoChange
+			}
+			if file.Entries[i].Acknowledgement == nil {
+				return errTrophallaxisDecisionNotAcknowledged
+			}
+			file.Entries[i].Decision = &colony.LifecycleDecision{
+				ID:          "trophallaxis-decision:" + packetID,
+				Scope:       "trophallaxis",
+				Summary:     sanitizedSummary,
+				EvidenceIDs: ids,
+			}
+			file.Entries[i].DecisionRecordedBy = receiver
+			file.Entries[i].DecisionRecordedAt = time.Now().UTC().Format(time.RFC3339)
+			result = file.Entries[i]
+			return nil
+		}
+		return errTrophallaxisPacketNotFound
+	})
+	if updateErr != nil {
+		switch updateErr {
+		case errTrophallaxisPacketNotFound:
+			return trophallaxisPacket{}, fmt.Errorf("trophallaxis decision names an unknown packet %q", packetID)
+		case errTrophallaxisDecisionNotAcknowledged:
+			return trophallaxisPacket{}, fmt.Errorf("trophallaxis packet %q: %v", packetID, errTrophallaxisDecisionNotAcknowledged)
+		case errTrophallaxisDecisionNoChange:
+			return result, nil
+		default:
+			return trophallaxisPacket{}, updateErr
+		}
+	}
+	return result, nil
+}
+
+func trophallaxisContainsID(ids []string, target string) bool {
+	for _, id := range ids {
+		if id == target {
+			return true
+		}
+	}
+	return false
+}
+
+// trophallaxisPacketState distinguishes the three reportable states Task 3
+// requires: unacknowledged, acknowledged with no decision yet, and
+// acknowledged with a recorded decision. The first two reuse the existing
+// pending-wording constants (cmd/agency_contract.go's
+// AgencyAcknowledgementPending and AgencyMeasuredEffectPending) rather than
+// inventing new phrases for states that already have names; only the third
+// state's wording is new, because no existing constant describes a
+// trophallaxis decision's own content.
+func trophallaxisPacketState(packet trophallaxisPacket) string {
+	if packet.Acknowledgement == nil {
+		return AgencyAcknowledgementPending
+	}
+	if packet.Decision == nil {
+		return AgencyMeasuredEffectPending
+	}
+	return fmt.Sprintf("decision %s (evidence %s)", packet.Decision.ID, packet.PacketID)
 }

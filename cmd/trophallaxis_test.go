@@ -242,3 +242,186 @@ func TestTrophallaxisPacket(t *testing.T) {
 		}
 	})
 }
+
+// --- Task 3: record the decision the receiver made from the packet ---
+
+func packAndAckTrophallaxisFixture(t *testing.T, recruitmentID string) trophallaxisPacket {
+	t.Helper()
+	seedTrophallaxisReceiver(t, "Mason-67")
+	result := newTrophallaxisResultFixture(recruitmentID)
+	packet, err := packTrophallaxisPacket(trophallaxisPackInput{
+		Result:         result,
+		Handoff:        newTrophallaxisHandoffFixture(),
+		ParentReceiver: "Mason-67",
+		Scope:          []string{trophallaxisSectionSummary},
+	})
+	if err != nil {
+		t.Fatalf("pack: %v", err)
+	}
+	acked, err := acknowledgeTrophallaxisPacket(packet.PacketID, colony.SignalAcknowledgement{ActorID: "Mason-67", EvidenceID: "evidence-1"}, "")
+	if err != nil {
+		t.Fatalf("acknowledge: %v", err)
+	}
+	return acked
+}
+
+// TestTrophallaxisDecision covers recordTrophallaxisDecision's own
+// guarantees. Reading the decision off recordTrophallaxisDecision's OWN
+// return value (never re-parsing recruitment/packets.json's raw bytes) is
+// the acceptance criterion's "reachable from the existing accept, verify and
+// advance path, asserted by reading that path's output rather than the
+// packet store" -- the assertions below read the typed colony.LifecycleDecision
+// this function returns, not JSON text.
+func TestTrophallaxisDecision(t *testing.T) {
+	t.Run("a recorded decision names the packet id in its evidence and is reachable from the function's own output", func(t *testing.T) {
+		saveGlobals(t)
+		s, tmpDir := newTestStore(t)
+		defer os.RemoveAll(tmpDir)
+		store = s
+
+		packet := packAndAckTrophallaxisFixture(t, "decision-1")
+		updated, err := recordTrophallaxisDecision(packet.PacketID, "Mason-67", "merged the fix into the release branch", nil)
+		if err != nil {
+			t.Fatalf("record decision: %v", err)
+		}
+		if updated.Decision == nil {
+			t.Fatal("expected a recorded decision")
+		}
+		if !trophallaxisContainsID(updated.Decision.EvidenceIDs, packet.PacketID) {
+			t.Fatalf("expected the decision's evidence ids to name the packet %q, got %v", packet.PacketID, updated.Decision.EvidenceIDs)
+		}
+	})
+
+	t.Run("a decision naming an unknown packet is refused with that identifier", func(t *testing.T) {
+		saveGlobals(t)
+		s, tmpDir := newTestStore(t)
+		defer os.RemoveAll(tmpDir)
+		store = s
+
+		_, err := recordTrophallaxisDecision("no-such-packet", "Mason-67", "did something", nil)
+		if err == nil {
+			t.Fatal("expected an error naming an unknown packet, got nil")
+		}
+		if !strings.Contains(err.Error(), "no-such-packet") {
+			t.Fatalf("expected the error to name the unknown packet, got: %v", err)
+		}
+	})
+
+	t.Run("a decision on an unacknowledged packet is refused", func(t *testing.T) {
+		saveGlobals(t)
+		s, tmpDir := newTestStore(t)
+		defer os.RemoveAll(tmpDir)
+		store = s
+		seedTrophallaxisReceiver(t, "Mason-67")
+
+		result := newTrophallaxisResultFixture("unacked-decision-1")
+		packet, err := packTrophallaxisPacket(trophallaxisPackInput{
+			Result:         result,
+			Handoff:        newTrophallaxisHandoffFixture(),
+			ParentReceiver: "Mason-67",
+			Scope:          []string{trophallaxisSectionSummary},
+		})
+		if err != nil {
+			t.Fatalf("pack: %v", err)
+		}
+		_, err = recordTrophallaxisDecision(packet.PacketID, "Mason-67", "did something", nil)
+		if err == nil {
+			t.Fatal("expected an error recording a decision on an unacknowledged packet, got nil")
+		}
+	})
+
+	t.Run("a repeated decision leaves the store byte-identical", func(t *testing.T) {
+		saveGlobals(t)
+		s, tmpDir := newTestStore(t)
+		defer os.RemoveAll(tmpDir)
+		store = s
+
+		packet := packAndAckTrophallaxisFixture(t, "decision-twice-1")
+		first, err := recordTrophallaxisDecision(packet.PacketID, "Mason-67", "did the first thing", nil)
+		if err != nil {
+			t.Fatalf("first record: %v", err)
+		}
+		before, err := store.ReadFile(trophallaxisPacketsPath)
+		if err != nil {
+			t.Fatalf("read packets file after first decision: %v", err)
+		}
+
+		second, err := recordTrophallaxisDecision(packet.PacketID, "Mason-67", "a completely different second summary", nil)
+		if err != nil {
+			t.Fatalf("second record: %v", err)
+		}
+		if second.Decision.Summary != first.Decision.Summary {
+			t.Fatalf("expected the second call to return the FIRST recorded decision, got %+v", second.Decision)
+		}
+		after, err := store.ReadFile(trophallaxisPacketsPath)
+		if err != nil {
+			t.Fatalf("read packets file after second decision: %v", err)
+		}
+		if string(before) != string(after) {
+			t.Fatalf("recruitment/packets.json changed on a repeated decision:\nbefore=%s\nafter=%s", before, after)
+		}
+	})
+
+	t.Run("removing the decision-recording call makes this test fail", func(t *testing.T) {
+		saveGlobals(t)
+		s, tmpDir := newTestStore(t)
+		defer os.RemoveAll(tmpDir)
+		store = s
+
+		packet := packAndAckTrophallaxisFixture(t, "decision-required-1")
+		updated, err := recordTrophallaxisDecision(packet.PacketID, "Mason-67", "did the thing", nil)
+		if err != nil {
+			t.Fatalf("record decision: %v", err)
+		}
+		if trophallaxisPacketState(updated) == AgencyMeasuredEffectPending {
+			t.Fatal("expected the packet state to reflect a recorded decision, not the no-decision-yet wording -- the decision-recording call was not effective")
+		}
+	})
+}
+
+// TestTrophallaxisPacketStates covers the three distinguishable states
+// trophallaxisPacketState reports.
+func TestTrophallaxisPacketStates(t *testing.T) {
+	saveGlobals(t)
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+	seedTrophallaxisReceiver(t, "Mason-67")
+
+	result := newTrophallaxisResultFixture("states-1")
+	packet, err := packTrophallaxisPacket(trophallaxisPackInput{
+		Result:         result,
+		Handoff:        newTrophallaxisHandoffFixture(),
+		ParentReceiver: "Mason-67",
+		Scope:          []string{trophallaxisSectionSummary},
+	})
+	if err != nil {
+		t.Fatalf("pack: %v", err)
+	}
+	if got := trophallaxisPacketState(packet); got != AgencyAcknowledgementPending {
+		t.Fatalf("expected the unacknowledged state to use the existing wording %q, got %q", AgencyAcknowledgementPending, got)
+	}
+
+	acked, err := acknowledgeTrophallaxisPacket(packet.PacketID, colony.SignalAcknowledgement{ActorID: "Mason-67", EvidenceID: "evidence-1"}, "")
+	if err != nil {
+		t.Fatalf("acknowledge: %v", err)
+	}
+	if got := trophallaxisPacketState(acked); got != AgencyMeasuredEffectPending {
+		t.Fatalf("expected the acknowledged-no-decision state to use the existing wording %q, got %q", AgencyMeasuredEffectPending, got)
+	}
+	if got := trophallaxisPacketState(acked); got == AgencyAcknowledgementPending {
+		t.Fatal("acknowledged-no-decision must be distinct from unacknowledged")
+	}
+
+	decided, err := recordTrophallaxisDecision(packet.PacketID, "Mason-67", "did the thing", nil)
+	if err != nil {
+		t.Fatalf("record decision: %v", err)
+	}
+	got := trophallaxisPacketState(decided)
+	if got == AgencyAcknowledgementPending || got == AgencyMeasuredEffectPending {
+		t.Fatalf("expected the decided state to be distinct from both pending wordings, got %q", got)
+	}
+	if !strings.Contains(got, decided.Decision.ID) {
+		t.Fatalf("expected the decided state to name the decision id %q, got %q", decided.Decision.ID, got)
+	}
+}
