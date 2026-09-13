@@ -11,8 +11,6 @@ import (
 const (
 	AgencyAcknowledgementPending = "Not yet acknowledged"
 	AgencyMeasuredEffectPending  = "No measured effect yet"
-
-	SwarmPhase202Limitation = "Typed live checkpoint, pause, and resume machinery awaits Phase 202."
 )
 
 // AgencyWorkEffect is the complete Phase 199 vocabulary for what a durable
@@ -181,6 +179,64 @@ func BuildAgencySignalResult(signal colony.PheromoneSignal, reinforced bool, fac
 	}, nil
 }
 
+// agencyEvidenceFromTrophallaxisDecision resolves a real ChangedDecision and
+// EffectEvidence pair from a trophallaxis packet's own recorded decision
+// (cmd/trophallaxis.go, 203-10-PLAN.md) and the recruitment credit record
+// recorded for it (cmd/recruitment_credit.go, this plan's Task 1) -- so
+// BuildAgencySignalResult's already-correct both-or-neither join (above)
+// finally receives genuine recorded data instead of remaining permanently
+// starved behind a stale stub constant that has now been deleted.
+//
+// Read-only: it neither writes recruitment/packets.json nor
+// credit/records.json. It reports ok=false (never a fabricated or default
+// value) when the named packet has no recorded decision yet, or when no
+// credit record naming that decision's own effect evidence exists yet --
+// there is genuinely nothing to report, not an inferred credit.
+func agencyEvidenceFromTrophallaxisDecision(packetID string) (AgencyReceiptEvidence, bool, error) {
+	packetID = strings.TrimSpace(packetID)
+	if packetID == "" || store == nil {
+		return AgencyReceiptEvidence{}, false, nil
+	}
+
+	var packets trophallaxisPacketsFile
+	if err := store.LoadJSON(trophallaxisPacketsPath, &packets); err != nil {
+		return AgencyReceiptEvidence{}, false, nil
+	}
+	var decision *colony.LifecycleDecision
+	for i := range packets.Entries {
+		if packets.Entries[i].PacketID == packetID {
+			decision = packets.Entries[i].Decision
+			break
+		}
+	}
+	if decision == nil {
+		return AgencyReceiptEvidence{}, false, nil
+	}
+
+	records, err := recruitmentCreditForDecision(decision.ID)
+	if err != nil {
+		return AgencyReceiptEvidence{}, false, err
+	}
+	for _, record := range records {
+		if record.Outcome == recruitmentCreditOutcomePending {
+			continue
+		}
+		effectEvidenceID := strings.TrimSpace(record.EffectEvidenceID)
+		if effectEvidenceID == "" || !agencyContainsID(decision.EvidenceIDs, effectEvidenceID) {
+			continue
+		}
+		decisionCopy := *decision
+		effect := &colony.LifecycleEvidence{
+			ID:      effectEvidenceID,
+			Kind:    "recruitment_credit_outcome",
+			Source:  recruitmentCreditPath,
+			Summary: fmt.Sprintf("Recruitment credit outcome %q for contribution %s", record.Outcome, record.ContributionID),
+		}
+		return AgencyReceiptEvidence{ChangedDecision: &decisionCopy, EffectEvidence: effect}, true, nil
+	}
+	return AgencyReceiptEvidence{}, false, nil
+}
+
 func agencyWorkEffect(signalType string, facts AgencyReceiptEvidence, receipt *colony.SignalDeliveryReceipt) (AgencyWorkEffect, string, error) {
 	active := agencyIDs(facts.ActiveJobIDs)
 	if len(active) == 0 {
@@ -328,7 +384,10 @@ type SwarmInterventionEvidence struct {
 }
 
 // SwarmInterventionContract exposes the localized future control loop without
-// pretending Phase 202's typed checkpoint/pause/resume events already exist.
+// pretending typed checkpoint/pause/resume events already reach this
+// preflight -- swarmInterventionPreflight (cmd/swarm_cmd.go) never supplies
+// CheckpointEvidenceID today, so this stays a read-only localization report
+// until a caller starts passing that evidence.
 type SwarmInterventionContract struct {
 	SchemaVersion            string   `json:"schema_version"`
 	AffectedJobID            string   `json:"affected_job_id,omitempty"`
@@ -354,7 +413,9 @@ func BuildSwarmInterventionContract(projection LifecycleProjection, evidence Swa
 		ResumePoint:            "unavailable until a verified result and typed checkpoint exist",
 		CurrentCapability:      "read_only_localization_preflight",
 		Localization:           "unsupported",
-		Limitation:             SwarmPhase202Limitation,
+		Limitation: "No typed checkpoint evidence is supplied to this preflight; it can " +
+			"identify the affected job and its dependents, but cannot integrate a " +
+			"verified swarm result until checkpoint evidence exists.",
 	}
 	jobID := strings.TrimSpace(evidence.AffectedJobID)
 	if jobID == "" {

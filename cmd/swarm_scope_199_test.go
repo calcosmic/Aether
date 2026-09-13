@@ -54,14 +54,21 @@ func TestSwarmScope199(t *testing.T) {
 	if got := strings.Join(contract.IndependentJobIDs, ","); got != independentID {
 		t.Fatalf("independent jobs = %q, want %q", got, independentID)
 	}
-	if contract.CurrentCapability != "read_only_localization_preflight" || !strings.Contains(contract.Limitation, "Phase 202") {
+	// CEC-07 (203-12-PLAN.md, Task 2): the limitation sentence no longer
+	// names a phase number -- it states in present tense what evidence this
+	// preflight is missing, since a phase-numbered claim silently becomes
+	// false the day that phase ships and nothing detects it.
+	if contract.CurrentCapability != "read_only_localization_preflight" || !strings.Contains(contract.Limitation, "checkpoint evidence") {
 		t.Fatalf("capability boundary is not explicit: %+v", contract)
+	}
+	if strings.Contains(contract.Limitation, "Phase") {
+		t.Fatalf("limitation sentence still names a phase number: %q", contract.Limitation)
 	}
 	if contract.AffectedCheckpoint != "" || contract.VerifiedResultEvidenceID != "" {
 		t.Fatalf("preflight invented live checkpoint/result evidence: %+v", contract)
 	}
 	visual := renderSwarmCompatibilityVisual(result)
-	for _, want := range []string{"Affected job: job-target", "Current capability: read_only_localization_preflight", "Phase 202"} {
+	for _, want := range []string{"Affected job: job-target", "Current capability: read_only_localization_preflight", "checkpoint evidence"} {
 		if !strings.Contains(visual, want) {
 			t.Fatalf("swarm visual lacks %q:\n%s", want, visual)
 		}
