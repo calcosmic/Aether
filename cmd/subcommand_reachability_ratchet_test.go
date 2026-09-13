@@ -74,22 +74,34 @@ var hookScriptCorpora = []struct {
 	{filepath.Join(".claude"), ".json"},
 }
 
-// workerDisciplineCallerFiles are the D-01(d) "shipped worker discipline
-// document" caller-evidence source, added for the same reason Phase 197
-// added hookScriptCorpora's third entry (see that var's own comment): a real
-// caller existed outside the scan. Unlike callerWrapperCorpora (platform
-// wrapper commands the ASSISTANT runs) and hookScriptCorpora (commands the
-// PLATFORM runs), these are documents every worker this program dispatches
-// is instructed to read before acting -- `.claude/agents/ant/*.md`'s own
-// "Read .aether/workers.md for {caste} discipline" line makes a command
-// documented here exactly as genuinely executed as a command a wrapper doc
-// tells the assistant to run. Phase 203's `aether recruit` is a worker-run
-// command with no wrapper or hook caller by design (a worker asks for help
-// from inside its own task, never the orchestrator) -- .aether/workers.md is
-// its one true, honest caller, and this is the narrow, individually-named
-// list (never a whole directory) that lets the ratchet see it.
+// workerDisciplineCallerFiles are the D-01(d) "shipped worker prompt"
+// caller-evidence source: files whose contents become a dispatched worker's
+// own instructions.
+//
+// CORRECTED 2026-09-13. This list was introduced naming `.aether/workers.md`,
+// justified by the claim that `.claude/agents/ant/*.md` carry a
+// "Read .aether/workers.md for {caste} discipline" line. That line does not
+// exist -- zero of the 27 Claude agent files reference workers.md, none do
+// across OpenCode or Codex, and no runtime code loads it into a prompt. So the
+// original entry admitted a document nobody is instructed to read and nothing
+// executes, which is precisely the "a doc mention is not an execution" case
+// D-02/D-06 excludes .aether/docs/command-playbooks for. It turned the orphan
+// check green while `aether recruit` still had no caller -- worse than the
+// honest red, because a passing test then says otherwise.
+//
+// These entries are different in kind: an agent definition IS the worker's
+// prompt, the same way a wrapper command doc in callerWrapperCorpora is the
+// prompt the assistant executes. A command named here is genuinely run.
+//
+// Belt and braces, and the stronger half: the runtime also writes the
+// invitation into every dispatched worker's brief
+// (renderRecruitmentInvitation, cmd/codex_build.go), proven by
+// TestEveryDispatchedWorkerIsToldHowToAskForHelp. That is execution the
+// scanner cannot see, so it is tested directly rather than asserted here.
 var workerDisciplineCallerFiles = []string{
-	filepath.Join(".aether", "workers.md"),
+	filepath.Join(".claude", "agents", "ant", "aether-builder.md"),
+	filepath.Join(".claude", "agents", "ant", "aether-watcher.md"),
+	filepath.Join(".claude", "agents", "ant", "aether-scout.md"),
 }
 
 // buildConstraintRe matches a real Go build-constraint directive, which is
