@@ -5,11 +5,27 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/calcosmic/Aether/pkg/storage"
+)
+
+// queenPromotionConfidenceFloor, queenPromotionApplicationFloor and
+// queenPromotionHelpfulFloor (LEARN-03, 204-06-PLAN.md Task 3) are the three
+// named thresholds the QUEEN.md promotion-eligibility condition in Run
+// below evaluates -- never an inline numeric literal
+// (TestPromotionThresholdsAreNamedConstants). The first two floors are
+// unchanged from before this phase (0.75 confidence, 3 applications); the
+// third is new: an instinct with three applications but not one of them
+// helpful no longer qualifies. A lesson now has to have genuinely helped at
+// least once before it is written into the instructions every helper reads.
+const (
+	queenPromotionConfidenceFloor  = 0.75
+	queenPromotionApplicationFloor = 3
+	queenPromotionHelpfulFloor     = 1
 )
 
 // ConsolidationResult holds the outcome of a phase-end consolidation run.
@@ -19,6 +35,13 @@ type ConsolidationResult struct {
 	ObservationsDecayed int
 	PromotionCandidates []string // content hashes of observations eligible for promotion
 	QueenEligible       []string // instinct IDs eligible for QUEEN.md promotion
+	// QueenDeclined names, for every non-archived instinct that did NOT
+	// qualify for QueenEligible this pass, which of the three eligibility
+	// conditions it failed (LEARN-03, 204-06-PLAN.md Task 3) -- so a
+	// declined instinct is explicable rather than merely absent. A parallel
+	// list to QueenEligible, never a replacement for it: nothing reads
+	// QueenEligible's own shape differently because of this addition.
+	QueenDeclined []QueenDeclinedReason
 	// QueenPromoted lists the instinct IDs Pipeline.RunConsolidation actually
 	// wrote into QUEEN.md -- a subset of QueenEligible. A failed PromoteInstinct
 	// is log-and-continue, so eligibility alone never proves a write happened.
@@ -26,6 +49,16 @@ type ConsolidationResult struct {
 	ReviewCandidates []string // instinct IDs that should be reviewed
 	RereadCandidates []string // observation or instinct IDs that should be re-read
 	Errors           []error
+}
+
+// QueenDeclinedReason names why an instinct did not qualify for QUEEN.md
+// promotion this pass (LEARN-03, 204-06-PLAN.md Task 3) -- one sentence
+// naming every one of the three floors (confidence, application count,
+// helpful-application count) it fell short of, so a declined instinct's
+// absence from QueenEligible is explicable rather than silent.
+type QueenDeclinedReason struct {
+	InstinctID string
+	Reason     string
 }
 
 // ConsolidationService runs phase-end consolidation: decay, archive, and check promotions.
@@ -69,6 +102,7 @@ func (s *ConsolidationService) Run(ctx context.Context) (*ConsolidationResult, e
 	result := &ConsolidationResult{
 		PromotionCandidates: []string{},
 		QueenEligible:       []string{},
+		QueenDeclined:       []QueenDeclinedReason{},
 		QueenPromoted:       []string{},
 		ReviewCandidates:    []string{},
 		RereadCandidates:    []string{},
@@ -152,8 +186,15 @@ func (s *ConsolidationService) Run(ctx context.Context) (*ConsolidationResult, e
 				continue
 			}
 			summary := SummarizeInstinctApplications(inst)
-			if inst.Confidence >= 0.75 && summary.Applications >= 3 {
+			if inst.Confidence >= queenPromotionConfidenceFloor &&
+				summary.Applications >= queenPromotionApplicationFloor &&
+				summary.HelpfulApplications >= queenPromotionHelpfulFloor {
 				result.QueenEligible = append(result.QueenEligible, inst.ID)
+			} else {
+				result.QueenDeclined = append(result.QueenDeclined, QueenDeclinedReason{
+					InstinctID: inst.ID,
+					Reason:     queenPromotionDeclineReason(inst, summary),
+				})
 			}
 			if _, exists := reviewSet[inst.ID]; !exists && InstinctNeedsReview(inst, time.Now().UTC()) {
 				result.ReviewCandidates = append(result.ReviewCandidates, inst.ID)
@@ -258,6 +299,26 @@ func (s *ConsolidationService) publishConsolidationEvent(ctx context.Context, re
 		"reread_candidates":    len(result.RereadCandidates),
 	})
 	s.bus.Publish(ctx, "consolidation.phase_end", payload, "consolidation")
+}
+
+// queenPromotionDeclineReason names, in one sentence per failed condition,
+// which of the three QUEEN.md promotion floors inst fell short of this
+// pass. Called only for an instinct the eligibility condition in Run above
+// did NOT admit -- the reason is derived from the SAME three named
+// constants that condition checks, so the two can never silently disagree
+// about what "eligible" means.
+func queenPromotionDeclineReason(inst colony.InstinctEntry, summary InstinctApplicationSummary) string {
+	var reasons []string
+	if inst.Confidence < queenPromotionConfidenceFloor {
+		reasons = append(reasons, fmt.Sprintf("confidence %.2f is below the floor %.2f", inst.Confidence, queenPromotionConfidenceFloor))
+	}
+	if summary.Applications < queenPromotionApplicationFloor {
+		reasons = append(reasons, fmt.Sprintf("applications %d is below the floor %d", summary.Applications, queenPromotionApplicationFloor))
+	}
+	if summary.HelpfulApplications < queenPromotionHelpfulFloor {
+		reasons = append(reasons, fmt.Sprintf("helpful applications %d is below the floor %d", summary.HelpfulApplications, queenPromotionHelpfulFloor))
+	}
+	return strings.Join(reasons, "; ")
 }
 
 func applicationTrustAdjustment(summary InstinctApplicationSummary) float64 {

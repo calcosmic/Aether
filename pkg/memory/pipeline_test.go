@@ -107,7 +107,9 @@ func TestPipeline_InstinctToQueen(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Pre-populate a high-confidence instinct with application_count >= 3
+	// Pre-populate a high-confidence instinct with application_count >= 3 and
+	// at least one genuinely helpful application (LEARN-03, 204-06-PLAN.md
+	// Task 3: three applications of any kind is no longer enough).
 	now := events.FormatTimestamp(time.Now().UTC())
 	instincts := colony.InstinctsFile{
 		Version: "1.0",
@@ -124,6 +126,9 @@ func TestPipeline_InstinctToQueen(t *testing.T) {
 					Source:           "sha256:test",
 					CreatedAt:        now,
 					ApplicationCount: 4,
+				},
+				ApplicationHistory: []colony.InstinctApplicationEntry{
+					{Timestamp: now, Phase: 1, Outcome: "helpful"},
 				},
 				Archived: false,
 			},
@@ -201,6 +206,12 @@ func TestPipeline_Consolidation(t *testing.T) {
 					CreatedAt:        oldTime,
 					ApplicationCount: 4,
 				},
+				// LEARN-03 (204-06-PLAN.md Task 3): at least one genuinely
+				// helpful application, not merely four applications of any
+				// kind.
+				ApplicationHistory: []colony.InstinctApplicationEntry{
+					{Timestamp: oldTime, Phase: 1, Outcome: "helpful"},
+				},
 				Archived: false,
 			},
 		},
@@ -275,10 +286,15 @@ func TestPipeline_FullCycle(t *testing.T) {
 		t.Fatal("expected at least one instinct after 3 captures")
 	}
 
-	// Step 3: Bump application count to make it queen-eligible
+	// Step 3: Bump application count and record one genuinely helpful
+	// application to make it queen-eligible (LEARN-03, 204-06-PLAN.md
+	// Task 3: an application count alone is no longer enough).
 	if promotedInstinct != nil {
 		promotedInstinct.Provenance.ApplicationCount = 4
 		promotedInstinct.Confidence = 0.80
+		promotedInstinct.ApplicationHistory = []colony.InstinctApplicationEntry{
+			{Timestamp: events.FormatTimestamp(time.Now().UTC()), Phase: 1, Outcome: "helpful"},
+		}
 		p.store.SaveJSON("instincts.json", instincts)
 	}
 
@@ -363,10 +379,13 @@ func TestPipeline_RunConsolidation_PromotesCandidates(t *testing.T) {
 	}
 }
 
-// queenEligibleInstinctFixture returns an instinct that clears both the
-// confidence bar (>= 0.75 post-decay) and the application bar (>= 3) for
-// QUEEN.md promotion.
+// queenEligibleInstinctFixture returns an instinct that clears all three
+// bars for QUEEN.md promotion: confidence (>= 0.75 post-decay), application
+// count (>= 3), and -- since LEARN-03 (204-06-PLAN.md Task 3) -- at least
+// one genuinely helpful application, not merely three applications of any
+// kind.
 func queenEligibleInstinctFixture(id string) colony.InstinctEntry {
+	now := time.Now().UTC().Format("2006-01-02T15:04:05Z")
 	return colony.InstinctEntry{
 		ID:         id,
 		Trigger:    "recurring pattern in pkg/memory/pipeline.go",
@@ -376,7 +395,10 @@ func queenEligibleInstinctFixture(id string) colony.InstinctEntry {
 		TrustTier:  "trusted",
 		Confidence: 0.9,
 		Provenance: colony.InstinctProvenance{ApplicationCount: 3},
-		Archived:   false,
+		ApplicationHistory: []colony.InstinctApplicationEntry{
+			{Timestamp: now, Phase: 1, Outcome: "helpful"},
+		},
+		Archived: false,
 	}
 }
 

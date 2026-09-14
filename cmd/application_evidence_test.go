@@ -2,6 +2,9 @@ package cmd
 
 import (
 	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -14,6 +17,9 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/events"
+	"github.com/calcosmic/Aether/pkg/memory"
+	"github.com/calcosmic/Aether/pkg/storage"
 )
 
 // ---------------------------------------------------------------------------
@@ -1024,6 +1030,231 @@ func corroborateGuidanceClaim(claim guidanceClaim, facts workerOutcomeFacts) (gu
 		fixtureViolations := corroborateGuidanceClaimFreeTextViolations(fset2, syntheticFile)
 		if len(fixtureViolations) == 0 {
 			t.Fatal("scanner failed to detect a synthetic direct free-text read inside corroborateGuidanceClaim")
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// Task 3 (204-06-PLAN.md): a lesson must have actually helped at least once
+// before it reaches the shared instruction file.
+// ---------------------------------------------------------------------------
+
+// promoteRealInstinctForQueenEligibility mirrors promoteRealInstinct
+// (cmd/instinct_application_test.go) but with ObservationCount: 2 --
+// matching CLAUDE.md's own documented auto-promotion threshold ("Pattern
+// observations need 2 captures to trigger; confidence starts at 0.75") --
+// so the resulting instinct's starting confidence clears
+// queenPromotionConfidenceFloor on its own, and this test's three rounds
+// isolate exactly the ONE variable the plan's behaviour line names (whether
+// one of those three applications was helpful), rather than being confused
+// with an unrelated confidence deficit from promoteRealInstinct's own
+// single-observation default.
+func promoteRealInstinctForQueenEligibility(t *testing.T, s *storage.Store, content, wisdomType string) colony.InstinctEntry {
+	t.Helper()
+	bus := events.NewBus(s, events.DefaultConfig())
+	now := time.Now().UTC()
+	hash := sha256.Sum256([]byte(content + ":" + wisdomType))
+	obs := colony.Observation{
+		ContentHash:      "sha256:" + hex.EncodeToString(hash[:]),
+		Content:          content,
+		WisdomType:       wisdomType,
+		ObservationCount: 2,
+		FirstSeen:        events.FormatTimestamp(now),
+		LastSeen:         events.FormatTimestamp(now),
+		Colonies:         []string{"test-colony"},
+		SourceType:       "success_pattern",
+		EvidenceType:     "single_phase",
+	}
+	svc := memory.NewPromoteService(s, bus)
+	result, err := svc.Promote(context.Background(), obs, "test-colony")
+	if err != nil {
+		t.Fatalf("promote real instinct for %q: %v", content, err)
+	}
+	return result.Instinct
+}
+
+// runQueenEligibilityColony drives one real, isolated colony through three
+// real phase-end rounds of delivery + application recording for one real
+// promoted instinct, seeding a genuinely helpful application every round
+// only when seedHelpful is true, then runs the real
+// memory.ConsolidationService.Run (never a hand-typed ConsolidationResult)
+// and returns its eligibility verdict for that one instinct.
+func runQueenEligibilityColony(t *testing.T, seedHelpful bool) (eligible []string, declined []memory.QueenDeclinedReason, instinctID string) {
+	t.Helper()
+	saveGlobals(t)
+	s, tmpDir := newTestStore(t)
+	t.Cleanup(func() { os.RemoveAll(tmpDir) })
+	store = s
+
+	inst := promoteRealInstinctForQueenEligibility(t, s, "run go vet ./cmd/ before go test ./cmd/ to catch lint failures early", "pattern")
+
+	for round := 1; round <= 3; round++ {
+		if recordInstinctDeliveries(round, "continue", inst.Action) == 0 {
+			t.Fatalf("round %d: expected a new delivery to be recorded", round)
+		}
+		if seedHelpful {
+			seedOneHelpfulApplicationCreditBuildAttempt(t, round)
+		}
+		recordPhaseApplicationCredit(round)
+		recordInstinctApplicationsForPhase(round)
+	}
+
+	bus := events.NewBus(s, events.DefaultConfig())
+	svc := memory.NewConsolidationService(s, bus, "", "test-colony")
+	result, err := svc.Run(context.Background())
+	if err != nil {
+		t.Fatalf("consolidation Run: %v", err)
+	}
+	return result.QueenEligible, result.QueenDeclined, inst.ID
+}
+
+func containsInstinctID(ids []string, id string) bool {
+	for _, existing := range ids {
+		if existing == id {
+			return true
+		}
+	}
+	return false
+}
+
+func declinedReasonFor(declined []memory.QueenDeclinedReason, id string) (string, bool) {
+	for _, d := range declined {
+		if d.InstinctID == id {
+			return d.Reason, true
+		}
+	}
+	return "", false
+}
+
+func TestPromotionRequiresAHelpfulApplication(t *testing.T) {
+	noHelpfulEligible, noHelpfulDeclined, noHelpfulID := runQueenEligibilityColony(t, false)
+	if containsInstinctID(noHelpfulEligible, noHelpfulID) {
+		t.Fatalf("expected %s NOT to be queen-eligible with three applications and none helpful, eligible=%v", noHelpfulID, noHelpfulEligible)
+	}
+	if _, found := declinedReasonFor(noHelpfulDeclined, noHelpfulID); !found {
+		t.Fatalf("expected %s to be named in QueenDeclined, got %+v", noHelpfulID, noHelpfulDeclined)
+	}
+
+	oneHelpfulEligible, _, oneHelpfulID := runQueenEligibilityColony(t, true)
+	if !containsInstinctID(oneHelpfulEligible, oneHelpfulID) {
+		t.Fatalf("expected %s to be queen-eligible with three applications, one of them helpful, eligible=%v", oneHelpfulID, oneHelpfulEligible)
+	}
+}
+
+func TestDeclinedPromotionNamesItsReason(t *testing.T) {
+	_, declined, instinctID := runQueenEligibilityColony(t, false)
+	reason, found := declinedReasonFor(declined, instinctID)
+	if !found {
+		t.Fatalf("expected %s to be named in QueenDeclined, got %+v", instinctID, declined)
+	}
+	if !strings.Contains(reason, "helpful") {
+		t.Fatalf("declined reason %q does not name the missing helpful-application condition", reason)
+	}
+}
+
+// findQueenEligibilityCondition returns the *ast.IfStmt whose body appends
+// to result.QueenEligible -- the exact eligibility condition
+// TestPromotionThresholdsAreNamedConstants scans for numeric literals.
+func findQueenEligibilityCondition(file *ast.File) *ast.IfStmt {
+	var found *ast.IfStmt
+	ast.Inspect(file, func(n ast.Node) bool {
+		ifStmt, ok := n.(*ast.IfStmt)
+		if !ok {
+			return true
+		}
+		appendsQueenEligible := false
+		ast.Inspect(ifStmt.Body, func(n2 ast.Node) bool {
+			call, ok := n2.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			ident, ok := call.Fun.(*ast.Ident)
+			if !ok || ident.Name != "append" || len(call.Args) == 0 {
+				return true
+			}
+			sel, ok := call.Args[0].(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+			if sel.Sel.Name == "QueenEligible" {
+				appendsQueenEligible = true
+			}
+			return true
+		})
+		if appendsQueenEligible {
+			found = ifStmt
+		}
+		return true
+	})
+	return found
+}
+
+// numericLiteralsIn returns every integer/float literal anywhere inside
+// expr.
+func numericLiteralsIn(expr ast.Expr) []*ast.BasicLit {
+	var lits []*ast.BasicLit
+	ast.Inspect(expr, func(n ast.Node) bool {
+		lit, ok := n.(*ast.BasicLit)
+		if !ok {
+			return true
+		}
+		if lit.Kind == token.INT || lit.Kind == token.FLOAT {
+			lits = append(lits, lit)
+		}
+		return true
+	})
+	return lits
+}
+
+func TestPromotionThresholdsAreNamedConstants(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+	path := filepath.Join(repoRoot, "pkg", "memory", "consolidate.go")
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, path, nil, 0)
+	if err != nil {
+		t.Fatalf("parse consolidate.go: %v", err)
+	}
+	cond := findQueenEligibilityCondition(file)
+	if cond == nil {
+		t.Fatal("fixture is broken: could not find the QueenEligible append's guarding if-condition in pkg/memory/consolidate.go")
+	}
+	if lits := numericLiteralsIn(cond.Cond); len(lits) != 0 {
+		var msgs []string
+		for _, lit := range lits {
+			msgs = append(msgs, fmt.Sprintf("%s: literal %s", fset.Position(lit.Pos()).String(), lit.Value))
+		}
+		t.Fatalf("eligibility condition contains numeric literal(s), want named constants only:\n%s", strings.Join(msgs, "\n"))
+	}
+
+	t.Run("a synthetic literal is caught and reports its position", func(t *testing.T) {
+		src := `package memory
+
+func f() {
+	if inst.Confidence >= 0.75 && summary.Applications >= 3 {
+		result.QueenEligible = append(result.QueenEligible, inst.ID)
+	}
+}
+`
+		fset2 := token.NewFileSet()
+		syntheticFile, parseErr := parser.ParseFile(fset2, "fixture_consolidate.go", src, 0)
+		if parseErr != nil {
+			t.Fatalf("parse fixture: %v", parseErr)
+		}
+		syntheticCond := findQueenEligibilityCondition(syntheticFile)
+		if syntheticCond == nil {
+			t.Fatal("fixture is broken: could not find the synthetic QueenEligible append's guarding if-condition")
+		}
+		lits := numericLiteralsIn(syntheticCond.Cond)
+		if len(lits) != 2 {
+			t.Fatalf("scanner found %d numeric literal(s) in the synthetic fixture, want 2 (0.75 and 3): %v", len(lits), lits)
+		}
+		for _, lit := range lits {
+			if fset2.Position(lit.Pos()).Line == 0 {
+				t.Fatalf("literal %s reports no position", lit.Value)
+			}
 		}
 	})
 }

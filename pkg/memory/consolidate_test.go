@@ -306,6 +306,12 @@ func TestConsolidate_QueenEligible(t *testing.T) {
 					CreatedAt:        nowStr,
 					ApplicationCount: 5, // >= 3 and confidence >= 0.75
 				},
+				// LEARN-03 (204-06-PLAN.md Task 3): at least one genuinely
+				// helpful application, not merely five applications of any
+				// kind.
+				ApplicationHistory: []colony.InstinctApplicationEntry{
+					{Timestamp: nowStr, Phase: 1, Outcome: "helpful"},
+				},
 				Archived: false,
 			},
 			{
@@ -417,6 +423,12 @@ func TestConsolidationResult_Fields(t *testing.T) {
 				Provenance: colony.InstinctProvenance{
 					CreatedAt:        nowStr,
 					ApplicationCount: 4,
+				},
+				// LEARN-03 (204-06-PLAN.md Task 3): at least one genuinely
+				// helpful application, not merely four applications of any
+				// kind.
+				ApplicationHistory: []colony.InstinctApplicationEntry{
+					{Timestamp: nowStr, Phase: 1, Outcome: "helpful"},
 				},
 				Archived: false,
 			},
