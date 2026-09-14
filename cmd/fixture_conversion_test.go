@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"go/ast"
@@ -827,4 +828,187 @@ func fixtureBankWriterViolations(fset *token.FileSet, file *ast.File) []string {
 		})
 	}
 	return violations
+}
+
+// --- Task 3: seed the bank from this repository's own confirmed failures ---
+
+// realConfirmedIncidents reads this repository's own real confirmed
+// incidents through the four production readers, exactly as the committed
+// seed was generated -- used by both TestSeededBankIsReproducible and
+// TestSeededBankFixturesAllCiteRealProvenance so neither test can drift
+// from how the bank was actually built.
+func realConfirmedIncidents(t *testing.T, repoRoot string) (failureLog, audit, defects, phaseReports fixtureIncidentReadResult) {
+	t.Helper()
+	saveGlobals(t)
+	s, err := storage.NewStore(filepath.Join(repoRoot, ".aether", "data"))
+	if err != nil {
+		t.Fatalf("open real store: %v", err)
+	}
+	store = s
+
+	failureLog, err = confirmedIncidentsFromFailureLog()
+	if err != nil {
+		t.Fatalf("failure log: %v", err)
+	}
+	audit, err = confirmedIncidentsFromAuditFindings(filepath.Join(repoRoot, ".planning", "audits", "2026-08-30-whole-system-audit.json"))
+	if err != nil {
+		t.Fatalf("audit findings: %v", err)
+	}
+	defects, err = confirmedIncidentsFromDefectRegister(filepath.Join(repoRoot, ".planning", "WINDOWS.md"))
+	if err != nil {
+		t.Fatalf("defect register: %v", err)
+	}
+	phaseReports, err = confirmedIncidentsFromPhaseReports(filepath.Join(repoRoot, ".planning", "phases"))
+	if err != nil {
+		t.Fatalf("phase reports: %v", err)
+	}
+	return
+}
+
+func TestSeededBankValidatesAgainstItsSchema(t *testing.T) {
+	repoRoot := findTestModuleRoot(t)
+	raw, err := os.ReadFile(filepath.Join(repoRoot, fixtureBankPath))
+	if err != nil {
+		t.Fatalf("read committed bank: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("unmarshal committed bank: %v", err)
+	}
+
+	prev := fixtureBankRepoRootOverride
+	fixtureBankRepoRootOverride = repoRoot
+	t.Cleanup(func() { fixtureBankRepoRootOverride = prev })
+
+	messages, err := validateFixtureBankDocument(doc)
+	if err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	if len(messages) != 0 {
+		t.Fatalf("committed fixture bank fails its own schema: %v", messages)
+	}
+
+	var typed regressionFixtureBank
+	if err := json.Unmarshal(raw, &typed); err != nil {
+		t.Fatalf("unmarshal into regressionFixtureBank: %v", err)
+	}
+	if len(typed.Fixtures) == 0 {
+		t.Fatal("committed fixture bank has zero fixtures -- expected a real seeded bank")
+	}
+}
+
+func TestSeededBankFixturesAllCiteRealProvenance(t *testing.T) {
+	repoRoot := findTestModuleRoot(t)
+	raw, err := os.ReadFile(filepath.Join(repoRoot, fixtureBankPath))
+	if err != nil {
+		t.Fatalf("read committed bank: %v", err)
+	}
+	var bank regressionFixtureBank
+	if err := json.Unmarshal(raw, &bank); err != nil {
+		t.Fatalf("unmarshal committed bank: %v", err)
+	}
+
+	failureLog, _, defects, phaseReports := realConfirmedIncidents(t, repoRoot)
+
+	failureLogIDs := map[string]bool{}
+	for _, inc := range failureLog.Incidents {
+		failureLogIDs[inc.SourceIdentifier] = true
+	}
+	var auditFile fixtureAuditFindingsFile
+	auditRaw, err := os.ReadFile(filepath.Join(repoRoot, ".planning", "audits", "2026-08-30-whole-system-audit.json"))
+	if err != nil {
+		t.Fatalf("read audit findings: %v", err)
+	}
+	if err := json.Unmarshal(auditRaw, &auditFile); err != nil {
+		t.Fatalf("unmarshal audit findings: %v", err)
+	}
+	defectIDs := map[string]bool{}
+	for _, inc := range defects.Incidents {
+		defectIDs[inc.SourceIdentifier] = true
+	}
+	phaseReportIDs := map[string]bool{}
+	for _, inc := range phaseReports.Incidents {
+		phaseReportIDs[inc.SourceIdentifier] = true
+	}
+
+	kindCounts := map[fixtureProvenanceKind]int{}
+	emptyCount := 0
+	for _, fixture := range bank.Fixtures {
+		if len(fixture.Provenance) == 0 {
+			emptyCount++
+			continue
+		}
+		for _, ref := range fixture.Provenance {
+			kindCounts[ref.Kind]++
+			switch ref.Kind {
+			case fixtureProvenanceFailureLog:
+				if !failureLogIDs[ref.Identifier] {
+					t.Errorf("fixture %s cites failure_log identifier %q, which is not a currently confirmed failure-log entry", fixture.ID, ref.Identifier)
+				}
+			case fixtureProvenanceAuditFinding:
+				var idx int
+				if _, err := fmt.Sscanf(ref.Identifier, "confirmed[%d]", &idx); err != nil {
+					t.Errorf("fixture %s cites malformed audit_finding identifier %q", fixture.ID, ref.Identifier)
+					continue
+				}
+				if idx < 0 || idx >= len(auditFile.Confirmed) {
+					t.Errorf("fixture %s cites audit_finding identifier %q, out of range for a %d-entry confirmed array", fixture.ID, ref.Identifier, len(auditFile.Confirmed))
+					continue
+				}
+				if !auditFile.Confirmed[idx].Verified {
+					t.Errorf("fixture %s cites audit_finding identifier %q, which is not marked verified in the source", fixture.ID, ref.Identifier)
+				}
+			case fixtureProvenanceDefectRegister:
+				if !defectIDs[ref.Identifier] {
+					t.Errorf("fixture %s cites defect_register identifier %q, which is not a currently fixed defect-register entry", fixture.ID, ref.Identifier)
+				}
+			case fixtureProvenancePhaseVerification, fixtureProvenancePhaseReview:
+				if !phaseReportIDs[ref.Identifier] {
+					t.Errorf("fixture %s cites phase report identifier %q, which is not a currently confirmed phase-report row", fixture.ID, ref.Identifier)
+				}
+			default:
+				t.Errorf("fixture %s cites undeclared provenance kind %q", fixture.ID, ref.Kind)
+			}
+		}
+	}
+	if emptyCount != 0 {
+		t.Fatalf("%d fixtures in the committed bank have an empty provenance array", emptyCount)
+	}
+	if len(kindCounts) < 3 {
+		t.Fatalf("expected fixtures from at least 3 distinct provenance kinds, got %v", kindCounts)
+	}
+	for _, want := range []fixtureProvenanceKind{fixtureProvenanceAuditFinding, fixtureProvenanceDefectRegister, fixtureProvenancePhaseVerification} {
+		if kindCounts[want] == 0 {
+			t.Errorf("expected at least one fixture citing provenance kind %q, got none", want)
+		}
+	}
+}
+
+func TestSeededBankIsReproducible(t *testing.T) {
+	repoRoot := findTestModuleRoot(t)
+	failureLog, audit, defects, phaseReports := realConfirmedIncidents(t, repoRoot)
+
+	var all []confirmedIncident
+	all = append(all, failureLog.Incidents...)
+	all = append(all, audit.Incidents...)
+	all = append(all, defects.Incidents...)
+	all = append(all, phaseReports.Incidents...)
+
+	bank, _, err := convertConfirmedIncidentsToFixtures(all)
+	if err != nil {
+		t.Fatalf("convert: %v", err)
+	}
+	regenerated, err := json.MarshalIndent(bank, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	regenerated = append(regenerated, '\n')
+
+	committed, err := os.ReadFile(filepath.Join(repoRoot, fixtureBankPath))
+	if err != nil {
+		t.Fatalf("read committed bank: %v", err)
+	}
+	if !bytes.Equal(regenerated, committed) {
+		t.Fatalf("re-running the readers and the conversion against the same sources does not reproduce the committed bank byte for byte")
+	}
 }
