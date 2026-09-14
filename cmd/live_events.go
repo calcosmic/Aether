@@ -3,9 +3,11 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/events"
@@ -106,23 +108,146 @@ func nextLiveSequence(episodeID string) int64 {
 // emitColonyLiveEpisodeStarted marks the beginning of one lifecycle episode
 // (a build, a check pass, a planning run, ...). episodeKind should be one of
 // the events.EpisodeKind* constants.
+//
+// 204-04 (LEARN-02, SYN-204-04): this is one of the two episode-boundary
+// functions every lifecycle lane already calls to open/close a live
+// episode -- extending it (rather than adding a second call site anywhere)
+// is what puts the durable ledger on every lane with no new wiring per
+// lane. See recordEpisodeLedgerOpen's own doc comment for the durable half.
 func emitColonyLiveEpisodeStarted(episodeID, episodeKind string) {
 	emitColonyLive(events.LiveTopicEpisodeStarted, events.ColonyLivePayload{
 		EpisodeID:   episodeID,
 		EpisodeKind: episodeKind,
 		Status:      "starting",
 	})
+	recordEpisodeLedgerOpen(episodeID, episodeKind)
 }
 
 // emitColonyLiveEpisodeEnded closes the episode episodeID opened. status is
 // the episode's own terminal status (e.g. "completed", "failed", "blocked",
 // "interrupted") -- whatever the caller's own outcome value already is.
+// See recordEpisodeLedgerClose's own doc comment for the durable half.
 func emitColonyLiveEpisodeEnded(episodeID, episodeKind, status string) {
 	emitColonyLive(events.LiveTopicEpisodeEnded, events.ColonyLivePayload{
 		EpisodeID:   episodeID,
 		EpisodeKind: episodeKind,
 		Status:      status,
 	})
+	recordEpisodeLedgerClose(episodeID, episodeKind, status)
+}
+
+// recordEpisodeLedgerOpen (204-04, LEARN-02) writes the durable open record
+// for episodeID through recordEpisodeOutcome -- the SAME opening moment
+// emitColonyLiveEpisodeStarted already announces on the live stream, never
+// a second call site. A ledger write failure is warned to stderr and never
+// returned: bookkeeping must never fail the run it is describing, the same
+// rule recordDispatchWorkerOutcome and runPhaseEndConsolidation already
+// follow.
+func recordEpisodeLedgerOpen(episodeID, episodeKind string) {
+	episodeID = strings.TrimSpace(episodeID)
+	if episodeID == "" || store == nil {
+		return
+	}
+	_, _, err := recordEpisodeOutcome(episodeLedgerRecord{
+		RecordKind:     episodeLedgerRecordKindOpened,
+		EpisodeID:      episodeID,
+		EpisodeKind:    episodeKind,
+		RuntimeVersion: resolveVersion(),
+		PolicyVersion:  episodeLedgerPolicyVersion(),
+		StartedAt:      time.Now().UTC().Format(time.RFC3339),
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to record durable episode-open record for %q: %v\n", episodeID, err)
+	}
+}
+
+// recordEpisodeLedgerClose (204-04, LEARN-02) writes the durable terminal
+// record for episodeID. Elapsed time is computed from the ALREADY-STORED
+// open record's own StartedAt, never from a separate clock reading taken
+// here -- a resumed or replayed episode must never report an elapsed
+// figure a full replay would not have produced (the live view already has
+// a recorded defect of exactly that shape; this must not reproduce it).
+func recordEpisodeLedgerClose(episodeID, episodeKind, status string) {
+	episodeID = strings.TrimSpace(episodeID)
+	if episodeID == "" || store == nil {
+		return
+	}
+	now := time.Now().UTC()
+	var elapsed float64
+	if records, err := episodeLedgerForEpisode(episodeID); err == nil {
+		if open, ok := episodeLedgerOpenRecord(records, episodeID); ok {
+			if startedAt, parseErr := time.Parse(time.RFC3339, open.StartedAt); parseErr == nil {
+				elapsed = now.Sub(startedAt).Seconds()
+			}
+		}
+	}
+	_, _, err := recordEpisodeOutcome(episodeLedgerRecord{
+		RecordKind:     episodeLedgerRecordKindClosed,
+		EpisodeID:      episodeID,
+		EpisodeKind:    episodeKind,
+		RuntimeVersion: resolveVersion(),
+		PolicyVersion:  episodeLedgerPolicyVersion(),
+		EndedAt:        now.Format(time.RFC3339),
+		ElapsedSeconds: elapsed,
+		TerminalResult: status,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to record durable episode-close record for %q: %v\n", episodeID, err)
+	}
+}
+
+// episodeLedgerPolicyVersion is the schema version of the permission and
+// admission policy currently in force, per this plan's own action text.
+// codex.PermissionProfileSchemaVersion is the one declared schema-version
+// constant this codebase carries for that policy today.
+func episodeLedgerPolicyVersion() string {
+	return fmt.Sprintf("%d", codex.PermissionProfileSchemaVersion)
+}
+
+// emitColonyLiveOutcomeRecorded (204-04, LEARN-02) publishes
+// LiveTopicOutcomeRecorded and, through the same recordEpisodeOutcome call
+// the episode boundary itself uses, writes a durable terminal record for a
+// caller that already holds a fuller episodeLedgerRecord (real evidence,
+// hard-gate, or usage facts recordEpisodeLedgerClose's own two-argument
+// signature does not receive).
+func emitColonyLiveOutcomeRecorded(episodeID, episodeKind string, record episodeLedgerRecord) {
+	emitColonyLive(events.LiveTopicOutcomeRecorded, events.ColonyLivePayload{
+		EpisodeID:   episodeID,
+		EpisodeKind: episodeKind,
+		Status:      record.TerminalResult,
+	})
+	record.RecordKind = episodeLedgerRecordKindClosed
+	record.EpisodeID = episodeID
+	if record.EpisodeKind == "" {
+		record.EpisodeKind = episodeKind
+	}
+	if _, _, err := recordEpisodeOutcome(record); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to record durable outcome for %q: %v\n", episodeID, err)
+	}
+}
+
+// emitColonyLiveInterventionRecorded (204-04, LEARN-02) publishes
+// LiveTopicInterventionRecorded and writes a durable intervention_recorded
+// record naming what the owner did (e.g. "declined a forced reviewer").
+func emitColonyLiveInterventionRecorded(episodeID, episodeKind, intervention string) {
+	intervention = strings.TrimSpace(intervention)
+	if intervention == "" {
+		return
+	}
+	emitColonyLive(events.LiveTopicInterventionRecorded, events.ColonyLivePayload{
+		EpisodeID:   episodeID,
+		EpisodeKind: episodeKind,
+		Reason:      intervention,
+	})
+	if _, _, err := recordEpisodeOutcome(episodeLedgerRecord{
+		RecordKind:    episodeLedgerRecordKindIntervention,
+		EpisodeID:     episodeID,
+		EpisodeKind:   episodeKind,
+		StartedAt:     time.Now().UTC().Format(time.RFC3339),
+		Interventions: []string{intervention},
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to record durable intervention for %q: %v\n", episodeID, err)
+	}
 }
 
 // emitColonyLiveWaveStarted marks the beginning of one dispatch wave inside
