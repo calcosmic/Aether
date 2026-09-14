@@ -34,14 +34,21 @@ func appendMiddenEntry(s *storage.Store, category, source, message string, tags 
 	if tags == nil {
 		tags = []string{}
 	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	// SYN-204-02 (204-03-PLAN.md Task 1, LEARN-01): the failure log's
+	// provenance is runtime -- a midden entry records something the
+	// running program observed, never a learning-pipeline decision.
+	lineage := colony.NewMemoryRecordLineage(colony.MemoryProvenanceRuntime, source, now)
 	entry := colony.MiddenEntry{
-		ID:        fmt.Sprintf("midden_%d_%d", time.Now().UTC().Unix(), os.Getpid()),
-		Timestamp: time.Now().UTC().Format(time.RFC3339),
-		Category:  category,
-		Source:    source,
-		Message:   message,
-		Reviewed:  false,
-		Tags:      tags,
+		ID:            fmt.Sprintf("midden_%d_%d", time.Now().UTC().Unix(), os.Getpid()),
+		Timestamp:     now,
+		Category:      category,
+		Source:        source,
+		Message:       message,
+		Reviewed:      false,
+		Tags:          tags,
+		SchemaVersion: colony.CurrentMemorySchemaVersion,
+		Lineage:       &lineage,
 	}
 
 	var mf colony.MiddenFile

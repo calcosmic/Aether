@@ -14,6 +14,13 @@ type MiddenEntry struct {
 	AcknowledgedAt    *string  `json:"acknowledged_at,omitempty"`
 	AcknowledgeReason *string  `json:"acknowledge_reason,omitempty"`
 	Tags              []string `json:"tags,omitempty"`
+
+	// SchemaVersion and Lineage are the SYN-204-02 per-record schema
+	// contract (204-03-PLAN.md Task 1, LEARN-01) -- see InstinctEntry's
+	// own field comment in instincts.go for the omitempty/legacy-defaults
+	// rationale, identical here.
+	SchemaVersion int                  `json:"schema_version,omitempty"`
+	Lineage       *MemoryRecordLineage `json:"lineage,omitempty"`
 }
 
 // MiddenArchivedSignal represents an archived pheromone signal in midden.json.

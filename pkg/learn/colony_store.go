@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
 )
 
@@ -92,6 +93,15 @@ func (c *ColonyStore) Add(entry Entry) error {
 		if entry.Status == "" {
 			entry.Status = StatusHypothesis
 		}
+		// SYN-204-02 (204-03-PLAN.md Task 1, LEARN-01): a learning entry's
+		// provenance is runtime -- it records something a worker or
+		// command observed and reported, never a learning-pipeline
+		// decision (that is promotion's provenance, see
+		// pkg/memory/promote.go). Every entry Add ever writes is stamped,
+		// unconditionally -- Add is the store's one write chokepoint.
+		entry.SchemaVersion = colony.CurrentMemorySchemaVersion
+		lineage := colony.NewMemoryRecordLineage(colony.MemoryProvenanceRuntime, entry.Caste, time.Now().UTC().Format(time.RFC3339))
+		entry.Lineage = &lineage
 		assignedID = entry.ID
 		return append(entries, entry), nil
 	})

@@ -29,6 +29,17 @@ type InstinctEntry struct {
 	ApplicationHistory []interface{}      `json:"application_history"`
 	RelatedInstincts   []interface{}      `json:"related_instincts"`
 	Archived           bool               `json:"archived"`
+
+	// SchemaVersion and Lineage are the SYN-204-02 per-record schema
+	// contract (204-03-PLAN.md Task 1, LEARN-01): SchemaVersion is
+	// omitempty because its zero value IS LegacyMemorySchemaVersion --
+	// an absent field and an explicit legacy stamp read identically, so
+	// there is no third state to track. Lineage is nil for any record
+	// written before this change (memory_schema.go's
+	// MemoryRecordLineage.ResolvedProvenance reads a nil Lineage as
+	// MemoryProvenanceUnknown, never a fabricated value).
+	SchemaVersion int                  `json:"schema_version,omitempty"`
+	Lineage       *MemoryRecordLineage `json:"lineage,omitempty"`
 }
 
 // InstinctsFile represents the standalone instincts.json file.
