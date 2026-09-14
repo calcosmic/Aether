@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,7 +15,6 @@ import (
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/learn"
-	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
 )
 
@@ -1878,6 +1876,13 @@ func captureContinueLearning(phase colony.Phase, workerFlow []codexContinueWorke
 	// Store via ColonyStore (D-06: .aether/data/learn/)
 	learnStore := learn.NewColonyStore(store)
 	entry := learn.Entry{
+		// Add (below) only assigns an id on ITS OWN parameter copy when
+		// entry.ID is empty -- Go's pass-by-value means that assignment
+		// never reaches this caller's entry, so the id difficulty-triggered
+		// skill proposals need to name their own source learning entry by
+		// (SkillProposal.LearningEntryID, LEARN-07) is pre-assigned here,
+		// before Add ever runs, rather than left for Add to silently drop.
+		ID:             generateSignalID(),
 		Content:        scanResult.Clean, // use cleaned content
 		Evidence:       evidence,
 		Classification: classification,
@@ -1889,18 +1894,18 @@ func captureContinueLearning(phase colony.Phase, workerFlow []codexContinueWorke
 		// Non-blocking: learning failure must not prevent phase advancement
 		fmt.Fprintf(os.Stderr, "warning: failed to capture learning: %v\n", err)
 	} else {
-		// Phase 91: Auto-skill creation hook (AUTO-01)
-		// Only fires after successful learning capture for difficult verified tasks.
-		// Reads auto_skill_mode config to determine behavior (off/propose/auto, default propose).
-		sqliteStore, sqliteErr := learn.NewSQLiteColonyStore(filepath.Join(store.BasePath(), "colony.db"))
-		if sqliteErr == nil {
-			defer sqliteStore.Close()
-			aetherRoot := storage.ResolveAetherRoot(context.Background())
-			mode := learn.LoadAutoSkillMode(store.BasePath())
-			if err := learn.AutoCreateSkillIfDifficult(entry, sqliteStore, aetherRoot, mode); err != nil {
-				// Non-blocking: auto-skill failure must not prevent phase advancement
-				fmt.Fprintf(os.Stderr, "warning: failed to auto-create skill: %v\n", err)
-			}
+		// Phase 91 / LEARN-07 (204-09-PLAN.md Task 3): auto-skill proposal
+		// hook (AUTO-01). Only fires after successful learning capture for
+		// difficult verified tasks. Reads auto_skill_mode config to
+		// determine whether a proposal is raised at all (off/propose/auto,
+		// default propose) -- neither mode creates an active skill
+		// directly any more; both route through the SAME owner
+		// tick-to-approve queue via colonySkillProposalSink
+		// (cmd/suggest_approve.go).
+		mode := learn.LoadAutoSkillMode(store.BasePath())
+		if err := learn.AutoCreateSkillIfDifficult(entry, mode, colonySkillProposalSink{}); err != nil {
+			// Non-blocking: a proposal failure must not prevent phase advancement
+			fmt.Fprintf(os.Stderr, "warning: failed to raise skill proposal: %v\n", err)
 		}
 	}
 }
