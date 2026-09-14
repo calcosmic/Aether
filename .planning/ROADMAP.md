@@ -630,12 +630,12 @@ Plans:
 4. A beneficial candidate beats its frozen baseline without hard-gate or holdout regression, while overfit or evaluator-tampering candidates are quarantined.
 5. Only allowed low-risk canaries promote and roll back atomically; preferences, skills, workflows, source, and security-sensitive policy retain required authority, and source changes remain independently verified branches/PRs that cannot self-approve, merge, publish, or deploy.
 
-**Plans:** 11 plans
+**Plans:** 1/11 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 204-01-PLAN.md — Publish the cited learning mechanism study, recover the Classic-era learning mechanics from git history, and register SYN-204 in the versioned corpus.
+- [x] 204-01-PLAN.md — Publish the cited learning mechanism study, recover the Classic-era learning mechanics from git history, and register SYN-204 in the versioned corpus.
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
