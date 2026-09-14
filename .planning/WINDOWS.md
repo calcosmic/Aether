@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 29
+open_count: 30
 waived_count: 0
 fixed_count: 9
-total_count: 38
-last_updated: 2026-09-14T12:51:19.761Z
+total_count: 39
+last_updated: 2026-09-14T14:21:30.954Z
 ---
 
 # Broken Windows Ledger
@@ -53,6 +53,7 @@ last_updated: 2026-09-14T12:51:19.761Z
 | 36 | 203 | unmet-truth | cmd/live_projection.go | 551 | PRE-EXISTING latent bug in the live-view resume path, found at the phase-203 closing gate and NOT introduced by it (git diff 1617ef3c..HEAD on cmd/live_projection.go shows the phase's only change to this file is additive Reason/Refusals fields plus gofmt realignment -- the elapsed/resume logic is untouched). ElapsedSeconds is recomputed from event timestamps ONLY when snapshot.Open is true (cmd/live_projection.go:551). A checkpoint taken mid-episode is therefore stamped with a live elapsed figure; when the run later closes, replayColonyLiveSnapshotResume carries that stale figure forward, while a full replay of the same events ends closed and leaves elapsed at 0. TestLiveProjectionResumesWithoutDoubleCounting asserts the two must be identical and correctly catches the divergence -- but only when the seeded events straddle a one-second boundary, so it is red perhaps one run in several. Observed 2026-09-14 with resumed ElapsedSeconds=1 vs full=0 and every other field byte-identical; passes in isolation. The underlying question is a behaviour decision for the owner, which is why this is recorded rather than patched: a FINISHED run arguably should report its total duration rather than 0, in which case the full-replay path is the one that is wrong, not the resume path. Fixing it by clearing the resumed value would make the test green while making the closed-episode screen less informative. TestSwarmCompatibilityWatchReportsActiveWorkers (active_count = 0, want 1) appeared in the same run, also passes in isolation, and reads the same projection -- likely the same family, not separately diagnosed. | open |  | 2026-09-14T00:24:50.809Z |  |
 | 37 | 203 | deviation | .planning/REQUIREMENTS.md |  | FIXED, superseding entry 24. Requirement completion tracking had been silently broken repo-wide: gsd-tools' checkbox pattern is (-\\s*\\[)[ ](\\]\\s*\\*\\*<REQ-ID>\\*\\*) (lib/milestone.cjs:162), which needs the bold to close immediately after the ID, while this file wrote '- [ ] **BIO-02 -- Atomic admission:** ...' with the title inside the bold span. Every requirements mark-complete therefore returned not_found and wrote nothing, and phase.complete reported 'ROADMAP cites REQ-IDs not registered anywhere in REQUIREMENTS.md' for IDs that were plainly present. Reformatted all 65 requirement lines to '- [ ] **REQ-ID** -- Title: ...' -- a pure format change, verified content-identical to the previous file once ** markers are stripped, and no test anywhere pins the old shape (no cmd/*_test.go references REQUIREMENTS.md at all). Phase 203's ten IDs (SYNTH-05, CEC-07, BIO-01..08) are now genuinely ticked by the tool's own write path rather than by hand. The earlier hand-edit of BIO-07 recorded in 203-08-SUMMARY.md can now be done the canonical way. | fixed |  | 2026-09-14T00:28:42.019Z | 2026-09-14T00:28:53.780Z |
 | 38 | 204 | unmet-truth | cmd/live_events.go |  | 204-04 shipped the durable episode ledger, but only its open/close basics have a production writer: emitColonyLiveOutcomeRecorded and emitColonyLiveInterventionRecorded (cmd/live_events.go) have NO production caller, so evidence_ids, hard_gate_results, changed_decision_ids, usage, reported_cost_usd, interventions, episode_revision, acceptance_digest and evaluator_digest are never written in a real run. 204-04-PLAN.md Task 2 asked for token figures 'from codex.WorkerUsage where the lane has one', i.e. the boundary callers were meant to pass these facts. 204-10's report (verified success needs evidence_ids + all hard gates passing; preventable interventions need intervention records) and 204-08's ledger writes are built over these fields, so in production 204-10 would classify every episode as unclassified until the boundary callers populate them. The ledger is also not yet registered in 204-03's field-level census (cmd/memory_schema_test.go liveMemoryStoreCensusTypes covers six stores; the ledger is the seventh), because registering it would expose exactly these nine writerless fields. Found by the orchestrator at the wave-3 post-merge step; the shared schema/lineage stand-in was reconciled in c632d3af. Close by wiring the existing boundary callers (build/continue/swarm/oracle/recovery lanes) to pass usage, gate results, evidence and interventions through the existing emitters, then adding the ledger to the census with a writer per field. | open |  | 2026-09-14T12:51:19.761Z |  |
+| 39 | 204 | unmet-truth | cmd/shadow_cmds.go |  | 204-08 built and tested two CLI commands (shadow-declare, shadow-compare) for trying a candidate beside current behaviour, but no plan in Phase 204 gives them a caller: 204-09's promotion gate drives pkg/shadow through Go functions, and no wrapper, menu spec, hook or worker-discipline file names them. TestNoRegisteredSubcommandIsUnreferenced refuses a registered command nothing calls and its allowlist may only shrink, so the orchestrator left both commands unregistered (cmd/shadow_cmds.go init) at the wave-4 gate. Registering them is one line once a plan decides the owner-facing exposure (a wrapper/menu command or a documented caller) -- a UX decision for the owner, not one to make silently. | open |  | 2026-09-14T14:21:30.954Z |  |
 
 ````json
 [
@@ -510,6 +511,18 @@ last_updated: 2026-09-14T12:51:19.761Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-09-14T12:51:19.761Z",
+    "resolved_at": null
+  },
+  {
+    "id": 39,
+    "kind": "unmet-truth",
+    "phase": "204",
+    "file": "cmd/shadow_cmds.go",
+    "line": null,
+    "description": "204-08 built and tested two CLI commands (shadow-declare, shadow-compare) for trying a candidate beside current behaviour, but no plan in Phase 204 gives them a caller: 204-09's promotion gate drives pkg/shadow through Go functions, and no wrapper, menu spec, hook or worker-discipline file names them. TestNoRegisteredSubcommandIsUnreferenced refuses a registered command nothing calls and its allowlist may only shrink, so the orchestrator left both commands unregistered (cmd/shadow_cmds.go init) at the wave-4 gate. Registering them is one line once a plan decides the owner-facing exposure (a wrapper/menu command or a documented caller) -- a UX decision for the owner, not one to make silently.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-14T14:21:30.954Z",
     "resolved_at": null
   }
 ]
