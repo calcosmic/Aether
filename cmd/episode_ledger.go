@@ -341,3 +341,185 @@ func episodeLedgerEpisodeIDs(records []episodeLedgerRecord) []string {
 	}
 	return ids
 }
+
+// ---------------------------------------------------------------------
+// LEARN-02 (204-04-PLAN.md, Task 3): derived, human-readable views over the
+// ledger. Each function below is pure over a slice of already-read records
+// -- no store read, no clock read -- so the same input always produces the
+// same output (TestDerivedViewsAreIdempotent) and neither view can ever
+// become an authority the durable record itself is not: the append-only
+// record is the authority, every view here is derived from it.
+// ---------------------------------------------------------------------
+
+// episodeChangelogEntry is the derived successor to
+// changelogCollectPlanDataCmd's ad-hoc output (cmd/changelog.go) -- that
+// command has no named entry type today; this declares exactly the field
+// set it already emits (date, phase, plan, entry text), so a later caller
+// can route changelog collection through the ledger without inventing a
+// different shape.
+type episodeChangelogEntry struct {
+	Date  string `json:"date"`
+	Phase string `json:"phase"`
+	Plan  string `json:"plan"`
+	Entry string `json:"entry"`
+}
+
+// episodeSpendSummary totals what the runs in a set of records reported,
+// and separately counts the runs that reported nothing -- so a summary
+// including unreported runs states how many it could not account for,
+// rather than silently treating an unreported figure as zero.
+type episodeSpendSummary struct {
+	AccountedEpisodes   int
+	UnaccountedEpisodes int
+	TotalUSDCost        float64
+	TotalTokens         int64
+}
+
+// episodeOutcomeWording translates a terminal-result value (an internal
+// vocabulary token such as "helpful"/"harmful"/"neutral"/"pending", or a
+// free-form episode terminal status such as "completed"/"failed") into an
+// ordinary sentence fragment -- so no rendered line ever prints the raw
+// token verbatim (TestDerivedViewsSpeakTheSharedVoice, TestVoicedScreens
+// CarryNoRawStateToken's own discipline, applied here to a screen outside
+// the voice corpus by the same rule).
+func episodeOutcomeWording(terminalResult string) string {
+	switch terminalResult {
+	case string(recruitmentCreditOutcomeHelpful):
+		return "helped"
+	case string(recruitmentCreditOutcomeNeutral):
+		return "made no measurable difference"
+	case string(recruitmentCreditOutcomeHarmful):
+		return "made things worse"
+	case string(recruitmentCreditOutcomePending):
+		return "outcome not yet verified"
+	case "":
+		return "no outcome recorded"
+	default:
+		return strings.ReplaceAll(terminalResult, "_", " ")
+	}
+}
+
+// renderEpisodeOutcomeSummary is the human-readable phase outcome the
+// capability ledger (CAP-067/CAP-070) routes here as a derived view rather
+// than a separately written file -- one row per episode, with its kind, its
+// terminal result, its elapsed time and its cost, and an explicit no-
+// outcome row for an episode with no terminal record, never a success and
+// never an omission.
+func renderEpisodeOutcomeSummary(records []episodeLedgerRecord) string {
+	if len(records) == 0 {
+		return voiceLine("status", "No episodes have been recorded yet.") + "\n"
+	}
+	var sb strings.Builder
+	sb.WriteString(voiceLine("status", "Episode outcomes") + "\n")
+	for _, episodeID := range episodeLedgerEpisodeIDs(records) {
+		open, hasOpen := episodeLedgerOpenRecord(records, episodeID)
+		kind := "an unknown kind of run"
+		if hasOpen && strings.TrimSpace(open.EpisodeKind) != "" {
+			kind = open.EpisodeKind
+		}
+		terminal, hasTerminal := episodeLedgerTerminalRecord(records, episodeID)
+		if !hasTerminal {
+			sb.WriteString(voiceLine("blocked", fmt.Sprintf("Episode %s (%s): no outcome recorded yet.", episodeID, kind)) + "\n")
+			continue
+		}
+		elapsed := "elapsed time not recorded"
+		if terminal.ElapsedSeconds > 0 {
+			elapsed = fmt.Sprintf("took %.0fs", terminal.ElapsedSeconds)
+		}
+		cost := "cost not reported"
+		if terminal.ReportedCostUSD != nil {
+			cost = fmt.Sprintf("cost $%.4f", *terminal.ReportedCostUSD)
+		}
+		glyphKind := "done"
+		if terminal.TerminalResult == string(recruitmentCreditOutcomeHarmful) {
+			glyphKind = "failed"
+		}
+		sb.WriteString(voiceLine(glyphKind, fmt.Sprintf(
+			"Episode %s (%s): %s, %s, %s.",
+			episodeID, kind, episodeOutcomeWording(terminal.TerminalResult), elapsed, cost,
+		)) + "\n")
+	}
+	return sb.String()
+}
+
+// collectChangelogEntriesFromLedger is the derived successor to
+// changelogCollectPlanDataCmd's ad-hoc output -- the changelog collection
+// the capability ledger (CAP-067) likewise routes here as a derived view.
+// Only closed episodes carrying enough identity to name a phase and plan
+// (EpisodeRevision, following this repo's "phase-plan" episode-revision
+// convention) produce an entry; anything else is skipped rather than
+// guessed.
+func collectChangelogEntriesFromLedger(records []episodeLedgerRecord) []episodeChangelogEntry {
+	var entries []episodeChangelogEntry
+	for _, episodeID := range episodeLedgerEpisodeIDs(records) {
+		terminal, ok := episodeLedgerTerminalRecord(records, episodeID)
+		if !ok {
+			continue
+		}
+		phase, plan := episodeLedgerRevisionPhaseAndPlan(terminal.EpisodeRevision)
+		if phase == "" && plan == "" {
+			continue
+		}
+		date := terminal.EndedAt
+		if date == "" {
+			date = terminal.StartedAt
+		}
+		entries = append(entries, episodeChangelogEntry{
+			Date:  date,
+			Phase: phase,
+			Plan:  plan,
+			Entry: episodeOutcomeWording(terminal.TerminalResult),
+		})
+	}
+	if entries == nil {
+		entries = []episodeChangelogEntry{}
+	}
+	return entries
+}
+
+// episodeLedgerRevisionPhaseAndPlan splits an EpisodeRevision value of the
+// form "phase-plan" (this repo's own phase/plan naming convention, e.g.
+// "204-04") into its two halves. A revision carrying no separator, or an
+// empty revision, returns two empty strings -- collectChangelogEntriesFrom
+// Ledger skips such an episode rather than guessing a phase/plan identity
+// that was never recorded.
+func episodeLedgerRevisionPhaseAndPlan(revision string) (phase, plan string) {
+	revision = strings.TrimSpace(revision)
+	if revision == "" {
+		return "", ""
+	}
+	parts := strings.SplitN(revision, "-", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", ""
+	}
+	return parts[0], parts[1]
+}
+
+// summariseEpisodeSpend totals what every closed episode in records
+// reported, and separately counts the ones that reported nothing -- a run
+// with a nil Usage pointer increments the unaccounted count and
+// contributes nothing to the totals, never a silent zero.
+func summariseEpisodeSpend(records []episodeLedgerRecord) episodeSpendSummary {
+	var summary episodeSpendSummary
+	for _, episodeID := range episodeLedgerEpisodeIDs(records) {
+		terminal, ok := episodeLedgerTerminalRecord(records, episodeID)
+		if !ok {
+			continue
+		}
+		reported := false
+		if terminal.Usage != nil && !terminal.Usage.Empty() {
+			summary.TotalTokens += terminal.Usage.TotalTokens
+			reported = true
+		}
+		if terminal.ReportedCostUSD != nil {
+			summary.TotalUSDCost += *terminal.ReportedCostUSD
+			reported = true
+		}
+		if reported {
+			summary.AccountedEpisodes++
+		} else {
+			summary.UnaccountedEpisodes++
+		}
+	}
+	return summary
+}

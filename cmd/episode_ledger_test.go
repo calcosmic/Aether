@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -11,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/events"
 )
 
@@ -541,10 +543,16 @@ func TestInterruptedEpisodeIsUnfinishedNotSuccessful(t *testing.T) {
 	if _, ok := episodeLedgerTerminalRecord(records, "ep-interrupted"); ok {
 		t.Fatal("an interrupted episode must not have a terminal record")
 	}
-	// Task 3's renderEpisodeOutcomeSummary (added below) additionally
-	// proves this state renders as neither a success nor an omission --
-	// see the render-level assertion this same test gains once Task 3's
-	// derived view exists.
+
+	// Task 3: the derived render view must also show this state as
+	// neither a success nor an omission.
+	summary := renderEpisodeOutcomeSummary(records)
+	if strings.Contains(strings.ToLower(summary), "completed") {
+		t.Fatalf("interrupted episode rendered as completed:\n%s", summary)
+	}
+	if !strings.Contains(summary, "ep-interrupted") {
+		t.Fatalf("summary does not name the interrupted episode:\n%s", summary)
+	}
 }
 
 // TestElapsedTimeComesFromTheStoredOpenTimestamp seeds an open record whose
@@ -616,5 +624,230 @@ func TestOutcomeTopicsAreRegistered(t *testing.T) {
 	}
 	if !wantIntervention {
 		t.Fatal("LiveTopicInterventionRecorded is not registered in events.ColonyLiveTopics()")
+	}
+}
+
+// ---------------------------------------------------------------------
+// Task 3 (LEARN-02, 204-04-PLAN.md): derived views and the durability
+// proof against the live feed's own retention window.
+// ---------------------------------------------------------------------
+
+// TestEpisodeOutcomeSurvivesTheLiveFeedWindow writes a record through the
+// real writer, then rewrites the underlying event-bus.jsonl entry's own
+// ExpiresAt to a moment in the past -- the same direct-seed seam
+// cmd/eventbus_test.go's TestEventBusCleanupRemovesExpiredEvents already
+// uses to simulate the passage of events.DefaultTTL days without a clock
+// seam existing anywhere in pkg/events -- and asserts the live bus no
+// longer returns the corresponding event while the durable ledger still
+// returns the record untouched.
+func TestEpisodeOutcomeSurvivesTheLiveFeedWindow(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	emitColonyLiveEpisodeStarted("ep-outlives-feed", "build")
+	emitColonyLiveEpisodeEnded("ep-outlives-feed", "build", "completed")
+
+	raw, err := s.ReadFile("event-bus.jsonl")
+	if err != nil {
+		t.Fatalf("read event-bus.jsonl: %v", err)
+	}
+	lines := strings.Split(strings.TrimRight(string(raw), "\n"), "\n")
+	if len(lines) == 0 || lines[0] == "" {
+		t.Fatal("fixture is broken: no live events were persisted to event-bus.jsonl")
+	}
+	var rewritten []string
+	touched := 0
+	for _, line := range lines {
+		var evt map[string]interface{}
+		if err := json.Unmarshal([]byte(line), &evt); err != nil {
+			t.Fatalf("decode event-bus.jsonl line: %v", err)
+		}
+		if strings.Contains(line, "ep-outlives-feed") {
+			// Same direct-seed technique as TestEventBusCleanupRemovesExpiredEvents:
+			// rewrite ExpiresAt to a moment in the past, simulating the
+			// passage of events.DefaultTTL days with no clock seam.
+			evt["expires_at"] = "2000-01-01T00:00:00Z"
+			touched++
+		}
+		reencoded, err := json.Marshal(evt)
+		if err != nil {
+			t.Fatalf("re-encode event-bus.jsonl line: %v", err)
+		}
+		rewritten = append(rewritten, string(reencoded))
+	}
+	if touched == 0 {
+		t.Fatal("fixture is broken: no persisted live event named ep-outlives-feed")
+	}
+	if err := s.AtomicWrite("event-bus.jsonl", []byte(strings.Join(rewritten, "\n")+"\n")); err != nil {
+		t.Fatalf("rewrite event-bus.jsonl: %v", err)
+	}
+
+	liveAfterExpiry := readColonyLiveEventsRaw(s, time.Time{})
+	for _, e := range liveAfterExpiry {
+		if strings.Contains(string(e.Payload), "ep-outlives-feed") {
+			t.Fatal("the live bus still returns an event past its own expiry window")
+		}
+	}
+
+	durable, err := episodeLedgerForEpisode("ep-outlives-feed")
+	if err != nil {
+		t.Fatalf("read durable ledger: %v", err)
+	}
+	if _, ok := episodeLedgerOpenRecord(durable, "ep-outlives-feed"); !ok {
+		t.Fatal("durable ledger lost its open record once the live feed's own event expired")
+	}
+	if _, ok := episodeLedgerTerminalRecord(durable, "ep-outlives-feed"); !ok {
+		t.Fatal("durable ledger lost its terminal record once the live feed's own event expired")
+	}
+}
+
+// TestDerivedViewsAreIdempotent calls each derived view twice on the same
+// records and compares bytes.
+func TestDerivedViewsAreIdempotent(t *testing.T) {
+	usage := &codex.WorkerUsage{TotalTokens: 100, USDCost: 1.5, Source: codex.UsageSourceProvider}
+	cost := 1.5
+	records := []episodeLedgerRecord{
+		{RecordKind: episodeLedgerRecordKindOpened, EpisodeID: "ep-idem", EpisodeKind: "build", StartedAt: "2026-09-01T00:00:00Z"},
+		{RecordKind: episodeLedgerRecordKindClosed, EpisodeID: "ep-idem", EpisodeKind: "build", EndedAt: "2026-09-01T00:05:00Z", ElapsedSeconds: 300, TerminalResult: "helpful", Usage: usage, ReportedCostUSD: &cost, EpisodeRevision: "204-04"},
+	}
+
+	if renderEpisodeOutcomeSummary(records) != renderEpisodeOutcomeSummary(records) {
+		t.Fatal("renderEpisodeOutcomeSummary is not idempotent")
+	}
+	firstChangelog, _ := json.Marshal(collectChangelogEntriesFromLedger(records))
+	secondChangelog, _ := json.Marshal(collectChangelogEntriesFromLedger(records))
+	if string(firstChangelog) != string(secondChangelog) {
+		t.Fatal("collectChangelogEntriesFromLedger is not idempotent")
+	}
+	firstSpend, _ := json.Marshal(summariseEpisodeSpend(records))
+	secondSpend, _ := json.Marshal(summariseEpisodeSpend(records))
+	if string(firstSpend) != string(secondSpend) {
+		t.Fatal("summariseEpisodeSpend is not idempotent")
+	}
+
+	t.Run("structurally performs no store read and no clock read", func(t *testing.T) {
+		fset := token.NewFileSet()
+		file, err := parser.ParseFile(fset, "episode_ledger.go", nil, 0)
+		if err != nil {
+			t.Fatalf("parse episode_ledger.go: %v", err)
+		}
+		views := map[string]bool{
+			"renderEpisodeOutcomeSummary":       true,
+			"collectChangelogEntriesFromLedger": true,
+			"summariseEpisodeSpend":             true,
+		}
+		checked := 0
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Body == nil || !views[fn.Name.Name] {
+				continue
+			}
+			checked++
+			ast.Inspect(fn.Body, func(n ast.Node) bool {
+				call, ok := n.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				sel, ok := call.Fun.(*ast.SelectorExpr)
+				if !ok {
+					return true
+				}
+				pkgIdent, ok := sel.X.(*ast.Ident)
+				if !ok {
+					return true
+				}
+				if pkgIdent.Name == "store" {
+					t.Errorf("%s: %s performs a store read/write via store.%s", fset.Position(call.Pos()).String(), fn.Name.Name, sel.Sel.Name)
+				}
+				if pkgIdent.Name == "time" && sel.Sel.Name == "Now" {
+					t.Errorf("%s: %s reads the clock via time.Now", fset.Position(call.Pos()).String(), fn.Name.Name)
+				}
+				return true
+			})
+		}
+		if checked != len(views) {
+			t.Fatalf("fixture is broken: expected to check %d derived-view functions, found %d in episode_ledger.go", len(views), checked)
+		}
+	})
+}
+
+// TestDerivedViewOverNoEpisodesIsEmptyNotAnError asserts each derived view
+// handles zero records gracefully.
+func TestDerivedViewOverNoEpisodesIsEmptyNotAnError(t *testing.T) {
+	if entries := collectChangelogEntriesFromLedger(nil); len(entries) != 0 {
+		t.Fatalf("expected zero changelog entries over zero records, got %d", len(entries))
+	}
+	summary := summariseEpisodeSpend(nil)
+	if summary.AccountedEpisodes != 0 || summary.UnaccountedEpisodes != 0 {
+		t.Fatalf("expected a zero-valued spend summary over zero records, got %+v", summary)
+	}
+	rendered := renderEpisodeOutcomeSummary(nil)
+	if rendered == "" {
+		t.Fatal("expected a non-empty (but non-erroring) rendered summary over zero episodes")
+	}
+}
+
+// TestEpisodeWithNoOutcomeRendersAsNoOutcome asserts an episode with an
+// open record and no terminal record renders an explicit no-outcome row.
+func TestEpisodeWithNoOutcomeRendersAsNoOutcome(t *testing.T) {
+	records := []episodeLedgerRecord{
+		{RecordKind: episodeLedgerRecordKindOpened, EpisodeID: "ep-no-outcome", EpisodeKind: "build", StartedAt: "2026-09-01T00:00:00Z"},
+	}
+	rendered := renderEpisodeOutcomeSummary(records)
+	if !strings.Contains(rendered, "no outcome recorded") {
+		t.Fatalf("expected an explicit no-outcome row, got:\n%s", rendered)
+	}
+	if strings.Contains(strings.ToLower(rendered), "helped") || strings.Contains(strings.ToLower(rendered), "completed") {
+		t.Fatalf("an unfinished episode must never render as a success:\n%s", rendered)
+	}
+}
+
+// TestSpendSummaryNamesUnaccountedRuns asserts a derived summary including
+// unreported runs states how many it could not account for.
+func TestSpendSummaryNamesUnaccountedRuns(t *testing.T) {
+	usage := &codex.WorkerUsage{TotalTokens: 500, Source: codex.UsageSourceProvider}
+	records := []episodeLedgerRecord{
+		{RecordKind: episodeLedgerRecordKindClosed, EpisodeID: "ep-a", TerminalResult: "helpful", Usage: usage},
+		{RecordKind: episodeLedgerRecordKindClosed, EpisodeID: "ep-b", TerminalResult: "neutral"},
+		{RecordKind: episodeLedgerRecordKindClosed, EpisodeID: "ep-c", TerminalResult: "helpful"},
+	}
+	summary := summariseEpisodeSpend(records)
+	if summary.AccountedEpisodes != 1 {
+		t.Fatalf("AccountedEpisodes = %d, want 1", summary.AccountedEpisodes)
+	}
+	if summary.UnaccountedEpisodes != 2 {
+		t.Fatalf("UnaccountedEpisodes = %d, want 2", summary.UnaccountedEpisodes)
+	}
+}
+
+// TestDerivedViewsSpeakTheSharedVoice asserts every content line opens with
+// a glyph drawn from the shared table and that no line contains an
+// underscore-joined internal token -- following classic_voice_corpus_test.go's
+// own rawStateTokenLeaks/underscoreTokenPattern shape.
+func TestDerivedViewsSpeakTheSharedVoice(t *testing.T) {
+	records := []episodeLedgerRecord{
+		{RecordKind: episodeLedgerRecordKindOpened, EpisodeID: "ep-voice", EpisodeKind: "build", StartedAt: "2026-09-01T00:00:00Z"},
+		{RecordKind: episodeLedgerRecordKindClosed, EpisodeID: "ep-voice", EpisodeKind: "build", EndedAt: "2026-09-01T00:05:00Z", ElapsedSeconds: 300, TerminalResult: "harmful"},
+		{RecordKind: episodeLedgerRecordKindOpened, EpisodeID: "ep-voice-2", EpisodeKind: "continue", StartedAt: "2026-09-02T00:00:00Z"},
+	}
+	rendered := renderEpisodeOutcomeSummary(records)
+	for _, line := range strings.Split(strings.TrimRight(rendered, "\n"), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		if underscoreTokenPattern.MatchString(line) {
+			t.Fatalf("line %q carries a raw internal token", line)
+		}
+		hasGlyph := false
+		for _, glyph := range voiceGlyphMap {
+			if strings.HasPrefix(line, glyph) {
+				hasGlyph = true
+				break
+			}
+		}
+		if !hasGlyph {
+			t.Fatalf("line %q does not open with a shared-table glyph", line)
+		}
 	}
 }
