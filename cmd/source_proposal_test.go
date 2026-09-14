@@ -188,6 +188,82 @@ func TestBranchNameCollisionIsRefused(t *testing.T) {
 	}
 }
 
+// TestPathTraversalChangeSetIsRefusedByName asserts a change set whose file
+// path escapes the proposal root (via ".." segments) is refused by name,
+// writes nothing outside the repository, and leaves no proposal branch
+// behind (CR-01, 204-REVIEW.md).
+func TestPathTraversalChangeSetIsRefusedByName(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	root := sourceProposalTestRepo(t)
+	chdirTemp(t, root)
+
+	before := sourceProposalBranchesWithPrefix(t, root)
+
+	escapeTarget := filepath.Join(filepath.Dir(root), "escaped-outside-repo.txt")
+	t.Cleanup(func() { _ = os.Remove(escapeTarget) })
+
+	changes := sourceChangeSet{
+		Files:   []sourceChangeSetFile{{Path: "../escaped-outside-repo.txt", Content: "should never land here\n"}},
+		Message: "propose a path traversal",
+	}
+	_, created, err := proposeSourceImprovement("candidate-traversal", nil, changes)
+	if err == nil {
+		t.Fatal("expected an error on a path-traversal change set, got nil")
+	}
+	if !strings.Contains(err.Error(), "escapes the proposal root") {
+		t.Fatalf("error %q does not name the escape", err.Error())
+	}
+	if created {
+		t.Fatal("expected created=false on a refused path-traversal proposal")
+	}
+	if _, statErr := os.Stat(escapeTarget); statErr == nil {
+		t.Fatal("path traversal wrote a file outside the repository root -- CR-01 regression")
+	}
+
+	after := sourceProposalBranchesWithPrefix(t, root)
+	if len(after) != len(before) {
+		t.Fatalf("branch count changed on a refused path-traversal proposal: before=%v after=%v", before, after)
+	}
+	if got := sourceProposalCurrentBranch(t, root); got != "main" {
+		t.Fatalf("current branch = %q, want main (untouched by the refused proposal)", got)
+	}
+}
+
+// TestAbsolutePathChangeSetIsRefusedByName asserts a change set whose file
+// path is absolute is refused by name rather than silently writing to an
+// arbitrary filesystem location (CR-01, 204-REVIEW.md).
+func TestAbsolutePathChangeSetIsRefusedByName(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	root := sourceProposalTestRepo(t)
+	chdirTemp(t, root)
+
+	absTarget := filepath.Join(t.TempDir(), "absolute-escape.txt")
+
+	changes := sourceChangeSet{
+		Files:   []sourceChangeSetFile{{Path: absTarget, Content: "should never land here\n"}},
+		Message: "propose an absolute path write",
+	}
+	_, created, err := proposeSourceImprovement("candidate-absolute", nil, changes)
+	if err == nil {
+		t.Fatal("expected an error on an absolute-path change set, got nil")
+	}
+	if !strings.Contains(err.Error(), "absolute path") {
+		t.Fatalf("error %q does not name the absolute path", err.Error())
+	}
+	if created {
+		t.Fatal("expected created=false on a refused absolute-path proposal")
+	}
+	if _, statErr := os.Stat(absTarget); statErr == nil {
+		t.Fatal("absolute path wrote a file outside the repository root -- CR-01 regression")
+	}
+}
+
 // TestProposalReplayCreatesNoSecondBranch asserts proposing the same
 // improvement twice returns the first proposal and creates no second
 // branch.

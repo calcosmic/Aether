@@ -236,13 +236,27 @@ func sourceProposalApplyChangeSet(root string, changes sourceChangeSet) error {
 	if len(changes.Files) == 0 {
 		return fmt.Errorf("source proposal change set carries no files")
 	}
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return fmt.Errorf("resolve proposal root: %w", err)
+	}
 	paths := make([]string, 0, len(changes.Files))
 	for _, f := range changes.Files {
 		relPath := strings.TrimSpace(f.Path)
 		if relPath == "" {
 			return fmt.Errorf("source proposal change set carries a file with an empty path")
 		}
-		full := filepath.Join(root, relPath)
+		if filepath.IsAbs(relPath) {
+			return fmt.Errorf("source proposal change set carries an absolute path %q -- refused", relPath)
+		}
+		full := filepath.Join(absRoot, relPath)
+		// filepath.Join already Cleans the result; it must still be inside
+		// absRoot, otherwise a ".." segment escaped the proposal root -- the
+		// same untrusted-input treatment CLAUDE.md requires for anything a
+		// candidate or worker can supply (CR-01, 204-REVIEW.md).
+		if full != absRoot && !strings.HasPrefix(full, absRoot+string(filepath.Separator)) {
+			return fmt.Errorf("source proposal change set path %q escapes the proposal root -- refused", relPath)
+		}
 		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
 			return fmt.Errorf("create directory for %s: %w", relPath, err)
 		}
