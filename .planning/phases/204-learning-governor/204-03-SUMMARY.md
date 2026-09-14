@@ -12,15 +12,15 @@ requires:
     provides: "recordPhaseApplicationCredit (cmd/application_evidence.go), phaseApplicationDecisionID, and recruitmentCreditForContribution -- the evidence-gated credit ledger this plan's typed application history reads its outcome from"
 provides:
   - "pkg/colony/memory_schema.go: CurrentMemorySchemaVersion, LegacyMemorySchemaVersion, MemoryProvenanceKind closed vocabulary, MemoryRecordLineage -- the one shared schema/provenance contract every live memory store writer now stamps"
-  - "cmd/memory_schema.go: cmd-local aliases of the same contract, plus the field-level writer census (memoryStoreFieldWriters/Exceptions/ExceptionFloor)"
+  - "cmd/memory_schema.go: cmd-local aliases of the same contract, plus the field-level writer census (memoryStoreFieldWriters/Exceptions/ExceptionFloor) and the owner's Task 4 field-disposition decision (memoryStoreFieldRetired)"
   - "colony.InstinctApplicationEntry: a typed application-history entry with a real, credit-ledger-derived outcome, replacing an untyped map that always recorded success:true"
-  - "The field-level census: 86 fields across 6 live memory stores, 82 with a confirmed production writer, 4 seeded into a shrink-only exception list pending the owner's Task 4 decision"
+  - "The field-level census: 86 fields across 6 live memory stores, 82 with a confirmed production writer, 1 retired with the owner's recorded agreement (instinct.related_instincts), 3 kept and recorded knowingly empty (midden.acknowledge_reason, learn.parent_id, pheromone.scope)"
 affects: [204-04, 204-05, 204-06, 204-07, 204-08, 204-09, 204-10, 204-11]
 
 actuals:
-  tokens: 22740
-  tasks: 3
-  commits: 3
+  tokens: 26937
+  tasks: 4
+  commits: 4
 
 tech-stack:
   added: []
@@ -28,6 +28,7 @@ tech-stack:
     - "Cross-package shared contract placed in pkg/colony (a leaf-ish package with no reverse dependency risk) rather than cmd, with cmd-local type aliases (type X = colony.X) satisfying a plan's cmd-file-literal acceptance criteria without creating a second, competing declaration or an import cycle"
     - "Custom UnmarshalJSON on a single typed slice element accepting two on-disk shapes (old untyped map, new typed struct) so one slice can hold both, side by side, for as long as a real colony's file does -- the compatibility path is a plain field (LegacySuccess), never a second type"
     - "Field-level writer census via reflect.Type.Field() enumeration over live record types, namespaced '<store>.<field>' to avoid cross-store name collisions, mirroring TestEveryMemoryPackPartHasALiveWriter's whole-section census pattern at field granularity"
+    - "A field-disposition decision that is irreversible (retirement) is recorded in its own map (memoryStoreFieldRetired), separate from the knowingly-empty exception list (memoryStoreFieldExceptions) -- each entry carries both a reason and the owner's recorded agreement date, and an entry missing either is refused by name, so a retirement can never happen by omission or silently collapse into an ordinary exception"
 
 key-files:
   created:
@@ -60,9 +61,13 @@ key-decisions:
   - "The instinct-apply CLI's --success boolean (cmd/internal_cmds.go) is treated as a manual, owner-invoked judgement, not an automated worker self-report -- SYN-204-06's repudiation of an unverified self-report targets recordInstinctApplicationsForPhase's own former unconditional-success behavior, not an operator's own explicit --success flag. Mapped onto the closed outcome vocabulary (helpful/harmful) rather than reviving a second boolean shape."
   - "ApplicationHistory's declared element type became []colony.InstinctApplicationEntry (a typed slice with a custom UnmarshalJSON accepting both shapes), not a literal []interface{} kept as-is -- the plan's own instruction to 'implement custom JSON unmarshalling on the entry type' only has meaning if the slice's own declared element type is that entry type; an []interface{} slice never invokes a custom UnmarshalJSON on read."
   - "The field-level census enumerates each of the six record types' TOP-LEVEL JSON fields only (no recursive descent into nested structs like InstinctProvenance) -- mirrors TestEveryMemoryPackPartHasALiveWriter's own one-level granularity and keeps the census's own scope matched to what a single writer function realistically fills in one call."
+  - "Task 4 (owner's field-disposition decision, 2026-09-14): the owner chose 'mixture' -- exactly the per-field recommendation table carried in this plan's own halted checkpoint, unchanged. instinct.related_instincts is retired (moved out of memoryStoreFieldExceptions into a new memoryStoreFieldRetired map, each entry carrying a reason and the owner's recorded agreement date); midden.acknowledge_reason, learn.parent_id and pheromone.scope stay in memoryStoreFieldExceptions, now recorded as the owner's knowingly-empty decision rather than an unexplained gap."
+  - "Retiring instinct.related_instincts touches no stored record: the struct field stays declared (now with omitempty) purely so a pre-retirement record's own \"related_instincts\": [] still round-trips on read; only the two production writers (cmd/instinct.go, pkg/memory/promote.go) stopped setting it on a newly-created record. memoryStoreFieldExceptionFloor dropped from 4 to 3 in the same change the field left the exception map, keeping TestMemoryStoreFieldExceptionsOnlyShrink honest rather than silently widened."
+  - "A retirement is validated separately from an exception, by its own check (validateMemoryStoreFieldRetirements) requiring BOTH a non-empty reason AND a non-empty owner-agreement date -- proven non-vacuous by TestRetiredFieldWithoutOwnerAgreementIsRefused, which drives the check against a synthetic map (never the real memoryStoreFieldRetired) so the negative path can fail independently of whatever the real map currently contains."
 
 patterns-established:
   - "A field-level writer census (reflect-based, namespaced by store) as a permanent structural ratchet over every live memory-store record type, extending the existing whole-section census (TestEveryMemoryPackPartHasALiveWriter) to field granularity."
+  - "An irreversible field-disposition decision (retirement) is recorded in a map structurally distinct from a reversible one (a knowingly-empty exception), with its own mandatory owner-agreement field and its own refusal check -- the shape any later Phase 204 plan facing a similar one-way memory-schema decision should reuse."
 
 requirements-completed: []
 
@@ -120,27 +125,36 @@ coverage:
         status: pass
     human_judgment: false
   - id: D4
-    description: "The owner decides, field by field, what happens to the four census fields with no production writer -- connect a writer, record them as knowingly empty, or retire them. Nothing is deleted under any option; this is the phase's only one-way decision."
+    description: "The owner decides, field by field, what happens to the four census fields with no production writer -- connect a writer, record them as knowingly empty, or retire them. Nothing is deleted under any option; this was the phase's only one-way decision."
     requirement: "LEARN-01"
-    verification: []
-    human_judgment: true
-    rationale: "This is exactly the Task 4 checkpoint below, awaiting the owner's reply. The census output and a per-field recommendation are reproduced verbatim in this summary for the owner's review."
+    verification:
+      - kind: unit
+        ref: "cmd/memory_schema_test.go#TestEveryMemoryStoreFieldHasALiveWriter"
+        status: pass
+      - kind: unit
+        ref: "cmd/memory_schema_test.go#TestRetiredFieldWithoutOwnerAgreementIsRefused"
+        status: pass
+      - kind: unit
+        ref: "cmd/memory_schema_test.go#TestMemoryStoreFieldExceptionsOnlyShrink"
+        status: pass
+    human_judgment: false
+    rationale: "The owner replied 'mixture' with no field-specific overrides, exactly matching the recommendation table this plan's own halted checkpoint carried. Applied: instinct.related_instincts retired into a new, structurally distinct memoryStoreFieldRetired map (reason + owner-agreement date, both mandatory); midden.acknowledge_reason, learn.parent_id and pheromone.scope stay in memoryStoreFieldExceptions, their reasons now recording the owner's knowingly-empty decision. The retirement's own refusal path (an entry missing a reason or an agreement date) is independently proven able to fail by TestRetiredFieldWithoutOwnerAgreementIsRefused, run against a synthetic map."
 
-duration: 150min
+duration: 150min (Tasks 1-3) + ~25min (Task 4 continuation)
 completed: 2026-09-14
-status: halted
+status: complete
 ---
 
 # Phase 204 Plan 03: Memory Schema and Provenance Summary
 
-**Declared one shared schema version and provenance contract across every live memory store, retyped the instinct application history so its outcome comes from the real credit ledger instead of an unconditional success, and censused all 86 fields across 6 memory stores against a named production writer -- 4 fields have none and are pending the owner's Task 4 decision below.**
+**Declared one shared schema version and provenance contract across every live memory store, retyped the instinct application history so its outcome comes from the real credit ledger instead of an unconditional success, censused all 86 fields across 6 memory stores against a named production writer, and applied the owner's field-by-field decision on the 4 fields with no writer -- 1 retired (instinct.related_instincts), 3 kept and recorded knowingly empty.**
 
 ## Performance
 
-- **Duration:** ~150 min (through Task 3; the Task 4 checkpoint below is awaiting the owner)
-- **Tasks:** 3/4 completed (Task 4 is a blocking-human checkpoint)
-- **Files modified:** 21 (3 created, 18 modified)
-- **Commits:** 3 (test/feat/test, one per task)
+- **Duration:** ~150 min (Tasks 1-3) + ~25 min (Task 4 continuation, applying the owner's decision)
+- **Tasks:** 4/4 completed
+- **Files modified:** 22 total across the plan (3 created, 19 modified: the 18 from Tasks 1-3 plus `cmd/instinct.go` touched again in Task 4)
+- **Commits:** 4 task commits (test/feat/test/feat, one per task) plus this docs commit
 
 ## Accomplishments
 
@@ -148,7 +162,8 @@ status: halted
 - Stamped the three write chokepoints: `appendMiddenEntry` (midden, provenance `runtime`), `PromoteService.Promote` (instincts, provenance `learning`, both the new-entry and dedup-reinforcement branches), `ColonyStore.Add` (learning entries, provenance `runtime`). A legacy record (raw pre-change bytes -- the runtime can no longer produce this shape) reads its absent version as legacy and its absent lineage as `MemoryProvenanceUnknown`, proven directly against real seeded bytes.
 - `colony.InstinctApplicationEntry` replaces `ApplicationHistory`'s untyped `[]interface{}` with a typed slice carrying a real `Outcome` (drawn from the credit ledger's own `helpful/neutral/harmful/pending` vocabulary) and the `CreditRecordID` that justified it -- `recordInstinctApplicationsForPhase` now looks this up via `recruitmentCreditForContribution` instead of recording `success: true` unconditionally. `cmd/consolidation_lifecycle.go` was reordered (credit recorded before applications) so the lookup can actually find a same-pass credit record; the reordering was proven safe and regression-free. The negative branch was independently verified: `TestApplicationOutcomeComesFromCreditNotFromAdvancement` was run against a temporarily reverted fixed-outcome implementation and confirmed to FAIL, then the real implementation was restored and reconfirmed passing.
 - The type change rippled into every other production and test call site that constructs `ApplicationHistory` (`cmd/instinct.go`, `cmd/internal_cmds.go`'s `instinct-apply` CLI, and 6 test fixture files across `cmd`/`pkg`) -- all converted to the typed shape with no behavior change to any existing test's intent.
-- The field-level writer census (`cmd/memory_schema.go`'s `memoryStoreFieldWriters`/`memoryStoreFieldExceptions`/`memoryStoreFieldExceptionFloor`, `cmd/memory_schema_test.go`'s `TestEveryMemoryStoreFieldHasALiveWriter`/`TestMemoryStoreFieldExceptionsOnlyShrink`) reflects over all six live memory-store record types (instinct, midden, learn, pheromone, credit, handoff) and cross-references all 86 discovered fields against a real, session-confirmed production writer. 82 fields have one; 4 do not and are seeded into the shrink-only exception list, each with a written reason. `TestMemoryStoreCensusDiscoversFieldsByReflectionNotByList` proves discovery is genuinely reflection-based (a synthetic type neither map has seen is still correctly reported) rather than a disguised hardcoded list.
+- The field-level writer census (`cmd/memory_schema.go`'s `memoryStoreFieldWriters`/`memoryStoreFieldExceptions`/`memoryStoreFieldExceptionFloor`, `cmd/memory_schema_test.go`'s `TestEveryMemoryStoreFieldHasALiveWriter`/`TestMemoryStoreFieldExceptionsOnlyShrink`) reflects over all six live memory-store record types (instinct, midden, learn, pheromone, credit, handoff) and cross-references all 86 discovered fields against a real, session-confirmed production writer. 82 fields have one; 4 did not and were seeded into the shrink-only exception list pending Task 4's owner decision, each with a written reason. `TestMemoryStoreCensusDiscoversFieldsByReflectionNotByList` proves discovery is genuinely reflection-based (a synthetic type neither map has seen is still correctly reported) rather than a disguised hardcoded list.
+- **Task 4 (this continuation):** applied the owner's `mixture` decision to the census's 4 writerless fields. Added `memoryStoreFieldRetired`, a map structurally distinct from `memoryStoreFieldExceptions` -- each entry requires BOTH a written reason AND the owner's recorded agreement date, and an entry missing either is refused by name (`TestRetiredFieldWithoutOwnerAgreementIsRefused`, driven against a synthetic map so the negative path can genuinely fail). Moved `instinct.related_instincts` into that new map with `ownerAgreedOn: "2026-09-14"`. Stopped the field's two production writers (`cmd/instinct.go`'s `instinct-observe`, `pkg/memory/promote.go`'s `PromoteService.Promote`) from setting it on a newly-created record, and added `omitempty` to `colony.InstinctEntry.RelatedInstincts`'s JSON tag so it no longer serializes on a new write -- the struct field itself stays declared, unchanged, so a pre-retirement record's own `"related_instincts": []` still reads back correctly. No stored record was touched. `memoryStoreFieldExceptionFloor` dropped from 4 to 3 in the same change, keeping `TestMemoryStoreFieldExceptionsOnlyShrink` honest. The remaining three fields (`midden.acknowledge_reason`, `learn.parent_id`, `pheromone.scope`) stayed in `memoryStoreFieldExceptions`, their reasons rewritten to record the owner's 2026-09-14 knowingly-empty decision rather than an unexplained gap.
 
 ## Task Commits
 
@@ -157,31 +172,35 @@ Each task was committed atomically:
 1. **Task 1: Declare one schema version and one provenance shape across the live memory stores** - `abeb5513` (test)
 2. **Task 2: Turn the untyped application history into a typed one with a real outcome** - `711d2b15` (feat)
 3. **Task 3: Census every field on every memory store against a named writer** - `1d253dc6` (test)
-
-**Plan metadata:** will be committed by the continuation once Task 4's owner decision is applied.
-
-_Note on TDD gate compliance: all three tasks carry `tdd="true"` in the plan, but implementation landed as one combined commit per task (tests and production code together) rather than a strict RED-then-GREEN pair. See "TDD Gate Compliance" below._
+4. **Task 4: Apply the owner's field-disposition decision** - `dcebe1b0` (feat)
 
 ## Files Created/Modified
 
 - `pkg/colony/memory_schema.go` - The shared schema-version/provenance contract (new)
-- `cmd/memory_schema.go` - cmd-local aliases + the field-level writer census (new)
-- `cmd/memory_schema_test.go` - All Task 1-3 tests (new)
-- `pkg/colony/instincts.go` - `InstinctApplicationEntry` (typed, dual-shape `UnmarshalJSON`), `InstinctEntry.SchemaVersion`/`.Lineage`, `ApplicationHistory` retyped
+- `cmd/memory_schema.go` - cmd-local aliases + the field-level writer census + `memoryStoreFieldRetired` (Task 4) (new)
+- `cmd/memory_schema_test.go` - All Task 1-4 tests (new)
+- `pkg/colony/instincts.go` - `InstinctApplicationEntry` (typed, dual-shape `UnmarshalJSON`), `InstinctEntry.SchemaVersion`/`.Lineage`, `ApplicationHistory` retyped, `RelatedInstincts` retired (Task 4: doc comment + `omitempty`)
 - `pkg/colony/midden.go` - `MiddenEntry.SchemaVersion`/`.Lineage`
 - `pkg/learn/learn.go` - `Entry.SchemaVersion`/`.Lineage`, `SortEntriesByRecency`
 - `pkg/learn/colony_store.go` - `Add` stamps schema version + runtime-provenance lineage
-- `pkg/memory/promote.go` - `Promote` stamps schema version + learning-provenance lineage (both branches)
+- `pkg/memory/promote.go` - `Promote` stamps schema version + learning-provenance lineage (both branches); Task 4: no longer sets `RelatedInstincts` on a new record
 - `pkg/memory/instinct_stats.go` - `SummarizeInstinctApplications` reads both history shapes
 - `cmd/midden_shared.go` - `appendMiddenEntry` stamps schema version + runtime-provenance lineage
 - `cmd/instinct_application.go` - `recordInstinctApplicationsForPhase` derives outcome from the credit ledger; `instinctAlreadyAppliedForPhase` reads the typed field
-- `cmd/instinct.go`, `cmd/internal_cmds.go` - Ripple fix: `ApplicationHistory` construction updated to the typed shape
+- `cmd/instinct.go`, `cmd/internal_cmds.go` - Ripple fix: `ApplicationHistory` construction updated to the typed shape; Task 4: `cmd/instinct.go`'s `instinct-observe` no longer sets `RelatedInstincts` on a new record
 - `cmd/consolidation_lifecycle.go` - Reordered credit-before-applications
 - `cmd/instinct_application_test.go`, `cmd/instinct_runtime_test.go`, `cmd/consolidation_promotion_target_test.go`, `cmd/memory_details_render_test.go`, `pkg/memory/consolidate_test.go`, `pkg/colony/instincts_test.go`, `pkg/agent/curation/orchestrator_test.go` - Ripple fix: fixtures converted to the typed `ApplicationHistory` shape
 
 ## Decisions Made
 
-See `key-decisions` in frontmatter above.
+See `key-decisions` in frontmatter above. The owner's Task 4 reply was `mixture`, with no field-specific overrides -- applying exactly the per-field recommendation table this plan's own halted checkpoint carried:
+
+| Field | Owner's decision (2026-09-14) |
+|---|---|
+| `instinct.related_instincts` | **Retired.** Moved to `memoryStoreFieldRetired`; no production writer sets it on a new record; no stored record touched. |
+| `midden.acknowledge_reason` | **Kept, recorded knowingly empty** in `memoryStoreFieldExceptions`. |
+| `learn.parent_id` | **Kept, recorded knowingly empty** in `memoryStoreFieldExceptions`. |
+| `pheromone.scope` | **Kept, recorded knowingly empty** in `memoryStoreFieldExceptions`. |
 
 ## Deviations from Plan
 
@@ -213,15 +232,15 @@ See `key-decisions` in frontmatter above.
 
 ---
 
-**Total deviations:** 3 auto-fixed (1 Rule 3 blocking, 2 Rule 1 bugs -- all direct, unavoidable consequences of the plan's own mandated type change and file list under-specification). **Impact on plan:** None on any machine-checkable gate -- every `<acceptance_criteria>` line and every task's `<verify>` command for Tasks 1-3 pass; the full pre-existing regression sweep (instinct-application, consolidation, colony-prime, autopilot-lessons, pheromone-outcome, application-evidence, field-writer-census, and the entirety of `pkg/colony`/`pkg/learn`/`pkg/memory`/`pkg/agent/curation`) passes with zero regressions.
+**Total deviations:** 3 auto-fixed (1 Rule 3 blocking, 2 Rule 1 bugs -- all direct, unavoidable consequences of the plan's own mandated type change and file list under-specification). Task 4 introduced no new deviations: the owner's `mixture` reply required no interpretation beyond applying the recommendation table already carried in the checkpoint. **Impact on plan:** None on any machine-checkable gate -- every `<acceptance_criteria>` line and every task's `<verify>` command for Tasks 1-4 pass; the full pre-existing regression sweep (instinct-application, consolidation, colony-prime, autopilot-lessons, pheromone-outcome, application-evidence, field-writer-census, and the entirety of `pkg/colony`/`pkg/learn`/`pkg/memory`/`pkg/agent/curation`) passes with zero regressions.
 
 ## TDD Gate Compliance
 
-Tasks 1-3 all carry `tdd="true"`, but each landed as a single combined commit (test file and production code together) rather than a strict RED-then-GREEN pair. The interdependent, cross-package nature of the schema/type changes (a struct field retype in `pkg/colony` ripples through `pkg/memory`, `pkg/learn`, and a dozen `cmd` call sites before anything compiles again) made an isolated, meaningfully-failing RED commit impractical without repeatedly breaking compilation across dependent packages mid-sequence. Every named test was, however, independently verified to be able to fail: `TestApplicationOutcomeComesFromCreditNotFromAdvancement` was run against a temporarily reverted fixed-outcome implementation and confirmed to FAIL before the real implementation was restored (documented in Deviation 2/Task 2 above); the other tests' non-vacuousness follows directly from asserting on real legacy bytes, real writer output, and (for the census) a synthetic fixture the writer map has never seen.
+Tasks 1-3 all carry `tdd="true"`, but each landed as a single combined commit (test file and production code together) rather than a strict RED-then-GREEN pair. The interdependent, cross-package nature of the schema/type changes (a struct field retype in `pkg/colony` ripples through `pkg/memory`, `pkg/learn`, and a dozen `cmd` call sites before anything compiles again) made an isolated, meaningfully-failing RED commit impractical without repeatedly breaking compilation across dependent packages mid-sequence. Every named test was, however, independently verified to be able to fail: `TestApplicationOutcomeComesFromCreditNotFromAdvancement` was run against a temporarily reverted fixed-outcome implementation and confirmed to FAIL before the real implementation was restored (documented in Deviation 2/Task 2 above); the other tests' non-vacuousness follows directly from asserting on real legacy bytes, real writer output, and (for the census) a synthetic fixture the writer map has never seen. Task 4 is a `checkpoint:decision` task, not a `tdd="true"` task -- its own new test, `TestRetiredFieldWithoutOwnerAgreementIsRefused`, was written and confirmed passing alongside the implementation in the same commit, and its non-vacuousness is direct: it is driven against a synthetic map with two deliberately-broken entries and one correct one, and asserts each is judged correctly.
 
 ## Issues Encountered
 
-None beyond the deviations documented above. `go build ./...` and `go vet ./...` are clean throughout. Full regression sweep across every touched package passes.
+None beyond the deviations documented above. `go build ./...` and `go vet ./cmd/... ./pkg/...` are clean throughout. Full regression sweep across every touched package passes.
 
 ## User Setup Required
 
@@ -229,25 +248,26 @@ None -- no external service configuration required.
 
 ## Next Phase Readiness
 
-Tasks 1-3 are complete and independently verified. Task 4 is a `checkpoint:decision` with `gate="blocking-human"` -- it cannot be auto-approved in any mode and is returned to the owner below, carrying the census output and a per-field recommendation. Once the owner replies, a continuation agent applies the decision, re-summarizes this file as `status: complete`, and marks `LEARN-01` complete (shared with other plans in this phase; the shared-ID gate keeps it correctly unmarked until every declaring plan finishes).
+All four tasks are complete and independently verified. `LEARN-01` is shared with other plans in this phase (204-04, 204-06, 204-11) not yet complete -- `gsd_run query requirements.ready-ids` confirmed it is still `blocked` as of this continuation, so it correctly stays unmarked in `REQUIREMENTS.md`; a later plan's completion will trip the shared-ID gate once every declaring plan is done.
 
-No other blockers. `recordInstinctApplicationsForPhase`'s SchemaVersion/Lineage stamping and the typed `ApplicationHistory` shape are both now the pattern any later Phase 204 plan reading or writing instinct/midden/learn records should follow -- `pheromones.json`'s own pointer-backed convention remains the model, now shared across three more stores.
+No blockers. `recordInstinctApplicationsForPhase`'s SchemaVersion/Lineage stamping, the typed `ApplicationHistory` shape, and the retired/exception-list distinction for a writerless field are all now the pattern any later Phase 204 plan reading or writing instinct/midden/learn records -- or facing its own writerless-field decision -- should follow. `pheromones.json`'s own pointer-backed convention remains the model, now shared across three more stores.
 
 ## Self-Check: PASSED
 
-- All 3 created files and 18 modified files confirmed present via `git status`/`git log`.
-- All three task commits (`abeb5513`, `711d2b15`, `1d253dc6`) confirmed present via `git log --oneline`.
-- All acceptance-criteria grep checks re-run clean: `cmd/memory_schema.go` contains `memoryStoreSchemaVersion`, `memoryStoreLegacySchemaVersion`, `memoryProvenanceKind`, `memoryRecordLineage`, `func memoryStoreSchemaReadable(`, `memoryStoreFieldWriters`, `memoryStoreFieldExceptions`, `memoryStoreFieldExceptionFloor`; `pkg/colony/instincts.go` contains `type InstinctApplicationEntry struct`; `cmd/instinct_application.go` contains no `map[string]interface{}` append into `ApplicationHistory`, and references both `recruitmentCreditForContribution` and `phaseApplicationDecisionID`.
-- Full combined named `<verify>` test set for Tasks 1-3 (16 test functions, several with subtests) passes together: `go test ./cmd ./pkg/colony ./pkg/learn ./pkg/memory -run '^(TestLegacyRecordsReadAsLegacy|TestNewRecordsCarryVersionAndLineage|TestFutureSchemaVersionIsRefusedNotCoerced|TestMemoryProvenanceVocabularyIsClosed|TestMemoryStoreOrderingIsTotalAndStable|TestTypedAndUntypedApplicationHistoryAgree|TestApplicationOutcomeComesFromCreditNotFromAdvancement|TestMixedShapeHistoryReadsCorrectly|TestEveryMemoryStoreFieldHasALiveWriter|TestMemoryStoreFieldExceptionsOnlyShrink|TestMemoryStoreCensusDiscoversFieldsByReflectionNotByList|TestQueenPromotionNeverHappensWithoutRecordedUse)$' -count=1 -timeout 90m` -> `ok`.
+- All 3 created files and 19 modified files (across the whole plan) confirmed present via `git status`/`git log`.
+- All four task commits (`abeb5513`, `711d2b15`, `1d253dc6`, `dcebe1b0`) confirmed present via `git log --oneline`.
+- All acceptance-criteria grep checks re-run clean: `cmd/memory_schema.go` contains `memoryStoreSchemaVersion`, `memoryStoreLegacySchemaVersion`, `memoryProvenanceKind`, `memoryRecordLineage`, `func memoryStoreSchemaReadable(`, `memoryStoreFieldWriters`, `memoryStoreFieldExceptions`, `memoryStoreFieldExceptionFloor`, `memoryStoreFieldRetired`; `pkg/colony/instincts.go` contains `type InstinctApplicationEntry struct`; `cmd/instinct_application.go` contains no `map[string]interface{}` append into `ApplicationHistory`, and references both `recruitmentCreditForContribution` and `phaseApplicationDecisionID`.
+- Full combined named `<verify>` test set for Tasks 1-3 plus Task 4's own tests (18 test functions, several with subtests) passes together: `go test ./cmd ./pkg/colony ./pkg/learn ./pkg/memory -run '^(TestLegacyRecordsReadAsLegacy|TestNewRecordsCarryVersionAndLineage|TestFutureSchemaVersionIsRefusedNotCoerced|TestMemoryProvenanceVocabularyIsClosed|TestMemoryStoreOrderingIsTotalAndStable|TestTypedAndUntypedApplicationHistoryAgree|TestApplicationOutcomeComesFromCreditNotFromAdvancement|TestMixedShapeHistoryReadsCorrectly|TestEveryMemoryStoreFieldHasALiveWriter|TestMemoryStoreFieldExceptionsOnlyShrink|TestMemoryStoreCensusDiscoversFieldsByReflectionNotByList|TestQueenPromotionNeverHappensWithoutRecordedUse|TestRetiredFieldWithoutOwnerAgreementIsRefused)$' -count=1 -timeout 90m` -> `ok`.
 - Broader regression sweep passes: `go test ./cmd -run '^(TestColonyPrime|TestAutopilot|TestLearning|TestMemoryPack|TestConfirmed|TestCapsule|TestInstinct|TestConsolidation|TestMidden|TestPheromone|TestHive|TestRecruitmentCredit|TestApplicationEvidence|TestPhaseApplicationCredit)'` and `go test ./pkg/colony ./pkg/learn ./pkg/memory ./pkg/agent/curation` both `ok`.
-- `go build ./...` and `go vet ./cmd/... ./pkg/...` both clean.
-- Requirement `LEARN-01` is shared with other plans in this phase not yet complete -- correctly NOT marked complete in `REQUIREMENTS.md`; the continuation completing this plan will do so per the shared-ID gate.
+- Targeted spot-checks against every raw-JSON fixture referencing `related_instincts` (`TestInstinctReadFromStandaloneStore`, `TestCurationArchivistThresholdArchivesTypedInstincts`, `TestMemoryMetrics*`) still `ok` -- these fixtures write JSON directly to disk and never depend on the two production writers that stopped setting the retired field.
+- `go build ./...` and `go vet ./cmd/... ./pkg/...` both clean; `gofmt -l` clean on every file this continuation touched.
+- Requirement `LEARN-01` confirmed still `blocked` (shared with 204-04/204-06/204-11, not all complete) via `gsd_run query requirements.ready-ids .planning/phases/204-learning-governor/204-03-PLAN.md LEARN-01` -- correctly NOT marked complete in `REQUIREMENTS.md`, per the shared-ID gate.
 
 ---
 
-## Task 4 Checkpoint: Field Census Output and Owner Decision
+## Task 4 Checkpoint: Field Census Output and Owner Decision (resolved)
 
-*(Carried verbatim for the checkpoint return below and for the continuation agent that applies the owner's decision.)*
+*(Carried verbatim from the halted checkpoint for the record, plus the owner's reply and how it was applied.)*
 
 ### Full census: 86 fields discovered across 6 live memory stores
 
@@ -284,13 +304,13 @@ pheromone.scope                   pheromone.source                   pheromone.s
 pheromone.strength                pheromone.tags                     pheromone.type
 ```
 
-### The 4 fields with no production writer
+### The 4 fields with no production writer, and what happened to each
 
-| Field | What it's for | Recommendation |
-|---|---|---|
-| `instinct.related_instincts` | A future link between related instincts. | **Retire.** The only code that would ever read this (`pkg/graph`) is doubly orphaned, and 204-CLASSIC-SYNTHESIS.md's own ruling (e) explicitly forbids any plan in this phase from citing `pkg/graph`'s existence as justification for new work -- so nobody in this phase can name a use, by the phase's own prior ruling. |
-| `midden.acknowledge_reason` | A written reason when a reviewer acknowledges a logged failure (pairs with the two fields next to it, which already work: who acknowledged it and when). | **Keep, record as empty for now.** Cheap and plausibly useful -- the acknowledge command would only need one new flag -- but nothing in this phase's own planned work needs it yet. |
-| `learn.parent_id` | A future link from one learned lesson back to the hypothesis it came from. | **Keep, record as empty for now.** Plausibly useful, but nothing in this phase's own planned work needs it yet. |
-| `pheromone.scope` | A future distinction between a project-wide note and a personal one. | **Keep, record as empty for now.** Plausibly useful, but nothing in this phase's own planned work needs it yet. |
+| Field | What it's for | Recommendation | Owner's decision (2026-09-14) | Applied as |
+|---|---|---|---|---|
+| `instinct.related_instincts` | A future link between related instincts. | **Retire.** The only code that would ever read this (`pkg/graph`) is doubly orphaned, and 204-CLASSIC-SYNTHESIS.md's own ruling (e) explicitly forbids any plan in this phase from citing `pkg/graph`'s existence as justification for new work -- so nobody in this phase can name a use, by the phase's own prior ruling. | **mixture (recommendation accepted)** | Moved to `memoryStoreFieldRetired["instinct.related_instincts"]` with `ownerAgreedOn: "2026-09-14"`; both production writers stopped setting it on a new record; `omitempty` added to the struct field; no stored record touched. |
+| `midden.acknowledge_reason` | A written reason when a reviewer acknowledges a logged failure (pairs with the two fields next to it, which already work: who acknowledged it and when). | **Keep, record as empty for now.** Cheap and plausibly useful -- the acknowledge command would only need one new flag -- but nothing in this phase's own planned work needs it yet. | **mixture (recommendation accepted)** | Stays in `memoryStoreFieldExceptions`, reason rewritten to record the owner's 2026-09-14 knowingly-empty decision. |
+| `learn.parent_id` | A future link from one learned lesson back to the hypothesis it came from. | **Keep, record as empty for now.** Plausibly useful, but nothing in this phase's own planned work needs it yet. | **mixture (recommendation accepted)** | Stays in `memoryStoreFieldExceptions`, reason rewritten to record the owner's 2026-09-14 knowingly-empty decision. |
+| `pheromone.scope` | A future distinction between a project-wide note and a personal one. | **Keep, record as empty for now.** Plausibly useful, but nothing in this phase's own planned work needs it yet. | **mixture (recommendation accepted)** | Stays in `memoryStoreFieldExceptions`, reason rewritten to record the owner's 2026-09-14 knowingly-empty decision. |
 
-**Recommended overall answer: mixture** (retire `instinct.related_instincts`, keep the other three recorded-as-empty) -- matching the per-field table above exactly.
+**Owner's answer:** `mixture` -- the recommendation table above, exactly, with no field-specific overrides.

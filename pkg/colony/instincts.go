@@ -99,8 +99,20 @@ type InstinctEntry struct {
 	Confidence         float64                    `json:"confidence"`
 	Provenance         InstinctProvenance         `json:"provenance"`
 	ApplicationHistory []InstinctApplicationEntry `json:"application_history"`
-	RelatedInstincts   []interface{}              `json:"related_instincts"`
-	Archived           bool                       `json:"archived"`
+
+	// RelatedInstincts is retired (204-03-PLAN.md Task 4, LEARN-01,
+	// owner-recorded agreement 2026-09-14: nobody in this phase can name a
+	// use for it -- the only code that would ever read it, pkg/graph, is
+	// doubly orphaned per 204-CLASSIC-SYNTHESIS.md ruling (e), which
+	// forbids any plan in this phase from citing pkg/graph's existence as
+	// justification for new work). No stored record is touched by this
+	// retirement and no data is deleted: the field stays declared, with
+	// omitempty, purely so a pre-retirement record's own
+	// "related_instincts": [] still round-trips on read. No writer sets it
+	// on a newly-created record any longer -- see cmd/instinct.go and
+	// pkg/memory/promote.go, whose entry literals no longer populate it.
+	RelatedInstincts []interface{} `json:"related_instincts,omitempty"`
+	Archived         bool          `json:"archived"`
 
 	// SchemaVersion and Lineage are the SYN-204-02 per-record schema
 	// contract (204-03-PLAN.md Task 1, LEARN-01): SchemaVersion is

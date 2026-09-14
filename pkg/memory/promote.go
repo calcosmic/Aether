@@ -168,10 +168,13 @@ func (s *PromoteService) Promote(ctx context.Context, obs colony.Observation, co
 			OriginLabel:      obs.OriginLabel,
 		},
 		ApplicationHistory: []colony.InstinctApplicationEntry{},
-		RelatedInstincts:   []interface{}{},
-		Archived:           false,
-		SchemaVersion:      colony.CurrentMemorySchemaVersion,
-		Lineage:            &newLineage,
+		// RelatedInstincts is retired (204-03-PLAN.md Task 4, LEARN-01,
+		// owner-recorded agreement 2026-09-14) -- no writer populates it
+		// on a newly-created record; see colony.InstinctEntry's own doc
+		// comment.
+		Archived:      false,
+		SchemaVersion: colony.CurrentMemorySchemaVersion,
+		Lineage:       &newLineage,
 	}
 
 	file.Instincts = append(file.Instincts, entry)
