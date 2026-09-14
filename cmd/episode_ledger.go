@@ -1,0 +1,343 @@
+package cmd
+
+// LEARN-02 (204-04-PLAN.md): the durable, append-only episode and outcome
+// ledger. The one genuine typed event bus this system has (pkg/events.Bus)
+// forgets anything older than events.DefaultTTL (30 days) on every read --
+// correct for a live activity feed, fatal for the record a promotion or
+// rollback decision may need to consult weeks or months later. This file is
+// the permanent record kept BESIDE that live feed, never a second bus and
+// never a second event-shaped type reaching durable storage (204-CLASSIC-
+// SYNTHESIS.md ruling (f), SYN-204-04) -- pkg/events.Bus continues to carry
+// liveness only (cmd/live_events.go emits a live/v1 topic for every episode
+// boundary this file also records durably); this file's own record type
+// carries no field whose Go name or JSON tag matches "timestamp" together
+// with a kind/type-shaped field, and its only writer never performs a raw
+// os.WriteFile/OpenFile/Create -- every write goes through
+// store.UpdateJSONAtomically, exactly like the file it follows in shape,
+// cmd/recruitment_credit.go's recordRecruitmentCredit.
+//
+// Deviation from the plan's action text (Rule 3, blocking -- documented in
+// 204-04-SUMMARY.md): the plan asks this file to declare
+// episodeLedgerSchemaVersion "against the shared constant plan 204-03
+// introduces" (cmd/memory_schema.go's memoryStoreSchemaVersion) and to carry
+// "the shared lineage shape from plan 204-03" (memoryRecordLineage). Plan
+// 204-03 is not a declared dependency of this plan (frontmatter
+// depends_on: ["204-01", "204-02"]) and had not landed in this worktree at
+// implementation time -- referencing either symbol would not compile. This
+// file declares its own local schema-version constant (following
+// pkg/codex/permission_profile.go's PermissionProfileSchemaVersion idiom)
+// and its own minimal lineage shape carrying the same four facts 204-03's
+// own doc comment describes, so this ledger is fully self-contained today
+// and can be migrated onto the shared symbols once 204-03 lands.
+import (
+	"crypto/sha256"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"sort"
+	"strings"
+
+	"github.com/calcosmic/Aether/pkg/codex"
+)
+
+// episodeLedgerPath is the store-relative path recordEpisodeOutcome
+// persists to. A directory of its own, mirroring credit/records.json's own
+// one-store-one-directory convention.
+const episodeLedgerPath = "episodes/ledger.json"
+
+// episodeLedgerSchemaVersion is this ledger's own current schema version.
+// See this file's top-of-file doc comment for why it is not yet the shared
+// plan-204-03 constant.
+const episodeLedgerSchemaVersion = 1
+
+// episodeLedgerRecordKind is the declared, closed vocabulary of every kind
+// of fact this ledger may record.
+type episodeLedgerRecordKind string
+
+const (
+	episodeLedgerRecordKindOpened       episodeLedgerRecordKind = "episode_opened"
+	episodeLedgerRecordKindClosed       episodeLedgerRecordKind = "episode_closed"
+	episodeLedgerRecordKindIntervention episodeLedgerRecordKind = "intervention_recorded"
+)
+
+// episodeLedgerRecordKindVocabulary is the declared, closed set of every
+// record kind -- same completeness convention as
+// recruitmentCreditOutcomeVocabulary/ColonyLiveTopics(): a kind added to the
+// const block above must also be added here.
+var episodeLedgerRecordKindVocabulary = []episodeLedgerRecordKind{
+	episodeLedgerRecordKindOpened,
+	episodeLedgerRecordKindClosed,
+	episodeLedgerRecordKindIntervention,
+}
+
+func episodeLedgerRecordKindNames() []string {
+	names := make([]string, 0, len(episodeLedgerRecordKindVocabulary))
+	for _, k := range episodeLedgerRecordKindVocabulary {
+		names = append(names, string(k))
+	}
+	return names
+}
+
+func episodeLedgerRecordKindDeclared(kind episodeLedgerRecordKind) bool {
+	for _, k := range episodeLedgerRecordKindVocabulary {
+		if k == kind {
+			return true
+		}
+	}
+	return false
+}
+
+// episodeLedgerLineage is this plan's own minimal stand-in for plan
+// 204-03's shared memoryRecordLineage shape -- see this file's top-of-file
+// doc comment. Every field is optional so absence round-trips as absence,
+// mirroring pheromones.json's pointer-backed convention.
+type episodeLedgerLineage struct {
+	ProvenanceKind  string `json:"provenance_kind,omitempty"`
+	SourceID        string `json:"source_id,omitempty"`
+	OutcomeRecordID string `json:"outcome_record_id,omitempty"`
+	RecordedAt      string `json:"recorded_at,omitempty"`
+}
+
+// episodeLedgerRecord is one durable fact about one episode: its identity,
+// what governed it (runtime/policy versions, acceptance and evaluator
+// digests), what it touched (evidence, hard gates, changed decisions), how
+// long it took and what it cost, and how it ended. Every optional field
+// carries omitempty so an unmeasured or inapplicable fact round-trips as
+// absent, never as a zero value that looks deliberate -- Usage and
+// ReportedCostUSD are pointers precisely so an unreported figure is nil,
+// distinct from a real, provider-reported zero.
+type episodeLedgerRecord struct {
+	RecordID           string                  `json:"record_id"`
+	RecordKind         episodeLedgerRecordKind `json:"record_kind"`
+	EpisodeID          string                  `json:"episode_id"`
+	EpisodeKind        string                  `json:"episode_kind,omitempty"`
+	EpisodeRevision    string                  `json:"episode_revision,omitempty"`
+	RuntimeVersion     string                  `json:"runtime_version,omitempty"`
+	PolicyVersion      string                  `json:"policy_version,omitempty"`
+	AcceptanceDigest   string                  `json:"acceptance_digest,omitempty"`
+	EvaluatorDigest    string                  `json:"evaluator_digest,omitempty"`
+	EvidenceIDs        []string                `json:"evidence_ids,omitempty"`
+	HardGateResults    map[string]bool         `json:"hard_gate_results,omitempty"`
+	ChangedDecisionIDs []string                `json:"changed_decision_ids,omitempty"`
+	Interventions      []string                `json:"interventions,omitempty"`
+	StartedAt          string                  `json:"started_at,omitempty"`
+	EndedAt            string                  `json:"ended_at,omitempty"`
+	ElapsedSeconds     float64                 `json:"elapsed_seconds,omitempty"`
+	Usage              *codex.WorkerUsage      `json:"usage,omitempty"`
+	ReportedCostUSD    *float64                `json:"reported_cost_usd,omitempty"`
+	TerminalResult     string                  `json:"terminal_result,omitempty"`
+	Lineage            *episodeLedgerLineage   `json:"lineage,omitempty"`
+}
+
+// episodeLedgerFile is the on-disk container at episodeLedgerPath.
+type episodeLedgerFile struct {
+	SchemaVersion int                   `json:"schema_version"`
+	Entries       []episodeLedgerRecord `json:"entries"`
+}
+
+// episodeLedgerDigestPayload derives the content used for a record's
+// identity. For episode_opened and episode_closed kinds this deliberately
+// excludes every timestamp-bearing field (StartedAt, EndedAt,
+// ElapsedSeconds) so a genuine replay -- the same episode's open or close
+// recorded a second time, at a different wall-clock moment -- collapses to
+// the SAME record id and writes nothing. For intervention_recorded, the
+// timestamp IS part of the identity: two categorically-identical
+// interventions genuinely happening at two different moments are two
+// distinct facts, never a replay of one.
+func episodeLedgerDigestPayload(record episodeLedgerRecord) string {
+	digestSource := record
+	digestSource.RecordID = ""
+	if record.RecordKind != episodeLedgerRecordKindIntervention {
+		digestSource.StartedAt = ""
+		digestSource.EndedAt = ""
+		digestSource.ElapsedSeconds = 0
+	}
+	encoded, err := json.Marshal(digestSource)
+	if err != nil {
+		// A plain struct built entirely of JSON-safe field types never
+		// fails to marshal in practice; fall back to the episode id alone
+		// rather than panicking on an unreachable path.
+		return record.EpisodeID
+	}
+	return string(encoded)
+}
+
+// episodeLedgerRecordID is the deterministic identity key a ledger record
+// is stored and replayed under, digesting with crypto/sha256 the way this
+// repository already derives content-addressed identities (mirroring
+// recruitmentCreditRecordID's role, cmd/recruitment_credit.go). Two facts
+// identical in episode, kind and payload digest are one record.
+func episodeLedgerRecordID(episodeID string, kind episodeLedgerRecordKind, payloadDigest string) string {
+	sum := sha256.Sum256([]byte(episodeID + "|" + string(kind) + "|" + payloadDigest))
+	return fmt.Sprintf("episode:%x", sum)
+}
+
+// errEpisodeLedgerNoChange is the internal replay sentinel
+// recordEpisodeOutcome returns from its own UpdateJSONAtomically mutate
+// closure to abort the write on a replay -- mirroring
+// errRecruitmentCreditNoChange's role in recordRecruitmentCredit.
+var errEpisodeLedgerNoChange = errors.New("episode ledger record already exists")
+
+// recordEpisodeOutcome is the ONE function in cmd/ that writes
+// episodes/ledger.json (TestEpisodeLedgerHasOneWriter enforces this by
+// name). It refuses a record with no episode identifier by name; refuses a
+// close for an episode with no open record by name; returns the stored
+// record with a false credited flag on replay; and never mutates an
+// existing record under any input.
+func recordEpisodeOutcome(record episodeLedgerRecord) (episodeLedgerRecord, bool, error) {
+	if store == nil {
+		return episodeLedgerRecord{}, false, fmt.Errorf("no store initialized")
+	}
+	episodeID := strings.TrimSpace(record.EpisodeID)
+	if episodeID == "" {
+		return episodeLedgerRecord{}, false, fmt.Errorf("episode ledger requires a non-empty episode id")
+	}
+	record.EpisodeID = episodeID
+	if !episodeLedgerRecordKindDeclared(record.RecordKind) {
+		return episodeLedgerRecord{}, false, fmt.Errorf(
+			"episode ledger record kind %q is not in the declared vocabulary %v", record.RecordKind, episodeLedgerRecordKindNames(),
+		)
+	}
+
+	var file episodeLedgerFile
+	var result episodeLedgerRecord
+	updateErr := store.UpdateJSONAtomically(episodeLedgerPath, &file, func() error {
+		file.SchemaVersion = episodeLedgerSchemaVersion
+		if record.RecordKind == episodeLedgerRecordKindClosed {
+			hasOpen := false
+			for _, existing := range file.Entries {
+				if existing.EpisodeID == episodeID && existing.RecordKind == episodeLedgerRecordKindOpened {
+					hasOpen = true
+					break
+				}
+			}
+			if !hasOpen {
+				return fmt.Errorf("episode ledger refuses to close episode %q: no open record exists for it", episodeID)
+			}
+		}
+
+		recordID := episodeLedgerRecordID(episodeID, record.RecordKind, episodeLedgerDigestPayload(record))
+		for _, existing := range file.Entries {
+			if existing.RecordID == recordID {
+				result = existing
+				return errEpisodeLedgerNoChange
+			}
+		}
+		record.RecordID = recordID
+		file.Entries = append(file.Entries, record)
+		result = record
+		return nil
+	})
+	if updateErr != nil {
+		if errors.Is(updateErr, errEpisodeLedgerNoChange) {
+			return result, false, nil
+		}
+		return episodeLedgerRecord{}, false, updateErr
+	}
+	return result, true, nil
+}
+
+// episodeLedgerRecordSortTimestamp returns the timestamp readEpisodeLedger
+// orders by: a record's own ended time when it has one, otherwise its
+// started time -- so a still-open episode's record sorts by when it began.
+func episodeLedgerRecordSortTimestamp(record episodeLedgerRecord) string {
+	if record.EndedAt != "" {
+		return record.EndedAt
+	}
+	return record.StartedAt
+}
+
+// sortEpisodeLedgerRecords orders records by timestamp ascending, with the
+// record identifier as the tie-break -- an explicit, deterministic
+// tie-break so repeated reads of identical underlying data always produce
+// byte-identical output.
+func sortEpisodeLedgerRecords(records []episodeLedgerRecord) {
+	sort.SliceStable(records, func(i, j int) bool {
+		ti := episodeLedgerRecordSortTimestamp(records[i])
+		tj := episodeLedgerRecordSortTimestamp(records[j])
+		if ti != tj {
+			return ti < tj
+		}
+		return records[i].RecordID < records[j].RecordID
+	})
+}
+
+// readEpisodeLedger returns every stored ledger record, ordered by
+// sortEpisodeLedgerRecords. Returns an empty slice (never an error) when
+// nothing has ever been recorded.
+func readEpisodeLedger() ([]episodeLedgerRecord, error) {
+	if store == nil {
+		return nil, fmt.Errorf("no store initialized")
+	}
+	var file episodeLedgerFile
+	if err := store.LoadJSON(episodeLedgerPath, &file); err != nil {
+		return []episodeLedgerRecord{}, nil
+	}
+	records := append([]episodeLedgerRecord{}, file.Entries...)
+	sortEpisodeLedgerRecords(records)
+	return records, nil
+}
+
+// episodeLedgerForEpisode returns every record naming episodeID, in the
+// same deterministic order readEpisodeLedger uses.
+func episodeLedgerForEpisode(episodeID string) ([]episodeLedgerRecord, error) {
+	episodeID = strings.TrimSpace(episodeID)
+	if episodeID == "" {
+		return []episodeLedgerRecord{}, nil
+	}
+	all, err := readEpisodeLedger()
+	if err != nil {
+		return nil, err
+	}
+	var matches []episodeLedgerRecord
+	for _, r := range all {
+		if r.EpisodeID == episodeID {
+			matches = append(matches, r)
+		}
+	}
+	if matches == nil {
+		matches = []episodeLedgerRecord{}
+	}
+	return matches, nil
+}
+
+// episodeLedgerTerminalRecord returns episodeID's own episode_closed record,
+// if one has been written, and ok=false otherwise -- an episode with an
+// open record and no terminal record is unfinished, never rendered as a
+// success and never as absent.
+func episodeLedgerTerminalRecord(records []episodeLedgerRecord, episodeID string) (episodeLedgerRecord, bool) {
+	for _, r := range records {
+		if r.EpisodeID == episodeID && r.RecordKind == episodeLedgerRecordKindClosed {
+			return r, true
+		}
+	}
+	return episodeLedgerRecord{}, false
+}
+
+// episodeLedgerOpenRecord returns episodeID's own episode_opened record, if
+// one has been written, and ok=false otherwise.
+func episodeLedgerOpenRecord(records []episodeLedgerRecord, episodeID string) (episodeLedgerRecord, bool) {
+	for _, r := range records {
+		if r.EpisodeID == episodeID && r.RecordKind == episodeLedgerRecordKindOpened {
+			return r, true
+		}
+	}
+	return episodeLedgerRecord{}, false
+}
+
+// episodeLedgerEpisodeIDs returns the distinct set of episode ids present
+// across records, in first-seen order over records' own already-sorted
+// (timestamp-ascending) order -- a stable, deterministic enumeration for
+// the derived views below.
+func episodeLedgerEpisodeIDs(records []episodeLedgerRecord) []string {
+	seen := map[string]bool{}
+	var ids []string
+	for _, r := range records {
+		if seen[r.EpisodeID] {
+			continue
+		}
+		seen[r.EpisodeID] = true
+		ids = append(ids, r.EpisodeID)
+	}
+	return ids
+}
