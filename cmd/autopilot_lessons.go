@@ -62,17 +62,28 @@ func activePlanLessonBoundary(plan colony.Plan) (string, time.Time, error) {
 // confirmedAutopilotLessonsSincePlan is a pure selector over the live plan and
 // the real learn.Entry shape written by captureContinueLearning. It performs
 // no promotion and reads no raw observation/memory stores.
+//
+// LEARN-01 (204-02-PLAN.md Task 2, ruling (b)): status admission runs
+// through the shared vocabulary (learningVerifiedEntries,
+// cmd/learning_status_vocabulary.go) rather than its own inline status
+// comparison -- a hypothesis-status entry is refused here exactly as a
+// disproven one already was, closing the same gap ruling (b) named at
+// cmd/colony_prime_context.go's render filter. Every OTHER admission rule
+// below (the phase and evidence-phase floors, the blocked classification,
+// the plan-revision boundary, the all-gates-passed requirement, and the
+// all-workers-completed requirement) is stronger than a status check, not a
+// substitute for it, and is unchanged.
 func confirmedAutopilotLessonsSincePlan(plan colony.Plan, entries []learn.Entry) ([]confirmedAutopilotLesson, error) {
 	revisionID, boundary, err := activePlanLessonBoundary(plan)
 	if err != nil {
 		return nil, err
 	}
 
+	entries = learningVerifiedEntries(entries)
 	candidates := make([]confirmedAutopilotLesson, 0, len(entries))
 	for _, entry := range entries {
 		content := strings.TrimSpace(entry.Content)
-		status := strings.ToLower(strings.TrimSpace(entry.Status))
-		if entry.Phase <= 0 || entry.Evidence.Phase <= 0 || content == "" || entry.Classification == learn.ClassBlocked || status == learn.StatusDisproven || status == "blocked" {
+		if entry.Phase <= 0 || entry.Evidence.Phase <= 0 || content == "" || entry.Classification == learn.ClassBlocked {
 			continue
 		}
 		evidenceAt, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(entry.Evidence.Timestamp))

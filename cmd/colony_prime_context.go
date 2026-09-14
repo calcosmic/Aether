@@ -721,21 +721,41 @@ func buildColonyPrimeOutputOpts(opts colonyPrimeOptions) colonyPrimeOutput {
 
 	// Learned Memory -- durable learning entries from successful builds (D-13, D-14, D-15, HIVE-03)
 	// D-15: colony-prime re-assembles per dispatch, so the snapshot refreshes between waves automatically.
+	//
+	// LEARN-01 (204-02-PLAN.md Task 2, ruling (b)): split into two sections
+	// by the shared status vocabulary (cmd/learning_status_vocabulary.go) --
+	// a hypothesis-status entry is never rendered under the verified
+	// heading. The entry cap below is applied ONCE, across both sections
+	// combined (the same at-most-20-entries fetch this section always used),
+	// so the context budget does not grow.
 	learnStore := learn.NewColonyStore(store)
 	learnEntries, _ := learnStore.List(learn.EntryFilter{
 		MinConfidence: 0.3, // filter out very low confidence
-		Limit:         20,  // cap entries to prevent budget exhaustion (Pitfall 5)
+		Limit:         20,  // cap entries (combined, across both sections below) to prevent budget exhaustion (Pitfall 5)
 	})
-	if len(learnEntries) > 0 {
-		var learnSB strings.Builder
-		writeSectionHeader(&learnSB, "learned_memory", "## LEARNED MEMORY (Verified Outcomes)\n\n")
-		for _, entry := range learnEntries {
-			learnSB.WriteString(fmtOrFallback("learned_memory", func(t *sectionTemplate) string { return t.EntryFormat }, "- [Phase %d] %s (confidence: %.0f%%, classification: %s)\n",
+	// renderLearnedMemorySection computes the content and D-13 scores shared
+	// by both sections below. It deliberately returns values rather than
+	// appending to sections itself, so each call site below still writes its
+	// own colonyPrimeSection{name: "<literal>", ...} composite literal --
+	// memoryPackPartNames (cmd/capsule_writer_invariant_198_2_test.go)
+	// mechanically discovers every memory-pack part by scanning for exactly
+	// that literal-string "name:" field shape, so the two part names below
+	// must stay literal, never a shared variable.
+	renderLearnedMemorySection := func(sectionName, heading string, entries []learn.Entry) (content string, freshness, confidence float64, ok bool) {
+		if len(entries) == 0 {
+			// An empty section writes no heading at all -- an empty heading
+			// is not an honest section.
+			return "", 0, 0, false
+		}
+		var sb strings.Builder
+		writeSectionHeader(&sb, sectionName, heading)
+		for _, entry := range entries {
+			sb.WriteString(fmtOrFallback(sectionName, func(t *sectionTemplate) string { return t.EntryFormat }, "- [Phase %d] %s (confidence: %.0f%%, classification: %s)\n",
 				entry.Phase, entry.Content, entry.Confidence*100, entry.Classification))
 		}
 
 		// Compute scores per D-13: phase -> priority, recency -> freshness, confidence -> confirmation
-		latestEntry := learnEntries[len(learnEntries)-1]
+		latestEntry := entries[len(entries)-1]
 		learnFreshness := 0.5
 		if latestEntry.Evidence.Timestamp != "" {
 			if t, err := time.Parse(time.RFC3339, latestEntry.Evidence.Timestamp); err == nil {
@@ -750,22 +770,36 @@ func buildColonyPrimeOutputOpts(opts colonyPrimeOptions) colonyPrimeOutput {
 			}
 		}
 		learnConfidence := 0.5
-		for _, e := range learnEntries {
-			learnConfidence += e.Confidence / float64(len(learnEntries))
+		for _, e := range entries {
+			learnConfidence += e.Confidence / float64(len(entries))
 		}
 		if learnConfidence > 1.0 {
 			learnConfidence = 1.0
 		}
-
+		return sb.String(), learnFreshness, learnConfidence, true
+	}
+	if content, freshness, confidence, ok := renderLearnedMemorySection("learned_memory", learnedMemoryVerifiedHeading, learningVerifiedEntries(learnEntries)); ok {
 		sections = append(sections, colonyPrimeSection{
 			name:              "learned_memory",
 			title:             "Learned Memory",
 			source:            filepath.Join(store.BasePath(), "entries.json"),
-			content:           learnSB.String(),
+			content:           content,
 			priority:          5, // same as global queen wisdom (per D-13)
-			freshnessScore:    learnFreshness,
-			confirmationScore: learnConfidence,
+			freshnessScore:    freshness,
+			confirmationScore: confidence,
 			relevanceScore:    sectionRelevanceScore("learned_memory"),
+		})
+	}
+	if content, freshness, confidence, ok := renderLearnedMemorySection("learned_memory_unverified", learnedMemoryUnverifiedHeading, learningUnverifiedEntries(learnEntries)); ok {
+		sections = append(sections, colonyPrimeSection{
+			name:              "learned_memory_unverified",
+			title:             "Learned Memory (Unverified)",
+			source:            filepath.Join(store.BasePath(), "entries.json"),
+			content:           content,
+			priority:          5, // same priority tier as the verified section
+			freshnessScore:    freshness,
+			confirmationScore: confidence,
+			relevanceScore:    sectionRelevanceScore("learned_memory_unverified"),
 		})
 	}
 

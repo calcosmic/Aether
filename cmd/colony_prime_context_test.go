@@ -212,7 +212,12 @@ section_templates:
 			"content":        "learned something",
 			"confidence":     0.85,
 			"classification": "pattern",
-			"evidence":       map[string]interface{}{"timestamp": "2024-01-01T00:00:00Z"},
+			// LEARN-01 (204-02-PLAN.md Task 2): explicit "validated" status so
+			// this fixture renders under the verified heading, exercising the
+			// custom template overrides / section presence these tests are
+			// actually about -- not the status-admission behavior itself.
+			"status":   "validated",
+			"evidence": map[string]interface{}{"timestamp": "2024-01-01T00:00:00Z"},
 		},
 	}
 	if err := s.SaveJSON("entries.json", entries); err != nil {
@@ -886,7 +891,12 @@ section_templates:
 			"content":        "learned something",
 			"confidence":     0.85,
 			"classification": "pattern",
-			"evidence":       map[string]interface{}{"timestamp": "2024-01-01T00:00:00Z"},
+			// LEARN-01 (204-02-PLAN.md Task 2): explicit "validated" status so
+			// this fixture renders under the verified heading, exercising the
+			// custom template overrides / section presence these tests are
+			// actually about -- not the status-admission behavior itself.
+			"status":   "validated",
+			"evidence": map[string]interface{}{"timestamp": "2024-01-01T00:00:00Z"},
 		},
 	}
 	if err := s.SaveJSON("entries.json", entries); err != nil {
@@ -982,7 +992,12 @@ func buildRichColonyPrimeFixture(t *testing.T, tmpDir string, dataDir string) *s
 			"content":        "learned something",
 			"confidence":     0.85,
 			"classification": "pattern",
-			"evidence":       map[string]interface{}{"timestamp": "2024-01-01T00:00:00Z"},
+			// LEARN-01 (204-02-PLAN.md Task 2): explicit "validated" status so
+			// this fixture renders under the verified heading, exercising the
+			// custom template overrides / section presence these tests are
+			// actually about -- not the status-admission behavior itself.
+			"status":   "validated",
+			"evidence": map[string]interface{}{"timestamp": "2024-01-01T00:00:00Z"},
 		},
 	}
 	if err := s.SaveJSON("entries.json", entries); err != nil {

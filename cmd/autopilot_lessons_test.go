@@ -15,7 +15,12 @@ func autopilotLessonFixture(boundary time.Time) learn.Entry {
 		Classification: learn.ClassRepoLocal,
 		CreatedAt:      boundary.Add(time.Hour).Format(time.RFC3339Nano),
 		Phase:          2,
-		Status:         learn.StatusHypothesis,
+		// LEARN-01 (204-02-PLAN.md Task 2): admission now requires a
+		// genuinely validated status (learningVerifiedEntries,
+		// cmd/learning_status_vocabulary.go) -- this fixture represents an
+		// entry that passes every admission rule, so its status must
+		// genuinely be validated, not merely non-disproven.
+		Status: learn.StatusValidated,
 		Evidence: learn.Evidence{
 			RunID: "run-2",
 			Phase: 2,
