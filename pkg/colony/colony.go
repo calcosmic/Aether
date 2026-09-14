@@ -360,19 +360,47 @@ type PendingSuggestion struct {
 	// lives in that history file instead.
 	Action   *string `json:"action,omitempty"`
 	ActionAt *string `json:"action_at,omitempty"`
+
+	// SkillName, SkillSourceRunID, SkillLearningEntryID and SkillConfidence
+	// carry a difficulty-triggered skill candidate's own fields when Origin
+	// is PendingOriginSkillProposal -- nil for every other origin (LEARN-07,
+	// 204-CLASSIC-SYNTHESIS.md ruling (d)). Content already carries the
+	// generated skill markdown body; these four name the skill and its
+	// provenance so approving it can create the real skill, and so its
+	// provenance is nameable without opening a file.
+	SkillName            *string  `json:"skill_name,omitempty"`
+	SkillSourceRunID     *string  `json:"skill_source_run_id,omitempty"`
+	SkillLearningEntryID *string  `json:"skill_learning_entry_id,omitempty"`
+	SkillConfidence      *float64 `json:"skill_confidence,omitempty"`
+
+	// CanaryCandidateID links a queued item whose Origin is
+	// PendingOriginCanaryCandidate back to the quarantined canary run
+	// (cmd/rollback.go's canaryRun, keyed by candidate id) it names, so
+	// approving it releases exactly that run's quarantine (LEARN-07).
+	CanaryCandidateID *string `json:"canary_candidate_id,omitempty"`
 }
 
 // Origin values a queued item may declare. PendingOriginSuggestion is also
 // the read-time fallback for a legacy item with no Origin field.
+// PendingOriginSkillProposal and PendingOriginCanaryCandidate are LEARN-07's
+// two additions (204-09-PLAN.md Task 3): a difficulty-triggered skill
+// candidate, and a canary candidate quarantined after a regression -- both
+// route through this SAME queue, never a second approval surface.
 const (
-	PendingOriginSuggestion = "suggestion"
-	PendingOriginImport     = "import"
+	PendingOriginSuggestion      = "suggestion"
+	PendingOriginImport          = "import"
+	PendingOriginSkillProposal   = "skill_proposal"
+	PendingOriginCanaryCandidate = "canary_candidate"
 )
 
-// PendingOrigins returns the two origin categories a queued item may
-// declare.
+// PendingOrigins returns every origin category a queued item may declare.
 func PendingOrigins() []string {
-	return []string{PendingOriginSuggestion, PendingOriginImport}
+	return []string{
+		PendingOriginSuggestion,
+		PendingOriginImport,
+		PendingOriginSkillProposal,
+		PendingOriginCanaryCandidate,
+	}
 }
 
 // Action values recorded on a queued item once the owner has decided it.
