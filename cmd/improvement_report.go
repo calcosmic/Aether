@@ -248,12 +248,19 @@ type improvementReportInterventionEntry struct {
 	Category  string
 }
 
-// collectPreventableInterventions returns one entry per non-empty category
-// string recorded on every intervention_recorded record in records. An
-// episode's own records showing the runtime would otherwise have proceeded
-// is exactly what an intervention_recorded record IS -- it is written only
-// when an owner action interrupted a run that was not itself already
-// terminal (emitColonyLiveInterventionRecorded's own call sites).
+// collectPreventableInterventions returns one entry per DECLARED
+// episodeInterventionKind category recorded on every intervention_recorded
+// record in records (204-13, D-10). An episode's own records showing the
+// runtime would otherwise have proceeded is exactly what an
+// intervention_recorded record IS -- it is written only when an owner
+// action interrupted a run that was not itself already terminal
+// (emitColonyLiveInterventionRecorded's own call sites). A category outside
+// the declared vocabulary is never silently counted into this figure --
+// collectUnrecognizedInterventionCategories reports it by name instead, so
+// an episode carrying only an unrecognised category falls through to
+// buildImprovementReport's existing UnclassifiedEpisodes list rather than
+// inflating the preventable-intervention ratio on text no writer here ever
+// declared.
 func collectPreventableInterventions(records []episodeLedgerRecord) []improvementReportInterventionEntry {
 	var entries []improvementReportInterventionEntry
 	for _, r := range records {
@@ -263,6 +270,9 @@ func collectPreventableInterventions(records []episodeLedgerRecord) []improvemen
 		for _, category := range r.Interventions {
 			category = strings.TrimSpace(category)
 			if category == "" {
+				continue
+			}
+			if !episodeInterventionKindDeclared(episodeInterventionKind(category)) {
 				continue
 			}
 			entries = append(entries, improvementReportInterventionEntry{
@@ -275,6 +285,37 @@ func collectPreventableInterventions(records []episodeLedgerRecord) []improvemen
 		entries = []improvementReportInterventionEntry{}
 	}
 	return entries
+}
+
+// collectUnrecognizedInterventionCategories returns, in "episodeID: category"
+// form, every intervention category recorded on an intervention_recorded
+// record that is NOT in the declared episodeInterventionKind vocabulary
+// (204-13, D-10) -- surfaced by name rather than either dropped or promoted
+// into the preventable-intervention figure. Callers fold this into the
+// report's existing UnclassifiedEpisodes-shaped output rather than a new
+// combined-score-adjacent field (TestTwoFiguresAreNeverCombined keeps
+// improvementReport's field set closed).
+func collectUnrecognizedInterventionCategories(records []episodeLedgerRecord) []string {
+	var unrecognized []string
+	for _, r := range records {
+		if r.RecordKind != episodeLedgerRecordKindIntervention {
+			continue
+		}
+		for _, category := range r.Interventions {
+			category = strings.TrimSpace(category)
+			if category == "" {
+				continue
+			}
+			if episodeInterventionKindDeclared(episodeInterventionKind(category)) {
+				continue
+			}
+			unrecognized = append(unrecognized, fmt.Sprintf("%s: %s (unrecognized intervention category)", r.EpisodeID, category))
+		}
+	}
+	if unrecognized == nil {
+		unrecognized = []string{}
+	}
+	return unrecognized
 }
 
 // improvementReportRow is one episode's row in the report: whether it

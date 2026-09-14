@@ -443,6 +443,7 @@ func releaseCanaryQuarantine(candidateID, releasedBy string) (canaryRun, error) 
 	now := time.Now().UTC().Format(time.RFC3339)
 	var result canaryRun
 	found := false
+	released := false
 	var file canaryRunFile
 	updateErr := store.UpdateJSONAtomically(canaryRunStorePath, &file, func() error {
 		for i := range file.Entries {
@@ -458,6 +459,7 @@ func releaseCanaryQuarantine(candidateID, releasedBy string) (canaryRun, error) 
 			file.Entries[i].QuarantineReleasedAt = now
 			file.Entries[i].QuarantineReleasedBy = releasedBy
 			result = file.Entries[i]
+			released = true
 			return nil
 		}
 		return nil
@@ -467,6 +469,19 @@ func releaseCanaryQuarantine(candidateID, releasedBy string) (canaryRun, error) 
 	}
 	if !found {
 		return canaryRun{}, fmt.Errorf("no canary run recorded for candidate %q", candidateID)
+	}
+	if released {
+		// 204-13 (SC3a/SC3b, D-10): recorded only on a GENUINE Quarantined
+		// true-to-false transition above, never for a release call that
+		// found the candidate already unquarantined (a no-op, not an
+		// intervention). This action has no phase of its own -- it is a
+		// standalone owner approval, resolved the same
+		// build-then-check-then-fallback way currentLiveRecoveryEpisode
+		// already resolves a phase-less recovery decision. Non-blocking:
+		// emitColonyLiveInterventionRecorded's own contract never fails
+		// this release.
+		episodeID, episodeKind := currentLiveRecoveryEpisode(0)
+		emitColonyLiveInterventionRecorded(episodeID, episodeKind, episodeInterventionKindReleasedQuarantine)
 	}
 	return result, nil
 }

@@ -226,25 +226,32 @@ func emitColonyLiveOutcomeRecorded(episodeID, episodeKind string, record episode
 	}
 }
 
-// emitColonyLiveInterventionRecorded (204-04, LEARN-02) publishes
-// LiveTopicInterventionRecorded and writes a durable intervention_recorded
-// record naming what the owner did (e.g. "declined a forced reviewer").
-func emitColonyLiveInterventionRecorded(episodeID, episodeKind, intervention string) {
-	intervention = strings.TrimSpace(intervention)
-	if intervention == "" {
+// emitColonyLiveInterventionRecorded (204-04, LEARN-02; vocabulary and
+// validation added 204-13, D-10) publishes LiveTopicInterventionRecorded and
+// writes a durable intervention_recorded record naming what the owner did.
+// intervention MUST be a declared episodeInterventionKind
+// (episodeInterventionKindDeclared) -- an undeclared value is refused: a
+// warning is written to stderr and NOTHING is emitted or recorded, keeping
+// this function's existing non-blocking contract (a refusal here can never
+// fail the caller's own action). The durable record's Interventions field
+// is set to a single-element slice holding the declared kind's own string
+// form.
+func emitColonyLiveInterventionRecorded(episodeID, episodeKind string, intervention episodeInterventionKind) {
+	if !episodeInterventionKindDeclared(intervention) {
+		fmt.Fprintf(os.Stderr, "warning: refusing to record undeclared intervention kind %q -- declared kinds are %v\n", intervention, episodeInterventionKindNames())
 		return
 	}
 	emitColonyLive(events.LiveTopicInterventionRecorded, events.ColonyLivePayload{
 		EpisodeID:   episodeID,
 		EpisodeKind: episodeKind,
-		Reason:      intervention,
+		Reason:      string(intervention),
 	})
 	if _, _, err := recordEpisodeOutcome(episodeLedgerRecord{
 		RecordKind:    episodeLedgerRecordKindIntervention,
 		EpisodeID:     episodeID,
 		EpisodeKind:   episodeKind,
 		StartedAt:     time.Now().UTC().Format(time.RFC3339),
-		Interventions: []string{intervention},
+		Interventions: []string{string(intervention)},
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: failed to record durable intervention for %q: %v\n", episodeID, err)
 	}
