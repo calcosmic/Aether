@@ -596,5 +596,15 @@ func resolveForcedReviewerWaiverPendingDecision(question, answer string, phaseID
 	}); err != nil {
 		return PendingDecision{}, false, err
 	}
+	if found {
+		// 204-13 (SC3a/SC3b, D-10): this is the single site that fires
+		// exactly once per real, genuine waiver -- inside the same
+		// transaction that resolved the pending row, only when a matching
+		// unresolved row was actually found and flipped. Non-blocking:
+		// emitColonyLiveInterventionRecorded's own contract never fails
+		// this resolution.
+		episodeID, episodeKind := currentLiveRecoveryEpisode(phaseID)
+		emitColonyLiveInterventionRecorded(episodeID, episodeKind, episodeInterventionKindDeclinedForcedReviewer)
+	}
 	return resolved, found, nil
 }

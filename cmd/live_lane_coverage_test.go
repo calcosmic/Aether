@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -360,38 +359,35 @@ func TestLiveLaneHelpersMapOnlyKnownFields(t *testing.T) {
 // drive persisted, in emission order.
 type liveLaneEntryPoint func(t *testing.T) []liveTestEvent
 
+// driveSwarmLiveLane (204-13, Task 1) drives the real swarm entry point,
+// runSwarmDestroy, end to end -- the same function `aether swarm` itself
+// calls -- with a swapped worker invoker standing in for the real worker
+// subprocess, exactly like TestSwarmDestroyRunsWorkerWavesAndReturnsStructured
+// Result already does (cmd/swarm_cmd_test.go). This used to hand-mirror
+// runSwarmDestroy's own wave emission with two direct emitColonyLive calls
+// around a bare executeSwarmWave call, which meant the episode-boundary
+// assertion this file's callers make was actually testing this file, not
+// production. Driving the real entry point end to end was viable here (no
+// production extraction needed): newSwarmWorkerInvoker is already a
+// package-level swap seam, and runSwarmDestroy's own preflight
+// (swarmInterventionPreflight -> loadLifecycleFacts) degrades gracefully
+// when no colony state exists, exactly as it does for every other swarm
+// test in this package that runs without one.
 func driveSwarmLiveLane(t *testing.T) []liveTestEvent {
 	t.Helper()
 	saveGlobals(t)
 	s, root := newTestStore(t)
 	store = s
 
-	target := "Auth panic when session is missing"
-	swarmID := "swarm-live-coverage-test"
-	if err := initializeSwarmRun(swarmID); err != nil {
-		t.Fatalf("initialize swarm run: %v", err)
-	}
-	investigation := buildSwarmInvestigationPlans(root, target)
-	if len(investigation) == 0 {
-		t.Fatalf("fixture is broken: buildSwarmInvestigationPlans returned no plans for %q", target)
-	}
-	wave := swarmPlansWaveNumber(investigation)
-	ctx := context.Background()
+	originalInvoker := newSwarmWorkerInvoker
 	invoker := &swarmTestInvoker{}
+	newSwarmWorkerInvoker = func() codex.WorkerInvoker { return invoker }
+	t.Cleanup(func() { newSwarmWorkerInvoker = originalInvoker })
 
-	// Mirrors runSwarmDestroy's own wave-boundary emission
-	// (cmd/swarm_cmd.go) around executeSwarmWave -- the same pattern
-	// 202-02's TestSwarmInvestigationWaveReachesTheLiveWatchScreen already
-	// established for driving the Swarm lane in a test.
-	emitColonyLive(events.LiveTopicWaveStarted, events.ColonyLivePayload{
-		EpisodeID: swarmID, EpisodeKind: events.EpisodeKindSwarm, Wave: wave, Status: "starting",
-	})
-	if _, err := executeSwarmWave(ctx, root, swarmID, target, investigation, "", invoker, true); err != nil {
-		t.Fatalf("executeSwarmWave: %v", err)
+	target := "Auth panic when session is missing"
+	if _, err := runSwarmDestroy(root, target); err != nil {
+		t.Fatalf("runSwarmDestroy: %v", err)
 	}
-	emitColonyLive(events.LiveTopicWaveEnded, events.ColonyLivePayload{
-		EpisodeID: swarmID, EpisodeKind: events.EpisodeKindSwarm, Wave: wave, Status: "completed",
-	})
 	return liveEventsSince(t)
 }
 

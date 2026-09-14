@@ -322,6 +322,21 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 		return nil, fmt.Errorf("initialize swarm workspace: %w", err)
 	}
 
+	// 204-13 (SC3b, D-06): the swarm lane's own durable episode boundary,
+	// on the SAME episode id the wave events above already carry --
+	// mirroring cmd/codex_build.go's runCodexBuildWithOptions three-line
+	// shape (emitColonyLiveEpisodeStarted, then a deferred
+	// emitColonyLiveEpisodeEnded reading runStatus) so this run's episode
+	// closes on EVERY return path below, including the investigation-wave
+	// error return, the timeout return, and the interrupted-episode paths.
+	// runStatus is the same variable finishRuntimeSpawnRun's own deferred
+	// call above reads, so the durable episode's terminal result and the
+	// spawn-run record's status can never disagree.
+	emitColonyLiveEpisodeStarted(swarmID, events.EpisodeKindSwarm)
+	defer func() {
+		emitColonyLiveEpisodeEnded(swarmID, events.EpisodeKindSwarm, runStatus)
+	}()
+
 	investigation := buildSwarmInvestigationPlans(root, target)
 	investigationWave := swarmPlansWaveNumber(investigation)
 	emitVisualProgress(renderSwarmDispatchPreview(swarmID, target, investigation, "Investigation Wave"))

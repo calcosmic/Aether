@@ -83,6 +83,69 @@ func episodeLedgerRecordKindDeclared(kind episodeLedgerRecordKind) bool {
 	return false
 }
 
+// episodeInterventionKind (204-13, SC3a/SC3b, D-10) is the declared, closed
+// vocabulary of every owner intervention this program can actually observe
+// and record today -- the identical shape episodeLedgerRecordKind above
+// already uses. Before this type existed, episodeLedgerRecord.Interventions
+// was a free-form string slice with no declared vocabulary and no
+// production writer at all, so collectPreventableInterventions
+// (cmd/improvement_report.go) would have treated every distinct sentence as
+// its own category the moment something DID write one. Add a member here
+// ONLY when a real production call site exists to write it --
+// TestEveryInterventionKindHasALiveWriter fails a declared member with no
+// writer by name, which is deliberate: a speculative member with no writer
+// is exactly the failure mode this vocabulary exists to prevent.
+type episodeInterventionKind string
+
+const (
+	// episodeInterventionKindAnsweredWorkerQuestion is recorded when the
+	// owner answers a worker's open decision through recordDecisionAnswer
+	// (cmd/handoff_decisions_cmd.go) -- excluding the seal ceremony's own
+	// internal "finish anyway?" confirmation gate, which is not a worker's
+	// question.
+	episodeInterventionKindAnsweredWorkerQuestion episodeInterventionKind = "answered a worker's question"
+	// episodeInterventionKindDeclinedForcedReviewer is recorded when the
+	// owner declines a forced reviewer through
+	// resolveForcedReviewerWaiverPendingDecision succeeding
+	// (cmd/forced_reviewer_waiver.go) -- the single site that fires exactly
+	// once per real, genuine waiver.
+	episodeInterventionKindDeclinedForcedReviewer episodeInterventionKind = "declined a forced reviewer"
+	// episodeInterventionKindReleasedQuarantine is recorded when the owner
+	// releases a quarantined canary candidate through a genuine
+	// Quarantined-true-to-false transition inside releaseCanaryQuarantine
+	// (cmd/rollback.go) -- never for a release call that finds the
+	// candidate already unquarantined (a no-op, not an intervention).
+	episodeInterventionKindReleasedQuarantine episodeInterventionKind = "released a quarantined candidate"
+)
+
+// episodeInterventionKindVocabulary is the declared, closed set of every
+// intervention kind. Mirrors the episodeLedgerRecordKindVocabulary /
+// recruitmentCreditOutcomeVocabulary completeness convention: a kind added
+// to the const block above must also be added here, or
+// TestInterventionKindVocabularyIsClosed fails.
+var episodeInterventionKindVocabulary = []episodeInterventionKind{
+	episodeInterventionKindAnsweredWorkerQuestion,
+	episodeInterventionKindDeclinedForcedReviewer,
+	episodeInterventionKindReleasedQuarantine,
+}
+
+func episodeInterventionKindNames() []string {
+	names := make([]string, 0, len(episodeInterventionKindVocabulary))
+	for _, k := range episodeInterventionKindVocabulary {
+		names = append(names, string(k))
+	}
+	return names
+}
+
+func episodeInterventionKindDeclared(kind episodeInterventionKind) bool {
+	for _, k := range episodeInterventionKindVocabulary {
+		if k == kind {
+			return true
+		}
+	}
+	return false
+}
+
 // episodeLedgerRecord is one durable fact about one episode: its identity,
 // what governed it (runtime/policy versions, acceptance and evaluator
 // digests), what it touched (evidence, hard gates, changed decisions), how
@@ -104,13 +167,21 @@ type episodeLedgerRecord struct {
 	EvidenceIDs        []string                `json:"evidence_ids,omitempty"`
 	HardGateResults    map[string]bool         `json:"hard_gate_results,omitempty"`
 	ChangedDecisionIDs []string                `json:"changed_decision_ids,omitempty"`
-	Interventions      []string                `json:"interventions,omitempty"`
-	StartedAt          string                  `json:"started_at,omitempty"`
-	EndedAt            string                  `json:"ended_at,omitempty"`
-	ElapsedSeconds     float64                 `json:"elapsed_seconds,omitempty"`
-	Usage              *codex.WorkerUsage      `json:"usage,omitempty"`
-	ReportedCostUSD    *float64                `json:"reported_cost_usd,omitempty"`
-	TerminalResult     string                  `json:"terminal_result,omitempty"`
+	// Interventions stays a []string on disk (JSON-compatible, never the
+	// episodeInterventionKind type itself), but every element written by
+	// the one production writer, emitColonyLiveInterventionRecorded, is a
+	// declared episodeInterventionKind's string form -- validated before
+	// the write, never after. No legacy record on disk carries a free-form
+	// intervention string: before 204-13, emitColonyLiveInterventionRecorded
+	// had zero production callers (confirmed by grep across cmd/), so no
+	// migration of existing data is required or written here.
+	Interventions   []string           `json:"interventions,omitempty"`
+	StartedAt       string             `json:"started_at,omitempty"`
+	EndedAt         string             `json:"ended_at,omitempty"`
+	ElapsedSeconds  float64            `json:"elapsed_seconds,omitempty"`
+	Usage           *codex.WorkerUsage `json:"usage,omitempty"`
+	ReportedCostUSD *float64           `json:"reported_cost_usd,omitempty"`
+	TerminalResult  string             `json:"terminal_result,omitempty"`
 	// SchemaVersion and Lineage are the shared per-record contract every
 	// live memory store carries (204-03). Both are stamped by
 	// recordEpisodeOutcome on every write and excluded from the record's

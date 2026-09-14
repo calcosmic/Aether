@@ -154,6 +154,17 @@ func recordDecisionAnswer(question, answer string, phase int, source string) (Pe
 	// decision answer itself.
 	if !strings.HasPrefix(source, "seal-") {
 		emitDecisionFeedback(question, answer, phase)
+
+		// 204-13 (SC3a/SC3b, D-10): the owner answering a worker's own open
+		// question is a declared, real intervention -- recorded against
+		// whichever episode is genuinely live right now (the same
+		// build-then-check-then-phase-fallback precedence
+		// currentLiveRecoveryEpisode already established for recovery
+		// decisions), never a second, ad-hoc resolution of its own.
+		// Non-blocking: emitColonyLiveInterventionRecorded's own contract
+		// never fails this answer.
+		episodeID, episodeKind := currentLiveRecoveryEpisode(phase)
+		emitColonyLiveInterventionRecorded(episodeID, episodeKind, episodeInterventionKindAnsweredWorkerQuestion)
 	}
 
 	return decision, nil
