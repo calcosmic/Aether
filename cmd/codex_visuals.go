@@ -2436,6 +2436,7 @@ func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekee
 	}
 
 	b.WriteString(renderLearningBeat(result["consolidation"]))
+	b.WriteString(renderImprovementPassBeat(result["improvement_pass"]))
 	b.WriteString(renderSuggestedSteering(state))
 
 	if final {
@@ -2492,6 +2493,127 @@ func renderLearningBeat(raw interface{}) string {
 	b.WriteString(prefix)
 	b.WriteString(summary.LearningBeatLine())
 	b.WriteString("\n")
+	return b.String()
+}
+
+// improvementPassEventView is what renderImprovementPassBeat reduces both
+// dual-typed shapes of result["improvement_pass"] to before rendering --
+// deliberately carrying no candidate identifier at all, so this renderer is
+// structurally unable to print one (204-12, D-03).
+type improvementPassEventView struct {
+	Kind   string
+	Detail string
+}
+
+// improvementPassEventViewsFromRaw is the dual-type reduction
+// renderImprovementPassBeat uses, following renderContinueGateDetail's own
+// precedent: raw is result["improvement_pass"], either the in-process
+// improvementPassSummary struct or the JSON-round-tripped
+// map[string]interface{} attachConsolidationSummary's own snake_case-keyed
+// shape produces.
+func improvementPassEventViewsFromRaw(raw interface{}) []improvementPassEventView {
+	switch v := raw.(type) {
+	case improvementPassSummary:
+		views := make([]improvementPassEventView, 0, len(v.Events))
+		for _, e := range v.Events {
+			views = append(views, improvementPassEventView{Kind: string(e.Kind), Detail: e.Detail})
+		}
+		return views
+	case map[string]interface{}:
+		// events may be []interface{} (after a JSON round-trip) or
+		// []map[string]interface{} (attachConsolidationSummary's own
+		// in-process shape, before any serialization) -- both are read
+		// here so the map case is dual-safe on its own, not just this
+		// function's outer struct/map switch.
+		switch rawEvents := v["events"].(type) {
+		case []interface{}:
+			views := make([]improvementPassEventView, 0, len(rawEvents))
+			for _, re := range rawEvents {
+				entry, ok := re.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				views = append(views, improvementPassEventView{
+					Kind:   stringValue(entry["kind"]),
+					Detail: stringValue(entry["detail"]),
+				})
+			}
+			return views
+		case []map[string]interface{}:
+			views := make([]improvementPassEventView, 0, len(rawEvents))
+			for _, entry := range rawEvents {
+				views = append(views, improvementPassEventView{
+					Kind:   stringValue(entry["kind"]),
+					Detail: stringValue(entry["detail"]),
+				})
+			}
+			return views
+		default:
+			return nil
+		}
+	default:
+		return nil
+	}
+}
+
+// improvementPassEventSentence renders one event view as one plain-English
+// sentence, translating this repo's own invented words inline and never
+// printing a raw verdict token, scope constant, status constant, or
+// key=value pair. "compared" is deliberately absent from this switch: it is
+// never its own closing-card line (see improvementPassEventKind's own doc
+// comment) -- an empty result here is silently skipped by the caller.
+func improvementPassEventSentence(e improvementPassEventView) string {
+	switch improvementPassEventKind(e.Kind) {
+	case improvementPassEventRefused:
+		return "Tried a proposed change beside the current behaviour: it was not adopted -- it either did not do well enough, or touches something only you or an independent reviewer may change."
+	case improvementPassEventStarted:
+		return "A proposed change did well enough to be tried live, on a small, watched, reversible trial basis -- your project's current state was saved first, so it can be put back exactly if this does not work."
+	case improvementPassEventCompleted:
+		return "A trial run of a proposed change finished and kept passing -- the change stays."
+	case improvementPassEventRolledBack:
+		return "A trial run of a proposed change did not hold up -- your project has been put back exactly to the state it was saved in."
+	default:
+		return ""
+	}
+}
+
+// improvementPassEventVoiceGlyph picks the voiceLine glyph kind for e --
+// mirroring the same status/done/failed distinctions this project's other
+// closing-card lines already use.
+func improvementPassEventVoiceGlyph(e improvementPassEventView) string {
+	switch improvementPassEventKind(e.Kind) {
+	case improvementPassEventCompleted:
+		return "done"
+	case improvementPassEventRolledBack:
+		return "failed"
+	default:
+		return "status"
+	}
+}
+
+// renderImprovementPassBeat renders the automatic improvement pass's own
+// result (204-12, D-01, D-03) as zero or more plain-English lines -- one
+// per card-worthy candidate outcome (a proposal refused, a trial started, a
+// trial kept, or a trial undone) -- and renders NOTHING AT ALL when the
+// pass did nothing (no declared candidate, no running canary). Unlike
+// renderLearningBeat, an absent or empty result is not itself announced:
+// silence about a pass that had nothing to do is the honest output, not a
+// missing one.
+func renderImprovementPassBeat(raw interface{}) string {
+	events := improvementPassEventViewsFromRaw(raw)
+	if len(events) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(renderStageMarker("Trying a Proposed Change"))
+	for _, e := range events {
+		line := improvementPassEventSentence(e)
+		if line == "" {
+			continue
+		}
+		b.WriteString(voiceLine(improvementPassEventVoiceGlyph(e), line))
+		b.WriteString("\n")
+	}
 	return b.String()
 }
 

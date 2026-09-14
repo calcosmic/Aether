@@ -162,6 +162,12 @@ type phaseEndConsolidationSummary struct {
 	// auto-REDIRECT threshold and got (or reinforced) a steering signal
 	// (198.1-04/FEED-04).
 	AutoRedirectsEmitted int
+	// ImprovementPass is runAutomaticImprovementPass's own summary for this
+	// same phase-end call (204-12, D-01): a declared candidate or a running
+	// canary driven through comparison, gate admission, canary start, and
+	// completion/rollback -- or, with neither, an honest no-op. Non-
+	// blocking, exactly like every other field on this summary.
+	ImprovementPass improvementPassSummary
 }
 
 // LearningBeatLine renders the single-line, caste-agnostic message body used
@@ -323,6 +329,16 @@ func runPhaseEndConsolidation(phaseID int) phaseEndConsolidationSummary {
 	emitPhaseCompletionFeedback(phase, summary, summary.PromotionCandidates, summary.FailuresRecorded)
 	summary.AutoRedirectsEmitted = emitMiddenThresholdRedirect()
 
+	// 204-12 (D-01, D-04): the automatic improvement pass runs here, at the
+	// very end of phase-end consolidation, so it is reached from both check
+	// lanes through this ONE call site -- runPhaseEndConsolidation is
+	// already invoked from both cmd/codex_continue.go's runCodexContinue
+	// and cmd/codex_continue_finalize.go's runCodexContinueFinalize, and
+	// attachConsolidationSummary below is already called on both lanes too.
+	// Never blocking: runAutomaticImprovementPass never returns an error
+	// type this function could propagate.
+	summary.ImprovementPass = runAutomaticImprovementPass(phaseID)
+
 	return summary
 }
 
@@ -357,8 +373,14 @@ func realConsolidationErrors(errs []error) []error {
 // (instincts_decayed, instincts_archived, observations_decayed,
 // promotion_candidates, queen_eligible, review_candidates,
 // reread_candidates), plus ran and reason. Keeping the key names identical
-// to the subcommand's output means the inspection path and the runtime path
-// report the same shape.
+// to the subcommand's own output means the inspection path and the runtime
+// path report the same shape.
+//
+// It also stores s.ImprovementPass under result["improvement_pass"] (204-12,
+// D-01) -- the same map both continue lanes already attach this result
+// under (cmd/codex_continue.go, cmd/codex_continue_finalize.go both call
+// this one function), so the automatic pass's own closing-card data reaches
+// both lanes structurally, the same way the call site above does.
 func attachConsolidationSummary(result map[string]interface{}, s phaseEndConsolidationSummary) {
 	if result == nil {
 		return
@@ -373,6 +395,37 @@ func attachConsolidationSummary(result map[string]interface{}, s phaseEndConsoli
 		"queen_eligible":       s.QueenEligible,
 		"review_candidates":    s.ReviewCandidates,
 		"reread_candidates":    s.RereadCandidates,
+	}
+	result["improvement_pass"] = improvementPassSummaryToMap(s.ImprovementPass)
+}
+
+// improvementPassSummaryToMap converts an improvementPassSummary into the
+// same snake_case-keyed shape result["consolidation"] uses above, so
+// result["improvement_pass"] survives a JSON round-trip
+// (writePhaseOutcomeDocument's SaveJSON/LoadJSON) with identical keys --
+// renderImprovementPassBeat (cmd/codex_visuals.go) reads this same shape
+// back, dual-typed against the in-process improvementPassSummary struct
+// itself (204-12, D-03).
+func improvementPassSummaryToMap(s improvementPassSummary) map[string]interface{} {
+	events := make([]map[string]interface{}, 0, len(s.Events))
+	for _, e := range s.Events {
+		events = append(events, map[string]interface{}{
+			"candidate_id": e.CandidateID,
+			"kind":         string(e.Kind),
+			"detail":       e.Detail,
+		})
+	}
+	return map[string]interface{}{
+		"ran":                   s.Ran,
+		"candidates_considered": s.CandidatesConsidered,
+		"compared":              s.Compared,
+		"admitted":              s.Admitted,
+		"refused":               s.Refused,
+		"canaries_started":      s.CanariesStarted,
+		"canaries_completed":    s.CanariesCompleted,
+		"canaries_rolled_back":  s.CanariesRolledBack,
+		"events":                events,
+		"failures":              append([]string{}, s.Failures...),
 	}
 }
 

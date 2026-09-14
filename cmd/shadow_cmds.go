@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/shadow"
@@ -169,7 +170,113 @@ func shadowCandidateToDomain(record shadowCandidateRecord) (shadow.Candidate, er
 // criteria parameter (see pkg/shadow/evaluator.go's doc comment on
 // NewFrozenEvaluator).
 const shadowAcceptanceCriteriaDefinition = "shadow-acceptance-v1"
-const shadowEvaluatorDefinitionPrefix = "shadow-evaluator-v1"
+const shadowEvaluatorDefinitionPrefix = "shadow-evaluator-v2"
+
+// shadowBaselineCandidateID mirrors pkg/shadow's own baselineAsCandidate
+// literal id ("baseline") -- the classifier below never receives a
+// shadow.Candidate for the baseline directly (it is unexported inside
+// pkg/shadow), so it recognises the baseline subject the same way every
+// other reader of a shadow.Candidate would have to: by its declared ID().
+const shadowBaselineCandidateID = "baseline"
+
+// shadowClassifierMinWordLength and shadowClassifierStopWords bound which
+// words extracted from a fixture's own Title/Invariant text count as a
+// meaningful subject-matter term for the run function's word-overlap
+// match below (204-12, D-08). Short connector words carry no subject-matter
+// signal on their own; this list is deliberately small and generic (never a
+// per-fixture table) so it works unchanged against whatever fixtures the
+// bank happens to carry.
+const shadowClassifierMinWordLength = 5
+
+var shadowClassifierStopWords = map[string]bool{
+	"which": true, "where": true, "while": true, "after": true, "before": true,
+	"their": true, "there": true, "these": true, "those": true, "would": true,
+	"could": true, "should": true, "never": true, "always": true, "every": true,
+	"about": true, "against": true, "because": true, "without": true,
+	"through": true, "another": true, "cannot": true, "still": true,
+	"being": true, "other": true, "under": true, "between": true,
+	"first": true, "second": true, "third": true,
+}
+
+// shadowFixtureSubjectWords extracts the significant (long enough, not a
+// stop word) lowercase words from fixture's own Title and Invariant text --
+// the subject matter it protects, resolved from the fixture itself at run
+// time rather than a hand-typed per-fixture table.
+func shadowFixtureSubjectWords(fixture regressionFixture) []string {
+	text := fixture.Title + " " + fixture.Invariant
+	var words []string
+	for _, w := range strings.FieldsFunc(strings.ToLower(text), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	}) {
+		if len(w) < shadowClassifierMinWordLength || shadowClassifierStopWords[w] {
+			continue
+		}
+		words = append(words, w)
+	}
+	return words
+}
+
+// shadowTextNamesFixtureSubject reports whether text shares at least one
+// significant word with fixture's own Title/Invariant text -- the run-time
+// stand-in for "the candidate claims to address (or, for harms, threatens)
+// this fixture's own confirmed incident."
+func shadowTextNamesFixtureSubject(text string, fixture regressionFixture) bool {
+	lower := strings.ToLower(text)
+	for _, w := range shadowFixtureSubjectWords(fixture) {
+		if strings.Contains(lower, w) {
+			return true
+		}
+	}
+	return false
+}
+
+// shadowFixtureByID returns the fixture in bank carrying id, or ok=false --
+// a task naming no fixture in the bank resolves to nothing, never a guess.
+func shadowFixtureByID(bank regressionFixtureBank, id string) (regressionFixture, bool) {
+	for _, f := range bank.Fixtures {
+		if f.ID == id {
+			return f, true
+		}
+	}
+	return regressionFixture{}, false
+}
+
+// shadowClassifyAgainstBank is the real per-fixture classifier (204-12,
+// D-08), constructed here in the command layer and handed into
+// shadow.NewFrozenEvaluator through the existing seam -- pkg/shadow itself
+// never sees bank, a regressionFixture, or anything else this file owns.
+//
+// Rules, in order (each a property this plan's <behavior> block names):
+//  1. A task naming no fixture in bank grades as not passing for every
+//     subject alike -- an unresolvable task can never advantage either
+//     side.
+//  2. The baseline subject (ID() == "baseline") passes a fixture exactly
+//     when that fixture carries a non-nil Guard -- genuinely protected
+//     where a guard exists today, genuinely unprotected where it does not.
+//  3. A non-baseline subject FAILS a fixture -- even a guarded one -- when
+//     its own declared Harms() text names the subject matter that
+//     fixture's Invariant protects (it is declaring a risk to the very
+//     thing the fixture protects). Otherwise it passes a guarded fixture
+//     outright, and passes an unguarded fixture only when its own declared
+//     Scope()+ExpectedBenefit() text names that fixture's subject matter
+//     (it is claiming to address that exact incident).
+func shadowClassifyAgainstBank(bank regressionFixtureBank, candidate shadow.Candidate, task shadow.Task) shadow.Result {
+	fixture, ok := shadowFixtureByID(bank, task.ID())
+	if !ok {
+		return shadow.NewResult(false)
+	}
+	if candidate.ID() == shadowBaselineCandidateID {
+		return shadow.NewResult(fixture.Guard != nil)
+	}
+	if shadowTextNamesFixtureSubject(candidate.Harms(), fixture) {
+		return shadow.NewResult(false)
+	}
+	if fixture.Guard != nil {
+		return shadow.NewResult(true)
+	}
+	subjectText := candidate.Scope() + " " + candidate.ExpectedBenefit()
+	return shadow.NewResult(shadowTextNamesFixtureSubject(subjectText, fixture))
+}
 
 // shadowBaseline builds the frozen representation of the current policy
 // value. It reuses codex.PermissionProfileSchemaVersion -- the one declared
@@ -180,22 +287,29 @@ func shadowBaseline() shadow.Baseline {
 	return shadow.NewBaseline([]byte(fmt.Sprintf("permission-profile-schema-v%d", codex.PermissionProfileSchemaVersion)))
 }
 
-// shadowEvaluator builds the grader every comparison runs through. The run
-// function is a deterministic, always-pass placeholder: the concrete
-// per-fixture grading mechanism (re-running a fixture's own guard test
-// live, or a real policy predicate) is out of scope for this plan -- LEARN-06
-// wires the structural isolation and comparison mechanism a candidate
-// cannot reach or alter, not a production classifier for what "passing"
-// concretely means for every fixture kind. Every comparison therefore
-// reports a tied verdict against an unchanged baseline until a real run
-// function is wired in by the plan that owns that classifier. Documented
-// as a deviation in this plan's SUMMARY.
+// shadowEvaluator builds the grader every comparison runs through: a real
+// per-fixture classifier (shadowClassifyAgainstBank) over the committed
+// regression-fixture bank (204-12, D-08), replacing the always-pass
+// placeholder LEARN-06 shipped structurally correct but ungraded. The
+// grader's own definition -- and therefore its Digest() -- tracks only the
+// grader's own code version (shadowEvaluatorDefinitionPrefix's "v2" bump)
+// plus the acceptance-criteria digest; it deliberately never folds in the
+// bank's own content digest, so the grader's identity does not drift every
+// time a fixture is guarded. A bank read failure (e.g. no committed bank
+// yet) degrades to an empty bank -- every task then resolves to nothing,
+// which shadowClassifyAgainstBank's own first rule already grades as "not
+// passing for every subject alike," never a crash and never an advantage
+// to either side.
 func shadowEvaluator() shadow.FrozenEvaluator {
 	criteria := shadow.NewAcceptanceCriteria([]byte(shadowAcceptanceCriteriaDefinition))
 	criteriaDigest := criteria.Digest()
 	def := append([]byte(shadowEvaluatorDefinitionPrefix), criteriaDigest[:]...)
-	run := func(shadow.Candidate, shadow.Task) shadow.Result {
-		return shadow.NewResult(true)
+	bank, err := loadFixtureBank()
+	if err != nil {
+		bank = regressionFixtureBank{}
+	}
+	run := func(candidate shadow.Candidate, task shadow.Task) shadow.Result {
+		return shadowClassifyAgainstBank(bank, candidate, task)
 	}
 	return shadow.NewFrozenEvaluator(def, run)
 }
