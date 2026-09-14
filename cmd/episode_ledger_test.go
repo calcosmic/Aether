@@ -587,6 +587,122 @@ func TestEveryLifecycleLaneWritesADurableOutcome(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------
+// 204-13 (SC3b, D-06), Task 1: the swarm lane's own durable episode
+// boundary.
+// ---------------------------------------------------------------------
+
+// TestSwarmLaneOpensAndClosesADurableEpisode drives the real swarm entry
+// point (runSwarmDestroy, via driveSwarmLiveLane) and asserts: exactly one
+// LiveTopicEpisodeStarted/Ended pair carrying events.EpisodeKindSwarm and a
+// shared episode id; a durable opened and terminal record for that same
+// episode id; and that a run which fails on its investigation wave still
+// closes its durable episode, carrying the run's own terminal status.
+func TestSwarmLaneOpensAndClosesADurableEpisode(t *testing.T) {
+	t.Run("a completed run opens and closes exactly one episode", func(t *testing.T) {
+		liveEvents := driveSwarmLiveLane(t)
+
+		var startedCount, endedCount int
+		var episodeID string
+		for _, e := range liveEvents {
+			if e.Topic == events.LiveTopicEpisodeStarted && e.Payload.EpisodeKind == events.EpisodeKindSwarm {
+				startedCount++
+				episodeID = e.Payload.EpisodeID
+			}
+			if e.Topic == events.LiveTopicEpisodeEnded && e.Payload.EpisodeKind == events.EpisodeKindSwarm {
+				endedCount++
+				if e.Payload.EpisodeID != episodeID {
+					t.Fatalf("episode-ended id %q does not match episode-started id %q", e.Payload.EpisodeID, episodeID)
+				}
+			}
+		}
+		if startedCount != 1 {
+			t.Fatalf("expected exactly 1 LiveTopicEpisodeStarted for swarm, got %d", startedCount)
+		}
+		if endedCount != 1 {
+			t.Fatalf("expected exactly 1 LiveTopicEpisodeEnded for swarm, got %d", endedCount)
+		}
+		if episodeID == "" {
+			t.Fatal("swarm episode carried no episode id")
+		}
+
+		records, err := episodeLedgerForEpisode(episodeID)
+		if err != nil {
+			t.Fatalf("read episode ledger for %q: %v", episodeID, err)
+		}
+		if _, ok := episodeLedgerOpenRecord(records, episodeID); !ok {
+			t.Fatalf("swarm episode %q has no durable open record", episodeID)
+		}
+		if _, ok := episodeLedgerTerminalRecord(records, episodeID); !ok {
+			t.Fatalf("swarm episode %q has no durable terminal record", episodeID)
+		}
+	})
+
+	t.Run("a run that fails its investigation wave still closes its episode with its own terminal status", func(t *testing.T) {
+		saveGlobals(t)
+		s, root := newTestStore(t)
+		store = s
+
+		originalInvoker := newSwarmWorkerInvoker
+		newSwarmWorkerInvoker = func() codex.WorkerInvoker { return &swarmTestInvoker{} }
+		t.Cleanup(func() { newSwarmWorkerInvoker = originalInvoker })
+
+		// Corrupt spawn-tree.txt with a 7-field line whose depth field is
+		// non-numeric -- parseSpawnTreeBytes (pkg/agent/spawn_tree.go)
+		// refuses this by name, so the very first RecordSpawn call inside
+		// executeSwarmWave's investigation wave fails, and runSwarmDestroy
+		// returns on its investigation-wave error path before any worker
+		// runs -- deterministic, no clock/timeout dependency.
+		corruptLine := "2020-01-01T00:00:00Z|parent|caste|name|task|not-a-number|active\n"
+		if err := os.WriteFile(filepath.Join(s.BasePath(), "spawn-tree.txt"), []byte(corruptLine), 0644); err != nil {
+			t.Fatalf("write corrupt spawn-tree.txt: %v", err)
+		}
+
+		target := "Auth panic when session is missing"
+		if _, err := runSwarmDestroy(root, target); err == nil {
+			t.Fatal("expected runSwarmDestroy to return an error on its investigation-wave path")
+		}
+
+		liveEvents := liveEventsSince(t)
+		var episodeID, endedStatus string
+		var startedCount, endedCount int
+		for _, e := range liveEvents {
+			if e.Topic == events.LiveTopicEpisodeStarted && e.Payload.EpisodeKind == events.EpisodeKindSwarm {
+				startedCount++
+				episodeID = e.Payload.EpisodeID
+			}
+			if e.Topic == events.LiveTopicEpisodeEnded && e.Payload.EpisodeKind == events.EpisodeKindSwarm {
+				endedCount++
+				endedStatus = e.Payload.Status
+			}
+		}
+		if startedCount != 1 {
+			t.Fatalf("expected exactly 1 LiveTopicEpisodeStarted even on the failing path, got %d", startedCount)
+		}
+		if endedCount != 1 {
+			t.Fatalf("expected exactly 1 LiveTopicEpisodeEnded even on the failing path, got %d", endedCount)
+		}
+		if endedStatus != "failed" {
+			t.Fatalf("episode-ended status = %q, want %q (runStatus's own default terminal value on this error path)", endedStatus, "failed")
+		}
+
+		records, err := episodeLedgerForEpisode(episodeID)
+		if err != nil {
+			t.Fatalf("read episode ledger for %q: %v", episodeID, err)
+		}
+		if _, ok := episodeLedgerOpenRecord(records, episodeID); !ok {
+			t.Fatalf("swarm episode %q has no durable open record on the failing path", episodeID)
+		}
+		terminal, ok := episodeLedgerTerminalRecord(records, episodeID)
+		if !ok {
+			t.Fatalf("swarm episode %q has no durable terminal record on the failing path", episodeID)
+		}
+		if terminal.TerminalResult != "failed" {
+			t.Fatalf("durable terminal record TerminalResult = %q, want %q", terminal.TerminalResult, "failed")
+		}
+	})
+}
+
 // TestInterruptedEpisodeIsUnfinishedNotSuccessful opens an episode, never
 // closes it, and asserts the reader reports it as unfinished -- an open
 // record with no terminal record -- rather than as a success or as absent.
