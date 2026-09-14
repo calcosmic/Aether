@@ -81,15 +81,21 @@ func phaseApplicationEffectEvidenceID(attemptID string) string {
 // (instinct-deliveries.json, recordInstinctDeliveries in
 // cmd/instinct_application.go) recorded as delivered on phaseID, excluding
 // any instinct now archived or absent from instincts.json
-// (loadInstinctFileOrEmpty). Each contribution earns credit only against a
-// changed decision this phase's own latest durable build attempt actually
-// recorded (a KnowledgeDeltas entry of kind "decision") -- a contribution
-// with no recorded decision earns no record at all, matching
+// (loadInstinctFileOrEmpty). Each contribution earns credit only when this
+// phase's own latest durable build attempt actually recorded at least one
+// changed decision (a KnowledgeDeltas entry of kind "decision") -- a
+// contribution with no recorded decision earns no record at all, matching
 // recordRecruitmentCredit's own first refusal branch (never a default or
-// inferred credit). The outcome for every (contribution, decision) pair is
-// derived from comparing that attempt's own free-check report against the
-// most recent EARLIER attempt that also carries one -- never inferred from
-// the phase having merely advanced (Assumption C).
+// inferred credit). A contribution earns exactly ONE credit record per
+// phase, against the phase's decision evidence AS A WHOLE (every decision
+// the attempt recorded, joined into one combined decision identifier) --
+// never one record per (contribution, decision) pair, which would inflate
+// the ledger to O(instincts x decisions) without establishing that any
+// particular instinct influenced any particular decision (WR-03,
+// 204-REVIEW.md). The outcome is derived from comparing that attempt's own
+// free-check report against the most recent EARLIER attempt that also
+// carries one -- never inferred from the phase having merely advanced
+// (Assumption C).
 //
 // Never returns a Go error and never blocks phase advancement: a store that
 // cannot be read, or a phase with no durable build attempt at all, is
@@ -173,27 +179,44 @@ func recordPhaseApplicationCredit(phaseID int) phaseApplicationCreditSummary {
 
 	effectEvidenceID, outcome := phaseApplicationEffectAndOutcome(phaseID, latestAttempt)
 
+	// WR-03 (204-REVIEW.md): credit each delivered instinct ONCE per phase
+	// against the phase's decision evidence AS A WHOLE, not once per
+	// (contribution, decision) pair. The previous nested loop crossed every
+	// contribution against every decision delta on the attempt -- a phase
+	// with 4 delivered instincts and 5 recorded decisions wrote 20 records
+	// sharing the identical outcome, none of which established that a
+	// particular instinct influenced a particular decision (only that both
+	// happened on the same phase), inflated the ledger to
+	// O(instincts x decisions), and announced the same contribution as
+	// "decision changed" once per unrelated decision. combinedDecisionID
+	// joins every decision this attempt recorded, in the same deterministic
+	// order decisionIDs was built above; for the common one-decision case
+	// this is byte-identical to the single decision id used before this fix
+	// (strings.Join of a one-element slice returns that element unchanged),
+	// so recruitmentCreditRecordID's existing (contributionID,
+	// changedDecisionID) identity and every reader keyed on it are
+	// unaffected for that case.
+	combinedDecisionID := strings.Join(decisionIDs, ",")
+
 	for _, contributionID := range contributions {
-		for _, decisionID := range decisionIDs {
-			record, credited, err := recordRecruitmentCredit(contributionID, recruitmentContributionMemoryItem, decisionID, effectEvidenceID, outcome, "")
-			if err != nil {
-				summary.Reason = err.Error()
-				continue
-			}
-			if !credited {
-				continue
-			}
-			summary.Recorded++
-			switch record.Outcome {
-			case recruitmentCreditOutcomePending:
-				summary.Pending++
-			case recruitmentCreditOutcomeHelpful:
-				summary.Helpful++
-			case recruitmentCreditOutcomeNeutral:
-				summary.Neutral++
-			case recruitmentCreditOutcomeHarmful:
-				summary.Harmful++
-			}
+		record, credited, err := recordRecruitmentCredit(contributionID, recruitmentContributionMemoryItem, combinedDecisionID, effectEvidenceID, outcome, "")
+		if err != nil {
+			summary.Reason = err.Error()
+			continue
+		}
+		if !credited {
+			continue
+		}
+		summary.Recorded++
+		switch record.Outcome {
+		case recruitmentCreditOutcomePending:
+			summary.Pending++
+		case recruitmentCreditOutcomeHelpful:
+			summary.Helpful++
+		case recruitmentCreditOutcomeNeutral:
+			summary.Neutral++
+		case recruitmentCreditOutcomeHarmful:
+			summary.Harmful++
 		}
 	}
 

@@ -251,6 +251,109 @@ func TestPhaseApplicationCreditTracerEndToEnd(t *testing.T) {
 	})
 }
 
+// TestPhaseApplicationCreditRecordsOncePerContributionNotPerDecision is the
+// WR-03 fix (204-REVIEW.md): a phase with TWO delivered instincts and TWO
+// recorded decisions must write exactly 2 credit records (one per
+// contribution, against the phase's decision evidence as a whole), not the
+// 2x2=4 cross product the previous nested loop produced -- and each
+// record's ChangedDecisionID names every decision the attempt recorded.
+func TestPhaseApplicationCreditRecordsOncePerContributionNotPerDecision(t *testing.T) {
+	saveGlobals(t)
+
+	taskOne := "1.1"
+	seedPhase := colony.Phase{ID: 1, Name: "Multi-decision credit"}
+	seedPhase.Tasks = []colony.Task{{ID: &taskOne, Goal: "exercise multi-decision credit", Status: colony.TaskPending}}
+	goal := "Exercise multi-decision phase application credit"
+	seedState := colony.ColonyState{Goal: &goal, State: colony.StateREADY, Plan: colony.Plan{
+		AcceptancePolicy: colony.PlanAcceptanceLegacyUnbound,
+		EvidencePolicy:   colony.PlanEvidenceNotRequired,
+		Phases:           []colony.Phase{seedPhase},
+	}}
+
+	earlier := commitTestBuildStart(t, testBuildStartOptions{
+		Variant: buildStartDirect, GeneratedAt: time.Now().UTC().Add(-time.Hour),
+		SelectedTasks: []string{taskOne},
+		Dispatches: []codexBuildDispatch{
+			{Name: "Mason-1", Caste: "builder", TaskID: taskOne, CoveredTaskIDs: []string{taskOne}, Status: "completed"},
+		},
+		ExecutionOwner: "go-runtime", DispatchMode: "direct", MakeLatest: testBuildStartBool(true),
+		PrepareRoot: func(r string) {
+			createTestColonyState(t, filepath.Join(r, ".aether", "data"), seedState)
+		},
+	})
+	if err := attachBuildFreeCheckReport(earlier.AttemptPath, buildFreeCheckReport{
+		RecordedAt: time.Now().UTC().Format(time.RFC3339), Phase: earlier.Phase.ID,
+		ChecksRun: []string{"tests"}, Failed: []string{"tests"}, Passed: false,
+		Summary: "earlier attempt free checks",
+	}); err != nil {
+		t.Fatalf("attach earlier free-check report: %v", err)
+	}
+
+	latest := commitTestBuildStartAt(t, earlier.Root, earlier.Phase.ID, time.Now().UTC(), testBuildStartOptions{
+		Variant: buildStartDirect, GeneratedAt: time.Now().UTC(),
+		SelectedTasks: []string{taskOne},
+		Dispatches: []codexBuildDispatch{
+			{Name: "Mason-2", Caste: "builder", TaskID: taskOne, CoveredTaskIDs: []string{taskOne}, Status: "completed"},
+		},
+		ExecutionOwner: "go-runtime", DispatchMode: "direct", MakeLatest: testBuildStartBool(true),
+	})
+	if err := attachBuildFreeCheckReport(latest.AttemptPath, buildFreeCheckReport{
+		RecordedAt: time.Now().UTC().Format(time.RFC3339), Phase: latest.Phase.ID,
+		ChecksRun: []string{"tests"}, Failed: nil, Passed: true,
+		Summary: "latest attempt free checks",
+	}); err != nil {
+		t.Fatalf("attach latest free-check report: %v", err)
+	}
+	if err := attachBuildKnowledgeDeltas(latest.AttemptPath, []buildAttemptKnowledgeDelta{
+		{Kind: buildKnowledgeDeltaKindDecision, Summary: "first decision this attempt recorded"},
+		{Kind: buildKnowledgeDeltaKindDecision, Summary: "second decision this attempt recorded"},
+	}); err != nil {
+		t.Fatalf("attach knowledge deltas: %v", err)
+	}
+
+	instinctA := promoteRealInstinct(t, store, "run go build ./cmd/aether before go vet ./cmd/ every single time", "pattern")
+	instinctB := promoteRealInstinct(t, store, "check .planning/WINDOWS.md before assuming a known gap is unrecorded always", "pattern")
+	capsule := instinctA.Action + "\n" + instinctB.Action
+	if recorded := recordInstinctDeliveries(latest.Phase.ID, "continue", capsule); recorded != 2 {
+		t.Fatalf("expected exactly 2 new instinct deliveries, got %d", recorded)
+	}
+
+	summary := recordPhaseApplicationCredit(latest.Phase.ID)
+	if !summary.Ran {
+		t.Fatalf("summary = %+v, want Ran=true", summary)
+	}
+	if summary.Considered != 2 {
+		t.Fatalf("summary.Considered = %d, want 2", summary.Considered)
+	}
+	if summary.Recorded != 2 {
+		t.Fatalf("summary.Recorded = %d, want 2 (one per contribution) -- got %+v (the pre-fix cross product would have reported 4)", summary.Recorded, summary)
+	}
+
+	all, err := recruitmentCreditAll()
+	if err != nil {
+		t.Fatalf("read credit records: %v", err)
+	}
+	var forThisPhase []recruitmentCreditRecord
+	for _, rec := range all {
+		if rec.ContributionID == instinctA.ID || rec.ContributionID == instinctB.ID {
+			forThisPhase = append(forThisPhase, rec)
+		}
+	}
+	if len(forThisPhase) != 2 {
+		t.Fatalf("expected exactly 2 credit records total (one per contribution), got %d: %+v", len(forThisPhase), forThisPhase)
+	}
+
+	decisionA := phaseApplicationDecisionID(latest.Attempt.ID, 0)
+	decisionB := phaseApplicationDecisionID(latest.Attempt.ID, 1)
+	wantCombined := decisionA + "," + decisionB
+	for _, rec := range forThisPhase {
+		if rec.ChangedDecisionID != wantCombined {
+			t.Fatalf("record %+v carries ChangedDecisionID %q, want the combined decision id %q naming both decisions this attempt recorded",
+				rec, rec.ChangedDecisionID, wantCombined)
+		}
+	}
+}
+
 // TestPhaseApplicationCreditIsReachedFromBothCheckLanes is an AST-based call-
 // graph guard, in the style of cmd/worktree_destruction_reachability_test.go
 // and cmd/verify_out_of_band_reachability_test.go: parse every non-test file
