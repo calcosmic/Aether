@@ -630,7 +630,7 @@ Plans:
 4. A beneficial candidate beats its frozen baseline without hard-gate or holdout regression, while overfit or evaluator-tampering candidates are quarantined.
 5. Only allowed low-risk canaries promote and roll back atomically; preferences, skills, workflows, source, and security-sensitive policy retain required authority, and source changes remain independently verified branches/PRs that cannot self-approve, merge, publish, or deploy.
 
-**Plans:** 11/11 plans executed; 5 gap-closure plans added 2026-09-14 (204-12..204-16) for the seven verification gaps
+**Plans:** 13/16 plans executed; 5 gap-closure plans added 2026-09-14 (204-12..204-16) for the seven verification gaps
 
 Plans:
 **Wave 1**
@@ -667,8 +667,8 @@ Plans:
 
 **Gap closure — Wave 1** *(the seven verification gaps; every mechanism exists and needs a caller)*
 
-- [ ] 204-13-PLAN.md — The swarm and recovery lanes open durable episodes (no skipped subtests), and a closed intervention-kind vocabulary with three real production writers.
-- [ ] 204-14-PLAN.md — Shrink the unguarded regression-fixture floor honestly, and make the recorded floor the number the tests prove in both directions.
+- [x] 204-13-PLAN.md — The swarm and recovery lanes open durable episodes (no skipped subtests), and a closed intervention-kind vocabulary with three real production writers.
+- [x] 204-14-PLAN.md — Shrink the unguarded regression-fixture floor honestly, and make the recorded floor the number the tests prove in both directions.
 
 **Gap closure — Wave 2** *(blocked on Wave 1)*
 
