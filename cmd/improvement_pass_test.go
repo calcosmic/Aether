@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
@@ -262,5 +265,229 @@ func TestImprovementPassFailureNeverBlocksTheCheck(t *testing.T) {
 	}
 	if len(pass.Failures) == 0 {
 		t.Fatal("expected the pass to record its own failure reason for the unreadable candidate store")
+	}
+}
+
+// TestAutomaticImprovementPassIsReachedFromBothCheckLanes is Task 2's Test
+// 1: an AST-based call-graph guard, in the exact shape of
+// cmd/application_evidence_test.go's TestPhaseApplicationCreditIsReachedFromBothCheckLanes
+// (and reusing its own generic unreached-lane helper), proving
+// runAutomaticImprovementPass is transitively reachable from BOTH
+// runCodexContinue and runCodexContinueFinalize.
+func TestAutomaticImprovementPassIsReachedFromBothCheckLanes(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+	g, err := buildCmdFuncGraph(filepath.Join(repoRoot, "cmd"))
+	if err != nil {
+		t.Fatalf("build call graph: %v", err)
+	}
+	if g.funcsIndexed == 0 {
+		t.Fatalf("found zero top-level functions while scanning %d files -- a guard that finds no functions to check would pass vacuously forever", g.filesScanned)
+	}
+
+	const target = "runAutomaticImprovementPass"
+	lanes := []string{"runCodexContinue", "runCodexContinueFinalize"}
+
+	if _, ok := g.calls[target]; !ok {
+		t.Fatalf("expected %s to be an indexed top-level function among %d indexed functions in cmd/, but it was missing -- renamed or moved?", target, g.funcsIndexed)
+	}
+	for _, lane := range lanes {
+		if _, ok := g.calls[lane]; !ok {
+			t.Fatalf("expected %s to be an indexed top-level function among %d indexed functions in cmd/, but it was missing -- renamed or moved?", lane, g.funcsIndexed)
+		}
+	}
+
+	if unreached := applicationCreditUnreachedLanes(g, lanes, target); len(unreached) > 0 {
+		t.Fatalf("%s is not transitively reachable from: %v -- both check lanes must reach the automatic improvement pass", target, unreached)
+	}
+
+	t.Run("a synthetic unreachable fixture is caught by name on both lanes", func(t *testing.T) {
+		synthetic := &cmdFuncGraph{calls: map[string]map[string]bool{
+			"runCodexContinue":            {"someOtherHelper": true},
+			"runCodexContinueFinalize":    {"anotherHelper": true},
+			"runAutomaticImprovementPass": {},
+		}}
+		unreached := applicationCreditUnreachedLanes(synthetic, lanes, target)
+		if len(unreached) != 2 {
+			t.Fatalf("scanner failed to detect the synthetic unreachable fixture on both lanes, got unreached=%v", unreached)
+		}
+		for _, lane := range lanes {
+			found := false
+			for _, u := range unreached {
+				if u == lane {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatalf("expected %q named in the unreached set %v", lane, unreached)
+			}
+		}
+	})
+}
+
+// TestAutomaticPassNeverPromotesOutsideTheTwoScopes is Task 2's Test 2:
+// table-driven over canaryRetainedAuthorityScopeNames() at run time (so a
+// tenth retained category added later is covered automatically), asserting
+// a candidate declaring that scope is refused, names the authority that
+// retains it, and creates no canary run.
+func TestAutomaticPassNeverPromotesOutsideTheTwoScopes(t *testing.T) {
+	for _, scopeName := range canaryRetainedAuthorityScopeNames() {
+		scopeName := scopeName
+		t.Run(scopeName, func(t *testing.T) {
+			saveGlobals(t)
+			s, _ := newTestStore(t)
+			store = s
+
+			candidateID := "candidate-retained-" + strings.ReplaceAll(scopeName, " ", "-")
+			expires := time.Now().Add(48 * time.Hour).UTC().Format(time.RFC3339)
+			record, _, err := declareShadowCandidate(candidateID, scopeName, "a generic benefit naming nothing in particular", shadowGraderBenignHarms, expires, "revert the declared change")
+			if err != nil {
+				t.Fatalf("declare candidate: %v", err)
+			}
+
+			pass := runAutomaticImprovementPass(1)
+			if len(pass.Events) != 1 {
+				t.Fatalf("expected exactly one event, got %+v (failures: %v)", pass.Events, pass.Failures)
+			}
+			if pass.Events[0].Kind != improvementPassEventRefused {
+				t.Fatalf("expected the candidate to be refused, got %+v", pass.Events[0])
+			}
+
+			authority, retained := canaryRetainedAuthorityFor(canaryScope(scopeName))
+			if !retained {
+				t.Fatalf("test setup broken: %q is not in canaryRetainedAuthority", scopeName)
+			}
+			if !strings.Contains(pass.Events[0].Detail, authority) {
+				t.Fatalf("refusal for scope %q does not name its authority %q: %v", scopeName, authority, pass.Events[0].Detail)
+			}
+
+			if _, found, err := loadCanaryRun(record.ID); err != nil {
+				t.Fatalf("load canary run: %v", err)
+			} else if found {
+				t.Fatalf("expected no canary run to be created for retained scope %q", scopeName)
+			}
+		})
+	}
+}
+
+// TestAutomaticPassCarriesNoBypassParameter is Task 2's Test 3: a
+// structural AST assertion, in the shape of
+// TestNeitherCoordinatorNorAutopilotCanWaiveARetainedRefusal
+// (cmd/promotion_gate_test.go), proving runAutomaticImprovementPass takes
+// exactly one parameter (an int phase identifier) and that
+// cmd/improvement_pass.go declares no identifier shaped like an actor,
+// caller identity, coordinator, autopilot, waiver, or bypass.
+func TestAutomaticPassCarriesNoBypassParameter(t *testing.T) {
+	src, err := os.ReadFile("improvement_pass.go")
+	if err != nil {
+		t.Fatalf("read improvement_pass.go: %v", err)
+	}
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "improvement_pass.go", src, 0)
+	if err != nil {
+		t.Fatalf("parse improvement_pass.go: %v", err)
+	}
+
+	var found bool
+	var params int
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Name == nil || fn.Name.Name != "runAutomaticImprovementPass" {
+			continue
+		}
+		found = true
+		for _, field := range fn.Type.Params.List {
+			if len(field.Names) == 0 {
+				params++
+				continue
+			}
+			params += len(field.Names)
+		}
+	}
+	if !found {
+		t.Fatal("could not find runAutomaticImprovementPass in improvement_pass.go")
+	}
+	if params != 1 {
+		t.Fatalf("runAutomaticImprovementPass takes %d parameters, expected exactly 1 (phaseID)", params)
+	}
+
+	forbidden := []string{"actor", "caller", "coordinator", "autopilot", "waiver", "bypass"}
+	var hits []string
+	ast.Inspect(file, func(n ast.Node) bool {
+		id, ok := n.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		lowerName := strings.ToLower(id.Name)
+		for _, f := range forbidden {
+			if strings.Contains(lowerName, f) {
+				hits = append(hits, id.Name)
+			}
+		}
+		return true
+	})
+	if len(hits) > 0 {
+		t.Fatalf("cmd/improvement_pass.go declares actor/bypass-shaped identifier(s): %v", hits)
+	}
+
+	t.Run("the checker is non-vacuous: a synthetic identifier is caught", func(t *testing.T) {
+		fixtureSrc := []byte(`package cmd
+
+func improvementPassFixtureViolation(autopilotOverride bool) {
+	_ = autopilotOverride
+}
+`)
+		fset := token.NewFileSet()
+		fixtureFile, err := parser.ParseFile(fset, "fixture_improvement_pass_violation.go", fixtureSrc, 0)
+		if err != nil {
+			t.Fatalf("parse fixture: %v", err)
+		}
+		var fixtureHits []string
+		ast.Inspect(fixtureFile, func(n ast.Node) bool {
+			id, ok := n.(*ast.Ident)
+			if !ok {
+				return true
+			}
+			lowerName := strings.ToLower(id.Name)
+			for _, f := range forbidden {
+				if strings.Contains(lowerName, f) {
+					fixtureHits = append(fixtureHits, id.Name)
+				}
+			}
+			return true
+		})
+		if len(fixtureHits) == 0 {
+			t.Fatal("scanner failed to flag a synthetic autopilot-shaped identifier -- the structural check would be vacuous")
+		}
+	})
+}
+
+// TestUnrecognizedScopeIsRefusedAndWritesNothing is Task 2's Test 4: a
+// candidate declaring a scope that is neither promotable nor retained is
+// refused and creates nothing.
+func TestUnrecognizedScopeIsRefusedAndWritesNothing(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	expires := time.Now().Add(48 * time.Hour).UTC().Format(time.RFC3339)
+	record, _, err := declareShadowCandidate("candidate-unrecognized-scope", "an entirely unrecognized scope naming nothing declared", "a generic benefit", shadowGraderBenignHarms, expires, "revert the declared change")
+	if err != nil {
+		t.Fatalf("declare candidate: %v", err)
+	}
+
+	pass := runAutomaticImprovementPass(1)
+	if len(pass.Events) != 1 {
+		t.Fatalf("expected exactly one event, got %+v (failures: %v)", pass.Events, pass.Failures)
+	}
+	if pass.Events[0].Kind != improvementPassEventRefused {
+		t.Fatalf("expected the candidate to be refused, got %+v", pass.Events[0])
+	}
+	if _, found, err := loadCanaryRun(record.ID); err != nil {
+		t.Fatalf("load canary run: %v", err)
+	} else if found {
+		t.Fatal("expected no canary run to be created for an unrecognized scope")
 	}
 }
