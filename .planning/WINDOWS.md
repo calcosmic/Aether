@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 30
+open_count: 36
 waived_count: 0
-fixed_count: 9
-total_count: 39
-last_updated: 2026-09-14T14:21:30.954Z
+fixed_count: 10
+total_count: 46
+last_updated: 2026-09-14T15:42:13.430Z
 ---
 
 # Broken Windows Ledger
@@ -54,6 +54,13 @@ last_updated: 2026-09-14T14:21:30.954Z
 | 37 | 203 | deviation | .planning/REQUIREMENTS.md |  | FIXED, superseding entry 24. Requirement completion tracking had been silently broken repo-wide: gsd-tools' checkbox pattern is (-\\s*\\[)[ ](\\]\\s*\\*\\*<REQ-ID>\\*\\*) (lib/milestone.cjs:162), which needs the bold to close immediately after the ID, while this file wrote '- [ ] **BIO-02 -- Atomic admission:** ...' with the title inside the bold span. Every requirements mark-complete therefore returned not_found and wrote nothing, and phase.complete reported 'ROADMAP cites REQ-IDs not registered anywhere in REQUIREMENTS.md' for IDs that were plainly present. Reformatted all 65 requirement lines to '- [ ] **REQ-ID** -- Title: ...' -- a pure format change, verified content-identical to the previous file once ** markers are stripped, and no test anywhere pins the old shape (no cmd/*_test.go references REQUIREMENTS.md at all). Phase 203's ten IDs (SYNTH-05, CEC-07, BIO-01..08) are now genuinely ticked by the tool's own write path rather than by hand. The earlier hand-edit of BIO-07 recorded in 203-08-SUMMARY.md can now be done the canonical way. | fixed |  | 2026-09-14T00:28:42.019Z | 2026-09-14T00:28:53.780Z |
 | 38 | 204 | unmet-truth | cmd/live_events.go |  | 204-04 shipped the durable episode ledger, but only its open/close basics have a production writer: emitColonyLiveOutcomeRecorded and emitColonyLiveInterventionRecorded (cmd/live_events.go) have NO production caller, so evidence_ids, hard_gate_results, changed_decision_ids, usage, reported_cost_usd, interventions, episode_revision, acceptance_digest and evaluator_digest are never written in a real run. 204-04-PLAN.md Task 2 asked for token figures 'from codex.WorkerUsage where the lane has one', i.e. the boundary callers were meant to pass these facts. 204-10's report (verified success needs evidence_ids + all hard gates passing; preventable interventions need intervention records) and 204-08's ledger writes are built over these fields, so in production 204-10 would classify every episode as unclassified until the boundary callers populate them. The ledger is also not yet registered in 204-03's field-level census (cmd/memory_schema_test.go liveMemoryStoreCensusTypes covers six stores; the ledger is the seventh), because registering it would expose exactly these nine writerless fields. Found by the orchestrator at the wave-3 post-merge step; the shared schema/lineage stand-in was reconciled in c632d3af. Close by wiring the existing boundary callers (build/continue/swarm/oracle/recovery lanes) to pass usage, gate results, evidence and interventions through the existing emitters, then adding the ledger to the census with a writer per field. | open |  | 2026-09-14T12:51:19.761Z |  |
 | 39 | 204 | unmet-truth | cmd/shadow_cmds.go |  | 204-08 built and tested two CLI commands (shadow-declare, shadow-compare) for trying a candidate beside current behaviour, but no plan in Phase 204 gives them a caller: 204-09's promotion gate drives pkg/shadow through Go functions, and no wrapper, menu spec, hook or worker-discipline file names them. TestNoRegisteredSubcommandIsUnreferenced refuses a registered command nothing calls and its allowlist may only shrink, so the orchestrator left both commands unregistered (cmd/shadow_cmds.go init) at the wave-4 gate. Registering them is one line once a plan decides the owner-facing exposure (a wrapper/menu command or a documented caller) -- a UX decision for the owner, not one to make silently. | open |  | 2026-09-14T14:21:30.954Z |  |
+| 40 | 204 | unmet-truth | cmd/shadow_cmds.go |  | shadowEvaluator's run function is a deterministic always-pass placeholder, not a real per-fixture classifier -- every real shadow-compare today reports a tied verdict against an unchanged baseline. The comparison also covers settings and rules only, never code changes (LEARN-06 explicitly scoped code-valued candidates out). Close by wiring a real grading function through the already-proven-safe FrozenEvaluator.Run(Candidate, Task) Result seam, and by extending isolation to code-valued candidates in a follow-on plan. | open |  | 2026-09-14T15:40:47.610Z |  |
+| 41 | 204 | deviation | cmd/episode_ledger_test.go |  | TestEveryLifecycleLaneWritesADurableOutcome skips the swarm and recovery lanes by name (t.Skipf) because neither opens a durable episode record in production today -- driveSwarmLiveLane/driveRecoveryLiveLane never call emitColonyLiveEpisodeStarted/Ended, routing instead through a different wave-started/recovery-changed event shape. Close by wiring cmd/swarm_cmd.go and the recovery entry point through the same episode boundary the other four lanes already use. | open |  | 2026-09-14T15:40:51.528Z |  |
+| 42 | 204 | unmet-truth | cmd/testdata/fixture-bank/v1/bank.json |  | 40 of the 46 fixtures in the seeded regression-fixture bank have no guarding Go test yet (seedBankUnguardedFloor=40, only 6 guarded, resolved from 203-VERIFICATION.md's own Fixed table). Close by naming and confirming a real guard test for each remaining fixture's own confirmed incident, shrinking the recorded floor as each is added -- the floor may only shrink, never widen. | open |  | 2026-09-14T15:40:55.056Z |  |
+| 43 | 204 | deviation | cmd/memory_schema.go |  | Owner decision 2026-09-14 (204-03 Task 4, 'mixture' reply accepting the recommendation table verbatim): instinct.related_instincts is retired (memoryStoreFieldRetired, reason: the only reader, pkg/graph, is doubly orphaned and this phase's own ruling (e) forbids citing it as justification for new work) -- no stored record touched, both production writers stopped setting it. midden.acknowledge_reason, learn.parent_id and pheromone.scope stay in memoryStoreFieldExceptions, recorded as knowingly empty (plausibly useful, but nothing in this phase's planned work needs them yet). Recorded here for traceability; closes only if a future phase names a concrete consumer for one of the three empty fields. | open |  | 2026-09-14T15:40:59.645Z |  |
+| 44 | 204 | unmet-truth | cmd/learning_cmds.go |  | learn.StatusValidated is written only by the manual 'learning-validate' CLI command -- no automatic runtime path ever promotes a StatusHypothesis entry to StatusValidated, so the '## LEARNED MEMORY (Verified Outcomes)' section and the autopilot replan note stay honestly empty in a real, unattended run even though the filtering machinery (learningVerifiedEntries, cmd/learning_status_vocabulary.go) is correct and already wired at both render sites. Close by wiring a validator fed by the credit/application ledgers that promotes a hypothesis to validated once it has genuinely helped. | open |  | 2026-09-14T15:41:03.868Z |  |
+| 45 | 204 | unmet-truth | cmd/source_proposal.go |  | proposeSourceImprovement has no caller anywhere in the tree -- no cobra command invokes it (204-10-SUMMARY's own Next Phase Readiness names this). Separately, episodeLedgerRecord.Interventions is a free-form []string with no declared closed intervention-kind vocabulary for buildImprovementReport's PreventableInterventions figure to classify against, so collectPreventableInterventions currently treats each non-empty string as its own category rather than a curated set. Close by wiring a CLI entry point (extending sourceProposalReachabilityEntryPoints in the same change) and declaring a closed intervention vocabulary the ledger's real writers populate from. | open |  | 2026-09-14T15:41:07.891Z |  |
+| 46 | 202.1 | unmet-truth | pkg/codex/platform_dispatch.go |  | workerProcessEnv (pkg/codex/process_tracker.go) had NO caller, so AETHER_WORKER_NAME never reached a spawned worker. aether hook-stop therefore could not tell an Aether build worker from a person: it blocked worker Weld-32 mid-build and advised aether pause, the worker ran it, and a live CosmicDashboard Autopilot colony was paused mid-phase. Wired the env at the spawn site and exempted Aether-spawned workers from hook-stop. Proven by a REAL spawned subprocess reading back its own environment (TestSpawnedWorkerCarriesItsIdentityInTheEnvironment) rather than by testing the builder in isolation -- an isolated builder test passed for the entire time the wiring was missing. Migrated 2026-09-14 by plan 204-11 from a stray, out-of-band duplicate row (originally id 14, colliding with the real phase-203 entry 14) that had drifted below the JSON ledger block; original recorded/resolved timestamps were 2026-09-12T21:30:00.000Z. | fixed |  | 2026-09-14T15:42:11.225Z | 2026-09-14T15:42:13.430Z |
 
 ````json
 [
@@ -524,7 +531,90 @@ last_updated: 2026-09-14T14:21:30.954Z
     "reason": "",
     "recorded_at": "2026-09-14T14:21:30.954Z",
     "resolved_at": null
+  },
+  {
+    "id": 40,
+    "kind": "unmet-truth",
+    "phase": "204",
+    "file": "cmd/shadow_cmds.go",
+    "line": null,
+    "description": "shadowEvaluator's run function is a deterministic always-pass placeholder, not a real per-fixture classifier -- every real shadow-compare today reports a tied verdict against an unchanged baseline. The comparison also covers settings and rules only, never code changes (LEARN-06 explicitly scoped code-valued candidates out). Close by wiring a real grading function through the already-proven-safe FrozenEvaluator.Run(Candidate, Task) Result seam, and by extending isolation to code-valued candidates in a follow-on plan.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-14T15:40:47.610Z",
+    "resolved_at": null
+  },
+  {
+    "id": 41,
+    "kind": "deviation",
+    "phase": "204",
+    "file": "cmd/episode_ledger_test.go",
+    "line": null,
+    "description": "TestEveryLifecycleLaneWritesADurableOutcome skips the swarm and recovery lanes by name (t.Skipf) because neither opens a durable episode record in production today -- driveSwarmLiveLane/driveRecoveryLiveLane never call emitColonyLiveEpisodeStarted/Ended, routing instead through a different wave-started/recovery-changed event shape. Close by wiring cmd/swarm_cmd.go and the recovery entry point through the same episode boundary the other four lanes already use.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-14T15:40:51.528Z",
+    "resolved_at": null
+  },
+  {
+    "id": 42,
+    "kind": "unmet-truth",
+    "phase": "204",
+    "file": "cmd/testdata/fixture-bank/v1/bank.json",
+    "line": null,
+    "description": "40 of the 46 fixtures in the seeded regression-fixture bank have no guarding Go test yet (seedBankUnguardedFloor=40, only 6 guarded, resolved from 203-VERIFICATION.md's own Fixed table). Close by naming and confirming a real guard test for each remaining fixture's own confirmed incident, shrinking the recorded floor as each is added -- the floor may only shrink, never widen.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-14T15:40:55.056Z",
+    "resolved_at": null
+  },
+  {
+    "id": 43,
+    "kind": "deviation",
+    "phase": "204",
+    "file": "cmd/memory_schema.go",
+    "line": null,
+    "description": "Owner decision 2026-09-14 (204-03 Task 4, 'mixture' reply accepting the recommendation table verbatim): instinct.related_instincts is retired (memoryStoreFieldRetired, reason: the only reader, pkg/graph, is doubly orphaned and this phase's own ruling (e) forbids citing it as justification for new work) -- no stored record touched, both production writers stopped setting it. midden.acknowledge_reason, learn.parent_id and pheromone.scope stay in memoryStoreFieldExceptions, recorded as knowingly empty (plausibly useful, but nothing in this phase's planned work needs them yet). Recorded here for traceability; closes only if a future phase names a concrete consumer for one of the three empty fields.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-14T15:40:59.645Z",
+    "resolved_at": null
+  },
+  {
+    "id": 44,
+    "kind": "unmet-truth",
+    "phase": "204",
+    "file": "cmd/learning_cmds.go",
+    "line": null,
+    "description": "learn.StatusValidated is written only by the manual 'learning-validate' CLI command -- no automatic runtime path ever promotes a StatusHypothesis entry to StatusValidated, so the '## LEARNED MEMORY (Verified Outcomes)' section and the autopilot replan note stay honestly empty in a real, unattended run even though the filtering machinery (learningVerifiedEntries, cmd/learning_status_vocabulary.go) is correct and already wired at both render sites. Close by wiring a validator fed by the credit/application ledgers that promotes a hypothesis to validated once it has genuinely helped.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-14T15:41:03.868Z",
+    "resolved_at": null
+  },
+  {
+    "id": 45,
+    "kind": "unmet-truth",
+    "phase": "204",
+    "file": "cmd/source_proposal.go",
+    "line": null,
+    "description": "proposeSourceImprovement has no caller anywhere in the tree -- no cobra command invokes it (204-10-SUMMARY's own Next Phase Readiness names this). Separately, episodeLedgerRecord.Interventions is a free-form []string with no declared closed intervention-kind vocabulary for buildImprovementReport's PreventableInterventions figure to classify against, so collectPreventableInterventions currently treats each non-empty string as its own category rather than a curated set. Close by wiring a CLI entry point (extending sourceProposalReachabilityEntryPoints in the same change) and declaring a closed intervention vocabulary the ledger's real writers populate from.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-14T15:41:07.891Z",
+    "resolved_at": null
+  },
+  {
+    "id": 46,
+    "kind": "unmet-truth",
+    "phase": "202.1",
+    "file": "pkg/codex/platform_dispatch.go",
+    "line": null,
+    "description": "workerProcessEnv (pkg/codex/process_tracker.go) had NO caller, so AETHER_WORKER_NAME never reached a spawned worker. aether hook-stop therefore could not tell an Aether build worker from a person: it blocked worker Weld-32 mid-build and advised aether pause, the worker ran it, and a live CosmicDashboard Autopilot colony was paused mid-phase. Wired the env at the spawn site and exempted Aether-spawned workers from hook-stop. Proven by a REAL spawned subprocess reading back its own environment (TestSpawnedWorkerCarriesItsIdentityInTheEnvironment) rather than by testing the builder in isolation -- an isolated builder test passed for the entire time the wiring was missing. Migrated 2026-09-14 by plan 204-11 from a stray, out-of-band duplicate row (originally id 14, colliding with the real phase-203 entry 14) that had drifted below the JSON ledger block; original recorded/resolved timestamps were 2026-09-12T21:30:00.000Z.",
+    "status": "fixed",
+    "reason": "",
+    "recorded_at": "2026-09-14T15:42:11.225Z",
+    "resolved_at": "2026-09-14T15:42:13.430Z"
   }
 ]
 ````
-| 14 | 202.1 | unmet-truth | pkg/codex/platform_dispatch.go |  | `workerProcessEnv` (pkg/codex/process_tracker.go) had NO caller, so AETHER_WORKER_NAME never reached a spawned worker. `aether hook-stop` therefore could not tell an Aether build worker from a person: it blocked worker Weld-32 mid-build and advised `aether pause`, the worker ran it, and a live CosmicDashboard Autopilot colony was paused mid-phase. Wired the env at the spawn site and exempted Aether-spawned workers from hook-stop. Proven by a REAL spawned subprocess reading back its own environment (TestSpawnedWorkerCarriesItsIdentityInTheEnvironment) rather than by testing the builder in isolation — an isolated builder test passed for the entire time the wiring was missing. | fixed |  | 2026-09-12T21:30:00.000Z | 2026-09-12T21:30:00.000Z |

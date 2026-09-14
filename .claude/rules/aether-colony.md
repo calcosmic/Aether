@@ -226,3 +226,56 @@ yet proving that a caller claiming one of those names really is the
 coordinator. This gap predates this phase and is tracked, not silently
 fixed, in `.planning/WINDOWS.md`. See CLAUDE.md's "Biological Runtime"
 section for the full account and the tests that lock every claim above.
+
+## Learning Governor (v1.28, Phase 204)
+
+The evidence-gated outcome ledger the previous phase built now has a real
+production writer, reached from both places the program checks its own
+work, earning credit only when a real decision changed and a real effect
+was measured afterward.
+
+A lesson the program recorded but never checked is no longer shown to a
+helper under a heading that calls it proven — one shared rule now decides,
+everywhere, what counts as verified.
+
+Every remembered record now carries its own version and says where it came
+from; an old record is read as the older shape it actually is, and every
+field is either filled by something real or sits on a reason-carrying list
+that may only shrink.
+
+Every run the program does now leaves a permanent record of what it cost,
+what it decided and how it ended — one that outlives the live activity
+screen's own thirty-day memory.
+
+Guidance now moves through nine tracked states, a helper's claim that it
+used something is independently checked against what the program can
+actually see for itself, and a lesson must have genuinely helped once
+before it reaches the shared instruction file.
+
+This project's own confirmed failures are now a versioned bank of
+regression fixtures, each traceable to a real incident, either guarded by a
+named check or on a counted list that may only shrink.
+
+The test suite now runs as seven named, budgeted gates, each proving it ran
+everything it found — closing the cause of three separate entries in the
+project's own defect register.
+
+A proposed change to settings or routing can be tried beside current
+behaviour, graded by a judge it structurally cannot reach or edit, and a
+change that only looks better on the work it could see is named as exactly
+that.
+
+Two kinds of thing may be changed this way — remembered project facts, and
+task routing — and nine may never be: preferences, skills, workflows,
+source code, security settings, deletion, permissions, verification steps,
+and external actions. The nine have no code path into the automatic route
+at all.
+
+Finally, how often the program's own suggestions genuinely helped and how
+often a person had to step in are two separate figures that can never be
+blended into one, and a proposed source-code change can only ever become an
+ordinary, reviewable change — never something the program approves, merges,
+publishes, or deploys itself.
+
+See CLAUDE.md's "Learning Governor" section for the full account and the
+tests that lock every claim above.
