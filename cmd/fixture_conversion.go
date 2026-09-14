@@ -242,22 +242,22 @@ type regressionFixtureGuard struct {
 type regressionFixture struct {
 	ID               string                           `json:"id"`
 	Title            string                           `json:"title"`
-	FailingBaseline  regressionFixtureFailingBaseline  `json:"failing_baseline"`
+	FailingBaseline  regressionFixtureFailingBaseline `json:"failing_baseline"`
 	Invariant        string                           `json:"invariant"`
-	AllowedMutations []fixtureAllowedMutation          `json:"allowed_mutations"`
-	Provenance       []regressionFixtureProvenance     `json:"provenance"`
-	Privacy          fixturePrivacy                    `json:"privacy"`
-	Severity         fixtureSeverity                   `json:"severity"`
-	ContentDigest    string                            `json:"content_digest"`
-	RetiredBy        string                            `json:"retired_by,omitempty"`
-	SuccessorID      string                            `json:"successor_id,omitempty"`
-	Guard            *regressionFixtureGuard           `json:"guard,omitempty"`
+	AllowedMutations []fixtureAllowedMutation         `json:"allowed_mutations"`
+	Provenance       []regressionFixtureProvenance    `json:"provenance"`
+	Privacy          fixturePrivacy                   `json:"privacy"`
+	Severity         fixtureSeverity                  `json:"severity"`
+	ContentDigest    string                           `json:"content_digest"`
+	RetiredBy        string                           `json:"retired_by,omitempty"`
+	SuccessorID      string                           `json:"successor_id,omitempty"`
+	Guard            *regressionFixtureGuard          `json:"guard,omitempty"`
 }
 
 // regressionFixtureBank is the on-disk container at fixtureBankPath.
 type regressionFixtureBank struct {
-	SchemaVersion string               `json:"schema_version"`
-	Fixtures      []regressionFixture  `json:"fixtures"`
+	SchemaVersion string              `json:"schema_version"`
+	Fixtures      []regressionFixture `json:"fixtures"`
 }
 
 // fixtureBankSortedByID returns a new slice holding bank's fixtures sorted
