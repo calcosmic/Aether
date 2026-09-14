@@ -3250,6 +3250,23 @@
     "stability_score": 91
   },
   {
+    "name": "improve",
+    "short_description": "Look at how the colony's own suggestions are doing, or try one by hand",
+    "flags": [
+      "compare",
+      "declare",
+      "expected-benefit",
+      "expires",
+      "harms",
+      "id",
+      "rollback-plan",
+      "scope"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
     "name": "incident-rule-add",
     "short_description": "Add a rule to decree, constraint, or gate file",
     "flags": [
@@ -6558,6 +6575,31 @@
       "v5.4.0": false
     },
     "stability_score": 91
+  },
+  {
+    "name": "shadow-compare",
+    "short_description": "Run a declared candidate beside the current behaviour and record the verdict",
+    "flags": [
+      "candidate-id"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "shadow-declare",
+    "short_description": "Declare a candidate to try beside the current behaviour",
+    "flags": [
+      "expected-benefit",
+      "expires",
+      "harms",
+      "id",
+      "rollback-plan",
+      "scope"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
   },
   {
     "name": "shelf-add",

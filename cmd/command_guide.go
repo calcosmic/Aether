@@ -518,6 +518,7 @@ func commandGuideLiteralCommands() []string {
 		"help",
 		"history",
 		"import-signals",
+		"improve",
 		"insert-phase",
 		"interpret",
 		"lay-eggs",
