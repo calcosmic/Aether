@@ -667,13 +667,13 @@ Plans:
 
 **Gap closure — Wave 1** *(the seven verification gaps; every mechanism exists and needs a caller)*
 
-- [ ] 204-12-PLAN.md — Real shadow grading and the automatic improvement pass: a declared candidate reaches comparison, the promotion gate and a canary at the end of every check, on both check lanes, plus the hand-run `aether improve` surface.
 - [ ] 204-13-PLAN.md — The swarm and recovery lanes open durable episodes (no skipped subtests), and a closed intervention-kind vocabulary with three real production writers.
 - [ ] 204-14-PLAN.md — Shrink the unguarded regression-fixture floor honestly, and make the recorded floor the number the tests prove in both directions.
 
 **Gap closure — Wave 2** *(blocked on Wave 1)*
 
-- [ ] 204-15-PLAN.md — The nine writerless episode fields get real production writers, the ledger joins the memory-schema census, and the two honest figures are proven over episodes real lanes wrote.
+- [ ] 204-12-PLAN.md — Real shadow grading and the automatic improvement pass: a declared candidate reaches comparison, the promotion gate and a canary at the end of every check, on both check lanes, plus the hand-run `aether improve` surface. *(follows 204-14: its grader reads the fixture bank's guard state.)*
+- [ ] 204-15-PLAN.md — The nine writerless episode fields get real production writers on both check lanes, the ledger joins the memory-schema census, and the two honest figures are proven over episodes real lanes wrote.
 
 **Gap closure — Wave 3** *(blocked on Wave 2)*
 
