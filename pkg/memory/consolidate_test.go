@@ -502,8 +502,8 @@ func TestConsolidate_UsesLastAppliedForDecay(t *testing.T) {
 					LastApplied:      &recentApplied,
 					ApplicationCount: 3,
 				},
-				ApplicationHistory: []interface{}{
-					map[string]interface{}{"timestamp": recentApplied, "success": true},
+				ApplicationHistory: []colony.InstinctApplicationEntry{
+					{Timestamp: recentApplied, Outcome: "helpful"},
 				},
 			},
 		},
@@ -594,9 +594,9 @@ func TestConsolidate_ReviewCandidatesTrackFailingInstincts(t *testing.T) {
 					LastApplied:      &now,
 					ApplicationCount: 2,
 				},
-				ApplicationHistory: []interface{}{
-					map[string]interface{}{"timestamp": now, "success": false},
-					map[string]interface{}{"timestamp": now, "success": false},
+				ApplicationHistory: []colony.InstinctApplicationEntry{
+					{Timestamp: now, Outcome: "harmful"},
+					{Timestamp: now, Outcome: "harmful"},
 				},
 			},
 		},

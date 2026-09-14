@@ -104,7 +104,7 @@ var instinctCreateCmd = &cobra.Command{
 				CreatedAt:        now,
 				ApplicationCount: 1,
 			},
-			ApplicationHistory: []interface{}{},
+			ApplicationHistory: []colony.InstinctApplicationEntry{},
 			RelatedInstincts:   []interface{}{},
 			Archived:           false,
 		}

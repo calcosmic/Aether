@@ -214,24 +214,33 @@ func runPhaseEndConsolidation(phaseID int) phaseEndConsolidationSummary {
 		return phaseEndConsolidationSummary{Ran: false, Reason: "no store initialized"}
 	}
 
-	// Record which instincts this phase actually delivered and applied
-	// BEFORE the pipeline runs, so the decay/confidence step below (STEP 1 of
+	// LEARN-03 (204-02-PLAN.md Task 1, ruling (a)): the first real
+	// production writer into the evidence-gated credit ledger
+	// (cmd/recruitment_credit.go) -- placed BEFORE
+	// recordInstinctApplicationsForPhase below (204-03-PLAN.md Task 2,
+	// SYN-204-05/06: reordered from the original placement after it).
+	// recordInstinctApplicationsForPhase now derives each entry's outcome
+	// by looking up this SAME phase's own credit record
+	// (recruitmentCreditForContribution) -- if credit were recorded
+	// second, every application entry this phase ever writes would read
+	// "pending" forever, since recordInstinctApplicationsForPhase's own
+	// per-phase idempotency guard (instinctAlreadyAppliedForPhase) means a
+	// phase is recorded exactly once and never revisited. Placing credit
+	// first is what makes the lookup findable on the very same pass.
+	// Never a Go error, never blocks this phase advance -- its own return
+	// value shares phaseEndConsolidationSummary's non-blocking shape (see
+	// cmd/application_evidence.go for the writer's own doc comment). This
+	// function is itself already invoked from cmd/codex_continue.go and
+	// cmd/codex_continue_finalize.go -- the one call site that puts this
+	// on both check lanes.
+	recordPhaseApplicationCredit(phaseID)
+
+	// Record which instincts this phase actually delivered and applied, so
+	// the decay/confidence step below (STEP 1 of
 	// pkg/memory.ConsolidationService.Run) reads the freshly-recorded
 	// application history for this phase, and a repeated phase-end pass for
 	// the same phase adds no further entries (198.1-03/FEED-03).
 	applicationsRecorded := recordInstinctApplicationsForPhase(phaseID)
-
-	// LEARN-03 (204-02-PLAN.md Task 1, ruling (a)): the first real
-	// production writer into the evidence-gated credit ledger
-	// (cmd/recruitment_credit.go) -- placed immediately after the
-	// application-recording call above and before the pipeline runs, the
-	// one call site that puts this on both check lanes (this function
-	// is itself already invoked from cmd/codex_continue.go and
-	// cmd/codex_continue_finalize.go). Never a Go error, never blocks this
-	// phase advance -- its own return value shares
-	// phaseEndConsolidationSummary's non-blocking shape (see
-	// cmd/application_evidence.go for the writer's own doc comment).
-	recordPhaseApplicationCredit(phaseID)
 
 	bus := events.NewBus(store, events.DefaultConfig())
 	pipeline := learn.NewPipeline(store, bus, pipelineConfigForStore())

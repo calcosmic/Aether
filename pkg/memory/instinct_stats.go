@@ -19,27 +19,43 @@ type InstinctApplicationSummary struct {
 // SummarizeInstinctApplications folds legacy provenance counters and explicit
 // application history into one consistent summary. Older colonies only tracked
 // application_count, so missing history entries are treated as successful uses.
+//
+// Each ApplicationHistory entry (colony.InstinctApplicationEntry,
+// SYN-204-05/06) is read in whichever of its two shapes it carries: the new
+// shape's Outcome (helpful counts a success, harmful counts a failure,
+// neutral/pending/empty count as neither -- an entry with no verified
+// outcome is not silently treated as a success), or -- only when Outcome is
+// empty -- the old shape's LegacySuccess boolean (true/false count exactly
+// as they did before this change). Applications counts every entry either
+// way; only the success/failure tally differs by shape.
 func SummarizeInstinctApplications(entry colony.InstinctEntry) InstinctApplicationSummary {
 	summary := InstinctApplicationSummary{}
 	if entry.Provenance.LastApplied != nil {
 		summary.LastApplied = *entry.Provenance.LastApplied
 	}
 
-	for _, raw := range entry.ApplicationHistory {
-		item, ok := raw.(map[string]interface{})
-		if !ok {
-			continue
-		}
+	for _, app := range entry.ApplicationHistory {
 		summary.Applications++
-		if success, ok := item["success"].(bool); ok {
-			if success {
+		switch {
+		case app.Outcome != "":
+			switch app.Outcome {
+			case "helpful":
+				summary.Successes++
+			case "harmful":
+				summary.Failures++
+				// neutral, pending: a verified-but-inconclusive or
+				// not-yet-verified outcome counts as neither a success
+				// nor a failure.
+			}
+		case app.LegacySuccess != nil:
+			if *app.LegacySuccess {
 				summary.Successes++
 			} else {
 				summary.Failures++
 			}
 		}
-		if ts, ok := item["timestamp"].(string); ok {
-			summary.LastApplied = newerTimestamp(summary.LastApplied, ts)
+		if app.Timestamp != "" {
+			summary.LastApplied = newerTimestamp(summary.LastApplied, app.Timestamp)
 		}
 	}
 

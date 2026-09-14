@@ -131,21 +131,26 @@ func capsuleForDispatch(dispatch codex.WorkerDispatch) string {
 	return manifest.Data.ContextCapsule
 }
 
-// applicationHistoryPhaseKey is the extra key recordInstinctApplicationsForPhase
-// writes alongside instinct-apply's existing "timestamp"/"success" pair --
-// it is what makes a repeated phase-end consolidation idempotent per phase.
-const applicationHistoryPhaseKey = "phase"
-
 // recordInstinctApplicationsForPhase reads instinct-deliveries.json for
 // phaseID and, for each delivered instinct id that is still present and
-// non-archived in instincts.json, appends one ApplicationHistory entry
-// matching instinct-apply's shape exactly (cmd/internal_cmds.go) plus the
-// extra "phase" key that makes this idempotent per phase. Reaching this
-// function means the phase durably advanced and its gates passed --
-// runPhaseEndConsolidation's own doc comment already states that contract,
-// so success is recorded as true on that basis; this is not a second
-// pass/fail signal. Returns the number of applications newly recorded.
-// Never returns an error -- a write failure is warned to stderr.
+// non-archived in instincts.json, appends one typed ApplicationHistory
+// entry (colony.InstinctApplicationEntry, SYN-204-05/06) carrying the
+// extra "phase" key that makes this idempotent per phase.
+//
+// The outcome is never inferred from the phase having merely advanced --
+// reaching this function proves nothing about whether any PARTICULAR
+// instinct helped (SYN-204-05, ruling (c)). It is looked up from the
+// evidence-gated credit ledger (cmd/recruitment_credit.go) via
+// recruitmentCreditForContribution, keyed by this instinct's ID and the
+// deterministic decision identifier phaseApplicationDecisionID declares
+// (cmd/application_evidence.go, 204-02-PLAN.md). When a credit record
+// exists for (instinct, decision), the entry carries that record's real
+// outcome and its record ID. When none exists yet, the entry carries the
+// pending outcome and no credit record ID -- a delivery that has not yet
+// been measured, never a default or inferred success.
+//
+// Returns the number of applications newly recorded. Never returns an
+// error -- a write failure is warned to stderr.
 func recordInstinctApplicationsForPhase(phaseID int) int {
 	if store == nil {
 		return 0
@@ -165,6 +170,8 @@ func recordInstinctApplicationsForPhase(phaseID int) int {
 		return 0
 	}
 
+	decisionIDs := latestPhaseDecisionIDs(phaseID)
+
 	newApplications := 0
 	var file colony.InstinctsFile
 	err := store.UpdateJSONAtomically("instincts.json", &file, func() error {
@@ -179,10 +186,12 @@ func recordInstinctApplicationsForPhase(phaseID int) int {
 			now := time.Now().UTC().Format("2006-01-02T15:04:05Z")
 			inst.Provenance.LastApplied = &now
 			inst.Provenance.ApplicationCount++
-			inst.ApplicationHistory = append(inst.ApplicationHistory, map[string]interface{}{
-				"timestamp":                now,
-				"success":                  true,
-				applicationHistoryPhaseKey: phaseID,
+			outcome, creditRecordID := instinctApplicationOutcome(inst.ID, decisionIDs)
+			inst.ApplicationHistory = append(inst.ApplicationHistory, colony.InstinctApplicationEntry{
+				Timestamp:      now,
+				Phase:          phaseID,
+				Outcome:        outcome,
+				CreditRecordID: creditRecordID,
 			})
 			newApplications++
 		}
@@ -195,28 +204,56 @@ func recordInstinctApplicationsForPhase(phaseID int) int {
 	return newApplications
 }
 
+// latestPhaseDecisionIDs returns the deterministic decision identifiers
+// (phaseApplicationDecisionID, cmd/application_evidence.go) for every
+// decision-kind knowledge delta on phaseID's latest durable build attempt,
+// or nil when there is none -- the SAME decision IDs
+// recordPhaseApplicationCredit derives, so a credit record recorded
+// against one of these IDs is the one this function can find.
+func latestPhaseDecisionIDs(phaseID int) []string {
+	_, latestAttempt, ok := loadLatestBuildAttempt(phaseID)
+	if !ok {
+		return nil
+	}
+	var decisionIDs []string
+	decisionIndex := 0
+	for _, delta := range latestAttempt.KnowledgeDeltas {
+		if delta.Kind != buildKnowledgeDeltaKindDecision {
+			continue
+		}
+		decisionIDs = append(decisionIDs, phaseApplicationDecisionID(latestAttempt.ID, decisionIndex))
+		decisionIndex++
+	}
+	return decisionIDs
+}
+
+// instinctApplicationOutcome looks up the real credit record for
+// (instinctID, decisionID) across every candidate decision ID, returning
+// the first one found's outcome and record ID. No decision ID to check, or
+// no credit record recorded against any of them yet, returns the pending
+// outcome and no credit record ID -- never a default or inferred success
+// (SYN-204-05/06).
+func instinctApplicationOutcome(instinctID string, decisionIDs []string) (string, string) {
+	for _, decisionID := range decisionIDs {
+		record, ok, err := recruitmentCreditForContribution(instinctID, decisionID)
+		if err != nil || !ok {
+			continue
+		}
+		return string(record.Outcome), record.RecordID
+	}
+	return string(recruitmentCreditOutcomePending), ""
+}
+
 // instinctAlreadyAppliedForPhase reports whether history already carries an
-// entry whose "phase" key equals phaseID -- what makes a repeated phase-end
-// consolidation add no further entries for that phase.
-func instinctAlreadyAppliedForPhase(history []interface{}, phaseID int) bool {
-	for _, raw := range history {
-		item, ok := raw.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		p, ok := item[applicationHistoryPhaseKey]
-		if !ok {
-			continue
-		}
-		switch v := p.(type) {
-		case float64:
-			if int(v) == phaseID {
-				return true
-			}
-		case int:
-			if v == phaseID {
-				return true
-			}
+// entry whose Phase equals phaseID -- what makes a repeated phase-end
+// consolidation add no further entries for that phase. Reads both shapes
+// (Phase is populated by UnmarshalJSON for either the new typed shape or
+// the old "phase" key), so a legacy entry recorded for this phase is
+// correctly recognized too.
+func instinctAlreadyAppliedForPhase(history []colony.InstinctApplicationEntry, phaseID int) bool {
+	for _, entry := range history {
+		if entry.Phase == phaseID {
+			return true
 		}
 	}
 	return false
