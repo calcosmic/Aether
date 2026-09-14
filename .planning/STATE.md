@@ -6,10 +6,10 @@ current_phase: 204
 current_phase_name: Learning Governor
 status: executing
 stopped_at: Phase 204 planned (11 plans, 7 waves), ready to execute
-last_updated: "2026-09-14T08:50:28.357Z"
+last_updated: "2026-09-14T09:12:12.381Z"
 last_activity: 2026-09-14
-last_activity_desc: Phase 204 planned — 11 plans verified, ready to execute
-state_head: 5023b0d021fbfa697721eba830696a48b40c9a52
+last_activity_desc: Phase 204 execution started
+state_head: 34dcd526ec9933983be37259374d779a91ee4d02
 progress:
   total_phases: 8
   completed_phases: 4
@@ -25,17 +25,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-07)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 203 — biological-runtime
+**Current focus:** Phase 204 — Learning Governor
 **Previous milestone:** v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02 (48/48 requirements; audit `tech_debt`, no blockers)
 **Product version:** v1.0.66 (installed and source binaries agree in the 2026-09-02 local check)
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
 
 ## Current Position
 
-Phase: 204 (Learning Governor) — READY TO EXECUTE
+Phase: 204 (Learning Governor) — EXECUTING
 Next phase: 205 (Owner Acceptance and Restoration Seal)
-Status: Ready to execute
-Last activity: 2026-09-14 — Phase 204 planned, 11 plans verified, ready to execute
+Status: Executing Phase 204
+Last activity: 2026-09-14 — Phase 204 execution started
 
 ## Performance Metrics
 
