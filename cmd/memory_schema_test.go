@@ -690,11 +690,15 @@ func discoveredMemoryStoreFields(types []memoryStoreCensusType) []string {
 }
 
 // memoryStoreCensusMissing returns every field in discovered that is named
-// in neither writers nor exceptions -- the shared check both
+// in none of writers, exceptions or retired -- the shared check both
 // TestEveryMemoryStoreFieldHasALiveWriter and the synthetic non-vacuousness
 // proof below reuse, so the two can never silently diverge on what
-// "missing" means.
-func memoryStoreCensusMissing(discovered []string, writers map[string]memoryStoreFieldWriter, exceptions map[string]string) []string {
+// "missing" means. A retired field (204-03-PLAN.md Task 4's owner
+// decision) counts as accounted-for here exactly like a writer or an
+// exception does -- retirement is validated separately, by
+// validateMemoryStoreFieldRetirements, for the reason/agreement-date
+// requirement a bare "is it in the map" check cannot express.
+func memoryStoreCensusMissing(discovered []string, writers map[string]memoryStoreFieldWriter, exceptions map[string]string, retired map[string]memoryStoreRetiredField) []string {
 	var missing []string
 	for _, f := range discovered {
 		if _, ok := writers[f]; ok {
@@ -703,10 +707,33 @@ func memoryStoreCensusMissing(discovered []string, writers map[string]memoryStor
 		if _, ok := exceptions[f]; ok {
 			continue
 		}
+		if _, ok := retired[f]; ok {
+			continue
+		}
 		missing = append(missing, f)
 	}
 	sort.Strings(missing)
 	return missing
+}
+
+// validateMemoryStoreFieldRetirements returns every field in retired whose
+// entry is missing a reason or the owner's recorded agreement date --
+// retiring a field is this phase's one irreversible action (204-03-PLAN.md
+// Task 4) and must never happen by omission. Shared by
+// TestEveryMemoryStoreFieldHasALiveWriter (run against the real
+// memoryStoreFieldRetired map) and
+// TestRetiredFieldWithoutOwnerAgreementIsRefused (run against a synthetic
+// map proving the check can genuinely fail), so the two can never silently
+// diverge on what "refused" means.
+func validateMemoryStoreFieldRetirements(retired map[string]memoryStoreRetiredField) []string {
+	var problems []string
+	for f, rf := range retired {
+		if strings.TrimSpace(rf.reason) == "" || strings.TrimSpace(rf.ownerAgreedOn) == "" {
+			problems = append(problems, f)
+		}
+	}
+	sort.Strings(problems)
+	return problems
 }
 
 // TestEveryMemoryStoreFieldHasALiveWriter is the LEARN-01 field-level
@@ -718,8 +745,8 @@ func memoryStoreCensusMissing(discovered []string, writers map[string]memoryStor
 func TestEveryMemoryStoreFieldHasALiveWriter(t *testing.T) {
 	discovered := discoveredMemoryStoreFields(liveMemoryStoreCensusTypes())
 
-	if missing := memoryStoreCensusMissing(discovered, memoryStoreFieldWriters, memoryStoreFieldExceptions); len(missing) > 0 {
-		t.Errorf("memory-store field(s) with no writer and no exception-list entry: %s -- give the field a writer, or add a justified exception", strings.Join(missing, ", "))
+	if missing := memoryStoreCensusMissing(discovered, memoryStoreFieldWriters, memoryStoreFieldExceptions, memoryStoreFieldRetired); len(missing) > 0 {
+		t.Errorf("memory-store field(s) with no writer, no exception-list entry, and no retirement: %s -- give the field a writer, add a justified exception, or retire it with the owner's recorded agreement", strings.Join(missing, ", "))
 	}
 
 	discoveredSet := map[string]bool{}
@@ -741,6 +768,38 @@ func TestEveryMemoryStoreFieldHasALiveWriter(t *testing.T) {
 		if strings.TrimSpace(reason) == "" {
 			t.Errorf("memoryStoreFieldExceptions[%q] has no written reason", f)
 		}
+	}
+
+	if problems := validateMemoryStoreFieldRetirements(memoryStoreFieldRetired); len(problems) > 0 {
+		t.Errorf("retired field(s) missing a written reason or the owner's recorded agreement date: %s -- a retirement requires both, recorded in the same reviewed change", strings.Join(problems, ", "))
+	}
+}
+
+// TestRetiredFieldWithoutOwnerAgreementIsRefused is the non-vacuousness
+// proof the plan's own Task 4 resume instructions require: a retirement
+// recorded without the owner's agreement date, or without a reason, must be
+// refused by name. Driven against a synthetic map -- never the real
+// memoryStoreFieldRetired, which must stay valid -- so this test can fail
+// independently of whatever the real map currently contains.
+func TestRetiredFieldWithoutOwnerAgreementIsRefused(t *testing.T) {
+	synthetic := map[string]memoryStoreRetiredField{
+		"synthetic.no_agreement_date": {reason: "a plausible-sounding reason", ownerAgreedOn: ""},
+		"synthetic.no_reason":         {reason: "", ownerAgreedOn: "2026-09-14"},
+		"synthetic.properly_recorded": {reason: "a plausible-sounding reason", ownerAgreedOn: "2026-09-14"},
+	}
+	problems := validateMemoryStoreFieldRetirements(synthetic)
+	problemSet := map[string]bool{}
+	for _, f := range problems {
+		problemSet[f] = true
+	}
+	if !problemSet["synthetic.no_agreement_date"] {
+		t.Errorf("expected synthetic.no_agreement_date to be refused for missing the owner's agreement date, got problems=%v", problems)
+	}
+	if !problemSet["synthetic.no_reason"] {
+		t.Errorf("expected synthetic.no_reason to be refused for missing a reason, got problems=%v", problems)
+	}
+	if problemSet["synthetic.properly_recorded"] {
+		t.Errorf("synthetic.properly_recorded carries both a reason and an agreement date -- it must NOT be refused, got problems=%v", problems)
 	}
 }
 
@@ -768,7 +827,7 @@ func TestMemoryStoreCensusDiscoversFieldsByReflectionNotByList(t *testing.T) {
 	synthetic := []memoryStoreCensusType{{"synthetic", reflect.TypeOf(syntheticRecord{})}}
 	discovered := discoveredMemoryStoreFields(synthetic)
 
-	missing := memoryStoreCensusMissing(discovered, memoryStoreFieldWriters, memoryStoreFieldExceptions)
+	missing := memoryStoreCensusMissing(discovered, memoryStoreFieldWriters, memoryStoreFieldExceptions, memoryStoreFieldRetired)
 	missingSet := map[string]bool{}
 	for _, f := range missing {
 		missingSet[f] = true

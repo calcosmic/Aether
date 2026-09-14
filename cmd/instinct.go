@@ -105,8 +105,11 @@ var instinctCreateCmd = &cobra.Command{
 				ApplicationCount: 1,
 			},
 			ApplicationHistory: []colony.InstinctApplicationEntry{},
-			RelatedInstincts:   []interface{}{},
-			Archived:           false,
+			// RelatedInstincts is retired (204-03-PLAN.md Task 4,
+			// LEARN-01, owner-recorded agreement 2026-09-14) -- no writer
+			// populates it on a newly-created record; see
+			// colony.InstinctEntry's own doc comment.
+			Archived: false,
 		}
 
 		file.Instincts = append(file.Instincts, entry)

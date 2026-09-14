@@ -43,16 +43,17 @@ func memoryStoreSchemaReadable(version int) bool {
 }
 
 // ---------------------------------------------------------------------------
-// Field-level writer census (204-03-PLAN.md Task 3, LEARN-01).
+// Field-level writer census (204-03-PLAN.md Task 3, LEARN-01), and the
+// owner's Task 4 field-disposition decision applied on top of it.
 //
-// memoryStoreFieldWriters and memoryStoreFieldExceptions are keyed
-// "<store>.<json field name>" -- namespaced by store because several of
-// the six live memory stores this census covers share field names
-// (id/timestamp/created_at/schema_version/lineage), and a flat, unqualified
-// map would silently conflate them. The six stores, and the store-name
-// prefix cmd/memory_schema_test.go's census uses for each, are declared
-// together with the record types themselves in that test file's
-// liveMemoryStoreCensusTypes -- not duplicated here.
+// memoryStoreFieldWriters, memoryStoreFieldExceptions and
+// memoryStoreFieldRetired are keyed "<store>.<json field name>" --
+// namespaced by store because several of the six live memory stores this
+// census covers share field names (id/timestamp/created_at/schema_version/
+// lineage), and a flat, unqualified map would silently conflate them. The
+// six stores, and the store-name prefix cmd/memory_schema_test.go's census
+// uses for each, are declared together with the record types themselves in
+// that test file's liveMemoryStoreCensusTypes -- not duplicated here.
 // ---------------------------------------------------------------------------
 
 // memoryStoreFieldWriter documents the concrete runtime function that fills
@@ -186,16 +187,53 @@ var memoryStoreFieldWriters = map[string]memoryStoreFieldWriter{
 // production writer. Every entry must carry a one-sentence reason. Seeded
 // from the census's own first real run against this worktree's HEAD, per
 // this plan's own instruction -- not pre-guessed.
+//
+// 204-03-PLAN.md Task 4 (LEARN-01) put the full census in front of the
+// owner, who chose "mixture" (decide field by field, per the recommendation
+// beside each): retire instinct.related_instincts (see
+// memoryStoreFieldRetired below -- it is no longer in this map, which is
+// why the exception count below dropped from 4 to 3 and the floor with
+// it), and keep these remaining three, recorded here as knowingly empty
+// rather than connected or retired.
 var memoryStoreFieldExceptions = map[string]string{
-	"instinct.related_instincts": "declared for a future instinct-relationship link; pkg/graph (the only code that would consume it) is doubly orphaned per 204-CLASSIC-SYNTHESIS.md ruling (e) -- no production writer fills it beyond the empty-slice initializer at creation.",
-	"midden.acknowledge_reason":  "declared alongside Acknowledged/AcknowledgedAt for a future reviewer-supplied reason; midden-acknowledge (cmd/midden_cmds.go) sets Acknowledged/AcknowledgedAt but never this field.",
-	"learn.parent_id":            "declared for a future hypothesis-lineage link; no production writer sets it (the only other ParentID writer in the tree, cmd/exchange.go, targets an unrelated type, exchange.ColonyEntry).",
-	"pheromone.scope":            "declared for a future global/local pheromone distinction; only a sync-time merge picker (firstScopePtr, cmd/pheromone_sync.go) reads an existing value -- nothing originates one.",
+	"midden.acknowledge_reason": "declared alongside Acknowledged/AcknowledgedAt for a future reviewer-supplied reason; midden-acknowledge (cmd/midden_cmds.go) sets Acknowledged/AcknowledgedAt but never this field. Owner reviewed the full field census on 2026-09-14 (204-03-PLAN.md Task 4, mixture decision) and chose to keep it, recorded knowingly empty: cheap and plausibly useful, but nothing in this phase's own planned work needs it yet.",
+	"learn.parent_id":           "declared for a future hypothesis-lineage link; no production writer sets it (the only other ParentID writer in the tree, cmd/exchange.go, targets an unrelated type, exchange.ColonyEntry). Owner reviewed the full field census on 2026-09-14 (204-03-PLAN.md Task 4, mixture decision) and chose to keep it, recorded knowingly empty: plausibly useful, but nothing in this phase's own planned work needs it yet.",
+	"pheromone.scope":           "declared for a future global/local pheromone distinction; only a sync-time merge picker (firstScopePtr, cmd/pheromone_sync.go) reads an existing value -- nothing originates one. Owner reviewed the full field census on 2026-09-14 (204-03-PLAN.md Task 4, mixture decision) and chose to keep it, recorded knowingly empty: plausibly useful, but nothing in this phase's own planned work needs it yet.",
 }
 
 // memoryStoreFieldExceptionFloor pins the maximum tolerated size of
 // memoryStoreFieldExceptions -- the exception list may only shrink.
 // Widening this map requires widening this constant in the SAME reviewed
 // change, with a written reason for each new entry. See
-// TestMemoryStoreFieldExceptionsOnlyShrink.
-const memoryStoreFieldExceptionFloor = 4
+// TestMemoryStoreFieldExceptionsOnlyShrink. Dropped from 4 to 3 when the
+// owner's Task 4 decision moved instinct.related_instincts out of this map
+// and into memoryStoreFieldRetired.
+const memoryStoreFieldExceptionFloor = 3
+
+// memoryStoreRetiredField documents a field the owner has explicitly agreed
+// to retire (204-03-PLAN.md Task 4, LEARN-01) -- distinct from
+// memoryStoreFieldExceptions, whose entries stay knowingly empty rather
+// than retired. Retiring a field never deletes a stored record and never
+// removes the struct field itself (which stays, so a pre-retirement
+// record's own value still reads back correctly); it only means no
+// production writer fills it on a newly-created record any longer. Both
+// fields are mandatory and non-empty -- a retirement recorded without the
+// owner's agreement date is refused by name (see
+// TestRetiredFieldWithoutOwnerAgreementIsRefused), because retiring is the
+// one irreversible action this phase's checkpoint named and must never
+// happen by omission.
+type memoryStoreRetiredField struct {
+	reason        string // what the field was for, and why nobody can name a use
+	ownerAgreedOn string // date the owner recorded agreement to retire (must be non-empty)
+}
+
+// memoryStoreFieldRetired is the retired-field list validated alongside
+// memoryStoreFieldWriters and memoryStoreFieldExceptions by
+// TestEveryMemoryStoreFieldHasALiveWriter. A field named here counts as
+// accounted-for in the census, exactly like a writer or an exception does.
+var memoryStoreFieldRetired = map[string]memoryStoreRetiredField{
+	"instinct.related_instincts": {
+		reason:        "a future link between related instincts; the only code that would ever read it (pkg/graph) is doubly orphaned per 204-CLASSIC-SYNTHESIS.md ruling (e), which forbids any plan in this phase from citing pkg/graph's existence as justification for new work -- nobody in this phase can name a use, by the phase's own prior ruling.",
+		ownerAgreedOn: "2026-09-14",
+	},
+}
