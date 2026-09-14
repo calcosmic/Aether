@@ -14,6 +14,19 @@ type InstinctApplicationSummary struct {
 	Failures     int
 	SuccessRate  float64
 	LastApplied  string
+
+	// HelpfulApplications, HarmfulApplications and IgnoredApplications
+	// (LEARN-03, 204-06-PLAN.md Task 3) count typed application entries by
+	// their own recorded outcome (colony.InstinctApplicationEntry.Outcome:
+	// helpful/harmful/ignored, from the credit ledger's and the guidance
+	// application ledger's own closed vocabularies) -- distinct from
+	// Successes/Failures above, which also fold in the legacy untyped
+	// LegacySuccess boolean. An instinct whose applications are all in the
+	// old untyped shape counts zero of all three: a legacy entry carries no
+	// outcome to be helpful, harmful, or ignored about.
+	HelpfulApplications int
+	HarmfulApplications int
+	IgnoredApplications int
 }
 
 // SummarizeInstinctApplications folds legacy provenance counters and explicit
@@ -41,8 +54,12 @@ func SummarizeInstinctApplications(entry colony.InstinctEntry) InstinctApplicati
 			switch app.Outcome {
 			case "helpful":
 				summary.Successes++
+				summary.HelpfulApplications++
 			case "harmful":
 				summary.Failures++
+				summary.HarmfulApplications++
+			case "ignored":
+				summary.IgnoredApplications++
 				// neutral, pending: a verified-but-inconclusive or
 				// not-yet-verified outcome counts as neither a success
 				// nor a failure.

@@ -1232,6 +1232,12 @@ func TestSealDoesNotDoublePromoteInstincts(t *testing.T) {
 	}
 
 	const actionText = "Run go build ./... before every seal to catch broken compilation"
+	// LEARN-03 (204-06-PLAN.md Task 3): at least one genuinely helpful
+	// application, not merely three applications of any kind -- otherwise
+	// this instinct falls out of consolidation's QueenEligible list and the
+	// fixture no longer exercises the "dual eligibility" scenario this test
+	// is named for.
+	dualEligibilityNow := time.Now().UTC().Format("2006-01-02T15:04:05Z")
 	instincts := colony.InstinctsFile{
 		Version: "1",
 		Instincts: []colony.InstinctEntry{
@@ -1244,7 +1250,10 @@ func TestSealDoesNotDoublePromoteInstincts(t *testing.T) {
 				TrustTier:  "trusted",
 				Confidence: 0.9,
 				Provenance: colony.InstinctProvenance{ApplicationCount: 3},
-				Archived:   false,
+				ApplicationHistory: []colony.InstinctApplicationEntry{
+					{Timestamp: dualEligibilityNow, Phase: 1, Outcome: "helpful"},
+				},
+				Archived: false,
 			},
 		},
 	}
@@ -1415,7 +1424,10 @@ func TestSealReportsPipelinePromotedInstinctsBelowLocalBar(t *testing.T) {
 
 	// Snapshot confidence 0.78: below the seal loop's 0.8 bar, but with 3
 	// recorded applications the post-decay confidence stays >= 0.75, so the
-	// pipeline promotes it into QUEEN.md's "## Instincts" section.
+	// pipeline promotes it into QUEEN.md's "## Instincts" section. LEARN-03
+	// (204-06-PLAN.md Task 3): at least one of those applications must now
+	// be genuinely helpful, not merely three applications of any kind.
+	nowStr := time.Now().UTC().Format("2006-01-02T15:04:05Z")
 	instincts := colony.InstinctsFile{
 		Version: "1",
 		Instincts: []colony.InstinctEntry{
@@ -1428,7 +1440,10 @@ func TestSealReportsPipelinePromotedInstinctsBelowLocalBar(t *testing.T) {
 				TrustTier:  "trusted",
 				Confidence: 0.78,
 				Provenance: colony.InstinctProvenance{ApplicationCount: 3},
-				Archived:   false,
+				ApplicationHistory: []colony.InstinctApplicationEntry{
+					{Timestamp: nowStr, Phase: 1, Outcome: "helpful"},
+				},
+				Archived: false,
 			},
 		},
 	}

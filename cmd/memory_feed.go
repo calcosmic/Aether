@@ -111,6 +111,16 @@ func recordDispatchWorkerOutcome(dispatch codex.WorkerDispatch, result codex.Dis
 	// stays the guarantee that both build lanes record deliveries.
 	recordInstinctDeliveries(dispatch.Phase, dispatch.Workflow, capsuleForDispatch(dispatch))
 
+	// LEARN-03 (204-06-PLAN.md Task 2): record what this worker's own
+	// handoff shows actually happened to a piece of delivered guidance --
+	// consulted, acted on, or contradicted, each checked against durable
+	// evidence the runtime holds independently, never accepted on the
+	// worker's own word. Placed here, after recordInstinctDeliveries and
+	// before feedMemoryFromWorkerOutcome, so Plan 01's one-boundary AST
+	// guard (TestEveryBuildLaneFeedsMemoryThroughOneBoundary) stays the
+	// guarantee that both build lanes record these states too.
+	recordGuidanceStatesForWorkerOutcome(facts)
+
 	feedMemoryFromWorkerOutcome(facts)
 
 	return err

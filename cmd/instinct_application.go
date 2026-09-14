@@ -60,8 +60,20 @@ func recordInstinctDeliveries(phaseID int, workflow, capsule string) int {
 		if action == "" {
 			continue
 		}
+		// LEARN-03 (204-06-PLAN.md Task 2): available is recorded at the
+		// point eligibility is determined -- every non-archived instinct
+		// with non-empty action text, whether or not the capsule actually
+		// carried its text -- so guidance that was eligible and never
+		// rendered is distinguishable from guidance that never existed.
+		// Never blocks delivery recording on a write failure.
+		if _, _, err := recordGuidanceApplicationState(inst.ID, recruitmentContributionMemoryItem, phaseID, guidanceApplicationStateAvailable, ""); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not record guidance available state: %v\n", err)
+		}
 		if !strings.Contains(capsule, action) {
 			continue
+		}
+		if _, _, err := recordGuidanceApplicationState(inst.ID, recruitmentContributionMemoryItem, phaseID, guidanceApplicationStateRendered, ""); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not record guidance rendered state: %v\n", err)
 		}
 		candidates = append(candidates, instinctDelivery{
 			Phase:      phaseID,

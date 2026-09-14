@@ -5,7 +5,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -82,6 +84,51 @@ func mapKeysEqual(a, b map[string]bool) bool {
 		}
 	}
 	return true
+}
+
+// seedOneHelpfulApplicationCreditBuildAttempt writes two minimal, real-shaped
+// durable build attempts for phaseID directly through the store, via the
+// SAME production setters cmd/recruitment_credit_test.go's own
+// newApplicationCreditFixture uses (attachBuildFreeCheckReport,
+// attachBuildKnowledgeDeltas) -- an earlier attempt whose free checks
+// failed, and the phase's LATEST attempt, carrying a decision-kind
+// knowledge delta and a clean free-check report. This drives
+// recordPhaseApplicationCredit's own real derivation
+// (cmd/application_evidence.go) to a genuine "helpful" outcome the next
+// time it runs for phaseID (LEARN-03, 204-06-PLAN.md Task 3), rather than
+// the "pending" outcome every round in this test would otherwise record.
+func seedOneHelpfulApplicationCreditBuildAttempt(t *testing.T, phaseID int) {
+	t.Helper()
+	if store == nil {
+		t.Fatal("seedOneHelpfulApplicationCreditBuildAttempt: store is nil")
+	}
+
+	earlierID := "attempt-a"
+	seedMinimalBuildAttempt(t, phaseID, earlierID, []codexBuildDispatch{{Name: "Mason-1", Caste: "builder"}})
+	earlierRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseID), "attempts", earlierID+".json"))
+	if err := attachBuildFreeCheckReport(earlierRel, buildFreeCheckReport{
+		RecordedAt: time.Now().UTC().Format(time.RFC3339), Phase: phaseID,
+		ChecksRun: []string{"tests"}, Failed: []string{"tests"}, Passed: false,
+		Summary: "earlier attempt free checks",
+	}); err != nil {
+		t.Fatalf("attach earlier free-check report: %v", err)
+	}
+
+	latestID := "attempt-b"
+	seedMinimalBuildAttempt(t, phaseID, latestID, []codexBuildDispatch{{Name: "Mason-1", Caste: "builder"}})
+	latestRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseID), "attempts", latestID+".json"))
+	if err := attachBuildFreeCheckReport(latestRel, buildFreeCheckReport{
+		RecordedAt: time.Now().UTC().Format(time.RFC3339), Phase: phaseID,
+		ChecksRun: []string{"tests"}, Failed: nil, Passed: true,
+		Summary: "latest attempt free checks",
+	}); err != nil {
+		t.Fatalf("attach latest free-check report: %v", err)
+	}
+	if err := attachBuildKnowledgeDeltas(latestRel, []buildAttemptKnowledgeDelta{
+		{Kind: buildKnowledgeDeltaKindDecision, Summary: "chose to require a genuinely helpful outcome before promotion"},
+	}); err != nil {
+		t.Fatalf("attach knowledge deltas: %v", err)
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -372,11 +419,17 @@ func TestPhaseEndConsolidationReportsWhatReachedTheQueenFile(t *testing.T) {
 
 	inst := promoteRealInstinct(t, s, "run go vet ./cmd/ before go test ./cmd/ to catch lint failures early", "pattern")
 
+	// LEARN-03 (204-06-PLAN.md Task 3): promotion now also requires at
+	// least one genuinely helpful application, not merely three
+	// applications of any kind -- see
+	// seedOneHelpfulApplicationCreditBuildAttempt's own doc comment for why
+	// every round seeds one.
 	var summary phaseEndConsolidationSummary
 	for phase := 1; phase <= 6; phase++ {
 		if recorded := recordInstinctDeliveries(phase, "continue", inst.Action); recorded == 0 {
 			t.Fatalf("phase %d: expected a new delivery to be recorded", phase)
 		}
+		seedOneHelpfulApplicationCreditBuildAttempt(t, phase)
 		summary = runPhaseEndConsolidation(phase)
 		if !summary.Ran {
 			t.Fatalf("phase %d: consolidation did not run: %s", phase, summary.Reason)
@@ -454,6 +507,21 @@ func TestWorkerLessonBecomesQueenFileWisdom(t *testing.T) {
 	// Stage 3: deliver + consolidate for up to 6 more phases until the
 	// instinct is promoted to QUEEN.md. The round count is discovered by
 	// running the real pipeline, never asserted as a constant.
+	//
+	// LEARN-03 (204-06-PLAN.md Task 3): promotion now also requires at
+	// least one genuinely helpful application, not merely three
+	// applications of any kind -- every round below would otherwise record
+	// only "pending" outcomes (no durable build attempt exists for any
+	// round). Every round therefore seeds one real, minimal build attempt
+	// pair (an earlier failing free-check report, then a passing one with a
+	// decision-kind delta) for that same phase, driving
+	// recordPhaseApplicationCredit's own real derivation to a genuine
+	// "helpful" outcome the same way cmd/recruitment_credit_test.go's
+	// newApplicationCreditFixture does end to end -- a single helpful round
+	// diluted among several later "pending" ones would otherwise LOWER the
+	// confidence trajectory below applicationAwareConfidence's own
+	// no-evidence-either-way default (pkg/memory/consolidate.go), the
+	// opposite of what one genuine success should do.
 	var summary phaseEndConsolidationSummary
 	promotedRound := 0
 	for round := 2; round <= 7; round++ {
@@ -464,6 +532,7 @@ func TestWorkerLessonBecomesQueenFileWisdom(t *testing.T) {
 		if recordInstinctDeliveries(round, "continue", capsule) == 0 {
 			t.Fatalf("round %d: expected a new delivery to be recorded", round)
 		}
+		seedOneHelpfulApplicationCreditBuildAttempt(t, round)
 		summary = runPhaseEndConsolidation(round)
 		if len(summary.QueenPromoted) > 0 {
 			promotedRound = round
