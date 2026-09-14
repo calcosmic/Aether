@@ -131,8 +131,35 @@ type recruitmentCreditRecord struct {
 }
 
 // recruitmentCreditFile is the on-disk container at recruitmentCreditPath.
+//
+// GuidanceApplications and GuidanceClaims (LEARN-03, 204-06-PLAN.md) are
+// sibling arrays added to this SAME file -- never a second data file -- so
+// one read of recruitmentCreditPath gives a reader the whole picture of
+// what a contribution did: the decision-level credit outcome (Entries,
+// above) AND the delivery-level application history
+// (cmd/application_evidence.go's guidanceApplicationState machinery). Both
+// are written exclusively through cmd/application_evidence.go's own
+// recordGuidanceApplicationState / recordGuidanceClaimUnverified, which
+// TestCreditRequiresBothFacts's single-writer guard (cmd/recruitment_credit_test.go)
+// permits by symbol name alongside recordRecruitmentCredit.
 type recruitmentCreditFile struct {
 	Entries []recruitmentCreditRecord `json:"entries"`
+
+	// GuidanceApplications is the append-only ledger of every guidance
+	// application state transition recorded by recordGuidanceApplicationState
+	// (cmd/application_evidence.go): available, rendered, consulted, acted
+	// on, ignored, contradicted, helpful, neutral, harmful.
+	GuidanceApplications []guidanceApplicationRecord `json:"guidance_applications,omitempty"`
+
+	// GuidanceClaims is the append-only ledger of a worker's own claim to
+	// have consulted or acted on a piece of guidance that the runtime could
+	// NOT independently corroborate (Assumption K, 204-06-PLAN.md Task 2) --
+	// neither accepted nor discarded, and distinct from every declared
+	// guidanceApplicationState: a claim is not itself a state transition, it
+	// is the fact that lets recordPhaseApplicationCredit's phase-close
+	// ignored-sweep tell "claimed but unproven" apart from "never claimed at
+	// all". Populated by recordGuidanceClaimUnverified.
+	GuidanceClaims []guidanceClaimRecord `json:"guidance_claims,omitempty"`
 }
 
 // recruitmentCreditRecordID is the deterministic identity key a credit

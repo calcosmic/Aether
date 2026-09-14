@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -403,13 +404,31 @@ func scanSourceForCreditWritesOutsideRecordRecruitmentCredit(t *testing.T, filen
 	return violations
 }
 
+// recruitmentCreditPathWriters is the closed, by-symbol-name allowlist of
+// every function permitted to write recruitmentCreditPath through the
+// store. recordRecruitmentCredit is the original CEC-07 writer (both-facts
+// contract, checked separately below). recordGuidanceApplicationState and
+// recordGuidanceClaimUnverified (cmd/application_evidence.go,
+// 204-06-PLAN.md, LEARN-03) were added when the sibling GuidanceApplications
+// / GuidanceClaims arrays moved into this SAME file
+// (recruitmentCreditFile) rather than a second data file -- extended by
+// symbol name here, never by exempting a file path, so a THIRD writer
+// dropped in anywhere in cmd/ is still caught by name.
+var recruitmentCreditPathWriters = map[string]bool{
+	"recordRecruitmentCredit":        true,
+	"recordGuidanceApplicationState": true,
+	"recordGuidanceClaimUnverified":  true,
+}
+
 // creditWriteViolationsInFile walks file for every call writing
 // recruitmentCreditPath through the store, and requires the enclosing
-// function to be literally named recordRecruitmentCredit AND to declare
-// parameters naming both a changed-decision identifier and an
-// effect-evidence identifier -- so a second write function, even one
-// wrongly reusing the same name's shape, is still caught if it drops either
-// parameter.
+// function to be one of recruitmentCreditPathWriters. recordRecruitmentCredit
+// additionally must declare parameters naming both a changed-decision
+// identifier and an effect-evidence identifier -- so a second write
+// function reusing that ONE name's shape is still caught if it drops either
+// parameter. The other allowed writers carry a different contract (a
+// guidance state or an unverified claim, not a credit outcome) and are not
+// held to that specific two-parameter shape.
 func creditWriteViolationsInFile(fset *token.FileSet, file *ast.File) (found bool, violations []string) {
 	for _, decl := range file.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
@@ -437,11 +456,14 @@ func creditWriteViolationsInFile(fset *token.FileSet, file *ast.File) (found boo
 			if fn.Name != nil {
 				fnName = fn.Name.Name
 			}
-			if fnName != "recordRecruitmentCredit" {
+			if !recruitmentCreditPathWriters[fnName] {
 				violations = append(violations, fmt.Sprintf(
-					"%s: %s writes recruitmentCreditPath via store.%s -- only recordRecruitmentCredit may write it",
-					fset.Position(call.Pos()).String(), fnName, sel.Sel.Name,
+					"%s: %s writes recruitmentCreditPath via store.%s -- only %v may write it",
+					fset.Position(call.Pos()).String(), fnName, sel.Sel.Name, recruitmentCreditPathWriterNames(),
 				))
+				return true
+			}
+			if fnName != "recordRecruitmentCredit" {
 				return true
 			}
 			hasChangedDecisionParam := false
@@ -467,6 +489,17 @@ func creditWriteViolationsInFile(fset *token.FileSet, file *ast.File) (found boo
 		})
 	}
 	return found, violations
+}
+
+// recruitmentCreditPathWriterNames returns every allowed writer name, sorted,
+// for a deterministic refusal message.
+func recruitmentCreditPathWriterNames() []string {
+	names := make([]string, 0, len(recruitmentCreditPathWriters))
+	for name := range recruitmentCreditPathWriters {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // TestHarmfulOutcomeIsReachable drives the real public path -- a packed,

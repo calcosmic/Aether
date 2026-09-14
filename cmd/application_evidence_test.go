@@ -2,8 +2,13 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -385,5 +390,337 @@ func TestTunerSeesGenuinelyProducedCredit(t *testing.T) {
 	tuning := tuneNoteStrengthFromOutcomes()
 	if !tuning.Ran {
 		t.Fatalf("tuneNoteStrengthFromOutcomes = %+v, want Ran=true now that the credit store genuinely holds data", tuning)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Task 1 (204-06-PLAN.md): the nine-state guidance application vocabulary
+// and its transition rule.
+// ---------------------------------------------------------------------------
+
+// mustRecordGuidanceState records state for (guidanceID, phaseID) via the
+// real writer and fails the test if the write is refused.
+func mustRecordGuidanceState(t *testing.T, guidanceID string, phaseID int, state guidanceApplicationState) {
+	t.Helper()
+	if _, _, err := recordGuidanceApplicationState(guidanceID, recruitmentContributionMemoryItem, phaseID, state, ""); err != nil {
+		t.Fatalf("record guidance state %s: %v", state, err)
+	}
+}
+
+func TestGuidanceStateVocabularyIsClosed(t *testing.T) {
+	want := map[guidanceApplicationState]bool{
+		guidanceApplicationStateAvailable:    true,
+		guidanceApplicationStateRendered:     true,
+		guidanceApplicationStateConsulted:    true,
+		guidanceApplicationStateActedOn:      true,
+		guidanceApplicationStateIgnored:      true,
+		guidanceApplicationStateContradicted: true,
+		guidanceApplicationStateHelpful:      true,
+		guidanceApplicationStateNeutral:      true,
+		guidanceApplicationStateHarmful:      true,
+	}
+	if len(guidanceApplicationStateVocabulary) != len(want) {
+		t.Fatalf("guidanceApplicationStateVocabulary has %d members, want exactly %d: %v", len(guidanceApplicationStateVocabulary), len(want), guidanceApplicationStateVocabulary)
+	}
+	seen := map[guidanceApplicationState]bool{}
+	for _, s := range guidanceApplicationStateVocabulary {
+		if !want[s] {
+			t.Fatalf("unexpected state %q in guidanceApplicationStateVocabulary", s)
+		}
+		if seen[s] {
+			t.Fatalf("state %q appears more than once in guidanceApplicationStateVocabulary", s)
+		}
+		seen[s] = true
+	}
+	for s := range want {
+		if !seen[s] {
+			t.Fatalf("declared state %q is missing from guidanceApplicationStateVocabulary", s)
+		}
+	}
+	if names := guidanceApplicationStateNames(); len(names) != len(want) {
+		t.Fatalf("guidanceApplicationStateNames() returned %d names, want %d: %v", len(names), len(want), names)
+	}
+
+	t.Run("an undeclared state is refused and the refusal lists all nine", func(t *testing.T) {
+		saveGlobals(t)
+		s, tmpDir := newTestStore(t)
+		defer os.RemoveAll(tmpDir)
+		store = s
+		inst := promoteRealInstinct(t, s, "run go vet ./cmd/ before go test ./cmd/ to catch lint failures early", "pattern")
+
+		_, written, err := recordGuidanceApplicationState(inst.ID, recruitmentContributionMemoryItem, 1, guidanceApplicationState("bogus"), "")
+		if err == nil {
+			t.Fatal("expected an undeclared state to be refused")
+		}
+		if written {
+			t.Fatal("expected written=false for a refused state")
+		}
+		for _, name := range guidanceApplicationStateNames() {
+			if !strings.Contains(err.Error(), name) {
+				t.Fatalf("refusal message %q does not name declared state %q", err.Error(), name)
+			}
+		}
+	})
+}
+
+func TestGuidanceStateTransitionsRequireTheirPredecessors(t *testing.T) {
+	setup := func(t *testing.T) colony.InstinctEntry {
+		t.Helper()
+		saveGlobals(t)
+		s, tmpDir := newTestStore(t)
+		t.Cleanup(func() { os.RemoveAll(tmpDir) })
+		store = s
+		return promoteRealInstinct(t, s, "run go vet ./cmd/ before go test ./cmd/ to catch lint failures early", "pattern")
+	}
+
+	t.Run("rendered without available is refused, naming available", func(t *testing.T) {
+		inst := setup(t)
+		_, written, err := recordGuidanceApplicationState(inst.ID, recruitmentContributionMemoryItem, 1, guidanceApplicationStateRendered, "")
+		if err == nil || written {
+			t.Fatalf("expected rendered without available to be refused, got written=%v err=%v", written, err)
+		}
+		if !strings.Contains(err.Error(), "available") {
+			t.Fatalf("refusal %q does not name the missing predecessor %q", err.Error(), "available")
+		}
+	})
+
+	t.Run("consulted without rendered is refused, naming rendered", func(t *testing.T) {
+		inst := setup(t)
+		mustRecordGuidanceState(t, inst.ID, 1, guidanceApplicationStateAvailable)
+		_, written, err := recordGuidanceApplicationState(inst.ID, recruitmentContributionMemoryItem, 1, guidanceApplicationStateConsulted, "")
+		if err == nil || written {
+			t.Fatalf("expected consulted without rendered to be refused, got written=%v err=%v", written, err)
+		}
+		if !strings.Contains(err.Error(), "rendered") {
+			t.Fatalf("refusal %q does not name the missing predecessor %q", err.Error(), "rendered")
+		}
+	})
+
+	t.Run("acted_on without consulted is refused, naming consulted", func(t *testing.T) {
+		inst := setup(t)
+		mustRecordGuidanceState(t, inst.ID, 1, guidanceApplicationStateAvailable)
+		mustRecordGuidanceState(t, inst.ID, 1, guidanceApplicationStateRendered)
+		_, written, err := recordGuidanceApplicationState(inst.ID, recruitmentContributionMemoryItem, 1, guidanceApplicationStateActedOn, "")
+		if err == nil || written {
+			t.Fatalf("expected acted_on without consulted to be refused, got written=%v err=%v", written, err)
+		}
+		if !strings.Contains(err.Error(), "consulted") {
+			t.Fatalf("refusal %q does not name the missing predecessor %q", err.Error(), "consulted")
+		}
+	})
+
+	t.Run("contradicted without consulted is refused, naming consulted", func(t *testing.T) {
+		inst := setup(t)
+		mustRecordGuidanceState(t, inst.ID, 1, guidanceApplicationStateAvailable)
+		mustRecordGuidanceState(t, inst.ID, 1, guidanceApplicationStateRendered)
+		_, written, err := recordGuidanceApplicationState(inst.ID, recruitmentContributionMemoryItem, 1, guidanceApplicationStateContradicted, "")
+		if err == nil || written {
+			t.Fatalf("expected contradicted without consulted to be refused, got written=%v err=%v", written, err)
+		}
+		if !strings.Contains(err.Error(), "consulted") {
+			t.Fatalf("refusal %q does not name the missing predecessor %q", err.Error(), "consulted")
+		}
+	})
+
+	for _, terminal := range []guidanceApplicationState{guidanceApplicationStateHelpful, guidanceApplicationStateNeutral, guidanceApplicationStateHarmful} {
+		terminal := terminal
+		t.Run(fmt.Sprintf("%s without acted_on is refused, naming acted_on", terminal), func(t *testing.T) {
+			inst := setup(t)
+			mustRecordGuidanceState(t, inst.ID, 1, guidanceApplicationStateAvailable)
+			mustRecordGuidanceState(t, inst.ID, 1, guidanceApplicationStateRendered)
+			mustRecordGuidanceState(t, inst.ID, 1, guidanceApplicationStateConsulted)
+			_, written, err := recordGuidanceApplicationState(inst.ID, recruitmentContributionMemoryItem, 1, terminal, "")
+			if err == nil || written {
+				t.Fatalf("expected %s without acted_on to be refused, got written=%v err=%v", terminal, written, err)
+			}
+			if !strings.Contains(err.Error(), "acted_on") {
+				t.Fatalf("refusal %q does not name the missing predecessor %q", err.Error(), "acted_on")
+			}
+		})
+	}
+
+	t.Run("no transition comparison outside the predecessor map", func(t *testing.T) {
+		assertNoGuidanceTransitionComparisonOutsidePredecessorMap(t)
+	})
+}
+
+// guidanceApplicationStateConstNames is the exact set of declared guidance
+// application state constant identifiers, used by the AST scan below to spot
+// an inline comparison against one of them.
+var guidanceApplicationStateConstNames = map[string]bool{
+	"guidanceApplicationStateAvailable":    true,
+	"guidanceApplicationStateRendered":     true,
+	"guidanceApplicationStateConsulted":    true,
+	"guidanceApplicationStateActedOn":      true,
+	"guidanceApplicationStateIgnored":      true,
+	"guidanceApplicationStateContradicted": true,
+	"guidanceApplicationStateHelpful":      true,
+	"guidanceApplicationStateNeutral":      true,
+	"guidanceApplicationStateHarmful":      true,
+}
+
+// assertNoGuidanceTransitionComparisonOutsidePredecessorMap parses the real
+// cmd/application_evidence.go and fails by name if any equality/inequality
+// comparison anywhere in the file (outside the guidanceApplicationPredecessors
+// var declaration itself, whose map literal necessarily NAMES every state as
+// a key and inside its Requires/Excludes values -- never as a comparison
+// operand) tests a named guidance state constant against anything. Every
+// transition rule this system enforces must live in that one map.
+func assertNoGuidanceTransitionComparisonOutsidePredecessorMap(t *testing.T) {
+	t.Helper()
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+	path := filepath.Join(repoRoot, "cmd", "application_evidence.go")
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, path, nil, 0)
+	if err != nil {
+		t.Fatalf("parse application_evidence.go: %v", err)
+	}
+	violations := guidanceStateComparisonViolations(fset, file)
+	if len(violations) != 0 {
+		t.Fatalf("found a transition comparison against a named guidance state constant outside guidanceApplicationPredecessors:\n%s", strings.Join(violations, "\n"))
+	}
+
+	t.Run("a synthetic inline comparison is caught", func(t *testing.T) {
+		src := `package cmd
+
+func f(state guidanceApplicationState) bool {
+	if state == guidanceApplicationStateConsulted {
+		return true
+	}
+	return false
+}
+`
+		fset2 := token.NewFileSet()
+		syntheticFile, parseErr := parser.ParseFile(fset2, "fixture_guidance_state.go", src, 0)
+		if parseErr != nil {
+			t.Fatalf("parse fixture: %v", parseErr)
+		}
+		fixtureViolations := guidanceStateComparisonViolations(fset2, syntheticFile)
+		if len(fixtureViolations) == 0 {
+			t.Fatal("scanner failed to detect a synthetic inline guidance state comparison")
+		}
+	})
+}
+
+func guidanceStateComparisonViolations(fset *token.FileSet, file *ast.File) []string {
+	var violations []string
+	for _, decl := range file.Decls {
+		if genDecl, ok := decl.(*ast.GenDecl); ok && genDecl.Tok == token.VAR {
+			isPredecessorsDecl := false
+			for _, spec := range genDecl.Specs {
+				vspec, ok := spec.(*ast.ValueSpec)
+				if !ok {
+					continue
+				}
+				for _, name := range vspec.Names {
+					if name.Name == "guidanceApplicationPredecessors" {
+						isPredecessorsDecl = true
+					}
+				}
+			}
+			if isPredecessorsDecl {
+				continue
+			}
+		}
+		ast.Inspect(decl, func(n ast.Node) bool {
+			bin, ok := n.(*ast.BinaryExpr)
+			if !ok {
+				return true
+			}
+			if bin.Op != token.EQL && bin.Op != token.NEQ {
+				return true
+			}
+			if guidanceStateIdent(bin.X) || guidanceStateIdent(bin.Y) {
+				violations = append(violations, fmt.Sprintf(
+					"%s: comparison against a named guidance state constant outside guidanceApplicationPredecessors",
+					fset.Position(bin.Pos()).String(),
+				))
+			}
+			return true
+		})
+	}
+	return violations
+}
+
+func guidanceStateIdent(expr ast.Expr) bool {
+	ident, ok := expr.(*ast.Ident)
+	if !ok {
+		return false
+	}
+	return guidanceApplicationStateConstNames[ident.Name]
+}
+
+func TestIgnoredAndConsultedAreMutuallyExclusive(t *testing.T) {
+	saveGlobals(t)
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+	inst := promoteRealInstinct(t, s, "check pkg/colony/context_ranking.go before assuming score-based trim order", "pattern")
+
+	mustRecordGuidanceState(t, inst.ID, 1, guidanceApplicationStateAvailable)
+	mustRecordGuidanceState(t, inst.ID, 1, guidanceApplicationStateRendered)
+	mustRecordGuidanceState(t, inst.ID, 1, guidanceApplicationStateConsulted)
+
+	_, written, err := recordGuidanceApplicationState(inst.ID, recruitmentContributionMemoryItem, 1, guidanceApplicationStateIgnored, "")
+	if err == nil || written {
+		t.Fatalf("expected ignored to be refused once consulted is recorded, got written=%v err=%v", written, err)
+	}
+	if !strings.Contains(err.Error(), "consulted") {
+		t.Fatalf("refusal %q does not name the conflicting state %q", err.Error(), "consulted")
+	}
+
+	t.Run("ignored is reachable when only rendered (never consulted) is recorded", func(t *testing.T) {
+		inst2 := promoteRealInstinct(t, s, "run go test ./pkg/... before go build ./cmd/aether to catch package failures early", "pattern")
+		mustRecordGuidanceState(t, inst2.ID, 1, guidanceApplicationStateAvailable)
+		mustRecordGuidanceState(t, inst2.ID, 1, guidanceApplicationStateRendered)
+		record, written, err := recordGuidanceApplicationState(inst2.ID, recruitmentContributionMemoryItem, 1, guidanceApplicationStateIgnored, "")
+		if err != nil || !written {
+			t.Fatalf("expected ignored to be recordable for rendered-only guidance, got written=%v err=%v", written, err)
+		}
+		if record.State != guidanceApplicationStateIgnored {
+			t.Fatalf("record.State = %q, want %q", record.State, guidanceApplicationStateIgnored)
+		}
+	})
+}
+
+func TestGuidanceStateRepeatWritesNothing(t *testing.T) {
+	saveGlobals(t)
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+	inst := promoteRealInstinct(t, s, "run go vet ./cmd/ before go build ./cmd/aether to catch type errors early", "pattern")
+
+	mustRecordGuidanceState(t, inst.ID, 1, guidanceApplicationStateAvailable)
+	first, written, err := recordGuidanceApplicationState(inst.ID, recruitmentContributionMemoryItem, 1, guidanceApplicationStateRendered, "")
+	if err != nil || !written {
+		t.Fatalf("expected the first rendered write to succeed, got written=%v err=%v", written, err)
+	}
+
+	creditFile := filepath.Join(s.BasePath(), filepath.FromSlash(recruitmentCreditPath))
+	before, err := os.ReadFile(creditFile)
+	if err != nil {
+		t.Fatalf("read credit store after first write: %v", err)
+	}
+
+	second, written, err := recordGuidanceApplicationState(inst.ID, recruitmentContributionMemoryItem, 1, guidanceApplicationStateRendered, "")
+	if err != nil {
+		t.Fatalf("repeat write returned an error: %v", err)
+	}
+	if written {
+		t.Fatal("expected the repeat write to report written=false")
+	}
+	if second.RecordID != first.RecordID {
+		t.Fatalf("repeat write returned a different record: first=%+v second=%+v", first, second)
+	}
+
+	after, err := os.ReadFile(creditFile)
+	if err != nil {
+		t.Fatalf("read credit store after repeat write: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatalf("credit store changed after a repeat write:\nbefore=%s\nafter=%s", before, after)
 	}
 }

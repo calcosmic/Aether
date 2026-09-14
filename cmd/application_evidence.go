@@ -13,8 +13,10 @@ package cmd
 // brief or a passing phase alone (Assumption C/D in 204-02-PLAN.md).
 
 import (
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // buildKnowledgeDeltaKindDecision is the buildAttemptKnowledgeDelta.Kind
@@ -263,4 +265,290 @@ func phaseApplicationEffectAndOutcome(phaseID int, latestAttempt buildAttemptRec
 	}
 
 	return effectEvidenceID, recruitmentCreditOutcomeNeutral
+}
+
+// ---------------------------------------------------------------------------
+// LEARN-03 (204-06-PLAN.md Task 1): the nine-state guidance application
+// vocabulary. recordPhaseApplicationCredit above proves one thing well --
+// that a delivered instinct's text was genuinely present in a worker's
+// capsule -- and records a success for every one of them on any phase that
+// merely advanced, because reaching that code means the phase advanced.
+// There is no path anywhere in this system that records a failure, an
+// ignore, or a contradiction for a piece of guidance. This section adds
+// that: nine declared states (available, rendered, consulted, acted on,
+// ignored, contradicted, helpful, neutral, harmful) with a transition rule,
+// so the program can tell advice that helped apart from advice that was
+// merely shown.
+// ---------------------------------------------------------------------------
+
+// guidanceApplicationState is the declared, closed vocabulary a piece of
+// guidance's recorded application may reach. Exactly nine members --
+// TestGuidanceStateVocabularyIsClosed asserts guidanceApplicationStateVocabulary
+// carries all nine and no more.
+//
+// The last three (helpful, neutral, harmful) deliberately reuse the same
+// three words recruitmentCreditOutcome already declares
+// (cmd/recruitment_credit.go) -- and are a SEPARATE Go type, never an alias
+// of it, because the two answer different questions that can legitimately
+// disagree: a recruitmentCreditOutcome is about a DECISION (did the changed
+// decision this contribution produced turn out to help, per
+// recordRecruitmentCredit's evidence-gated ledger); a
+// guidanceApplicationState is about a DELIVERY (what happened to this
+// specific piece of guidance once it reached a worker -- was it even read,
+// let alone acted on). The same contribution can be credited helpful at the
+// decision level while its own delivery-level application never advances
+// past "rendered" (nobody ever claimed to consult it), and vice versa.
+type guidanceApplicationState string
+
+const (
+	guidanceApplicationStateAvailable    guidanceApplicationState = "available"
+	guidanceApplicationStateRendered     guidanceApplicationState = "rendered"
+	guidanceApplicationStateConsulted    guidanceApplicationState = "consulted"
+	guidanceApplicationStateActedOn      guidanceApplicationState = "acted_on"
+	guidanceApplicationStateIgnored      guidanceApplicationState = "ignored"
+	guidanceApplicationStateContradicted guidanceApplicationState = "contradicted"
+	guidanceApplicationStateHelpful      guidanceApplicationState = "helpful"
+	guidanceApplicationStateNeutral      guidanceApplicationState = "neutral"
+	guidanceApplicationStateHarmful      guidanceApplicationState = "harmful"
+)
+
+// guidanceApplicationStateVocabulary is the declared, closed set of every
+// state a guidance application may reach. Mirrors the
+// recruitmentCreditOutcomeVocabulary / recruitmentContributionKindVocabulary
+// completeness convention (cmd/recruitment_credit.go): a state added to the
+// const block above must also be added here, or TestGuidanceStateVocabularyIsClosed
+// fails.
+var guidanceApplicationStateVocabulary = []guidanceApplicationState{
+	guidanceApplicationStateAvailable,
+	guidanceApplicationStateRendered,
+	guidanceApplicationStateConsulted,
+	guidanceApplicationStateActedOn,
+	guidanceApplicationStateIgnored,
+	guidanceApplicationStateContradicted,
+	guidanceApplicationStateHelpful,
+	guidanceApplicationStateNeutral,
+	guidanceApplicationStateHarmful,
+}
+
+// guidanceApplicationStateNames returns the string form of every declared
+// state, for display and for refusal messages that must name all nine.
+func guidanceApplicationStateNames() []string {
+	names := make([]string, 0, len(guidanceApplicationStateVocabulary))
+	for _, s := range guidanceApplicationStateVocabulary {
+		names = append(names, string(s))
+	}
+	return names
+}
+
+func guidanceApplicationStateDeclared(state guidanceApplicationState) bool {
+	for _, s := range guidanceApplicationStateVocabulary {
+		if s == state {
+			return true
+		}
+	}
+	return false
+}
+
+// guidanceApplicationTransitionRule is one state's transition contract:
+// which states must already be reached before it may be recorded (Requires),
+// and which already-reached states refuse it outright as a mutually
+// exclusive terminal reading of the same delivery (Excludes). Every
+// transition rule this system enforces is declared once, here, inside
+// guidanceApplicationPredecessors -- recordGuidanceApplicationState below
+// contains no comparison against a named state constant outside this map
+// (TestGuidanceStateTransitionsRequireTheirPredecessors's own AST check).
+type guidanceApplicationTransitionRule struct {
+	Requires []guidanceApplicationState
+	Excludes []guidanceApplicationState
+}
+
+// guidanceApplicationPredecessors declares every state's transition rule.
+// Available has none. Rendered requires available. Consulted requires
+// rendered. Acted on requires consulted. Ignored requires rendered and is
+// refused when consulted is already present (mutually exclusive terminal
+// readings of the same delivery -- TestIgnoredAndConsultedAreMutuallyExclusive).
+// Contradicted requires consulted. Helpful, neutral and harmful each require
+// acted on.
+var guidanceApplicationPredecessors = map[guidanceApplicationState]guidanceApplicationTransitionRule{
+	guidanceApplicationStateAvailable: {},
+	guidanceApplicationStateRendered: {
+		Requires: []guidanceApplicationState{guidanceApplicationStateAvailable},
+	},
+	guidanceApplicationStateConsulted: {
+		Requires: []guidanceApplicationState{guidanceApplicationStateRendered},
+	},
+	guidanceApplicationStateActedOn: {
+		Requires: []guidanceApplicationState{guidanceApplicationStateConsulted},
+	},
+	guidanceApplicationStateIgnored: {
+		Requires: []guidanceApplicationState{guidanceApplicationStateRendered},
+		Excludes: []guidanceApplicationState{guidanceApplicationStateConsulted},
+	},
+	guidanceApplicationStateContradicted: {
+		Requires: []guidanceApplicationState{guidanceApplicationStateConsulted},
+	},
+	guidanceApplicationStateHelpful: {
+		Requires: []guidanceApplicationState{guidanceApplicationStateActedOn},
+	},
+	guidanceApplicationStateNeutral: {
+		Requires: []guidanceApplicationState{guidanceApplicationStateActedOn},
+	},
+	guidanceApplicationStateHarmful: {
+		Requires: []guidanceApplicationState{guidanceApplicationStateActedOn},
+	},
+}
+
+// guidanceApplicationRecord is one recorded fact: this guidance reached this
+// state, on this phase, for this contribution kind, with (optionally) the
+// evidence identifier that justified the transition.
+type guidanceApplicationRecord struct {
+	RecordID   string                      `json:"record_id"`
+	GuidanceID string                      `json:"guidance_id"`
+	Kind       recruitmentContributionKind `json:"kind"`
+	Phase      int                         `json:"phase"`
+	State      guidanceApplicationState    `json:"state"`
+	EvidenceID string                      `json:"evidence_id,omitempty"`
+	RecordedAt string                      `json:"recorded_at"`
+}
+
+// guidanceClaimRecord is one recorded fact: a worker's own claim to have
+// consulted or acted on this guidance, which the runtime could NOT
+// independently corroborate (Assumption K, 204-06-PLAN.md Task 2). Declared
+// here as a sibling type of guidanceApplicationRecord because
+// recruitmentCreditFile (cmd/recruitment_credit.go) carries both as sibling
+// arrays in the same file; the writer that populates it
+// (recordGuidanceClaimUnverified) is added in Task 2.
+type guidanceClaimRecord struct {
+	RecordID   string `json:"record_id"`
+	GuidanceID string `json:"guidance_id"`
+	Phase      int    `json:"phase"`
+	RecordedAt string `json:"recorded_at"`
+}
+
+// guidanceApplicationRecordID is the deterministic, content-addressed record
+// identifier over the guidance identifier, the phase, and the state --
+// following recruitmentCreditRecordID's own identity idiom
+// (cmd/recruitment_credit.go): the same (guidanceID, phase, state) always
+// resolves to the same record, so a repeat write is a replay, never a
+// second record.
+func guidanceApplicationRecordID(guidanceID string, phaseID int, state guidanceApplicationState) string {
+	return fmt.Sprintf("guidance:%s:%d:%s", strings.TrimSpace(guidanceID), phaseID, state)
+}
+
+// errGuidanceApplicationNoChange is the internal replay sentinel
+// recordGuidanceApplicationState returns from its own UpdateJSONAtomically
+// mutate closure to abort the write on a replay -- mirroring
+// errRecruitmentCreditNoChange's role in recordRecruitmentCredit
+// (cmd/recruitment_credit.go).
+var errGuidanceApplicationNoChange = errors.New("guidance application state already recorded")
+
+// guidanceReachedStates returns the set of states already recorded for
+// (guidanceID, phaseID) among records -- the read side every transition
+// check and every idempotency check below is built from.
+func guidanceReachedStates(records []guidanceApplicationRecord, guidanceID string, phaseID int) map[guidanceApplicationState]bool {
+	reached := make(map[guidanceApplicationState]bool, len(guidanceApplicationStateVocabulary))
+	for _, rec := range records {
+		if rec.GuidanceID == guidanceID && rec.Phase == phaseID {
+			reached[rec.State] = true
+		}
+	}
+	return reached
+}
+
+// findGuidanceApplicationRecord returns the existing record for
+// (guidanceID, phaseID, state) among records, if one is already there.
+func findGuidanceApplicationRecord(records []guidanceApplicationRecord, guidanceID string, phaseID int, state guidanceApplicationState) (guidanceApplicationRecord, bool) {
+	for _, rec := range records {
+		if rec.GuidanceID == guidanceID && rec.Phase == phaseID && rec.State == state {
+			return rec, true
+		}
+	}
+	return guidanceApplicationRecord{}, false
+}
+
+// guidanceApplicationTransitionRefusal checks state's transition rule
+// (guidanceApplicationPredecessors) against reached, and returns a non-nil
+// error naming the exact missing predecessor or the exact excluded
+// conflicting state when the transition is refused. Contains no comparison
+// against a named state constant -- only generic membership checks over the
+// rule's own Requires/Excludes lists -- so every transition rule this system
+// enforces stays declared exactly once, in the map above.
+func guidanceApplicationTransitionRefusal(state guidanceApplicationState, reached map[guidanceApplicationState]bool, guidanceID string, phaseID int) error {
+	rule := guidanceApplicationPredecessors[state]
+	for _, excluded := range rule.Excludes {
+		if reached[excluded] {
+			return fmt.Errorf(
+				"guidance application state %q is refused for guidance %q on phase %d: %q is already recorded, and these are mutually exclusive terminal readings of the same delivery",
+				state, guidanceID, phaseID, excluded,
+			)
+		}
+	}
+	for _, predecessor := range rule.Requires {
+		if !reached[predecessor] {
+			return fmt.Errorf(
+				"guidance application state %q requires %q to already be recorded for guidance %q on phase %d, but it is not",
+				state, predecessor, guidanceID, phaseID,
+			)
+		}
+	}
+	return nil
+}
+
+// recordGuidanceApplicationState is the single writer for every guidance
+// application state transition. It refuses an undeclared state by name,
+// listing all nine declared values; refuses a state whose transition rule is
+// not satisfied (missing predecessor, or an excluded state already
+// recorded), naming the specific reason; returns the existing record with
+// written=false on a repeat; and stores through the credit ledger's own
+// atomic-update store (recruitmentCreditPath, cmd/recruitment_credit.go) as
+// a sibling array in the SAME file -- never a second data file -- so one
+// read gives a reader the whole picture of what a contribution did.
+func recordGuidanceApplicationState(guidanceID string, kind recruitmentContributionKind, phaseID int, state guidanceApplicationState, evidenceID string) (guidanceApplicationRecord, bool, error) {
+	if store == nil {
+		return guidanceApplicationRecord{}, false, fmt.Errorf("no store initialized")
+	}
+	guidanceID = strings.TrimSpace(guidanceID)
+	if guidanceID == "" {
+		return guidanceApplicationRecord{}, false, fmt.Errorf("guidance application state requires a non-empty guidance id")
+	}
+	if !guidanceApplicationStateDeclared(state) {
+		return guidanceApplicationRecord{}, false, fmt.Errorf(
+			"guidance application state %q is not in the declared vocabulary %v", state, guidanceApplicationStateNames(),
+		)
+	}
+
+	var file recruitmentCreditFile
+	var result guidanceApplicationRecord
+	updateErr := store.UpdateJSONAtomically(recruitmentCreditPath, &file, func() error {
+		reached := guidanceReachedStates(file.GuidanceApplications, guidanceID, phaseID)
+
+		if existing, ok := findGuidanceApplicationRecord(file.GuidanceApplications, guidanceID, phaseID, state); ok {
+			result = existing
+			return errGuidanceApplicationNoChange
+		}
+
+		if err := guidanceApplicationTransitionRefusal(state, reached, guidanceID, phaseID); err != nil {
+			return err
+		}
+
+		rec := guidanceApplicationRecord{
+			RecordID:   guidanceApplicationRecordID(guidanceID, phaseID, state),
+			GuidanceID: guidanceID,
+			Kind:       kind,
+			Phase:      phaseID,
+			State:      state,
+			EvidenceID: strings.TrimSpace(evidenceID),
+			RecordedAt: time.Now().UTC().Format(time.RFC3339),
+		}
+		file.GuidanceApplications = append(file.GuidanceApplications, rec)
+		result = rec
+		return nil
+	})
+	if updateErr != nil {
+		if errors.Is(updateErr, errGuidanceApplicationNoChange) {
+			return result, false, nil
+		}
+		return guidanceApplicationRecord{}, false, updateErr
+	}
+	return result, true, nil
 }
