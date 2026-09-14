@@ -2,11 +2,19 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/storage"
 )
 
 // --- Task 1: the versioned fixture bank and its schema ---
@@ -382,4 +390,441 @@ func equalStrings(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// --- Task 2: convert confirmed incidents, refusing everything unconfirmed ---
+
+// seedMiddenEntryForTest appends one real failure-log entry, in the
+// failure log's own real shape, directly through the store -- so
+// confirmation-gate tests drive the real reader against a real seeded
+// entry, never a hand-built confirmedIncident.
+func seedMiddenEntryForTest(t *testing.T, s *storage.Store, entry colony.MiddenEntry) {
+	t.Helper()
+	var mf colony.MiddenFile
+	err := s.UpdateJSONAtomically(middenCanonicalPath, &mf, func() error {
+		if mf.Entries == nil {
+			mf.Entries = []colony.MiddenEntry{}
+		}
+		if mf.Version == "" {
+			mf.Version = "1.0.0"
+		}
+		mf.Entries = append(mf.Entries, entry)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed midden entry: %v", err)
+	}
+}
+
+func fixtureBoolPtr(b bool) *bool { return &b }
+
+func writeAuditFindingsFixture(t *testing.T, path string, confirmed []map[string]any) {
+	t.Helper()
+	doc := map[string]any{"confirmed": confirmed}
+	encoded, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal audit findings fixture: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(path, encoded, 0o644); err != nil {
+		t.Fatalf("write audit findings fixture: %v", err)
+	}
+}
+
+func writeDefectRegisterFixture(t *testing.T, path string, entries []map[string]any) {
+	t.Helper()
+	encoded, err := json.MarshalIndent(entries, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal defect register fixture: %v", err)
+	}
+	var b strings.Builder
+	b.WriteString("# Broken Windows Ledger\n\n")
+	b.WriteString("| id | phase | kind | file | description | status |\n")
+	b.WriteString("|----|-------|------|------|-------------|--------|\n")
+	b.WriteString("\n```json\n")
+	b.Write(encoded)
+	b.WriteString("\n```\n")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
+		t.Fatalf("write defect register fixture: %v", err)
+	}
+}
+
+func writePhaseReportFixture(t *testing.T, phasesDir, phaseName, table string) {
+	t.Helper()
+	dir := filepath.Join(phasesDir, phaseName)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	content := "# Phase Verification\n\n## Test evidence\n\n" + table + "\n"
+	path := filepath.Join(dir, phaseName+"-VERIFICATION.md")
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write phase report fixture: %v", err)
+	}
+}
+
+func TestUnconfirmedIncidentProducesNoFixture(t *testing.T) {
+	t.Run("failure_log", func(t *testing.T) {
+		saveGlobals(t)
+		s, tmpDir := newTestStore(t)
+		defer os.RemoveAll(tmpDir)
+		store = s
+
+		seedMiddenEntryForTest(t, s, colony.MiddenEntry{
+			ID: "midden_not_reviewed", Category: "deviation", Source: "test",
+			Message: "not reviewed yet", Reviewed: false,
+		})
+		seedMiddenEntryForTest(t, s, colony.MiddenEntry{
+			ID: "midden_not_acknowledged", Category: "deviation", Source: "test",
+			Message: "reviewed but not acknowledged", Reviewed: true, Acknowledged: boolPtr(false),
+		})
+
+		result, err := confirmedIncidentsFromFailureLog()
+		if err != nil {
+			t.Fatalf("confirmedIncidentsFromFailureLog: %v", err)
+		}
+		if len(result.Incidents) != 0 {
+			t.Fatalf("expected zero confirmed incidents, got %d: %+v", len(result.Incidents), result.Incidents)
+		}
+		if len(result.Refused) != 2 {
+			t.Fatalf("expected 2 refusals, got %d: %+v", len(result.Refused), result.Refused)
+		}
+		foundReviewed, foundAcknowledged := false, false
+		for _, r := range result.Refused {
+			if r.Identifier == "midden_not_reviewed" && strings.Contains(r.Reason, "reviewed") {
+				foundReviewed = true
+			}
+			if r.Identifier == "midden_not_acknowledged" && strings.Contains(r.Reason, "acknowledged") {
+				foundAcknowledged = true
+			}
+		}
+		if !foundReviewed {
+			t.Errorf("no refusal named midden_not_reviewed's missing confirmation fact (reviewed); got %+v", result.Refused)
+		}
+		if !foundAcknowledged {
+			t.Errorf("no refusal named midden_not_acknowledged's missing confirmation fact (acknowledged); got %+v", result.Refused)
+		}
+	})
+
+	t.Run("audit_finding", func(t *testing.T) {
+		root := t.TempDir()
+		path := filepath.Join(root, "audit.json")
+		writeAuditFindingsFixture(t, path, []map[string]any{
+			{"subject": "unverified claim", "status": "dropped", "claim": "not checked", "severity": "low", "verified": false},
+		})
+		result, err := confirmedIncidentsFromAuditFindings(path)
+		if err != nil {
+			t.Fatalf("confirmedIncidentsFromAuditFindings: %v", err)
+		}
+		if len(result.Incidents) != 0 {
+			t.Fatalf("expected zero confirmed incidents, got %+v", result.Incidents)
+		}
+		if len(result.Refused) != 1 || !strings.Contains(result.Refused[0].Reason, "verified") {
+			t.Fatalf("expected one refusal naming 'verified', got %+v", result.Refused)
+		}
+	})
+
+	t.Run("defect_register", func(t *testing.T) {
+		root := t.TempDir()
+		path := filepath.Join(root, "WINDOWS.md")
+		writeDefectRegisterFixture(t, path, []map[string]any{
+			{"id": 1, "kind": "deviation", "phase": "204", "file": "cmd/x.go", "description": "still open", "status": "open", "recorded_at": "2026-09-14T00:00:00Z"},
+		})
+		result, err := confirmedIncidentsFromDefectRegister(path)
+		if err != nil {
+			t.Fatalf("confirmedIncidentsFromDefectRegister: %v", err)
+		}
+		if len(result.Incidents) != 0 {
+			t.Fatalf("expected zero confirmed incidents, got %+v", result.Incidents)
+		}
+		if len(result.Refused) != 1 || !strings.Contains(result.Refused[0].Reason, "fixed") {
+			t.Fatalf("expected one refusal naming 'fixed', got %+v", result.Refused)
+		}
+	})
+
+	t.Run("phase_report_no_commit", func(t *testing.T) {
+		root := t.TempDir()
+		phasesDir := filepath.Join(root, "phases")
+		table := "| Fixed | Cause | Commit |\n|---|---|---|\n| TestSomething | a cause | no commit here |\n"
+		writePhaseReportFixture(t, phasesDir, "204-test-phase", table)
+		result, err := confirmedIncidentsFromPhaseReports(phasesDir)
+		if err != nil {
+			t.Fatalf("confirmedIncidentsFromPhaseReports: %v", err)
+		}
+		if len(result.Incidents) != 0 {
+			t.Fatalf("expected zero confirmed incidents, got %+v", result.Incidents)
+		}
+		if len(result.Refused) != 1 || !strings.Contains(result.Refused[0].Reason, "commit") {
+			t.Fatalf("expected one refusal naming 'commit', got %+v", result.Refused)
+		}
+	})
+}
+
+func TestSameIncidentTwiceProducesOneFixture(t *testing.T) {
+	saveGlobals(t)
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+	newFixtureBankTestRoot(t)
+
+	seedMiddenEntryForTest(t, s, colony.MiddenEntry{
+		ID: "midden_confirmed_once", Category: "deviation", Source: "test",
+		Message: "a real confirmed failure", Reviewed: true, Acknowledged: boolPtr(true),
+	})
+
+	runOnce := func() []byte {
+		result, err := confirmedIncidentsFromFailureLog()
+		if err != nil {
+			t.Fatalf("read: %v", err)
+		}
+		bank, _, err := convertConfirmedIncidentsToFixtures(result.Incidents)
+		if err != nil {
+			t.Fatalf("convert: %v", err)
+		}
+		if err := writeFixtureBank(bank); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		root, _ := fixtureBankRepoRoot()
+		data, err := os.ReadFile(filepath.Join(root, fixtureBankPath))
+		if err != nil {
+			t.Fatalf("read bank file: %v", err)
+		}
+		return data
+	}
+
+	first := runOnce()
+	second := runOnce()
+
+	if string(first) != string(second) {
+		t.Fatalf("re-running conversion against the same confirmed incident changed the bank file:\nfirst:\n%s\nsecond:\n%s", first, second)
+	}
+
+	bank, err := loadFixtureBank()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(bank.Fixtures) != 1 {
+		t.Fatalf("expected exactly one fixture after feeding the same incident twice, got %d", len(bank.Fixtures))
+	}
+}
+
+func TestTwoIncidentsWithOneDigestShareAFixture(t *testing.T) {
+	incidents := []confirmedIncident{
+		{SourceKind: fixtureProvenanceFailureLog, SourceIdentifier: "midden_a", Title: "same content", Detail: "identical detail text"},
+		{SourceKind: fixtureProvenanceAuditFinding, SourceIdentifier: "confirmed[7]", Title: "same content", Detail: "identical detail text"},
+	}
+	bank, summary, err := convertConfirmedIncidentsToFixtures(incidents)
+	if err != nil {
+		t.Fatalf("convert: %v", err)
+	}
+	if len(bank.Fixtures) != 1 {
+		t.Fatalf("expected exactly one fixture for two identically-content incidents, got %d", len(bank.Fixtures))
+	}
+	if summary.Deduplicated != 1 {
+		t.Fatalf("expected summary.Deduplicated = 1, got %d", summary.Deduplicated)
+	}
+	if len(bank.Fixtures[0].Provenance) != 2 {
+		t.Fatalf("expected the shared fixture to carry 2 provenance references, got %d: %+v", len(bank.Fixtures[0].Provenance), bank.Fixtures[0].Provenance)
+	}
+}
+
+func TestUnsanitisableIncidentIsDroppedNotStored(t *testing.T) {
+	incidents := []confirmedIncident{
+		{SourceKind: fixtureProvenanceFailureLog, SourceIdentifier: "midden_bad", Title: "bad incident", Detail: "contains <task> a structural tag"},
+	}
+	bank, summary, err := convertConfirmedIncidentsToFixtures(incidents)
+	if err != nil {
+		t.Fatalf("convert: %v", err)
+	}
+	if len(bank.Fixtures) != 0 {
+		t.Fatalf("expected the unsanitisable incident to produce no fixture, got %d", len(bank.Fixtures))
+	}
+	if len(summary.Dropped) != 1 || summary.Dropped[0].Identifier != "midden_bad" {
+		t.Fatalf("expected exactly one dropped entry naming midden_bad, got %+v", summary.Dropped)
+	}
+}
+
+func TestRetirementNamesASuccessorAndKeepsTheFixture(t *testing.T) {
+	newFixtureBankTestRoot(t)
+
+	seed := regressionFixtureBank{
+		SchemaVersion: fixtureBankSchemaVersion,
+		Fixtures: []regressionFixture{
+			{
+				ID: "fixture-000000000001", Title: "old", Invariant: "must hold",
+				FailingBaseline:  regressionFixtureFailingBaseline{Description: "d", Reference: "r"},
+				AllowedMutations: []fixtureAllowedMutation{fixtureMutationWording},
+				Provenance:       []regressionFixtureProvenance{{Kind: fixtureProvenanceFailureLog, Identifier: "midden_1"}},
+				Privacy:          fixturePrivacyRepoLocal, Severity: fixtureSeverityMedium,
+				ContentDigest: strings.Repeat("a", 64),
+			},
+			{
+				ID: "fixture-000000000002", Title: "new", Invariant: "must also hold",
+				FailingBaseline:  regressionFixtureFailingBaseline{Description: "d2", Reference: "r2"},
+				AllowedMutations: []fixtureAllowedMutation{fixtureMutationWording},
+				Provenance:       []regressionFixtureProvenance{{Kind: fixtureProvenanceFailureLog, Identifier: "midden_2"}},
+				Privacy:          fixturePrivacyRepoLocal, Severity: fixtureSeverityMedium,
+				ContentDigest: strings.Repeat("b", 64),
+			},
+		},
+	}
+	if err := writeFixtureBank(seed); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	t.Run("unknown_successor_is_refused", func(t *testing.T) {
+		if err := retireFixture("fixture-000000000001", "fixture-does-not-exist", "superseded"); err == nil {
+			t.Fatal("expected retiring against an unknown successor to be refused")
+		}
+	})
+
+	if err := retireFixture("fixture-000000000001", "fixture-000000000002", "superseded by the newer fixture"); err != nil {
+		t.Fatalf("retire: %v", err)
+	}
+
+	bank, err := loadFixtureBank()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(bank.Fixtures) != 2 {
+		t.Fatalf("expected retirement to keep the fixture count at 2, got %d", len(bank.Fixtures))
+	}
+	var retired *regressionFixture
+	for i := range bank.Fixtures {
+		if bank.Fixtures[i].ID == "fixture-000000000001" {
+			retired = &bank.Fixtures[i]
+		}
+	}
+	if retired == nil {
+		t.Fatal("retired fixture is missing from the bank -- retirement must never delete")
+	}
+	if retired.SuccessorID != "fixture-000000000002" {
+		t.Fatalf("retired.SuccessorID = %q, want fixture-000000000002", retired.SuccessorID)
+	}
+	if retired.RetiredBy == "" {
+		t.Fatal("retired.RetiredBy is empty")
+	}
+}
+
+func TestEmptyIncidentSetWritesAnEmptyBank(t *testing.T) {
+	newFixtureBankTestRoot(t)
+	bank, summary, err := convertConfirmedIncidentsToFixtures(nil)
+	if err != nil {
+		t.Fatalf("convert: %v", err)
+	}
+	if len(bank.Fixtures) != 0 {
+		t.Fatalf("expected an empty bank, got %d fixtures", len(bank.Fixtures))
+	}
+	if summary.FinalFixtureCount != 0 {
+		t.Fatalf("summary.FinalFixtureCount = %d, want 0", summary.FinalFixtureCount)
+	}
+	if err := writeFixtureBank(bank); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	loaded, err := loadFixtureBank()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(loaded.Fixtures) != 0 {
+		t.Fatalf("expected an empty bank on disk, got %d fixtures", len(loaded.Fixtures))
+	}
+}
+
+// TestFixtureBankHasOneWriter proves, by AST scan, that no function other
+// than writeFixtureBank writes cmd/testdata/fixture-bank/v1/bank.json.
+func TestFixtureBankHasOneWriter(t *testing.T) {
+	repoRoot := findTestModuleRoot(t)
+	violations := scanForFixtureBankWritersOutsideWriteFixtureBank(t, filepath.Join(repoRoot, "cmd"))
+	if len(violations) != 0 {
+		t.Fatalf("found a non-test Go function writing the fixture bank path outside writeFixtureBank:\n%s", strings.Join(violations, "\n"))
+	}
+
+	t.Run("a synthetic sneaky writer is caught by name", func(t *testing.T) {
+		fixtureSrc := `package cmd
+
+import "os"
+
+func sneakyFixtureBankWriter(payload []byte) error {
+	return os.WriteFile("cmd/testdata/fixture-bank/v1/bank.json", payload, 0644)
+}
+`
+		violations := fixtureBankWriterViolationsInSource(t, "fixture_sneaky_writer.go", fixtureSrc)
+		if len(violations) == 0 {
+			t.Fatal("scanner failed to detect a synthetic write into the fixture bank path")
+		}
+		if !strings.Contains(violations[0], "sneakyFixtureBankWriter") {
+			t.Fatalf("violation %q does not name the offending function sneakyFixtureBankWriter", violations[0])
+		}
+	})
+}
+
+func scanForFixtureBankWritersOutsideWriteFixtureBank(t *testing.T, dir string) []string {
+	t.Helper()
+	names, err := filepath.Glob(filepath.Join(dir, "*.go"))
+	if err != nil {
+		t.Fatalf("glob %s: %v", dir, err)
+	}
+	fset := token.NewFileSet()
+	var violations []string
+	for _, name := range names {
+		if strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(fset, name, nil, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", name, err)
+		}
+		violations = append(violations, fixtureBankWriterViolations(fset, file)...)
+	}
+	return violations
+}
+
+func fixtureBankWriterViolationsInSource(t *testing.T, filename, src string) []string {
+	t.Helper()
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, filename, src, 0)
+	if err != nil {
+		t.Fatalf("parse fixture source: %v", err)
+	}
+	return fixtureBankWriterViolations(fset, file)
+}
+
+func fixtureBankWriterViolations(fset *token.FileSet, file *ast.File) []string {
+	const bankBasename = "fixture-bank/v1/bank.json"
+	var violations []string
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Body == nil {
+			continue
+		}
+		if fn.Name.Name == "writeFixtureBank" {
+			continue
+		}
+		ast.Inspect(fn.Body, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			for _, arg := range call.Args {
+				lit, ok := arg.(*ast.BasicLit)
+				if !ok || lit.Kind != token.STRING {
+					continue
+				}
+				value, err := strconv.Unquote(lit.Value)
+				if err != nil {
+					continue
+				}
+				if strings.Contains(value, bankBasename) {
+					pos := fset.Position(call.Pos())
+					violations = append(violations, fmt.Sprintf("%s:%d in func %s references %q", pos.Filename, pos.Line, fn.Name.Name, bankBasename))
+				}
+			}
+			return true
+		})
+	}
+	return violations
 }
