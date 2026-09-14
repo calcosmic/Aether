@@ -183,6 +183,16 @@ None - no external service configuration required.
 - `seedBankUnguardedFloor` is now a genuine two-sided ratchet: it can be lowered further as more fixtures are honestly guarded, but any attempt to raise it above the real count, or to let the real count exceed it, fails the suite by name.
 - 30 fixtures remain unguarded. Of those, the Deviations section above documents which ones describe defects that are genuinely still unfixed today (most of them) versus which have no real Go test yet written specifically for them despite the underlying behavior being restored (none found in this pass -- every genuinely-fixed incident I could identify was guarded). A future plan closing more of SC3c should start from the "genuinely unfixed" list above rather than re-deriving it.
 
+## Self-Check: PASSED
+
+- `cmd/testdata/fixture-bank/v1/bank.json` — FOUND
+- `cmd/eval_gates.go` — FOUND
+- `cmd/seed_bank_test.go` — FOUND
+- Commit `cdfbf6e4` (Task 1) — FOUND in `git log --oneline --all`
+- Commit `c3ab9e82` (Task 2) — FOUND in `git log --oneline --all`
+- Commit `1e3864db` (this SUMMARY) — FOUND in `git log --oneline --all`
+- `requirements.ready-ids` for LEARN-05 against this plan reports 0/1 ready (204-16 also declares LEARN-05 and has not yet produced a SUMMARY) — correctly deferred, not marked complete by this plan.
+
 ---
 *Phase: 204-learning-governor*
 *Completed: 2026-09-14*
