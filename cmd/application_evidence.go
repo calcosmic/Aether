@@ -15,8 +15,11 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
+
+	"github.com/calcosmic/Aether/pkg/codex"
 )
 
 // buildKnowledgeDeltaKindDecision is the buildAttemptKnowledgeDelta.Kind
@@ -98,6 +101,15 @@ func recordPhaseApplicationCredit(phaseID int) phaseApplicationCreditSummary {
 		summary.Reason = "no store initialized"
 		return summary
 	}
+
+	// LEARN-03 (204-06-PLAN.md Task 2): ignored is recorded at phase close
+	// rather than at worker close, because a later worker in the same phase
+	// may still consult guidance an earlier one did not. This runs exactly
+	// once per phase-end call, on every return path below, via defer --
+	// every guidance rendered on this phase with no consulted, acted-on,
+	// contradicted, or claimed-but-unverified record by the time this
+	// function returns is recorded as ignored.
+	defer sweepIgnoredGuidanceApplications(phaseID)
 
 	var deliveries instinctDeliveryFile
 	if err := store.LoadJSON(instinctDeliveriesPath, &deliveries); err != nil {
@@ -551,4 +563,336 @@ func recordGuidanceApplicationState(guidanceID string, kind recruitmentContribut
 		return guidanceApplicationRecord{}, false, updateErr
 	}
 	return result, true, nil
+}
+
+// ---------------------------------------------------------------------------
+// LEARN-03 (204-06-PLAN.md Task 2): checking a worker's claim against what
+// the runtime can see for itself (Assumption K). A worker cannot literally
+// cite an instinct's internal ID -- colony-prime never renders one into a
+// worker's capsule (cmd/colony_prime_context.go's "- [trigger] action
+// (confidence: X.XX)" format carries no ID) -- so a claim is detected by the
+// SAME signal recordInstinctDeliveries already uses for delivery: the
+// guidance's own action text appearing in the worker's own words.
+// ---------------------------------------------------------------------------
+
+// guidanceClaim is one guidance identifier a worker's own handoff names as
+// consulted or acted on -- extracted from untrusted input
+// (guidanceClaimFromHandoff) and never itself proof of anything; it is
+// checked against durable evidence by corroborateGuidanceClaim before it is
+// ever recorded as more than a claim.
+type guidanceClaim struct {
+	GuidanceID string
+	Kind       recruitmentContributionKind
+}
+
+// guidanceClaimFromHandoff extracts, from a worker's own handoff, the
+// guidance identifiers that worker says it consulted or acted on. It is
+// parsing untrusted input: every candidate is checked against instincts.json
+// (loadInstinctFileOrEmpty) -- only a non-archived instinct whose own action
+// text is found, verbatim, inside one of the worker's own retrospective
+// fields (NextWorkerInstructions, DoNotRepeat -- the same two fields
+// feedMemoryFromWorkerOutcome already treats as the worker's own lesson
+// content, cmd/memory_feed.go) is extracted; anything else is discarded
+// rather than invented.
+func guidanceClaimFromHandoff(handoff codex.WorkerHandoff) []guidanceClaim {
+	if store == nil {
+		return nil
+	}
+	file := loadInstinctFileOrEmpty(store)
+	if len(file.Instincts) == 0 {
+		return nil
+	}
+
+	texts := make([]string, 0, len(handoff.NextWorkerInstructions)+len(handoff.DoNotRepeat))
+	texts = append(texts, handoff.NextWorkerInstructions...)
+	texts = append(texts, handoff.DoNotRepeat...)
+	if len(texts) == 0 {
+		return nil
+	}
+
+	var claims []guidanceClaim
+	for _, inst := range file.Instincts {
+		if inst.Archived {
+			continue
+		}
+		action := strings.TrimSpace(inst.Action)
+		if action == "" {
+			continue
+		}
+		for _, text := range texts {
+			if strings.Contains(text, action) {
+				claims = append(claims, guidanceClaim{GuidanceID: inst.ID, Kind: recruitmentContributionMemoryItem})
+				break
+			}
+		}
+	}
+	return claims
+}
+
+// guidanceContradictionMarker is the fixed phrase a worker's own recorded
+// decision must contain, immediately followed by the guidance's own action
+// text, for that decision to count as an explicit contradiction. A
+// contradiction is parsed conservatively from an explicit marker, never
+// inferred from prose -- the same discipline this repository already
+// applies to worker-reported evidence generally (never believed, always
+// re-checked).
+const guidanceContradictionMarker = "against its own guidance: "
+
+// corroborateGuidanceClaim is the independent check behind a worker's own
+// claim to have consulted or acted on a piece of guidance (Assumption K): it
+// looks only at records the runtime wrote itself, never the worker's own
+// free-text fields directly (TestCorroborationNeverReadsTheWorkersOwnText) --
+//
+//   - the handoff's own recorded changed-file list (facts.Handoff.ChangedFiles,
+//     a durable list of paths, not prose)
+//   - the "decision"-kind knowledge delta deriveBuildKnowledgeDeltas
+//     (cmd/build_knowledge_deltas.go) derives fresh from this worker's OWN
+//     already-persisted handoff record -- a runtime-derived, sanitized
+//     summary, never the raw field
+//   - the "decision"-kind deltas the phase's latest durable build attempt
+//     already carries (loadLatestBuildAttempt), the SAME durable decision
+//     records recordPhaseApplicationCredit itself reads
+//
+// This mirrors the discipline this repository already applies to
+// builder-reported evidence (CLAUDE.md's Coherent Jobs section: a worker's
+// claim is checked against files actually present, never taken on its own
+// word): a claim is re-run against durable evidence, never believed.
+//
+// Returns acted_on when this worker's own changed files are non-empty AND a
+// decision delta freshly derived from this worker's own handoff mentions the
+// guidance's action text; consulted when the phase's already-durable latest
+// attempt carries a decision delta mentioning it (evidence someone recorded
+// this decision this phase, even if not corroborated as this worker's own
+// action); ok=false when neither is found.
+func corroborateGuidanceClaim(claim guidanceClaim, facts workerOutcomeFacts) (guidanceApplicationState, string, bool) {
+	if store == nil {
+		return "", "", false
+	}
+	action := guidanceActionTextByID(claim.GuidanceID)
+	if action == "" {
+		return "", "", false
+	}
+
+	if len(facts.Handoff.ChangedFiles) > 0 {
+		deltas := deriveBuildKnowledgeDeltas(facts.PhaseID, []codexBuildDispatch{{Name: facts.WorkerName}})
+		for i, delta := range deltas {
+			if delta.Kind == buildKnowledgeDeltaKindDecision && strings.Contains(delta.Summary, action) {
+				return guidanceApplicationStateActedOn, fmt.Sprintf("handoff-decision:%s:%d", facts.WorkerName, i), true
+			}
+		}
+	}
+
+	if _, latest, ok := loadLatestBuildAttempt(facts.PhaseID); ok {
+		decisionIndex := 0
+		for _, delta := range latest.KnowledgeDeltas {
+			if delta.Kind != buildKnowledgeDeltaKindDecision {
+				continue
+			}
+			if strings.Contains(delta.Summary, action) {
+				return guidanceApplicationStateConsulted, phaseApplicationDecisionID(latest.ID, decisionIndex), true
+			}
+			decisionIndex++
+		}
+	}
+
+	return "", "", false
+}
+
+// guidanceActionTextByID looks up a non-archived instinct's own trimmed
+// action text by ID, or "" if it is archived, absent, or blank.
+func guidanceActionTextByID(guidanceID string) string {
+	if store == nil {
+		return ""
+	}
+	file := loadInstinctFileOrEmpty(store)
+	for _, inst := range file.Instincts {
+		if inst.Archived || inst.ID != guidanceID {
+			continue
+		}
+		return strings.TrimSpace(inst.Action)
+	}
+	return ""
+}
+
+// guidanceContradiction is one guidance identifier a worker's own recorded
+// decision explicitly went against (guidanceContradictionMarker), together
+// with the evidence identifier that decision's delta corresponds to.
+type guidanceContradiction struct {
+	GuidanceID string
+	EvidenceID string
+}
+
+// guidanceContradictionsFromWorkerOutcome scans the "decision"-kind
+// knowledge deltas deriveBuildKnowledgeDeltas derives fresh from this
+// worker's own already-persisted handoff record for the explicit
+// contradiction marker, immediately followed by a known, non-archived
+// instinct's own action text.
+func guidanceContradictionsFromWorkerOutcome(facts workerOutcomeFacts) []guidanceContradiction {
+	if store == nil {
+		return nil
+	}
+	deltas := deriveBuildKnowledgeDeltas(facts.PhaseID, []codexBuildDispatch{{Name: facts.WorkerName}})
+	if len(deltas) == 0 {
+		return nil
+	}
+	file := loadInstinctFileOrEmpty(store)
+	var out []guidanceContradiction
+	for i, delta := range deltas {
+		if delta.Kind != buildKnowledgeDeltaKindDecision {
+			continue
+		}
+		for _, inst := range file.Instincts {
+			if inst.Archived {
+				continue
+			}
+			action := strings.TrimSpace(inst.Action)
+			if action == "" {
+				continue
+			}
+			if strings.Contains(delta.Summary, guidanceContradictionMarker+action) {
+				out = append(out, guidanceContradiction{
+					GuidanceID: inst.ID,
+					EvidenceID: fmt.Sprintf("handoff-decision:%s:%d", facts.WorkerName, i),
+				})
+			}
+		}
+	}
+	return out
+}
+
+// recordGuidanceClaimUnverified records a worker's own uncorroborated claim
+// to have consulted or acted on guidanceID -- neither accepted nor discarded
+// (Assumption K). Idempotent per (guidanceID, phase): a repeat claim writes
+// nothing new.
+func recordGuidanceClaimUnverified(guidanceID string, phaseID int) (guidanceClaimRecord, bool, error) {
+	if store == nil {
+		return guidanceClaimRecord{}, false, fmt.Errorf("no store initialized")
+	}
+	guidanceID = strings.TrimSpace(guidanceID)
+	if guidanceID == "" {
+		return guidanceClaimRecord{}, false, fmt.Errorf("guidance claim requires a non-empty guidance id")
+	}
+
+	recordID := fmt.Sprintf("guidance-claim:%s:%d", guidanceID, phaseID)
+	var file recruitmentCreditFile
+	var result guidanceClaimRecord
+	updateErr := store.UpdateJSONAtomically(recruitmentCreditPath, &file, func() error {
+		for _, existing := range file.GuidanceClaims {
+			if existing.RecordID == recordID {
+				result = existing
+				return errGuidanceApplicationNoChange
+			}
+		}
+		rec := guidanceClaimRecord{
+			RecordID:   recordID,
+			GuidanceID: guidanceID,
+			Phase:      phaseID,
+			RecordedAt: time.Now().UTC().Format(time.RFC3339),
+		}
+		file.GuidanceClaims = append(file.GuidanceClaims, rec)
+		result = rec
+		return nil
+	})
+	if updateErr != nil {
+		if errors.Is(updateErr, errGuidanceApplicationNoChange) {
+			return result, false, nil
+		}
+		return guidanceClaimRecord{}, false, updateErr
+	}
+	return result, true, nil
+}
+
+// recordGuidanceStatesForWorkerOutcome is the fan-out from one worker
+// outcome into the guidance application ledger, called from
+// recordDispatchWorkerOutcome (cmd/memory_feed.go) immediately after the
+// existing recordInstinctDeliveries call and before feedMemoryFromWorkerOutcome.
+// Placing it there keeps the existing one-boundary guard
+// (TestEveryBuildLaneFeedsMemoryThroughOneBoundary) as the guarantee that
+// both build lanes record these states -- there is no second call site.
+//
+// For each guidance claim extracted from this worker's own handoff
+// (guidanceClaimFromHandoff): a corroborated claim is recorded consulted
+// (always -- the predecessor acted_on itself requires), and additionally
+// acted_on when corroboration reached that far; an uncorroborated claim is
+// recorded as an unverified claim (recordGuidanceClaimUnverified) --
+// neither consulted nor ignored. Separately, any decision this worker's own
+// handoff explicitly recorded as going against a piece of guidance is
+// recorded contradicted (which also requires consulted first).
+func recordGuidanceStatesForWorkerOutcome(facts workerOutcomeFacts) {
+	if store == nil {
+		return
+	}
+
+	for _, claim := range guidanceClaimFromHandoff(facts.Handoff) {
+		state, evidenceID, corroborated := corroborateGuidanceClaim(claim, facts)
+		if !corroborated {
+			if _, _, err := recordGuidanceClaimUnverified(claim.GuidanceID, facts.PhaseID); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: could not record guidance claimed-but-unverified state: %v\n", err)
+			}
+			continue
+		}
+		if _, _, err := recordGuidanceApplicationState(claim.GuidanceID, claim.Kind, facts.PhaseID, guidanceApplicationStateConsulted, evidenceID); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not record guidance consulted state: %v\n", err)
+			continue
+		}
+		if state == guidanceApplicationStateActedOn {
+			if _, _, err := recordGuidanceApplicationState(claim.GuidanceID, claim.Kind, facts.PhaseID, guidanceApplicationStateActedOn, evidenceID); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: could not record guidance acted-on state: %v\n", err)
+			}
+		}
+	}
+
+	for _, contradiction := range guidanceContradictionsFromWorkerOutcome(facts) {
+		if _, _, err := recordGuidanceApplicationState(contradiction.GuidanceID, recruitmentContributionMemoryItem, facts.PhaseID, guidanceApplicationStateConsulted, contradiction.EvidenceID); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not record guidance consulted state ahead of contradiction: %v\n", err)
+			continue
+		}
+		if _, _, err := recordGuidanceApplicationState(contradiction.GuidanceID, recruitmentContributionMemoryItem, facts.PhaseID, guidanceApplicationStateContradicted, contradiction.EvidenceID); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not record guidance contradicted state: %v\n", err)
+		}
+	}
+}
+
+// sweepIgnoredGuidanceApplications records ignored for every guidance
+// rendered on phaseID with no consulted, acted-on, contradicted, or
+// claimed-but-unverified record -- called once, unconditionally, from
+// recordPhaseApplicationCredit via defer, so it runs at phase close exactly
+// once per phase-end pass regardless of which of that function's own early
+// returns fires.
+func sweepIgnoredGuidanceApplications(phaseID int) {
+	if store == nil {
+		return
+	}
+	var file recruitmentCreditFile
+	if err := store.LoadJSON(recruitmentCreditPath, &file); err != nil {
+		return
+	}
+
+	renderedKind := map[string]recruitmentContributionKind{}
+	settled := map[string]bool{}
+	for _, rec := range file.GuidanceApplications {
+		if rec.Phase != phaseID {
+			continue
+		}
+		if rec.State == guidanceApplicationStateRendered {
+			renderedKind[rec.GuidanceID] = rec.Kind
+		}
+		if rec.State == guidanceApplicationStateConsulted || rec.State == guidanceApplicationStateActedOn || rec.State == guidanceApplicationStateContradicted {
+			settled[rec.GuidanceID] = true
+		}
+	}
+	for _, rec := range file.GuidanceClaims {
+		if rec.Phase == phaseID {
+			settled[rec.GuidanceID] = true
+		}
+	}
+
+	for guidanceID, kind := range renderedKind {
+		if settled[guidanceID] {
+			continue
+		}
+		if _, _, err := recordGuidanceApplicationState(guidanceID, kind, phaseID, guidanceApplicationStateIgnored, ""); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not record guidance ignored state: %v\n", err)
+		}
+	}
 }

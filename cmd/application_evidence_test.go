@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
@@ -559,11 +560,26 @@ var guidanceApplicationStateConstNames = map[string]bool{
 	"guidanceApplicationStateHarmful":      true,
 }
 
+// guidanceTransitionRuleFuncs names the two functions that implement the
+// transition RULE itself -- the single writer (recordGuidanceApplicationState)
+// and the refusal check it delegates to (guidanceApplicationTransitionRefusal).
+// The AST scan below is scoped to exactly these two: comparisons against a
+// named guidance state constant appear all over this file for entirely
+// different, legitimate reasons (deciding which state corroboration reached,
+// filtering which records a phase-close sweep should act on) -- what must
+// never happen is the TRANSITION rule (what predecessor a state requires,
+// what state it excludes) being reimplemented inline anywhere outside the
+// one declared map.
+var guidanceTransitionRuleFuncs = map[string]bool{
+	"recordGuidanceApplicationState":       true,
+	"guidanceApplicationTransitionRefusal": true,
+}
+
 // assertNoGuidanceTransitionComparisonOutsidePredecessorMap parses the real
-// cmd/application_evidence.go and fails by name if any equality/inequality
-// comparison anywhere in the file (outside the guidanceApplicationPredecessors
-// var declaration itself, whose map literal necessarily NAMES every state as
-// a key and inside its Requires/Excludes values -- never as a comparison
+// cmd/application_evidence.go and fails by name if either transition-rule
+// function above (outside the guidanceApplicationPredecessors var
+// declaration itself, whose map literal necessarily NAMES every state as a
+// key and inside its Requires/Excludes values -- never as a comparison
 // operand) tests a named guidance state constant against anything. Every
 // transition rule this system enforces must live in that one map.
 func assertNoGuidanceTransitionComparisonOutsidePredecessorMap(t *testing.T) {
@@ -586,7 +602,7 @@ func assertNoGuidanceTransitionComparisonOutsidePredecessorMap(t *testing.T) {
 	t.Run("a synthetic inline comparison is caught", func(t *testing.T) {
 		src := `package cmd
 
-func f(state guidanceApplicationState) bool {
+func guidanceApplicationTransitionRefusal(state guidanceApplicationState) bool {
 	if state == guidanceApplicationStateConsulted {
 		return true
 	}
@@ -605,27 +621,18 @@ func f(state guidanceApplicationState) bool {
 	})
 }
 
+// guidanceStateComparisonViolations walks ONLY the function bodies named in
+// guidanceTransitionRuleFuncs (the writer and its refusal check), never the
+// whole file -- see that var's own doc comment for why other functions'
+// comparisons against a named state constant are legitimate and excluded.
 func guidanceStateComparisonViolations(fset *token.FileSet, file *ast.File) []string {
 	var violations []string
 	for _, decl := range file.Decls {
-		if genDecl, ok := decl.(*ast.GenDecl); ok && genDecl.Tok == token.VAR {
-			isPredecessorsDecl := false
-			for _, spec := range genDecl.Specs {
-				vspec, ok := spec.(*ast.ValueSpec)
-				if !ok {
-					continue
-				}
-				for _, name := range vspec.Names {
-					if name.Name == "guidanceApplicationPredecessors" {
-						isPredecessorsDecl = true
-					}
-				}
-			}
-			if isPredecessorsDecl {
-				continue
-			}
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Name == nil || !guidanceTransitionRuleFuncs[fn.Name.Name] || fn.Body == nil {
+			continue
 		}
-		ast.Inspect(decl, func(n ast.Node) bool {
+		ast.Inspect(fn.Body, func(n ast.Node) bool {
 			bin, ok := n.(*ast.BinaryExpr)
 			if !ok {
 				return true
@@ -723,4 +730,300 @@ func TestGuidanceStateRepeatWritesNothing(t *testing.T) {
 	if !bytes.Equal(before, after) {
 		t.Fatalf("credit store changed after a repeat write:\nbefore=%s\nafter=%s", before, after)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Task 2 (204-06-PLAN.md): checking a worker's claim against what the
+// runtime can see for itself. Every fixture below drives the real dispatch
+// and handoff-persistence boundary (recordDispatchWorkerOutcome,
+// cmd/memory_feed.go) -- never a direct write to the handoff store or a
+// hand-typed guidanceApplicationRecord.
+// ---------------------------------------------------------------------------
+
+// setupGuidanceClaimFixture opens a fresh real store and promotes one real
+// instinct through the real observation->promotion path, returning it.
+func setupGuidanceClaimFixture(t *testing.T, action string) colony.InstinctEntry {
+	t.Helper()
+	saveGlobals(t)
+	s, tmpDir := newTestStore(t)
+	t.Cleanup(func() { os.RemoveAll(tmpDir) })
+	store = s
+	return promoteRealInstinct(t, s, action, "pattern")
+}
+
+// guidanceApplicationRecordedStates reads the real credit store and returns
+// the set of states already recorded for (guidanceID, phaseID).
+func guidanceApplicationRecordedStates(t *testing.T, guidanceID string, phaseID int) map[guidanceApplicationState]bool {
+	t.Helper()
+	var file recruitmentCreditFile
+	if err := store.LoadJSON(recruitmentCreditPath, &file); err != nil {
+		return map[guidanceApplicationState]bool{}
+	}
+	return guidanceReachedStates(file.GuidanceApplications, guidanceID, phaseID)
+}
+
+func TestRenderedAloneIsNotConsulted(t *testing.T) {
+	inst := setupGuidanceClaimFixture(t, "run go vet ./cmd/ before go test ./cmd/ to catch lint failures early")
+	const phaseID = 1
+
+	dispatch := codex.WorkerDispatch{WorkerName: "Mason-1", Caste: "builder", Workflow: "continue", Phase: phaseID, ContextCapsule: inst.Action}
+	result := codex.DispatchResult{
+		WorkerName: "Mason-1",
+		Status:     "completed",
+		WorkerResult: &codex.WorkerResult{
+			WorkerName: "Mason-1", Caste: "builder", Status: "completed",
+			Summary: "did unrelated work",
+			Handoff: codex.WorkerHandoff{
+				VerificationStatus: "pass",
+			},
+		},
+	}
+	if err := recordDispatchWorkerOutcome(dispatch, result); err != nil {
+		t.Fatalf("recordDispatchWorkerOutcome: %v", err)
+	}
+
+	reached := guidanceApplicationRecordedStates(t, inst.ID, phaseID)
+	if !reached[guidanceApplicationStateRendered] {
+		t.Fatalf("expected rendered to be recorded, reached=%v", reached)
+	}
+	if reached[guidanceApplicationStateConsulted] {
+		t.Fatalf("expected consulted NOT to be recorded when nothing claims to have used the guidance, reached=%v", reached)
+	}
+}
+
+func TestCorroboratedClaimBecomesConsulted(t *testing.T) {
+	inst := setupGuidanceClaimFixture(t, "run go vet ./cmd/ before go test ./cmd/ to catch lint failures early")
+	const phaseID = 1
+
+	dispatch := codex.WorkerDispatch{WorkerName: "Mason-1", Caste: "builder", Workflow: "continue", Phase: phaseID, ContextCapsule: inst.Action}
+	result := codex.DispatchResult{
+		WorkerName: "Mason-1",
+		Status:     "completed",
+		WorkerResult: &codex.WorkerResult{
+			WorkerName: "Mason-1", Caste: "builder", Status: "completed",
+			Summary: "followed the guidance",
+			Handoff: codex.WorkerHandoff{
+				ChangedFiles:           []string{"cmd/example.go"},
+				OpenDecisions:          []string{"decided to " + inst.Action},
+				NextWorkerInstructions: []string{"consulted this guidance: " + inst.Action},
+				VerificationStatus:     "pass",
+			},
+		},
+	}
+	if err := recordDispatchWorkerOutcome(dispatch, result); err != nil {
+		t.Fatalf("recordDispatchWorkerOutcome: %v", err)
+	}
+
+	reached := guidanceApplicationRecordedStates(t, inst.ID, phaseID)
+	if !reached[guidanceApplicationStateConsulted] {
+		t.Fatalf("expected consulted to be recorded, reached=%v", reached)
+	}
+	if !reached[guidanceApplicationStateActedOn] {
+		t.Fatalf("expected acted_on to be recorded (corroborated by this worker's own changed files and decision), reached=%v", reached)
+	}
+}
+
+func TestUncorroboratedClaimIsRecordedAsUnverified(t *testing.T) {
+	inst := setupGuidanceClaimFixture(t, "check pkg/colony/context_ranking.go before assuming score-based trim order")
+	const phaseID = 1
+
+	dispatch := codex.WorkerDispatch{WorkerName: "Mason-1", Caste: "builder", Workflow: "continue", Phase: phaseID, ContextCapsule: inst.Action}
+	result := codex.DispatchResult{
+		WorkerName: "Mason-1",
+		Status:     "completed",
+		WorkerResult: &codex.WorkerResult{
+			WorkerName: "Mason-1", Caste: "builder", Status: "completed",
+			Summary: "claims to have used the guidance but leaves no corroborating evidence",
+			Handoff: codex.WorkerHandoff{
+				NextWorkerInstructions: []string{"consulted this guidance: " + inst.Action},
+				VerificationStatus:     "pass",
+			},
+		},
+	}
+	if err := recordDispatchWorkerOutcome(dispatch, result); err != nil {
+		t.Fatalf("recordDispatchWorkerOutcome: %v", err)
+	}
+
+	reached := guidanceApplicationRecordedStates(t, inst.ID, phaseID)
+	if reached[guidanceApplicationStateConsulted] {
+		t.Fatalf("expected consulted NOT to be recorded for an uncorroborated claim, reached=%v", reached)
+	}
+	if reached[guidanceApplicationStateIgnored] {
+		t.Fatalf("expected ignored NOT to be recorded directly by the worker-outcome fan-out, reached=%v", reached)
+	}
+
+	var file recruitmentCreditFile
+	if err := store.LoadJSON(recruitmentCreditPath, &file); err != nil {
+		t.Fatalf("read credit store: %v", err)
+	}
+	found := false
+	for _, claim := range file.GuidanceClaims {
+		if claim.GuidanceID == inst.ID && claim.Phase == phaseID {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected an unverified claim record for guidance %s on phase %d, got %+v", inst.ID, phaseID, file.GuidanceClaims)
+	}
+}
+
+func TestRenderedAndUnusedBecomesIgnoredAtPhaseClose(t *testing.T) {
+	inst := setupGuidanceClaimFixture(t, "run go vet ./cmd/ before go build ./cmd/aether to catch type errors early")
+	const phaseID = 1
+
+	dispatch := codex.WorkerDispatch{WorkerName: "Mason-1", Caste: "builder", Workflow: "continue", Phase: phaseID, ContextCapsule: inst.Action}
+	result := codex.DispatchResult{
+		WorkerName: "Mason-1",
+		Status:     "completed",
+		WorkerResult: &codex.WorkerResult{
+			WorkerName: "Mason-1", Caste: "builder", Status: "completed",
+			Summary: "unrelated work",
+			Handoff: codex.WorkerHandoff{VerificationStatus: "pass"},
+		},
+	}
+	if err := recordDispatchWorkerOutcome(dispatch, result); err != nil {
+		t.Fatalf("recordDispatchWorkerOutcome: %v", err)
+	}
+
+	reached := guidanceApplicationRecordedStates(t, inst.ID, phaseID)
+	if !reached[guidanceApplicationStateRendered] {
+		t.Fatalf("expected rendered before phase close, reached=%v", reached)
+	}
+	if reached[guidanceApplicationStateIgnored] {
+		t.Fatalf("expected ignored NOT to be recorded before phase close, reached=%v", reached)
+	}
+
+	recordPhaseApplicationCredit(phaseID)
+
+	reached = guidanceApplicationRecordedStates(t, inst.ID, phaseID)
+	if !reached[guidanceApplicationStateIgnored] {
+		t.Fatalf("expected ignored to be recorded at phase close for rendered-and-unused guidance, reached=%v", reached)
+	}
+}
+
+func TestContradictedIsRecordedFromARecordedDecision(t *testing.T) {
+	inst := setupGuidanceClaimFixture(t, "always run go vet ./cmd/ before go test ./cmd/ here")
+	const phaseID = 1
+
+	dispatch := codex.WorkerDispatch{WorkerName: "Mason-1", Caste: "builder", Workflow: "continue", Phase: phaseID, ContextCapsule: inst.Action}
+	result := codex.DispatchResult{
+		WorkerName: "Mason-1",
+		Status:     "completed",
+		WorkerResult: &codex.WorkerResult{
+			WorkerName: "Mason-1", Caste: "builder", Status: "completed",
+			Summary: "chose to skip the guidance this time",
+			Handoff: codex.WorkerHandoff{
+				OpenDecisions:      []string{"went " + guidanceContradictionMarker + inst.Action},
+				VerificationStatus: "pass",
+			},
+		},
+	}
+	if err := recordDispatchWorkerOutcome(dispatch, result); err != nil {
+		t.Fatalf("recordDispatchWorkerOutcome: %v", err)
+	}
+
+	reached := guidanceApplicationRecordedStates(t, inst.ID, phaseID)
+	if !reached[guidanceApplicationStateConsulted] {
+		t.Fatalf("expected consulted to be recorded ahead of contradicted, reached=%v", reached)
+	}
+	if !reached[guidanceApplicationStateContradicted] {
+		t.Fatalf("expected contradicted to be recorded from the worker's own recorded decision, reached=%v", reached)
+	}
+}
+
+// forbiddenWorkerFreeTextFields are the WorkerHandoff fields carrying the
+// worker's own prose. corroborateGuidanceClaim may touch
+// facts.Handoff.ChangedFiles (a durable list of paths, not prose) and may
+// call deriveBuildKnowledgeDeltas / loadLatestBuildAttempt (runtime-derived,
+// sanitized data), but must never reference one of these fields directly.
+var forbiddenWorkerFreeTextFields = map[string]bool{
+	"NextWorkerInstructions": true,
+	"DoNotRepeat":            true,
+	"OpenDecisions":          true,
+	"Assumptions":            true,
+	"KnownFailures":          true,
+	"Summary":                true,
+}
+
+// isFactsHandoffSelector reports whether expr is exactly the two-level
+// selector `facts.Handoff` -- the base every forbidden field name is checked
+// under. Scoping to this exact base (rather than flagging any `.Summary` /
+// `.OpenDecisions` anywhere) is what lets a legitimately different struct's
+// OWN field of the same name (e.g. buildAttemptKnowledgeDelta.Summary, a
+// runtime-derived, sanitized value corroborateGuidanceClaim is allowed to
+// read) pass cleanly.
+func isFactsHandoffSelector(expr ast.Expr) bool {
+	sel, ok := expr.(*ast.SelectorExpr)
+	if !ok || sel.Sel.Name != "Handoff" {
+		return false
+	}
+	ident, ok := sel.X.(*ast.Ident)
+	return ok && ident.Name == "facts"
+}
+
+func corroborateGuidanceClaimFreeTextViolations(fset *token.FileSet, file *ast.File) []string {
+	var violations []string
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Name == nil || fn.Name.Name != "corroborateGuidanceClaim" || fn.Body == nil {
+			continue
+		}
+		ast.Inspect(fn.Body, func(n ast.Node) bool {
+			sel, ok := n.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+			if !forbiddenWorkerFreeTextFields[sel.Sel.Name] {
+				return true
+			}
+			if !isFactsHandoffSelector(sel.X) {
+				return true
+			}
+			violations = append(violations, fmt.Sprintf(
+				"%s: corroborateGuidanceClaim references facts.Handoff.%s directly -- must go through a runtime-derived source instead",
+				fset.Position(sel.Pos()).String(), sel.Sel.Name,
+			))
+			return true
+		})
+	}
+	return violations
+}
+
+func TestCorroborationNeverReadsTheWorkersOwnText(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+	path := filepath.Join(repoRoot, "cmd", "application_evidence.go")
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, path, nil, 0)
+	if err != nil {
+		t.Fatalf("parse application_evidence.go: %v", err)
+	}
+
+	violations := corroborateGuidanceClaimFreeTextViolations(fset, file)
+	if len(violations) != 0 {
+		t.Fatalf("corroborateGuidanceClaim touches the worker's own free-text field(s) directly:\n%s", strings.Join(violations, "\n"))
+	}
+
+	t.Run("a synthetic direct free-text read is caught", func(t *testing.T) {
+		src := `package cmd
+
+func corroborateGuidanceClaim(claim guidanceClaim, facts workerOutcomeFacts) (guidanceApplicationState, string, bool) {
+	for _, s := range facts.Handoff.NextWorkerInstructions {
+		_ = s
+	}
+	return "", "", false
+}
+`
+		fset2 := token.NewFileSet()
+		syntheticFile, parseErr := parser.ParseFile(fset2, "fixture_corroborate.go", src, 0)
+		if parseErr != nil {
+			t.Fatalf("parse fixture: %v", parseErr)
+		}
+		fixtureViolations := corroborateGuidanceClaimFreeTextViolations(fset2, syntheticFile)
+		if len(fixtureViolations) == 0 {
+			t.Fatal("scanner failed to detect a synthetic direct free-text read inside corroborateGuidanceClaim")
+		}
+	})
 }
