@@ -1004,11 +1004,36 @@ func TestSeededBankIsReproducible(t *testing.T) {
 	}
 	regenerated = append(regenerated, '\n')
 
-	committed, err := os.ReadFile(filepath.Join(repoRoot, fixtureBankPath))
+	committedRaw, err := os.ReadFile(filepath.Join(repoRoot, fixtureBankPath))
 	if err != nil {
 		t.Fatalf("read committed bank: %v", err)
 	}
-	if !bytes.Equal(regenerated, committed) {
-		t.Fatalf("re-running the readers and the conversion against the same sources does not reproduce the committed bank byte for byte")
+
+	// 204-07 (LEARN-05, Task 3) layers a manually-curated `guard` field onto
+	// the committed bank -- the test that would fail if a fixture's own
+	// invariant broke. convertConfirmedIncidentsToFixtures has no way to
+	// derive that curation mechanically from confirmed-incident sources
+	// (nothing in a failure log, an audit finding, a defect-register entry,
+	// or a phase report names the Go test that guards it), so this
+	// reproducibility check compares everything the mechanical conversion
+	// DOES own -- every field except guard -- and never re-derives guard
+	// itself. TestEveryFixtureNamesItsGuardOrIsCountedUnguarded
+	// (cmd/seed_bank_test.go) is the check that holds the guard layer to
+	// account.
+	var committedBank regressionFixtureBank
+	if err := json.Unmarshal(committedRaw, &committedBank); err != nil {
+		t.Fatalf("unmarshal committed bank: %v", err)
+	}
+	for i := range committedBank.Fixtures {
+		committedBank.Fixtures[i].Guard = nil
+	}
+	committedWithoutGuards, err := json.MarshalIndent(committedBank, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal committed bank without guards: %v", err)
+	}
+	committedWithoutGuards = append(committedWithoutGuards, '\n')
+
+	if !bytes.Equal(regenerated, committedWithoutGuards) {
+		t.Fatalf("re-running the readers and the conversion against the same sources does not reproduce the committed bank byte for byte (guard fields excluded from this comparison, see comment above)")
 	}
 }

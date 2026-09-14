@@ -1,0 +1,86 @@
+{
+  "schema_version": "eval-gates/v1",
+  "gates": [
+    {
+      "name": "fast",
+      "packages": [
+        "./pkg/agent/...",
+        "./pkg/cache/...",
+        "./pkg/codegraph/...",
+        "./pkg/colony/...",
+        "./pkg/downloader/...",
+        "./pkg/events/...",
+        "./pkg/exchange/...",
+        "./pkg/graph/...",
+        "./pkg/learn/...",
+        "./pkg/llm/...",
+        "./pkg/memory/...",
+        "./pkg/smoke/...",
+        "./pkg/storage/...",
+        "./pkg/terminal/...",
+        "./pkg/trace/..."
+      ],
+      "build_tags": [],
+      "run_pattern": "",
+      "requires": "none",
+      "budget_seconds": 60,
+      "purpose": "The gate run on every change: the small pkg/... packages only (explicitly excluding pkg/codex, whose own suite alone measures over a minute -- too slow to call 'fast'), no network, no build tags -- proves the change compiles and the fast-feedback layer is clean in tens of seconds instead of twenty-one minutes. pkg/codex is covered by focused/race/release instead."
+    },
+    {
+      "name": "focused",
+      "packages": ["./..."],
+      "build_tags": [],
+      "run_pattern": "",
+      "requires": "none",
+      "budget_seconds": 300,
+      "purpose": "The gate run while working on one area: the caller supplies a name pattern at invocation (make eval-gate-focused PATTERN=TestFoo.*) against the full default build. The manifest's own run_pattern is deliberately empty -- the pattern is supplied per-invocation, never baked in here."
+    },
+    {
+      "name": "integration",
+      "packages": ["./..."],
+      "build_tags": ["integration"],
+      "run_pattern": "",
+      "requires": "none",
+      "budget_seconds": 1400,
+      "purpose": "The tests behind the integration build tag, excluded from the default build, no network required. No test in this repository declares this tag yet, so this gate's selection today equals the default corpus -- build tags are additive, never exclusionary, so adding this tag never shrinks or grows the untagged (fast/focused) selection. TestDefaultSuiteDiscoveredCountIsUnchangedByTags proves the default build's own discovered count is unaffected by this tag's existence. Future integration-tagged tests join this gate without touching fast or focused."
+    },
+    {
+      "name": "provider",
+      "packages": ["./..."],
+      "build_tags": ["provider"],
+      "run_pattern": "",
+      "requires": "provider_credentials",
+      "budget_seconds": 1400,
+      "purpose": "The tests behind the provider build tag, requiring real provider credentials, never run by default. No test in this repository declares this tag yet -- the same additive-tag reasoning as the integration gate applies until dedicated provider-tagged tests exist."
+    },
+    {
+      "name": "overnight",
+      "packages": ["./..."],
+      "build_tags": ["overnight"],
+      "run_pattern": "",
+      "requires": "long_wall_clock",
+      "budget_seconds": 7200,
+      "purpose": "The tests behind the overnight build tag: long wall clock, the whole corpus plus anything too slow for any other gate. No test in this repository declares this tag yet -- the same additive-tag reasoning as the integration gate applies until dedicated overnight-tagged tests exist."
+    },
+    {
+      "name": "race",
+      "packages": ["./..."],
+      "build_tags": [],
+      "run_pattern": "",
+      "requires": "none",
+      "budget_seconds": 1260,
+      "purpose": "The full default build with the race detector -- mirrors the existing Makefile 'test' target exactly. Budget is CLAUDE.md's own stated figure (the cmd suite needs about twenty-one minutes), not a guess.",
+      "race": true
+    },
+    {
+      "name": "release",
+      "packages": ["./..."],
+      "build_tags": ["integration"],
+      "run_pattern": "",
+      "requires": "none",
+      "budget_seconds": 1800,
+      "purpose": "The union of fast, focused, integration and race, plus the sentinel list -- the gate that must pass before anything is published.",
+      "race": true
+    }
+  ]
+}
