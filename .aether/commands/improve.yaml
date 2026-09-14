@@ -1,0 +1,17 @@
+name: ant-improve
+description: "Look at how the colony's own suggestions are doing, or try one by hand"
+source_of_truth: "Use the Go `aether` CLI as the source of truth."
+runtime:
+  command: "AETHER_OUTPUT_MODE=visual aether improve $ARGUMENTS"
+wrapper_additions:
+  routing: |
+    Keep improvement inspection and trial runtime-first:
+    1. With no arguments, run `AETHER_OUTPUT_MODE=visual aether improve` to see two honest figures: how often the colony's own suggestions genuinely helped, and how often you had to step in to stop something.
+    2. If the user wants to propose a change (a "candidate" -- a proposed setting or routing rule, never a piece of code), route to `aether shadow-declare --id <id> --scope <"project knowledge"|"routing"> --expected-benefit "<why it might help>" --harms "<what could go wrong>" --expires <RFC3339 timestamp> --rollback-plan "<how to undo it>"`.
+    3. If the user wants to try a declared candidate beside the current behaviour, route to `aether shadow-compare --candidate-id <id>`.
+    4. This same declare/compare pair also runs automatically, on its own, at the end of every check -- the wrapper only needs to relay the result, never re-run it.
+guardrails:
+  - "Do not write colony state files, session files, or shadow/canary files by hand from this command spec."
+  - "Do not read shadow/candidates.json or canary/runs.json directly from the wrapper."
+  - "Do not use jq or shell file surgery to declare or compare a candidate."
+  - "If docs and runtime disagree, runtime wins."
