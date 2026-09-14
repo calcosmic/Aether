@@ -16,6 +16,7 @@ import (
 	"runtime"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -70,7 +71,15 @@ var (
 		"V-203-SUBTREE",
 		"V-203-SIGNALS",
 	}
-	classicContractGroups            = append(append(append(append(slices.Clone(classicContractPhase199Groups), classicContractPhase200Groups...), classicContractPhase201Groups...), classicContractPhase202Groups...), classicContractPhase203Groups...)
+	classicContractPhase204Groups = []string{
+		"V-204-TRUTH",
+		"V-204-LEDGER",
+		"V-204-EVIDENCE",
+		"V-204-FIXTURES",
+		"V-204-GATES",
+		"V-204-PROMOTION",
+	}
+	classicContractGroups            = append(append(append(append(append(slices.Clone(classicContractPhase199Groups), classicContractPhase200Groups...), classicContractPhase201Groups...), classicContractPhase202Groups...), classicContractPhase203Groups...), classicContractPhase204Groups...)
 	classicContractPlatforms         = []string{"runtime", "claude", "opencode"}
 	classicContractPhase199Decisions = []string{
 		"SYN-199-01",
@@ -105,7 +114,12 @@ var (
 		"SYN-203-05", "SYN-203-06", "SYN-203-07", "SYN-203-08",
 		"SYN-203-09", "SYN-203-10", "SYN-203-11", "SYN-203-12",
 	}
-	classicContractDecisions            = append(append(append(append(slices.Clone(classicContractPhase199Decisions), classicContractPhase200Decisions...), classicContractPhase201Decisions...), classicContractPhase202Decisions...), classicContractPhase203Decisions...)
+	classicContractPhase204Decisions = []string{
+		"SYN-204-01", "SYN-204-02", "SYN-204-03", "SYN-204-04",
+		"SYN-204-05", "SYN-204-06", "SYN-204-07", "SYN-204-08",
+		"SYN-204-09", "SYN-204-10", "SYN-204-11", "SYN-204-12",
+	}
+	classicContractDecisions            = append(append(append(append(append(slices.Clone(classicContractPhase199Decisions), classicContractPhase200Decisions...), classicContractPhase201Decisions...), classicContractPhase202Decisions...), classicContractPhase203Decisions...), classicContractPhase204Decisions...)
 	classicContractPhase199Capabilities = []string{
 		"CAP-006", "CAP-007", "CAP-008", "CAP-013", "CAP-015", "CAP-016", "CAP-017",
 		"CAP-018", "CAP-019", "CAP-020", "CAP-026", "CAP-027", "CAP-028", "CAP-032",
@@ -125,8 +139,11 @@ var (
 	classicContractPhase203Capabilities = []string{
 		"CAP-002", "CAP-009", "CAP-014", "CAP-030", "CAP-031", "CAP-058",
 	}
+	classicContractPhase204Capabilities = []string{
+		"CAP-001", "CAP-025", "CAP-043", "CAP-055", "CAP-057", "CAP-067", "CAP-070",
+	}
 	classicContractCaseIDPattern          = regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`)
-	classicContractDecisionPattern        = regexp.MustCompile(`^SYN-(?:199-(?:0[1-9]|10)|200-(?:0[1-9]|1[0-2])|201-(?:0[1-9]|1[0-4])|202-(?:0[1-9]|1[0-2])|203-(?:0[1-9]|1[0-2]))$`)
+	classicContractDecisionPattern        = regexp.MustCompile(`^SYN-(?:199-(?:0[1-9]|10)|200-(?:0[1-9]|1[0-2])|201-(?:0[1-9]|1[0-4])|202-(?:0[1-9]|1[0-2])|203-(?:0[1-9]|1[0-2])|204-(?:0[1-9]|1[0-2]))$`)
 	classicContractCAPPattern             = regexp.MustCompile(`^CAP-[0-9]{3}$`)
 	classicContractRoundVocabulary        = regexp.MustCompile(`(?i)\brounds?\b`)
 	classicContractPhase200PublicCommands = map[string]bool{
@@ -145,6 +162,10 @@ var (
 	classicContractPhase203PublicCommands = map[string]bool{
 		"/ant-build": true, "/ant-continue": true, "/ant-watch": true, "/ant-status": true,
 		"/ant-pheromones": true, "/ant-focus": true, "/ant-redirect": true,
+	}
+	classicContractPhase204PublicCommands = map[string]bool{
+		"/ant-continue": true, "/ant-build": true, "/ant-status": true, "/ant-seal": true,
+		"/ant-patrol": true, "/ant-skill-create": true, "/ant-pheromones": true,
 	}
 	classicContractPhase200MechanismProofs = []classicPhase200MechanismProofExpectation{
 		{
@@ -425,13 +446,15 @@ func TestClassicMechanismCoverage(t *testing.T) {
 		".planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md",
 		".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md",
 		".planning/phases/203-biological-runtime/203-CLASSIC-SYNTHESIS.md",
+		".planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md",
 	}) {
-		t.Fatalf("synthesis_sources = %v, want the ordered Phase 199, Phase 200, Phase 201, Phase 202, and Phase 203 sources", registry.SynthesisSources)
+		t.Fatalf("synthesis_sources = %v, want the ordered Phase 199, Phase 200, Phase 201, Phase 202, Phase 203, and Phase 204 sources", registry.SynthesisSources)
 	}
 	assertClassicSynthesisSource(t, repoRoot, registry.SynthesisSources[1], classicContractPhase200Decisions, classicContractPhase200Capabilities, false)
 	assertClassicSynthesisSource(t, repoRoot, registry.SynthesisSources[2], classicContractPhase201Decisions, classicContractPhase201Capabilities, false)
 	assertClassicSynthesisSource(t, repoRoot, registry.SynthesisSources[3], classicContractPhase202Decisions, classicContractPhase202Capabilities, false)
 	assertClassicSynthesisSource(t, repoRoot, registry.SynthesisSources[4], classicContractPhase203Decisions, classicContractPhase203Capabilities, false)
+	assertClassicSynthesisSource(t, repoRoot, registry.SynthesisSources[5], classicContractPhase204Decisions, classicContractPhase204Capabilities, false)
 
 	after := snapshotStoreFileHashesForTest(t, contractDir)
 	assertHashSnapshotsEqualForTest(t, "Classic mechanism validation", before, after)
@@ -709,6 +732,223 @@ func TestClassicContractPhase203MechanismRegistry(t *testing.T) {
 
 	after := snapshotStoreFileHashesForTest(t, contractDir)
 	assertHashSnapshotsEqualForTest(t, "Classic Phase 203 mechanism registry validation", before, after)
+}
+
+// TestClassicContractPhase204MechanismRegistry proves the widened corpus
+// carries the twelve SYN-204 learning-governor mechanism identities, in
+// ascending order, each with at least one source citation, and that the
+// union of their capability identifiers covers every one of the seven
+// capability rows the ledger routed to Phase 204. Only six of the twelve
+// SYN-204 rows trace to a routed CAP row (CAP-001, CAP-025, CAP-043,
+// CAP-055, CAP-057, CAP-067, CAP-070 -- per 204-CLASSIC-SYNTHESIS.md's own
+// "Routed capability coverage" table); the remaining six (SYN-204-02,
+// 204-06, 204-07, 204-09, 204-11, 204-12) implement requirements (LEARN-01's
+// schema half, LEARN-03's self-report verification, LEARN-04, LEARN-06,
+// LEARN-07's rollback half, LEARN-08) the ledger never routed a capability
+// row to. Fabricating a CAP association where the study found none would
+// violate this phase's own prohibition ("never record a disposition for a
+// routed capability row without citing both historical and current
+// evidence") -- mirroring TestClassicContractPhase203MechanismRegistry's own
+// documented choice, this test asserts CAP coverage in AGGREGATE rather than
+// requiring every individual entry to carry one.
+func TestClassicContractPhase204MechanismRegistry(t *testing.T) {
+	contractDir := classicContractFixtureDir(t)
+	before := snapshotStoreFileHashesForTest(t, contractDir)
+	registry, err := loadClassicMechanismRegistry(filepath.Join(contractDir, "mechanisms.json"))
+	if err != nil {
+		t.Fatalf("load Classic mechanism registry: %v", err)
+	}
+
+	var orderedIDs []string
+	referencedCAPs := make(map[string]bool)
+	decisionCounts := make(map[string]int, len(classicContractPhase204Decisions))
+	for _, mechanism := range registry.Mechanisms {
+		if !strings.HasPrefix(mechanism.ID, "SYN-204-") {
+			continue
+		}
+		orderedIDs = append(orderedIDs, mechanism.ID)
+		decisionCounts[mechanism.ID]++
+		for _, capID := range mechanism.CAPIDs {
+			referencedCAPs[capID] = true
+		}
+		if len(mechanism.SourceCitations) == 0 || classicStringsContainBlank(mechanism.SourceCitations) {
+			t.Errorf("mechanism %q requires at least one source citation", mechanism.ID)
+		}
+		if len(mechanism.PublicCommands) == 0 || classicStringsContainBlank(mechanism.PublicCommands) {
+			t.Errorf("mechanism %q requires at least one public command", mechanism.ID)
+		}
+		if len(mechanism.Groups) == 0 {
+			t.Errorf("mechanism %q requires at least one owning group", mechanism.ID)
+		}
+	}
+	for _, id := range classicContractPhase204Decisions {
+		if decisionCounts[id] != 1 {
+			t.Errorf("mechanism %s count = %d, want exactly 1", id, decisionCounts[id])
+		}
+	}
+	if !slices.Equal(orderedIDs, classicContractPhase204Decisions) {
+		t.Errorf("SYN-204 registry order = %v, want ascending order %v", orderedIDs, classicContractPhase204Decisions)
+	}
+	for _, capID := range classicContractPhase204Capabilities {
+		if !referencedCAPs[capID] {
+			t.Errorf("routed capability %s is not named by any SYN-204 mechanism", capID)
+		}
+	}
+
+	t.Run("unregistered SYN-204 identifier is refused by name", func(t *testing.T) {
+		invalid := cloneClassicMechanismRegistry(t, registry)
+		invalid.Mechanisms = classicMechanismsWithoutDecision(invalid.Mechanisms, "SYN-204-06")
+		assertClassicMechanismError(t, invalid, `missing synthesis decision "SYN-204-06"`)
+	})
+
+	t.Run("case referencing an unregistered decision fails coverage validation by name", func(t *testing.T) {
+		invalid := cloneClassicMechanismRegistry(t, registry)
+		invalid.Mechanisms = classicMechanismsWithoutDecision(invalid.Mechanisms, "SYN-204-06")
+		testCase := classicContractValidDocument().Cases[0]
+		testCase.ID = "learning-governor.probe.unregistered-decision"
+		testCase.SynthesisDecision = "SYN-204-06"
+		err := validateClassicCaseSynthesisCoverage([]classicContractCase{testCase}, invalid)
+		if err == nil || !strings.Contains(err.Error(), `"SYN-204-06"`) {
+			t.Fatalf("coverage validation error = %v, want it to name SYN-204-06", err)
+		}
+	})
+
+	t.Run("identifier differing only by letter case is rejected by exact byte match", func(t *testing.T) {
+		testCase := classicContractValidDocument().Cases[0]
+		testCase.ID = "learning-governor.probe.case-variant-decision"
+		testCase.SynthesisDecision = "syn-204-06"
+		document := classicContractDocument{SchemaVersion: classicContractSchemaVersion, Cases: []classicContractCase{testCase}}
+		err := validateClassicContractDocument(document)
+		if err == nil || !strings.Contains(err.Error(), `"syn-204-06"`) {
+			t.Fatalf("schema validation error = %v, want it to name the rejected case-variant identifier \"syn-204-06\"", err)
+		}
+		if err := validateClassicCaseSynthesisCoverage(document.Cases, registry); err == nil || !strings.Contains(err.Error(), `"syn-204-06"`) {
+			t.Fatalf("coverage validation error = %v, want it to name the rejected case-variant identifier \"syn-204-06\" -- exact byte equality against the registered \"SYN-204-06\" must not match", err)
+		}
+	})
+
+	t.Run("SYN-204-05 case in group V-204-EVIDENCE validates against the widened schema and passes coverage", func(t *testing.T) {
+		testCase := classicContractValidDocument().Cases[0]
+		testCase.ID = "learning-governor.probe.registered-decision"
+		testCase.Group = "V-204-EVIDENCE"
+		testCase.SynthesisDecision = "SYN-204-05"
+		document := classicContractDocument{SchemaVersion: classicContractSchemaVersion, Cases: []classicContractCase{testCase}}
+		if err := validateClassicContractDocument(document); err != nil {
+			t.Fatalf("schema validation error = %v, want nil for SYN-204-05 in V-204-EVIDENCE", err)
+		}
+		if err := validateClassicCaseSynthesisCoverage(document.Cases, registry); err != nil {
+			t.Fatalf("coverage validation error = %v, want nil for a registered decision", err)
+		}
+	})
+
+	after := snapshotStoreFileHashesForTest(t, contractDir)
+	assertHashSnapshotsEqualForTest(t, "Classic Phase 204 mechanism registry validation", before, after)
+}
+
+// TestClassicContractRegistryHasNoRuntimeWriter proves the Classic mechanism
+// registry (cmd/testdata/classic-contract/v1/mechanisms.json) is an authored
+// artefact no concurrent runtime write can interleave a partial write into.
+// It parses every non-test .go file under cmd/ and pkg/ and fails, naming
+// the offending file and function, if any of them contains a call whose
+// argument list mentions the registry file's own basename -- confirmed this
+// session to have zero non-test occurrences anywhere in the tree
+// (grep -rln "mechanisms.json" cmd/ pkg/ | grep -v _test.go returns only a
+// coincidental testdata fixture, not Go source), so any call-site match is
+// itself the violation this test exists to catch.
+func TestClassicContractRegistryHasNoRuntimeWriter(t *testing.T) {
+	repoRoot := findTestModuleRoot(t)
+	violations := scanForClassicRegistryRuntimeWriters(t, filepath.Join(repoRoot, "cmd"))
+	violations = append(violations, scanForClassicRegistryRuntimeWriters(t, filepath.Join(repoRoot, "pkg"))...)
+	if len(violations) != 0 {
+		t.Fatalf("found a non-test Go file referencing the Classic mechanism registry path:\n%s", strings.Join(violations, "\n"))
+	}
+
+	t.Run("a synthetic runtime writer is caught by name", func(t *testing.T) {
+		fixtureSrc := `package cmd
+
+import "os"
+
+func sneakyRegistryWriter(payload []byte) error {
+	return os.WriteFile("cmd/testdata/classic-contract/v1/mechanisms.json", payload, 0644)
+}
+`
+		violations := classicRegistryRuntimeWriterViolationsInSource(t, "fixture_registry_writer.go", fixtureSrc)
+		if len(violations) == 0 {
+			t.Fatal("scanner failed to detect a synthetic write into the Classic mechanism registry")
+		}
+		if !strings.Contains(violations[0], "sneakyRegistryWriter") {
+			t.Fatalf("violation %q does not name the offending function sneakyRegistryWriter", violations[0])
+		}
+	})
+}
+
+// scanForClassicRegistryRuntimeWriters walks every non-test .go file
+// directly under dir (not recursively -- mirroring the existing
+// TestOneLiveEventModelOnly/TestCreditRequiresBothFacts glob-per-package
+// convention in this file) and reports every call expression naming the
+// registry file's own basename, "mechanisms.json".
+func scanForClassicRegistryRuntimeWriters(t *testing.T, dir string) []string {
+	t.Helper()
+	names, err := filepath.Glob(filepath.Join(dir, "*.go"))
+	if err != nil {
+		t.Fatalf("glob %s: %v", dir, err)
+	}
+	fset := token.NewFileSet()
+	var violations []string
+	for _, name := range names {
+		if strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(fset, name, nil, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", name, err)
+		}
+		violations = append(violations, classicRegistryRuntimeWriterViolations(fset, file)...)
+	}
+	return violations
+}
+
+func classicRegistryRuntimeWriterViolationsInSource(t *testing.T, filename, src string) []string {
+	t.Helper()
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, filename, src, 0)
+	if err != nil {
+		t.Fatalf("parse fixture source: %v", err)
+	}
+	return classicRegistryRuntimeWriterViolations(fset, file)
+}
+
+func classicRegistryRuntimeWriterViolations(fset *token.FileSet, file *ast.File) []string {
+	const registryBasename = "mechanisms.json"
+	var violations []string
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Body == nil {
+			continue
+		}
+		ast.Inspect(fn.Body, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			for _, arg := range call.Args {
+				lit, ok := arg.(*ast.BasicLit)
+				if !ok || lit.Kind != token.STRING {
+					continue
+				}
+				value, err := strconv.Unquote(lit.Value)
+				if err != nil {
+					continue
+				}
+				if strings.Contains(value, registryBasename) {
+					pos := fset.Position(call.Pos())
+					violations = append(violations, fmt.Sprintf("%s:%d in func %s references %q", pos.Filename, pos.Line, fn.Name.Name, registryBasename))
+				}
+			}
+			return true
+		})
+	}
+	return violations
 }
 
 func TestClassicContractPhase200SchemaMechanismsAndCausalCases(t *testing.T) {
@@ -2410,6 +2650,7 @@ func validateClassicMechanismRegistry(registry classicMechanismRegistry) error {
 		".planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md",
 		".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md",
 		".planning/phases/203-biological-runtime/203-CLASSIC-SYNTHESIS.md",
+		".planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md",
 	}) {
 		return fmt.Errorf("unexpected synthesis_sources %v", registry.SynthesisSources)
 	}
@@ -2452,6 +2693,10 @@ func validateClassicMechanismRegistry(registry classicMechanismRegistry) error {
 				if !slices.Contains(classicContractPhase203Capabilities, capID) {
 					return fmt.Errorf("mechanism %q has unexpected Phase 203 capability %q", mechanism.ID, capID)
 				}
+			} else if strings.HasPrefix(mechanism.ID, "SYN-204-") {
+				if !slices.Contains(classicContractPhase204Capabilities, capID) {
+					return fmt.Errorf("mechanism %q has unexpected Phase 204 capability %q", mechanism.ID, capID)
+				}
 			} else if !slices.Contains(classicContractPhase200Capabilities, capID) {
 				return fmt.Errorf("mechanism %q has unexpected Phase 200 capability %q", mechanism.ID, capID)
 			}
@@ -2483,6 +2728,13 @@ func validateClassicMechanismRegistry(registry classicMechanismRegistry) error {
 		if strings.HasPrefix(mechanism.ID, "SYN-203-") {
 			for _, command := range mechanism.PublicCommands {
 				if !classicContractPhase203PublicCommands[command] {
+					return fmt.Errorf("mechanism %q uses stale or non-public command %q", mechanism.ID, command)
+				}
+			}
+		}
+		if strings.HasPrefix(mechanism.ID, "SYN-204-") {
+			for _, command := range mechanism.PublicCommands {
+				if !classicContractPhase204PublicCommands[command] {
 					return fmt.Errorf("mechanism %q uses stale or non-public command %q", mechanism.ID, command)
 				}
 			}
