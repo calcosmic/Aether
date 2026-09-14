@@ -475,7 +475,47 @@ var instinctApplyCmd = &cobra.Command{
 		}
 
 		instinctID := args[0]
-		success, _ := cmd.Flags().GetBool("success")
+
+		// WR-01 (204-REVIEW.md): --success is a boolean, but the credit
+		// ledger's own outcome vocabulary is three-way (helpful/neutral/
+		// harmful). Mapping --success=false straight onto "harmful"
+		// silently collapsed "this guidance didn't help" into "this
+		// guidance actively made things worse" -- both fed the same
+		// Failures/HarmfulApplications counters downstream. --outcome is
+		// the explicit, unambiguous way to record any of the three;
+		// --success stays as a backward-compatible alias, but false now
+		// means neutral, never harmful. Passing both is refused by name.
+		outcomeFlag, _ := cmd.Flags().GetString("outcome")
+		successChanged := cmd.Flags().Changed("success")
+		outcomeChanged := cmd.Flags().Changed("outcome")
+		if successChanged && outcomeChanged {
+			outputErrorMessage("instinct-apply refuses --success and --outcome together -- pass exactly one")
+			return nil
+		}
+
+		var outcome recruitmentCreditOutcome
+		if outcomeChanged {
+			outcome = recruitmentCreditOutcome(outcomeFlag)
+			switch outcome {
+			case recruitmentCreditOutcomeHelpful, recruitmentCreditOutcomeNeutral, recruitmentCreditOutcomeHarmful:
+				// declared
+			default:
+				outputErrorMessage(fmt.Sprintf(
+					"instinct-apply --outcome %q is not one of helpful, neutral, harmful", outcomeFlag,
+				))
+				return nil
+			}
+		} else {
+			successFlag, _ := cmd.Flags().GetBool("success")
+			if !successChanged || successFlag {
+				outcome = recruitmentCreditOutcomeHelpful
+			} else {
+				outcome = recruitmentCreditOutcomeNeutral
+			}
+		}
+		// success is retained for the JSON payload/output shape only --
+		// true exactly when the recorded outcome is helpful.
+		success := outcome == recruitmentCreditOutcomeHelpful
 
 		file := loadInstinctFileOrEmpty(store)
 		found := false
@@ -489,22 +529,21 @@ var instinctApplyCmd = &cobra.Command{
 				file.Instincts[i].Provenance.LastApplied = &now
 				file.Instincts[i].Provenance.ApplicationCount++
 				// SYN-204-05/06 (204-03-PLAN.md Task 2, LEARN-03): this is
-				// a manual, owner-invoked grading via the --success flag,
-				// not an automated worker self-report -- the discipline
-				// SYN-204-06 repudiates is recordInstinctApplicationsForPhase
+				// a manual, owner-invoked grading via --outcome (or the
+				// backward-compatible --success alias), not an automated
+				// worker self-report -- the discipline SYN-204-06
+				// repudiates is recordInstinctApplicationsForPhase
 				// (cmd/instinct_application.go) trusting a phase having
-				// merely advanced, not an operator's own explicit --success
+				// merely advanced, not an operator's own explicit
 				// judgement here. Mapped onto the same closed outcome
 				// vocabulary the credit ledger declares (never a bare
-				// boolean) so a single ApplicationHistory slice reads both
-				// writers' entries identically.
-				outcome := string(recruitmentCreditOutcomeHarmful)
-				if success {
-					outcome = string(recruitmentCreditOutcomeHelpful)
-				}
+				// boolean, and never collapsing "did not help" into
+				// "harmful" -- WR-01, 204-REVIEW.md) so a single
+				// ApplicationHistory slice reads both writers' entries
+				// identically.
 				file.Instincts[i].ApplicationHistory = append(file.Instincts[i].ApplicationHistory, colony.InstinctApplicationEntry{
 					Timestamp: now,
-					Outcome:   outcome,
+					Outcome:   string(outcome),
 				})
 				break
 			}
@@ -519,9 +558,15 @@ var instinctApplyCmd = &cobra.Command{
 					}
 					found = true
 					state.Memory.Instincts[i].Applications++
-					if success {
+					// Legacy schema has no neutral counter -- a neutral
+					// outcome increments neither, matching "didn't help,
+					// didn't hurt" rather than being forced into one of
+					// two buckets that both feed downstream review/decay
+					// logic (WR-01, 204-REVIEW.md).
+					switch outcome {
+					case recruitmentCreditOutcomeHelpful:
 						state.Memory.Instincts[i].Successes++
-					} else {
+					case recruitmentCreditOutcomeHarmful:
 						state.Memory.Instincts[i].Failures++
 					}
 					now := time.Now().UTC().Format("2006-01-02T15:04:05Z")
@@ -892,7 +937,8 @@ func init() {
 	incidentRuleAddCmd.Flags().String("rule", "", "Rule content (required)")
 	incidentRuleAddCmd.Flags().String("priority", "normal", "Rule priority")
 
-	instinctApplyCmd.Flags().Bool("success", true, "Whether the application was successful")
+	instinctApplyCmd.Flags().Bool("success", true, "Deprecated alias for --outcome: true means helpful, false means neutral (never harmful)")
+	instinctApplyCmd.Flags().String("outcome", "", "Application outcome: helpful, neutral, or harmful (refused together with --success)")
 
 	spawnGetDepthCmd.Flags().String("name", "", "Ant name to look up (required)")
 
