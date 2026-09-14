@@ -206,6 +206,15 @@ func TestOracleProgressLineNamesRoundConfidenceAndQuestion(t *testing.T) {
 
 func TestOracleStatusFollowStreamsExistingRoundsAndExitsOnRunEnd(t *testing.T) {
 	saveGlobals(t)
+	// followOracleProgress only ever runs inside `aether oracle ... --follow`
+	// (cmd/compatibility_cmds.go:183), and root.go's PersistentPreRunE has by
+	// then recorded that command's own name -- which is what lets
+	// emitVisualLine stream at all. Derive the value from the real command
+	// rather than inheriting whatever the previous test left behind: a follow
+	// running while a quiet command is recorded is a state the runtime cannot
+	// produce, and inheriting it silenced this test's entire output depending
+	// on lane order.
+	currentStreamingCommand = oracleCmd.Name()
 	root := t.TempDir()
 	paths := oracleWorkspacePaths(root)
 	if err := ensureOracleWorkspace(paths); err != nil {
