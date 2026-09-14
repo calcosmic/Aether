@@ -4,16 +4,16 @@ milestone: v1.28
 milestone_name: Classic Colony Restoration
 current_phase: 204
 current_phase_name: Learning Governor
-status: executing
-stopped_at: "Phase 204 executed: 11/11 plans merged, race suite clean vs baseline, code review fixed (5/5); verification found 7 wiring gaps (mechanisms built, no production caller) -- next: /gsd-plan-phase 204 --gaps"
-last_updated: "2026-09-14T16:42:11.162Z"
+status: ready_to_execute
+stopped_at: "Phase 204 gap closure planned: 5 plans (204-12..16) in 3 waves, checker passed on iteration 2, owner chose automatic-at-check + hand-run command (D-01..D-03) -- next: /gsd-execute-phase 204 --gaps-only"
+last_updated: "2026-09-14T18:24:48.438Z"
 last_activity: 2026-09-14
-last_activity_desc: Phase 204 execution started
-state_head: 472046279b8565563bba61aa4214c1fc986843cb
+last_activity_desc: Phase 204 gap-closure planned — 5 plans verified, ready to execute (gaps only)
+state_head: cbb7ad82cd1353201adc9269c9e1c7fe9955bc12
 progress:
   total_phases: 8
   completed_phases: 4
-  total_plans: 159
+  total_plans: 164
   completed_plans: 159
   percent: 50
 ---
@@ -32,10 +32,10 @@ See: .planning/PROJECT.md (updated 2026-09-07)
 
 ## Current Position
 
-Phase: 204 (Learning Governor) — EXECUTING
+Phase: 204 (Learning Governor) — READY TO EXECUTE
 Next phase: 205 (Owner Acceptance and Restoration Seal)
-Status: Executing Phase 204
-Last activity: 2026-09-14 — Phase 204 execution started
+Status: Ready to execute
+Last activity: 2026-09-14 — Phase 204 gap-closure planned (5 plans, 3 waves), ready to execute
 
 ## Performance Metrics
 
