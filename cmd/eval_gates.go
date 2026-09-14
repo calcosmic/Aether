@@ -595,12 +595,17 @@ func loadEvalGateHoldouts() (evalGateHoldoutFile, error) {
 // seedBankUnguardedFloor is the recorded maximum number of fixture-bank
 // entries that may lack a guard test. This floor may only DECREASE --
 // TestEveryFixtureNamesItsGuardOrIsCountedUnguarded fails when the real
-// unguarded count exceeds it. Give a fixture a guard, or raise this comment
-// and this constant together in the same reviewed change with a written
-// reason (never widen it silently). Recorded 2026-09-14: 46 fixtures total,
-// 6 guarded, 40 unguarded -- this constant is that 40, the floor the
-// unguarded count is recorded at.
-const seedBankUnguardedFloor = 40
+// unguarded count exceeds it, and TestSeedBankUnguardedFloorIsTheRealCount
+// (via assertSeedBankUnguardedFloorIsExact) fails when the real unguarded
+// count is BELOW it -- so the two checks together are a two-sided ratchet:
+// this constant must equal the real count exactly, never merely bound it
+// from one side. Give a fixture a guard, or raise this comment and this
+// constant together in the same reviewed change with a written reason
+// (never widen it silently). Recorded 2026-09-14 (204-14-PLAN.md Task 1,
+// closing verification gap SC3c): 47 fixtures total, 17 guarded, 30
+// unguarded -- this constant is that 30, the floor the unguarded count is
+// recorded at.
+const seedBankUnguardedFloor = 30
 
 // seedBankGuardIndexEntry is one visible row in the guard index.
 type seedBankGuardIndexEntry struct {
@@ -661,6 +666,29 @@ func assertSeedBankUnguardedWithinFloor(bank regressionFixtureBank, floor int) e
 		"unguarded fixture count %d exceeds the recorded floor %d -- give one of these fixtures a guard, or raise seedBankUnguardedFloor in the same reviewed change with a written reason: %s",
 		len(unguardedIDs), floor, strings.Join(unguardedIDs, ", "),
 	)
+}
+
+// assertSeedBankUnguardedFloorIsExact fails when bank's real unguarded count
+// is BELOW floor -- the inflated-floor case assertSeedBankUnguardedWithinFloor
+// cannot see on its own (that check only fails when the real count EXCEEDS
+// the floor, so a floor set generously above reality would pass forever).
+// Together the two functions form a two-sided ratchet: the recorded floor
+// must equal the real unguarded count exactly, and per seedBankUnguardedFloor's
+// own comment, may only ever decrease.
+func assertSeedBankUnguardedFloorIsExact(bank regressionFixtureBank, floor int) error {
+	real := 0
+	for _, f := range bank.Fixtures {
+		if f.Guard == nil {
+			real++
+		}
+	}
+	if real < floor {
+		return fmt.Errorf(
+			"recorded seedBankUnguardedFloor (%d) is inflated above the real unguarded count (%d) -- lower the constant to %d",
+			floor, real, real,
+		)
+	}
+	return nil
 }
 
 // resolveEvalGateHoldouts recomputes each held-back fixture's identity by
