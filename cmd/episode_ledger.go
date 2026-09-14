@@ -16,19 +16,14 @@ package cmd
 // store.UpdateJSONAtomically, exactly like the file it follows in shape,
 // cmd/recruitment_credit.go's recordRecruitmentCredit.
 //
-// Deviation from the plan's action text (Rule 3, blocking -- documented in
-// 204-04-SUMMARY.md): the plan asks this file to declare
-// episodeLedgerSchemaVersion "against the shared constant plan 204-03
-// introduces" (cmd/memory_schema.go's memoryStoreSchemaVersion) and to carry
-// "the shared lineage shape from plan 204-03" (memoryRecordLineage). Plan
-// 204-03 is not a declared dependency of this plan (frontmatter
-// depends_on: ["204-01", "204-02"]) and had not landed in this worktree at
-// implementation time -- referencing either symbol would not compile. This
-// file declares its own local schema-version constant (following
-// pkg/codex/permission_profile.go's PermissionProfileSchemaVersion idiom)
-// and its own minimal lineage shape carrying the same four facts 204-03's
-// own doc comment describes, so this ledger is fully self-contained today
-// and can be migrated onto the shared symbols once 204-03 lands.
+// Schema and lineage (204-03 shared contract): this ledger's file-level
+// schema version is the shared colony.CurrentMemorySchemaVersion, and every
+// record it writes carries the shared per-record SchemaVersion and
+// colony.MemoryRecordLineage that the other live memory stores carry --
+// stamped inside recordEpisodeOutcome, the ledger's one writer, so no call
+// site can produce a record without them. 204-04 first shipped a local
+// stand-in for both because 204-03 landed in a sibling worktree; the
+// stand-in was reconciled onto the shared symbols when the two merged.
 import (
 	"crypto/sha256"
 	"encoding/json"
@@ -38,6 +33,7 @@ import (
 	"strings"
 
 	"github.com/calcosmic/Aether/pkg/codex"
+	"github.com/calcosmic/Aether/pkg/colony"
 )
 
 // episodeLedgerPath is the store-relative path recordEpisodeOutcome
@@ -45,10 +41,10 @@ import (
 // one-store-one-directory convention.
 const episodeLedgerPath = "episodes/ledger.json"
 
-// episodeLedgerSchemaVersion is this ledger's own current schema version.
-// See this file's top-of-file doc comment for why it is not yet the shared
-// plan-204-03 constant.
-const episodeLedgerSchemaVersion = 1
+// episodeLedgerSchemaVersion is the ledger's current schema version -- the
+// shared constant every live memory store declares against (204-03), never
+// a private number that could drift from the rest of memory.
+const episodeLedgerSchemaVersion = colony.CurrentMemorySchemaVersion
 
 // episodeLedgerRecordKind is the declared, closed vocabulary of every kind
 // of fact this ledger may record.
@@ -87,17 +83,6 @@ func episodeLedgerRecordKindDeclared(kind episodeLedgerRecordKind) bool {
 	return false
 }
 
-// episodeLedgerLineage is this plan's own minimal stand-in for plan
-// 204-03's shared memoryRecordLineage shape -- see this file's top-of-file
-// doc comment. Every field is optional so absence round-trips as absence,
-// mirroring pheromones.json's pointer-backed convention.
-type episodeLedgerLineage struct {
-	ProvenanceKind  string `json:"provenance_kind,omitempty"`
-	SourceID        string `json:"source_id,omitempty"`
-	OutcomeRecordID string `json:"outcome_record_id,omitempty"`
-	RecordedAt      string `json:"recorded_at,omitempty"`
-}
-
 // episodeLedgerRecord is one durable fact about one episode: its identity,
 // what governed it (runtime/policy versions, acceptance and evaluator
 // digests), what it touched (evidence, hard gates, changed decisions), how
@@ -126,7 +111,13 @@ type episodeLedgerRecord struct {
 	Usage              *codex.WorkerUsage      `json:"usage,omitempty"`
 	ReportedCostUSD    *float64                `json:"reported_cost_usd,omitempty"`
 	TerminalResult     string                  `json:"terminal_result,omitempty"`
-	Lineage            *episodeLedgerLineage   `json:"lineage,omitempty"`
+	// SchemaVersion and Lineage are the shared per-record contract every
+	// live memory store carries (204-03). Both are stamped by
+	// recordEpisodeOutcome on every write and excluded from the record's
+	// replay-identity digest, so a replayed open or close still collapses
+	// to the same record id.
+	SchemaVersion int                         `json:"schema_version,omitempty"`
+	Lineage       *colony.MemoryRecordLineage `json:"lineage,omitempty"`
 }
 
 // episodeLedgerFile is the on-disk container at episodeLedgerPath.
@@ -147,6 +138,10 @@ type episodeLedgerFile struct {
 func episodeLedgerDigestPayload(record episodeLedgerRecord) string {
 	digestSource := record
 	digestSource.RecordID = ""
+	// Schema version and lineage are bookkeeping about the record, not the
+	// fact it records: a replay stamped a moment later must still collapse.
+	digestSource.SchemaVersion = 0
+	digestSource.Lineage = nil
 	if record.RecordKind != episodeLedgerRecordKindIntervention {
 		digestSource.StartedAt = ""
 		digestSource.EndedAt = ""
@@ -224,6 +219,9 @@ func recordEpisodeOutcome(record episodeLedgerRecord) (episodeLedgerRecord, bool
 			}
 		}
 		record.RecordID = recordID
+		record.SchemaVersion = episodeLedgerSchemaVersion
+		lineage := colony.NewMemoryRecordLineage(colony.MemoryProvenanceRuntime, episodeID, episodeLedgerRecordSortTimestamp(record))
+		record.Lineage = &lineage
 		file.Entries = append(file.Entries, record)
 		result = record
 		return nil

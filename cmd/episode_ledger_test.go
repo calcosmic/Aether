@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/codex"
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/events"
 )
 
@@ -848,6 +849,64 @@ func TestDerivedViewsSpeakTheSharedVoice(t *testing.T) {
 		}
 		if !hasGlyph {
 			t.Fatalf("line %q does not open with a shared-table glyph", line)
+		}
+	}
+}
+
+// TestEpisodeLedgerRecordsCarryTheSharedSchemaAndLineage proves the ledger
+// honours the per-record contract every other live memory store carries
+// (204-03): a record written through the one writer comes back stamped with
+// the shared schema version and a runtime-provenance lineage naming the
+// episode and the record's own timestamp -- and a caller cannot bypass the
+// stamp by passing a record without them, because the writer applies both
+// itself. The replay half (a re-recorded open still collapses to the same
+// id despite the stamp) is TestEpisodeLedgerReplayWritesNothing's job.
+func TestEpisodeLedgerRecordsCarryTheSharedSchemaAndLineage(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	written, credited, err := recordEpisodeOutcome(episodeLedgerRecord{
+		RecordKind:  episodeLedgerRecordKindOpened,
+		EpisodeID:   "ep-lineage-1",
+		EpisodeKind: "build",
+		StartedAt:   "2026-09-14T10:00:00Z",
+	})
+	if err != nil || !credited {
+		t.Fatalf("record open: credited=%v err=%v", credited, err)
+	}
+	if written.SchemaVersion != colony.CurrentMemorySchemaVersion {
+		t.Fatalf("schema_version = %d, want the shared colony.CurrentMemorySchemaVersion %d", written.SchemaVersion, colony.CurrentMemorySchemaVersion)
+	}
+	if !colony.MemoryStoreSchemaReadable(written.SchemaVersion) {
+		t.Fatalf("schema_version %d is not readable by the shared contract", written.SchemaVersion)
+	}
+	if written.Lineage == nil {
+		t.Fatal("lineage was not stamped on the written record")
+	}
+	if got := written.Lineage.ResolvedProvenance(); got != colony.MemoryProvenanceRuntime {
+		t.Fatalf("lineage provenance = %q, want %q", got, colony.MemoryProvenanceRuntime)
+	}
+	if written.Lineage.SourceID == nil || *written.Lineage.SourceID != "ep-lineage-1" {
+		t.Fatalf("lineage source_id = %v, want the episode id", written.Lineage.SourceID)
+	}
+	if written.Lineage.RecordedAt == nil || *written.Lineage.RecordedAt != "2026-09-14T10:00:00Z" {
+		t.Fatalf("lineage recorded_at = %v, want the record's own started_at", written.Lineage.RecordedAt)
+	}
+
+	// The stamp is durable, not a return-value courtesy: the bytes on disk
+	// carry both fields under the shared json names.
+	records, err := readEpisodeLedger()
+	if err != nil || len(records) != 1 {
+		t.Fatalf("read ledger: n=%d err=%v", len(records), err)
+	}
+	raw, err := json.Marshal(records[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`"schema_version":` + fmt.Sprint(colony.CurrentMemorySchemaVersion), `"lineage":{`, `"provenance":"runtime"`} {
+		if !strings.Contains(string(raw), want) {
+			t.Errorf("stored record lacks %s: %s", want, raw)
 		}
 	}
 }
