@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aether.dev/schemas/fixture-bank/v1",
+  "title": "Aether regression fixture bank v1",
+  "description": "A versioned bank of regression fixtures converted from confirmed incidents. Each fixture names the real, previously confirmed defect it protects against -- never an invented one -- and carries its failing baseline, the invariant it protects, the mutations it permits, its provenance, its privacy disposition, and its retirement or successor rule.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "fixtures"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "fixture-bank/v1"
+    },
+    "fixtures": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/fixture"
+      }
+    }
+  },
+  "$defs": {
+    "fixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "failing_baseline",
+        "invariant",
+        "allowed_mutations",
+        "provenance",
+        "privacy",
+        "severity",
+        "content_digest"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "failing_baseline": {
+          "$ref": "#/$defs/failing_baseline"
+        },
+        "invariant": {
+          "type": "string",
+          "minLength": 1
+        },
+        "allowed_mutations": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "wording",
+              "formatting",
+              "file_path",
+              "symbol_name",
+              "none"
+            ]
+          }
+        },
+        "provenance": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/provenance_ref"
+          }
+        },
+        "privacy": {
+          "enum": [
+            "public",
+            "repo_local",
+            "redacted"
+          ]
+        },
+        "severity": {
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        },
+        "content_digest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "retired_by": {
+          "type": "string",
+          "minLength": 1
+        },
+        "successor_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"
+        }
+      },
+      "dependentRequired": {
+        "retired_by": [
+          "successor_id"
+        ],
+        "successor_id": [
+          "retired_by"
+        ]
+      }
+    },
+    "failing_baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "description",
+        "reference"
+      ],
+      "properties": {
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reference": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "provenance_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "identifier"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "failure_log",
+            "audit_finding",
+            "defect_register",
+            "phase_verification",
+            "phase_review"
+          ]
+        },
+        "identifier": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}
