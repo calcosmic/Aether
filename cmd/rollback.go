@@ -329,6 +329,25 @@ func rollbackCanary(run canaryRun, reason string) (canaryRollbackReceipt, bool, 
 		return existing, false, nil
 	}
 
+	// Re-read the current stored status rather than trusting the caller's
+	// own run argument, which may be stale by the time this is called.
+	// A canary already marked completed has already been reported to the
+	// owner as kept -- a rollback must refuse to silently reverse that
+	// (CR-02, 204-REVIEW.md).
+	current, found, err := loadCanaryRun(candidateID)
+	if err != nil {
+		return canaryRollbackReceipt{}, false, err
+	}
+	if !found {
+		return canaryRollbackReceipt{}, false, fmt.Errorf("no canary run recorded for candidate %q", candidateID)
+	}
+	if current.Status == canaryRunStatusCompleted {
+		return canaryRollbackReceipt{}, false, fmt.Errorf(
+			"canary %q already completed and kept -- rollback refuses to undo a change already reported as kept",
+			candidateID,
+		)
+	}
+
 	checkpoint := repairCheckpoint{
 		ID:        run.CheckpointID,
 		Root:      run.Root,

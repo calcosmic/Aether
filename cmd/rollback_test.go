@@ -435,6 +435,76 @@ func TestCompleteCanaryMarksTheChangeAsKept(t *testing.T) {
 	}
 }
 
+// TestRollbackRefusesAnAlreadyCompletedCanary asserts rollbackCanary refuses,
+// by name, to roll back a canary already marked completed -- leaving the
+// completed record and the durable episode ledger's terminal result
+// untouched (CR-02, 204-REVIEW.md).
+func TestRollbackRefusesAnAlreadyCompletedCanary(t *testing.T) {
+	root, scopedFile := rollbackTestSetup(t)
+	admission := rollbackTestAdmission("candidate-completed-then-rollback", canaryScopeRouting)
+	run, err := startCanary(admission, []string{scopedFile})
+	if err != nil {
+		t.Fatalf("start canary: %v", err)
+	}
+	if _, err := completeCanary(run); err != nil {
+		t.Fatalf("complete canary: %v", err)
+	}
+
+	// A candidate applying its own change after completion, simulating a
+	// delayed/duplicate re-evaluation attempting to roll back a change
+	// already reported to the owner as kept.
+	if err := os.WriteFile(filepath.Join(root, scopedFile), []byte("changed after completion\n"), 0o644); err != nil {
+		t.Fatalf("apply post-completion change: %v", err)
+	}
+
+	_, credited, err := rollbackCanary(run, "delayed regression re-evaluation")
+	if err == nil {
+		t.Fatal("expected rollbackCanary to refuse an already-completed canary, got nil error")
+	}
+	if !strings.Contains(err.Error(), "already completed") {
+		t.Fatalf("error %q does not name the already-completed refusal", err.Error())
+	}
+	if credited {
+		t.Fatal("expected credited=false on a refused rollback of a completed canary")
+	}
+
+	// The file must NOT be restored -- the change already reported as kept
+	// must survive untouched.
+	current, err := os.ReadFile(filepath.Join(root, scopedFile))
+	if err != nil {
+		t.Fatalf("read scoped file: %v", err)
+	}
+	if string(current) != "changed after completion\n" {
+		t.Fatalf("expected the completed change to survive untouched, got %q", string(current))
+	}
+
+	// The stored run record must still report completed, not rolled_back.
+	stored, found, err := loadCanaryRun(admission.CandidateID)
+	if err != nil {
+		t.Fatalf("load canary run: %v", err)
+	}
+	if !found {
+		t.Fatal("expected a stored canary run record")
+	}
+	if stored.Status != canaryRunStatusCompleted {
+		t.Fatalf("expected status to remain completed, got %q", stored.Status)
+	}
+
+	// The durable episode ledger's terminal result must still report
+	// completed, not rolled_back.
+	records, err := episodeLedgerForEpisode(canaryEpisodeID(admission.CandidateID))
+	if err != nil {
+		t.Fatalf("read episode ledger: %v", err)
+	}
+	terminal, ok := episodeLedgerTerminalRecord(records, canaryEpisodeID(admission.CandidateID))
+	if !ok {
+		t.Fatal("expected a durable terminal record for the canary episode")
+	}
+	if terminal.TerminalResult != "completed" {
+		t.Fatalf("expected terminal result to remain completed, got %q", terminal.TerminalResult)
+	}
+}
+
 func TestReleaseCanaryQuarantineThroughApprovedPath(t *testing.T) {
 	root, scopedFile := rollbackTestSetup(t)
 	admission := rollbackTestAdmission("candidate-release", canaryScopeRouting)
