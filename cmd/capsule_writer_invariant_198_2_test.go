@@ -140,6 +140,15 @@ var memoryPackPartWriters = map[string]memoryPackPartWriter{
 		writer:    "entries.json via learn.NewColonyStore(store).Add(...), written in cmd/codex_continue_finalize.go and the build-finalize memory-feed path",
 		reachedBy: "/ant-build, /ant-continue",
 	},
+	// LEARN-01 (204-02-PLAN.md Task 2, ruling (b)): the same entries.json
+	// writer as "learned_memory" above -- a fresh entry captureContinueLearning
+	// writes is genuinely a hypothesis, and this section is where it is
+	// honestly shown until (if ever) it earns learn.StatusValidated and
+	// moves to the section above.
+	"learned_memory_unverified": {
+		writer:    "entries.json via learn.NewColonyStore(store).Add(...), written in cmd/codex_continue_finalize.go and the build-finalize memory-feed path",
+		reachedBy: "/ant-build, /ant-continue",
+	},
 	"global_queen_md": {
 		writer:    `hub QUEEN.md, written by "/ant-preferences" and phase-end consolidation's instinct promotion`,
 		reachedBy: "/ant-preferences, /ant-continue",

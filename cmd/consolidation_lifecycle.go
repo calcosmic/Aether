@@ -221,6 +221,18 @@ func runPhaseEndConsolidation(phaseID int) phaseEndConsolidationSummary {
 	// the same phase adds no further entries (198.1-03/FEED-03).
 	applicationsRecorded := recordInstinctApplicationsForPhase(phaseID)
 
+	// LEARN-03 (204-02-PLAN.md Task 1, ruling (a)): the first real
+	// production writer into the evidence-gated credit ledger
+	// (cmd/recruitment_credit.go) -- placed immediately after the
+	// application-recording call above and before the pipeline runs, the
+	// one call site that puts this on both check lanes (this function
+	// is itself already invoked from cmd/codex_continue.go and
+	// cmd/codex_continue_finalize.go). Never a Go error, never blocks this
+	// phase advance -- its own return value shares
+	// phaseEndConsolidationSummary's non-blocking shape (see
+	// cmd/application_evidence.go for the writer's own doc comment).
+	recordPhaseApplicationCredit(phaseID)
+
 	bus := events.NewBus(store, events.DefaultConfig())
 	pipeline := learn.NewPipeline(store, bus, pipelineConfigForStore())
 
