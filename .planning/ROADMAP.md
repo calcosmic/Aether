@@ -630,7 +630,7 @@ Plans:
 4. A beneficial candidate beats its frozen baseline without hard-gate or holdout regression, while overfit or evaluator-tampering candidates are quarantined.
 5. Only allowed low-risk canaries promote and roll back atomically; preferences, skills, workflows, source, and security-sensitive policy retain required authority, and source changes remain independently verified branches/PRs that cannot self-approve, merge, publish, or deploy.
 
-**Plans:** 1/11 plans executed
+**Plans:** 3/11 plans executed
 
 Plans:
 **Wave 1**
@@ -639,13 +639,13 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 204-02-PLAN.md — Tracer: wire the first real production writer into the outcome-credit ledger end to end, and stop hypotheses being rendered as verified.
+- [x] 204-02-PLAN.md — Tracer: wire the first real production writer into the outcome-credit ledger end to end, and stop hypotheses being rendered as verified.
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
 - [ ] 204-03-PLAN.md — Versioned schemas and common provenance across every live memory store, typed application history, and the writerless-field census with its owner decision.
 - [ ] 204-04-PLAN.md — The durable, append-only episode and outcome ledger with idempotent derived views, outliving the live feed's own retention window.
-- [ ] 204-05-PLAN.md — Convert this project's own confirmed failures into a versioned, sanitised, deduplicated regression fixture bank.
+- [x] 204-05-PLAN.md — Convert this project's own confirmed failures into a versioned, sanitised, deduplicated regression fixture bank.
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
