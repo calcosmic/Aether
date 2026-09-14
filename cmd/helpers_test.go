@@ -166,6 +166,11 @@ func TestEnvelopeJSONMatch(t *testing.T) {
 // --- Completion tests ---
 
 func TestCompletionBash(t *testing.T) {
+	// Running a real command through rootCmd sets process globals (notably
+	// currentStreamingCommand, which "completion" leaves classified quiet and
+	// thereby silences every later streaming emitter in this process);
+	// saveGlobals restores them, exactly as every other command-running test does.
+	saveGlobals(t)
 	output := captureStdout(t, func() {
 		rootCmd.SetArgs([]string{"completion", "bash"})
 		defer rootCmd.SetArgs([]string{})
@@ -182,6 +187,11 @@ func TestCompletionBash(t *testing.T) {
 }
 
 func TestCompletionZsh(t *testing.T) {
+	// Running a real command through rootCmd sets process globals (notably
+	// currentStreamingCommand, which "completion" leaves classified quiet and
+	// thereby silences every later streaming emitter in this process);
+	// saveGlobals restores them, exactly as every other command-running test does.
+	saveGlobals(t)
 	output := captureStdout(t, func() {
 		rootCmd.SetArgs([]string{"completion", "zsh"})
 		defer rootCmd.SetArgs([]string{})
@@ -198,6 +208,11 @@ func TestCompletionZsh(t *testing.T) {
 }
 
 func TestCompletionFish(t *testing.T) {
+	// Running a real command through rootCmd sets process globals (notably
+	// currentStreamingCommand, which "completion" leaves classified quiet and
+	// thereby silences every later streaming emitter in this process);
+	// saveGlobals restores them, exactly as every other command-running test does.
+	saveGlobals(t)
 	output := captureStdout(t, func() {
 		rootCmd.SetArgs([]string{"completion", "fish"})
 		defer rootCmd.SetArgs([]string{})
@@ -215,6 +230,11 @@ func TestCompletionFish(t *testing.T) {
 }
 
 func TestCompletionInvalid(t *testing.T) {
+	// Running a real command through rootCmd sets process globals (notably
+	// currentStreamingCommand, which "completion" leaves classified quiet and
+	// thereby silences every later streaming emitter in this process);
+	// saveGlobals restores them, exactly as every other command-running test does.
+	saveGlobals(t)
 	rootCmd.SetArgs([]string{"completion", "invalid"})
 	defer rootCmd.SetArgs([]string{})
 
