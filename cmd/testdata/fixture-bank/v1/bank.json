@@ -946,6 +946,34 @@
       "content_digest": "c44507ac47717d2eac4af0bb4e8387e95a0bbfd8258f38c1b7b77c96cbb689cc"
     },
     {
+      "id": "fixture-c4535d3ebd58",
+      "title": "[broad-invariant] unmet-truth: cmd/shadow_cmds.go. shadowEvaluator's run function is a deterministic always-pass p",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/shadow_cmds.go. shadowEvaluator's run function is a deterministic always-pass placeholder, not a real per-fixture classifier -- every real shadow-compare today reports a tied verdict against an unchanged baseline. The comparison also covers settings and rules only, never code changes (LEARN-06 explicitly scoped code-valued candidates out). Close by wiring a real grading function through the already-proven-safe FrozenEvaluator.Run(Candidate, Task) Result seam, and by extending is",
+        "reference": "40"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/shadow_cmds.go. shadowEvaluator's run function is a deterministic always-pass placeholder, not a real per-fixture classifier -- every real shadow-compare today reports a tied verdict against an unchanged baseline. The comparison also covers settings and rules only, never code changes (LEARN-06 explicitly scoped code-valued candidates out). Close by wiring a real grading function through the already-proven-safe FrozenEvaluator.Run(Candidate, Task) Result seam, and by extending is",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "40"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "c4535d3ebd581e9aef7dbc6b236153867f938956c45fefb7964fd5ee6e43f7a2",
+      "guard": {
+        "test": "TestShadowGraderDistinguishesBeneficialFromHarmful",
+        "package": "cmd"
+      }
+    },
+    {
       "id": "fixture-c5c8f1407a68",
       "title": "[broad-invariant] dream. The Dreamer's only write target (.aether/dreams/{date}.md) is blocked by the PreToolUse h",
       "failing_baseline": {
@@ -1042,6 +1070,34 @@
       "content_digest": "d12096a6c6515d2c2bf19590f46f6afbf0bc8e0b05bce64649fa903c73e72e19",
       "guard": {
         "test": "TestMemoryDetailsIsNoLongerAnAliasOfMemoryMetrics",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-dd9837a62df7",
+      "title": "[broad-invariant] unmet-truth: cmd/shadow_cmds.go. 204-08 built and tested two CLI commands (shadow-declare, shado",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/shadow_cmds.go. 204-08 built and tested two CLI commands (shadow-declare, shadow-compare) for trying a candidate beside current behaviour, but no plan in Phase 204 gives them a caller: 204-09's promotion gate drives pkg/shadow through Go functions, and no wrapper, menu spec, hook or worker-discipline file names them. TestNoRegisteredSubcommandIsUnreferenced refuses a registered command nothing calls and its allowlist may only shrink, so the orchestrator left both commands unregi",
+        "reference": "39"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/shadow_cmds.go. 204-08 built and tested two CLI commands (shadow-declare, shadow-compare) for trying a candidate beside current behaviour, but no plan in Phase 204 gives them a caller: 204-09's promotion gate drives pkg/shadow through Go functions, and no wrapper, menu spec, hook or worker-discipline file names them. TestNoRegisteredSubcommandIsUnreferenced refuses a registered command nothing calls and its allowlist may only shrink, so the orchestrator left both commands unregi",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "39"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "dd9837a62df76bfb82c1e9c5b6b8e61915a4a22313b4c4e18893e9476a050592",
+      "guard": {
+        "test": "TestAutomaticImprovementPassIsReachedFromBothCheckLanes",
         "package": "cmd"
       }
     },

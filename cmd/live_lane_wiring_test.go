@@ -98,6 +98,9 @@ func TestBuildLaneEmitsOrderedLiveEvents(t *testing.T) {
 		events.LiveTopicWorkerStarted,
 		events.LiveTopicWorkerFinished,
 		events.LiveTopicWaveEnded,
+		// 204-15: the build lane records its outcome (evidence, gate results,
+		// changed decisions) on the durable ledger before the episode closes.
+		events.LiveTopicOutcomeRecorded,
 		events.LiveTopicEpisodeEnded,
 	}
 	if len(topics) != len(want) {

@@ -34,6 +34,7 @@ var wrapperCommandNames = map[string]bool{
 	"help":            true,
 	"history":         true,
 	"import-signals":  true,
+	"improve":         true,
 	"init":            true,
 	"insert-phase":    true,
 	"interpret":       true,

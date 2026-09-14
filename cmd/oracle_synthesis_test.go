@@ -206,6 +206,7 @@ func TestEmptyResearchRunWritesNoDocument(t *testing.T) {
 }
 
 func TestEmptyResearchRunIsReportedAsEmpty(t *testing.T) {
+	saveGlobals(t) // starts from "no command in flight": a leaked quiet command silenced this output in full-suite lanes
 	root := t.TempDir()
 	paths := oracleWorkspacePaths(root)
 	if err := ensureOracleWorkspace(paths); err != nil {

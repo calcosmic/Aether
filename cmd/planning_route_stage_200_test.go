@@ -528,12 +528,15 @@ func planningRouteStageSetPolicy(t *testing.T, root, runID string, target, passC
 }
 
 // planningRouteStageFixtureNow is the instant every candidate built on this
-// fixture observes as "now": after the last evidence literal below and inside
-// the seven-day acceptance window production stamps from that evidence. The
+// fixture observes as "now": after the last September-8 evidence literal any
+// dependent fixture adds (classicPhase200TwoPassCandidate's second pass at
+// 01:30, planning_real_repo_200's at 02:20), before the September-9 literals
+// tests pass explicitly, and inside the seven-day acceptance window production
+// stamps from the seed evidence below. The
 // fixture's dates are fixed literals, so its clock must be fixed too -- read
 // against the wall clock, every candidate it produces expired at
 // 2026-09-14T18:05:00Z and eleven tests started failing by calendar.
-var planningRouteStageFixtureNow = time.Date(2026, time.September, 8, 0, 0, 0, 0, time.UTC)
+var planningRouteStageFixtureNow = time.Date(2026, time.September, 8, 12, 0, 0, 0, time.UTC)
 
 func planningRouteStageTestFixture(t *testing.T) (string, planningStageManifest, planningRouteStageResult) {
 	t.Helper()

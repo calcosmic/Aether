@@ -1082,6 +1082,18 @@ var knownEnrichmentSubcommands = map[string]bool{
 	// scan, or gate outcome depends on a recruitment succeeding. Enrichment,
 	// not a gate.
 	"recruit": true,
+	// improve / shadow-declare / shadow-compare (Phase 204, plan 204-12): the
+	// owner-facing improvement report and the two shadow-comparison commands
+	// the automatic pass drives from the end of every check. Their contract
+	// (204-12-PLAN.md D-04) is that a failed, refused or empty comparison,
+	// admission, canary or rollback never blocks, fails or aborts a check --
+	// the same non-blocking contract hive promotion follows -- and `improve`
+	// in its default form is inspection that mutates nothing. A loud warning
+	// is therefore the right severity; halting a run on them would invert
+	// the contract the plan's own tests lock.
+	"improve":        true,
+	"shadow-declare": true,
+	"shadow-compare": true,
 	// spend (Phase 196): a read-only per-worker token view. It renders the
 	// ledger and changes nothing (TestSpendDoesNotMutate). If it cannot run,
 	// the owner loses a cost breakdown -- no verification result, security
