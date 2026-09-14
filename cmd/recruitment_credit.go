@@ -272,8 +272,15 @@ func recordRecruitmentCredit(contributionID string, kind recruitmentContribution
 	// covers every caller without a second call site (203-14-SUMMARY.md
 	// Deviations: cmd/recruitment_credit.go is outside 203-14's declared
 	// files_modified).
+	//
+	// 204-02 (LEARN-03/LEARN-01, this plan's tracer): widened to also fire
+	// for a memory-item contribution (a delivered instinct earning credit
+	// via recordPhaseApplicationCredit, cmd/application_evidence.go) -- the
+	// owner sees this in the same window and the same line shape they
+	// already see for a note, never a second line format
+	// (renderInlineDecisionChangedLine is unchanged).
 	isNewRecord := updateErr == nil
-	if isNewRecord && kind == recruitmentContributionNote && strings.TrimSpace(result.ChangedDecisionID) != "" {
+	if isNewRecord && (kind == recruitmentContributionNote || kind == recruitmentContributionMemoryItem) && strings.TrimSpace(result.ChangedDecisionID) != "" {
 		emitInlineDecisionChangedLine(result.ContributionID, result.ChangedDecisionID, string(result.Outcome))
 	}
 	return result, true, nil
