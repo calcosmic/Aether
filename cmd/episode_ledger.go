@@ -29,11 +29,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/shadow"
 )
 
 // episodeLedgerPath is the store-relative path recordEpisodeOutcome
@@ -611,4 +613,187 @@ func summariseEpisodeSpend(records []episodeLedgerRecord) episodeSpendSummary {
 		}
 	}
 	return summary
+}
+
+// ---------------------------------------------------------------------
+// 204-15 (SC3a): the nine previously writerless episode fields. Every
+// function below reads a fact a lane's own boundary already produced --
+// this phase's latest durable build attempt, the per-phase gate/
+// verification reports the check lanes already write to disk, and the
+// process-wide shadow acceptance/evaluator definitions -- rather than
+// threading a value through the lane's own long call chain. Reading fresh
+// at close time is what lets a single already-registered `defer`, set up
+// before any of these facts exist, still assemble the full record once the
+// lane actually returns.
+// ---------------------------------------------------------------------
+
+// buildEpisodeGateResultNames is the closed set of check names the direct
+// build lane's own pre-dispatch blocker advisory (buildStartBlockerSignals,
+// cmd/build_blocker_advisory.go) can ever report. The direct build lane
+// (runCodexBuildWithOptions) never runs the program's own build/types/lint/
+// tests floor itself -- that only runs later, at build-finalize time
+// (cmd/codex_build_finalize.go's buildFreeCheckReportFromFloor), a
+// SEPARATE lane this plan does not touch -- so this advisory, already
+// computed once per direct build before dispatch, is the one real,
+// always-available check set this lane's own episode close has to report.
+// Documented as a deliberate design choice in 204-15-SUMMARY.md.
+var buildEpisodeGateResultNames = []string{"forced-reviewer", "unanswered-question", "last-continue-blocked"}
+
+// buildEpisodeGateResults converts advisory's own already-computed signals
+// into a name->passed map covering every name in
+// buildEpisodeGateResultNames -- true (clear) unless that signal is
+// actually present in advisory.Signals. Always returns a non-empty map
+// (the direct build lane always evaluates this advisory before dispatch),
+// so this never produces the "fabricated empty map" isVerifiedUsefulSuccess
+// would misread as evidence of failure.
+func buildEpisodeGateResults(advisory buildBlockerAdvisory) map[string]bool {
+	present := make(map[string]bool, len(advisory.Signals))
+	for _, s := range advisory.Signals {
+		present[s.Name] = true
+	}
+	results := make(map[string]bool, len(buildEpisodeGateResultNames))
+	for _, name := range buildEpisodeGateResultNames {
+		results[name] = !present[name]
+	}
+	return results
+}
+
+// buildEpisodeApplicationFacts re-reads phaseNum's own latest durable build
+// attempt -- written earlier in the SAME run this function's caller closes,
+// before the deferred close reads it -- for the evidence and changed-
+// decision identifiers, reusing phaseApplicationEffectEvidenceID /
+// phaseApplicationDecisionID's exact derivation shape
+// (cmd/application_evidence.go) rather than inventing a second identifier
+// scheme. EpisodeRevision is phaseNum joined with the attempt's own ID in
+// the "phase-plan" shape episodeLedgerRevisionPhaseAndPlan already parses
+// (SplitN on the FIRST "-" keeps the attempt ID, which itself contains
+// "-", intact as the second half). ok=false when no durable attempt has
+// been recorded for this phase yet -- the earliest failure-return paths in
+// both the build and the check lanes -- in which case the caller must
+// leave EvidenceIDs, ChangedDecisionIDs and EpisodeRevision absent.
+func buildEpisodeApplicationFacts(phaseNum int) (evidenceIDs []string, changedDecisionIDs []string, revision string, ok bool) {
+	_, attempt, found := loadLatestBuildAttempt(phaseNum)
+	if !found || strings.TrimSpace(attempt.ID) == "" {
+		return nil, nil, "", false
+	}
+	evidenceIDs = []string{phaseApplicationEffectEvidenceID(attempt.ID)}
+	idx := 0
+	for _, delta := range attempt.KnowledgeDeltas {
+		if delta.Kind != buildKnowledgeDeltaKindDecision {
+			continue
+		}
+		changedDecisionIDs = append(changedDecisionIDs, phaseApplicationDecisionID(attempt.ID, idx))
+		idx++
+	}
+	revision = fmt.Sprintf("%d-%s", phaseNum, attempt.ID)
+	return evidenceIDs, changedDecisionIDs, revision, true
+}
+
+// shadowAcceptanceDigestHex and shadowEvaluatorDigestHex are the hex-string
+// forms of shadowAcceptanceCriteriaDefinition's and shadowEvaluator()'s own
+// [32]byte digests (cmd/shadow_cmds.go) -- the acceptance criteria and the
+// grader currently in force for LEARN-06's canary comparisons, process-wide
+// and constant, never a per-lane value. A CHECK is the moment this program
+// verifies work against acceptance criteria, so both check lanes record
+// these; the direct build lane leaves them absent (it dispatches workers,
+// it does not itself grade anything against a frozen evaluator).
+func shadowAcceptanceDigestHex() string {
+	criteria := shadow.NewAcceptanceCriteria([]byte(shadowAcceptanceCriteriaDefinition))
+	digest := criteria.Digest()
+	return fmt.Sprintf("%x", digest)
+}
+
+func shadowEvaluatorDigestHex() string {
+	digest := shadowEvaluator().Digest()
+	return fmt.Sprintf("%x", digest)
+}
+
+// checkEpisodeCloseRecord (204-15, SC3a) assembles the durable
+// episodeLedgerRecord shared by BOTH check lanes -- runCodexContinue
+// (cmd/codex_continue.go) and runCodexContinueFinalize
+// (cmd/codex_continue_finalize.go) -- at their own episode close. One
+// helper, two callers, so the native and delegate lanes cannot record
+// different things for what should be the identical fact set (204-15-
+// PLAN.md Task 1(b)). Every source here is a fresh, independent read (the
+// per-phase gate report already written to disk by either lane, this
+// phase's own latest durable build attempt, and the process-wide shadow
+// definitions) rather than an in-process value threaded through the
+// lane's own call chain -- exactly what lets this one helper work
+// unmodified from either lane's deferred close, registered before any of
+// these facts exist. HardGateResults is left nil (never a fabricated
+// empty map) when no gate report has been written yet for this phase --
+// an early-return path before verification ran.
+func checkEpisodeCloseRecord(phaseID int, runStatus string) episodeLedgerRecord {
+	record := episodeLedgerRecord{TerminalResult: runStatus}
+
+	if store != nil {
+		var gates codexContinueGateReport
+		gateReportRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseID), "gates.json"))
+		if err := store.LoadJSON(gateReportRel, &gates); err == nil && len(gates.Checks) > 0 {
+			results := make(map[string]bool, len(gates.Checks))
+			for _, c := range gates.Checks {
+				results[c.Name] = c.Passed
+			}
+			record.HardGateResults = results
+		}
+	}
+
+	if evidenceIDs, changedDecisionIDs, revision, ok := buildEpisodeApplicationFacts(phaseID); ok {
+		record.EvidenceIDs = evidenceIDs
+		record.ChangedDecisionIDs = changedDecisionIDs
+		record.EpisodeRevision = revision
+	}
+
+	record.AcceptanceDigest = shadowAcceptanceDigestHex()
+	record.EvaluatorDigest = shadowEvaluatorDigestHex()
+
+	return record
+}
+
+// episodeCloseFacts (204-15, SC3a) carries the fields a lane's own later
+// processing discovers, for a deferred close registered near the TOP of
+// the lane -- before any of these facts exist -- to read once the lane
+// actually returns. A pointer so the deferred closure sees every field the
+// lane fills in along the way, regardless of how much code runs between
+// registration and the point a fact becomes known: Go's declare-before-use
+// scoping otherwise forbids an early closure from referencing a variable
+// declared later in the same function body, and this is the one field
+// (per-worker usage, never serialized -- codexBuildDispatch.Usage and
+// codexContinueWorkerFlowStep.Usage both carry `json:"-"`) that cannot be
+// recovered by a fresh disk read at close time the way the others above
+// are.
+type episodeCloseFacts struct {
+	Usage           *codex.WorkerUsage
+	ReportedCostUSD *float64
+}
+
+// addUsage folds one worker's own reported usage into f, following
+// wrapperUsageWasReported's existing reported-vs-unreported rule
+// (cmd/wrapper_usage_resolve.go) and WorkerUsage.Estimated's existing
+// measured-vs-estimated rule: a usage with no source at all contributes
+// nothing (T-204-15-02, never a fabricated zero); an estimated usage's
+// token counts are still folded in (a genuine record of what was
+// estimated, never fabricated) but its cost is never folded into
+// ReportedCostUSD (T-204-15-01) -- an estimate must never be presentable
+// as a measurement.
+func (f *episodeCloseFacts) addUsage(usage codex.WorkerUsage) {
+	if f == nil || !wrapperUsageWasReported(usage) {
+		return
+	}
+	if f.Usage == nil {
+		f.Usage = &codex.WorkerUsage{}
+	}
+	f.Usage.InputTokens += usage.InputTokens
+	f.Usage.CachedInputTokens += usage.CachedInputTokens
+	f.Usage.CacheCreationTokens += usage.CacheCreationTokens
+	f.Usage.OutputTokens += usage.OutputTokens
+	f.Usage.TotalTokens += usage.TotalTokens
+	if usage.Estimated() {
+		return
+	}
+	if f.ReportedCostUSD == nil {
+		zero := 0.0
+		f.ReportedCostUSD = &zero
+	}
+	*f.ReportedCostUSD += usage.USDCost
 }

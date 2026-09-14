@@ -800,8 +800,19 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	emitColonyLiveEpisodeStarted(continueEpisodeID, events.EpisodeKindContinue)
 	restoreLiveContinueEpisode := setActiveLiveContinueEpisode(continueEpisodeID)
 	defer restoreLiveContinueEpisode()
+	// 204-15 (SC3a): the NATIVE check lane's episode close now assembles a
+	// fuller episodeLedgerRecord via checkEpisodeCloseRecord
+	// (cmd/episode_ledger.go) -- the SAME helper the delegate check lane
+	// (cmd/codex_continue_finalize.go's runCodexContinueFinalize) calls, so
+	// the two lanes cannot drift into recording different things -- then
+	// still publishes the live episode-ended event, so the cockpit is
+	// unchanged. phase.ID and runStatus are both read at DEFER-EXECUTION
+	// time, after every later reassignment in this function's body.
 	defer func() {
-		emitColonyLiveEpisodeEnded(continueEpisodeID, events.EpisodeKindContinue, runStatus)
+		record := checkEpisodeCloseRecord(phase.ID, runStatus)
+		record.RuntimeVersion, record.PolicyVersion, record.EndedAt, record.ElapsedSeconds = episodeCloseBasics(continueEpisodeID, runStatus)
+		emitColonyLiveOutcomeRecorded(continueEpisodeID, events.EpisodeKindContinue, record)
+		emitColonyLiveEpisodeEndedEventOnly(continueEpisodeID, events.EpisodeKindContinue, runStatus)
 	}()
 
 	// FIELD-04 (191.1-CONTEXT.md D-07/D-08): a completed, passing

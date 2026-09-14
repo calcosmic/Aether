@@ -48,12 +48,17 @@ func memoryStoreSchemaReadable(version int) bool {
 //
 // memoryStoreFieldWriters, memoryStoreFieldExceptions and
 // memoryStoreFieldRetired are keyed "<store>.<json field name>" --
-// namespaced by store because several of the six live memory stores this
+// namespaced by store because several of the seven live memory stores this
 // census covers share field names (id/timestamp/created_at/schema_version/
 // lineage), and a flat, unqualified map would silently conflate them. The
-// six stores, and the store-name prefix cmd/memory_schema_test.go's census
-// uses for each, are declared together with the record types themselves in
-// that test file's liveMemoryStoreCensusTypes -- not duplicated here.
+// seven stores, and the store-name prefix cmd/memory_schema_test.go's
+// census uses for each, are declared together with the record types
+// themselves in that test file's liveMemoryStoreCensusTypes -- not
+// duplicated here. The episode ledger (cmd/episode_ledger.go) joined as the
+// seventh store in 204-15 (SC3a) -- WINDOWS.md entry 38 recorded it as
+// omitted precisely because registering it would have exposed nine
+// writerless fields; 204-15 gave every one of those fields a real writer
+// first, so it registers clean.
 // ---------------------------------------------------------------------------
 
 // memoryStoreFieldWriter documents the concrete runtime function that fills
@@ -180,6 +185,43 @@ var memoryStoreFieldWriters = map[string]memoryStoreFieldWriter{
 	"handoff.next_worker_instructions": {writer: "buildWorkerHandoffRecord (cmd/codex_dispatch_contract.go)"},
 	"handoff.do_not_repeat":            {writer: "buildWorkerHandoffRecord (cmd/codex_dispatch_contract.go)"},
 	"handoff.freshness":                {writer: "buildWorkerHandoffRecord (cmd/codex_dispatch_contract.go)"},
+
+	// episode (episodeLedgerRecord, cmd/episode_ledger.go) -- the durable
+	// episode/outcome ledger, joined as the seventh census store in 204-15
+	// (SC3a). recordEpisodeOutcome is the ONE function in cmd/ that writes
+	// episodes/ledger.json (TestEpisodeLedgerHasOneWriter enforces this by
+	// name); it stamps record_id/schema_version/lineage on every write and
+	// normalizes episode_id. The nine fields WINDOWS.md entry 38 recorded as
+	// writerless (evidence_ids, hard_gate_results, changed_decision_ids,
+	// usage, reported_cost_usd, interventions, episode_revision,
+	// acceptance_digest, evaluator_digest) each gained a real production
+	// writer in 204-15: buildEpisodeGateResults/buildEpisodeApplicationFacts/
+	// checkEpisodeCloseRecord/episodeCloseFacts.addUsage (all
+	// cmd/episode_ledger.go), consumed by the build lane's, both check
+	// lanes', and the swarm lane's own deferred episode closes
+	// (cmd/codex_build.go, cmd/codex_continue.go,
+	// cmd/codex_continue_finalize.go, cmd/swarm_cmd.go).
+	"episode.record_id":            {writer: "recordEpisodeOutcome (cmd/episode_ledger.go)"},
+	"episode.record_kind":          {writer: "recordEpisodeLedgerOpen/recordEpisodeLedgerClose/emitColonyLiveOutcomeRecorded/emitColonyLiveInterventionRecorded (cmd/live_events.go)"},
+	"episode.episode_id":           {writer: "recordEpisodeOutcome (cmd/episode_ledger.go), normalized from every call site's own episodeID"},
+	"episode.episode_kind":         {writer: "recordEpisodeLedgerOpen/recordEpisodeLedgerClose/emitColonyLiveOutcomeRecorded/emitColonyLiveInterventionRecorded (cmd/live_events.go)"},
+	"episode.episode_revision":     {writer: "buildEpisodeApplicationFacts (cmd/episode_ledger.go, 204-15), consumed by cmd/codex_build.go's, cmd/codex_continue.go's and cmd/codex_continue_finalize.go's deferred episode closes"},
+	"episode.runtime_version":      {writer: "episodeCloseBasics (cmd/live_events.go, 204-15); recordEpisodeLedgerOpen (cmd/live_events.go)"},
+	"episode.policy_version":       {writer: "episodeCloseBasics (cmd/live_events.go, 204-15); recordEpisodeLedgerOpen (cmd/live_events.go)"},
+	"episode.acceptance_digest":    {writer: "checkEpisodeCloseRecord via shadowAcceptanceDigestHex (cmd/episode_ledger.go, 204-15), consumed by both check lanes' deferred closes"},
+	"episode.evaluator_digest":     {writer: "checkEpisodeCloseRecord via shadowEvaluatorDigestHex (cmd/episode_ledger.go, 204-15), consumed by both check lanes' deferred closes"},
+	"episode.evidence_ids":         {writer: "buildEpisodeApplicationFacts (cmd/episode_ledger.go, 204-15), consumed by cmd/codex_build.go's, cmd/codex_continue.go's and cmd/codex_continue_finalize.go's deferred episode closes"},
+	"episode.hard_gate_results":    {writer: "buildEpisodeGateResults (cmd/episode_ledger.go, 204-15) on cmd/codex_build.go's close; checkEpisodeCloseRecord (cmd/episode_ledger.go, 204-15) on both check lanes' closes, reading the phase's own gates.json"},
+	"episode.changed_decision_ids": {writer: "buildEpisodeApplicationFacts (cmd/episode_ledger.go, 204-15), consumed by cmd/codex_build.go's, cmd/codex_continue.go's and cmd/codex_continue_finalize.go's deferred episode closes"},
+	"episode.interventions":        {writer: "emitColonyLiveInterventionRecorded (cmd/live_events.go, 204-13)"},
+	"episode.started_at":           {writer: "recordEpisodeLedgerOpen (cmd/live_events.go); emitColonyLiveInterventionRecorded (cmd/live_events.go, 204-13)"},
+	"episode.ended_at":             {writer: "episodeCloseBasics (cmd/live_events.go, 204-15)"},
+	"episode.elapsed_seconds":      {writer: "episodeCloseBasics (cmd/live_events.go, 204-15)"},
+	"episode.usage":                {writer: "episodeCloseFacts.addUsage (cmd/episode_ledger.go, 204-15), consumed by cmd/codex_build.go's and cmd/swarm_cmd.go's deferred episode closes"},
+	"episode.reported_cost_usd":    {writer: "episodeCloseFacts.addUsage (cmd/episode_ledger.go, 204-15), consumed by cmd/codex_build.go's and cmd/swarm_cmd.go's deferred episode closes"},
+	"episode.terminal_result":      {writer: "recordEpisodeLedgerClose (cmd/live_events.go); cmd/codex_build.go's, cmd/codex_continue.go's, cmd/codex_continue_finalize.go's and cmd/swarm_cmd.go's own deferred episode-close records (204-15)"},
+	"episode.schema_version":       {writer: "recordEpisodeOutcome (cmd/episode_ledger.go)"},
+	"episode.lineage":              {writer: "recordEpisodeOutcome (cmd/episode_ledger.go)"},
 }
 
 // memoryStoreFieldExceptions is the shrink-only allowlist for a

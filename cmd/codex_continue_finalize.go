@@ -14,6 +14,7 @@ import (
 	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/calcosmic/Aether/pkg/learn"
 	"github.com/spf13/cobra"
 )
@@ -180,6 +181,37 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	runStatus := "failed"
 	defer func() {
 		finishRuntimeSpawnRun(runHandle, runStatus, time.Now().UTC())
+	}()
+
+	// 204-15 (SC3a): the DELEGATE check lane's own episode boundary. Before
+	// this plan, runCodexContinueFinalize opened and closed NO episode at
+	// all -- the complete non-test call list for emitColonyLiveEpisodeEnded(
+	// in cmd/ was codex_build.go, oracle_live.go, oracle_loop.go,
+	// codex_plan.go, codex_continue.go; this file did not appear on it
+	// (204-15-PLAN.md's own plan-time finding). continueEpisodeID reuses the
+	// same run identifier finishRuntimeSpawnRun above persists, mirroring
+	// the native lane's shape (cmd/codex_continue.go) line for line.
+	// Registered immediately after runHandle exists and BEFORE the FIELD-04
+	// replay early return just below, so every return path in this
+	// function -- including that early return -- closes inside the
+	// episode.
+	continueEpisodeID := ""
+	if runHandle != nil {
+		continueEpisodeID = runHandle.Run.ID
+	}
+	emitColonyLiveEpisodeStarted(continueEpisodeID, events.EpisodeKindContinue)
+	restoreLiveContinueEpisode := setActiveLiveContinueEpisode(continueEpisodeID)
+	defer restoreLiveContinueEpisode()
+	// The deferred close reuses checkEpisodeCloseRecord (cmd/episode_ledger.go)
+	// -- the SAME helper the native check lane calls -- so the two lanes
+	// cannot drift into recording different things (204-15-PLAN.md Task
+	// 1(b)). phase.ID and runStatus are both read at DEFER-EXECUTION time,
+	// after every later reassignment in this function's body.
+	defer func() {
+		record := checkEpisodeCloseRecord(phase.ID, runStatus)
+		record.RuntimeVersion, record.PolicyVersion, record.EndedAt, record.ElapsedSeconds = episodeCloseBasics(continueEpisodeID, runStatus)
+		emitColonyLiveOutcomeRecorded(continueEpisodeID, events.EpisodeKindContinue, record)
+		emitColonyLiveEpisodeEndedEventOnly(continueEpisodeID, events.EpisodeKindContinue, runStatus)
 	}()
 
 	// FIELD-04 (191.1-CONTEXT.md D-07/D-08): a completed, passing

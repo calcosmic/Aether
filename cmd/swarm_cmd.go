@@ -333,8 +333,19 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 	// call above reads, so the durable episode's terminal result and the
 	// spawn-run record's status can never disagree.
 	emitColonyLiveEpisodeStarted(swarmID, events.EpisodeKindSwarm)
+	// 204-15 (SC3a): swarmFacts accumulates whichever wave(s) below actually
+	// ran and reported usage -- swarm has no hard gates and no acceptance
+	// digest (it dispatches investigators and fixers, it does not itself
+	// grade against a frozen evaluator), so those fields are left absent
+	// rather than written as empty/placeholder values.
+	swarmFacts := &episodeCloseFacts{}
 	defer func() {
-		emitColonyLiveEpisodeEnded(swarmID, events.EpisodeKindSwarm, runStatus)
+		record := episodeLedgerRecord{TerminalResult: runStatus}
+		record.Usage = swarmFacts.Usage
+		record.ReportedCostUSD = swarmFacts.ReportedCostUSD
+		record.RuntimeVersion, record.PolicyVersion, record.EndedAt, record.ElapsedSeconds = episodeCloseBasics(swarmID, runStatus)
+		emitColonyLiveOutcomeRecorded(swarmID, events.EpisodeKindSwarm, record)
+		emitColonyLiveEpisodeEndedEventOnly(swarmID, events.EpisodeKindSwarm, runStatus)
 	}()
 
 	investigation := buildSwarmInvestigationPlans(root, target)
@@ -347,6 +358,7 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 		Status:      "starting",
 	})
 	investigationRuns, err := executeSwarmWave(ctx, root, swarmID, target, investigation, "", invoker, true)
+	addSwarmRunsUsage(swarmFacts, investigationRuns)
 	if err != nil {
 		partialHypotheses, partialMissing := hypothesesFromSwarmRuns(investigationRuns)
 		persistInterruptedSwarmEpisode(swarmID, target, swarmEpisodeStageInvestigation, startedAt,
@@ -465,6 +477,7 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 
 	emitVisualProgress(renderSwarmDispatchPreview(swarmID, target, fixPlans, "Fix Wave"))
 	builderRuns, err := executeSwarmWave(ctx, root, swarmID, target, fixPlans, swarmFixWaveBrief(comparison), invoker, false)
+	addSwarmRunsUsage(swarmFacts, builderRuns)
 	if err != nil {
 		if haveCheckpoint {
 			os.RemoveAll(checkpoint.BackupDir)
@@ -481,6 +494,7 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 	verificationPlans := buildSwarmVerificationPlans(root, target)
 	emitVisualProgress(renderSwarmDispatchPreview(swarmID, target, verificationPlans, "Verification Wave"))
 	watcherRuns, err := executeSwarmWave(ctx, root, swarmID, target, verificationPlans, findingSummary+"\n\n"+builderSummary, invoker, false)
+	addSwarmRunsUsage(swarmFacts, watcherRuns)
 	if err != nil {
 		if haveCheckpoint {
 			os.RemoveAll(checkpoint.BackupDir)
@@ -537,17 +551,17 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 				return nil, fmt.Errorf("write and evaluate swarm result: %w", persistErr)
 			}
 			if episodeErr := persistSwarmEpisode(store, buildSwarmEpisodeRecord(swarmEpisodeBuildParams{
-				SwarmID:             swarmID,
-				Target:              target,
-				Status:              swarmEpisodeStatusCompleted,
-				StartedAt:           startedAt,
-				EndedAt:             time.Now().UTC(),
-				Comparison:          comparison,
-				CheckpointSaved:     true,
-				CheckpointRestored:  false,
-				VerificationStatus:  verificationStatus,
-				StrikeStanding:      strikeStanding,
-				SpawnRunID:          spawnRunIDFrom(runHandle),
+				SwarmID:            swarmID,
+				Target:             target,
+				Status:             swarmEpisodeStatusCompleted,
+				StartedAt:          startedAt,
+				EndedAt:            time.Now().UTC(),
+				Comparison:         comparison,
+				CheckpointSaved:    true,
+				CheckpointRestored: false,
+				VerificationStatus: verificationStatus,
+				StrikeStanding:     strikeStanding,
+				SpawnRunID:         spawnRunIDFrom(runHandle),
 			})); episodeErr != nil {
 				fmt.Fprintf(os.Stderr, "warning: could not persist swarm episode for %q: %v\n", target, episodeErr)
 			}
@@ -1515,6 +1529,22 @@ func buildLegacySwarmWatcherPlan(root, target string) swarmWorkerPlan {
 		AgentName: "aether-watcher",
 		Wave:      3,
 		Timeout:   defaultSwarmWorkerTimeout,
+	}
+}
+
+// addSwarmRunsUsage (204-15, SC3a) folds one wave's worker runs' own
+// reported usage into facts, via each run's Claims (*codex.WorkerResult,
+// json:"-") -- the same in-process, never-serialized field build's own
+// dispatches[i].Usage mirrors for the exact same reason (CR-03: a figure
+// that crossed a wire could be asserted rather than measured). A run with
+// no Claims (never dispatched, or the worker produced no result at all)
+// contributes nothing.
+func addSwarmRunsUsage(facts *episodeCloseFacts, runs []swarmWorkerExecution) {
+	for _, run := range runs {
+		if run.Claims == nil {
+			continue
+		}
+		facts.addUsage(run.Claims.Usage)
 	}
 }
 
