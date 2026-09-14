@@ -655,10 +655,14 @@ type memoryStoreCensusType struct {
 	typ   reflect.Type
 }
 
-// liveMemoryStoreCensusTypes names the six live memory store record types
-// this census covers, per 204-03-PLAN.md Task 3's own list: the instinct
-// entry, the failure-log entry, the learning entry, the pheromone signal,
-// the credit record, and the worker-handoff record.
+// liveMemoryStoreCensusTypes names the seven live memory store record
+// types this census covers: the six named in 204-03-PLAN.md Task 3's own
+// list (the instinct entry, the failure-log entry, the learning entry, the
+// pheromone signal, the credit record, and the worker-handoff record) plus
+// the durable episode ledger (episodeLedgerRecord, cmd/episode_ledger.go),
+// which joined as the seventh store in 204-15 (SC3a) once every one of its
+// previously writerless fields (WINDOWS.md entry 38) gained a real
+// production writer.
 func liveMemoryStoreCensusTypes() []memoryStoreCensusType {
 	return []memoryStoreCensusType{
 		{"instinct", reflect.TypeOf(colony.InstinctEntry{})},
@@ -667,6 +671,7 @@ func liveMemoryStoreCensusTypes() []memoryStoreCensusType {
 		{"pheromone", reflect.TypeOf(colony.PheromoneSignal{})},
 		{"credit", reflect.TypeOf(recruitmentCreditRecord{})},
 		{"handoff", reflect.TypeOf(workerHandoffRecord{})},
+		{"episode", reflect.TypeOf(episodeLedgerRecord{})},
 	}
 }
 
