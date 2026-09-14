@@ -39,6 +39,18 @@ func pendingNoteOriginLabel(item colony.PendingSuggestion) string {
 	return "suggested by the program"
 }
 
+// pendingNoteExtras lets an origin with its own link fields or its own
+// dedup rule still route through enqueuePendingNote -- the one constructor
+// of a queued item -- instead of building a colony.PendingSuggestion of its
+// own. ContentHash overrides the default hash of the content alone; Link
+// sets origin-specific link fields on the item before it is stored;
+// Duplicate replaces the default "same content hash, not dismissed" rule.
+type pendingNoteExtras struct {
+	ContentHash string
+	Link        func(item *colony.PendingSuggestion)
+	Duplicate   func(existing colony.PendingSuggestion) bool
+}
+
 // enqueuePendingNote is the one function that adds an item to the shared
 // tick-to-approve queue -- the SAME colony.PendingSuggestion queue
 // suggest-analyze already populates in COLONY_STATE.json's
@@ -53,16 +65,32 @@ func pendingNoteOriginLabel(item colony.PendingSuggestion) string {
 // matches an existing, non-dismissed queued entry is reported as a
 // duplicate and not added again -- no second dedup mechanism.
 //
-// origin must be colony.PendingOriginSuggestion or colony.PendingOriginImport.
-// signalID, when non-empty, links the queued item to the colony.PheromoneSignal
-// it names (an import's already-quarantined stored note) so approve/reject
-// can find and act on that signal.
-func enqueuePendingNote(sigType, content, reason, origin, signalID string) (colony.PendingSuggestion, bool, error) {
+// origin is one of colony.PendingOrigins(). signalID, when non-empty, links
+// the queued item to the colony.PheromoneSignal it names (an import's
+// already-quarantined stored note) so approve/reject can find and act on
+// that signal.
+//
+// LEARN-07 (204-09) added two more producers -- a difficulty-triggered skill
+// proposal and a quarantined canary awaiting release -- whose queued items
+// carry origin-specific link fields and, for the canary, a dedup rule keyed
+// on the candidate rather than on content. Both route through this one
+// function via pendingNoteExtras rather than building their own item, so
+// TestEveryProposalEntersTheOneQueue keeps holding: exactly one function
+// constructs a queued item, and every proposal the owner can tick enters
+// the same list.
+func enqueuePendingNote(sigType, content, reason, origin, signalID string, extras ...pendingNoteExtras) (colony.PendingSuggestion, bool, error) {
 	if store == nil {
 		return colony.PendingSuggestion{}, false, fmt.Errorf("no store initialized")
 	}
+	var extra pendingNoteExtras
+	if len(extras) > 0 {
+		extra = extras[0]
+	}
 
 	contentHash := "sha256:" + sha256Sum(content)
+	if extra.ContentHash != "" {
+		contentHash = extra.ContentHash
+	}
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	item := colony.PendingSuggestion{
@@ -80,6 +108,15 @@ func enqueuePendingNote(sigType, content, reason, origin, signalID string) (colo
 		s := signalID
 		item.SignalID = &s
 	}
+	if extra.Link != nil {
+		extra.Link(&item)
+	}
+	isDuplicate := func(e colony.PendingSuggestion) bool {
+		return !e.Dismissed && e.ContentHash == contentHash
+	}
+	if extra.Duplicate != nil {
+		isDuplicate = extra.Duplicate
+	}
 
 	duplicated := false
 	var cs colony.ColonyState
@@ -89,7 +126,7 @@ func enqueuePendingNote(sigType, content, reason, origin, signalID string) (colo
 			existing = *cs.PendingSuggestions
 		}
 		for _, e := range existing {
-			if !e.Dismissed && e.ContentHash == contentHash {
+			if isDuplicate(e) {
 				duplicated = true
 				return nil
 			}

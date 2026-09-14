@@ -251,43 +251,27 @@ func (colonySkillProposalSink) ProposeSkill(proposal learn.SkillProposal) error 
 	if store == nil {
 		return fmt.Errorf("no store initialized")
 	}
-	contentHash := "sha256:" + sha256Sum(proposal.Name+"|"+proposal.Content)
-	now := time.Now().UTC().Format(time.RFC3339)
-	origin := colony.PendingOriginSkillProposal
 	name := proposal.Name
 	sourceRunID := proposal.SourceRunID
 	learningEntryID := proposal.LearningEntryID
 	confidence := proposal.Confidence
-
-	item := colony.PendingSuggestion{
-		ID:                   generateSignalID(),
-		Type:                 "SKILL",
-		Content:              proposal.Content,
-		Reason:               fmt.Sprintf("A difficulty-triggered skill candidate derived from run %s", sourceRunID),
-		ContentHash:          contentHash,
-		CreatedAt:            now,
-		Origin:               &origin,
-		SkillName:            &name,
-		SkillSourceRunID:     &sourceRunID,
-		SkillLearningEntryID: &learningEntryID,
-		SkillConfidence:      &confidence,
-	}
-
-	var cs colony.ColonyState
-	return store.UpdateJSONAtomically("COLONY_STATE.json", &cs, func() error {
-		existing := []colony.PendingSuggestion{}
-		if cs.PendingSuggestions != nil {
-			existing = *cs.PendingSuggestions
-		}
-		for _, e := range existing {
-			if !e.Dismissed && e.ContentHash == contentHash {
-				return nil // identical candidate already queued -- not a duplicate proposal
-			}
-		}
-		merged := append(existing, item)
-		cs.PendingSuggestions = &merged
-		return nil
-	})
+	// Routed through enqueuePendingNote -- the one constructor of a queued
+	// item (TestEveryProposalEntersTheOneQueue) -- carrying the skill link
+	// fields; the default "same content hash, not dismissed" rule, over a
+	// hash of name+content, means an identical candidate already queued is
+	// not a duplicate proposal.
+	_, _, err := enqueuePendingNote("SKILL", proposal.Content,
+		fmt.Sprintf("A difficulty-triggered skill candidate derived from run %s", sourceRunID),
+		colony.PendingOriginSkillProposal, "", pendingNoteExtras{
+			ContentHash: "sha256:" + sha256Sum(proposal.Name+"|"+proposal.Content),
+			Link: func(item *colony.PendingSuggestion) {
+				item.SkillName = &name
+				item.SkillSourceRunID = &sourceRunID
+				item.SkillLearningEntryID = &learningEntryID
+				item.SkillConfidence = &confidence
+			},
+		})
+	return err
 }
 
 // approveSkillProposal creates the real skill through the skill service's

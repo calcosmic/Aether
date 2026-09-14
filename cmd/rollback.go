@@ -465,42 +465,24 @@ func enqueueCanaryQuarantineApproval(candidateID string, scope canaryScope, reas
 		"Canary %q (scope: %s) was rolled back and quarantined: %s",
 		candidateID, scope, reason,
 	)
-	contentHash := "sha256:" + sha256Sum(candidateID+"|"+content)
-	now := time.Now().UTC().Format(time.RFC3339)
-	origin := colony.PendingOriginCanaryCandidate
 	linkedID := candidateID
-	item := colony.PendingSuggestion{
-		ID:                generateSignalID(),
-		Type:              "CANARY",
-		Content:           content,
-		Reason:            reason,
-		ContentHash:       contentHash,
-		CreatedAt:         now,
-		Origin:            &origin,
-		CanaryCandidateID: &linkedID,
-	}
-
-	var cs colony.ColonyState
-	return store.UpdateJSONAtomically("COLONY_STATE.json", &cs, func() error {
-		existing := []colony.PendingSuggestion{}
-		if cs.PendingSuggestions != nil {
-			existing = *cs.PendingSuggestions
-		}
-		for _, e := range existing {
-			if e.Dismissed {
-				continue
+	// Routed through enqueuePendingNote -- the one constructor of a queued
+	// item (TestEveryProposalEntersTheOneQueue) -- with the canary's own
+	// link field and its own dedup rule: one open release request per
+	// candidate, keyed on the candidate rather than on the wording.
+	_, _, err := enqueuePendingNote("CANARY", content, reason, colony.PendingOriginCanaryCandidate, "", pendingNoteExtras{
+		ContentHash: "sha256:" + sha256Sum(candidateID+"|"+content),
+		Link: func(item *colony.PendingSuggestion) {
+			item.CanaryCandidateID = &linkedID
+		},
+		Duplicate: func(e colony.PendingSuggestion) bool {
+			if e.Dismissed || e.Origin == nil || *e.Origin != colony.PendingOriginCanaryCandidate {
+				return false
 			}
-			if e.Origin == nil || *e.Origin != colony.PendingOriginCanaryCandidate {
-				continue
-			}
-			if e.CanaryCandidateID != nil && *e.CanaryCandidateID == candidateID {
-				return nil
-			}
-		}
-		merged := append(existing, item)
-		cs.PendingSuggestions = &merged
-		return nil
+			return e.CanaryCandidateID != nil && *e.CanaryCandidateID == candidateID
+		},
 	})
+	return err
 }
 
 // ---------------------------------------------------------------------------
