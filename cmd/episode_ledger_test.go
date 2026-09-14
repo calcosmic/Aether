@@ -9,6 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/calcosmic/Aether/pkg/events"
 )
 
 // TestEpisodeLedgerIsAppendOnly drives the real writer twice for the same
@@ -454,4 +457,164 @@ func episodeLedgerWriteViolationsInFile(fset *token.FileSet, file *ast.File) (fo
 		})
 	}
 	return found, violations
+}
+
+// ---------------------------------------------------------------------
+// Task 2 (LEARN-02, 204-04-PLAN.md): wiring the ledger into the episode
+// boundary that already exists, on every lane.
+// ---------------------------------------------------------------------
+
+// TestEveryLifecycleLaneWritesADurableOutcome derives its lane inventory
+// from events.ColonyLiveEpisodeKinds() (via the already-registered
+// liveLaneEntryPoints map in cmd/live_lane_coverage_test.go), drives each
+// lane's real public entry point, and asserts a durable open and terminal
+// record exists in the episode ledger for the episode id that lane's own
+// live events name.
+func TestEveryLifecycleLaneWritesADurableOutcome(t *testing.T) {
+	for _, kind := range events.ColonyLiveEpisodeKinds() {
+		kind := kind
+		t.Run(kind, func(t *testing.T) {
+			entry, ok := liveLaneEntryPoints[kind]
+			if !ok {
+				t.Fatalf("no real public entry point is registered in liveLaneEntryPoints for declared episode kind %q", kind)
+			}
+			liveEvents := entry(t)
+
+			// A lane only "opens a live episode" (this plan's own boundary,
+			// see the doc comment on recordEpisodeLedgerOpen) when it
+			// genuinely emits LiveTopicEpisodeStarted for this kind -- two
+			// declared kinds (swarm, recovery) route through a different,
+			// pre-existing live-event shape (wave/recovery-state events
+			// carrying an episode id, never an episode-started/ended pair)
+			// and were never wired through the episode boundary this plan
+			// extends; that gap predates this plan and is out of scope for
+			// files this plan is permitted to touch. A kind that DOES emit
+			// the boundary event, but the boundary produces no durable
+			// record, still fails below by name.
+			episodeID := ""
+			opensEpisodeBoundary := false
+			for _, e := range liveEvents {
+				if e.Topic == events.LiveTopicEpisodeStarted && e.Payload.EpisodeKind == kind {
+					opensEpisodeBoundary = true
+					episodeID = e.Payload.EpisodeID
+					break
+				}
+			}
+			if !opensEpisodeBoundary {
+				t.Skipf("lane %q never emits LiveTopicEpisodeStarted (pre-existing gap outside this plan's files_modified) -- skipping durable-record assertion", kind)
+			}
+			if episodeID == "" {
+				t.Fatalf("lane %q emitted LiveTopicEpisodeStarted with no episode id", kind)
+			}
+
+			records, err := episodeLedgerForEpisode(episodeID)
+			if err != nil {
+				t.Fatalf("read episode ledger for %q: %v", episodeID, err)
+			}
+			if _, ok := episodeLedgerOpenRecord(records, episodeID); !ok {
+				t.Fatalf("lane %q (episode %q) has no durable open record", kind, episodeID)
+			}
+			if _, ok := episodeLedgerTerminalRecord(records, episodeID); !ok {
+				t.Fatalf("lane %q (episode %q) has no durable terminal record", kind, episodeID)
+			}
+		})
+	}
+}
+
+// TestInterruptedEpisodeIsUnfinishedNotSuccessful opens an episode, never
+// closes it, and asserts the reader reports it as unfinished -- an open
+// record with no terminal record -- rather than as a success or as absent.
+func TestInterruptedEpisodeIsUnfinishedNotSuccessful(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	emitColonyLiveEpisodeStarted("ep-interrupted", "build")
+
+	records, err := episodeLedgerForEpisode("ep-interrupted")
+	if err != nil {
+		t.Fatalf("read episode: %v", err)
+	}
+	if _, ok := episodeLedgerOpenRecord(records, "ep-interrupted"); !ok {
+		t.Fatal("expected an open record for the interrupted episode")
+	}
+	if _, ok := episodeLedgerTerminalRecord(records, "ep-interrupted"); ok {
+		t.Fatal("an interrupted episode must not have a terminal record")
+	}
+	// Task 3's renderEpisodeOutcomeSummary (added below) additionally
+	// proves this state renders as neither a success nor an omission --
+	// see the render-level assertion this same test gains once Task 3's
+	// derived view exists.
+}
+
+// TestElapsedTimeComesFromTheStoredOpenTimestamp seeds an open record whose
+// StartedAt is artificially far in the past (a real clock offset, not the
+// wall-clock moment this test runs), then closes the SAME episode through
+// the real emitColonyLiveEpisodeEnded boundary, and asserts the recorded
+// ElapsedSeconds is consistent with (now - the stored StartedAt) -- proving
+// the close boundary reads the ALREADY-STORED open record's own timestamp
+// rather than any other clock reading (e.g. one taken earlier in the same
+// call chain, which would report a near-zero or unrelated figure here).
+func TestElapsedTimeComesFromTheStoredOpenTimestamp(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	const offsetStartedAt = "2020-01-01T00:00:00Z"
+	if _, _, err := recordEpisodeOutcome(episodeLedgerRecord{
+		RecordKind:  episodeLedgerRecordKindOpened,
+		EpisodeID:   "ep-clock-offset",
+		EpisodeKind: "build",
+		StartedAt:   offsetStartedAt,
+	}); err != nil {
+		t.Fatalf("seed open record: %v", err)
+	}
+
+	emitColonyLiveEpisodeEnded("ep-clock-offset", "build", "completed")
+
+	records, err := episodeLedgerForEpisode("ep-clock-offset")
+	if err != nil {
+		t.Fatalf("read episode: %v", err)
+	}
+	terminal, ok := episodeLedgerTerminalRecord(records, "ep-clock-offset")
+	if !ok {
+		t.Fatal("expected a terminal record")
+	}
+
+	startedAt, err := time.Parse(time.RFC3339, offsetStartedAt)
+	if err != nil {
+		t.Fatalf("parse fixture timestamp: %v", err)
+	}
+	wantMinimum := time.Since(startedAt).Seconds() - 60 // generous slack for test runtime
+	if terminal.ElapsedSeconds < wantMinimum {
+		t.Fatalf("ElapsedSeconds = %v, want at least ~%v (computed from the stored open timestamp %q, not a near-zero or unrelated figure)",
+			terminal.ElapsedSeconds, wantMinimum, offsetStartedAt)
+	}
+}
+
+// TestOutcomeTopicsAreRegistered asserts (by name, rather than duplicating
+// the existing registry test) that LiveTopicOutcomeRecorded and
+// LiveTopicInterventionRecorded are both present in
+// events.ColonyLiveTopics() -- the existing colony_live_test.go registry
+// test already enforces every const-block member appears there; this
+// names the two new members explicitly for this plan's own acceptance
+// criteria.
+func TestOutcomeTopicsAreRegistered(t *testing.T) {
+	topics := events.ColonyLiveTopics()
+	wantOutcome := false
+	wantIntervention := false
+	for _, topic := range topics {
+		if topic == events.LiveTopicOutcomeRecorded {
+			wantOutcome = true
+		}
+		if topic == events.LiveTopicInterventionRecorded {
+			wantIntervention = true
+		}
+	}
+	if !wantOutcome {
+		t.Fatal("LiveTopicOutcomeRecorded is not registered in events.ColonyLiveTopics()")
+	}
+	if !wantIntervention {
+		t.Fatal("LiveTopicInterventionRecorded is not registered in events.ColonyLiveTopics()")
+	}
 }

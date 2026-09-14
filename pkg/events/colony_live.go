@@ -43,6 +43,17 @@ const (
 	// caller (D-03); this topic is how the owner sees it happen, both
 	// inline and later in the end-of-run summary (D-06).
 	LiveTopicRecruitRefused = "live.recruit.refused"
+	// LiveTopicOutcomeRecorded (204-04, LEARN-02/SYN-204-04) is emitted the
+	// moment a terminal outcome becomes durable in the episode ledger
+	// (cmd/episode_ledger.go's recordEpisodeOutcome, reached through
+	// cmd/live_events.go's emitColonyLiveEpisodeEnded/
+	// emitColonyLiveOutcomeRecorded) -- liveness only; the ledger record
+	// itself, not this event, is the never-expiring authority (ruling (f)).
+	LiveTopicOutcomeRecorded = "live.outcome.recorded"
+	// LiveTopicInterventionRecorded (204-04, LEARN-02) is emitted the
+	// moment a categorised owner intervention becomes durable in the
+	// episode ledger.
+	LiveTopicInterventionRecorded = "live.intervention.recorded"
 )
 
 // Episode-kind vocabulary. EpisodeKind on ColonyLivePayload is a free-form
@@ -172,5 +183,7 @@ func ColonyLiveTopics() []string {
 		LiveTopicGapTargeted,
 		LiveTopicRecruitAdmitted,
 		LiveTopicRecruitRefused,
+		LiveTopicOutcomeRecorded,
+		LiveTopicInterventionRecorded,
 	}
 }
