@@ -225,6 +225,16 @@ type regressionFixtureProvenance struct {
 	Identifier string                `json:"identifier"`
 }
 
+// regressionFixtureGuard names the Go test that would fail if this
+// fixture's invariant broke, and the package it lives in. A fixture with no
+// Guard is counted as unguarded (204-07-PLAN.md, LEARN-05) -- listed, never
+// silently hidden, on a ratchet that may only decrease
+// (seedBankUnguardedFloor, cmd/eval_gates.go).
+type regressionFixtureGuard struct {
+	Test    string `json:"test"`
+	Package string `json:"package"`
+}
+
 // regressionFixture is one entry in the versioned fixture bank. A fixture
 // cannot enter the bank without saying what it protects, what broke to
 // create it, what a later change may legitimately alter, and where it came
@@ -241,6 +251,7 @@ type regressionFixture struct {
 	ContentDigest    string                            `json:"content_digest"`
 	RetiredBy        string                            `json:"retired_by,omitempty"`
 	SuccessorID      string                            `json:"successor_id,omitempty"`
+	Guard            *regressionFixtureGuard           `json:"guard,omitempty"`
 }
 
 // regressionFixtureBank is the on-disk container at fixtureBankPath.

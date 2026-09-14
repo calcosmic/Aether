@@ -71,16 +71,20 @@
       ],
       "privacy": "repo_local",
       "severity": "medium",
-      "content_digest": "0b946259e15946a4ccc73d08a432bdae2ee35d9435f6e5a83ce822402b517b8e"
+      "content_digest": "0b946259e15946a4ccc73d08a432bdae2ee35d9435f6e5a83ce822402b517b8e",
+      "guard": {
+        "test": "TestDeliberatelyDroppedDisplayChoicesStayDropped",
+        "package": "cmd"
+      }
     },
     {
       "id": "fixture-0feb4e6b8824",
       "title": "[broad-invariant] TestCLIFlagAudit. Cobra registers help lazily, so whether the audit saw the whole command tree d",
       "failing_baseline": {
-        "description": "TestCLIFlagAudit. Cobra registers help lazily, so whether the audit saw the whole command tree depended on lane composition. Pre-existing — fails identically at 702aee63",
+        "description": "TestCLIFlagAudit. Cobra registers help lazily, so whether the audit saw the whole command tree depended on lane composition. Pre-existing \u2014 fails identically at 702aee63",
         "reference": "203-biological-runtime:TestCLIFlagAudit"
       },
-      "invariant": "The confirmed defect must not recur: TestCLIFlagAudit. Cobra registers help lazily, so whether the audit saw the whole command tree depended on lane composition. Pre-existing — fails identically at 702aee63",
+      "invariant": "The confirmed defect must not recur: TestCLIFlagAudit. Cobra registers help lazily, so whether the audit saw the whole command tree depended on lane composition. Pre-existing \u2014 fails identically at 702aee63",
       "allowed_mutations": [
         "wording",
         "formatting",
@@ -95,16 +99,20 @@
       ],
       "privacy": "repo_local",
       "severity": "medium",
-      "content_digest": "0feb4e6b8824b7b38e26780e37be080bd316c97a5cde56da68faee1488fa8d83"
+      "content_digest": "0feb4e6b8824b7b38e26780e37be080bd316c97a5cde56da68faee1488fa8d83",
+      "guard": {
+        "test": "TestCLIFlagAudit",
+        "package": "cmd"
+      }
     },
     {
       "id": "fixture-1b371cb64348",
       "title": "[broad-invariant] TestSkillIndexReadEmpty, TestSkillIsUserCreated, TestSkillIsUserCreatedShipped, TestVisualsDumpE",
       "failing_baseline": {
-        "description": "TestSkillIndexReadEmpty, TestSkillIsUserCreated, TestSkillIsUserCreatedShipped, TestVisualsDumpExportsCasteIdentityContract (four failures, one cause). setupSanitizationTest used os.Setenv(\"AETHER_ROOT\", …), which outlives t.TempDir's cleanup, so every later test in the lane resolved the repository root to a deleted path",
+        "description": "TestSkillIndexReadEmpty, TestSkillIsUserCreated, TestSkillIsUserCreatedShipped, TestVisualsDumpExportsCasteIdentityContract (four failures, one cause). setupSanitizationTest used os.Setenv(\"AETHER_ROOT\", \u2026), which outlives t.TempDir's cleanup, so every later test in the lane resolved the repository root to a deleted path",
         "reference": "203-biological-runtime:TestSkillIndexReadEmpty, TestSkillIsUserCreated, TestSkillIsUserCreatedShipped, TestVisualsDumpExportsCasteIdentityContract (four failures, one cause)"
       },
-      "invariant": "The confirmed defect must not recur: TestSkillIndexReadEmpty, TestSkillIsUserCreated, TestSkillIsUserCreatedShipped, TestVisualsDumpExportsCasteIdentityContract (four failures, one cause). setupSanitizationTest used os.Setenv(\"AETHER_ROOT\", …), which outlives t.TempDir's cleanup, so every later test in the lane resolved the repository root to a deleted path",
+      "invariant": "The confirmed defect must not recur: TestSkillIndexReadEmpty, TestSkillIsUserCreated, TestSkillIsUserCreatedShipped, TestVisualsDumpExportsCasteIdentityContract (four failures, one cause). setupSanitizationTest used os.Setenv(\"AETHER_ROOT\", \u2026), which outlives t.TempDir's cleanup, so every later test in the lane resolved the repository root to a deleted path",
       "allowed_mutations": [
         "wording",
         "formatting",
@@ -119,7 +127,11 @@
       ],
       "privacy": "repo_local",
       "severity": "medium",
-      "content_digest": "1b371cb643487e368af9c0510031f6745083aa95244f32b6c741ac125e4c07e4"
+      "content_digest": "1b371cb643487e368af9c0510031f6745083aa95244f32b6c741ac125e4c07e4",
+      "guard": {
+        "test": "TestSkillIndexReadEmpty",
+        "package": "cmd"
+      }
     },
     {
       "id": "fixture-1e2842699888",
@@ -167,16 +179,20 @@
       ],
       "privacy": "repo_local",
       "severity": "medium",
-      "content_digest": "1fe6e24042ef661f7c80294b11f886f8167adc0e1f98eb5546a1240c5c965840"
+      "content_digest": "1fe6e24042ef661f7c80294b11f886f8167adc0e1f98eb5546a1240c5c965840",
+      "guard": {
+        "test": "TestOracleStatusFollowStreamsExistingRoundsAndExitsOnRunEnd",
+        "package": "cmd"
+      }
     },
     {
       "id": "fixture-225723e8f991",
-      "title": "[broad-invariant] council: clarification mode (category menu -\u0026gt; pheromones + instincts). The interactive intent",
+      "title": "[broad-invariant] council: clarification mode (category menu -&gt; pheromones + instincts). The interactive intent",
       "failing_baseline": {
-        "description": "council: clarification mode (category menu -\u0026gt; pheromones + instincts). The interactive intent-clarification flow that turned answers into FOCUS/REDIRECT/FEEDBACK signals and instincts is gone from council; the wrapper says to fall back to CLI subcommands, none of which write pheromones or instincts.",
+        "description": "council: clarification mode (category menu -&gt; pheromones + instincts). The interactive intent-clarification flow that turned answers into FOCUS/REDIRECT/FEEDBACK signals and instincts is gone from council; the wrapper says to fall back to CLI subcommands, none of which write pheromones or instincts.",
         "reference": "confirmed[11]"
       },
-      "invariant": "The confirmed defect must not recur: council: clarification mode (category menu -\u0026gt; pheromones + instincts). The interactive intent-clarification flow that turned answers into FOCUS/REDIRECT/FEEDBACK signals and instincts is gone from council; the wrapper says to fall back to CLI subcommands, none of which write pheromones or instincts.",
+      "invariant": "The confirmed defect must not recur: council: clarification mode (category menu -&gt; pheromones + instincts). The interactive intent-clarification flow that turned answers into FOCUS/REDIRECT/FEEDBACK signals and instincts is gone from council; the wrapper says to fall back to CLI subcommands, none of which write pheromones or instincts.",
       "allowed_mutations": [
         "wording",
         "formatting",
@@ -215,16 +231,20 @@
       ],
       "privacy": "repo_local",
       "severity": "medium",
-      "content_digest": "2b84f3f641cbe2ef91decd2eba67c0a42bdda928dab1c3d0d122c84e0fa5d860"
+      "content_digest": "2b84f3f641cbe2ef91decd2eba67c0a42bdda928dab1c3d0d122c84e0fa5d860",
+      "guard": {
+        "test": "TestStatusPausedColonyIgnoresStaleSpawnTreeWorkers",
+        "package": "cmd"
+      }
     },
     {
       "id": "fixture-2ec5e3c17152",
       "title": "[broad-invariant] redirect. Redirect no longer updates the narrative context document (CONTEXT.md constraint entry",
       "failing_baseline": {
-        "description": "redirect. Redirect no longer updates the narrative context document (CONTEXT.md constraint entry) — the context-update subcommand exists in Go but redirect never calls it.",
+        "description": "redirect. Redirect no longer updates the narrative context document (CONTEXT.md constraint entry) \u2014 the context-update subcommand exists in Go but redirect never calls it.",
         "reference": "confirmed[74]"
       },
-      "invariant": "The confirmed defect must not recur: redirect. Redirect no longer updates the narrative context document (CONTEXT.md constraint entry) — the context-update subcommand exists in Go but redirect never calls it.",
+      "invariant": "The confirmed defect must not recur: redirect. Redirect no longer updates the narrative context document (CONTEXT.md constraint entry) \u2014 the context-update subcommand exists in Go but redirect never calls it.",
       "allowed_mutations": [
         "wording",
         "formatting",
@@ -629,10 +649,10 @@
       "id": "fixture-78ec657a8851",
       "title": "[broad-invariant] insert-phase. Inserting a corrective phase no longer emits the 30-day FOCUS pheromone for the go",
       "failing_baseline": {
-        "description": "insert-phase. Inserting a corrective phase no longer emits the 30-day FOCUS pheromone for the goal, the REDIRECT for constraints, the memory-capture learning, or the phase_inserted event — the downstream steering/learning side effects are all gone.",
+        "description": "insert-phase. Inserting a corrective phase no longer emits the 30-day FOCUS pheromone for the goal, the REDIRECT for constraints, the memory-capture learning, or the phase_inserted event \u2014 the downstream steering/learning side effects are all gone.",
         "reference": "confirmed[28]"
       },
-      "invariant": "The confirmed defect must not recur: insert-phase. Inserting a corrective phase no longer emits the 30-day FOCUS pheromone for the goal, the REDIRECT for constraints, the memory-capture learning, or the phase_inserted event — the downstream steering/learning side effects are all gone.",
+      "invariant": "The confirmed defect must not recur: insert-phase. Inserting a corrective phase no longer emits the 30-day FOCUS pheromone for the goal, the REDIRECT for constraints, the memory-capture learning, or the phase_inserted event \u2014 the downstream steering/learning side effects are all gone.",
       "allowed_mutations": [
         "wording",
         "formatting",
@@ -701,10 +721,10 @@
       "id": "fixture-83a8113c2dd6",
       "title": "[broad-invariant] TestAetherCorpusCatchesAnUnregisteredFlag. 203-15 replaced workers.md's spawn-can-spawn invocati",
       "failing_baseline": {
-        "description": "TestAetherCorpusCatchesAnUnregisteredFlag. 203-15 replaced workers.md's spawn-can-spawn invocation with recruit, leaving the negative corpus test hunting a call the live corpus no longer holds — it refused to pass vacuously, which is what it was built to do",
+        "description": "TestAetherCorpusCatchesAnUnregisteredFlag. 203-15 replaced workers.md's spawn-can-spawn invocation with recruit, leaving the negative corpus test hunting a call the live corpus no longer holds \u2014 it refused to pass vacuously, which is what it was built to do",
         "reference": "203-biological-runtime:TestAetherCorpusCatchesAnUnregisteredFlag"
       },
-      "invariant": "The confirmed defect must not recur: TestAetherCorpusCatchesAnUnregisteredFlag. 203-15 replaced workers.md's spawn-can-spawn invocation with recruit, leaving the negative corpus test hunting a call the live corpus no longer holds — it refused to pass vacuously, which is what it was built to do",
+      "invariant": "The confirmed defect must not recur: TestAetherCorpusCatchesAnUnregisteredFlag. 203-15 replaced workers.md's spawn-can-spawn invocation with recruit, leaving the negative corpus test hunting a call the live corpus no longer holds \u2014 it refused to pass vacuously, which is what it was built to do",
       "allowed_mutations": [
         "wording",
         "formatting",
@@ -719,7 +739,11 @@
       ],
       "privacy": "repo_local",
       "severity": "medium",
-      "content_digest": "83a8113c2dd6eee64b080c2376f7b4aa167394d53adb29802fadc23969583bb7"
+      "content_digest": "83a8113c2dd6eee64b080c2376f7b4aa167394d53adb29802fadc23969583bb7",
+      "guard": {
+        "test": "TestAetherCorpusCatchesAnUnregisteredFlag",
+        "package": "cmd"
+      }
     },
     {
       "id": "fixture-901dfdf5d632",
@@ -747,12 +771,12 @@
     },
     {
       "id": "fixture-b1cd712d7fae",
-      "title": "[broad-invariant] continue: observation -\u0026gt; instinct -\u0026gt; QUEEN.md promotion. The old phase-end loop (memory-ca",
+      "title": "[broad-invariant] continue: observation -&gt; instinct -&gt; QUEEN.md promotion. The old phase-end loop (memory-ca",
       "failing_baseline": {
-        "description": "continue: observation -\u0026gt; instinct -\u0026gt; QUEEN.md promotion. The old phase-end loop (memory-capture -\u0026gt; learning-promote-auto -\u0026gt; instinct-create -\u0026gt; queen-promote-instinct -\u0026gt; queen-write-learnings) has no lifecycle caller; continue writes hypotheses to entries.json only, and nothing ever writes learning-observations.json on a build/continue path, so consolidation finds nothing to promote and QueenPromoted is never populated.",
+        "description": "continue: observation -&gt; instinct -&gt; QUEEN.md promotion. The old phase-end loop (memory-capture -&gt; learning-promote-auto -&gt; instinct-create -&gt; queen-promote-instinct -&gt; queen-write-learnings) has no lifecycle caller; continue writes hypotheses to entries.json only, and nothing ever writes learning-observations.json on a build/continue path, so consolidation finds nothing to promote and QueenPromoted is never populated.",
         "reference": "confirmed[0]"
       },
-      "invariant": "The confirmed defect must not recur: continue: observation -\u0026gt; instinct -\u0026gt; QUEEN.md promotion. The old phase-end loop (memory-capture -\u0026gt; learning-promote-auto -\u0026gt; instinct-create -\u0026gt; queen-promote-instinct -\u0026gt; queen-write-learnings) has no lifecycle caller; continue writes hypotheses to entries.json only, and nothing ever writes learning-observations.json on a build/continue path, so consolidation finds nothing to promote and QueenPromoted is never populated.",
+      "invariant": "The confirmed defect must not recur: continue: observation -&gt; instinct -&gt; QUEEN.md promotion. The old phase-end loop (memory-capture -&gt; learning-promote-auto -&gt; instinct-create -&gt; queen-promote-instinct -&gt; queen-write-learnings) has no lifecycle caller; continue writes hypotheses to entries.json only, and nothing ever writes learning-observations.json on a build/continue path, so consolidation finds nothing to promote and QueenPromoted is never populated.",
       "allowed_mutations": [
         "wording",
         "formatting",

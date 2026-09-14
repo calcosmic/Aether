@@ -97,6 +97,9 @@
         "successor_id": {
           "type": "string",
           "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"
+        },
+        "guard": {
+          "$ref": "#/$defs/guard"
         }
       },
       "dependentRequired": {
@@ -144,6 +147,24 @@
           ]
         },
         "identifier": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "guard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "test",
+        "package"
+      ],
+      "properties": {
+        "test": {
+          "type": "string",
+          "minLength": 1
+        },
+        "package": {
           "type": "string",
           "minLength": 1
         }

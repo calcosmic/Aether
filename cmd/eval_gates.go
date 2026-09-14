@@ -29,6 +29,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
@@ -587,6 +588,79 @@ func loadEvalGateHoldouts() (evalGateHoldoutFile, error) {
 		return evalGateHoldoutFile{}, fmt.Errorf("unmarshal eval gate holdouts %s: %w", path, err)
 	}
 	return file, nil
+}
+
+// --- Seed bank guard index (LEARN-05, Task 3) ---
+
+// seedBankUnguardedFloor is the recorded maximum number of fixture-bank
+// entries that may lack a guard test. This floor may only DECREASE --
+// TestEveryFixtureNamesItsGuardOrIsCountedUnguarded fails when the real
+// unguarded count exceeds it. Give a fixture a guard, or raise this comment
+// and this constant together in the same reviewed change with a written
+// reason (never widen it silently). Recorded 2026-09-14: 46 fixtures total,
+// 6 guarded, 40 unguarded -- this constant is that 40, the floor the
+// unguarded count is recorded at.
+const seedBankUnguardedFloor = 40
+
+// seedBankGuardIndexEntry is one visible row in the guard index.
+type seedBankGuardIndexEntry struct {
+	FixtureID string
+	Title     string
+	Guard     *regressionFixtureGuard
+}
+
+// seedBankGuardIndex reports the guarded count, the unguarded count and the
+// total, plus the visible listing -- which excludes any fixture whose ID is
+// in holdoutIDs, so the total stays honest while the names stay hidden.
+type seedBankGuardIndex struct {
+	Visible   []seedBankGuardIndexEntry
+	Guarded   int
+	Unguarded int
+	Total     int
+}
+
+// buildSeedBankGuardIndex indexes every fixture in bank to whether it names
+// a guard, honestly totaling guarded+unguarded against the bank's own
+// fixture count. A fixture whose ID is in holdoutIDs is excluded from the
+// visible listing while still counting toward Guarded/Unguarded/Total.
+func buildSeedBankGuardIndex(bank regressionFixtureBank, holdoutIDs map[string]bool) seedBankGuardIndex {
+	idx := seedBankGuardIndex{Total: len(bank.Fixtures)}
+	for _, f := range bank.Fixtures {
+		if f.Guard != nil {
+			idx.Guarded++
+		} else {
+			idx.Unguarded++
+		}
+		if holdoutIDs[f.ID] {
+			continue
+		}
+		idx.Visible = append(idx.Visible, seedBankGuardIndexEntry{
+			FixtureID: f.ID,
+			Title:     f.Title,
+			Guard:     f.Guard,
+		})
+	}
+	return idx
+}
+
+// assertSeedBankUnguardedWithinFloor fails, naming every currently
+// unguarded fixture ID, when bank's unguarded count exceeds floor. Never
+// vacuous: an over-floor bank always names the fixtures pushing it over.
+func assertSeedBankUnguardedWithinFloor(bank regressionFixtureBank, floor int) error {
+	var unguardedIDs []string
+	for _, f := range bank.Fixtures {
+		if f.Guard == nil {
+			unguardedIDs = append(unguardedIDs, f.ID)
+		}
+	}
+	if len(unguardedIDs) <= floor {
+		return nil
+	}
+	sort.Strings(unguardedIDs)
+	return fmt.Errorf(
+		"unguarded fixture count %d exceeds the recorded floor %d -- give one of these fixtures a guard, or raise seedBankUnguardedFloor in the same reviewed change with a written reason: %s",
+		len(unguardedIDs), floor, strings.Join(unguardedIDs, ", "),
+	)
 }
 
 // resolveEvalGateHoldouts recomputes each held-back fixture's identity by
