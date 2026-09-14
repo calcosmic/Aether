@@ -3,12 +3,28 @@
   "gates": [
     {
       "name": "fast",
-      "packages": ["./pkg/..."],
+      "packages": [
+        "./pkg/agent/...",
+        "./pkg/cache/...",
+        "./pkg/codegraph/...",
+        "./pkg/colony/...",
+        "./pkg/downloader/...",
+        "./pkg/events/...",
+        "./pkg/exchange/...",
+        "./pkg/graph/...",
+        "./pkg/learn/...",
+        "./pkg/llm/...",
+        "./pkg/memory/...",
+        "./pkg/smoke/...",
+        "./pkg/storage/...",
+        "./pkg/terminal/...",
+        "./pkg/trace/..."
+      ],
       "build_tags": [],
       "run_pattern": "",
       "requires": "none",
       "budget_seconds": 60,
-      "purpose": "The gate run on every change: the small pkg/... test suite only, no network, no build tags -- proves the change compiles and the fast-feedback layer is clean in tens of seconds instead of twenty-one minutes."
+      "purpose": "The gate run on every change: the small pkg/... packages only (explicitly excluding pkg/codex, whose own suite alone measures over a minute -- too slow to call 'fast'), no network, no build tags -- proves the change compiles and the fast-feedback layer is clean in tens of seconds instead of twenty-one minutes. pkg/codex is covered by focused/race/release instead."
     },
     {
       "name": "focused",

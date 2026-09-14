@@ -1,0 +1,11 @@
+{
+  "schema_version": "eval-gates/v1",
+  "digest_algorithm": "sha256",
+  "holdouts": [
+    { "digest": "03f8df082186eaf11a5bd339f2d2f627b152868833f6a1590327a80169181c5f" },
+    { "digest": "05a7247fbe72f78026f116a442745d1febe625d833fa81dc3722fb82e92577f2" },
+    { "digest": "1e284269988873042ddc369d5bdb13cf1bcf002ab00905e5013b06c9e409bcc3" },
+    { "digest": "225723e8f99121273147f13d0702260259e8b4fb06a866be262e4b3cad444f21" },
+    { "digest": "2ec5e3c171527655c5b5d77d6b09cb56a444f4fb00deaf113149897a6093287d" }
+  ]
+}

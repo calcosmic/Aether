@@ -1,0 +1,35 @@
+{
+  "schema_version": "eval-gates/v1",
+  "sentinels": [
+    {
+      "test": "TestOneAdmissionAuthority",
+      "package": "cmd",
+      "consequence": "If this breaks, a helper's request for backup could be admitted through a path other than the one runtime gate every ordinary worker assignment already goes through -- the single-authority guarantee Phase 203's Biological Runtime section documents."
+    },
+    {
+      "test": "TestBothLanesUseOneReasonVocabulary",
+      "package": "cmd",
+      "consequence": "If this breaks, the menu-command dispatch lane and the direct/autopilot dispatch lane could reach different verdicts on the identical recruitment request, silently reintroducing the two-lanes-disagree failure mode CLAUDE.md names as this project's own signature defect."
+    },
+    {
+      "test": "TestConsolidationPhaseEndDryRunDoesNotMutate",
+      "package": "cmd",
+      "consequence": "If this breaks, `consolidation-phase-end --dry-run` could once again silently write to instincts.json despite its own flag reading \"report without modifying\" -- the exact defect fixed in v1.25 and documented in CLAUDE.md's Definition of Done."
+    },
+    {
+      "test": "TestConsolidationSealDryRunDoesNotMutate",
+      "package": "cmd",
+      "consequence": "If this breaks, `consolidation-seal --dry-run` could once again silently write to instincts.json despite its own flag reading \"report without modifying\" -- the seal-time sibling of the same defect fixed in v1.25."
+    },
+    {
+      "test": "TestOneLiveEventModelOnly",
+      "package": "cmd",
+      "consequence": "If this breaks, a second event-shaped type (a struct carrying both a Kind-like and a Timestamp-like field) could reach durable file-write storage inside package cmd, splitting the one live event trail every screen (aether watch, Swarm, Oracle) currently reads."
+    },
+    {
+      "test": "TestOneApprovalSurface",
+      "package": "cmd",
+      "consequence": "If this breaks, a second owner-approval command could exist beside the tick-to-approve queue suggest_approve.go already provides, letting a decision the owner never actually reviewed slip through a path nobody is watching."
+    }
+  ]
+}

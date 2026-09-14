@@ -215,10 +215,14 @@ func evalGateByName(manifest evalGateManifest, name evalGateName) (evalGate, boo
 
 // --- Selection resolution ---
 
-// evalGateTestNamePattern matches a top-level Test/Example/Benchmark
-// function name, the same convention testing_main_test.go's
-// discoverFullSuiteTests already uses.
-var evalGateTestNamePattern = regexp.MustCompile(`^(Test|Example|Benchmark)[A-Za-z0-9_]*$`)
+// evalGateTestNamePattern matches a top-level Test/Example function name --
+// the same convention and the same exclusion of Benchmark that
+// testing_main_test.go's discoverFullSuiteTests already uses. Benchmark
+// functions are deliberately excluded: `go test` (no `-bench` flag) never
+// executes them, so including them here would make every gate's own
+// discovered==executed accounting fail on a benchmark that was never
+// supposed to run in the first place.
+var evalGateTestNamePattern = regexp.MustCompile(`^(Test|Example)[A-Za-z0-9_]*$`)
 
 // evalGateSelectionTimeout bounds a single `go test -list` invocation.
 var evalGateSelectionTimeout = 3 * time.Minute
@@ -444,4 +448,172 @@ func evalGateFuncBodyHasSkipCall(fn *ast.FuncDecl) bool {
 		return true
 	})
 	return found
+}
+
+// --- Run-integrity layer ---
+//
+// This is the check whose absence is the documented root cause behind
+// three separate entries in this project's own defect register: an
+// unqualified full-suite run reported a result after executing roughly a
+// third of the tests, printing a complete-looking summary of the fraction
+// it finished. Every gate this file declares carries it.
+
+// evalGateRunReport carries what a gate's own run actually did: what it
+// discovered, what it executed, what failed, how long it took, and the
+// budget it was declared against.
+type evalGateRunReport struct {
+	GateName              string
+	Discovered            int
+	Executed              int
+	FailedTests           []string
+	ElapsedSeconds        float64
+	DeclaredBudgetSeconds int
+}
+
+// assertEvalGateCoverage fails when discovered and executed differ, naming
+// the gate and both figures. Its message states plainly that a truncated
+// run is indistinguishable from a clean one without this check -- that is
+// exactly the defect this function exists to catch, restated so the next
+// reader does not have to go dig up the incident.
+func assertEvalGateCoverage(report evalGateRunReport) error {
+	if report.Discovered == report.Executed {
+		return nil
+	}
+	return fmt.Errorf(
+		"eval gate %q ran a truncated selection: discovered=%d executed=%d -- a truncated run is indistinguishable from a clean one without this check, exactly the defect behind three entries in this project's own defect register",
+		report.GateName, report.Discovered, report.Executed,
+	)
+}
+
+// assertEvalGateBudget reports an overrun with both the measured and the
+// declared figures -- never silently tolerated. A DeclaredBudgetSeconds of
+// zero or less is treated as "nothing declared to check against" rather
+// than an automatic overrun, matching validateEvalGateManifest's own
+// positive-budget requirement (a manifest that reaches this function has
+// already been validated).
+func assertEvalGateBudget(report evalGateRunReport) error {
+	if report.DeclaredBudgetSeconds <= 0 {
+		return nil
+	}
+	if report.ElapsedSeconds <= float64(report.DeclaredBudgetSeconds) {
+		return nil
+	}
+	return fmt.Errorf(
+		"eval gate %q exceeded its declared budget: measured=%.1fs declared=%ds",
+		report.GateName, report.ElapsedSeconds, report.DeclaredBudgetSeconds,
+	)
+}
+
+// --- Sentinels ---
+
+// evalGateSentinel is one hard-gate sentinel: a test that may never be
+// skipped or removed, and the consequence if it goes.
+type evalGateSentinel struct {
+	Test        string `json:"test"`
+	Package     string `json:"package"`
+	Consequence string `json:"consequence"`
+}
+
+// evalGateSentinelFile is the on-disk container at evalGateSentinelsPath.
+type evalGateSentinelFile struct {
+	SchemaVersion string             `json:"schema_version"`
+	Sentinels     []evalGateSentinel `json:"sentinels"`
+}
+
+// loadEvalGateSentinels reads and parses the committed sentinel list.
+func loadEvalGateSentinels() (evalGateSentinelFile, error) {
+	root, err := evalGateRepoRoot()
+	if err != nil {
+		return evalGateSentinelFile{}, err
+	}
+	path := filepath.Join(root, evalGateSentinelsPath)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return evalGateSentinelFile{}, fmt.Errorf("read eval gate sentinels %s: %w", path, err)
+	}
+	var file evalGateSentinelFile
+	if err := json.Unmarshal(data, &file); err != nil {
+		return evalGateSentinelFile{}, fmt.Errorf("unmarshal eval gate sentinels %s: %w", path, err)
+	}
+	return file, nil
+}
+
+// evalGateSentinelFloor is the recorded minimum set of hard-gate sentinel
+// tests -- the actual test names, not merely a count, so a removal can be
+// named rather than only counted. This list may only grow: an entry
+// removed here is refused by TestSentinelListOnlyGrows, which names the
+// removed sentinel. Raising this floor (adding an entry) is always safe;
+// lowering it requires the same written-reason discipline every other
+// ratchet in this codebase requires.
+var evalGateSentinelFloor = []string{
+	"TestOneAdmissionAuthority",
+	"TestBothLanesUseOneReasonVocabulary",
+	"TestConsolidationPhaseEndDryRunDoesNotMutate",
+	"TestConsolidationSealDryRunDoesNotMutate",
+	"TestOneLiveEventModelOnly",
+	"TestOneApprovalSurface",
+}
+
+// --- Holdouts ---
+
+// evalGateHoldoutEntry carries only a digest -- no test name, no fixture
+// title, no other readable identifier. This is the mechanism by which the
+// hidden holdout set is resolved at run time without ever being written
+// down in readable form.
+type evalGateHoldoutEntry struct {
+	Digest string `json:"digest"`
+}
+
+// evalGateHoldoutFile is the on-disk container at evalGateHoldoutsPath.
+type evalGateHoldoutFile struct {
+	SchemaVersion   string                 `json:"schema_version"`
+	DigestAlgorithm string                 `json:"digest_algorithm"`
+	Holdouts        []evalGateHoldoutEntry `json:"holdouts"`
+}
+
+// loadEvalGateHoldouts reads and parses the committed holdout digest file.
+func loadEvalGateHoldouts() (evalGateHoldoutFile, error) {
+	root, err := evalGateRepoRoot()
+	if err != nil {
+		return evalGateHoldoutFile{}, err
+	}
+	path := filepath.Join(root, evalGateHoldoutsPath)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return evalGateHoldoutFile{}, fmt.Errorf("read eval gate holdouts %s: %w", path, err)
+	}
+	var file evalGateHoldoutFile
+	if err := json.Unmarshal(data, &file); err != nil {
+		return evalGateHoldoutFile{}, fmt.Errorf("unmarshal eval gate holdouts %s: %w", path, err)
+	}
+	return file, nil
+}
+
+// resolveEvalGateHoldouts recomputes each held-back fixture's identity by
+// recomputing digests over bank's own fixtures and returns the fixtures
+// whose ContentDigest -- the same sha256 content-addressed digest
+// convertConfirmedIncidentsToFixtures already computes for every fixture --
+// appears in the committed holdout file. This is how the hidden set is
+// resolved at run time without ever being named in the repository: reading
+// every file in the project tells you the DIGESTS, never which fixtures
+// they resolve to, until this function is actually run against a real bank.
+func resolveEvalGateHoldouts(bank regressionFixtureBank) []regressionFixture {
+	file, err := loadEvalGateHoldouts()
+	if err != nil {
+		return nil
+	}
+	digestSet := make(map[string]bool, len(file.Holdouts))
+	for _, h := range file.Holdouts {
+		digest := strings.ToLower(strings.TrimSpace(h.Digest))
+		if digest != "" {
+			digestSet[digest] = true
+		}
+	}
+	var matched []regressionFixture
+	for _, f := range bank.Fixtures {
+		if digestSet[strings.ToLower(strings.TrimSpace(f.ContentDigest))] {
+			matched = append(matched, f)
+		}
+	}
+	return matched
 }
