@@ -630,7 +630,7 @@ Plans:
 4. A beneficial candidate beats its frozen baseline without hard-gate or holdout regression, while overfit or evaluator-tampering candidates are quarantined.
 5. Only allowed low-risk canaries promote and roll back atomically; preferences, skills, workflows, source, and security-sensitive policy retain required authority, and source changes remain independently verified branches/PRs that cannot self-approve, merge, publish, or deploy.
 
-**Plans:** 3/11 plans executed
+**Plans:** 6/11 plans executed
 
 Plans:
 **Wave 1**
@@ -643,14 +643,14 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 204-03-PLAN.md — Versioned schemas and common provenance across every live memory store, typed application history, and the writerless-field census with its owner decision.
-- [ ] 204-04-PLAN.md — The durable, append-only episode and outcome ledger with idempotent derived views, outliving the live feed's own retention window.
+- [x] 204-03-PLAN.md — Versioned schemas and common provenance across every live memory store, typed application history, and the writerless-field census with its owner decision.
+- [x] 204-04-PLAN.md — The durable, append-only episode and outcome ledger with idempotent derived views, outliving the live feed's own retention window.
 - [x] 204-05-PLAN.md — Convert this project's own confirmed failures into a versioned, sanitised, deduplicated regression fixture bank.
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
 - [ ] 204-06-PLAN.md — The nine guidance application states, independent verification of worker claims, and a promotion gate that requires a helpful outcome.
-- [ ] 204-07-PLAN.md — Seven named budgeted test gates, hard-gate sentinels, hidden holdouts, and the fixture-to-guard index.
+- [x] 204-07-PLAN.md — Seven named budgeted test gates, hard-gate sentinels, hidden holdouts, and the fixture-to-guard index.
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
