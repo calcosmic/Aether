@@ -546,17 +546,13 @@ func TestEveryLifecycleLaneWritesADurableOutcome(t *testing.T) {
 			}
 			liveEvents := entry(t)
 
-			// A lane only "opens a live episode" (this plan's own boundary,
-			// see the doc comment on recordEpisodeLedgerOpen) when it
-			// genuinely emits LiveTopicEpisodeStarted for this kind -- two
-			// declared kinds (swarm, recovery) route through a different,
-			// pre-existing live-event shape (wave/recovery-state events
-			// carrying an episode id, never an episode-started/ended pair)
-			// and were never wired through the episode boundary this plan
-			// extends; that gap predates this plan and is out of scope for
-			// files this plan is permitted to touch. A kind that DOES emit
-			// the boundary event, but the boundary produces no durable
-			// record, still fails below by name.
+			// 204-13 (SC3b, D-06): every declared lane must genuinely emit
+			// LiveTopicEpisodeStarted for its own kind -- the swarm and
+			// recovery gaps this branch used to skip by name are closed
+			// (204-13, Tasks 1-2). A lane that goes dark on the episode
+			// boundary now fails the suite by name, exactly as a lane that
+			// emits the event but produces no durable record already did
+			// below -- a dark lane must never read as a pass.
 			episodeID := ""
 			opensEpisodeBoundary := false
 			for _, e := range liveEvents {
@@ -567,7 +563,7 @@ func TestEveryLifecycleLaneWritesADurableOutcome(t *testing.T) {
 				}
 			}
 			if !opensEpisodeBoundary {
-				t.Skipf("lane %q never emits LiveTopicEpisodeStarted (pre-existing gap outside this plan's files_modified) -- skipping durable-record assertion", kind)
+				t.Fatalf("lane %q never emits LiveTopicEpisodeStarted via its real entry point -- this lane has gone dark on the episode boundary", kind)
 			}
 			if episodeID == "" {
 				t.Fatalf("lane %q emitted LiveTopicEpisodeStarted with no episode id", kind)
@@ -699,6 +695,123 @@ func TestSwarmLaneOpensAndClosesADurableEpisode(t *testing.T) {
 		}
 		if terminal.TerminalResult != "failed" {
 			t.Fatalf("durable terminal record TerminalResult = %q, want %q", terminal.TerminalResult, "failed")
+		}
+	})
+}
+
+// ---------------------------------------------------------------------
+// 204-13 (SC3b, D-06), Task 2: the recovery lane's own durable episode
+// boundary -- opened ONLY in the no-open-episode fallback case.
+// ---------------------------------------------------------------------
+
+// TestRecoveryLaneOpensADurableEpisodeOnlyWhenItOwnsOne drives
+// orchestrateRecovery (via its real entry point,
+// buildExternalBuildRecoveryInstructions) in both of currentLiveRecovery
+// Episode's cases: no live episode open (recovery owns its own fallback
+// episode and must open/close a durable record for it) and a build episode
+// already open (recovery attributes its decision to that episode and must
+// NOT open a second durable episode of its own).
+func TestRecoveryLaneOpensADurableEpisodeOnlyWhenItOwnsOne(t *testing.T) {
+	t.Run("no live episode open: recovery opens and closes its own durable episode", func(t *testing.T) {
+		liveEvents := driveRecoveryLiveLane(t)
+
+		var episodeID string
+		var startedCount, endedCount int
+		for _, e := range liveEvents {
+			if e.Topic == events.LiveTopicEpisodeStarted && e.Payload.EpisodeKind == events.EpisodeKindRecovery {
+				startedCount++
+				episodeID = e.Payload.EpisodeID
+			}
+			if e.Topic == events.LiveTopicEpisodeEnded && e.Payload.EpisodeKind == events.EpisodeKindRecovery {
+				endedCount++
+			}
+		}
+		if startedCount != 1 {
+			t.Fatalf("expected exactly 1 LiveTopicEpisodeStarted for the recovery fallback episode, got %d", startedCount)
+		}
+		if endedCount != 1 {
+			t.Fatalf("expected exactly 1 LiveTopicEpisodeEnded for the recovery fallback episode, got %d", endedCount)
+		}
+		if episodeID == "" {
+			t.Fatal("recovery fallback episode carried no episode id")
+		}
+		if !strings.HasPrefix(episodeID, "recovery-phase-") {
+			t.Fatalf("episode id %q does not look like currentLiveRecoveryEpisode's own phase-derived fallback", episodeID)
+		}
+
+		records, err := episodeLedgerForEpisode(episodeID)
+		if err != nil {
+			t.Fatalf("read episode ledger for %q: %v", episodeID, err)
+		}
+		if _, ok := episodeLedgerOpenRecord(records, episodeID); !ok {
+			t.Fatalf("recovery fallback episode %q has no durable open record", episodeID)
+		}
+		if _, ok := episodeLedgerTerminalRecord(records, episodeID); !ok {
+			t.Fatalf("recovery fallback episode %q has no durable terminal record", episodeID)
+		}
+	})
+
+	t.Run("build episode open: recovery does not open a second durable episode", func(t *testing.T) {
+		saveGlobals(t)
+		s, _ := newTestStore(t)
+		store = s
+
+		buildEpisodeID := "build-ep-recovery-ledger-test"
+		emitColonyLiveEpisodeStarted(buildEpisodeID, events.EpisodeKindBuild)
+		emitColonyLiveWorkerStarted(buildEpisodeID, events.EpisodeKindBuild, codex.WorkerDispatch{
+			WorkerName: "Mason-1",
+			Caste:      "builder",
+			Wave:       1,
+		})
+		restore := setActiveLiveBuildEpisode(buildEpisodeID)
+		defer restore()
+
+		outcome := orchestrateRecovery(RecoveryContext{
+			Phase:        204,
+			Wave:         1,
+			WorkerName:   "Mason-1",
+			TaskID:       "task-1",
+			Caste:        "builder",
+			Status:       "failed",
+			ErrorMessage: "generic worker failure",
+			Dispatches: []codex.WorkerDispatch{
+				{WorkerName: "Mason-1", Caste: "builder", TaskID: "task-1"},
+			},
+			Budget: newRecoveryBudget(1),
+		})
+		_ = outcome
+
+		// No new "recovery"-kind episode should have opened -- the ledger
+		// must carry no record naming a recovery-kind episode at all, and
+		// the build episode's own open/terminal records must be exactly
+		// the ones this run wrote (recovery attributed its decision to the
+		// build episode, never opened a fallback of its own).
+		fallbackID, fallbackKind := currentLiveRecoveryEpisode(204)
+		if fallbackKind != events.EpisodeKindBuild {
+			t.Fatalf("fixture setup broken: currentLiveRecoveryEpisode with the build carrier set returned kind %q, want %q", fallbackKind, events.EpisodeKindBuild)
+		}
+		if fallbackID != buildEpisodeID {
+			t.Fatalf("fixture setup broken: currentLiveRecoveryEpisode returned %q, want the open build episode %q", fallbackID, buildEpisodeID)
+		}
+
+		phaseFallbackID := fmt.Sprintf("recovery-phase-%d", 204)
+		fallbackRecords, err := episodeLedgerForEpisode(phaseFallbackID)
+		if err != nil {
+			t.Fatalf("read episode ledger for %q: %v", phaseFallbackID, err)
+		}
+		if len(fallbackRecords) != 0 {
+			t.Fatalf("recovery opened a durable fallback episode %q even though a build episode was open: %+v", phaseFallbackID, fallbackRecords)
+		}
+
+		buildRecords, err := episodeLedgerForEpisode(buildEpisodeID)
+		if err != nil {
+			t.Fatalf("read episode ledger for %q: %v", buildEpisodeID, err)
+		}
+		if _, ok := episodeLedgerOpenRecord(buildRecords, buildEpisodeID); !ok {
+			t.Fatalf("build episode %q lost its own durable open record", buildEpisodeID)
+		}
+		if _, ok := episodeLedgerTerminalRecord(buildRecords, buildEpisodeID); ok {
+			t.Fatalf("build episode %q was closed by the recovery decision -- it must stay open until the build lane itself closes it", buildEpisodeID)
 		}
 	})
 }

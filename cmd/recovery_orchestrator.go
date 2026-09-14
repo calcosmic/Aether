@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/codex"
+	"github.com/calcosmic/Aether/pkg/events"
 )
 
 // RecoveryBudget tracks per-wave recovery action consumption.
@@ -216,7 +217,28 @@ func orchestrateRecovery(ctx RecoveryContext) RecoveryOutcome {
 	// get an episode of its own, so a standalone decision is still
 	// recorded rather than dropped.
 	recoveryEpisodeID, recoveryEpisodeKind := currentLiveRecoveryEpisode(ctx.Phase)
+	// 204-13 (SC3b, D-06): recovery owns a durable episode boundary of its
+	// OWN only in the no-open-episode fallback case -- currentLiveRecovery
+	// Episode returns events.EpisodeKindRecovery ONLY when it found no open
+	// build or check episode to attribute this decision to (see that
+	// function's own doc comment). When the returned kind is
+	// events.EpisodeKindBuild or events.EpisodeKindContinue, the owning
+	// lane already opened and will close that episode itself -- opening a
+	// SECOND boundary here, inside it, is exactly the defect
+	// TestRecoveryDecisionKeepsTheBuildEpisodeLive and
+	// TestWatchFollowsTheMostRecentlyStartedOpenEpisode were written to
+	// prevent (a recovery decision must stay part of the run it happened
+	// inside, never jump the live view to a screen of its own). Do NOT
+	// "simplify" this branch to an unconditional pair -- the two rules
+	// above are both load-bearing.
+	recoveryOwnsItsOwnEpisode := recoveryEpisodeKind == events.EpisodeKindRecovery
+	if recoveryOwnsItsOwnEpisode {
+		emitColonyLiveEpisodeStarted(recoveryEpisodeID, recoveryEpisodeKind)
+	}
 	emitColonyLiveRecoveryChanged(recoveryEpisodeID, recoveryEpisodeKind, outcome.Action.Type)
+	if recoveryOwnsItsOwnEpisode {
+		emitColonyLiveEpisodeEnded(recoveryEpisodeID, recoveryEpisodeKind, outcome.Action.Type)
+	}
 	return outcome
 }
 
