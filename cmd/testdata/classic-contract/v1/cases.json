@@ -9556,6 +9556,712 @@
         },
         "fault_point": "oracle.synthesis.no-sources-first-ordering.rejected-shortcut"
       }
+    },
+    {
+      "id": "learning-governor.truth.hypothesis-never-rendered-as-verified",
+      "group": "V-204-TRUTH",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-07:.planning/phases/204-learning-governor/204-CLASSIC-HISTORICAL-EVIDENCE.md"
+      ],
+      "synthesis_decision": "SYN-204-01",
+      "cap_ids": [
+        "CAP-057"
+      ],
+      "source_citations": [
+        "cmd/colony_prime_context.go:722-731",
+        "cmd/autopilot_lessons.go:65-91",
+        "cmd/learning_status_vocabulary_test.go",
+        ".planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "continue",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "learning-governor.truth.hypothesis-never-rendered-as-verified",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "LEARN-01"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "proof:TestHypothesisIsNeverRenderedAsVerified",
+          "structured_assertions": [
+            "negative.SYN-204-01.rejected-shortcut"
+          ],
+          "go_test_symbol": "TestHypothesisIsNeverRenderedAsVerified"
+        },
+        "required_text_tokens": [
+          "SYN-204-01"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "unchanged"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "learning-governor.truth.hypothesis-never-rendered-as-verified"
+        },
+        "fault_point": "learning-governor.truth.hypothesis-never-rendered-as-verified.rejected-shortcut"
+      }
+    },
+    {
+      "id": "learning-governor.truth.typed-application-history-reads-both-shapes",
+      "group": "V-204-TRUTH",
+      "kind": "behavior",
+      "historical_anchors": [
+        "no-classic-ancestor:.planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-204-02",
+      "cap_ids": [],
+      "source_citations": [
+        "pkg/colony/instincts.go",
+        "cmd/instinct_application.go:43,149",
+        "cmd/memory_schema_test.go",
+        ".planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "continue",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "learning-governor.truth.typed-application-history-reads-both-shapes",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "LEARN-01"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "proof:TestTypedAndUntypedApplicationHistoryAgree",
+          "structured_assertions": [
+            "decision.SYN-204-02.causal-proof"
+          ],
+          "go_test_symbol": "TestTypedAndUntypedApplicationHistoryAgree"
+        },
+        "required_text_tokens": [
+          "SYN-204-02"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "learning-governor.truth.typed-application-history-reads-both-shapes"
+        },
+        "fault_point": "learning-governor.truth.typed-application-history-reads-both-shapes.causal-proof"
+      }
+    },
+    {
+      "id": "learning-governor.ledger.credit-earned-from-real-evidence",
+      "group": "V-204-LEDGER",
+      "kind": "behavior",
+      "historical_anchors": [
+        "no-classic-ancestor:.planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-204-03",
+      "cap_ids": [
+        "CAP-001"
+      ],
+      "source_citations": [
+        "cmd/recruitment_credit.go:184",
+        "cmd/application_evidence.go",
+        "cmd/application_evidence_test.go",
+        ".planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "continue",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "learning-governor.ledger.credit-earned-from-real-evidence",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "LEARN-02",
+            "LEARN-03"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "proof:TestPhaseApplicationCreditTracerEndToEnd",
+          "structured_assertions": [
+            "decision.SYN-204-03.causal-proof"
+          ],
+          "go_test_symbol": "TestPhaseApplicationCreditTracerEndToEnd"
+        },
+        "required_text_tokens": [
+          "SYN-204-03"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "learning-governor.ledger.credit-earned-from-real-evidence"
+        },
+        "fault_point": "learning-governor.ledger.credit-earned-from-real-evidence.causal-proof"
+      }
+    },
+    {
+      "id": "learning-governor.ledger.outcome-survives-the-live-feed-window",
+      "group": "V-204-LEDGER",
+      "kind": "behavior",
+      "historical_anchors": [
+        "no-classic-ancestor:.planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-204-04",
+      "cap_ids": [
+        "CAP-067",
+        "CAP-070"
+      ],
+      "source_citations": [
+        "pkg/events/bus.go",
+        "pkg/events/event.go:15",
+        "cmd/episode_ledger.go",
+        "cmd/episode_ledger_test.go",
+        ".planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "continue",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "learning-governor.ledger.outcome-survives-the-live-feed-window",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "LEARN-02"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "proof:TestEpisodeOutcomeSurvivesTheLiveFeedWindow",
+          "structured_assertions": [
+            "decision.SYN-204-04.causal-proof"
+          ],
+          "go_test_symbol": "TestEpisodeOutcomeSurvivesTheLiveFeedWindow"
+        },
+        "required_text_tokens": [
+          "SYN-204-04"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "learning-governor.ledger.outcome-survives-the-live-feed-window"
+        },
+        "fault_point": "learning-governor.ledger.outcome-survives-the-live-feed-window.causal-proof"
+      }
+    },
+    {
+      "id": "learning-governor.evidence.outcome-derived-from-credit-not-advancement",
+      "group": "V-204-EVIDENCE",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-02:.planning/phases/204-learning-governor/204-CLASSIC-HISTORICAL-EVIDENCE.md"
+      ],
+      "synthesis_decision": "SYN-204-05",
+      "cap_ids": [
+        "CAP-055"
+      ],
+      "source_citations": [
+        "cmd/instinct_application.go:149-196",
+        "cmd/recruitment_credit.go:184",
+        "cmd/memory_schema_test.go",
+        ".planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "continue",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "learning-governor.evidence.outcome-derived-from-credit-not-advancement",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "LEARN-03"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "proof:TestApplicationOutcomeComesFromCreditNotFromAdvancement",
+          "structured_assertions": [
+            "decision.SYN-204-05.causal-proof"
+          ],
+          "go_test_symbol": "TestApplicationOutcomeComesFromCreditNotFromAdvancement"
+        },
+        "required_text_tokens": [
+          "SYN-204-05"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "learning-governor.evidence.outcome-derived-from-credit-not-advancement"
+        },
+        "fault_point": "learning-governor.evidence.outcome-derived-from-credit-not-advancement.causal-proof"
+      }
+    },
+    {
+      "id": "learning-governor.evidence.corroboration-ignores-the-workers-own-text",
+      "group": "V-204-EVIDENCE",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-02:.planning/phases/204-learning-governor/204-CLASSIC-HISTORICAL-EVIDENCE.md"
+      ],
+      "synthesis_decision": "SYN-204-06",
+      "cap_ids": [],
+      "source_citations": [
+        "cmd/recruitment_credit.go:184",
+        "cmd/application_evidence.go",
+        "cmd/application_evidence_test.go",
+        ".planning/phases/204-learning-governor/204-CLASSIC-HISTORICAL-EVIDENCE.md",
+        ".planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "continue",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "learning-governor.evidence.corroboration-ignores-the-workers-own-text",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "LEARN-03"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "proof:TestCorroborationNeverReadsTheWorkersOwnText",
+          "structured_assertions": [
+            "negative.SYN-204-06.rejected-shortcut"
+          ],
+          "go_test_symbol": "TestCorroborationNeverReadsTheWorkersOwnText"
+        },
+        "required_text_tokens": [
+          "SYN-204-06"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "unchanged"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "learning-governor.evidence.corroboration-ignores-the-workers-own-text"
+        },
+        "fault_point": "learning-governor.evidence.corroboration-ignores-the-workers-own-text.rejected-shortcut"
+      }
+    },
+    {
+      "id": "learning-governor.fixtures.unconfirmed-incident-produces-no-fixture",
+      "group": "V-204-FIXTURES",
+      "kind": "behavior",
+      "historical_anchors": [
+        "OLD-05:.planning/phases/204-learning-governor/204-CLASSIC-HISTORICAL-EVIDENCE.md"
+      ],
+      "synthesis_decision": "SYN-204-07",
+      "cap_ids": [],
+      "source_citations": [
+        "pkg/colony/midden.go",
+        "cmd/midden_shared.go:33",
+        "pkg/colony/sanitize.go:21",
+        "cmd/fixture_conversion.go",
+        "cmd/fixture_conversion_test.go",
+        ".planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "patrol",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "learning-governor.fixtures.unconfirmed-incident-produces-no-fixture",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "LEARN-04"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "proof:TestUnconfirmedIncidentProducesNoFixture",
+          "structured_assertions": [
+            "negative.SYN-204-07.rejected-shortcut"
+          ],
+          "go_test_symbol": "TestUnconfirmedIncidentProducesNoFixture"
+        },
+        "required_text_tokens": [
+          "SYN-204-07"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "unchanged"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "learning-governor.fixtures.unconfirmed-incident-produces-no-fixture"
+        },
+        "fault_point": "learning-governor.fixtures.unconfirmed-incident-produces-no-fixture.rejected-shortcut"
+      }
+    },
+    {
+      "id": "learning-governor.gates.truncated-run-fails-by-name",
+      "group": "V-204-GATES",
+      "kind": "behavior",
+      "historical_anchors": [
+        "no-classic-ancestor:.planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-204-08",
+      "cap_ids": [
+        "CAP-025"
+      ],
+      "source_citations": [
+        "cmd/eval_gates.go",
+        "cmd/eval_gates_test.go",
+        ".planning/phases/204-learning-governor/204-RESEARCH.md",
+        ".planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "patrol",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "learning-governor.gates.truncated-run-fails-by-name",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "LEARN-05"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "proof:TestTruncatedGateRunFails",
+          "structured_assertions": [
+            "negative.SYN-204-08.rejected-shortcut"
+          ],
+          "go_test_symbol": "TestTruncatedGateRunFails"
+        },
+        "required_text_tokens": [
+          "SYN-204-08"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "unchanged"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "learning-governor.gates.truncated-run-fails-by-name"
+        },
+        "fault_point": "learning-governor.gates.truncated-run-fails-by-name.rejected-shortcut"
+      }
+    },
+    {
+      "id": "learning-governor.gates.candidate-cannot-alter-its-evaluator",
+      "group": "V-204-GATES",
+      "kind": "behavior",
+      "historical_anchors": [
+        "no-classic-ancestor:.planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-204-09",
+      "cap_ids": [],
+      "source_citations": [
+        "pkg/shadow/evaluator.go",
+        "pkg/shadow/isolation_test.go",
+        "cmd/live_model_singleton_test.go:276-336",
+        ".planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "continue",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "learning-governor.gates.candidate-cannot-alter-its-evaluator",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "LEARN-06"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "proof:TestCandidateCannotAlterItsEvaluatorDigest",
+          "structured_assertions": [
+            "negative.SYN-204-09.rejected-shortcut"
+          ],
+          "go_test_symbol": "TestCandidateCannotAlterItsEvaluatorDigest"
+        },
+        "required_text_tokens": [
+          "SYN-204-09"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "unchanged"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "learning-governor.gates.candidate-cannot-alter-its-evaluator"
+        },
+        "fault_point": "learning-governor.gates.candidate-cannot-alter-its-evaluator.rejected-shortcut"
+      }
+    },
+    {
+      "id": "learning-governor.promotion.retained-authority-refused-by-name",
+      "group": "V-204-PROMOTION",
+      "kind": "behavior",
+      "historical_anchors": [
+        "no-classic-ancestor:.planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-204-10",
+      "cap_ids": [
+        "CAP-043"
+      ],
+      "source_citations": [
+        "pkg/learn/difficulty.go:14-21,132-154",
+        "cmd/codex_continue_finalize.go:1899-1900",
+        "pkg/colony/colony.go:331",
+        "cmd/suggest_approve.go:472",
+        "cmd/promotion_gate.go",
+        "cmd/promotion_gate_test.go",
+        ".planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "continue",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "learning-governor.promotion.retained-authority-refused-by-name",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "LEARN-07"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "proof:TestEachRetainedScopeRefusalNamesItsAuthority",
+          "structured_assertions": [
+            "negative.SYN-204-10.rejected-shortcut"
+          ],
+          "go_test_symbol": "TestEachRetainedScopeRefusalNamesItsAuthority"
+        },
+        "required_text_tokens": [
+          "SYN-204-10"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "unchanged"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "learning-governor.promotion.retained-authority-refused-by-name"
+        },
+        "fault_point": "learning-governor.promotion.retained-authority-refused-by-name.rejected-shortcut"
+      }
+    },
+    {
+      "id": "learning-governor.promotion.regression-rolls-back-and-quarantines-atomically",
+      "group": "V-204-PROMOTION",
+      "kind": "behavior",
+      "historical_anchors": [
+        "no-classic-ancestor:.planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-204-11",
+      "cap_ids": [],
+      "source_citations": [
+        "cmd/work_repair.go:274,317",
+        "cmd/pheromone_outcome.go:49",
+        "cmd/rollback.go",
+        "cmd/rollback_test.go",
+        ".planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "continue",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "learning-governor.promotion.regression-rolls-back-and-quarantines-atomically",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "LEARN-07"
+          ],
+          "pre_post_digest": "changed",
+          "artifact_or_receipt": "proof:TestRegressionRestoresAndQuarantinesAtomically",
+          "structured_assertions": [
+            "decision.SYN-204-11.causal-proof"
+          ],
+          "go_test_symbol": "TestRegressionRestoresAndQuarantinesAtomically"
+        },
+        "required_text_tokens": [
+          "SYN-204-11"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "changed"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "learning-governor.promotion.regression-rolls-back-and-quarantines-atomically"
+        },
+        "fault_point": "learning-governor.promotion.regression-rolls-back-and-quarantines-atomically.causal-proof"
+      }
+    },
+    {
+      "id": "learning-governor.promotion.propose-only-boundary-has-no-merge-path",
+      "group": "V-204-PROMOTION",
+      "kind": "behavior",
+      "historical_anchors": [
+        "no-classic-ancestor:.planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "synthesis_decision": "SYN-204-12",
+      "cap_ids": [],
+      "source_citations": [
+        ".planning/WINDOWS.md",
+        "cmd/source_proposal.go",
+        "cmd/source_proposal_test.go",
+        ".planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "platform": "runtime",
+      "command": {
+        "name": "seal",
+        "args": [],
+        "environment": {
+          "AETHER_OUTPUT_MODE": "json"
+        }
+      },
+      "expected": {
+        "exit_code": 0,
+        "outcome": "learning-governor.promotion.propose-only-boundary-has-no-merge-path",
+        "semantic_fields": {
+          "fixture": "existing-go-test-fixture",
+          "requirement_ids": [
+            "LEARN-08"
+          ],
+          "pre_post_digest": "unchanged",
+          "artifact_or_receipt": "proof:TestSourceProposalCannotMergePublishOrDeploy",
+          "structured_assertions": [
+            "negative.SYN-204-12.rejected-shortcut"
+          ],
+          "go_test_symbol": "TestSourceProposalCannotMergePublishOrDeploy"
+        },
+        "required_text_tokens": [
+          "SYN-204-12"
+        ],
+        "forbidden_text_tokens": [
+          "TODO"
+        ],
+        "state_assertions": [
+          {
+            "path": ".aether/data/COLONY_STATE.json",
+            "operator": "unchanged"
+          }
+        ],
+        "replay": {
+          "mode": "idempotent",
+          "expected_outcome": "learning-governor.promotion.propose-only-boundary-has-no-merge-path"
+        },
+        "fault_point": "learning-governor.promotion.propose-only-boundary-has-no-merge-path.rejected-shortcut"
+      }
     }
   ]
 }
