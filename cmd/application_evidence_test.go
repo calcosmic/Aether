@@ -666,6 +666,62 @@ func guidanceStateIdent(expr ast.Expr) bool {
 	return guidanceApplicationStateConstNames[ident.Name]
 }
 
+// TestAllNineGuidanceStatesAreReachable is the positive companion to
+// TestGuidanceStateTransitionsRequireTheirPredecessors: every one of the
+// nine declared states is genuinely recordable once its own predecessors
+// are recorded in order -- the phase's own <verification> block requires
+// both halves ("reachable, and each is refused without its predecessors"),
+// not merely the refusal half.
+func TestAllNineGuidanceStatesAreReachable(t *testing.T) {
+	for _, state := range guidanceApplicationStateVocabulary {
+		state := state
+		t.Run(string(state), func(t *testing.T) {
+			saveGlobals(t)
+			s, tmpDir := newTestStore(t)
+			defer os.RemoveAll(tmpDir)
+			store = s
+			inst := promoteRealInstinct(t, s, "run go vet ./cmd/ before go test ./cmd/ to catch lint failures early", "pattern")
+
+			// Each state's own chain of predecessors to record first, in
+			// order -- ignored is its own special case (requires rendered,
+			// but EXCLUDES consulted, so it must never walk through the
+			// shared available->rendered->consulted->acted_on chain the
+			// other eight states share).
+			var chain []guidanceApplicationState
+			if state == guidanceApplicationStateIgnored {
+				chain = []guidanceApplicationState{guidanceApplicationStateAvailable, guidanceApplicationStateRendered}
+			} else {
+				full := []guidanceApplicationState{
+					guidanceApplicationStateAvailable,
+					guidanceApplicationStateRendered,
+					guidanceApplicationStateConsulted,
+					guidanceApplicationStateActedOn,
+				}
+				for _, predecessor := range full {
+					if predecessor == state {
+						break
+					}
+					chain = append(chain, predecessor)
+				}
+			}
+			for _, predecessor := range chain {
+				mustRecordGuidanceState(t, inst.ID, 1, predecessor)
+			}
+
+			record, written, err := recordGuidanceApplicationState(inst.ID, recruitmentContributionMemoryItem, 1, state, "")
+			if err != nil {
+				t.Fatalf("expected %s to be reachable once its predecessors are recorded, got error: %v", state, err)
+			}
+			if !written {
+				t.Fatalf("expected %s to be newly written, got written=false", state)
+			}
+			if record.State != state {
+				t.Fatalf("record.State = %q, want %q", record.State, state)
+			}
+		})
+	}
+}
+
 func TestIgnoredAndConsultedAreMutuallyExclusive(t *testing.T) {
 	saveGlobals(t)
 	s, tmpDir := newTestStore(t)
