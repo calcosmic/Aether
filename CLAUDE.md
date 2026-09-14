@@ -1101,12 +1101,21 @@ Automated changelog collection:
 
 ## Verification Commands
 
+> **Always pass `-timeout 90m`.** The `cmd` suite needs about 21 minutes and Go's
+> default per-package timeout is 10. On timeout the suite's own controller stops
+> early and prints a complete-looking per-lane summary of the fraction it
+> finished — a truncated run reads exactly like a clean one. Before trusting any
+> FAIL list, check the `FULL-SUITE ... discovered=N executed=N` headline and
+> confirm the two numbers are equal. Measured 2026-09-13: an unqualified
+> `go test ./...` reported a result after running 1635 of 5299 tests, with 30
+> lanes never started.
+
 ```bash
 # Run Go tests
-go test ./...
+go test ./... -count=1 -timeout 90m
 
 # Run Go tests with race detection
-go test ./... -race
+go test ./... -race -count=1 -timeout 90m
 
 # Verify Go binary builds
 go build ./cmd/aether
@@ -1119,13 +1128,12 @@ goreleaser check
 
 # Build snapshot (no tag required)
 goreleaser build --snapshot --clean
-go test ./...
 
 # Verify binary works
 aether version
 
-# Run all Go tests
-go test ./... -race
+# Run all Go tests (or: make test)
+go test ./... -race -count=1 -timeout 90m
 ```
 
 ---

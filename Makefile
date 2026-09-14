@@ -44,7 +44,13 @@ build:
 	go build -ldflags "$(LDFLAGS)" -o $(BINARY) ./cmd/aether/
 
 test:
-	go test -race -count=1 ./...
+	# -timeout 90m is load-bearing, not padding: the cmd suite needs ~21 minutes
+	# and go test's default per-package timeout is 10. On timeout the suite's own
+	# controller stops early and prints a complete-looking per-lane summary of the
+	# fraction it finished, so a truncated run is indistinguishable from a clean one
+	# unless you read the FULL-SUITE discovered=/executed= headline. Always check
+	# that those two numbers are equal before trusting the FAIL list.
+	go test -race -count=1 -timeout 90m ./...
 
 lint:
 	go vet ./...

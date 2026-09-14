@@ -64,7 +64,7 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 - [x] **Phase 201 — Queen-Led Work Cycle** (completed 2026-09-10)
 - [x] **Phase 202 — Swarm, Oracle, and Live Colony** — completed 2026-09-12
 - [x] **Phase 202.1 — Classic Visual Voice** (completed 2026-09-12)
-- [ ] **Phase 203 — Biological Runtime**
+- [x] **Phase 203 — Biological Runtime** (completed 2026-09-14)
 - [ ] **Phase 204 — Learning Governor**
 - [ ] **Phase 205 — Owner Acceptance and Restoration Seal**
 
@@ -572,7 +572,7 @@ Plans:
 4. The terminal result returns exactly once, survives interruption/replay, reaches an acknowledged parent or named follow-on as a scoped packet, and changes a recorded downstream decision.
 5. Status, watch, recovery, cost, and depth cover the whole governed subtree, while evidence-backed pheromone proposals expose full action history and later outcomes govern their strengthening, weakening, or quarantine.
 
-**Plans:** 14/15 plans executed
+**Plans:** 15/15 plans complete
 
 Plans:
 **Wave 1**
@@ -612,7 +612,7 @@ Plans:
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 203-15-PLAN.md — Measured no-cost-when-unused, truthful worker instructions, and test-locked claims
+- [x] 203-15-PLAN.md — Measured no-cost-when-unused, truthful worker instructions, and test-locked claims
 
 ### Phase 204: Learning Governor
 
