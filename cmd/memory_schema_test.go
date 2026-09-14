@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"os"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -615,5 +616,164 @@ func TestMixedShapeHistoryReadsCorrectly(t *testing.T) {
 	}
 	if summary.LastApplied != ts3 {
 		t.Fatalf("LastApplied = %q, want %q (the most recent timestamp across both shapes)", summary.LastApplied, ts3)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Task 3 (204-03-PLAN.md, LEARN-01): the field-level writer census, in the
+// same structure as TestEveryMemoryPackPartHasALiveWriter /
+// TestMemoryPackWriterExceptionsOnlyShrink
+// (cmd/capsule_writer_invariant_198_2_test.go).
+// ---------------------------------------------------------------------------
+
+// memoryStoreCensusType names one live memory store's record type plus the
+// short store-name prefix the field-level census namespaces its field keys
+// with (several of the six stores share field names like id/timestamp/
+// created_at/schema_version/lineage; an unqualified flat map would silently
+// conflate them).
+type memoryStoreCensusType struct {
+	store string
+	typ   reflect.Type
+}
+
+// liveMemoryStoreCensusTypes names the six live memory store record types
+// this census covers, per 204-03-PLAN.md Task 3's own list: the instinct
+// entry, the failure-log entry, the learning entry, the pheromone signal,
+// the credit record, and the worker-handoff record.
+func liveMemoryStoreCensusTypes() []memoryStoreCensusType {
+	return []memoryStoreCensusType{
+		{"instinct", reflect.TypeOf(colony.InstinctEntry{})},
+		{"midden", reflect.TypeOf(colony.MiddenEntry{})},
+		{"learn", reflect.TypeOf(learn.Entry{})},
+		{"pheromone", reflect.TypeOf(colony.PheromoneSignal{})},
+		{"credit", reflect.TypeOf(recruitmentCreditRecord{})},
+		{"handoff", reflect.TypeOf(workerHandoffRecord{})},
+	}
+}
+
+// censusFieldsForType returns every JSON field name t's own struct tags
+// declare, namespaced "<store>.<field>" -- derived by reflecting over t's
+// live field list every time this runs, never from a list typed into the
+// test (a field added to or removed from the real struct is discovered
+// automatically on the next run; see
+// TestMemoryStoreCensusDiscoversFieldsByReflectionNotByList for the
+// non-vacuous proof). A field tagged "-" is skipped, matching
+// encoding/json's own semantics; a field with no json tag falls back to
+// its own Go field name (none of the six census types this census covers
+// have one).
+func censusFieldsForType(store string, t reflect.Type) []string {
+	fields := make([]string, 0, t.NumField())
+	for i := 0; i < t.NumField(); i++ {
+		f := t.Field(i)
+		tag := f.Tag.Get("json")
+		if tag == "-" {
+			continue
+		}
+		name := strings.Split(tag, ",")[0]
+		if name == "" {
+			name = f.Name
+		}
+		fields = append(fields, store+"."+name)
+	}
+	return fields
+}
+
+// discoveredMemoryStoreFields returns every census field across every type
+// in types, namespaced and sorted.
+func discoveredMemoryStoreFields(types []memoryStoreCensusType) []string {
+	var all []string
+	for _, ct := range types {
+		all = append(all, censusFieldsForType(ct.store, ct.typ)...)
+	}
+	sort.Strings(all)
+	return all
+}
+
+// memoryStoreCensusMissing returns every field in discovered that is named
+// in neither writers nor exceptions -- the shared check both
+// TestEveryMemoryStoreFieldHasALiveWriter and the synthetic non-vacuousness
+// proof below reuse, so the two can never silently diverge on what
+// "missing" means.
+func memoryStoreCensusMissing(discovered []string, writers map[string]memoryStoreFieldWriter, exceptions map[string]string) []string {
+	var missing []string
+	for _, f := range discovered {
+		if _, ok := writers[f]; ok {
+			continue
+		}
+		if _, ok := exceptions[f]; ok {
+			continue
+		}
+		missing = append(missing, f)
+	}
+	sort.Strings(missing)
+	return missing
+}
+
+// TestEveryMemoryStoreFieldHasALiveWriter is the LEARN-01 field-level
+// invariant: every field on every live memory store's record type must
+// have either a writer in memoryStoreFieldWriters, or a justified entry in
+// memoryStoreFieldExceptions. It fails in both directions -- an
+// undiscovered field is named, and so is an orphaned writer-map entry for
+// a field that no longer exists -- so the map can never quietly rot.
+func TestEveryMemoryStoreFieldHasALiveWriter(t *testing.T) {
+	discovered := discoveredMemoryStoreFields(liveMemoryStoreCensusTypes())
+
+	if missing := memoryStoreCensusMissing(discovered, memoryStoreFieldWriters, memoryStoreFieldExceptions); len(missing) > 0 {
+		t.Errorf("memory-store field(s) with no writer and no exception-list entry: %s -- give the field a writer, or add a justified exception", strings.Join(missing, ", "))
+	}
+
+	discoveredSet := map[string]bool{}
+	for _, f := range discovered {
+		discoveredSet[f] = true
+	}
+	var staleWriters []string
+	for f := range memoryStoreFieldWriters {
+		if !discoveredSet[f] {
+			staleWriters = append(staleWriters, f)
+		}
+	}
+	if len(staleWriters) > 0 {
+		sort.Strings(staleWriters)
+		t.Errorf("writer-map entries for field(s) that no longer exist on any census record type: %s -- the writer map has gone stale, delete these entries", strings.Join(staleWriters, ", "))
+	}
+
+	for f, reason := range memoryStoreFieldExceptions {
+		if strings.TrimSpace(reason) == "" {
+			t.Errorf("memoryStoreFieldExceptions[%q] has no written reason", f)
+		}
+	}
+}
+
+// TestMemoryStoreFieldExceptionsOnlyShrink is the ratchet: the exception
+// list may only shrink. Widening memoryStoreFieldExceptionFloor is a
+// deliberate, reviewed act, not something that can happen silently.
+func TestMemoryStoreFieldExceptionsOnlyShrink(t *testing.T) {
+	if len(memoryStoreFieldExceptions) > memoryStoreFieldExceptionFloor {
+		t.Errorf("memoryStoreFieldExceptions has grown to %d entries, exceeding the recorded floor of %d -- the exception list may only shrink; give the new field(s) a writer, or widen the floor in the SAME reviewed change with a written reason for each new entry", len(memoryStoreFieldExceptions), memoryStoreFieldExceptionFloor)
+	}
+}
+
+// TestMemoryStoreCensusDiscoversFieldsByReflectionNotByList is the
+// non-vacuousness proof the plan's own acceptance criteria requires: a
+// synthetic record type, never seen by memoryStoreFieldWriters or
+// memoryStoreFieldExceptions, has its fields discovered and reported
+// missing purely by reflecting over its own struct tags. A hardcoded field
+// list could never discover a brand-new type's fields at all -- this is
+// what proves the census is live, not a fixed list dressed up as one.
+func TestMemoryStoreCensusDiscoversFieldsByReflectionNotByList(t *testing.T) {
+	type syntheticRecord struct {
+		Known    string `json:"known"`
+		Unmapped string `json:"unmapped_field_never_in_writer_map"`
+	}
+	synthetic := []memoryStoreCensusType{{"synthetic", reflect.TypeOf(syntheticRecord{})}}
+	discovered := discoveredMemoryStoreFields(synthetic)
+
+	missing := memoryStoreCensusMissing(discovered, memoryStoreFieldWriters, memoryStoreFieldExceptions)
+	missingSet := map[string]bool{}
+	for _, f := range missing {
+		missingSet[f] = true
+	}
+	if !missingSet["synthetic.known"] || !missingSet["synthetic.unmapped_field_never_in_writer_map"] {
+		t.Fatalf("expected both synthetic fields to be reported missing (proving reflection-based discovery), got discovered=%v missing=%v", discovered, missing)
 	}
 }
