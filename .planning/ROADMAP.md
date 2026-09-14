@@ -630,7 +630,7 @@ Plans:
 4. A beneficial candidate beats its frozen baseline without hard-gate or holdout regression, while overfit or evaluator-tampering candidates are quarantined.
 5. Only allowed low-risk canaries promote and roll back atomically; preferences, skills, workflows, source, and security-sensitive policy retain required authority, and source changes remain independently verified branches/PRs that cannot self-approve, merge, publish, or deploy.
 
-**Plans:** 9/11 plans executed
+**Plans:** 10/11 plans executed
 
 Plans:
 **Wave 1**
@@ -658,7 +658,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 204-09-PLAN.md — Tiered promotion, atomic rollback with quarantine, and the nine retained-authority categories refused structurally.
+- [x] 204-09-PLAN.md — Tiered promotion, atomic rollback with quarantine, and the nine retained-authority categories refused structurally.
 - [x] 204-10-PLAN.md — Honest separate reporting of verified success and preventable intervention, and a source boundary that can only ever propose.
 
 **Wave 7** *(blocked on Wave 6 completion)*
