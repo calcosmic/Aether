@@ -527,8 +527,19 @@ func planningRouteStageSetPolicy(t *testing.T, root, runID string, target, passC
 	planningStageReceiptTestWriteJSON(t, headerPath, header)
 }
 
+// planningRouteStageFixtureNow is the instant every candidate built on this
+// fixture observes as "now": after the last evidence literal below and inside
+// the seven-day acceptance window production stamps from that evidence. The
+// fixture's dates are fixed literals, so its clock must be fixed too -- read
+// against the wall clock, every candidate it produces expired at
+// 2026-09-14T18:05:00Z and eleven tests started failing by calendar.
+var planningRouteStageFixtureNow = time.Date(2026, time.September, 8, 0, 0, 0, 0, time.UTC)
+
 func planningRouteStageTestFixture(t *testing.T) (string, planningStageManifest, planningRouteStageResult) {
 	t.Helper()
+	previousClock := planCandidateNow
+	planCandidateNow = func() time.Time { return planningRouteStageFixtureNow }
+	t.Cleanup(func() { planCandidateNow = previousClock })
 	root := newSpecificationTestRepository(t, colony.ColonyState{})
 	draftRequest := specificationTestDraftRequest(t, colony.SpecScopeWholeGoal)
 	draftRequest.Scope.GoalID = "goal-200"

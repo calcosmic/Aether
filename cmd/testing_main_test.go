@@ -998,7 +998,20 @@ func saveGlobals(t *testing.T) {
 	// how TestOracleStatusFollowStreamsExistingRoundsAndExitsOnRunEnd could pass
 	// alone and fail in the full suite depending on lane order.
 	origCurrentStreamingCommand := currentStreamingCommand
+	// Restoring at cleanup only protects the tests that come AFTER a test that
+	// called saveGlobals. A test that executed a quiet command (spawn-log,
+	// version, any *-finalize) WITHOUT calling saveGlobals still leaks its name
+	// into whichever test the lane runs next -- TestInlineRecruitLineCostDash
+	// WithNoLedger and TestInlineDecisionChangedLine passed alone and failed in
+	// full-suite lanes for exactly that reason. So every test that opts into
+	// this contract also STARTS from "no command in flight".
+	currentStreamingCommand = ""
+	// The candidate clock seam is set by planning tests that pin "now"; a test
+	// that pinned it and never restored it left every later candidate test in
+	// the lane reading a fixed instant instead of the wall clock.
+	origPlanCandidateNow := planCandidateNow
 	t.Cleanup(func() {
+		planCandidateNow = origPlanCandidateNow
 		// A Store and its tracer are repository authorities, not ordinary test
 		// values. Never resurrect one after its temporary repository may have
 		// been deleted by another cleanup.

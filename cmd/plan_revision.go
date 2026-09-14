@@ -138,7 +138,10 @@ func createPhaseInsertCandidateInSession(session *planningMutationSession, reque
 
 	createdAt := request.CreatedAt.UTC()
 	if createdAt.IsZero() {
-		createdAt = time.Now().UTC()
+		// planCandidateNow is the one clock seam for candidate commands; sampling
+		// time.Now() here bypassed it, so a test that pinned the clock still
+		// created a candidate at wall-clock time and refused its own acceptance.
+		createdAt = planCandidateNow().UTC()
 	}
 	phaseSeed, err := jsonSHA256(struct {
 		Name        string   `json:"name"`
