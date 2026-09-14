@@ -6,7 +6,8 @@
     ".planning/phases/200-iterative-planning/200-CLASSIC-SYNTHESIS.md",
     ".planning/phases/201-queen-led-work-cycle/201-CLASSIC-SYNTHESIS.md",
     ".planning/phases/202-swarm-oracle-and-live-colony/202-CLASSIC-SYNTHESIS.md",
-    ".planning/phases/203-biological-runtime/203-CLASSIC-SYNTHESIS.md"
+    ".planning/phases/203-biological-runtime/203-CLASSIC-SYNTHESIS.md",
+    ".planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md"
   ],
   "mechanisms": [
     {
@@ -1448,6 +1449,232 @@
       ],
       "groups": [
         "V-203-SIGNALS"
+      ]
+    },
+    {
+      "id": "SYN-204-01",
+      "title": "One shared status vocabulary so a guess is never rendered under a verified heading",
+      "disposition": "keep-current",
+      "cap_ids": [
+        "CAP-057"
+      ],
+      "public_commands": [
+        "/ant-build",
+        "/ant-continue",
+        "/ant-pheromones"
+      ],
+      "source_citations": [
+        "cmd/colony_prime_context.go:722-731",
+        "cmd/autopilot_lessons.go:65-91",
+        "pkg/learn/colony_store.go:136",
+        ".planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-204-TRUTH"
+      ]
+    },
+    {
+      "id": "SYN-204-02",
+      "title": "Versioned, provenance-carrying memory schemas with writerless legacy fields migrated or retired",
+      "disposition": "replace-better",
+      "cap_ids": [],
+      "public_commands": [
+        "/ant-continue"
+      ],
+      "source_citations": [
+        "pkg/colony/instincts.go",
+        "cmd/instinct_application.go:43,149",
+        "pkg/colony/pheromones.go",
+        ".planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-204-TRUTH"
+      ]
+    },
+    {
+      "id": "SYN-204-03",
+      "title": "One evidence-gated credit ledger serving every contribution kind, never a second outcome store",
+      "disposition": "replace-better",
+      "cap_ids": [
+        "CAP-001"
+      ],
+      "public_commands": [
+        "/ant-build",
+        "/ant-continue"
+      ],
+      "source_citations": [
+        "cmd/recruitment_credit.go:184",
+        "cmd/pheromone_outcome.go:196",
+        ".planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-204-LEDGER"
+      ]
+    },
+    {
+      "id": "SYN-204-04",
+      "title": "Immutable episode and outcome ledger with liveness on the one event bus and durability beside it",
+      "disposition": "replace-better",
+      "cap_ids": [
+        "CAP-067",
+        "CAP-070"
+      ],
+      "public_commands": [
+        "/ant-continue",
+        "/ant-status"
+      ],
+      "source_citations": [
+        "pkg/events/bus.go",
+        "pkg/events/event.go:15",
+        "cmd/live_model_singleton_test.go:276-336",
+        ".planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-204-LEDGER"
+      ]
+    },
+    {
+      "id": "SYN-204-05",
+      "title": "Application evidence earned rather than inferred, with a real negative branch",
+      "disposition": "replace-better",
+      "cap_ids": [
+        "CAP-055"
+      ],
+      "public_commands": [
+        "/ant-continue"
+      ],
+      "source_citations": [
+        "cmd/instinct_application.go:149-196",
+        "cmd/recruitment_credit.go:184",
+        ".planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-204-EVIDENCE"
+      ]
+    },
+    {
+      "id": "SYN-204-06",
+      "title": "Worker self-report treated as untrusted input the runtime independently verifies",
+      "disposition": "replace-better",
+      "cap_ids": [],
+      "public_commands": [
+        "/ant-continue"
+      ],
+      "source_citations": [
+        "cmd/recruitment_credit.go:184",
+        ".planning/phases/204-learning-governor/204-CLASSIC-HISTORICAL-EVIDENCE.md",
+        ".planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-204-EVIDENCE"
+      ]
+    },
+    {
+      "id": "SYN-204-07",
+      "title": "Confirmed incidents becoming sanitized, deduplicated, versioned failing fixtures with provenance and retirement rules",
+      "disposition": "replace-better",
+      "cap_ids": [],
+      "public_commands": [
+        "/ant-patrol"
+      ],
+      "source_citations": [
+        "pkg/colony/midden.go",
+        "cmd/midden_shared.go:33",
+        "pkg/colony/sanitize.go:21",
+        ".planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-204-FIXTURES"
+      ]
+    },
+    {
+      "id": "SYN-204-08",
+      "title": "Named budgeted gates tiering the existing corpus, with holdouts no test name reveals",
+      "disposition": "replace-better",
+      "cap_ids": [
+        "CAP-025"
+      ],
+      "public_commands": [
+        "/ant-patrol"
+      ],
+      "source_citations": [
+        ".planning/phases/204-learning-governor/204-RESEARCH.md",
+        ".planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-204-GATES"
+      ]
+    },
+    {
+      "id": "SYN-204-09",
+      "title": "A candidate that structurally cannot select or edit its own evaluator",
+      "disposition": "replace-better",
+      "cap_ids": [],
+      "public_commands": [
+        "/ant-continue"
+      ],
+      "source_citations": [
+        "cmd/recruitment_credit.go:184",
+        "cmd/live_model_singleton_test.go:276-336",
+        ".planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-204-GATES"
+      ]
+    },
+    {
+      "id": "SYN-204-10",
+      "title": "Only proven reversible low-risk knowledge or routing enters a bounded canary, retained authority refused by name",
+      "disposition": "replace-better",
+      "cap_ids": [
+        "CAP-043"
+      ],
+      "public_commands": [
+        "/ant-continue",
+        "/ant-skill-create"
+      ],
+      "source_citations": [
+        "pkg/learn/difficulty.go:14-21,132-154",
+        "cmd/codex_continue_finalize.go:1899-1900",
+        "pkg/colony/colony.go:331",
+        "cmd/suggest_approve.go:472",
+        ".planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-204-PROMOTION"
+      ]
+    },
+    {
+      "id": "SYN-204-11",
+      "title": "Atomic rollback and quarantine reusing the proven checkpoint-verify-restore and threshold-count patterns",
+      "disposition": "replace-better",
+      "cap_ids": [],
+      "public_commands": [
+        "/ant-continue"
+      ],
+      "source_citations": [
+        "cmd/work_repair.go:274,317",
+        "cmd/pheromone_outcome.go:49",
+        ".planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-204-PROMOTION"
+      ]
+    },
+    {
+      "id": "SYN-204-12",
+      "title": "Honest improvement reporting plus a source boundary that cannot self-approve, merge, publish or deploy",
+      "disposition": "replace-better",
+      "cap_ids": [],
+      "public_commands": [
+        "/ant-seal"
+      ],
+      "source_citations": [
+        ".planning/WINDOWS.md",
+        ".planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md#4-comparative-synthesis-matrix"
+      ],
+      "groups": [
+        "V-204-PROMOTION"
       ]
     }
   ]
