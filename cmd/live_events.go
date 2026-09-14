@@ -172,28 +172,65 @@ func recordEpisodeLedgerClose(episodeID, episodeKind, status string) {
 	if episodeID == "" || store == nil {
 		return
 	}
-	now := time.Now().UTC()
-	var elapsed float64
-	if records, err := episodeLedgerForEpisode(episodeID); err == nil {
-		if open, ok := episodeLedgerOpenRecord(records, episodeID); ok {
-			if startedAt, parseErr := time.Parse(time.RFC3339, open.StartedAt); parseErr == nil {
-				elapsed = now.Sub(startedAt).Seconds()
-			}
-		}
-	}
+	runtimeVersion, policyVersion, endedAt, elapsed := episodeCloseBasics(episodeID, status)
 	_, _, err := recordEpisodeOutcome(episodeLedgerRecord{
 		RecordKind:     episodeLedgerRecordKindClosed,
 		EpisodeID:      episodeID,
 		EpisodeKind:    episodeKind,
-		RuntimeVersion: resolveVersion(),
-		PolicyVersion:  episodeLedgerPolicyVersion(),
-		EndedAt:        now.Format(time.RFC3339),
+		RuntimeVersion: runtimeVersion,
+		PolicyVersion:  policyVersion,
+		EndedAt:        endedAt,
 		ElapsedSeconds: elapsed,
 		TerminalResult: status,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: failed to record durable episode-close record for %q: %v\n", episodeID, err)
 	}
+}
+
+// episodeCloseBasics (204-15, SC3a) computes the terminal fields
+// recordEpisodeLedgerClose has always derived -- RuntimeVersion,
+// PolicyVersion, EndedAt, ElapsedSeconds -- reading episodeID's own
+// ALREADY-STORED open record for StartedAt exactly as
+// recordEpisodeLedgerClose's own inline logic did before this extraction.
+// Shared so a caller assembling a fuller episodeLedgerRecord for
+// emitColonyLiveOutcomeRecorded (build's, the check lanes', and swarm's own
+// deferred closes) can never drift from the plain two-argument close's own
+// elapsed-time rule -- one computation, every caller.
+func episodeCloseBasics(episodeID, status string) (runtimeVersion, policyVersion, endedAt string, elapsedSeconds float64) {
+	now := time.Now().UTC()
+	runtimeVersion = resolveVersion()
+	policyVersion = episodeLedgerPolicyVersion()
+	endedAt = now.Format(time.RFC3339)
+	if records, err := episodeLedgerForEpisode(episodeID); err == nil {
+		if open, ok := episodeLedgerOpenRecord(records, episodeID); ok {
+			if startedAt, parseErr := time.Parse(time.RFC3339, open.StartedAt); parseErr == nil {
+				elapsedSeconds = now.Sub(startedAt).Seconds()
+			}
+		}
+	}
+	return runtimeVersion, policyVersion, endedAt, elapsedSeconds
+}
+
+// emitColonyLiveEpisodeEndedEventOnly (204-15, SC3a) publishes ONLY the
+// live LiveTopicEpisodeEnded cockpit event, without also writing a second,
+// necessarily-different durable close record through
+// recordEpisodeLedgerClose -- for a caller that has ALREADY written the
+// episode's one durable close via emitColonyLiveOutcomeRecorded immediately
+// before this call. recordEpisodeOutcome refuses a second, different close
+// for an already-closed episode by name (WR-02, 204-REVIEW.md); calling
+// the combined emitColonyLiveEpisodeEnded here as well would trip that
+// refusal (a harmless but noisy stderr warning) on every build or check
+// that now records real facts. status is the episode's own terminal
+// status, matching emitColonyLiveEpisodeEnded's own parameter -- "the
+// cockpit is unchanged" (204-15-PLAN.md) because this still publishes the
+// exact same live topic and payload shape that function always has.
+func emitColonyLiveEpisodeEndedEventOnly(episodeID, episodeKind, status string) {
+	emitColonyLive(events.LiveTopicEpisodeEnded, events.ColonyLivePayload{
+		EpisodeID:   episodeID,
+		EpisodeKind: episodeKind,
+		Status:      status,
+	})
 }
 
 // episodeLedgerPolicyVersion is the schema version of the permission and

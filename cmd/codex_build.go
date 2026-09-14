@@ -1066,8 +1066,33 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	emitColonyLiveEpisodeStarted(buildEpisodeID, events.EpisodeKindBuild)
 	restoreLiveBuildEpisode := setActiveLiveBuildEpisode(buildEpisodeID)
 	defer restoreLiveBuildEpisode()
+	// 204-15 (SC3a): the direct build lane's episode close now assembles a
+	// fuller episodeLedgerRecord and records it through
+	// emitColonyLiveOutcomeRecorded -- the emitter built for exactly this
+	// (cmd/live_events.go's own doc comment) and never called before this
+	// plan -- then still publishes the live episode-ended event, so the
+	// cockpit is unchanged. dispatches and directBuildAdvisory are both
+	// already in scope here (declared before this defer registers) and are
+	// read at DEFER-EXECUTION time, after every later reassignment in this
+	// function's body -- the same closure-over-a-mutated-variable pattern
+	// runStatus itself already relies on below.
 	defer func() {
-		emitColonyLiveEpisodeEnded(buildEpisodeID, events.EpisodeKindBuild, runStatus)
+		record := episodeLedgerRecord{TerminalResult: runStatus}
+		record.HardGateResults = buildEpisodeGateResults(directBuildAdvisory)
+		facts := &episodeCloseFacts{}
+		for _, d := range dispatches {
+			facts.addUsage(d.Usage)
+		}
+		record.Usage = facts.Usage
+		record.ReportedCostUSD = facts.ReportedCostUSD
+		if evidenceIDs, changedDecisionIDs, revision, ok := buildEpisodeApplicationFacts(phaseNum); ok {
+			record.EvidenceIDs = evidenceIDs
+			record.ChangedDecisionIDs = changedDecisionIDs
+			record.EpisodeRevision = revision
+		}
+		record.RuntimeVersion, record.PolicyVersion, record.EndedAt, record.ElapsedSeconds = episodeCloseBasics(buildEpisodeID, runStatus)
+		emitColonyLiveOutcomeRecorded(buildEpisodeID, events.EpisodeKindBuild, record)
+		emitColonyLiveEpisodeEndedEventOnly(buildEpisodeID, events.EpisodeKindBuild, runStatus)
 	}()
 
 	dispatches, err = ensureUniqueBuildDispatchNames(dispatches, phaseNum)
@@ -2557,12 +2582,12 @@ func buildCodexWorkerDispatches(
 			return nil, err
 		}
 		workerDispatches = append(workerDispatches, codex.WorkerDispatch{
-			ID:                fmt.Sprintf("phase-%d-dispatch-%d", phase.ID, i+1),
-			WorkerName:        dispatch.Name,
-			AgentName:         agentName,
-			AgentTOMLPath:     dispatchAgentPath(root, invoker, agentName),
-			Caste:             dispatch.Caste,
-			TaskID:            normalizedDispatchTaskID(dispatch),
+			ID:            fmt.Sprintf("phase-%d-dispatch-%d", phase.ID, i+1),
+			WorkerName:    dispatch.Name,
+			AgentName:     agentName,
+			AgentTOMLPath: dispatchAgentPath(root, invoker, agentName),
+			Caste:         dispatch.Caste,
+			TaskID:        normalizedDispatchTaskID(dispatch),
 			// CR-05/203-REVIEW.md: renderCodexBuildWorkerBrief alone never told
 			// this lane's workers the recruit invitation -- only the
 			// plan-only/wrapper lane's composeBuildManifestBrief did, so every
