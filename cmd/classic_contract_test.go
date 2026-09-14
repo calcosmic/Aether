@@ -845,6 +845,102 @@ func TestClassicContractPhase204MechanismRegistry(t *testing.T) {
 	assertHashSnapshotsEqualForTest(t, "Classic Phase 204 mechanism registry validation", before, after)
 }
 
+// TestClassicContractPhase204Cases is Task 2's (Plan 204-11) case-set proof,
+// following TestClassicContractPhase201Cases's own structure: it loads the
+// corpus through the existing strict loader, asserts every one of the twelve
+// registered SYN-204 mechanisms has at least one case, asserts every one of
+// the six Phase 204 groups has at least one case, and asserts every SYN-204
+// case carries a causal state or filesystem assertion rather than rendered
+// text alone -- the exact label-only-restoration shortcut this milestone's
+// acceptance phase rejects. Two negative fixtures then prove, by name, that a
+// case citing a SYN-204 decision the registry does not hold fails coverage
+// validation, and a case declaring a group the schema does not hold fails
+// schema validation -- reusing validateClassicCaseSynthesisCoverage and
+// validateClassicContractDocument (the existing loader/coverage helpers)
+// rather than writing new ones, per this plan's own instruction.
+func TestClassicContractPhase204Cases(t *testing.T) {
+	contractDir := classicContractFixtureDir(t)
+	before := snapshotStoreFileHashesForTest(t, contractDir)
+
+	document := loadClassicContractCorpus(t)
+	registry, err := loadClassicMechanismRegistry(filepath.Join(contractDir, "mechanisms.json"))
+	if err != nil {
+		t.Fatalf("load Classic mechanism registry: %v", err)
+	}
+
+	decisionCounts := make(map[string]int, len(classicContractPhase204Decisions))
+	groupCounts := make(map[string]int, len(classicContractPhase204Groups))
+	var phase204Cases []classicContractCase
+	for _, testCase := range document.Cases {
+		if !strings.HasPrefix(testCase.SynthesisDecision, "SYN-204-") {
+			continue
+		}
+		phase204Cases = append(phase204Cases, testCase)
+		decisionCounts[testCase.SynthesisDecision]++
+		groupCounts[testCase.Group]++
+		if !slices.Contains(classicContractPhase204Groups, testCase.Group) {
+			t.Errorf("case %q has group %q, want one of the six Phase 204 groups", testCase.ID, testCase.Group)
+		}
+		if len(testCase.Expected.StateAssertions) == 0 && len(testCase.Expected.ForbiddenArtifacts) == 0 {
+			t.Errorf("case %q lacks a causal state or forbidden-artifact assertion", testCase.ID)
+		}
+	}
+
+	if len(phase204Cases) == 0 {
+		t.Fatal("no Phase 204 cases were added to the corpus")
+	}
+	for _, id := range classicContractPhase204Decisions {
+		if decisionCounts[id] == 0 {
+			t.Errorf("SYN-204 decision %q has no case", id)
+		}
+	}
+	for _, group := range classicContractPhase204Groups {
+		if groupCounts[group] == 0 {
+			t.Errorf("Phase 204 group %q has no case", group)
+		}
+	}
+
+	if err := validateClassicCaseSynthesisCoverage(document.Cases, registry); err != nil {
+		t.Fatalf("coverage validation error = %v, want nil for the full corpus", err)
+	}
+
+	t.Run("a case citing a SYN-204 decision the registry does not hold fails coverage validation by name", func(t *testing.T) {
+		invalid := cloneClassicMechanismRegistry(t, registry)
+		invalid.Mechanisms = classicMechanismsWithoutDecision(invalid.Mechanisms, "SYN-204-07")
+		testCase := phase204Cases[0]
+		testCase.ID = "learning-governor.probe.decision-registry-does-not-hold"
+		testCase.SynthesisDecision = "SYN-204-07"
+		err := validateClassicCaseSynthesisCoverage([]classicContractCase{testCase}, invalid)
+		if err == nil || !strings.Contains(err.Error(), `"SYN-204-07"`) {
+			t.Fatalf("coverage validation error = %v, want it to name SYN-204-07", err)
+		}
+	})
+
+	t.Run("a case declaring a group the schema does not hold fails schema validation by name", func(t *testing.T) {
+		invalid := phase204Cases[0]
+		invalid.ID = "learning-governor.probe.unknown-group"
+		invalid.Group = "V-204-BOGUS"
+		invalidDoc := classicContractDocument{SchemaVersion: classicContractSchemaVersion, Cases: []classicContractCase{invalid}}
+		err := validateClassicContractDocument(invalidDoc)
+		if err == nil || !strings.Contains(err.Error(), `"V-204-BOGUS"`) {
+			t.Fatalf("schema validation error = %v, want it to name the rejected group \"V-204-BOGUS\"", err)
+		}
+	})
+
+	t.Run("a case asserting only rendered text fails schema validation", func(t *testing.T) {
+		textOnly := phase204Cases[0]
+		textOnly.Expected.StateAssertions = nil
+		textOnly.Expected.ForbiddenArtifacts = nil
+		invalidDoc := classicContractDocument{SchemaVersion: classicContractSchemaVersion, Cases: []classicContractCase{textOnly}}
+		if err := validateClassicContractDocument(invalidDoc); err == nil || !strings.Contains(err.Error(), "missing causal state_assertions or forbidden_artifacts") {
+			t.Fatalf("validation error = %v, want a text-only refusal", err)
+		}
+	})
+
+	after := snapshotStoreFileHashesForTest(t, contractDir)
+	assertHashSnapshotsEqualForTest(t, "Classic Phase 204 case validation", before, after)
+}
+
 // TestClassicContractRegistryHasNoRuntimeWriter proves the Classic mechanism
 // registry (cmd/testdata/classic-contract/v1/mechanisms.json) is an authored
 // artefact no concurrent runtime write can interleave a partial write into.
@@ -2023,7 +2119,13 @@ func validateClassicContractCorpus(document classicContractDocument) error {
 	platforms := make(map[string]map[string]bool, len(required))
 	phase199Cases := 0
 	for _, testCase := range document.Cases {
-		if strings.HasPrefix(testCase.SynthesisDecision, "SYN-200-") || strings.HasPrefix(testCase.SynthesisDecision, "SYN-201-") || strings.HasPrefix(testCase.SynthesisDecision, "SYN-202-") {
+		// SYN-203-/SYN-204- cases follow the same behavior-only, non-journey
+		// shape SYN-200/201/202 already established (no PROOF-01 citation, no
+		// .claude/.opencode journey-ID split) -- this plan (204-11) is the
+		// first to add SYN-204 cases to the corpus, so this exclusion is
+		// widened here rather than left to silently misclassify them as
+		// unregistered Phase 199 journeys.
+		if strings.HasPrefix(testCase.SynthesisDecision, "SYN-200-") || strings.HasPrefix(testCase.SynthesisDecision, "SYN-201-") || strings.HasPrefix(testCase.SynthesisDecision, "SYN-202-") || strings.HasPrefix(testCase.SynthesisDecision, "SYN-203-") || strings.HasPrefix(testCase.SynthesisDecision, "SYN-204-") {
 			continue
 		}
 		phase199Cases++

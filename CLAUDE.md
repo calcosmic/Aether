@@ -1552,6 +1552,122 @@ who it claims to be.*
 
 ---
 
+## Learning Governor (v1.28, Phase 204)
+
+The evidence-gated outcome ledger the previous phase built (a record of
+whether a suggestion actually helped, did nothing, or made things worse) now
+has a real production writer, reached from both places the program checks
+its own work, and it earns credit only when a real decision changed and a
+real effect was measured afterward — never merely because a note was
+delivered or a phase happened to pass (`TestPhaseApplicationCreditTracerEndToEnd`,
+`TestPhaseApplicationCreditIsReachedFromBothCheckLanes`, `TestCreditRequiresBothFacts`).
+
+A lesson the program recorded but never checked is no longer shown to a
+helper under a heading that calls it proven. One shared rule now decides, in
+exactly one place, what counts as verified everywhere the program makes that
+claim (`TestHypothesisIsNeverRenderedAsVerified`, `TestOneLearningStatusVocabulary`,
+`TestAutopilotLessonsRequireValidatedStatus`).
+
+Every remembered record — an instinct (a lesson the system learned and now
+reuses automatically), a logged failure, a learned entry — now carries its
+own version number and says where it came from, so an old record already on
+disk is read as the older shape it actually is rather than guessed at. Every
+field on every one of these records is either filled in by something real or
+sits on a list that names the reason it is empty and can only ever get
+shorter, never longer (`TestNewRecordsCarryVersionAndLineage`,
+`TestLegacyRecordsReadAsLegacy`, `TestEveryMemoryStoreFieldHasALiveWriter`,
+`TestMemoryStoreFieldExceptionsOnlyShrink`, `TestRetiredFieldWithoutOwnerAgreementIsRefused`).
+
+Every run the program does now leaves a permanent record of what it cost,
+what it decided and how it ended — one that outlives the live activity
+screen's own thirty-day memory, so a run from a month ago can still be
+looked up after the live screen has forgotten it (`TestEpisodeOutcomeSurvivesTheLiveFeedWindow`,
+`TestEveryLifecycleLaneWritesADurableOutcome`, `TestOneLiveEventModelOnly`).
+
+Guidance — an instinct (a lesson the system learned) or a steering note
+handed to a helper — now moves through nine tracked states, from merely
+available to genuinely helpful or harmful, and a helper's own claim that it
+consulted or acted on a piece of guidance is independently checked against
+what the program can actually see for itself (which files really changed,
+what decision really got made), never taken on the helper's word alone. A
+lesson must have genuinely helped at least once before it is promoted into
+the shared instruction file every helper reads (`TestGuidanceStateVocabularyIsClosed`,
+`TestCorroboratedClaimBecomesConsulted`, `TestCorroborationNeverReadsTheWorkersOwnText`,
+`TestPromotionRequiresAHelpfulApplication`).
+
+This project's own confirmed failures are now a versioned bank of regression
+fixtures, and every entry traces back to a real incident this project
+already agreed was real — never a plausible-looking guess. Every entry is
+either guarded by a named, real check or sits on a counted list of fixtures
+still waiting for one, and that list may only shrink (`TestSeededBankFixturesAllCiteRealProvenance`,
+`TestEveryFixtureNamesItsGuardOrIsCountedUnguarded`).
+
+The test suite now runs as seven named, budgeted gates — fast, focused,
+integration, provider, overnight, race and release — each proving it
+actually ran every test it found rather than quietly stopping partway
+through and looking clean anyway. This closes the exact cause behind three
+separate entries this project's own defect register already recorded
+(`TestEvalGateVocabularyMatchesTheManifest`, `TestTruncatedGateRunFails`,
+`TestEverySentinelStillExists`).
+
+A proposed change to the program's own settings or routing can now be tried
+side by side with its current behaviour, graded by a judge the proposal
+itself structurally cannot reach, edit, or swap out. A change that only
+looks better on the work it was allowed to see — and would actually fail on
+work it was kept from seeing — is named as exactly that, never reported as
+an improvement (`TestCandidateStoreIsAppendOnlyAndRefusesEdits`,
+`TestComparisonResultReachesTheDurableLedger`, `TestHoldoutResolutionHappensOnlyInTheCommandLayer`).
+
+Exactly two kinds of thing may ever be changed this way — which facts the
+program remembers about a project, and how it routes a task — and nine
+kinds of thing may never be, no matter how confident the program becomes:
+your saved preferences, a skill, a workflow, your actual source code, a
+security setting, a permission, a verification step, an external action
+such as sending or contacting something, or anything that deletes data. The
+nine have no code path into the automatic route at all — refusing one is
+not a rule the program chooses to follow, it is a route that was never
+built (`TestOnlyTwoScopesAreCanaryPromotable`, `TestRetainedAuthorityCannotBecomeCanaryPromotable`,
+`TestEachRetainedScopeRefusalNamesItsAuthority`).
+
+Finally, how often the program's own suggestions genuinely helped and how
+often a person had to step in and stop something are now two separate,
+honestly-reported figures that can never be blended into one misleading
+score. And if the program ever proposes a change to its own source code,
+that proposal can only ever become an ordinary, reviewable code change
+waiting for a person to look at it — there is no code path anywhere that
+lets it approve, merge, publish or deploy itself (`TestTwoFiguresAreNeverCombined`,
+`TestSourceProposalCannotMergePublishOrDeploy`).
+
+*For dummies: the program's memory of what it has learned is now honest, in
+a few ways. A guess it never checked is never shown to you or a helper as
+"proven" — one clear rule decides that everywhere. Every remembered fact —
+an instinct (a lesson the system learned and reuses automatically), a note,
+a logged failure — now says its own version and where it came from, and
+nothing is silently missing without a reason written down for it. Every job
+the program runs leaves a permanent receipt of what it cost and how it
+ended, even after the live activity screen has forgotten it a month later.
+A confirmed bug becomes a permanent test so the same mistake can't quietly
+happen twice. Test runs are now split into seven named, timed batches that
+each prove they ran everything they were supposed to, closing three
+separate cases of a "clean-looking" test run that had actually stopped
+partway through. A proposed improvement gets tried out fairly, checked by a
+judge it cannot tamper with or peek at answers from, and an improvement
+that only looks good on the questions it was shown is called out by name,
+not credited. Only two very safe, easy-to-undo kinds of change — which
+facts the program remembers about your project, and how it routes a task to
+a helper — are ever allowed to run automatically on a small, watched,
+reversible trial basis, called a "canary" here. Nine other things — your
+preferences, a skill, a workflow, your actual code, a security setting, a
+permission, a verification step, sending or contacting something outside
+the program, or deleting anything — can never be changed this way, no
+matter how sure the program is; there simply is no route built for the
+program to do it without you. And if the program ever wants to improve its
+own code, the most it can do is write up the idea as an ordinary change for
+a person to review — it can never approve, merge, publish, or apply that
+change itself.*
+
+---
+
 ## The Core Insight
 
 The system's pieces are now **connected**:

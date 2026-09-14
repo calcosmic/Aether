@@ -235,3 +235,61 @@ continued existence and its mention of both `pkg/memory` and `AETHER_HIVE_POLICY
 `TestLearningDocsDoNotClaimUnwiredConsolidation` pins that the retired claims this
 document corrects do not reappear in `CLAUDE.md`, `AGENTS.md`, or
 `.aether/docs/structural-learning-stack.md`.
+
+## Decision 6 — Phase 204's canary authority boundary: two scopes may enter a
+## bounded trial, nine retain owner or independent authority
+
+Phase 204 (Learning Governor) adds the first mechanism by which the program
+can try a proposed self-change automatically, on a small, watched, reversible
+trial basis (a "canary"). This decision records exactly what that mechanism
+may touch and what it may never touch, and — critically — *how* the boundary
+is held, because a boundary that is merely documented is not the same as one
+that cannot be crossed.
+
+**Two scopes may enter a canary trial:** project knowledge (which facts the
+program remembers about a project — an instinct, a memory item, a routing
+preference already scoped to what the credit ledger and shadow comparison
+grade) and routing (how a task is routed to a helper). Both are reversible by
+the same atomic restore-and-quarantine path every canary already runs
+through, and neither can touch code, configuration, or anything outside the
+program's own remembered facts about the project it is working in.
+
+**Nine scopes retain owner or independent authority and are never
+canary-promotable:** preferences, skills, workflows, source code, security
+settings, deletion, permissions, verification steps, and external actions.
+Each is mapped to the authority that retains it — the owner, in every one of
+the nine cases; none of the nine defers to an "independent reviewer" instead,
+because none of the nine is a decision this program is ever positioned to
+make unsupervised. `cmd/promotion_gate.go`'s `canaryRetainedAuthorityScopes`
+names all nine explicitly, alongside `canaryPromotableScopes`' two.
+
+**The boundary is enforced by code structure, not by a rule the gate chooses
+to follow.** `admitCandidateToCanary` (`cmd/promotion_gate.go`) derives its
+admissible set exclusively from `canaryPromotableScopes` — its own function
+body never references `canaryRetainedAuthorityScopes` or any of the nine
+retained-authority identifiers at all, proven by an AST scan carrying a
+non-vacuous synthetic violation fixture
+(`TestRetainedAuthorityCannotBecomeCanaryPromotable`,
+`TestOnlyTwoScopesAreCanaryPromotable`,
+`TestEachRetainedScopeRefusalNamesItsAuthority`). Widening the retained list
+in the future can never silently widen what the gate admits, because the
+admitting function structurally cannot read that list — there is no code path
+from "a scope is retained" to "the gate admits it anyway," which is a
+stronger guarantee than a check that merely refuses a request it recognizes.
+A regression during a live trial is restored and quarantined atomically
+(`cmd/rollback.go`'s `rollbackCanary`), and no automatic path — none, on any
+lane — can release that quarantine; only the owner's approval, through the
+one existing tick-to-approve queue, can
+(`TestNoAutomaticPathReleasesAQuarantine`,
+`cmd/pheromone_resolver_test.go`'s `TestNoUngovernedQuarantineClear`).
+
+**The execution environment's own restriction (a sandbox refusing a tool
+call, a permission profile denying a path) is a second, independent layer —
+never the guarantee itself.** This mirrors the same caution
+`cmd/source_proposal.go`'s propose-only boundary states for the source-change
+path (`SYN-204-12`): a sandbox is real defense-in-depth, but it is specific to
+one execution lane and one tool-permission configuration, and cannot be
+assumed present on every lane a future integration might add. The structural
+proof above — no code path exists, not merely "no code path is currently
+taken" — is what this decision actually relies on; the environment's
+restriction is a welcome second wall, not the one the design leans on.
