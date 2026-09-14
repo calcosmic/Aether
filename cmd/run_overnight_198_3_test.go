@@ -16,6 +16,7 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/learn"
 )
 
 const overnightMeasuredUsageEvent = `{"type":"result","usage":{"input_tokens":1200,"output_tokens":300},"model":"overnight-fixture"}`
@@ -216,6 +217,40 @@ func installOvernightOwnerCriterionGap(t *testing.T, phaseID int) {
 	t.Cleanup(func() { runAutopilotContinue = original })
 }
 
+// installOvernightOwnerLessonValidation stands in for the owner running
+// `aether learning-validate` on the lessons an overnight run captured: after
+// every real continue it marks each hypothesis-status entry validated through
+// the same store write that command performs (cmd/learning_cmds.go). Since
+// 204-02 (LEARN-01) the replan checkpoint admits only validated lessons --
+// a fresh worker sentence is honestly a hypothesis and never counts as
+// "evidence-confirmed" on its own -- so without this step the morning queue
+// correctly carries no replan note, and the end-to-end replan proof below
+// would be asserting a path the runtime no longer takes for unvalidated
+// content.
+func installOvernightOwnerLessonValidation(t *testing.T) {
+	t.Helper()
+	original := runAutopilotContinue
+	runAutopilotContinue = func(root string, options codexContinueOptions) (map[string]interface{}, colony.ColonyState, colony.Phase, *colony.Phase, *signalHousekeepingResult, bool, error) {
+		result, state, phase, next, housekeeping, final, err := original(root, options)
+		if err != nil || store == nil {
+			return result, state, phase, next, housekeeping, final, err
+		}
+		learnStore := learn.NewColonyStore(store)
+		entries, listErr := learnStore.List(learn.EntryFilter{Status: learn.StatusHypothesis})
+		if listErr != nil {
+			t.Fatalf("list overnight hypothesis lessons: %v", listErr)
+		}
+		for _, entry := range entries {
+			entry.Status = learn.StatusValidated
+			if replaceErr := learnStore.Replace(entry.ID, entry); replaceErr != nil {
+				t.Fatalf("validate overnight lesson %s: %v", entry.ID, replaceErr)
+			}
+		}
+		return result, state, phase, next, housekeeping, final, err
+	}
+	t.Cleanup(func() { runAutopilotContinue = original })
+}
+
 func TestOvernightRunCompletesSixPhases(t *testing.T) {
 	saveGlobalsCmd(t)
 	saveGlobals(t)
@@ -226,6 +261,7 @@ func TestOvernightRunCompletesSixPhases(t *testing.T) {
 	installOvernightInvoker(t, recorder)
 	installOvernightClock(t)
 	installOvernightOwnerCriterionGap(t, 4)
+	installOvernightOwnerLessonValidation(t)
 	seedOrdinaryOvernightBlocker(t)
 
 	rootCmd.SetArgs([]string{"run", "--headless", "--replan-interval", "2"})

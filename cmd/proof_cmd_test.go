@@ -96,15 +96,25 @@ func TestProofCommandShowsContextAndSkillProofFromManifest(t *testing.T) {
 
 	// This fixture's compact-ranking-pressure filler used to be Decisions +
 	// PhaseLearnings (both removed in 198.2-04 -- dead capsule slots,
-	// neither field has a writer). learned_memory (many even-sized fresh
-	// entries, real writer, priority 5) supplies the same pressure, and a
-	// decayed hive_wisdom entry (real writer, priority 4, lower confidence
-	// so ranked below the fresh entries) is left with too little remaining
-	// budget for its required two non-empty lines and is dropped outright
-	// -- proving "trimmed" is genuinely non-empty rather than vacuously so.
+	// neither field has a writer). learned_memory_unverified (many
+	// even-sized fresh hypothesis entries, real writer, priority 5) supplies
+	// the same pressure, and a decayed hive_wisdom entry (real writer,
+	// priority 4, lower confidence so ranked below the fresh entries) is
+	// left with too little remaining budget for its required two non-empty
+	// lines and is dropped outright -- proving "trimmed" is genuinely
+	// non-empty rather than vacuously so.
+	//
+	// The pressure must not depend on arithmetic luck. Ranking trims a
+	// section whole-line-first, so the budget left over after the filler is
+	// always shorter than one filler line. Each filler line here is ~215
+	// chars, below the ~245 chars hive_wisdom needs for its heading plus one
+	// entry, so no heading-length change in the filler section (204-02
+	// lengthened it once, and this assertion flipped) can ever leave enough
+	// room to seat the hive section. Twenty lines still exceed the 4000-char
+	// compact budget, so the pressure itself is preserved.
 	learnStore := learn.NewColonyStore(s)
 	for i := 0; i < 20; i++ {
-		content := fmt.Sprintf("Learned %d: %s", i, strings.Repeat("Keep proof output explicit and deterministic. ", 8))
+		content := fmt.Sprintf("Learned %d: %s", i, strings.Repeat("Keep proof output explicit and deterministic. ", 3))
 		entry := learn.Entry{
 			Content:        content,
 			Evidence:       learn.Evidence{Timestamp: now.Format(time.RFC3339), Confidence: 0.9},
