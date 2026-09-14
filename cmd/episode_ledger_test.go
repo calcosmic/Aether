@@ -115,6 +115,69 @@ func TestEpisodeCloseWithoutOpenIsRefusedByName(t *testing.T) {
 	}
 }
 
+// TestEpisodeSecondDifferentCloseIsRefusedByName is WR-02 (204-REVIEW.md):
+// a SECOND, genuinely different episode_closed record for an episode that
+// already has one (a different TerminalResult, e.g. "completed" then
+// "failed" on a retried finalize path) is refused by name, and the FIRST
+// close's terminal result survives untouched -- distinguishing this from
+// an identical replay of the same close, which must still collapse
+// silently (TestEqualDigestsCollapseAndDifferentTimestampsDoNot).
+func TestEpisodeSecondDifferentCloseIsRefusedByName(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	if _, _, err := recordEpisodeOutcome(episodeLedgerRecord{
+		RecordKind: episodeLedgerRecordKindOpened, EpisodeID: "ep-double-close", StartedAt: "2026-09-01T00:00:00Z",
+	}); err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	first, credited, err := recordEpisodeOutcome(episodeLedgerRecord{
+		RecordKind: episodeLedgerRecordKindClosed, EpisodeID: "ep-double-close", EndedAt: "2026-09-01T00:05:00Z", TerminalResult: "completed",
+	})
+	if err != nil || !credited {
+		t.Fatalf("first close: credited=%v err=%v", credited, err)
+	}
+
+	_, credited, err = recordEpisodeOutcome(episodeLedgerRecord{
+		RecordKind: episodeLedgerRecordKindClosed, EpisodeID: "ep-double-close", EndedAt: "2026-09-01T00:09:00Z", TerminalResult: "failed",
+	})
+	if err == nil {
+		t.Fatal("expected an error on a second, different close for an already-closed episode")
+	}
+	if !strings.Contains(err.Error(), "already closed") {
+		t.Fatalf("refusal %q does not name the already-closed episode", err.Error())
+	}
+	if credited {
+		t.Fatal("expected credited=false on a refused second close")
+	}
+
+	all, err := readEpisodeLedger()
+	if err != nil {
+		t.Fatalf("read ledger: %v", err)
+	}
+	terminal, ok := episodeLedgerTerminalRecord(all, "ep-double-close")
+	if !ok {
+		t.Fatal("expected a terminal record to survive")
+	}
+	if terminal.TerminalResult != "completed" {
+		t.Fatalf("expected the FIRST close's terminal result to survive untouched, got %q", terminal.TerminalResult)
+	}
+	if terminal.RecordID != first.RecordID {
+		t.Fatalf("expected the surviving terminal record to be the first close, got a different record id")
+	}
+
+	var closedCount int
+	for _, r := range all {
+		if r.EpisodeID == "ep-double-close" && r.RecordKind == episodeLedgerRecordKindClosed {
+			closedCount++
+		}
+	}
+	if closedCount != 1 {
+		t.Fatalf("expected exactly 1 episode_closed record for ep-double-close, got %d", closedCount)
+	}
+}
+
 // TestEpisodeLedgerReplayWritesNothing drives the same open record twice
 // and asserts the file's own bytes on disk are byte-identical before and
 // after the second call -- not merely that the returned record looks the

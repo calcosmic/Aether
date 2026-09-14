@@ -176,9 +176,11 @@ var errEpisodeLedgerNoChange = errors.New("episode ledger record already exists"
 // recordEpisodeOutcome is the ONE function in cmd/ that writes
 // episodes/ledger.json (TestEpisodeLedgerHasOneWriter enforces this by
 // name). It refuses a record with no episode identifier by name; refuses a
-// close for an episode with no open record by name; returns the stored
-// record with a false credited flag on replay; and never mutates an
-// existing record under any input.
+// close for an episode with no open record by name; refuses a DIFFERENT
+// close for an episode that already has one by name (WR-02, 204-REVIEW.md
+// -- an identical replay of the same close still collapses silently);
+// returns the stored record with a false credited flag on replay; and
+// never mutates an existing record under any input.
 func recordEpisodeOutcome(record episodeLedgerRecord) (episodeLedgerRecord, bool, error) {
 	if store == nil {
 		return episodeLedgerRecord{}, false, fmt.Errorf("no store initialized")
@@ -218,6 +220,24 @@ func recordEpisodeOutcome(record episodeLedgerRecord) (episodeLedgerRecord, bool
 				return errEpisodeLedgerNoChange
 			}
 		}
+
+		// WR-02 (204-REVIEW.md): an identical replay of an existing close
+		// (caught above, by its identical digest) still collapses silently
+		// -- but a DIFFERENT close for an episode that already has one is
+		// refused by name, rather than appending a second, distinct
+		// episode_closed record that episodeLedgerTerminalRecord would then
+		// silently pick between.
+		if record.RecordKind == episodeLedgerRecordKindClosed {
+			for _, existing := range file.Entries {
+				if existing.EpisodeID == episodeID && existing.RecordKind == episodeLedgerRecordKindClosed {
+					return fmt.Errorf(
+						"episode ledger refuses a second close for episode %q: it is already closed with terminal result %q",
+						episodeID, existing.TerminalResult,
+					)
+				}
+			}
+		}
+
 		record.RecordID = recordID
 		record.SchemaVersion = episodeLedgerSchemaVersion
 		lineage := colony.NewMemoryRecordLineage(colony.MemoryProvenanceRuntime, episodeID, episodeLedgerRecordSortTimestamp(record))
