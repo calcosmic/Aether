@@ -379,7 +379,11 @@
       ],
       "privacy": "repo_local",
       "severity": "medium",
-      "content_digest": "411f07cc56660b0dc52e24587da38a75b9a4b6b304c8bf818e6a928567b189a5"
+      "content_digest": "411f07cc56660b0dc52e24587da38a75b9a4b6b304c8bf818e6a928567b189a5",
+      "guard": {
+        "test": "TestNoCasteIsDispatchedAtBothBoundaries",
+        "package": "cmd"
+      }
     },
     {
       "id": "fixture-4c5c7d22b094",
@@ -499,7 +503,11 @@
       ],
       "privacy": "repo_local",
       "severity": "medium",
-      "content_digest": "59af7d6f3c3ea6d6dbbe4a30009a554f6f3de4c96569d1a0f31aee026acc8897"
+      "content_digest": "59af7d6f3c3ea6d6dbbe4a30009a554f6f3de4c96569d1a0f31aee026acc8897",
+      "guard": {
+        "test": "TestTruncatedGateRunFails",
+        "package": "cmd"
+      }
     },
     {
       "id": "fixture-5aced737d86d",
@@ -571,7 +579,11 @@
       ],
       "privacy": "repo_local",
       "severity": "high",
-      "content_digest": "6897296bd765722c583f620197afa5a0470c13b6cf9808ea39c76bd7c7b8e2e9"
+      "content_digest": "6897296bd765722c583f620197afa5a0470c13b6cf9808ea39c76bd7c7b8e2e9",
+      "guard": {
+        "test": "TestFailedBuildWorkerReachesTheNextBriefOnTheDelegateLane",
+        "package": "cmd"
+      }
     },
     {
       "id": "fixture-730cb2297b20",
@@ -595,7 +607,11 @@
       ],
       "privacy": "repo_local",
       "severity": "low",
-      "content_digest": "730cb2297b204a4f79e2b1a43f6821aaa2b84b49596fedaed8c311f74ba6a75c"
+      "content_digest": "730cb2297b204a4f79e2b1a43f6821aaa2b84b49596fedaed8c311f74ba6a75c",
+      "guard": {
+        "test": "TestQueenMarkdownUpdatedAtFallsBackToModTime",
+        "package": "cmd"
+      }
     },
     {
       "id": "fixture-732ca716fd27",
@@ -715,7 +731,11 @@
       ],
       "privacy": "repo_local",
       "severity": "medium",
-      "content_digest": "81a39cbb423c7e93bff0e1e411155c355805543c0703a4be9092bcb6e6a7a873"
+      "content_digest": "81a39cbb423c7e93bff0e1e411155c355805543c0703a4be9092bcb6e6a7a873",
+      "guard": {
+        "test": "TestBuildWorkerLessonsBecomeObservations",
+        "package": "cmd"
+      }
     },
     {
       "id": "fixture-83a8113c2dd6",
@@ -791,7 +811,11 @@
       ],
       "privacy": "redacted",
       "severity": "high",
-      "content_digest": "b1cd712d7fae156547cfc9f865493551394bad430d26512a32370d1e61b176cf"
+      "content_digest": "b1cd712d7fae156547cfc9f865493551394bad430d26512a32370d1e61b176cf",
+      "guard": {
+        "test": "TestWorkerLessonBecomesQueenFileWisdom",
+        "package": "cmd"
+      }
     },
     {
       "id": "fixture-b5e9c89cdf5c",
@@ -815,7 +839,11 @@
       ],
       "privacy": "repo_local",
       "severity": "medium",
-      "content_digest": "b5e9c89cdf5c7a0e893cd2a763181c158a51d2fa7486b2c4358904929a082fd7"
+      "content_digest": "b5e9c89cdf5c7a0e893cd2a763181c158a51d2fa7486b2c4358904929a082fd7",
+      "guard": {
+        "test": "TestHandoffConfirmedBeforeClearGuidance",
+        "package": "cmd"
+      }
     },
     {
       "id": "fixture-b8edbf49712f",
@@ -839,7 +867,11 @@
       ],
       "privacy": "repo_local",
       "severity": "medium",
-      "content_digest": "b8edbf49712f52c9d795c0995e52e19d7ec2d89f1428042a7f34cda48cbc5a43"
+      "content_digest": "b8edbf49712f52c9d795c0995e52e19d7ec2d89f1428042a7f34cda48cbc5a43",
+      "guard": {
+        "test": "TestStrongInstinctReachesTheSharedStoreAtCheck",
+        "package": "cmd"
+      }
     },
     {
       "id": "fixture-badffc8ba876",
@@ -1007,7 +1039,11 @@
       ],
       "privacy": "repo_local",
       "severity": "high",
-      "content_digest": "d12096a6c6515d2c2bf19590f46f6afbf0bc8e0b05bce64649fa903c73e72e19"
+      "content_digest": "d12096a6c6515d2c2bf19590f46f6afbf0bc8e0b05bce64649fa903c73e72e19",
+      "guard": {
+        "test": "TestMemoryDetailsIsNoLongerAnAliasOfMemoryMetrics",
+        "package": "cmd"
+      }
     },
     {
       "id": "fixture-e2643bd2bf86",
@@ -1155,7 +1191,11 @@
       ],
       "privacy": "repo_local",
       "severity": "high",
-      "content_digest": "f5298cc6d9536be9c252686f27c4c97bec9be2bb57b3ac54640ee9f1868f10ca"
+      "content_digest": "f5298cc6d9536be9c252686f27c4c97bec9be2bb57b3ac54640ee9f1868f10ca",
+      "guard": {
+        "test": "TestThreeFailuresOfOneKindProduceOneRedirect",
+        "package": "cmd"
+      }
     }
   ]
 }
