@@ -155,7 +155,7 @@ status: complete
 2. **Task 2: Check a worker's claim against what the runtime can see for itself** - `0f472254` (feat)
 3. **Task 3: Require a lesson to have actually helped before it reaches the shared instruction file** - `e57d2f72` (feat)
 4. **Coverage addition: prove all nine states positively reachable** - `bef335f2` (test)
-**Plan metadata:** _pending_ (this commit)
+**Plan metadata:** `584adee2` (docs)
 
 ## Files Created/Modified
 - `cmd/application_evidence.go` - The nine-state vocabulary, transition rule, writer, claim extraction/corroboration, contradiction detection, and the phase-close ignored sweep.
