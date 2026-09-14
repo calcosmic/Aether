@@ -1,9 +1,15 @@
 package cmd
 
 import (
+	"context"
+	"fmt"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/learn"
+	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
 )
 
@@ -137,7 +143,7 @@ var suggestApproveCmd = &cobra.Command{
 				}
 			}
 
-			result, err := approvePendingNote(approveID, actor, actorName, dryRun)
+			result, err := approvePendingItem(approveID, actor, actorName, dryRun)
 			if err != nil {
 				outputErrorMessage(err.Error())
 				return nil
@@ -202,6 +208,171 @@ func init() {
 	suggestApproveCmd.Flags().String("actor", "", "Actor performing --approve/--edit/--dismiss: owner (default), runtime, or learning")
 	suggestApproveCmd.Flags().String("actor-name", "", "Name of the actor performing the action (optional, recorded in the history)")
 	rootCmd.AddCommand(suggestApproveCmd)
+}
+
+// approvePendingItem is suggest-approve's ONE dispatch point for --approve
+// (D-07/D-10, LEARN-07): a runtime-proposed pheromone suggestion and a
+// cross-project import (the two pre-existing origins) still go through
+// approvePendingNote unchanged; a difficulty-triggered skill proposal and a
+// quarantined canary candidate (LEARN-07's two additions) are each handled
+// by their own function below. There is deliberately no second approval
+// command for either new kind -- TestOneApprovalSurface still passes
+// because all four kinds share this ONE dispatch point and this ONE CLI
+// surface (suggest-approve).
+func approvePendingItem(id, actorKind, actorName string, dryRun bool) (pendingNoteActionResult, error) {
+	if store == nil {
+		return pendingNoteActionResult{}, fmt.Errorf("no store initialized")
+	}
+	_, item, _, ok := findPendingNote(id)
+	if !ok {
+		return pendingNoteActionResult{Found: false}, nil
+	}
+	switch pendingNoteOrigin(item) {
+	case colony.PendingOriginSkillProposal:
+		return approveSkillProposal(item, actorKind, actorName, dryRun)
+	case colony.PendingOriginCanaryCandidate:
+		return approveCanaryQuarantineRelease(item, actorKind, actorName, dryRun)
+	default:
+		return approvePendingNote(id, actorKind, actorName, dryRun)
+	}
+}
+
+// colonySkillProposalSink is the real implementation of
+// learn.SkillProposalSink (pkg/learn/difficulty.go): it enqueues a
+// difficulty-triggered skill candidate into the SAME owner tick-to-approve
+// queue every other pending decision already uses -- it never creates an
+// active skill directly. cmd/codex_continue_finalize.go's
+// captureContinueLearning passes this on both continue lanes
+// (TestSkillProposalSinkIsWiredFromTheCheckPath).
+type colonySkillProposalSink struct{}
+
+// ProposeSkill implements learn.SkillProposalSink.
+func (colonySkillProposalSink) ProposeSkill(proposal learn.SkillProposal) error {
+	if store == nil {
+		return fmt.Errorf("no store initialized")
+	}
+	contentHash := "sha256:" + sha256Sum(proposal.Name+"|"+proposal.Content)
+	now := time.Now().UTC().Format(time.RFC3339)
+	origin := colony.PendingOriginSkillProposal
+	name := proposal.Name
+	sourceRunID := proposal.SourceRunID
+	learningEntryID := proposal.LearningEntryID
+	confidence := proposal.Confidence
+
+	item := colony.PendingSuggestion{
+		ID:                   generateSignalID(),
+		Type:                 "SKILL",
+		Content:              proposal.Content,
+		Reason:               fmt.Sprintf("A difficulty-triggered skill candidate derived from run %s", sourceRunID),
+		ContentHash:          contentHash,
+		CreatedAt:            now,
+		Origin:               &origin,
+		SkillName:            &name,
+		SkillSourceRunID:     &sourceRunID,
+		SkillLearningEntryID: &learningEntryID,
+		SkillConfidence:      &confidence,
+	}
+
+	var cs colony.ColonyState
+	return store.UpdateJSONAtomically("COLONY_STATE.json", &cs, func() error {
+		existing := []colony.PendingSuggestion{}
+		if cs.PendingSuggestions != nil {
+			existing = *cs.PendingSuggestions
+		}
+		for _, e := range existing {
+			if !e.Dismissed && e.ContentHash == contentHash {
+				return nil // identical candidate already queued -- not a duplicate proposal
+			}
+		}
+		merged := append(existing, item)
+		cs.PendingSuggestions = &merged
+		return nil
+	})
+}
+
+// approveSkillProposal creates the real skill through the skill service's
+// own creation function (learn.SkillService.CreateSkill, pkg/learn/skills.go,
+// which stays exactly where it is) and marks the queued item accepted.
+// Dismissing a skill proposal (rejectPendingNote, unchanged) creates
+// nothing.
+func approveSkillProposal(item colony.PendingSuggestion, actorKind, actorName string, dryRun bool) (pendingNoteActionResult, error) {
+	if dryRun {
+		return pendingNoteActionResult{Found: true, WouldApply: true, Item: item}, nil
+	}
+	if item.SkillName == nil || strings.TrimSpace(*item.SkillName) == "" {
+		return pendingNoteActionResult{}, fmt.Errorf("queued skill proposal %q has no skill name", item.ID)
+	}
+
+	before := pendingNoteActionSummary(item)
+
+	dbPath := filepath.Join(store.BasePath(), "colony.db")
+	sqliteStore, err := learn.NewSQLiteColonyStore(dbPath)
+	if err != nil {
+		return pendingNoteActionResult{}, fmt.Errorf("open skill store: %w", err)
+	}
+	defer sqliteStore.Close()
+
+	baseDir := storage.ResolveAetherRoot(context.Background())
+	svc := learn.NewSkillService(sqliteStore.DB(), baseDir)
+	meta := learn.SkillMetadata{
+		Name:        *item.SkillName,
+		Stage:       learn.SkillStageActive,
+		AutoCreated: true,
+		CreatedAt:   time.Now().UTC().Format(time.RFC3339),
+	}
+	if item.SkillSourceRunID != nil {
+		meta.SourceRunID = *item.SkillSourceRunID
+	}
+	if item.SkillConfidence != nil {
+		meta.Confidence = *item.SkillConfidence
+	}
+	if err := svc.CreateSkill(meta, item.Content); err != nil {
+		return pendingNoteActionResult{}, fmt.Errorf("create skill %q: %w", meta.Name, err)
+	}
+
+	stampPendingNoteAction(&item, colony.PendingActionAccepted)
+	if err := savePendingNoteAtomically(item); err != nil {
+		return pendingNoteActionResult{}, err
+	}
+	pendingNoteWriteCount++
+	if _, err := appendInfluenceHistory(item.ID, pheromoneActionAccepted, actorKind, actorName, before, pendingNoteActionSummary(item), ""); err != nil {
+		return pendingNoteActionResult{}, err
+	}
+	return pendingNoteActionResult{Found: true, Item: item}, nil
+}
+
+// approveCanaryQuarantineRelease is the queue-side half of releasing a
+// quarantined canary candidate: it is reached ONLY through this one owner
+// approval surface, and it is the only caller of releaseCanaryQuarantine
+// (cmd/rollback.go) -- Task 2's own structural check
+// (TestNoAutomaticPathReleasesAQuarantine) proves nothing else clears the
+// flag.
+func approveCanaryQuarantineRelease(item colony.PendingSuggestion, actorKind, actorName string, dryRun bool) (pendingNoteActionResult, error) {
+	if item.CanaryCandidateID == nil || strings.TrimSpace(*item.CanaryCandidateID) == "" {
+		return pendingNoteActionResult{}, fmt.Errorf("queued canary candidate %q has no linked candidate id", item.ID)
+	}
+	if dryRun {
+		return pendingNoteActionResult{Found: true, WouldApply: true, Item: item}, nil
+	}
+
+	before := pendingNoteActionSummary(item)
+	releasedBy := actorName
+	if strings.TrimSpace(releasedBy) == "" {
+		releasedBy = actorKind
+	}
+	if _, err := releaseCanaryQuarantine(*item.CanaryCandidateID, releasedBy); err != nil {
+		return pendingNoteActionResult{}, err
+	}
+
+	stampPendingNoteAction(&item, colony.PendingActionAccepted)
+	if err := savePendingNoteAtomically(item); err != nil {
+		return pendingNoteActionResult{}, err
+	}
+	pendingNoteWriteCount++
+	if _, err := appendInfluenceHistory(item.ID, pheromoneActionAccepted, actorKind, actorName, before, pendingNoteActionSummary(item), ""); err != nil {
+		return pendingNoteActionResult{}, err
+	}
+	return pendingNoteActionResult{Found: true, Item: item}, nil
 }
 
 // filterActiveSuggestions returns only non-dismissed suggestions from the slice.

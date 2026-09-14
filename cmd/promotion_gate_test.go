@@ -5,10 +5,13 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/learn"
 	"github.com/calcosmic/Aether/pkg/shadow"
 )
 
@@ -320,4 +323,344 @@ func TestPromotableCandidateIsAdmitted(t *testing.T) {
 			}
 		})
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Task 3 (LEARN-07): auto-derived skills and canary candidates route into
+// the one owner approval list, never the active set and never a second
+// approval surface.
+// ---------------------------------------------------------------------------
+
+func promotionGateTestEntry(id, runID string) learn.Entry {
+	return learn.Entry{
+		ID:      id,
+		Content: "authentication middleware implementation with JWT tokens and refresh rotation",
+		Evidence: learn.Evidence{
+			RunID: runID,
+			Phase: 5,
+			Workers: []learn.WorkerEvidence{
+				{Name: "Builder-1", Caste: "builder", Status: "failed"},
+				{Name: "Builder-2", Caste: "builder", Status: "completed"},
+			},
+			FilesTouched: []string{"pkg/auth/middleware.go", "pkg/auth/tokens.go"},
+			GatesPassed:  2,
+			GatesTotal:   3,
+			Confidence:   0.8,
+		},
+		Classification: learn.ClassRepoLocal,
+		Phase:          5,
+		Confidence:     0.8,
+	}
+}
+
+func pendingSkillProposalItems(cs colony.ColonyState) []colony.PendingSuggestion {
+	if cs.PendingSuggestions == nil {
+		return nil
+	}
+	var items []colony.PendingSuggestion
+	for _, item := range *cs.PendingSuggestions {
+		if item.Origin != nil && *item.Origin == colony.PendingOriginSkillProposal {
+			items = append(items, item)
+		}
+	}
+	return items
+}
+
+// TestAutoDerivedSkillEntersTheApprovalListNotTheActiveSet drives all three
+// declared auto-skill modes through the real check path
+// (learn.AutoCreateSkillIfDifficult with the real colonySkillProposalSink)
+// and asserts the skill service holds no new active skill in any of them --
+// demonstrated able to fail against the previous behaviour: before this
+// plan, "auto" mode called svc.CreateSkill directly, so this exact
+// assertion (len(skills) == 0) failed for that mode (recorded in this
+// plan's own SUMMARY.md).
+func TestAutoDerivedSkillEntersTheApprovalListNotTheActiveSet(t *testing.T) {
+	for _, mode := range []string{learn.AutoSkillModeOff, learn.AutoSkillModePropose, learn.AutoSkillModeAuto} {
+		mode := mode
+		t.Run(mode, func(t *testing.T) {
+			saveGlobals(t)
+			s, _ := newTestStore(t)
+			store = s
+
+			entry := promotionGateTestEntry("entry-"+mode, "run-"+mode)
+			if err := learn.AutoCreateSkillIfDifficult(entry, mode, colonySkillProposalSink{}); err != nil {
+				t.Fatalf("AutoCreateSkillIfDifficult (%s): %v", mode, err)
+			}
+
+			sqliteStore, err := learn.NewSQLiteColonyStore(filepath.Join(store.BasePath(), "colony.db"))
+			if err != nil {
+				t.Fatalf("open sqlite store: %v", err)
+			}
+			defer sqliteStore.Close()
+			svc := learn.NewSkillService(sqliteStore.DB(), t.TempDir())
+			skills, err := svc.ListSkills(learn.SkillStageActive)
+			if err != nil {
+				t.Fatalf("list skills: %v", err)
+			}
+			if len(skills) != 0 {
+				t.Fatalf("expected no active skill created for mode %q, found %d", mode, len(skills))
+			}
+
+			var cs colony.ColonyState
+			_ = store.LoadJSON("COLONY_STATE.json", &cs)
+			hasProposal := len(pendingSkillProposalItems(cs)) > 0
+
+			if mode == learn.AutoSkillModeOff {
+				if hasProposal {
+					t.Fatal("expected off mode to raise no proposal")
+				}
+				return
+			}
+			if !hasProposal {
+				t.Fatalf("expected mode %q to raise a proposal into the approval queue", mode)
+			}
+		})
+	}
+}
+
+func TestApprovingASkillProposalCreatesTheSkill(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	entry := promotionGateTestEntry("entry-approve-1", "run-approve-1")
+	if err := learn.AutoCreateSkillIfDifficult(entry, learn.AutoSkillModePropose, colonySkillProposalSink{}); err != nil {
+		t.Fatalf("AutoCreateSkillIfDifficult: %v", err)
+	}
+
+	var cs colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &cs); err != nil {
+		t.Fatalf("load colony state: %v", err)
+	}
+	items := pendingSkillProposalItems(cs)
+	if len(items) != 1 {
+		t.Fatalf("expected exactly one queued skill proposal, got %d", len(items))
+	}
+	item := items[0]
+
+	aetherRoot := t.TempDir()
+	t.Setenv("AETHER_ROOT", aetherRoot)
+
+	result, err := approvePendingItem(item.ID, "owner", "", false)
+	if err != nil {
+		t.Fatalf("approve skill proposal: %v", err)
+	}
+	if !result.Found {
+		t.Fatal("expected the queued item to be found")
+	}
+
+	sqliteStore, err := learn.NewSQLiteColonyStore(filepath.Join(store.BasePath(), "colony.db"))
+	if err != nil {
+		t.Fatalf("open sqlite store: %v", err)
+	}
+	defer sqliteStore.Close()
+	svc := learn.NewSkillService(sqliteStore.DB(), aetherRoot)
+	got, err := svc.GetSkill(*item.SkillName)
+	if err != nil {
+		t.Fatalf("get skill: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected approving the proposal to create the real skill")
+	}
+}
+
+func TestDismissingASkillProposalCreatesNothing(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	entry := promotionGateTestEntry("entry-dismiss-1", "run-dismiss-1")
+	if err := learn.AutoCreateSkillIfDifficult(entry, learn.AutoSkillModePropose, colonySkillProposalSink{}); err != nil {
+		t.Fatalf("AutoCreateSkillIfDifficult: %v", err)
+	}
+	var cs colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &cs); err != nil {
+		t.Fatalf("load colony state: %v", err)
+	}
+	items := pendingSkillProposalItems(cs)
+	if len(items) != 1 {
+		t.Fatalf("expected exactly one queued skill proposal, got %d", len(items))
+	}
+	item := items[0]
+
+	result, err := rejectPendingNote(item.ID, "owner", "", false)
+	if err != nil {
+		t.Fatalf("reject: %v", err)
+	}
+	if !result.Found {
+		t.Fatal("expected the queued item to be found")
+	}
+
+	aetherRoot := t.TempDir()
+	sqliteStore, err := learn.NewSQLiteColonyStore(filepath.Join(store.BasePath(), "colony.db"))
+	if err != nil {
+		t.Fatalf("open sqlite store: %v", err)
+	}
+	defer sqliteStore.Close()
+	svc := learn.NewSkillService(sqliteStore.DB(), aetherRoot)
+	got, _ := svc.GetSkill(*item.SkillName)
+	if got != nil {
+		t.Fatal("expected dismissing a skill proposal to create nothing")
+	}
+}
+
+func TestQuarantinedCandidateIsReleasableOnlyFromTheApprovalSurface(t *testing.T) {
+	root, scopedFile := rollbackTestSetup(t)
+	admission := rollbackTestAdmission("candidate-release-via-queue", canaryScopeRouting)
+	run, err := startCanary(admission, []string{scopedFile})
+	if err != nil {
+		t.Fatalf("start canary: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, scopedFile), []byte("changed\n"), 0o644); err != nil {
+		t.Fatalf("apply candidate change: %v", err)
+	}
+	if _, _, err := rollbackCanary(run, "regression for release-via-queue test"); err != nil {
+		t.Fatalf("rollback: %v", err)
+	}
+
+	var cs colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &cs); err != nil {
+		t.Fatalf("load colony state: %v", err)
+	}
+	var item colony.PendingSuggestion
+	found := false
+	if cs.PendingSuggestions != nil {
+		for _, s := range *cs.PendingSuggestions {
+			if s.Origin != nil && *s.Origin == colony.PendingOriginCanaryCandidate &&
+				s.CanaryCandidateID != nil && *s.CanaryCandidateID == admission.CandidateID {
+				item = s
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Fatal("expected the quarantined candidate to be queued for owner approval")
+	}
+
+	result, err := approvePendingItem(item.ID, "owner", "", false)
+	if err != nil {
+		t.Fatalf("approve quarantine release: %v", err)
+	}
+	if !result.Found {
+		t.Fatal("expected the queued item to be found")
+	}
+
+	stored, found, err := loadCanaryRun(admission.CandidateID)
+	if err != nil {
+		t.Fatalf("load canary run: %v", err)
+	}
+	if !found {
+		t.Fatal("expected a stored canary run")
+	}
+	if stored.Quarantined {
+		t.Fatal("expected approving the queued item to release the quarantine")
+	}
+}
+
+func TestSkillProposalNamesItsSourceLearningEntry(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	entry := promotionGateTestEntry("entry-provenance-1", "run-provenance-1")
+	if err := learn.AutoCreateSkillIfDifficult(entry, learn.AutoSkillModePropose, colonySkillProposalSink{}); err != nil {
+		t.Fatalf("AutoCreateSkillIfDifficult: %v", err)
+	}
+
+	var cs colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &cs); err != nil {
+		t.Fatalf("load colony state: %v", err)
+	}
+	items := pendingSkillProposalItems(cs)
+	if len(items) != 1 {
+		t.Fatalf("expected exactly one queued skill proposal, got %d", len(items))
+	}
+	item := items[0]
+	if item.SkillLearningEntryID == nil || *item.SkillLearningEntryID != entry.ID {
+		t.Fatalf("expected the queued proposal to name its source learning entry %q, got %v", entry.ID, item.SkillLearningEntryID)
+	}
+}
+
+// captureContinueLearningCallsRealSink parses src, finds the function
+// literally named captureContinueLearning, and reports whether its body
+// calls learn.AutoCreateSkillIfDifficult with a colonySkillProposalSink{}
+// composite literal as its final argument -- the real sink, not a nil or
+// some other value.
+func captureContinueLearningCallsRealSink(t *testing.T, filename string, src interface{}) (wired bool) {
+	t.Helper()
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, filename, src, 0)
+	if err != nil {
+		t.Fatalf("parse %s: %v", filename, err)
+	}
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Body == nil || fn.Name == nil || fn.Name.Name != "captureContinueLearning" {
+			continue
+		}
+		ast.Inspect(fn.Body, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok || sel.Sel == nil || sel.Sel.Name != "AutoCreateSkillIfDifficult" {
+				return true
+			}
+			if len(call.Args) == 0 {
+				return true
+			}
+			last := call.Args[len(call.Args)-1]
+			if lit, ok := last.(*ast.CompositeLit); ok {
+				if id, ok := lit.Type.(*ast.Ident); ok && id.Name == "colonySkillProposalSink" {
+					wired = true
+				}
+			}
+			return true
+		})
+	}
+	return wired
+}
+
+// TestSkillProposalSinkIsWiredFromTheCheckPath is a call-graph test proving
+// the real sink implementation is reached from the continue path on BOTH
+// lanes. There is exactly one call site of AutoCreateSkillIfDifficult
+// (inside captureContinueLearning), and exactly one call site of
+// captureContinueLearning's own caller, captureContinueMemory
+// (cmd/memory_feed_continue.go) -- which both continue lanes
+// (runCodexContinue, the direct lane, and runCodexContinueFinalize, the
+// external/host lane) call directly. Proving the sink is wired at that one
+// shared chokepoint therefore proves it for both lanes without needing two
+// separate scans of divergent call chains.
+func TestSkillProposalSinkIsWiredFromTheCheckPath(t *testing.T) {
+	src, err := os.ReadFile("codex_continue_finalize.go")
+	if err != nil {
+		t.Fatalf("read codex_continue_finalize.go: %v", err)
+	}
+	if !captureContinueLearningCallsRealSink(t, "codex_continue_finalize.go", src) {
+		t.Fatal("captureContinueLearning does not call AutoCreateSkillIfDifficult with the real colonySkillProposalSink")
+	}
+
+	directSrc, err := os.ReadFile("codex_continue.go")
+	if err != nil {
+		t.Fatalf("read codex_continue.go: %v", err)
+	}
+	if !strings.Contains(string(directSrc), "captureContinueMemory(") {
+		t.Fatal("the direct continue lane does not call captureContinueMemory -- the shared chokepoint to captureContinueLearning")
+	}
+	if !strings.Contains(string(src), "captureContinueMemory(") {
+		t.Fatal("the external/host continue lane does not call captureContinueMemory -- the shared chokepoint to captureContinueLearning")
+	}
+
+	t.Run("a synthetic negative fixture (nil sink) is not reported as wired", func(t *testing.T) {
+		fixtureSrc := `package cmd
+
+func captureContinueLearning() {
+	learn.AutoCreateSkillIfDifficult(entry, mode, nil)
+}
+`
+		if captureContinueLearningCallsRealSink(t, "fixture_unwired_sink.go", fixtureSrc) {
+			t.Fatal("scanner incorrectly reported a nil-sink call as wired -- the check would be vacuous")
+		}
+	})
 }
