@@ -11,6 +11,7 @@ package cmd
 // legacy fixture's own comment.
 
 import (
+	"encoding/json"
 	"os"
 	"reflect"
 	"strings"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/learn"
+	"github.com/calcosmic/Aether/pkg/memory"
 )
 
 // ---------------------------------------------------------------------------
@@ -455,4 +457,163 @@ func TestMemoryStoreOrderingIsTotalAndStable(t *testing.T) {
 			t.Fatalf("canonical sort did not tie-break equal timestamps by ID ascending: %+v", sortedFirst)
 		}
 	})
+}
+
+// ---------------------------------------------------------------------------
+// Task 2 (204-03-PLAN.md, SYN-204-05/06, LEARN-03): the typed application
+// history, its real (never inferred) outcome, and the two shapes reading
+// identically.
+// ---------------------------------------------------------------------------
+
+// TestTypedAndUntypedApplicationHistoryAgree builds one history in the old
+// shape (real legacy bytes, unmarshalled through
+// colony.InstinctApplicationEntry's own compatibility path -- the runtime
+// itself can no longer produce this shape) and one in the new shape (a
+// direct Go struct literal, exactly what every current writer produces),
+// carrying the same underlying fact (one successful/helpful application),
+// and asserts SummarizeInstinctApplications returns identical values for
+// both.
+func TestTypedAndUntypedApplicationHistoryAgree(t *testing.T) {
+	const ts = "2026-09-14T00:00:00Z"
+
+	typedEntry := colony.InstinctEntry{
+		Provenance: colony.InstinctProvenance{CreatedAt: ts},
+		ApplicationHistory: []colony.InstinctApplicationEntry{
+			{Timestamp: ts, Outcome: "helpful"},
+		},
+	}
+
+	legacyJSON := `{"id":"i","trigger":"t","action":"a","domain":"d","provenance":{"created_at":"` + ts + `"},"application_history":[{"timestamp":"` + ts + `","success":true}],"related_instincts":[],"archived":false}`
+	var legacyEntry colony.InstinctEntry
+	if err := json.Unmarshal([]byte(legacyJSON), &legacyEntry); err != nil {
+		t.Fatalf("unmarshal legacy entry: %v", err)
+	}
+
+	typedSummary := memory.SummarizeInstinctApplications(typedEntry)
+	legacySummary := memory.SummarizeInstinctApplications(legacyEntry)
+	if !reflect.DeepEqual(typedSummary, legacySummary) {
+		t.Fatalf("typed vs legacy summaries differ: typed=%+v legacy=%+v", typedSummary, legacySummary)
+	}
+	if typedSummary.Applications != 1 || typedSummary.Successes != 1 || typedSummary.Failures != 0 {
+		t.Fatalf("summary = %+v, want Applications=1 Successes=1 Failures=0 in both shapes", typedSummary)
+	}
+}
+
+// mustFindInstinctApplicationEntry returns the ApplicationHistory entry
+// recorded for (instinctID, phaseID), failing the test if none exists.
+func mustFindInstinctApplicationEntry(t *testing.T, file colony.InstinctsFile, instinctID string, phaseID int) colony.InstinctApplicationEntry {
+	t.Helper()
+	for _, inst := range file.Instincts {
+		if inst.ID != instinctID {
+			continue
+		}
+		for _, entry := range inst.ApplicationHistory {
+			if entry.Phase == phaseID {
+				return entry
+			}
+		}
+	}
+	t.Fatalf("no application history entry found for instinct %s phase %d", instinctID, phaseID)
+	return colony.InstinctApplicationEntry{}
+}
+
+// TestApplicationOutcomeComesFromCreditNotFromAdvancement drives the real
+// phase-end path (recordPhaseApplicationCredit then
+// recordInstinctApplicationsForPhase, the order this plan's Task 2
+// established in cmd/consolidation_lifecycle.go) twice -- once where a real
+// credit record ends up recording harmful, once where no decision delta
+// exists so no credit record is ever recorded -- and asserts the two runs'
+// recorded outcomes differ: the first carries harmful, the second carries
+// pending, never a default or inferred success either way (Pitfall 2: an
+// assertion that a history entry merely EXISTS would already pass against
+// the pre-204-03 code and proves nothing).
+func TestApplicationOutcomeComesFromCreditNotFromAdvancement(t *testing.T) {
+	t.Run("a real credit record exists: entry carries its real outcome", func(t *testing.T) {
+		saveGlobals(t)
+		phase, instinct := newApplicationCreditFixture(t, applicationCreditFixtureOptions{
+			InstinctContent:   "check pkg/colony/context_ranking.go before assuming score-based trim order",
+			HasEarlierAttempt: true, EarlierFailed: nil, LatestFailed: []string{"tests"},
+			HasDecisionDelta: true,
+		})
+		creditSummary := recordPhaseApplicationCredit(phase.ID)
+		if !creditSummary.Ran || creditSummary.Harmful != 1 {
+			t.Fatalf("credit summary = %+v, want Ran=true Harmful=1", creditSummary)
+		}
+
+		if n := recordInstinctApplicationsForPhase(phase.ID); n != 1 {
+			t.Fatalf("recordInstinctApplicationsForPhase = %d, want 1", n)
+		}
+
+		file := loadInstinctFileOrEmpty(store)
+		entry := mustFindInstinctApplicationEntry(t, file, instinct.ID, phase.ID)
+		if entry.Outcome != string(recruitmentCreditOutcomeHarmful) {
+			t.Fatalf("entry outcome = %q, want harmful", entry.Outcome)
+		}
+		if entry.CreditRecordID == "" {
+			t.Fatal("entry carries no credit record id, want the harmful record's id")
+		}
+	})
+
+	t.Run("no credit record exists: entry carries pending, never a default success", func(t *testing.T) {
+		saveGlobals(t)
+		phase, instinct := newApplicationCreditFixture(t, applicationCreditFixtureOptions{
+			InstinctContent:   "check .planning/WINDOWS.md before assuming a known gap is unrecorded",
+			HasEarlierAttempt: true, EarlierFailed: []string{"tests"}, LatestFailed: nil,
+			HasDecisionDelta: false,
+		})
+		creditSummary := recordPhaseApplicationCredit(phase.ID)
+		if !creditSummary.Ran || creditSummary.Recorded != 0 {
+			t.Fatalf("credit summary = %+v, want Ran=true Recorded=0 (no decision delta to earn credit against)", creditSummary)
+		}
+
+		if n := recordInstinctApplicationsForPhase(phase.ID); n != 1 {
+			t.Fatalf("recordInstinctApplicationsForPhase = %d, want 1", n)
+		}
+
+		file := loadInstinctFileOrEmpty(store)
+		entry := mustFindInstinctApplicationEntry(t, file, instinct.ID, phase.ID)
+		if entry.Outcome != string(recruitmentCreditOutcomePending) {
+			t.Fatalf("entry outcome = %q, want pending -- never a default or inferred success", entry.Outcome)
+		}
+		if entry.CreditRecordID != "" {
+			t.Fatalf("entry carries credit record id %q, want none", entry.CreditRecordID)
+		}
+	})
+}
+
+// TestMixedShapeHistoryReadsCorrectly builds one history holding two
+// legacy-shape entries (unmarshalled from real legacy bytes) and one
+// typed-shape entry (a direct Go struct literal) side by side -- a real
+// colony will hold both shapes for months -- and asserts
+// SummarizeInstinctApplications reads every entry correctly regardless of
+// which shape it was written in.
+func TestMixedShapeHistoryReadsCorrectly(t *testing.T) {
+	const ts1, ts2, ts3 = "2026-09-01T00:00:00Z", "2026-09-02T00:00:00Z", "2026-09-03T00:00:00Z"
+
+	legacyJSON := `{"id":"i","trigger":"t","action":"a","domain":"d","provenance":{"created_at":"` + ts1 + `"},"application_history":[` +
+		`{"timestamp":"` + ts1 + `","success":true},` +
+		`{"timestamp":"` + ts2 + `","success":false}` +
+		`],"related_instincts":[],"archived":false}`
+	var entry colony.InstinctEntry
+	if err := json.Unmarshal([]byte(legacyJSON), &entry); err != nil {
+		t.Fatalf("unmarshal mixed-shape fixture: %v", err)
+	}
+	// A typed entry, appended directly as a Go value -- never through JSON
+	// -- exactly what a real writer (recordInstinctApplicationsForPhase,
+	// PromoteService.Promote's dedup path) produces.
+	entry.ApplicationHistory = append(entry.ApplicationHistory, colony.InstinctApplicationEntry{Timestamp: ts3, Outcome: "harmful"})
+
+	summary := memory.SummarizeInstinctApplications(entry)
+	if summary.Applications != 3 {
+		t.Fatalf("Applications = %d, want 3 (2 legacy + 1 typed)", summary.Applications)
+	}
+	if summary.Successes != 1 {
+		t.Fatalf("Successes = %d, want 1 (from the legacy success:true entry)", summary.Successes)
+	}
+	if summary.Failures != 2 {
+		t.Fatalf("Failures = %d, want 2 (1 legacy success:false + 1 typed harmful)", summary.Failures)
+	}
+	if summary.LastApplied != ts3 {
+		t.Fatalf("LastApplied = %q, want %q (the most recent timestamp across both shapes)", summary.LastApplied, ts3)
+	}
 }

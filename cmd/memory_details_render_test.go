@@ -400,10 +400,10 @@ func TestStatusListsTheStrongestInstinctFirst(t *testing.T) {
 				Provenance: colony.InstinctProvenance{
 					CreatedAt: oldCreated,
 				},
-				ApplicationHistory: []interface{}{
-					map[string]interface{}{"timestamp": now.AddDate(0, 0, -20).Format(time.RFC3339), "success": true},
-					map[string]interface{}{"timestamp": now.AddDate(0, 0, -10).Format(time.RFC3339), "success": true},
-					map[string]interface{}{"timestamp": now.AddDate(0, 0, -1).Format(time.RFC3339), "success": true},
+				ApplicationHistory: []colony.InstinctApplicationEntry{
+					{Timestamp: now.AddDate(0, 0, -20).Format(time.RFC3339), Outcome: "helpful"},
+					{Timestamp: now.AddDate(0, 0, -10).Format(time.RFC3339), Outcome: "helpful"},
+					{Timestamp: now.AddDate(0, 0, -1).Format(time.RFC3339), Outcome: "helpful"},
 				},
 			},
 		},

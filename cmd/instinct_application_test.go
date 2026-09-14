@@ -49,17 +49,25 @@ func promoteRealInstinct(t *testing.T, s *storage.Store, content, wisdomType str
 	return result.Instinct
 }
 
-// historyEntryKeys extracts the key set of a raw ApplicationHistory entry
-// (a map[string]interface{} once round-tripped through JSON).
-func historyEntryKeys(t *testing.T, raw interface{}) map[string]bool {
+// historyEntryKeys extracts the set of JSON keys entry would marshal --
+// mirroring colony.InstinctApplicationEntry's own omitempty tags, since
+// SYN-204-05 (204-03-PLAN.md Task 2) retyped ApplicationHistory from
+// []interface{} (a raw map once round-tripped through JSON) to a typed
+// []colony.InstinctApplicationEntry slice.
+func historyEntryKeys(t *testing.T, entry colony.InstinctApplicationEntry) map[string]bool {
 	t.Helper()
-	m, ok := raw.(map[string]interface{})
-	if !ok {
-		t.Fatalf("history entry is not a map: %#v", raw)
+	keys := map[string]bool{}
+	if entry.Timestamp != "" {
+		keys["timestamp"] = true
 	}
-	keys := make(map[string]bool, len(m))
-	for k := range m {
-		keys[k] = true
+	if entry.Phase != 0 {
+		keys["phase"] = true
+	}
+	if entry.Outcome != "" {
+		keys["outcome"] = true
+	}
+	if entry.CreditRecordID != "" {
+		keys["credit_record_id"] = true
 	}
 	return keys
 }

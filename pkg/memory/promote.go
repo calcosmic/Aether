@@ -167,7 +167,7 @@ func (s *PromoteService) Promote(ctx context.Context, obs colony.Observation, co
 			ApplicationCount: 0,
 			OriginLabel:      obs.OriginLabel,
 		},
-		ApplicationHistory: []interface{}{},
+		ApplicationHistory: []colony.InstinctApplicationEntry{},
 		RelatedInstincts:   []interface{}{},
 		Archived:           false,
 		SchemaVersion:      colony.CurrentMemorySchemaVersion,

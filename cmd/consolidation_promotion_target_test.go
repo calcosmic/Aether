@@ -168,10 +168,10 @@ func seedQueenEligibleInstinct(t *testing.T, sentinel string) {
 				TrustScore: 0.90,
 				TrustTier:  "trusted",
 				Confidence: 0.90,
-				ApplicationHistory: []interface{}{
-					map[string]interface{}{"timestamp": applied, "success": true},
-					map[string]interface{}{"timestamp": applied, "success": true},
-					map[string]interface{}{"timestamp": applied, "success": true},
+				ApplicationHistory: []colony.InstinctApplicationEntry{
+					{Timestamp: applied, Outcome: "helpful"},
+					{Timestamp: applied, Outcome: "helpful"},
+					{Timestamp: applied, Outcome: "helpful"},
 				},
 			},
 		},

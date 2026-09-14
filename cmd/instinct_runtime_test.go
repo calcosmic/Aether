@@ -72,9 +72,9 @@ func TestLoadRecentRuntimeInstincts_PrefersUsefulAppliedInstincts(t *testing.T) 
 					LastApplied:      runtimeStrPtr("2026-04-21T11:00:00Z"),
 					ApplicationCount: 4,
 				},
-				ApplicationHistory: []interface{}{
-					map[string]interface{}{"timestamp": "2026-04-20T10:00:00Z", "success": true},
-					map[string]interface{}{"timestamp": "2026-04-21T11:00:00Z", "success": true},
+				ApplicationHistory: []colony.InstinctApplicationEntry{
+					{Timestamp: "2026-04-20T10:00:00Z", Outcome: "helpful"},
+					{Timestamp: "2026-04-21T11:00:00Z", Outcome: "helpful"},
 				},
 			},
 		},

@@ -488,9 +488,23 @@ var instinctApplyCmd = &cobra.Command{
 				now := time.Now().UTC().Format("2006-01-02T15:04:05Z")
 				file.Instincts[i].Provenance.LastApplied = &now
 				file.Instincts[i].Provenance.ApplicationCount++
-				file.Instincts[i].ApplicationHistory = append(file.Instincts[i].ApplicationHistory, map[string]interface{}{
-					"timestamp": now,
-					"success":   success,
+				// SYN-204-05/06 (204-03-PLAN.md Task 2, LEARN-03): this is
+				// a manual, owner-invoked grading via the --success flag,
+				// not an automated worker self-report -- the discipline
+				// SYN-204-06 repudiates is recordInstinctApplicationsForPhase
+				// (cmd/instinct_application.go) trusting a phase having
+				// merely advanced, not an operator's own explicit --success
+				// judgement here. Mapped onto the same closed outcome
+				// vocabulary the credit ledger declares (never a bare
+				// boolean) so a single ApplicationHistory slice reads both
+				// writers' entries identically.
+				outcome := string(recruitmentCreditOutcomeHarmful)
+				if success {
+					outcome = string(recruitmentCreditOutcomeHelpful)
+				}
+				file.Instincts[i].ApplicationHistory = append(file.Instincts[i].ApplicationHistory, colony.InstinctApplicationEntry{
+					Timestamp: now,
+					Outcome:   outcome,
 				})
 				break
 			}
