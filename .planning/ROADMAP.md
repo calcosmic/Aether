@@ -630,7 +630,7 @@ Plans:
 4. A beneficial candidate beats its frozen baseline without hard-gate or holdout regression, while overfit or evaluator-tampering candidates are quarantined.
 5. Only allowed low-risk canaries promote and roll back atomically; preferences, skills, workflows, source, and security-sensitive policy retain required authority, and source changes remain independently verified branches/PRs that cannot self-approve, merge, publish, or deploy.
 
-**Plans:** 6/11 plans executed
+**Plans:** 9/11 plans executed
 
 Plans:
 **Wave 1**
@@ -649,17 +649,17 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 204-06-PLAN.md — The nine guidance application states, independent verification of worker claims, and a promotion gate that requires a helpful outcome.
+- [x] 204-06-PLAN.md — The nine guidance application states, independent verification of worker claims, and a promotion gate that requires a helpful outcome.
 - [x] 204-07-PLAN.md — Seven named budgeted test gates, hard-gate sentinels, hidden holdouts, and the fixture-to-guard index.
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 204-08-PLAN.md — Independent shadow comparison in an isolated package whose grader a candidate structurally cannot reach or alter.
+- [x] 204-08-PLAN.md — Independent shadow comparison in an isolated package whose grader a candidate structurally cannot reach or alter.
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
 - [ ] 204-09-PLAN.md — Tiered promotion, atomic rollback with quarantine, and the nine retained-authority categories refused structurally.
-- [ ] 204-10-PLAN.md — Honest separate reporting of verified success and preventable intervention, and a source boundary that can only ever propose.
+- [x] 204-10-PLAN.md — Honest separate reporting of verified success and preventable intervention, and a source boundary that can only ever propose.
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
