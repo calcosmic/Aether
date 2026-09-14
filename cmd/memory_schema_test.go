@@ -492,11 +492,30 @@ func TestTypedAndUntypedApplicationHistoryAgree(t *testing.T) {
 
 	typedSummary := memory.SummarizeInstinctApplications(typedEntry)
 	legacySummary := memory.SummarizeInstinctApplications(legacyEntry)
-	if !reflect.DeepEqual(typedSummary, legacySummary) {
-		t.Fatalf("typed vs legacy summaries differ: typed=%+v legacy=%+v", typedSummary, legacySummary)
+
+	// The two shapes must agree on everything a legacy record can express:
+	// how often the instinct was applied, how many of those the old
+	// success flag counted, and when. The outcome counters 204-06 added
+	// (HelpfulApplications/HarmfulApplications/IgnoredApplications) are
+	// typed-only by design and are asserted separately below -- a legacy
+	// entry's success flag was the unconditional "the phase advanced"
+	// success this phase removes, so it is never read as evidence that the
+	// guidance helped.
+	typedShared := typedSummary
+	typedShared.HelpfulApplications, typedShared.HarmfulApplications, typedShared.IgnoredApplications = 0, 0, 0
+	legacyShared := legacySummary
+	legacyShared.HelpfulApplications, legacyShared.HarmfulApplications, legacyShared.IgnoredApplications = 0, 0, 0
+	if !reflect.DeepEqual(typedShared, legacyShared) {
+		t.Fatalf("typed vs legacy summaries differ on the legacy-expressible fields: typed=%+v legacy=%+v", typedSummary, legacySummary)
 	}
 	if typedSummary.Applications != 1 || typedSummary.Successes != 1 || typedSummary.Failures != 0 {
 		t.Fatalf("summary = %+v, want Applications=1 Successes=1 Failures=0 in both shapes", typedSummary)
+	}
+	if typedSummary.HelpfulApplications != 1 || typedSummary.HarmfulApplications != 0 || typedSummary.IgnoredApplications != 0 {
+		t.Fatalf("typed summary outcome counters = helpful %d harmful %d ignored %d, want 1/0/0 from the recorded helpful outcome", typedSummary.HelpfulApplications, typedSummary.HarmfulApplications, typedSummary.IgnoredApplications)
+	}
+	if legacySummary.HelpfulApplications != 0 || legacySummary.HarmfulApplications != 0 || legacySummary.IgnoredApplications != 0 {
+		t.Fatalf("legacy summary outcome counters = helpful %d harmful %d ignored %d, want 0/0/0: a legacy success flag is not evidence the guidance helped", legacySummary.HelpfulApplications, legacySummary.HarmfulApplications, legacySummary.IgnoredApplications)
 	}
 }
 

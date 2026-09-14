@@ -446,6 +446,14 @@ var shadowCompareCmd = &cobra.Command{
 	},
 }
 
+// The two commands below are built and tested but NOT registered on rootCmd
+// yet. This repository refuses a registered command that nothing calls
+// (TestNoRegisteredSubcommandIsUnreferenced, and its allowlist may only
+// shrink), and no plan in Phase 204 gives the shadow surface a caller: the
+// promotion gate (204-09) drives pkg/shadow through its Go functions, not
+// through these commands. Registering them is one line here once a plan
+// exposes them through a wrapper or a worker discipline file -- recorded as
+// an open item in .planning/WINDOWS.md so it is decided, not forgotten.
 func init() {
 	shadowDeclareCmd.Flags().String("id", "", "Candidate identifier")
 	shadowDeclareCmd.Flags().String("scope", "", "What the candidate would change")
@@ -453,8 +461,6 @@ func init() {
 	shadowDeclareCmd.Flags().String("harms", "", "What could go wrong if the candidate is adopted")
 	shadowDeclareCmd.Flags().String("expires", "", "RFC3339 timestamp the candidate's declaration expires at")
 	shadowDeclareCmd.Flags().String("rollback-plan", "", "How to undo the candidate if it is adopted and later needs reverting")
-	rootCmd.AddCommand(shadowDeclareCmd)
 
 	shadowCompareCmd.Flags().String("candidate-id", "", "Identifier of the declared candidate to compare")
-	rootCmd.AddCommand(shadowCompareCmd)
 }
