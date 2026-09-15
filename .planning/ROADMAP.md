@@ -695,7 +695,7 @@ Plans:
 4. Claude Code, OpenCode, and runtime-native Codex outcomes are demonstrated or fail early with truthful limitations; residual risk, costs, unreported values, physical evidence, and owner decisions remain explicit.
 5. Callum accepts that the result feels like Aether again and is trustworthy to operate; only then is the restoration sealed.
 
-**Plans:** 10/18 plans executed
+**Plans:** 11/18 plans executed
 
 Plans:
 **Wave 1**
@@ -716,7 +716,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 205-11-PLAN.md — Sign Phase 205's own rows and close with the master 72-row check (wave 3)
+- [x] 205-11-PLAN.md — Sign Phase 205's own rows and close with the master 72-row check (wave 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
