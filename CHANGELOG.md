@@ -5,6 +5,24 @@ All notable changes to the Aether Colony project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.79] - 2026-09-16
+
+### Changed
+
+- **Phase 203 — worker and runtime changes:** additional workers use shared
+  admission limits and recorded handoffs. Worker requests, progress and results
+  can be traced through the run, and guidance is adjusted using recorded outcomes.
+- **Phase 204 — learning changes:** durable run records support checks before
+  learned guidance is promoted, rollback when a change causes harm, and reports
+  showing what helped and where the owner had to intervene.
+
+### Fixed
+
+- **Phase 205 — finishing and archiving:** archiving a finished colony handles
+  missing handoff notes, and resuming refreshes those notes. Finish and archive
+  messages reach the chat while machine-readable results remain valid. Completion
+  checks reject claims that name tests which never ran.
+
 ## [1.0.63] - 2026-08-21
 
 ### Added
