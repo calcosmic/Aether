@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -526,6 +527,20 @@ func evaluatePhaseCriterionEvidence(root string, phase colony.Phase, manifest co
 			}
 			evaluation.Deterministic = true
 		}
+		// #3210-05 / field report 2026-09-14 finding 7: a criterion's own
+		// wording can name a specific command ("...and the operator broker
+		// suite all pass" naming `npm run test:operator`) that no bound
+		// check actually covers -- the "tests" check above is satisfied by
+		// whatever generic test command IS configured, so it credited the
+		// criterion without ever running the suite the criterion itself
+		// named. This is independent of, and additive to, the
+		// artifact/check evidence above: a requirement with zero named
+		// commands (criterionNamedCommands returns nil) leaves this a
+		// no-op, so nothing about a criterion that names no command
+		// changes.
+		for _, missing := range criterionNamedCommandsWereRun(criterionNamedCommands(requirement.Criterion), executedCriterionCommands(steps)) {
+			result.BlockingIssues = append(result.BlockingIssues, fmt.Sprintf("names command %q, which is not among the commands this phase actually ran", missing))
+		}
 		needsOwnerConfirmation := false
 		var ownerConfirmationIssues []string
 		for _, check := range requirement.Checks {
@@ -788,6 +803,156 @@ func criterionTaskSuffix(taskID string) string {
 		return ""
 	}
 	return " for task " + strings.TrimSpace(taskID)
+}
+
+// criterionCommandWordPattern tokenizes a criterion's prose into
+// whitespace-delimited words while keeping each word's byte offset, so
+// criterionNamedCommands can report extracted commands in the order they
+// actually appear in the criterion's own text.
+var criterionCommandWordPattern = regexp.MustCompile(`\S+`)
+
+// criterionNamedCommands extracts the command invocations a criterion's own
+// wording names, in order of first appearance, de-duplicated
+// case-insensitively. A command is recognised only where it is written as
+// one -- never merely because the surrounding prose contains the same
+// words (field report finding 7; TestCriterionCommandExtractionIgnoresProse):
+//
+//   - inside backticks, when the backtick content is itself an
+//     argv-shaped build/test runner invocation (commandSafeToReRun, the
+//     same recogniser reRunOneBuilderCommand already trusts enough to
+//     actually execute -- reused here purely for text recognition, never
+//     execution, so a distinctive project-specific suite name like
+//     "npm run test:operator" is recognised even though no generic
+//     verification-command parser would classify it); or
+//   - as a bare-prose occurrence of one of the four generic verification
+//     command shapes CLAUDE.md-parsing already recognises
+//     (detectVerificationCommandKind, cmd/codex_continue.go: "go test",
+//     "npm run lint", "pytest", and so on), extracted as exactly the
+//     matched prefix text -- never the surrounding sentence, so "run go
+//     test now to see" cannot balloon into "go test now to see".
+//
+// A backtick span whose content is not itself command-shaped (a file path
+// like `README.md`, or a non-runner word like `echo done`) is left alone,
+// and ordinary prose -- "the build succeeds and the tests all pass" --
+// never matches either path.
+func criterionNamedCommands(text string) []string {
+	type match struct {
+		start int
+		text  string
+	}
+	var matches []match
+
+	cursor := 0
+	for {
+		relOpen := strings.Index(text[cursor:], "`")
+		if relOpen < 0 {
+			break
+		}
+		open := cursor + relOpen
+		relClose := strings.Index(text[open+1:], "`")
+		if relClose < 0 {
+			break
+		}
+		closeIdx := open + 1 + relClose
+		content := strings.TrimSpace(text[open+1 : closeIdx])
+		if commandSafeToReRun(content) {
+			matches = append(matches, match{start: open + 1, text: content})
+		}
+		cursor = closeIdx + 1
+	}
+
+	wordLocs := criterionCommandWordPattern.FindAllStringIndex(text, -1)
+	words := make([]string, len(wordLocs))
+	for i, loc := range wordLocs {
+		words[i] = text[loc[0]:loc[1]]
+	}
+	for i := range words {
+		for wordCount := 1; wordCount <= 3 && i+wordCount <= len(words); wordCount++ {
+			candidate := strings.Trim(strings.Join(words[i:i+wordCount], " "), "`'\"(),.;:!?")
+			if candidate == "" {
+				continue
+			}
+			if detectVerificationCommandKind(strings.ToLower(candidate)) != "" {
+				matches = append(matches, match{start: wordLocs[i][0], text: candidate})
+				break
+			}
+		}
+	}
+
+	sort.SliceStable(matches, func(i, j int) bool { return matches[i].start < matches[j].start })
+
+	seen := map[string]struct{}{}
+	named := make([]string, 0, len(matches))
+	for _, m := range matches {
+		key := strings.ToLower(m.text)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		named = append(named, m.text)
+	}
+	return named
+}
+
+// normalizeCriterionCommandText is the one normalisation both sides of the
+// command-coverage comparison pass through -- criterionNamedCommands'
+// extracted text, and each codexVerificationStep.Command the runtime
+// actually ran -- lower-cased with internal whitespace collapsed to a
+// single space. Never invented a second time: criterionNamedCommandsWereRun
+// calls this on both sides, nowhere else re-derives an equivalent form.
+func normalizeCriterionCommandText(command string) string {
+	return strings.ToLower(strings.Join(strings.Fields(command), " "))
+}
+
+// executedCriterionCommands lists the resolved shell command text for each
+// verification step this phase's continue run actually executed. Skipped
+// steps carry no Command (runVerificationStep never sets one when nothing
+// resolved -- see its own doc comment), so filtering on a non-empty Command
+// is exactly "ran", the same reading verificationReRunProvesArtifacts
+// already relies on for this field.
+func executedCriterionCommands(steps []codexVerificationStep) []string {
+	executed := make([]string, 0, len(steps))
+	for _, step := range steps {
+		if command := strings.TrimSpace(step.Command); command != "" {
+			executed = append(executed, command)
+		}
+	}
+	return executed
+}
+
+// criterionNamedCommandsWereRun returns the members of named that do not
+// appear among executed. named is checked as a substring of some executed
+// command (both normalised via normalizeCriterionCommandText) so a
+// criterion may name a shorter form of the actual configured invocation
+// ("npm test" against a configured "npm test -- --ci") without being
+// wrongly flagged, while a genuinely different, never-configured command
+// (the field report's `npm run test:operator`) cannot hide inside an
+// unrelated executed command unless it truly is a substring of it.
+func criterionNamedCommandsWereRun(named []string, executed []string) []string {
+	normalizedExecuted := make([]string, 0, len(executed))
+	for _, command := range executed {
+		if normalized := normalizeCriterionCommandText(command); normalized != "" {
+			normalizedExecuted = append(normalizedExecuted, normalized)
+		}
+	}
+	missing := make([]string, 0, len(named))
+	for _, command := range named {
+		normalizedNamed := normalizeCriterionCommandText(command)
+		if normalizedNamed == "" {
+			continue
+		}
+		ran := false
+		for _, candidate := range normalizedExecuted {
+			if strings.Contains(candidate, normalizedNamed) {
+				ran = true
+				break
+			}
+		}
+		if !ran {
+			missing = append(missing, command)
+		}
+	}
+	return missing
 }
 
 // verificationReRunProvesArtifacts reports whether this continue run actually
