@@ -352,7 +352,7 @@ func planningRealRepo200DriveTwoPasses(t *testing.T, root string) (planningRoute
 	}
 
 	scoutManifest := first.ScoutDispatch.Manifest
-	fresh := planningRealRepo200Evidence(t, root, scoutManifest.Specification, scoutManifest.BasePlanRevisionID, "second-pass", "A new repository inspection resolves the first weakest gap and changes the semantic plan.", time.Date(2026, time.September, 8, 2, 10, 0, 0, time.UTC))
+	fresh := planningRealRepo200Evidence(t, root, scoutManifest.Specification, scoutManifest.BasePlanRevisionID, "second-pass", "A new repository inspection resolves the first weakest gap and changes the semantic plan.", planningRealRepo200At(10))
 	scoutGap := planningRouteStageGap("real-repo-second-scout-gap", colony.PlanningDimensionRisks, fresh.Reference.ID, colony.PlanningGapNonMaterial, 9)
 	scoutResult := planningScoutStageResult{
 		ResultType: planningStageResultScout, ManifestID: scoutManifest.ID, ManifestHash: scoutManifest.ContentHash,
@@ -400,6 +400,22 @@ func planningRealRepo200DriveTwoPasses(t *testing.T, root string) (planningRoute
 	return first, second, *second.Candidate
 }
 
+// planningRealRepo200Base anchors every timestamp the first-route fixture
+// stamps. The tests built on it drive the compiled aether binary (and the
+// unpinned in-process command layer), whose clock is the wall clock and
+// cannot be pinned the way planningRouteStageTestFixture pins its own; the
+// fixed September-8 02:xx literals that used to sit here therefore expired
+// against production's seven-day candidate window on 2026-09-15 and turned
+// four binary-driven tests red with no code change. Forty-eight hours back,
+// truncated to the hour, keeps every derived candidate well inside the window
+// and keeps the fixture's own ordering (seed, first pass, second pass) exact.
+var planningRealRepo200Base = time.Now().UTC().Add(-48 * time.Hour).Truncate(time.Hour)
+
+// planningRealRepo200At returns the fixture instant `minutes` after the base.
+func planningRealRepo200At(minutes int) time.Time {
+	return planningRealRepo200Base.Add(time.Duration(minutes) * time.Minute)
+}
+
 func planningRealRepo200FirstRouteFixture(t *testing.T, root string) (planningStageManifest, planningRouteStageResult) {
 	t.Helper()
 	state, err := loadSpecificationColonyState(root)
@@ -426,7 +442,7 @@ func planningRealRepo200FirstRouteFixture(t *testing.T, root string) (planningSt
 		RevisionID: specification.ID, ContentHash: specification.ContentHash, Status: colony.SpecStatusApproved,
 		ApprovalReceiptID: specification.Approval.ID, ApprovalReceiptHash: approvalHash,
 	}
-	seed := planningRealRepo200Evidence(t, root, binding, baseID, "seed", "The approved Specification and repository state seed this run.", time.Date(2026, time.September, 8, 2, 1, 0, 0, time.UTC))
+	seed := planningRealRepo200Evidence(t, root, binding, baseID, "seed", "The approved Specification and repository state seed this run.", planningRealRepo200At(1))
 	runID := "planning-real-repo-200-" + baseHash[:12]
 	initial := planningStageState{
 		Stage: planningStageScoutReady, RunID: runID, Pass: 1, Preset: planningStagePresetBalanced,
@@ -454,7 +470,7 @@ func planningRealRepo200FirstRouteFixture(t *testing.T, root string) (planningSt
 		InputFrontierHash: scoutManifest.InputFrontierHash,
 		ResearchPolicy:    phaseResearchAutomaticPolicy{SchemaVersion: phaseResearchAutomaticPolicySchemaVersion, Preset: planningStagePresetBalanced, OwnerDecisionBoundary: "after_scout", EvidenceContract: automaticPhaseResearchEvidenceContract()},
 		WeakestGap:        *scoutManifest.WeakestGap, StageManifestID: scoutManifest.ID, StageManifestHash: scoutManifest.ContentHash,
-		CreatedAt: time.Date(2026, time.September, 8, 2, 0, 0, 0, time.UTC),
+		CreatedAt: planningRealRepo200At(0),
 	}
 	payload := header
 	payload.ID, payload.ContentHash = "", ""
@@ -465,7 +481,7 @@ func planningRealRepo200FirstRouteFixture(t *testing.T, root string) (planningSt
 	header.ContentHash, header.ID = hash, "planning-run-header-"+hash[:16]
 	planningStageReceiptTestWriteJSON(t, filepath.Join(root, ".aether", "data", "planning", scoutManifest.RunID, "run-header.json"), header)
 
-	fresh := planningRealRepo200Evidence(t, root, binding, baseID, "first-pass", "The first Scout maps the initial executable route.", time.Date(2026, time.September, 8, 2, 5, 0, 0, time.UTC))
+	fresh := planningRealRepo200Evidence(t, root, binding, baseID, "first-pass", "The first Scout maps the initial executable route.", planningRealRepo200At(5))
 	scoutGap := planningRouteStageGap("real-repo-first-scout-gap", colony.PlanningDimensionKnowledge, fresh.Reference.ID, colony.PlanningGapNonMaterial, 25)
 	scoutResult := planningScoutStageResult{
 		ResultType: planningStageResultScout, ManifestID: scoutManifest.ID, ManifestHash: scoutManifest.ContentHash,
