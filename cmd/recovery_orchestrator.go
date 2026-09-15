@@ -233,6 +233,33 @@ func orchestrateRecovery(ctx RecoveryContext) RecoveryOutcome {
 	// above are both load-bearing.
 	recoveryOwnsItsOwnEpisode := recoveryEpisodeKind == events.EpisodeKindRecovery
 	if recoveryOwnsItsOwnEpisode {
+		// CR-02 (204-REVIEW.md): currentLiveRecoveryEpisode's phase-only
+		// fallback id ("recovery-phase-%d") is the SAME string for every
+		// standalone decision recorded against this phase. A single
+		// standalone decision is fine with that -- it opens and closes the
+		// one id itself -- but a caller that invokes orchestrateRecovery
+		// more than once for the same phase with no open build/continue
+		// episode (cmd/codex_build_finalize.go's
+		// buildExternalBuildRecoveryInstructions, which loops once per
+		// failed dispatch on the delegate/external build-finalize lane --
+		// the lane the interactive wrapper's documented primary path
+		// uses) re-opens the identical id on the second call, then hits
+		// recordEpisodeOutcome's "second close" refusal on ITS close,
+		// silently dropping that decision's durable record (a warning to
+		// stderr, never a hard failure). Disambiguate the id per
+		// standalone decision using facts unique to THIS call (worker name
+		// + task id, always present on a real dispatch) so each
+		// standalone recovery decision in a phase gets its own durable
+		// open/close pair. This discriminated id is used ONLY for this
+		// call's own open/changed/close triple -- it never needs to match
+		// what an unrelated caller of currentLiveRecoveryEpisode
+		// (forced_reviewer_waiver.go, handoff_decisions_cmd.go,
+		// rollback.go) computes for an unrelated fact recorded at a
+		// different moment, because none of those call sites ever open or
+		// close an episode themselves (recordEpisodeOutcome only refuses a
+		// CLOSE without a matching open; an intervention record carries no
+		// such requirement).
+		recoveryEpisodeID = standaloneRecoveryEpisodeID(recoveryEpisodeID, ctx.WorkerName, ctx.TaskID)
 		emitColonyLiveEpisodeStarted(recoveryEpisodeID, recoveryEpisodeKind)
 	}
 	emitColonyLiveRecoveryChanged(recoveryEpisodeID, recoveryEpisodeKind, outcome.Action.Type)
@@ -240,6 +267,29 @@ func orchestrateRecovery(ctx RecoveryContext) RecoveryOutcome {
 		emitColonyLiveEpisodeEnded(recoveryEpisodeID, recoveryEpisodeKind, outcome.Action.Type)
 	}
 	return outcome
+}
+
+// standaloneRecoveryEpisodeID disambiguates base (currentLiveRecoveryEpisode's
+// phase-only fallback id) for one standalone recovery decision, so repeated
+// standalone decisions for the same phase -- with no open build/continue
+// episode to attach to -- never collide on the same durable episode id
+// (CR-02, 204-REVIEW.md). Prefers workerName (always present on a real
+// dispatch); falls back to taskID alone, then to base unchanged only when
+// neither is available (a case that cannot arise from a real dispatch, kept
+// only so this function never panics or produces an empty suffix).
+func standaloneRecoveryEpisodeID(base, workerName, taskID string) string {
+	workerName = strings.TrimSpace(workerName)
+	taskID = strings.TrimSpace(taskID)
+	switch {
+	case workerName != "" && taskID != "":
+		return fmt.Sprintf("%s-%s-%s", base, workerName, taskID)
+	case workerName != "":
+		return fmt.Sprintf("%s-%s", base, workerName)
+	case taskID != "":
+		return fmt.Sprintf("%s-%s", base, taskID)
+	default:
+		return base
+	}
 }
 
 // sequenceRequiresAttempt handles the requires-attempt recovery sequence.

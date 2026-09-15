@@ -11,6 +11,7 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/events"
 )
 
 // --- RecoveryBudget tests ---
@@ -957,6 +958,116 @@ func TestBuildFinalize_MultipleFailedDispatches(t *testing.T) {
 	}
 	if budget.totalUsed() != 2 {
 		t.Errorf("expected total budget used=2, got %d", budget.totalUsed())
+	}
+}
+
+// TestBuildFinalize_MultipleFailedDispatches_EachGetsADistinctDurableEpisode
+// is CR-02's fix-locking test (204-REVIEW.md): drives the SAME real
+// production path as TestBuildFinalize_MultipleFailedDispatches above
+// (runCodexBuildFinalize -> buildExternalBuildRecoveryInstructions ->
+// orchestrateRecovery, once per failed dispatch, on the delegate/external
+// build-finalize lane the interactive wrapper's documented primary path
+// uses) with two failed dispatches in one phase and no live build/continue
+// episode open. Before the fix, both standalone recovery decisions
+// resolved to the identical fallback episode id ("recovery-phase-1"): the
+// first opened and closed it cleanly, and the second's close was silently
+// refused by recordEpisodeOutcome's "second close" guard (a warning to
+// stderr, never a hard failure), so the durable episode ledger carried
+// only one closed recovery episode for two real failures. This test
+// asserts two independent, distinct, fully closed durable episode records
+// exist -- one per failed dispatch.
+func TestBuildFinalize_MultipleFailedDispatches_EachGetsADistinctDurableEpisode(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+	writeClaimFileForTest(t, root, "cmd/test.go")
+
+	origCB := globalCircuitBreaker
+	cb := NewCircuitBreaker(3)
+	globalCircuitBreaker = cb
+	defer func() { globalCircuitBreaker = origCB }()
+
+	state := colony.ColonyState{
+		Goal:         strPtr("Test goal"),
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Test Phase", Status: colony.PhaseInProgress, Tasks: []colony.Task{
+					{ID: strPtr("task-1"), Status: colony.TaskInProgress},
+					{ID: strPtr("task-2"), Status: colony.TaskInProgress},
+					{ID: strPtr("task-3"), Status: colony.TaskInProgress},
+				}},
+			},
+		},
+	}
+	createTestColonyState(t, dataDir, state)
+
+	manifest := codexBuildManifest{
+		Phase:           1,
+		Root:            root,
+		PlanOnly:        true,
+		DispatchMode:    "plan-only",
+		ExecutionOwner:  "host-queen",
+		GeneratedAt:     time.Now().UTC().Format(time.RFC3339),
+		WorkerBriefs:    []string{},
+		Tasks:           []codexBuildTaskPlan{},
+		SuccessCriteria: []string{},
+		Dispatches: []codexBuildDispatch{
+			{Name: "Builder-1", Caste: "builder", TaskID: "task-1", Task: "Build feature 1", Status: "pending", Wave: 1},
+			{Name: "Builder-2", Caste: "builder", TaskID: "task-2", Task: "Build feature 2", Status: "pending", Wave: 1},
+			{Name: "Builder-3", Caste: "builder", TaskID: "task-3", Task: "Build feature 3", Status: "pending", Wave: 1},
+		},
+		SelectedTasks: []string{"task-1", "task-2", "task-3"},
+	}
+	completion := codexExternalBuildCompletion{
+		DispatchManifest: &manifest,
+		Results: []codexExternalBuildWorkerResult{
+			{Name: "Builder-1", Status: "timeout", Summary: "timed out", Handoff: codex.WorkerHandoff{CommandsRun: []string{"go test ./..."}, VerificationStatus: "pass", NextWorkerInstructions: []string{"work complete"}, Freshness: "not-run"}},
+			{Name: "Builder-2", Status: "failed", Summary: "generic failure", Handoff: codex.WorkerHandoff{CommandsRun: []string{"go test ./..."}, VerificationStatus: "pass", NextWorkerInstructions: []string{"work complete"}, Freshness: "not-run"}},
+			{Name: "Builder-3", Status: "completed", Summary: "done", FilesModified: []string{"cmd/test.go"}, Handoff: codex.WorkerHandoff{CommandsRun: []string{"go test ./..."}, VerificationStatus: "pass", NextWorkerInstructions: []string{"work complete"}, Freshness: "not-run"}},
+		},
+	}
+
+	if _, _, _, _, err := runCodexBuildFinalize(root, 1, completion, false); err != nil {
+		t.Fatalf("runCodexBuildFinalize failed: %v", err)
+	}
+
+	baseFallbackID, kind := currentLiveRecoveryEpisode(1)
+	if kind != events.EpisodeKindRecovery {
+		t.Fatalf("fixture setup broken: currentLiveRecoveryEpisode(1) returned kind %q, want %q (no live build/continue episode should be open in this headless finalize test)", kind, events.EpisodeKindRecovery)
+	}
+
+	wantIDs := []string{
+		standaloneRecoveryEpisodeID(baseFallbackID, "Builder-1", "task-1"),
+		standaloneRecoveryEpisodeID(baseFallbackID, "Builder-2", "task-2"),
+	}
+	if wantIDs[0] == wantIDs[1] {
+		t.Fatalf("fixture setup broken: the two expected episode ids collided (%q) -- this test cannot prove anything", wantIDs[0])
+	}
+
+	all, err := readEpisodeLedger()
+	if err != nil {
+		t.Fatalf("readEpisodeLedger: %v", err)
+	}
+
+	for _, id := range wantIDs {
+		var records []episodeLedgerRecord
+		for _, r := range all {
+			if r.EpisodeID == id {
+				records = append(records, r)
+			}
+		}
+		if _, ok := episodeLedgerOpenRecord(records, id); !ok {
+			t.Errorf("expected a durable open record for standalone recovery episode %q, found none -- durable records: %+v", id, all)
+		}
+		if _, ok := episodeLedgerTerminalRecord(records, id); !ok {
+			t.Errorf("expected a durable closed record for standalone recovery episode %q, found none (this is exactly CR-02's collision: a second standalone decision's close silently refused) -- durable records: %+v", id, all)
+		}
 	}
 }
 

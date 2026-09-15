@@ -105,10 +105,20 @@ func TestRecoveryDecisionKeepsTheBuildEpisodeLive(t *testing.T) {
 		store = s
 
 		ctx := newFailingRecoveryContext(202)
-		wantEpisodeID, wantEpisodeKind := currentLiveRecoveryEpisode(ctx.Phase)
+		baseFallbackID, wantEpisodeKind := currentLiveRecoveryEpisode(ctx.Phase)
 		if wantEpisodeKind != events.EpisodeKindRecovery {
 			t.Fatalf("fixture setup broken: currentLiveRecoveryEpisode with no carrier set returned kind %q, want %q", wantEpisodeKind, events.EpisodeKindRecovery)
 		}
+		// CR-02 (204-REVIEW.md): the actual episode id orchestrateRecovery
+		// uses for a standalone (fallback) decision is the phase-derived
+		// base id disambiguated by worker name + task id
+		// (standaloneRecoveryEpisodeID), never the bare base id -- so that
+		// a second standalone decision for the same phase (as
+		// cmd/codex_build_finalize.go's buildExternalBuildRecoveryInstructions
+		// produces once per failed dispatch) gets its own durable episode
+		// rather than colliding on recordEpisodeOutcome's "second close"
+		// refusal.
+		wantEpisodeID := standaloneRecoveryEpisodeID(baseFallbackID, ctx.WorkerName, ctx.TaskID)
 
 		outcome := orchestrateRecovery(ctx)
 
