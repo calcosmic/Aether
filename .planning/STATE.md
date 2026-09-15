@@ -5,7 +5,7 @@ milestone_name: Classic Colony Restoration
 current_phase: 205
 current_phase_name: Owner Acceptance and Restoration Seal
 status: executing
-stopped_at: Session resumed — Phase 205 waves 1–2 complete; next is 205-11 (wave 3)
+stopped_at: 205-11 merged; full/race release gates running; 205-12 snapshot and brief preparation in progress
 last_updated: "2026-09-15T21:13:40.184Z"
 last_activity: 2026-09-15
 last_activity_desc: Phase 205 execution resumed (wave continue)
@@ -758,11 +758,18 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-15T21:11:40Z
-Stopped at: Session resumed — Phase 205 waves 1–2 complete; next is 205-11 (wave 3)
+Last session: 2026-09-15T21:32:27Z
+Stopped at: 205-11 merged; full/race release gates running; 205-12 snapshot and brief preparation in progress
 Resume file: .planning/phases/205-owner-acceptance-and-restoration-seal/205-11-PLAN.md
 
 Resume evidence: HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
+
+## Active Execution — 2026-09-15
+
+- Plan 205-11 is implemented and merged at 7508fc73, with task commits d924fbe8/759cc446 and committed summary c2ede9fa. All 40 focused coverage/parity tests executed and passed. Phase tracking awaits the full integration gate.
+- Serial build, vet, full suite and race suite are running from `/tmp/aether-phase205-execution/gate-checkout`, pinned to 7508fc73. Build and vet passed. Durable logs/results: `/tmp/aether-phase205-execution/gates/`; baseline: `/tmp/aether-phase205-execution/baseline.json`. Never start a competing full run or publish before the complete accounting and baseline comparison have been reviewed.
+- Plan 205-12's independent reversible tasks (snapshot and brief) run in `.claude/worktrees/agent-p205-12-codex-20260915`; manifest `/tmp/aether-phase205-execution/wave4.json`, progress `/tmp/aether-phase205-execution/plan12-progress.json`, log `/tmp/aether-phase205-execution/plan12-executor.log`. Its readiness task must consume the parent's completed gate evidence before a SUMMARY or release authorization is recorded.
+- Target inventory agrees with the plan: 764 collapsed status entries, representing 1,906 individual files. Preserve all colony records, including modified `.aether/CONTEXT.md` and `.aether/HANDOFF.md`, while creating the clean session branch. The original branch must remain unchanged and the snapshot must remain reachable by name.
 
 ## Operator Next Steps
 
