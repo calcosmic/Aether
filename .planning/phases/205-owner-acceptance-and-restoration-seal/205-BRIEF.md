@@ -24,6 +24,6 @@ Your experiment, including research, is safe on **p205-owner-work-snapshot-20260
 9. **Try it yourself.** In your music software, play the generated sequencer, stop and restart playback, then save, close and reopen to check that patterns survive.
 10. **Undo a harmful lesson, if one appears.** Reverse that automatic learned change. Otherwise record “not exercised by the owner; undo path proven only by the program’s own tests.”
 
-**Time:** All ten record time and cost. Tasks **2, 3 and 7** each have a **10-minute limit**, from your ask to “built and checked”; for 7, from asking to resume. Use the program’s own run record. Over ten minutes fails even if correct. The other tasks cannot fail for length.
+**Time:** All ten are timed. Use only costs the program reports; note missing values. Tasks **2, 3 and 7** each have a **10-minute limit**, from your ask to “built and checked”; for 7, from asking to resume. Use the program’s own run record. Over ten minutes fails even if correct. The other tasks cannot fail for length.
 
 **Your verdict:** Write ten lines, one per task: **pass**, **fail**, or **worked, but…**, in your own words; use the conditional wording above where needed. Then answer **yes or no**: does it feel like the old system again, and do you trust it to operate? Only your overall yes accepts the work.
