@@ -255,6 +255,9 @@ Classic era (the comprehensive report and ledger already hold those answers).
 - `.planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md` (§"Ruling (c)" — two stale dispositions to re-adjudicate), `204-CLASSIC-HISTORICAL-EVIDENCE.md`, `204-VERIFICATION.md` (11/11 with two owner-accepted deferrals, 2026-09-15; no UAT file)
 - `.planning/phases/203-biological-runtime/203-CONTEXT.md` D-04 — the standing hard constraint: the owner never uses a second terminal; all liveness renders inline.
 
+### Known defects on the walk-through's own path (never raised with the owner until this discussion)
+- `.planning/field-reports/2026-09-14-cosmic-seal-entomb-lifecycle.md` — a real resume → seal → entomb run on CosmicDashboard, 2026-09-14, eight findings: (1) seal reviewer briefs omit the handoff contract `seal-finalize` enforces (HIGH); (2) `entomb` requires `.aether/HANDOFF.md`, which `resume` deletes and seal never rewrites (HIGH) — this is journey 1 exactly; (3) visual output never reaches the owner in Claude Code (HIGH for UX); (4) `seal-finalize` JSON mode prints the visual card before the JSON; (5) `/ant-seal` wrapper vs runtime drift; (6) seal promoted unsafe/noisy "lessons" into QUEEN.md, including a `.env`-copying command (safety); (7) a task criterion credited with no verifying command; (8) test runs filled the owner's disk. **The planner must schedule fixes for everything on the ten journeys' path before the session** — a known, recorded defect met "live" is a staged failure, not evidence — and list whatever is not fixed on the card (D-15). Bug fixes are Claude's to decide; the owner is told, not asked.
+
 ### Limitations and folded notes
 - `.planning/WINDOWS.md` — 48 entries, 34 open at discussion time; every open entry goes on the card (D-15).
 - `.planning/todos/2026-09-13-nothing-proves-who-is-calling.md` (D-20)
@@ -308,6 +311,7 @@ Classic era (the comprehensive report and ledger already hold those answers).
 - The owner's stated bar, from memory: "as snappy as plain Claude"; a one-plan job at ~30 minutes is why he stopped using Aether. D-11's 10-minute limit is the operational form of that bar.
 - The hub the owner's projects use is v1.0.78 published 13 Sep; Phases 203 (14 Sep) and 204 (15 Sep) are not in it. Without D-14's publish the session would test stale code.
 - The target path contains a space (`Max 9`). Earlier real-use sessions in downstream repos (CosmicDashboard) surfaced genuine planning-pipeline bugs; this is the same class of evidence — chase the symptom, not the owner's diagnosis.
+- Journey 1 (seal → archive → init) is the exact path the 2026-09-14 field report found broken on CosmicDashboard (entomb needs a handoff file that resume deletes). Fix before the session; otherwise the owner's first act fails on a defect already on record.
 - Ledger state at discussion: 34 rows signed (all Phase 199), 36 routed to 200–204 and unsigned, 2 routed to 205, 3 marked delivered in Phase 198.3 (`CAP-010`, `CAP-046`, `CAP-051` — verify they are signed, not merely labelled).
 
 </specifics>
