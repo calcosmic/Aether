@@ -1,0 +1,21 @@
+Platform: OpenCode CLI
+Version: 1.1.63
+Command: opencode run "/ant-status"
+Working directory: /Users/callumcowie/.claude/jobs/d8ed0c97/tmp/platform-runs/aether-scratch (a disposable throwaway copy of this repository's HEAD, commit aa67c905, made so the real run never touches the live worktree, the main checkout, or the owner's own projects)
+Exit status: 0
+
+--- Captured output (stdout+stderr, ANSI color codes stripped) ---
+> build · minimax-2.5
+
+
+Error: Error: Unable to connect. Is the computer able to access the url?
+
+--- End of capture ---
+
+Diagnostic note (not part of the entry-point run above, recorded for accuracy): a follow-up
+probe in the same environment against a different configured provider (`opencode run --model
+"openrouter/~anthropic/claude-haiku-latest" "say hello in exactly 3 words"`) reached the
+provider successfully and returned a normal API-level response ("This request requires more
+credits, or fewer max_tokens..."). This shows outbound network access from this environment is
+not broadly blocked; the connection failure above is specific to the default "build" agent's
+configured MiniMax model endpoint, not a general inability of OpenCode to reach any provider.
