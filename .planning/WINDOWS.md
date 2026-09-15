@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 33
+open_count: 34
 waived_count: 0
 fixed_count: 14
-total_count: 47
-last_updated: 2026-09-15T01:08:31.907Z
+total_count: 48
+last_updated: 2026-09-15T06:51:56.003Z
 ---
 
 # Broken Windows Ledger
@@ -62,6 +62,7 @@ last_updated: 2026-09-15T01:08:31.907Z
 | 45 | 204 | unmet-truth | cmd/source_proposal.go |  | FIXED, both halves: (1) 204-13 declared episodeInterventionKind, a closed, source-derived intervention-kind vocabulary with three real production writers, so collectPreventableInterventions now classifies against a curated set instead of treating every free-form string as its own category. (2) 204-16 gave proposeSourceImprovement its first real production caller, triggerRepeatedInterventionProposal (cmd/improvement_pass.go): when the same declared intervention kind recurs on 3+ distinct episodes, it proposes a source change naming the real episodes, on an isolated branch, with sourceProposalReachabilityEntryPoints extended in the same change so TestSourceProposalCannotMergePublishOrDeploy's call-graph walk covers the new entry point too. | fixed |  | 2026-09-14T15:41:07.891Z | 2026-09-15T00:22:57.000Z |
 | 46 | 202.1 | unmet-truth | pkg/codex/platform_dispatch.go |  | workerProcessEnv (pkg/codex/process_tracker.go) had NO caller, so AETHER_WORKER_NAME never reached a spawned worker. aether hook-stop therefore could not tell an Aether build worker from a person: it blocked worker Weld-32 mid-build and advised aether pause, the worker ran it, and a live CosmicDashboard Autopilot colony was paused mid-phase. Wired the env at the spawn site and exempted Aether-spawned workers from hook-stop. Proven by a REAL spawned subprocess reading back its own environment (TestSpawnedWorkerCarriesItsIdentityInTheEnvironment) rather than by testing the builder in isolation -- an isolated builder test passed for the entire time the wiring was missing. Migrated 2026-09-14 by plan 204-11 from a stray, out-of-band duplicate row (originally id 14, colliding with the real phase-203 entry 14) that had drifted below the JSON ledger block; original recorded/resolved timestamps were 2026-09-12T21:30:00.000Z. | fixed |  | 2026-09-14T15:42:11.225Z | 2026-09-14T15:42:13.430Z |
 | 47 | 204 | unmet-truth | cmd/swarm_cmd.go |  | PRE-EXISTING latent collision in swarm worker naming, found at the Phase 204 gap-closure wave-3 gate (2026-09-15) and NOT introduced by it: no gap-closure plan touches swarm naming. deterministicAntName (cmd/codex_visuals.go) derives a worker name as prefix[hash mod len(prefixes)] plus a number from hash mod 99, seeded by the colony root path, caste and target; buildSwarmManifest (cmd/swarm_cmd.go, the duplicate dispatch name check near line 1256) then refuses the whole manifest when two dispatches land on the same name instead of de-duplicating. With five or six workers drawn from roughly six prefixes times 99 numbers, any two collide about one run in fifty to a hundred, and because the root path is part of the seed, a given colony can be stuck colliding on a given target every time. Observed as TestSwarmFinalizeRecordsExternalTaskResults/timeout failing with duplicate dispatch name Guard-95 once in a full-suite run at 05b0d453; the same test passed in the previous gate at 2eae06e3 and passed three of three re-runs in isolation. Close by making the manifest builder append a disambiguating suffix on collision (or fold the caste index into the seed) with a test that forces two workers onto one name and asserts both are dispatched under distinct names. | open |  | 2026-09-15T01:08:31.907Z |  |
+| 48 | 204 | unmet-truth | cmd/codex_continue.go |  | DEFERRED by owner decision at the Phase 204 gap-closure verification (2026-09-15): a check episode's token usage and reported cost stay recorded as absent on both check lanes -- the native lane (runCodexContinue, cmd/codex_continue.go) and the delegate lane (runCodexContinueFinalize, cmd/codex_continue_finalize.go). The watcher and reviewer workers' own usage figures are computed inside runCodexContinueVerification after the episode-close defer is already registered and are never persisted anywhere the close can re-read, so 204-15 left the two fields nil rather than write a zero or an estimate (204-15-SUMMARY.md deviation 2; 204-VERIFICATION.md SC3a partial). The build and swarm lanes do record usage. Close by restructuring runCodexContinue to pre-declare a usage accumulator the close defer can read, the same shape the build lane uses, with a test on each check lane that fails when the accumulator is not threaded through. | open |  | 2026-09-15T06:51:56.003Z |  |
 
 ````json
 [
@@ -627,6 +628,18 @@ last_updated: 2026-09-15T01:08:31.907Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-09-15T01:08:31.907Z",
+    "resolved_at": null
+  },
+  {
+    "id": 48,
+    "kind": "unmet-truth",
+    "phase": "204",
+    "file": "cmd/codex_continue.go",
+    "line": null,
+    "description": "DEFERRED by owner decision at the Phase 204 gap-closure verification (2026-09-15): a check episode's token usage and reported cost stay recorded as absent on both check lanes -- the native lane (runCodexContinue, cmd/codex_continue.go) and the delegate lane (runCodexContinueFinalize, cmd/codex_continue_finalize.go). The watcher and reviewer workers' own usage figures are computed inside runCodexContinueVerification after the episode-close defer is already registered and are never persisted anywhere the close can re-read, so 204-15 left the two fields nil rather than write a zero or an estimate (204-15-SUMMARY.md deviation 2; 204-VERIFICATION.md SC3a partial). The build and swarm lanes do record usage. Close by restructuring runCodexContinue to pre-declare a usage accumulator the close defer can read, the same shape the build lane uses, with a test on each check lane that fails when the accumulator is not threaded through.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-15T06:51:56.003Z",
     "resolved_at": null
   }
 ]

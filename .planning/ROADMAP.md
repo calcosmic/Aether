@@ -65,7 +65,7 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 - [x] **Phase 202 — Swarm, Oracle, and Live Colony** — completed 2026-09-12
 - [x] **Phase 202.1 — Classic Visual Voice** (completed 2026-09-12)
 - [x] **Phase 203 — Biological Runtime** (completed 2026-09-14)
-- [ ] **Phase 204 — Learning Governor**
+- [x] **Phase 204 — Learning Governor** (completed 2026-09-15)
 - [ ] **Phase 205 — Owner Acceptance and Restoration Seal**
 
 ## Phase Details
@@ -630,7 +630,7 @@ Plans:
 4. A beneficial candidate beats its frozen baseline without hard-gate or holdout regression, while overfit or evaluator-tampering candidates are quarantined.
 5. Only allowed low-risk canaries promote and roll back atomically; preferences, skills, workflows, source, and security-sensitive policy retain required authority, and source changes remain independently verified branches/PRs that cannot self-approve, merge, publish, or deploy.
 
-**Plans:** 16/16 plans executed; 5 gap-closure plans added 2026-09-14 (204-12..204-16) for the seven verification gaps
+**Plans:** 16/16 plans complete
 
 Plans:
 **Wave 1**

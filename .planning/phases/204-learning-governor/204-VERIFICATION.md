@@ -1,10 +1,19 @@
 ---
 phase: 204-learning-governor
 verified: 2026-09-15T00:00:00Z
-status: gaps_found
-score: 9/11 sub-truths fully verified (2 narrowed, not fully closed)
+status: passed
+score: "11/11 (9 verified, 2 passed by owner override -- see overrides)"
 behavior_unverified: 0
-overrides_applied: 0
+overrides_applied: 2
+overrides:
+  - must_have: "SC3a: Every started episode records immutable outcome, evidence, hard-gate, changed-decision, intervention, time, token, and cost"
+    reason: "Accepted as deferred: a check episode's token usage and reported cost stay recorded as absent (never zero, never an estimate) on both check lanes; surfacing the watcher/reviewer usage needs a restructure of runCodexContinue that no acceptance criterion of this closure required. Tracked as WINDOWS.md entry 48. Every other field of SC3a is verified."
+    accepted_by: "owner (cosmic-cal)"
+    accepted_at: "2026-09-15T06:52:13Z"
+  - must_have: "SC3c: Confirmed incidents become a versioned regression-fixture bank actually guarded by real tests"
+    reason: "Accepted as deferred: 21 of 51 fixtures now carry a real, incident-specific guard (from 7 of 47) and the unguarded floor is a two-sided ratchet at 30; the remaining 30 were each inspected and none has an existing test that honestly locks its incident. 204-CONTEXT.md placed guarding every fixture out of this closure's scope; LEARN-05 stays unticked and WINDOWS.md entry 42 stays open with the exact number."
+    accepted_by: "owner (cosmic-cal)"
+    accepted_at: "2026-09-15T06:52:13Z"
 re_verification:
   previous_status: gaps_found
   previous_score: "5/11 sub-truths fully verified (per previous body text; previous frontmatter said 5/12, which does not match its own 11-item truths list -- carried forward here only for continuity, not repeated)"
