@@ -170,3 +170,13 @@ None - no external service configuration required.
 ---
 *Phase: 205-owner-acceptance-and-restoration-seal*
 *Completed: 2026-09-15*
+
+## Self-Check: PASSED
+
+- FOUND: `cmd/classic_coverage_ratchet_test.go`
+- FOUND: `.planning/phases/203-biological-runtime/203-CLASSIC-COVERAGE.json`
+- FOUND: `.planning/phases/203-biological-runtime/203-CLASSIC-COVERAGE.md`
+- FOUND: `.planning/phases/205-owner-acceptance-and-restoration-seal/205-01-SUMMARY.md`
+- FOUND commit `4ccd1daf` (feat: Task 1)
+- FOUND commit `c05eae60` (test: Task 2)
+- FOUND commit `b0205bba` (docs: this SUMMARY)
