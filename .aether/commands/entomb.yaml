@@ -7,6 +7,7 @@ ceremony_contract:
   authority: "The Go runtime owns the preflight preview, confirmation, Stage archive, Write digest manifest, Verify bytes and cross-references, Publish chamber and tombstone, and Clear active state."
   wrapper_role: "Keep entomb separate and optional after seal, invoke the runtime exactly once when the owner chooses it, and report the typed runtime result."
 guardrails:
+  - "Show this output to the owner in your own reply, unchanged — you are relaying what the command produced, not computing, gating, or re-verifying anything."
   - "Do not copy archive bytes, do not parse visual output, do not clear or write active state, and do not fabricate verification from this command spec."
   - "Never invoke entomb from the seal workflow; it remains a separately chosen owner action."
   - "If docs and runtime disagree, runtime wins."

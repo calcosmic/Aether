@@ -24,6 +24,8 @@ If the user explicitly asks for raw, exact, direct, or no-orchestration seal, ru
 AETHER_OUTPUT_MODE=visual aether seal $ARGUMENTS
 ```
 
+Show this output to the owner in your own reply, unchanged — you are relaying what the command produced, not computing, gating, or re-verifying anything.
+
 Otherwise use the hosted review flow below.
 
 ## Seal Manifest
@@ -68,7 +70,7 @@ Before spawning final-review workers, render the runtime-owned old-style seal ce
 AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow seal --manifest-file <manifest_file>
 ```
 
-This output is display-only; do not parse it as state.
+Show this output to the owner in your own reply, unchanged — you are relaying what the command produced, not computing, gating, or re-verifying anything. This output is display-only; do not parse it as state.
 
 ## Live Worker Ceremony
 
@@ -87,7 +89,7 @@ Dispatch the runtime-provided workers through the host platform in manifest wave
 
 For each dispatch:
 
-1. Render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow seal --manifest-file <manifest_file> --execution-wave "<execution_wave>"`.
+1. Render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow seal --manifest-file <manifest_file> --execution-wave "<execution_wave>"`. Show this output to the owner in your own reply, unchanged — you are relaying what the command produced, not computing, gating, or re-verifying anything.
 2. Run `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "<caste>" --name "<name>" --task "<task>" --depth 1`.
 3. Spawn the host agent using `agent_name` as the subagent type.
 4. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
@@ -106,7 +108,7 @@ For each dispatch:
    - optional `findings` or `issues` objects shaped as `{domain,severity,file,line,category,description,suggestion,blocking}`
    - optional `recommendations`, `weak_spots`, `edge_cases_discovered`, and `reusable_lessons`
 8. Run `AETHER_OUTPUT_MODE=json aether spawn-complete --name "<name>" --status "<status>" --summary "<summary>"`.
-9. Write that one terminal result to a temporary worker JSON file and render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow seal --worker-file <worker_file>`.
+9. Write that one terminal result to a temporary worker JSON file and render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow seal --worker-file <worker_file>`. Show this output to the owner in your own reply, unchanged — you are relaying what the command produced, not computing, gating, or re-verifying anything.
 
 Terminal statuses are `completed`, `passed`, `blocked`, `failed`, or `timeout`.
 
@@ -156,6 +158,8 @@ Render the user-facing closeout after the JSON finalizer succeeds:
 AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow seal --completion-file <completion_file>
 ```
 
+Show this output to the owner in your own reply, unchanged — you are relaying what the command produced, not computing, gating, or re-verifying anything.
+
 Branch strictly on `seal-finalize` output:
 
 - If blocked, report the runtime blocker text and stop.
@@ -204,7 +208,7 @@ Run selected delivery actions sequentially and stop on first failure.
 
 ## Post-Seal Review
 
-After sealing, run `AETHER_OUTPUT_MODE=visual aether status` first to review the retained sealed state; `aether entomb` is a separate optional owner-confirmed archive-and-clear action.
+After sealing, run `AETHER_OUTPUT_MODE=visual aether status` first to review the retained sealed state; `aether entomb` is a separate optional owner-confirmed archive-and-clear action. Show this output to the owner in your own reply, unchanged — you are relaying what the command produced, not computing, gating, or re-verifying anything.
 Never invoke entomb automatically; sealing retains active state for owner review.
 
 ## Guardrails

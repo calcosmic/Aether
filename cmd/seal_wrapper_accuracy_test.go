@@ -200,3 +200,122 @@ func TestSealWrapperTripletStaysIdentical(t *testing.T) {
 		t.Errorf("seal.md's `dispatches` bullet does not carry the exact review-team sentence from %s\nyaml:    %s\nwrapper: %s", yamlPath, reviewTeamSentence, claudeLine)
 	}
 }
+
+// relayCardSentence is the exact instruction that must follow every step
+// where a wrapper runs the runtime in its picture-drawing (AETHER_OUTPUT_
+// MODE=visual) output mode -- the moment the field report found nothing
+// told the assistant to show that output to the owner. It grants the
+// wrapper no computation, gating, or verification duty: it only says the
+// card the runtime drew must reach the owner's chat.
+const relayCardSentence = "Show this output to the owner in your own reply, unchanged — you are relaying what the command produced, not computing, gating, or re-verifying anything."
+
+// visualModeLinesWithoutNearbyRelay parses wrapperText for every step that
+// runs the runtime in picture-drawing (AETHER_OUTPUT_MODE=visual) mode and
+// returns the 1-based line numbers of any such step with no relay
+// instruction within the following few lines -- covering both an inline
+// numbered-list step (relay appended to the same line) and a fenced code
+// block followed by a relay sentence a couple of lines later.
+func visualModeLinesWithoutNearbyRelay(wrapperText string) []int {
+	const proximity = 6
+	lines := strings.Split(wrapperText, "\n")
+	var missing []int
+	for i, line := range lines {
+		if !strings.Contains(line, "AETHER_OUTPUT_MODE=visual") {
+			continue
+		}
+		found := false
+		for j := i; j < len(lines) && j < i+proximity; j++ {
+			if strings.Contains(lines[j], relayCardSentence) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			missing = append(missing, i+1)
+		}
+	}
+	return missing
+}
+
+// yamlGuardrails reads the top-level `guardrails` list from a wrapper source
+// YAML file.
+func yamlGuardrails(t *testing.T, path string) []string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	var spec struct {
+		Guardrails []string `yaml:"guardrails"`
+	}
+	if err := yaml.Unmarshal(data, &spec); err != nil {
+		t.Fatalf("parse %s: %v", path, err)
+	}
+	return spec.Guardrails
+}
+
+// TestSealAndEntombWrappersRelayTheCard closes field-report defect 3: the
+// wrappers ran the runtime's picture-drawing output mode through a shell and
+// never told the assistant to show what came back, so the owner saw
+// nothing. For each of the four platform wrapper files, this asserts every
+// step that runs AETHER_OUTPUT_MODE=visual is followed by a relay
+// instruction, and that all four files' relay sentences are byte-identical
+// to each other and to both runtime source YAMLs.
+func TestSealAndEntombWrappersRelayTheCard(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	wrapperPaths := []string{
+		filepath.Join(repoRoot, ".claude", "commands", "ant", "seal.md"),
+		filepath.Join(repoRoot, ".claude", "commands", "ant", "entomb.md"),
+		filepath.Join(repoRoot, ".opencode", "commands", "ant", "seal.md"),
+		filepath.Join(repoRoot, ".opencode", "commands", "ant", "entomb.md"),
+	}
+	for _, path := range wrapperPaths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		text := string(data)
+		if !strings.Contains(text, relayCardSentence) {
+			t.Errorf("%s never relays the runtime's picture-drawing output to the owner: missing %q", path, relayCardSentence)
+			continue
+		}
+		if missing := visualModeLinesWithoutNearbyRelay(text); len(missing) > 0 {
+			t.Errorf("%s runs AETHER_OUTPUT_MODE=visual at line(s) %v with no relay instruction nearby", path, missing)
+		}
+	}
+
+	sealGuardrails := yamlGuardrails(t, filepath.Join(repoRoot, ".aether", "commands", "seal.yaml"))
+	if !containsString(sealGuardrails, relayCardSentence) {
+		t.Errorf(".aether/commands/seal.yaml guardrails do not carry the exact relay sentence: %q", relayCardSentence)
+	}
+	entombGuardrails := yamlGuardrails(t, filepath.Join(repoRoot, ".aether", "commands", "entomb.yaml"))
+	if !containsString(entombGuardrails, relayCardSentence) {
+		t.Errorf(".aether/commands/entomb.yaml guardrails do not carry the exact relay sentence: %q", relayCardSentence)
+	}
+}
+
+// TestEntombWrapperTripletStaysIdentical mirrors the seal parity assertion
+// for the archive command: the Claude and OpenCode copies of entomb.md are
+// hand-maintained with no generator and must stay byte-identical.
+func TestEntombWrapperTripletStaysIdentical(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	claudeBytes, err := os.ReadFile(filepath.Join(repoRoot, ".claude", "commands", "ant", "entomb.md"))
+	if err != nil {
+		t.Fatalf("read claude entomb.md: %v", err)
+	}
+	opencodeBytes, err := os.ReadFile(filepath.Join(repoRoot, ".opencode", "commands", "ant", "entomb.md"))
+	if err != nil {
+		t.Fatalf("read opencode entomb.md: %v", err)
+	}
+	if string(claudeBytes) != string(opencodeBytes) {
+		t.Fatalf("entomb.md drifted between the Claude and OpenCode copies -- these two files are hand-maintained with no generator and must stay byte-identical")
+	}
+}
