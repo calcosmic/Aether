@@ -187,3 +187,12 @@ None - no external service configuration required.
 ---
 *Phase: 205-owner-acceptance-and-restoration-seal*
 *Completed: 2026-09-15*
+
+## Self-Check: PASSED
+
+- `cmd/classic_synthesis_audit_test.go` found on disk
+- `.planning/phases/205-owner-acceptance-and-restoration-seal/205-SYNTH-07-AUDIT.md` found on disk
+- `.planning/phases/205-owner-acceptance-and-restoration-seal/205-06-SUMMARY.md` found on disk
+- Commits `6be45490`, `935b1b55`, `659d9bb2`, `f29bc202`, `faa02057` all found in `git log --oneline --all`
+- `go test ./cmd/ -run TestClassicSynthesis -count=1 -timeout 90m` re-run clean (9/9 passing) after all edits above
+- `git status --porcelain .planning/phases/` confirms no `CLASSIC-SYNTHESIS.md` file for any phase was modified by this plan
