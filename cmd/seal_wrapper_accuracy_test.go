@@ -207,7 +207,7 @@ func TestSealWrapperTripletStaysIdentical(t *testing.T) {
 // told the assistant to show that output to the owner. It grants the
 // wrapper no computation, gating, or verification duty: it only says the
 // card the runtime drew must reach the owner's chat.
-const relayCardSentence = "Show this output to the owner in your own reply, unchanged — you are relaying what the command produced, not computing, gating, or re-verifying anything."
+const relayCardSentence = "Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself."
 
 // visualModeLinesWithoutNearbyRelay parses wrapperText for every step that
 // runs the runtime in picture-drawing (AETHER_OUTPUT_MODE=visual) mode and
