@@ -698,23 +698,52 @@ Plans:
 **Plans:** 18 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 205-01-PLAN.md — Capability-row signing ratchet, proven end to end on Phase 203's six rows (wave 1)
 - [ ] 205-02-PLAN.md — Seal reviewer briefs carry the result contract; promoted lessons are filtered (wave 1)
 - [ ] 205-03-PLAN.md — Finish-and-archive completes with no hand-off note; machine output stays machine-only (wave 1)
 - [ ] 205-04-PLAN.md — Wrapper claims match the runtime and the card reaches the owner (wave 1)
 - [ ] 205-05-PLAN.md — A criterion cannot be credited by a check that never covered it (wave 1)
 - [ ] 205-06-PLAN.md — Research-to-execution audit of the seven synthesis artifacts (wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 205-07-PLAN.md — Sign the capability rows for Phases 200, 201 and 202 (wave 2)
 - [ ] 205-08-PLAN.md — Sign Phase 204's rows and record its two re-adjudications (wave 2)
 - [ ] 205-09-PLAN.md — Four-dimension parity record over every restored slice (wave 2)
 - [ ] 205-10-PLAN.md — Honest platform cards from one real run per platform (wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 205-11-PLAN.md — Sign Phase 205's own rows and close with the master 72-row check (wave 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 205-12-PLAN.md — Pre-session readiness: tidy, one-page brief, full-gate run (wave 4)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 205-13-PLAN.md — The v1.28 release publish, backed up and integrity-checked (wave 5)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 205-14-PLAN.md — The owner's walk-through session (wave 6)
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
 - [ ] 205-15-PLAN.md — Evidence read-back and the ten marks (wave 7)
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
 - [ ] 205-16-PLAN.md — Gap triage, targeted fixes, and re-run of failed journeys only (wave 8)
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
 - [ ] 205-17-PLAN.md — The limitations card (wave 9)
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
 - [ ] 205-18-PLAN.md — Owner acceptance and the restoration seal (wave 10)
 
 ## Milestone Traceability
