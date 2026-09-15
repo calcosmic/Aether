@@ -5,11 +5,11 @@ milestone_name: Classic Colony Restoration
 current_phase: 205
 current_phase_name: Owner Acceptance and Restoration Seal
 status: executing
-stopped_at: 205-12 complete; readiness reviewed and merged; 205-13 local release next
-last_updated: "2026-09-15T23:22:00Z"
+stopped_at: 205-12 complete; 205-13 local release executing in isolated worktree
+last_updated: "2026-09-15T23:23:06Z"
 last_activity: 2026-09-15
 last_activity_desc: Phase 205 execution resumed (wave continue)
-state_head: c255fc42a6167a32de1f66e9cd83fa7bffd89d95
+state_head: 6b1ca37f884e144e734ed66e3aa60052291f255a
 progress:
   total_phases: 8
   completed_phases: 5
@@ -35,7 +35,7 @@ See: .planning/PROJECT.md (updated 2026-09-15)
 Phase: 205 (Owner Acceptance and Restoration Seal) — EXECUTING
 Next phase: 205 (Owner Acceptance and Restoration Seal)
 Status: Executing Phase 205
-Plan: 13 of 18 next — waves 1–4 complete; 12/18 plans have committed summaries
+Plan: 13 of 18 active — waves 1–4 complete; 12/18 plans have committed summaries
 Last activity: 2026-09-15 — Phase 205 execution resumed (wave continue)
 
 ## Performance Metrics
@@ -758,8 +758,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-15T23:22:00Z
-Stopped at: 205-12 complete; readiness reviewed and merged; 205-13 local release next
+Last session: 2026-09-15T23:23:06Z
+Stopped at: 205-12 complete; 205-13 local release executing in isolated worktree
 Resume file: .planning/phases/205-owner-acceptance-and-restoration-seal/205-13-PLAN.md
 
 Resume evidence: HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
@@ -774,6 +774,8 @@ Resume evidence: HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each
 - Owner project is clean on `p205-owner-session-20260915` at `363fd07630d9028d2d1a18edf3f5cc21e7dece2d`; original `codex/skills-as-commands` remains at `ccf18264`. Snapshot `p205-owner-work-snapshot-20260915` at `e8941d6f5e1f3f1834357d4746e7ffcf0f77b962` preserves all 1,906 expanded changed entries (764 grouped entries). The nested research repository has the same named snapshot at `f09a3a27e7a81f3e50bb5e79b86d0d97c9a0f61f`; restore both named snapshots to retrieve the full experiment.
 - All 383 data files, 1,305 extended record files and 12,605 ignored files were verified unchanged. Two pre-existing modified context/handoff records are carried verbatim on the session branch; the completed 3-phase/20-task colony remains unsealed. Durable inventory/receipts: the evidence root's `owner-preparation/`. Three already-ignored cache paths retain their prior ignored classification via exact local `.git/info/exclude` entries.
 - Verified pre-release backup: `/Users/callumcowie/.aether-backups/phase205-pre-release-20260915T213324Z/manifest.json`, covering hub, binary and platform-home assets (1,427 verified files). Revalidate immediately before publishing. Source, installed binary and hub remain 1.0.78; no release has happened yet.
+
+- Plan 205-13 is executing in `.claude/worktrees/agent-p205-13-codex-20260916`, base `6b1ca37f884e144e734ed66e3aa60052291f255a`; manifest `/tmp/aether-phase205-execution/wave5.json`, log `/tmp/aether-phase205-execution/plan13-executor.log`, process receipt `/tmp/aether-phase205-execution/plan13-process.json`. It owns version metadata, local stable publish, verified rollback and the downstream owner-project update. No remote push/tag/npm publication. Do not start a competing publish.
 
 ## Operator Next Steps
 
