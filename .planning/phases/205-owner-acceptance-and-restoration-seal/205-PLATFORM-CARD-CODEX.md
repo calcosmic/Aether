@@ -1,10 +1,10 @@
 # Codex — Platform Honesty Card
 
-Codex is OpenAI's own command-line coding assistant, a third AI platform this program can run inside. Codex has no menu commands (no short `/ant-...` shortcuts) — every colony operation has to be typed out as the program's own `aether` command, or described in plain language for Codex to type out itself. Like OpenCode, the owner decided Codex does not have to work this milestone; this card is an honest record of what a real run actually did, with no extra engineering effort spent on it. This describes one real, non-interactive run of Codex's own command line, made in a disposable throwaway copy of this project so the real checkout was never touched. Every line below is backed by the exact captured output in `evidence/platform-runs/codex-run.txt`.
+Codex is OpenAI's own command-line coding assistant, a third AI platform this program can run inside. Codex has no menu commands (no short `/ant-...` shortcuts) — every operation on a project has to be typed out as the program's own `aether` command, or described in plain language for Codex to type out itself. Like OpenCode, the owner decided Codex does not have to work this milestone; this card is an honest record of what a real run actually did, with no extra engineering effort spent on it. This describes one real, non-interactive run of Codex's own command line, made in a disposable throwaway copy of this project so the real checkout was never touched. Every line below is backed by the exact captured output in `evidence/platform-runs/codex-run.txt`.
 
 ## What worked
 
-- Given a plain-language instruction with no short command name, Codex chose on its own to run this program's real status command directly, exactly as CODEX.md says it should -- no invented shortcut, no substitute path. [transcript: codex-run.txt:27 | "AETHER_OUTPUT_MODE=visual aether status"]
+- Given a plain-language instruction with no short command name, Codex chose on its own to run this program's real status command directly -- no invented shortcut, no substitute path, exactly the behavior this program expects from Codex. [transcript: codex-run.txt:27 | "AETHER_OUTPUT_MODE=visual aether status"]
 - This program's own status screen then rendered correctly and told the truth: no project exists yet in this throwaway copy, with a plain next step. [transcript: codex-run.txt:31 | "No colony initialized in this repo."]
 
 ## What stopped early with a truthful message
