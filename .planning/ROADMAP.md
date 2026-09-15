@@ -695,7 +695,7 @@ Plans:
 4. Claude Code, OpenCode, and runtime-native Codex outcomes are demonstrated or fail early with truthful limitations; residual risk, costs, unreported values, physical evidence, and owner decisions remain explicit.
 5. Callum accepts that the result feels like Aether again and is trustworthy to operate; only then is the restoration sealed.
 
-**Plans:** 6/18 plans executed
+**Plans:** 10/18 plans executed
 
 Plans:
 **Wave 1**
@@ -709,10 +709,10 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 205-07-PLAN.md — Sign the capability rows for Phases 200, 201 and 202 (wave 2)
-- [ ] 205-08-PLAN.md — Sign Phase 204's rows and record its two re-adjudications (wave 2)
-- [ ] 205-09-PLAN.md — Four-dimension parity record over every restored slice (wave 2)
-- [ ] 205-10-PLAN.md — Honest platform cards from one real run per platform (wave 2)
+- [x] 205-07-PLAN.md — Sign the capability rows for Phases 200, 201 and 202 (wave 2)
+- [x] 205-08-PLAN.md — Sign Phase 204's rows and record its two re-adjudications (wave 2)
+- [x] 205-09-PLAN.md — Four-dimension parity record over every restored slice (wave 2)
+- [x] 205-10-PLAN.md — Honest platform cards from one real run per platform (wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
