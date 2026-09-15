@@ -695,6 +695,28 @@ Plans:
 4. Claude Code, OpenCode, and runtime-native Codex outcomes are demonstrated or fail early with truthful limitations; residual risk, costs, unreported values, physical evidence, and owner decisions remain explicit.
 5. Callum accepts that the result feels like Aether again and is trustworthy to operate; only then is the restoration sealed.
 
+**Plans:** 18 plans
+
+Plans:
+- [ ] 205-01-PLAN.md — Capability-row signing ratchet, proven end to end on Phase 203's six rows (wave 1)
+- [ ] 205-02-PLAN.md — Seal reviewer briefs carry the result contract; promoted lessons are filtered (wave 1)
+- [ ] 205-03-PLAN.md — Finish-and-archive completes with no hand-off note; machine output stays machine-only (wave 1)
+- [ ] 205-04-PLAN.md — Wrapper claims match the runtime and the card reaches the owner (wave 1)
+- [ ] 205-05-PLAN.md — A criterion cannot be credited by a check that never covered it (wave 1)
+- [ ] 205-06-PLAN.md — Research-to-execution audit of the seven synthesis artifacts (wave 1)
+- [ ] 205-07-PLAN.md — Sign the capability rows for Phases 200, 201 and 202 (wave 2)
+- [ ] 205-08-PLAN.md — Sign Phase 204's rows and record its two re-adjudications (wave 2)
+- [ ] 205-09-PLAN.md — Four-dimension parity record over every restored slice (wave 2)
+- [ ] 205-10-PLAN.md — Honest platform cards from one real run per platform (wave 2)
+- [ ] 205-11-PLAN.md — Sign Phase 205's own rows and close with the master 72-row check (wave 3)
+- [ ] 205-12-PLAN.md — Pre-session readiness: tidy, one-page brief, full-gate run (wave 4)
+- [ ] 205-13-PLAN.md — The v1.28 release publish, backed up and integrity-checked (wave 5)
+- [ ] 205-14-PLAN.md — The owner's walk-through session (wave 6)
+- [ ] 205-15-PLAN.md — Evidence read-back and the ten marks (wave 7)
+- [ ] 205-16-PLAN.md — Gap triage, targeted fixes, and re-run of failed journeys only (wave 8)
+- [ ] 205-17-PLAN.md — The limitations card (wave 9)
+- [ ] 205-18-PLAN.md — Owner acceptance and the restoration seal (wave 10)
+
 ## Milestone Traceability
 
 | Phase | Requirement count | Primary restored experience |
