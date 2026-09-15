@@ -238,8 +238,16 @@ func TestResumeColonyRestoresSessionAndClearsHandoff(t *testing.T) {
 		t.Fatalf("expected resumed:true JSON, got: %s", buf.String())
 	}
 
-	if _, err := os.Stat(handoffPath); !os.IsNotExist(err) {
-		t.Fatalf("expected handoff to be removed, stat err=%v", err)
+	// Resume pairs its removal of the pre-resume handoff with a fresh,
+	// minimal one written in the same transaction (#205-03) so a later
+	// archive never sees an empty required tombstone_input slot. The note
+	// must therefore exist and carry real content, not merely survive.
+	handoffAfterResume, err := os.ReadFile(handoffPath)
+	if err != nil {
+		t.Fatalf("resume did not leave a usable human handoff: %v", err)
+	}
+	if !strings.Contains(string(handoffAfterResume), "# Colony Handoff") {
+		t.Fatalf("resume handoff missing expected content: %s", handoffAfterResume)
 	}
 
 	var updated colony.SessionFile
