@@ -16,6 +16,7 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/calcosmic/Aether/pkg/storage"
 )
 
@@ -393,6 +394,73 @@ func TestSwarmFinalizeRecordsExternalTaskResults(t *testing.T) {
 				t.Fatalf("expected swarm result artifact: %v", err)
 			}
 		})
+	}
+}
+
+// TestSwarmFinalizeLaneOpensAndClosesADurableEpisode is CR-03's fix-locking
+// test (204-REVIEW.md): drives the real delegate/external swarm-finalize
+// lane (runSwarmFinalize, reached via `aether swarm-finalize
+// --completion-file`) the same way TestSwarmFinalizeRecordsExternalTaskResults
+// above does, and asserts it now opens AND closes a durable episode --
+// exactly the way TestSwarmLaneOpensAndClosesADurableEpisode
+// (cmd/episode_ledger_test.go) already proves for swarm's NATIVE lane
+// (runSwarmDestroy). Before this fix, runSwarmFinalize contained zero calls
+// to emitColonyLiveEpisodeStarted/Ended/OutcomeRecorded, so every swarm run
+// dispatched through this lane produced no durable episode-ledger record
+// at all -- this test fails before that wiring exists, mirroring how
+// TestDelegateCheckEpisodeRecordsItsOwnFacts proves continue's own delegate
+// lane the same way, rather than folding coverage into the shared
+// liveLaneEntryPoints map (which asserts one lane per declared episode
+// kind, not "every lane").
+func TestSwarmFinalizeLaneOpensAndClosesADurableEpisode(t *testing.T) {
+	saveGlobals(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+	goal := "Finalize visible swarm workers durably"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+	})
+
+	manifest := issuedSwarmManifestForTest(t, root, "Auth panic when session is missing")
+	dispatches := validExternalSwarmResults(manifest, "completed")
+
+	result, err := runSwarmFinalize(root, externalSwarmCompletion{
+		SwarmManifest: &manifest,
+		Dispatches:    dispatches,
+	})
+	if err != nil {
+		t.Fatalf("runSwarmFinalize: %v", err)
+	}
+	if got := result["dispatch_mode"]; got != "external-task" {
+		t.Fatalf("dispatch_mode = %v, want external-task", got)
+	}
+
+	records, err := readEpisodeLedger()
+	if err != nil {
+		t.Fatalf("readEpisodeLedger: %v", err)
+	}
+	var swarmRecords []episodeLedgerRecord
+	for _, r := range records {
+		if r.EpisodeID == manifest.SwarmID {
+			swarmRecords = append(swarmRecords, r)
+		}
+	}
+	openRecord, ok := episodeLedgerOpenRecord(swarmRecords, manifest.SwarmID)
+	if !ok {
+		t.Fatalf("delegate swarm-finalize lane wrote no durable open record for episode %q -- durable records: %+v", manifest.SwarmID, records)
+	}
+	if openRecord.EpisodeKind != events.EpisodeKindSwarm {
+		t.Fatalf("delegate swarm-finalize open record episode kind = %q, want %q", openRecord.EpisodeKind, events.EpisodeKindSwarm)
+	}
+	terminal, ok := episodeLedgerTerminalRecord(swarmRecords, manifest.SwarmID)
+	if !ok {
+		t.Fatalf("delegate swarm-finalize lane wrote no durable closed record for episode %q -- durable records: %+v", manifest.SwarmID, records)
+	}
+	if terminal.TerminalResult != "completed" {
+		t.Fatalf("delegate swarm-finalize terminal record TerminalResult = %q, want %q", terminal.TerminalResult, "completed")
 	}
 }
 

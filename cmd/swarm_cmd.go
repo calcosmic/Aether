@@ -1166,6 +1166,32 @@ func runSwarmFinalize(root string, completion externalSwarmCompletion) (map[stri
 		return nil, fmt.Errorf("initialize swarm workspace: %w", err)
 	}
 
+	// CR-03 (204-REVIEW.md): the delegate/external swarm-finalize lane
+	// (reached via `aether swarm-finalize --completion-file`, the same
+	// plan-only-dispatch-then-finalize-commits shape build's and
+	// continue's delegate lanes both have) previously opened and closed NO
+	// durable episode at all, unlike runSwarmDestroy's native lane above,
+	// which this block mirrors: emitColonyLiveEpisodeStarted immediately,
+	// then a deferred emitColonyLiveOutcomeRecorded/
+	// emitColonyLiveEpisodeEndedEventOnly pair reading the same runStatus
+	// variable finishRuntimeSpawnRun's own deferred call above reads, so
+	// this run's episode closes on every return path below and the
+	// durable episode's terminal result can never disagree with the spawn
+	// run record's status. Registered AFTER the finishRuntimeSpawnRun
+	// defer so it runs FIRST on return (LIFO), the same ordering
+	// runSwarmDestroy already uses.
+	emitColonyLiveEpisodeStarted(swarmID, events.EpisodeKindSwarm)
+	swarmFacts := &episodeCloseFacts{}
+	addSwarmRunsUsage(swarmFacts, runs)
+	defer func() {
+		record := episodeLedgerRecord{TerminalResult: runStatus}
+		record.Usage = swarmFacts.Usage
+		record.ReportedCostUSD = swarmFacts.ReportedCostUSD
+		record.RuntimeVersion, record.PolicyVersion, record.EndedAt, record.ElapsedSeconds = episodeCloseBasics(swarmID, runStatus)
+		emitColonyLiveOutcomeRecorded(swarmID, events.EpisodeKindSwarm, record)
+		emitColonyLiveEpisodeEndedEventOnly(swarmID, events.EpisodeKindSwarm, runStatus)
+	}()
+
 	for _, run := range runs {
 		if run.Status == "failed" || run.Status == "timeout" {
 			recordSwarmWorkerFailureToMidden(manifest.SwarmID, manifest.Target, run)
