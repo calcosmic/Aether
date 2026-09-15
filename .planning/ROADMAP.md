@@ -695,17 +695,17 @@ Plans:
 4. Claude Code, OpenCode, and runtime-native Codex outcomes are demonstrated or fail early with truthful limitations; residual risk, costs, unreported values, physical evidence, and owner decisions remain explicit.
 5. Callum accepts that the result feels like Aether again and is trustworthy to operate; only then is the restoration sealed.
 
-**Plans:** 18 plans
+**Plans:** 6/18 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 205-01-PLAN.md — Capability-row signing ratchet, proven end to end on Phase 203's six rows (wave 1)
-- [ ] 205-02-PLAN.md — Seal reviewer briefs carry the result contract; promoted lessons are filtered (wave 1)
-- [ ] 205-03-PLAN.md — Finish-and-archive completes with no hand-off note; machine output stays machine-only (wave 1)
-- [ ] 205-04-PLAN.md — Wrapper claims match the runtime and the card reaches the owner (wave 1)
-- [ ] 205-05-PLAN.md — A criterion cannot be credited by a check that never covered it (wave 1)
-- [ ] 205-06-PLAN.md — Research-to-execution audit of the seven synthesis artifacts (wave 1)
+- [x] 205-01-PLAN.md — Capability-row signing ratchet, proven end to end on Phase 203's six rows (wave 1)
+- [x] 205-02-PLAN.md — Seal reviewer briefs carry the result contract; promoted lessons are filtered (wave 1)
+- [x] 205-03-PLAN.md — Finish-and-archive completes with no hand-off note; machine output stays machine-only (wave 1)
+- [x] 205-04-PLAN.md — Wrapper claims match the runtime and the card reaches the owner (wave 1)
+- [x] 205-05-PLAN.md — A criterion cannot be credited by a check that never covered it (wave 1)
+- [x] 205-06-PLAN.md — Research-to-execution audit of the seven synthesis artifacts (wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
