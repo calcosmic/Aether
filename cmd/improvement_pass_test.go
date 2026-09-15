@@ -495,6 +495,73 @@ func TestUnrecognizedScopeIsRefusedAndWritesNothing(t *testing.T) {
 	}
 }
 
+// TestRefusedCandidateIsNotReCompareOrReReportedOnANextCheck is WR-01's
+// fix-locking test (204-REVIEW.md): a declared candidate refused once
+// (Compared: 1, Refused: 1, one improvementPassEventRefused card line) is,
+// on a second call to runAutomaticImprovementPass for the SAME still-live
+// declaration, skipped entirely -- zero comparisons, zero refusals, zero
+// events, zero failures -- rather than producing the identical refused
+// line forever. Before this fix, processNewImprovementCandidate re-ran
+// runShadowCompare and re-emitted improvementPassEventRefused on every
+// single call, indefinitely, for any declared candidate that stays
+// declared with no canary run (exactly the shape an unrecognized-scope
+// declaration like this one has forever, since it is never admitted and
+// never removed).
+func TestRefusedCandidateIsNotReCompareOrReReportedOnANextCheck(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	expires := time.Now().Add(48 * time.Hour).UTC().Format(time.RFC3339)
+	record, _, err := declareShadowCandidate("candidate-repeatedly-refused", "an entirely unrecognized scope naming nothing declared", "a generic benefit", shadowGraderBenignHarms, expires, "revert the declared change")
+	if err != nil {
+		t.Fatalf("declare candidate: %v", err)
+	}
+
+	first := runAutomaticImprovementPass(1)
+	if first.Compared != 1 {
+		t.Fatalf("first pass: expected 1 comparison, got %d (failures: %v)", first.Compared, first.Failures)
+	}
+	if first.Refused != 1 {
+		t.Fatalf("first pass: expected 1 refusal, got %d (failures: %v)", first.Refused, first.Failures)
+	}
+	if len(first.Events) != 1 || first.Events[0].Kind != improvementPassEventRefused {
+		t.Fatalf("first pass: expected exactly one refused event, got %+v", first.Events)
+	}
+
+	refusal, found, err := loadImprovementRefusal(record.ID)
+	if err != nil {
+		t.Fatalf("load refusal marker: %v", err)
+	}
+	if !found {
+		t.Fatal("expected a durable refusal marker to be recorded after the first refusal")
+	}
+	if refusal.ContentDigest != record.ContentDigest {
+		t.Fatalf("refusal marker ContentDigest = %q, want the candidate's own %q", refusal.ContentDigest, record.ContentDigest)
+	}
+
+	second := runAutomaticImprovementPass(1)
+	if second.Compared != 0 {
+		t.Fatalf("second pass: expected 0 comparisons (already refused for this exact declaration), got %d", second.Compared)
+	}
+	if second.Refused != 0 {
+		t.Fatalf("second pass: expected 0 refusals, got %d", second.Refused)
+	}
+	if len(second.Events) != 0 {
+		t.Fatalf("second pass: expected zero events (no repeated card line), got %+v", second.Events)
+	}
+	if len(second.Failures) != 0 {
+		t.Fatalf("second pass: expected zero failures, got %v", second.Failures)
+	}
+
+	// A THIRD pass, for good measure -- proves this is a durable skip, not
+	// a one-time debounce.
+	third := runAutomaticImprovementPass(1)
+	if third.Compared != 0 || len(third.Events) != 0 {
+		t.Fatalf("third pass: expected the refusal to still be skipped, got Compared=%d Events=%+v", third.Compared, third.Events)
+	}
+}
+
 // ---------------------------------------------------------------------
 // 204-16-PLAN.md, Task 1 (SC5d, WINDOWS.md entry 45): the automatic,
 // evidence-gated source-improvement proposal trigger

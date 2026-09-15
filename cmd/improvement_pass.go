@@ -177,11 +177,131 @@ func improvementPassCanaryBoundExceeded(run canaryRun, now time.Time) (bool, err
 	return canaryBoundExceeded(canaryAdmission{Bound: bound}, now), nil
 }
 
+// improvementRefusalPath is the store-relative path recordImprovementRefusal
+// and loadImprovementRefusal persist to -- WR-01 (204-REVIEW.md)'s marker
+// so a refused declaration is compared and reported exactly once, never on
+// every future check forever.
+const improvementRefusalPath = "shadow/refusals.json"
+
+// improvementRefusalRecord is one durable "this exact declaration was
+// refused" marker, keyed by (CandidateID, ContentDigest) -- the same
+// ContentDigest declareShadowCandidate already computes and stores on the
+// candidate record, so a genuine edit (a different declaration under the
+// same candidate id) carries a different digest and is never mistaken for
+// the declaration this marker names.
+type improvementRefusalRecord struct {
+	CandidateID   string `json:"candidate_id"`
+	ContentDigest string `json:"content_digest"`
+	Reason        string `json:"reason"`
+	RefusedAt     string `json:"refused_at"`
+}
+
+// improvementRefusalFile is the on-disk container at improvementRefusalPath.
+type improvementRefusalFile struct {
+	Entries []improvementRefusalRecord `json:"entries"`
+}
+
+// loadImprovementRefusal returns candidateID's own stored refusal marker,
+// if one exists -- a missing or unreadable file is read as "never
+// refused" rather than an error, since a fresh colony with no refusal
+// history is normal starting state, the same convention
+// learningEntryHasHelpfulApplication and sweepIgnoredGuidanceApplications
+// already use for their own stores.
+func loadImprovementRefusal(candidateID string) (improvementRefusalRecord, bool, error) {
+	if store == nil {
+		return improvementRefusalRecord{}, false, fmt.Errorf("no store initialized")
+	}
+	var file improvementRefusalFile
+	if err := store.LoadJSON(improvementRefusalPath, &file); err != nil {
+		if errorIsFileNotExist(err) {
+			return improvementRefusalRecord{}, false, nil
+		}
+		return improvementRefusalRecord{}, false, err
+	}
+	for _, rec := range file.Entries {
+		if rec.CandidateID == candidateID {
+			return rec, true, nil
+		}
+	}
+	return improvementRefusalRecord{}, false, nil
+}
+
+// recordImprovementRefusal durably marks candidateID's declaration
+// (identified by contentDigest) as refused, replacing any prior marker for
+// the same candidate id -- a candidate can only ever carry one live
+// declaration at a time, so one marker per id is always enough.
+func recordImprovementRefusal(candidateID, contentDigest, reason string) error {
+	if store == nil {
+		return fmt.Errorf("no store initialized")
+	}
+	var file improvementRefusalFile
+	return store.UpdateJSONAtomically(improvementRefusalPath, &file, func() error {
+		now := time.Now().UTC().Format(time.RFC3339)
+		for i := range file.Entries {
+			if file.Entries[i].CandidateID == candidateID {
+				file.Entries[i].ContentDigest = contentDigest
+				file.Entries[i].Reason = reason
+				file.Entries[i].RefusedAt = now
+				return nil
+			}
+		}
+		file.Entries = append(file.Entries, improvementRefusalRecord{
+			CandidateID:   candidateID,
+			ContentDigest: contentDigest,
+			Reason:        reason,
+			RefusedAt:     now,
+		})
+		return nil
+	})
+}
+
+// removeImprovementRefusal drops candidateID's own stored refusal marker,
+// if any -- called once a re-declared candidate is genuinely admitted, so
+// the store does not accumulate a marker for a declaration that is no
+// longer live. Best-effort: a missing file or a missing entry is a no-op,
+// never an error.
+func removeImprovementRefusal(candidateID string) error {
+	if store == nil {
+		return fmt.Errorf("no store initialized")
+	}
+	var file improvementRefusalFile
+	return store.UpdateJSONAtomically(improvementRefusalPath, &file, func() error {
+		kept := file.Entries[:0]
+		for _, rec := range file.Entries {
+			if rec.CandidateID != candidateID {
+				kept = append(kept, rec)
+			}
+		}
+		file.Entries = kept
+		return nil
+	})
+}
+
 // processNewImprovementCandidate drives ONE declared candidate with no
 // existing canary run through comparison, gate admission, and canary start
 // -- refusing (never erroring) at any step, and recording every outcome
 // into summary.
+//
+// WR-01 (204-REVIEW.md): a candidate whose CURRENT declaration was already
+// refused on a prior check is skipped entirely here -- no re-comparison, no
+// repeated improvementPassEventRefused card line, forever -- via
+// loadImprovementRefusal/recordImprovementRefusal's ContentDigest-keyed
+// marker. A genuine edit to the declaration (a different ContentDigest
+// under the same candidate id) is still compared fresh: the owner may have
+// fixed exactly what admitCandidateToCanary objected to.
 func processNewImprovementCandidate(record shadowCandidateRecord, summary *improvementPassSummary) {
+	if refusal, found, err := loadImprovementRefusal(record.ID); err != nil {
+		summary.recordFailure(record.ID, fmt.Sprintf("could not check for an existing refusal marker: %v", err))
+		return
+	} else if found && refusal.ContentDigest == record.ContentDigest {
+		// Already reported as refused for this exact declaration -- no
+		// event, no failure, no re-comparison. Silent by design, the same
+		// way an already-admitted candidate's existing canary run below is
+		// silently skipped (it "belongs to the running-canary pass
+		// instead").
+		return
+	}
+
 	if _, found, err := loadCanaryRun(record.ID); err != nil {
 		summary.recordFailure(record.ID, fmt.Sprintf("could not check for an existing canary run: %v", err))
 		return
@@ -213,9 +333,24 @@ func processNewImprovementCandidate(record shadowCandidateRecord, summary *impro
 		// candidate outcome).
 		summary.Refused++
 		summary.addEvent(record.ID, improvementPassEventRefused, err.Error())
+		// WR-01 (204-REVIEW.md): mark this exact declaration refused so it
+		// is never re-compared or re-reported again unless it changes.
+		// Non-blocking, matching this pass's own contract: a write failure
+		// here never turns a refusal into an error, it only means the next
+		// check will (harmlessly) re-evaluate and re-report this same
+		// declaration once more.
+		if markErr := recordImprovementRefusal(record.ID, record.ContentDigest, err.Error()); markErr != nil {
+			summary.recordFailure(record.ID, fmt.Sprintf("could not record refusal marker: %v", markErr))
+		}
 		return
 	}
 	summary.Admitted++
+	// A candidate that was previously refused and has now been genuinely
+	// admitted (a real edit fixed whatever was wrong) no longer needs its
+	// stale refusal marker. Best-effort: never blocks admission.
+	if err := removeImprovementRefusal(record.ID); err != nil {
+		summary.recordFailure(record.ID, fmt.Sprintf("could not clear stale refusal marker: %v", err))
+	}
 
 	scopePaths := improvementPassScopePaths(admission.Scope)
 	if len(scopePaths) == 0 {
