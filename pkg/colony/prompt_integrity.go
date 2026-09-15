@@ -100,12 +100,20 @@ var shellInjectionRuleSpecs = []struct {
 // and seal-promoted lessons via sanitizeQueenPromotedLesson in cmd/queen.go)
 // gains the protection at once, rather than each caller hand-rolling its own
 // secrets-path list.
+//
+// The rule is deliberately PATH-shaped: the secrets file name must sit inside
+// a path (`../dashboard/.env.local`, `~/.ssh/id_rsa`) or be the direct target
+// of a file-handling shell verb (`cp .env.local .`). A bare mention of ".env
+// files" in ordinary guidance is not a path, and refusing it broke
+// suggest-analyze's own built-in "never commit secrets or .env files to
+// version control" steering note (Phase 205 wave-1 post-merge gate; locked by
+// TestPromptIntegritySecretsPathRuleIsPathShaped).
 var secretsPathRuleSpecs = []struct {
 	kind    string
 	message string
 	pattern string
 }{
-	{"secrets_path", "content references a secrets or credentials file path which is not allowed", `(?i)(\.env(\.[a-zA-Z0-9_-]+)?|credentials\.json|secrets\.json|id_rsa|\.pem|\.netrc|\.npmrc)\b`},
+	{"secrets_path", "content references a secrets or credentials file path which is not allowed", `(?i)(?:/[^\s"']*?|\b(?:cp|cat|mv|scp|rsync|source|curl|wget|tee|less|more|head|tail|base64|xxd|type)\s+[^\s"']*?)(\.env(\.[a-zA-Z0-9_-]+)?|credentials\.json|secrets\.json|id_rsa|\.pem|\.netrc|\.npmrc)\b`},
 }
 
 type compiledPromptRule struct {
