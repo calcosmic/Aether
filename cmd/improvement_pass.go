@@ -134,6 +134,23 @@ func (s *improvementPassSummary) recordFailure(candidateID, reason string) {
 // reached after the current phase's own checks have already passed
 // (its own doc comment: "Gates have passed by this point"), so missing
 // evidence here never means "assume failed."
+//
+// WR-02 (204-REVIEW.md): because of that call-site guarantee, gatesPassed
+// is true on the overwhelming majority of calls, REGARDLESS of whether the
+// canary being evaluated (processRunningImprovementCanary, below) actually
+// has anything to do with what the current phase's checks exercised. This
+// is a deliberate, lightweight, best-effort signal -- "the colony's checks
+// are healthy right now" -- not a scope-specific grade of the canary's own
+// change. It is not yet a genuine evaluation of "did admitting THIS
+// candidate cause a regression in THIS candidate's own scope"; a canary
+// whose scope (.aether/data/instincts.json or .aether/data/COLONY_STATE.json)
+// the current phase's checks never touch will still read as "gates
+// passed" and be completed rather than rolled back, purely because nothing
+// else happened to fail on that phase. Treat gatesPassed as a proxy until
+// a scope-specific evaluator exists, the same way shadowEvaluator's own
+// doc comment (cmd/shadow_cmds.go) names its own placeholder-vs-real
+// history, so a future reader does not mistake "gates passed" for "this
+// canary was graded."
 func improvementPassPhaseGatesPassed(phaseID int) (passed bool, failingGate string) {
 	_, attempt, ok := loadLatestBuildAttempt(phaseID)
 	if !ok || attempt.FreeChecks == nil {
@@ -219,6 +236,15 @@ func processNewImprovementCandidate(record shadowCandidateRecord, summary *impro
 
 // processRunningImprovementCanary drives ONE canary already in status
 // running through completion or rollback once its bound is reached.
+//
+// WR-02 (204-REVIEW.md): gatesPassed is improvementPassPhaseGatesPassed's
+// own proxy signal -- see that function's doc comment for the full
+// account. Because that signal is almost always true regardless of
+// whether this specific canary's own scope was actually implicated by the
+// current phase's checks, this function will almost always choose
+// "complete" over "roll back" once a canary's bound is reached. This is
+// the deliberate, lightweight, best-effort design this pass shipped with
+// (204-12), not yet a scope-specific regression check.
 func processRunningImprovementCanary(run canaryRun, gatesPassed bool, failingGate string, summary *improvementPassSummary) {
 	exceeded, err := improvementPassCanaryBoundExceeded(run, time.Now())
 	if err != nil {
