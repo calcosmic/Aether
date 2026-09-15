@@ -744,3 +744,37 @@ func TestDirtyTreeAutomaticProposalIsRefusedAndNeverBlocks(t *testing.T) {
 		t.Fatalf("expected no proposal branch on a refused dirty-tree proposal, got %v", branches)
 	}
 }
+
+// TestProposalWrittenClosingLineIsPlainEnglish is the plan's D-03 follow-on:
+// renderImprovementPassBeat gains one more plain-English line for a written
+// source proposal, on the same dual-typed (struct / JSON-round-tripped map)
+// shape every other improvement-pass event already renders through.
+func TestProposalWrittenClosingLineIsPlainEnglish(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+	seedZeroStateImprovementPassFixtures(t)
+
+	root := sourceProposalTestRepo(t)
+	chdirTemp(t, root)
+
+	seedRepeatedInterventionEpisodes(t, episodeInterventionKindAnsweredWorkerQuestion, sourceProposalRepeatedInterventionThreshold)
+
+	summary := runPhaseEndConsolidation(1)
+	pass := summary.ImprovementPass
+
+	rendered := renderImprovementPassBeat(pass)
+	if rendered == "" {
+		t.Fatalf("expected a non-empty closing line for a written proposal, pass=%+v", pass)
+	}
+	if strings.Contains(rendered, "proposal_written") {
+		t.Fatalf("closing line leaks the raw event-kind token instead of plain English:\n%s", rendered)
+	}
+
+	result := map[string]interface{}{}
+	attachConsolidationSummary(result, summary)
+	renderedFromMap := renderImprovementPassBeat(result["improvement_pass"])
+	if renderedFromMap == "" {
+		t.Fatalf("expected a non-empty closing line from the JSON-round-tripped map shape too, got %q", renderedFromMap)
+	}
+}
