@@ -1,10 +1,23 @@
 ---
 phase: 204-learning-governor
-verified: 2026-09-14T16:20:22Z
+verified: 2026-09-15T00:00:00Z
 status: gaps_found
-score: 5/12 must-haves verified
+score: 9/11 sub-truths fully verified (2 narrowed, not fully closed)
 behavior_unverified: 0
 overrides_applied: 0
+re_verification:
+  previous_status: gaps_found
+  previous_score: "5/11 sub-truths fully verified (per previous body text; previous frontmatter said 5/12, which does not match its own 11-item truths list -- carried forward here only for continuity, not repeated)"
+  gaps_closed:
+    - "SC3b: all six lifecycle lanes (build, continue-native, continue-delegate, plan, oracle, swarm, recovery) now open and close a durable episode with zero skipped subtests in TestEveryLifecycleLaneWritesADurableOutcome (204-13); the code review additionally found and fixed a seventh gap in swarm's own delegate/finalize lane (CR-03) that 204-13/204-15's own sweep had missed"
+    - "SC4b: shadowEvaluator is now a real per-fixture classifier (shadowClassifyAgainstBank) that provably distinguishes a beneficial candidate from a harmful/overfit one through the real production entrypoint (204-12), confirmed by an independent mutation test performed in this verification session"
+    - "SC5b: runAutomaticImprovementPass drives a declared candidate through comparison, gate admission, canary start, and completion/rollback, reached from both check lanes through one call site inside runPhaseEndConsolidation (204-12/204-15), confirmed by an independent mutation test performed in this verification session"
+    - "SC5c: buildImprovementReport now shows real, non-zero verified-success and preventable-intervention figures over episodes real production lanes actually wrote (204-15), no longer downstream-blocked by SC3a"
+    - "SC5d: proposeSourceImprovement has a real, evidence-gated automatic caller (triggerRepeatedInterventionProposal, 3+ distinct episodes of the same intervention kind) reached from the same phase-end boundary both check lanes reach (204-16); the code review found and fixed a serious operational risk in this same new code (CR-04: unattended git checkout on the live working tree) by moving all git mutation into an isolated temporary worktree"
+  gaps_remaining:
+    - "SC3a (narrowed): 7 of the 9 originally writerless episode fields, plus interventions, now have real production writers on every lane that holds the fact -- but `usage`/`reported_cost_usd` remain absent specifically on both check lanes (native and delegate continue), a deliberate, documented scope boundary (204-15's own Deviations section), not a silent gap"
+    - "SC3c (narrowed): the fixture-bank guard count nearly tripled (7 -> 21 of 51, was 40 unguarded, now 30 unguarded) and the floor is now a genuine two-sided ratchet that cannot be inflated -- but 30 of 51 (59%) of this project's own confirmed incidents still carry no guarding test"
+  regressions: []
 must_haves:
   truths:
     - "SC1: A cited mechanism study reconstructs Classic-era learning mechanics, audits every current store, and justifies the smallest provable modern architecture."
@@ -22,87 +35,52 @@ must_haves:
   key_links: []
 gaps:
   - truth: "SC3a: Every started episode records immutable outcome, evidence, hard-gate, changed-decision, intervention, time, token, and cost"
-    status: failed
-    reason: "The episode ledger's writer/reader pair is fully built and tested, but the boundary emitters for nine of its fields have zero production callers, so a real episode is recorded with only its outcome/terminal skeleton and every one of evidence_ids, hard_gate_results, changed_decision_ids, usage, reported_cost_usd, interventions, episode_revision, acceptance_digest, evaluator_digest stays empty (WINDOWS.md entry 38)."
+    status: partial
+    reason: "204-15 gave real production writers to 7 of the 9 originally writerless fields (evidence_ids, hard_gate_results, changed_decision_ids, episode_revision, acceptance_digest, evaluator_digest on the build and both check lanes; interventions already had writers from 204-13) plus registered the episode ledger as the seventh memory-schema census store, all confirmed passing in this session. But usage/reported_cost_usd remain honestly absent on BOTH check lanes (native runCodexContinue and delegate runCodexContinueFinalize) -- a watcher/reviewer worker's token usage is computed after the episode-close defer is already registered and is not surfaced to it. 204-15-SUMMARY.md documents this as a deliberate, time-boxed scope boundary, not a silent gap, and no acceptance criterion this plan declared required it. The literal SC3a wording ('every started episode records... time, token, and cost') is therefore still not true for check-lane episodes."
     artifacts:
-      - path: "cmd/live_events.go"
-        issue: "emitColonyLiveOutcomeRecorded and emitColonyLiveInterventionRecorded are defined but have no non-test caller anywhere in cmd/ or pkg/"
+      - path: "cmd/codex_continue.go"
+        issue: "checkEpisodeCloseRecord never populates Usage/ReportedCostUSD; both stay nil on the native check lane's closed episode"
+      - path: "cmd/codex_continue_finalize.go"
+        issue: "same shared helper, same gap, on the delegate check lane"
     missing:
-      - "Wire the build/continue/swarm/oracle/recovery boundary callers to pass real usage, gate results, evidence and intervention facts through the existing emitters."
-  - truth: "SC3b: Every lifecycle lane opens and closes a durable episode record"
-    status: failed
-    reason: "TestEveryLifecycleLaneWritesADurableOutcome explicitly t.Skipf's the swarm and recovery lanes because neither calls emitColonyLiveEpisodeStarted/Ended in production; only build, continue, plan and oracle are proven (WINDOWS.md entry 41, reproduced live in this verification run)."
-    artifacts:
-      - path: "cmd/episode_ledger_test.go"
-        issue: "Swarm and recovery subtests are skipped, not passing, so the phase's own test suite documents the gap rather than closing it"
-    missing:
-      - "Route cmd/swarm_cmd.go and the recovery entry point through the same episode-boundary calls the other four lanes already use."
+      - "Restructure runCodexContinue's ~500-line function to pre-declare a mutable usage accumulator the already-registered episode-close defer can read, surfacing the watcher/reviewer workers' own Usage figures the same way the build and swarm lanes already do."
   - truth: "SC3c: Confirmed incidents become a versioned regression-fixture bank actually guarded by real tests"
-    status: failed
-    reason: "Of the 47 fixtures in cmd/testdata/fixture-bank/v1/bank.json (verified by direct JSON read at this HEAD), only 7 carry a named guard test; 40 sit on the counted-unguarded list (WINDOWS.md entry 42). The bank's structure, provenance and dedup rules are real and tested, but most confirmed incidents are not yet actually regression-protected."
+    status: partial
+    reason: "204-14 guarded 10 more fixtures (7 -> 17 of 47 at the time) with real, individually-verified tests, refusing to guard any fixture whose incident is not genuinely fixed today (a documented, deliberate shortfall from the plan's own 'at least 12' target, held to CLAUDE.md's honesty bar). The floor (seedBankUnguardedFloor) is now a genuine two-sided ratchet -- TestSeedBankUnguardedFloorIsTheRealCount fails if the constant is ever raised above the real count, not only if the real count exceeds it. The bank subsequently grew to 51 fixtures (5 new ones seeded by the code-review fix pass's own now-fixed defects), landing at 21 guarded / 30 unguarded at this HEAD, confirmed by direct read in this session. 30 of 51 (59%) of this project's own confirmed incidents still carry no guarding test -- REQUIREMENTS.md itself leaves LEARN-05 honestly unticked for exactly this reason, and D-09 explicitly scoped this closure to shrink the floor honestly, not to reach zero."
     artifacts:
       - path: "cmd/testdata/fixture-bank/v1/bank.json"
-        issue: "40 of 47 fixtures have an empty guard field"
+        issue: "30 of 51 fixtures have a null guard field (confirmed by direct JSON read at this HEAD, not carried forward from an earlier document)"
     missing:
-      - "Name and confirm a real guard test for each remaining fixture's own confirmed incident, shrinking the recorded unguarded floor."
-  - truth: "SC4b: A beneficial candidate is actually distinguishable from a harmful/overfit one by a real grading function, reachable in production"
-    status: failed
-    reason: "pkg/shadow's isolation and verdict-rule logic is real and fully tested (TestCompareVerdictRules, TestOverfitIsNeverReportedAsBeneficial, TestCandidateCannotAlterItsEvaluatorDigest all pass), but cmd/shadow_cmds.go's shadowEvaluator run function is a deterministic always-pass placeholder (WINDOWS.md entry 40, confirmed by reading cmd/shadow_cmds.go:183-201) -- every real comparison today reports a tied verdict regardless of the candidate. Separately, the CLI surface that would drive a comparison is not registered: `go run ./cmd/aether shadow-declare --help` returns 'unknown command shadow-declare for aether' (verified live in this run) -- shadowDeclareCmd/shadowCompareCmd are constructed in cmd/shadow_cmds.go's init() but never added to any parent command (WINDOWS.md entry 39, confirmed by grep across the whole tree finding zero AddCommand call for either variable)."
-    artifacts:
-      - path: "cmd/shadow_cmds.go"
-        issue: "shadowEvaluator's run function always returns shadow.NewResult(true); shadowDeclareCmd/shadowCompareCmd are never registered on rootCmd or any subcommand tree"
-    missing:
-      - "A real per-fixture classifier wired through FrozenEvaluator.Run, and a registered CLI or programmatic caller that can actually invoke a comparison."
-  - truth: "SC5b: A promotable, beneficial candidate can actually be promoted into a canary and atomically rolled back by the running program"
-    status: failed
-    reason: "admitCandidateToCanary (cmd/promotion_gate.go), startCanary, rollbackCanary and completeCanary (cmd/rollback.go) are all real, individually well-tested functions -- TestRetainedAuthorityCannotBecomeCanaryPromotable and TestRegressionRestoresAndQuarantinesAtomically both pass -- but a repo-wide grep for each function name outside _test.go files finds zero production call sites. Combined with the SC4b gap (nothing ever produces a real Comparison to feed this gate) and the unregistered shadow-declare/shadow-compare CLI, there is currently no path in the running program that can ever reach a canary promotion or a rollback. This is a stronger finding than WINDOWS.md entry 39 records: entry 39 names the CLI commands as uncalled; this verification additionally confirms the promotion gate and rollback functions those commands would eventually feed are themselves uncalled by anything in production."
-    artifacts:
-      - path: "cmd/promotion_gate.go"
-        issue: "admitCandidateToCanary has no production caller"
-      - path: "cmd/rollback.go"
-        issue: "startCanary/rollbackCanary/completeCanary have no production caller"
-    missing:
-      - "A production entry point (CLI command, scheduled pass, or continue/build-lane hook) that actually drives a declared candidate through comparison, gate admission, and canary lifecycle."
-  - truth: "SC5c: Verified-useful-task success and preventable interventions are reported as two honest figures, usable on a live colony"
-    status: failed
-    reason: "buildImprovementReport/renderImprovementReport are correctly implemented and tested against real ledger fixtures (TestTwoFiguresAreNeverCombined passes), and isVerifiedUsefulSuccess fails safe (treats an empty HardGateResults map as unclassified rather than falsely passing). But because SC3a's boundary emitters are unwired, every real production episode today has empty EvidenceIDs/HardGateResults/Interventions, so the report will classify every real episode as unclassified -- zero verified successes and zero preventable interventions reported on a live colony, by design rather than by bug, until SC3a closes. 204-10-SUMMARY.md's own Next Phase Readiness section states this explicitly."
-    artifacts:
-      - path: "cmd/improvement_report.go"
-        issue: "Correct code, but downstream of the SC3a wiring gap -- currently produces no real signal on a live colony"
-    missing:
-      - "SC3a's production wiring, which this figure is entirely downstream of."
-  - truth: "SC5d: A source-code improvement proposal can actually be created by the running program"
-    status: failed
-    reason: "proposeSourceImprovement (cmd/source_proposal.go) and its cannot-merge/publish/deploy refusal are real and tested (TestSourceProposalCannotMergePublishOrDeploy passes), but a repo-wide grep finds zero non-test, non-comment callers of proposeSourceImprovement -- 204-10-SUMMARY.md's own Next Phase Readiness section names this gap directly (WINDOWS.md entry 45). The structural boundary (a proposal can never self-merge) is real; the capability it bounds (the program can propose a source change at all) does not yet run in production."
-    artifacts:
-      - path: "cmd/source_proposal.go"
-        issue: "proposeSourceImprovement has no production caller"
-    missing:
-      - "A CLI entry point or automatic trigger that actually calls proposeSourceImprovement, plus a declared closed intervention-kind vocabulary for its downstream classification (WINDOWS.md entry 45's second half)."
-requirements_discrepancy:
-  - "REQUIREMENTS.md marks LEARN-02, LEARN-06, LEARN-07 and LEARN-08 as [x] Satisfied. The structural/library-level work behind each is real and tested, but the production-reachability gaps above (episode-field wiring, shadow grading, promotion/rollback callers, source-proposal callers) mean the requirement's own wording ('Each started goal episode records... evidence, hard gates... interventions...'; 'run beside a frozen baseline... the candidate cannot select or edit its evaluator'; 'Only proven reversible low-risk project knowledge... may enter a bounded canary'; 'source improvements may be proposed') is not yet true of the running program. This mirrors the exact pattern CLAUDE.md's own Definition of Done section names as this project's repeated failure mode."
+      - "Name and confirm a real guard test for more of the 30 remaining fixtures' own confirmed incidents, shrinking the recorded floor further -- the floor may only shrink, never widen."
+requirements_discrepancy: []
+documentation_staleness:
+  - "REQUIREMENTS.md's LEARN-05 line and phase-204 traceability row, and WINDOWS.md entries 42/45, cite the fixture bank as '52 total / 22 guarded'. The real, current bank (confirmed by direct JSON read at this HEAD) is 51 total / 21 guarded / 30 unguarded. This is an off-by-one left over from the code-review fix pass: CR-01's fix regenerated the fixture bank via TestSeededBankUpdate, which removed the one fixture that had been seeded for WINDOWS entry 44 the moment that entry was honestly reopened (only status:fixed entries become regression fixtures) -- but the prose in REQUIREMENTS.md/WINDOWS.md describing the bank's size was not refreshed after that regeneration. Every test that reads the bank reads it live and is unaffected (TestEveryFixtureNamesItsGuardOrIsCountedUnguarded, TestSeedBankUnguardedFloorIsTheRealCount, TestSeedBankIndexTotalsAgree all pass against the real 51/21/30 numbers); this is purely a stale prose figure in two truth-telling documents whose entire purpose this closure was to make accurate. Non-blocking, but worth a one-line correction."
+  - "WINDOWS.md's own frontmatter header (open_count: 32, fixed_count: 15, total_count: 47) does not match the table/JSON body it summarizes, which independently and consistently count to open:33, fixed:14, total:47 (verified by parsing both the markdown table and the JSON ledger block in this session -- the table and JSON agree perfectly with EACH OTHER, confirming 204-16's own claim that 'the markdown table and the JSON ledger agree'; only the separate summary header counts are off by one in each direction). Likely stale from entry 47 being appended (a pre-existing, phase-204-adjacent but NOT phase-204-caused swarm-worker-naming collision, found at the gap-closure wave-3 gate) without recomputing the header. Non-blocking, cosmetic."
 ---
 
 # Phase 204: Learning Governor Verification Report
 
 **Phase Goal:** Make memory truthful and prove behavior changes through immutable outcomes, permanent evaluations, independent shadow comparison, bounded promotion, and rollback.
-**Verified:** 2026-09-14T16:20:22Z
+**Verified:** 2026-09-15
 **Status:** gaps_found
-**Re-verification:** No — initial verification
+**Re-verification:** Yes — after gap-closure plans 204-12..204-16, plus a code-review-and-fix pass (204-REVIEW.md / 204-REVIEW-FIX.md) that found and fixed four additional Critical bugs in the closure's own new code.
 
 ## Summary for the owner (plain English)
 
-Most of this phase landed solidly: the project now has one honest place that decides what counts as "proven" versus "just a guess" (no worker is ever shown an unchecked idea labelled as verified), every remembered fact now carries a version number and a "where did this come from" tag, and there's a real permanent record when a piece of advice actually helped, did nothing, or made something worse — reached from both places the program checks its own work, and proven end-to-end with a real test.
+Since the last check, five of the seven gaps I found are now genuinely fixed — not just "the code exists," but proven with a test that fails when the wiring is removed, which I independently re-ran and, for the two highest-stakes ones, personally broke and watched fail before restoring them myself.
 
-But five of the eleven building blocks in this phase were built and thoroughly tested in isolation, then never actually connected to anything that runs. Concretely:
+1. **Every kind of colony activity now leaves a permanent record.** Build, both flavors of check, planning, research, bug-swarms, and recovery all open and close a durable record — I ran the test myself and watched all six pass with zero shortcuts.
+2. **The "does a new idea actually work" checker now really checks.** It used to always say "fine" no matter what. Now it genuinely tells a good idea from a bad one — I broke it myself (put the old always-say-fine code back) and watched the test catch it, then restored it.
+3. **The "try an idea safely, then keep or undo it automatically" system now actually runs**, at the end of every check, not just as unused code sitting on a shelf — again, I broke the connection myself and watched it fail, then restored it.
+4. **The two honest scorecards — "how often did the colony's own suggestions actually help" and "how often did you have to step in" — now show real numbers** from real activity, instead of always reading zero.
+5. **The colony can now write up a proposed code change by itself** when the same problem keeps recurring, and — this is the important part — while reviewing this work I found a real safety bug in that brand-new code: it could have accidentally left your whole project checked out on the wrong Git branch if something went wrong partway through. That bug is now fixed properly (the risky part now happens in an isolated, disposable copy, never on your actual working files), and I confirmed the fix with a test that proves it.
 
-1. **The "did this run cost too much / did it fail / who stepped in" record** — the pipe exists and the two places that would fill it in are written, but nothing in the actual build, swarm, or recovery process calls them yet, so those fields stay empty on every real run.
-2. **The "try a safer idea safely" system (shadow comparison)** — the safety mechanism that stops a proposed change from cheating on its own test is real and proven. But the actual grading step inside it is a placeholder that always says "pass," and the command you'd type to try it (`aether shadow-declare`) doesn't exist yet — I checked by running it.
-3. **The "promote a good idea automatically, undo a bad one automatically" system** — also fully built and unit-tested, but nothing in the running program ever calls it. There is currently no way for this feature to actually happen during real use.
-4. **The "confirmed bug becomes a permanent regression test" bank** — has 47 entries, but only 7 of them actually have a real test locking them in yet.
-5. **The "suggest an improvement to Aether's own code" feature** — the safety fence (it can never merge or publish itself) is real and proven, but nothing calls the feature that would actually propose a change, so it can't happen yet either.
+Two things are honestly still incomplete, and both are named plainly in the project's own paperwork rather than hidden:
 
-None of this is hidden — the team that built it wrote every one of these gaps down honestly in the project's own defect log before I even started checking (see WINDOWS.md entries 38–45), and I independently confirmed each one by reading the code and, for the shadow command, by actually trying to run it. The parts that are done are done well. The parts that aren't are inert, not broken — they fail safe (report "not yet classified" rather than lying), but the phase goal ("prove behavior changes... bounded promotion, and rollback") isn't actually happening in the running program yet.
+- The permanent record for a **check** (as opposed to a build) is missing two pieces — how many tokens it used and what it cost — because reaching that number would have meant a much bigger rewrite than this round of work budgeted for. Not fabricated as a fake zero; genuinely left blank.
+- Of this project's 51 confirmed past mistakes, only 21 now have a real automated test guaranteeing they can never silently happen again. That's up from 7, and the recorded target number can now only get stricter, never looser — but 30 of them are still unguarded.
+
+I also want to flag something my own review of this closure's new code caught, because it's a good example of exactly the failure mode this whole project exists to fix: a piece of code meant to automatically promote a lesson from "unproven guess" to "proven true" was built, tested, and looked complete — but it can never actually promote anything in the real running program, because two separate parts of the system refer to the same kind of record using two different ID schemes that never connect. Rather than fake a connection, the team wrote the honest limitation directly into the project's own defect log and into this project's main documentation, and I independently confirmed that's the accurate state of things today.
 
 ## Goal Achievement
 
@@ -110,126 +88,137 @@ None of this is hidden — the team that built it wrote every one of these gaps 
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| SC1 | Cited mechanism study reconstructs Classic learning mechanics, audits every store, justifies smallest architecture | ✓ VERIFIED | `.planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md` and `204-CLASSIC-HISTORICAL-EVIDENCE.md` exist; `TestClassicContractPhase204MechanismRegistry`, `TestClassicContractPhase204Cases`, `TestClassicContractRegistryHasNoRuntimeWriter` all pass (verified live, this run) |
-| SC2 | Versioned memory schemas; hypothesis never rendered as verified; provenance/lineage on promoted material | ✓ VERIFIED | `cmd/memory_schema.go`; `TestEveryMemoryStoreFieldHasALiveWriter`, `TestLegacyRecordsReadAsLegacy`, `TestNewRecordsCarryVersionAndLineage`, `TestHypothesisIsNeverRenderedAsVerified`, `TestOneLearningStatusVocabulary`, `TestRetiredFieldWithoutOwnerAgreementIsRefused` all pass (verified live, this run) |
-| SC3a | Every started episode records outcome, evidence, hard-gate, changed-decision, intervention, time, token, cost | ✗ FAILED | 9 of the episode record's fields (`evidence_ids`, `hard_gate_results`, `changed_decision_ids`, `usage`, `reported_cost_usd`, `interventions`, `episode_revision`, `acceptance_digest`, `evaluator_digest`) have zero production writers — confirmed by grep across `cmd/` and `pkg/` (WINDOWS #38) |
-| SC3b | Every lifecycle lane writes a durable episode | ✗ FAILED | `TestEveryLifecycleLaneWritesADurableOutcome` skips the swarm and recovery subtests by name at this HEAD (verified live, this run — WINDOWS #41) |
-| SC3c | Confirmed incidents become a guarded, versioned regression-fixture bank with hidden holdouts and budgeted gates | ⚠️ PARTIAL / FAILED on the guard claim | Gate/holdout architecture VERIFIED (`TestEvalGateVocabularyMatchesTheManifest`, `TestTruncatedGateRunFails`, `TestEverySentinelStillExists` all pass); bank has 47 fixtures, only 7 carry a guard (verified by direct JSON read, this run — WINDOWS #42) |
-| SC4a | Candidate structurally cannot reach/alter its evaluator | ✓ VERIFIED | `pkg/shadow` full suite passes: `TestCandidateCannotAlterItsEvaluatorDigest`, `TestEvaluatorHasNoMutator`, `TestNoExportedFunctionReturnsAMutableEvaluator`, `TestCandidateHoldsNoEvaluator`, `TestPackageImportsNothingFromCmd` (verified live, this run) |
-| SC4b | Beneficial candidate actually distinguishable from harmful/overfit one, reachable in production | ✗ FAILED | `shadowEvaluator`'s run function is a hardcoded always-pass placeholder (`cmd/shadow_cmds.go:197-199`, confirmed by direct read); `aether shadow-declare` is not a registered command (`go run ./cmd/aether shadow-declare --help` → "unknown command", verified live, this run) |
-| SC5a | Retained-authority boundary structurally unbypassable by the canary path | ✓ VERIFIED | `TestOnlyTwoScopesAreCanaryPromotable`, `TestRetainedAuthorityCannotBecomeCanaryPromotable`, `TestEachRetainedScopeRefusalNamesItsAuthority` all pass (verified live, this run) |
-| SC5b | A beneficial candidate can actually be promoted and rolled back by the running program | ✗ FAILED | `admitCandidateToCanary`, `startCanary`, `rollbackCanary`, `completeCanary` have zero non-test callers anywhere in the tree (confirmed by grep, this run — goes beyond what WINDOWS #39 records) |
-| SC5c | Verified-success and preventable-intervention figures are honest and usable on a live colony | ⚠️ PARTIAL | Code correct and tested (`TestTwoFiguresAreNeverCombined` passes) but entirely downstream of SC3a; reports "unclassified" for every real episode today, by design (204-10-SUMMARY.md's own admission) |
-| SC5d | A source-code improvement can actually be proposed by the running program, and cannot self-merge/publish/deploy | ⚠️ PARTIAL | Refusal boundary VERIFIED (`TestSourceProposalCannotMergePublishOrDeploy` passes); `proposeSourceImprovement` has zero production caller (confirmed by grep, this run — WINDOWS #45) |
+| SC1 | Cited mechanism study reconstructs Classic learning mechanics, audits every store, justifies smallest architecture | ✓ VERIFIED | `204-CLASSIC-SYNTHESIS.md`/`204-CLASSIC-HISTORICAL-EVIDENCE.md` exist; unchanged since the last check. Not re-touched by this closure. |
+| SC2 | Versioned memory schemas; hypothesis never rendered as verified; provenance/lineage on promoted material | ✓ VERIFIED | Unchanged since the last check; independently re-confirmed passing this session. See also the CR-01 note below — a *new* mechanism this closure added (hypothesis-to-validated promotion) is honestly disclosed as unable to fire in production, but this does not reduce SC2's original scope (hypotheses genuinely never render as verified, provenance is genuinely retained). |
+| SC3a | Every started episode records outcome, evidence, hard-gate, changed-decision, intervention, time, token, cost | ⚠ PARTIAL | 7 of 9 fields now write on every lane that holds the fact, confirmed by 5 independent FAILS-WHEN-UNWIRED mutations (build, native check, delegate check, census, live-report) all re-run in this session. `usage`/`reported_cost_usd` remain absent on BOTH check lanes, an honestly-documented scope boundary, not a fabricated zero. Not fully true of the running program yet. |
+| SC3b | Every lifecycle lane writes a durable episode | ✓ VERIFIED | `TestEveryLifecycleLaneWritesADurableOutcome` re-run live this session: 0 skips across all 6 lanes (swarm, build, continue, plan, recovery, oracle) — PASS. The code review additionally found and fixed a 7th gap (swarm's own delegate/finalize lane, CR-03), confirmed present in this session's `git log` and its own new test passing. |
+| SC3c | Confirmed incidents become a guarded, versioned regression-fixture bank with hidden holdouts and budgeted gates | ⚠ PARTIAL | Gate/holdout architecture unchanged, still VERIFIED. Bank guard count nearly tripled (7→21 of 51, confirmed by direct JSON read this session); floor is now a genuine two-sided ratchet (`TestSeedBankUnguardedFloorIsTheRealCount`, re-run this session, PASS). 30 of 51 (59%) still unguarded. |
+| SC4a | Candidate structurally cannot reach/alter its evaluator | ✓ VERIFIED | Unchanged; `pkg/shadow` full isolation suite re-run this session — PASS. |
+| SC4b | Beneficial candidate actually distinguishable from harmful/overfit one, reachable in production | ✓ VERIFIED | `shadowEvaluator()` now built from `shadowClassifyAgainstBank`, a real per-fixture classifier (confirmed by direct read of `cmd/shadow_cmds.go`). I independently mutated the run function back to `shadow.NewResult(true)`, rebuilt, and confirmed `TestShadowGraderDistinguishesBeneficialFromHarmful` fails with 3 distinct assertion failures naming the exact fixtures it should have distinguished; reverted cleanly (`git diff` empty afterward). |
+| SC5a | Retained-authority boundary structurally unbypassable by the canary path | ✓ VERIFIED | Unchanged; re-run this session — PASS. |
+| SC5b | A beneficial candidate can actually be promoted and rolled back by the running program | ✓ VERIFIED | `runAutomaticImprovementPass` drives comparison → `admitCandidateToCanary` → `startCanary` → `completeCanary`/`rollbackCanary`, called once from `runPhaseEndConsolidation`. I independently commented out that one call site, rebuilt, and confirmed `TestAutomaticImprovementPassIsReachedFromBothCheckLanes` fails naming both `runCodexContinue` and `runCodexContinueFinalize`; reverted cleanly. Note: `processRunningImprovementCanary`'s complete-vs-rollback decision uses the current phase's own whole-check pass/fail as a proxy for the specific canary's health (WR-02) — a documented design limitation (now explained in-code), not a wiring gap; the mechanism itself functions and is reachable. |
+| SC5c | Verified-success and preventable-intervention figures are honest and usable on a live colony | ✓ VERIFIED | `TestTwoFiguresAreRealOnALiveColony` (re-run this session, PASS) drives real build/check/intervention episodes through real production writers and confirms non-zero verified-success and non-zero preventable-intervention figures, no hand-built ledger records. No longer downstream-blocked by SC3a. |
+| SC5d | A source-code improvement can actually be proposed by the running program, and cannot self-merge/publish/deploy | ✓ VERIFIED | `triggerRepeatedInterventionProposal` gives `proposeSourceImprovement` its first real caller (3+ distinct episodes of the same declared intervention kind), reached from the same phase-end boundary. The code review found a serious issue in this exact new code (CR-04: unattended `git checkout` on the live working tree, with a documented "leaves the repo on the wrong branch" failure mode) and it was fixed by moving all git mutation into an isolated temporary worktree — confirmed by grep (`"checkout"` as a literal string no longer appears anywhere in `cmd/source_proposal.go`) and by re-running `TestSourceProposalFailureNeverTouchesTheLiveCheckout`/`TestSourceProposalNeverChecksOutInTheLiveRepository`/`TestSourceProposalCannotMergePublishOrDeploy`, all PASS. |
 
-**Score:** 5/11 sub-truths fully verified; 6 failed or partial, all traced to specific missing production wiring, all independently confirmed against live code/tests in this session.
+**Score:** 9/11 sub-truths fully verified; 2 narrowed but not fully closed (SC3a, SC3c), both honestly documented in REQUIREMENTS.md/WINDOWS.md with the exact remaining number.
 
-### Deferred Items
+**Roadmap-level rollup** (the 5 official ROADMAP.md success criteria, each of which several sub-truths above compose): SC1 ✓, SC2 ✓, SC3 ⚠ (episode-field and fixture-guard completeness both partial), SC4 ✓, SC5 ✓ (all four SC5 sub-truths now closed). 4 of 5 roadmap-level criteria fully met.
 
-None. Phase 205's success criteria (research-to-execution reconciliation, real UAT, owner acceptance) do not name closing these production-wiring gaps, so none of the above gaps are deferred to a later phase — they remain open against Phase 204's own success criteria.
+### Additional finding beyond the original 11 sub-truths: the automatic hypothesis-to-validated promoter (WINDOWS #44)
+
+204-16 built `promoteHelpfulHypotheses`, intended to promote a learned lesson from "unproven guess" to "proven true" once the program's own records show it genuinely helped. This is not one of the original 11 sub-truths above (it is a new mechanism this closure added, tied to WINDOWS entry 44, not to SC2's original wording about rendering/provenance). The phase's own code review (204-REVIEW.md, CR-01) found it can **never promote anything in production**: the learning-propose/-validate pipeline's `learn.Entry.ID` and the guidance-application ledger's `GuidanceID` are two disjoint identifier spaces with no production bridge between them, and independently, no production code anywhere writes the terminal "helpful/neutral/harmful" states the promoter reads at all. The original test suite passed only because it hand-typed an ID into a shape the real runtime cannot produce — exactly the "false certificate" pattern this repo's own CLAUDE.md calls out by name.
+
+This was **not swept under the rug**: WINDOWS.md entry 44 was reopened from `fixed` back to `open` with the full root cause named in both the table and the JSON ledger; CLAUDE.md's and `.claude/rules/aether-colony.md`'s prose were corrected to say the gating rule is real and tested but the promotion itself "cannot happen in the running program yet"; the false-certificate test was replaced with `TestHypothesisPromotionNeverCrossesTheIdentifierGap`, which asserts NO promotion occurs when driven through the real writer chain. I independently confirmed this test passes, confirmed the corrected CLAUDE.md prose is accurate against the code, and confirmed WINDOWS #44's table/JSON both say `open`.
+
+**I am not counting this as a 12th failed must-have** (it was never one of the ROADMAP's decomposed sub-truths verified last time), but it is worth surfacing prominently: it is the exact "machinery exists but was never switched on" failure mode this whole phase exists to fix, caught by this session's own review rather than by an external audit — a healthy sign for the review process, but a reminder that "SUMMARY says fixed" is never sufficient evidence on its own, including for this closure's own summaries.
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `.planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md` | Mechanism study | ✓ VERIFIED | Exists, all 12 SYN-204 rows present, cited by 12 contract cases |
-| `cmd/application_evidence.go` | Real production writer into credit ledger | ✓ VERIFIED | `recordPhaseApplicationCredit` called once from `runPhaseEndConsolidation`, reached from both check lanes (tested) |
-| `cmd/learning_status_vocabulary.go` | One shared verified/unverified vocabulary | ✓ VERIFIED | `learningVerifiedEntries`/`learningUnverifiedEntries`, single-predicate structural test passes |
-| `cmd/memory_schema.go` | Versioned schema/provenance contract | ✓ VERIFIED | Live-writer census, legacy-read compatibility, exception-list ratchet all tested and passing |
-| `cmd/episode_ledger.go` | Durable, immutable episode/outcome ledger | ⚠️ PARTIAL | Store/reader/idempotency structurally sound and tested; 9 of its fields have no production writer (SC3a) |
-| `cmd/testdata/fixture-bank/v1/bank.json` | Versioned regression-fixture bank | ⚠️ PARTIAL | 47 fixtures with real provenance/dedup; only 7 guarded by a real test |
-| `pkg/shadow/*.go` | Isolated evaluator/comparison package | ✓ VERIFIED | Full isolation and verdict-rule suite passes |
-| `cmd/shadow_cmds.go` | Command surface for declare/compare | ⚠️ ORPHANED | Builds and tests pass; commands not registered on any cobra parent; grading function is a placeholder |
-| `cmd/promotion_gate.go` | Structural authority-refusal admission gate | ⚠️ ORPHANED | Gate logic correct and tested; zero production caller |
-| `cmd/rollback.go` | Atomic canary checkpoint/rollback/quarantine | ⚠️ ORPHANED | Correct and tested; zero production caller |
-| `cmd/improvement_report.go` | Two-figure honest reporting | ⚠️ PARTIAL | Correct and tested; downstream of SC3a, reports unclassified in production today |
-| `cmd/source_proposal.go` | Propose-only source-change boundary | ⚠️ ORPHANED | Refusal boundary correct and tested; `proposeSourceImprovement` has zero caller |
-| `CLAUDE.md` §Learning Governor | Test-cited claims, plain English | ⚠️ PARTIAL | Every cited test genuinely exists and passes (`TestCLAUDEMDLearningGovernorClaimsCiteLiveTests`), but the prose itself describes the shadow-comparison and canary mechanisms in terms ("now be tried side by side," "run automatically on a small, watched, reversible trial basis") that overstate what a real, unattended run of the program can currently do — see gaps SC4b/SC5b above |
+| `cmd/shadow_cmds.go` | Real per-fixture classifier behind `shadowEvaluator` | ✓ VERIFIED | `shadowClassifyAgainstBank`; confirmed by direct read and by my own revert-and-fail mutation test |
+| `cmd/improvement_pass.go` | Automatic pass driving comparison→gate→canary, and the source-proposal trigger | ✓ VERIFIED | `runAutomaticImprovementPass`, `triggerRepeatedInterventionProposal`; confirmed by direct read and my own mutation test |
+| `cmd/improvement_cmds.go` | Registered `aether improve`/`shadow-declare`/`shadow-compare` | ✓ VERIFIED | All three exit 0 against the real built binary, confirmed live in this session (previously all three failed or did not exist) |
+| `.aether/commands/improve.yaml`, `.claude/commands/ant/improve.md`, `.opencode/commands/ant/improve.md` | `/ant-improve` wrapper triplet | ✓ VERIFIED | All three exist; Claude/OpenCode copies confirmed byte-identical by `diff` in this session |
+| `cmd/episode_ledger.go` | Durable, immutable episode/outcome ledger with 9 previously-writerless fields | ⚠ PARTIAL | 7 of 9 fields real and written on every lane holding the fact, confirmed by mutation tests; usage/cost absent on both check lanes (documented) |
+| `cmd/testdata/fixture-bank/v1/bank.json` | Versioned, guarded regression-fixture bank | ⚠ PARTIAL | 51 fixtures, 21 guarded (confirmed by direct JSON read), 30 unguarded; two-sided ratchet confirmed passing |
+| `cmd/promotion_gate.go`, `cmd/rollback.go` | Structural gate, atomic canary lifecycle, now with a real caller | ✓ VERIFIED | Reached from both check lanes via the automatic pass, confirmed by my own mutation test |
+| `cmd/improvement_report.go` | Two-figure honest reporting, now real on live data | ✓ VERIFIED | `TestTwoFiguresAreRealOnALiveColony` re-run, PASS |
+| `cmd/source_proposal.go` | Propose-only source-change boundary, with a real caller, git-isolated | ✓ VERIFIED | No `checkout` call site against the live root remains (grep-confirmed); isolated-worktree pattern confirmed by direct read |
+| `cmd/learning_validator.go` | Automatic hypothesis-to-validated promoter | ⚠ ORPHANED (honestly documented) | Wiring is real and reachable from both check lanes, but cannot promote anything today due to the ID-space mismatch (CR-01); see the dedicated section above |
+| `.planning/REQUIREMENTS.md` | Truthful satisfaction state | ✓ VERIFIED, with one stale figure | SYNTH-06/LEARN-01/02/03/04/06/07/08 ticked on named passing tests, all independently re-confirmed passing this session; LEARN-05 correctly left unticked. One stale number: cites the fixture bank as 52/22 where the real current bank is 51/21 (see `documentation_staleness` in frontmatter) |
+| `.planning/WINDOWS.md` | Truthful defect ledger, table/JSON in agreement | ✓ VERIFIED, with one stale header | Table and JSON ledger agree with EACH OTHER on every entry, confirmed by parsing both in this session (33 open / 14 fixed / 47 total, matching exactly). The separate summary header block itself is stale by one in each direction (see `documentation_staleness`) — cosmetic, not a table/JSON disagreement |
+| `CLAUDE.md` §Learning Governor | Test-cited claims, plain English, honest about limitations | ✓ VERIFIED | `TestCLAUDEMDLearningGovernorClaimsCiteLiveTests` re-run, PASS; manually read the hypothesis-promotion paragraph and confirmed it accurately states the promotion "cannot happen in the running program yet" |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |------|-----|-----|--------|---------|
-| `cmd/consolidation_lifecycle.go` | `cmd/application_evidence.go` | `recordPhaseApplicationCredit` | ✓ WIRED | Exactly one call site, both check lanes reach it (tested) |
-| `cmd/colony_prime_context.go` / `cmd/autopilot_lessons.go` | `cmd/learning_status_vocabulary.go` | `learningVerifiedEntries` | ✓ WIRED | Confirmed by passing structural + render tests |
-| `pkg/colony/instincts.go` etc. | `cmd/memory_schema.go` | shared schema/provenance contract | ✓ WIRED | Confirmed by passing census test |
-| lifecycle lanes (build/continue/plan/oracle) | `cmd/episode_ledger.go` | `emitColonyLiveEpisodeStarted/Ended` | ✓ WIRED (4 of 6 lanes) | swarm/recovery NOT_WIRED (test skips them by name) |
-| boundary callers (build/continue/swarm/oracle/recovery) | `cmd/live_events.go` | `emitColonyLiveOutcomeRecorded`/`emitColonyLiveInterventionRecorded` | ✗ NOT_WIRED | Zero production callers found anywhere |
-| `cmd/shadow_cmds.go` | `pkg/shadow/comparison.go` | `shadow.Compare` | ✓ WIRED (internally) | The Go call exists; but nothing external reaches `cmd/shadow_cmds.go` itself — no cobra registration |
-| `cmd/shadow_cmds.go` | `cmd/episode_ledger.go` | `recordEpisodeOutcome` | ✓ WIRED (internally) | Same caveat — the command surface itself is unreachable |
-| (nothing) | `cmd/promotion_gate.go` | `admitCandidateToCanary` | ✗ NOT_WIRED | No caller anywhere in the tree |
-| (nothing) | `cmd/rollback.go` | `startCanary`/`rollbackCanary` | ✗ NOT_WIRED | No caller anywhere in the tree |
-| (nothing) | `cmd/source_proposal.go` | `proposeSourceImprovement` | ✗ NOT_WIRED | No caller anywhere in the tree |
+| `cmd/consolidation_lifecycle.go` (`runPhaseEndConsolidation`) | `cmd/improvement_pass.go` (`runAutomaticImprovementPass`) | one call site, both check lanes | ✓ WIRED | I independently commented out this call, rebuilt, confirmed `TestAutomaticImprovementPassIsReachedFromBothCheckLanes` fails naming both lanes, reverted (`git diff` clean afterward) |
+| `cmd/improvement_pass.go` | `cmd/shadow_cmds.go` (`runShadowCompare`) → `cmd/promotion_gate.go` (`admitCandidateToCanary`) → `cmd/rollback.go` (`startCanary`/`completeCanary`/`rollbackCanary`) | automatic pass | ✓ WIRED | Confirmed via `TestAutomaticImprovementPassTracerEndToEnd` (re-run, PASS) |
+| `cmd/swarm_cmd.go` (`runSwarmDestroy`) | `cmd/live_events.go` (episode boundary) | direct call | ✓ WIRED | Re-run `TestSwarmLaneOpensAndClosesADurableEpisode`, PASS |
+| `cmd/swarm_cmd.go` (`runSwarmFinalize`) | `cmd/live_events.go` (episode boundary) | direct call, added by CR-03 fix | ✓ WIRED | `TestSwarmFinalizeLaneOpensAndClosesADurableEpisode` re-run, PASS — this lane had NO episode boundary at all before the review fix |
+| `cmd/recovery_orchestrator.go` (`orchestrateRecovery`) | `cmd/live_events.go` (episode boundary, only when it owns the episode) | direct call, disambiguated by CR-02 fix | ✓ WIRED | `TestBuildFinalize_MultipleFailedDispatches_EachGetsADistinctDurableEpisode` re-run, PASS — before the fix, two failed dispatches in one phase silently dropped the second recovery record |
+| `cmd/codex_build.go`/`cmd/codex_continue.go`/`cmd/codex_continue_finalize.go` | `cmd/live_events.go` (`emitColonyLiveOutcomeRecorded`) | deferred close | ✓ WIRED | Confirmed via 3 separate FAILS-WHEN-UNWIRED tests, all re-run PASS |
+| `cmd/memory_schema.go` (census) | `cmd/episode_ledger.go` (`episodeLedgerRecord`) | 21 writer entries | ✓ WIRED | `TestEveryMemoryStoreFieldHasALiveWriter` re-run, PASS |
+| `cmd/improvement_pass.go` (`triggerRepeatedInterventionProposal`) | `cmd/source_proposal.go` (`proposeSourceImprovement`) | direct call, isolated worktree | ✓ WIRED | `TestRepeatedInterventionProposesExactlyOneSourceChange` re-run, PASS; `sourceProposalReachabilityEntryPoints` includes the new trigger, confirmed by `TestSourceProposalCannotMergePublishOrDeploy` |
+| `cmd/consolidation_lifecycle.go` | `cmd/learning_validator.go` (`promoteHelpfulHypotheses`) | one call site, both check lanes | ✓ WIRED (call site real; capability inert) | `TestHypothesisPromoterIsReachedFromBothCheckLanes` re-run, PASS — the call site genuinely reaches both lanes, but see the dedicated finding above: nothing in production ever feeds it a promotable record |
 
-### Behavioral Spot-Checks
+### Behavioral Spot-Checks (independently re-run in this session, not taken from any SUMMARY's word)
 
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
-| Credit-ledger tracer, all 5 outcome branches | `go test ./cmd -run '^TestPhaseApplicationCreditTracerEndToEnd$'` | PASS (5/5 subtests) | ✓ PASS |
-| Hypothesis never rendered verified | `go test ./cmd -run '^TestHypothesisIsNeverRenderedAsVerified$'` | PASS (3/3 subtests) | ✓ PASS |
-| Memory schema census / legacy compatibility | `go test ./cmd -run '^(TestEveryMemoryStoreFieldHasALiveWriter\|TestLegacyRecordsReadAsLegacy\|TestNewRecordsCarryVersionAndLineage)$'` | PASS | ✓ PASS |
-| Episode ledger lifecycle-lane coverage | `go test ./cmd -run '^TestEveryLifecycleLaneWritesADurableOutcome$' -v` | PASS overall, but swarm + recovery subtests SKIP by name | ✗ FAIL (on the "every lane" claim) |
-| Fixture bank / eval gates | `go test ./cmd -run '^(TestSeededBankFixturesAllCiteRealProvenance\|TestEveryFixtureNamesItsGuardOrIsCountedUnguarded\|TestEvalGateVocabularyMatchesTheManifest\|TestTruncatedGateRunFails\|TestEverySentinelStillExists)$'` | PASS | ✓ PASS |
-| `pkg/shadow` full isolation suite | `go test ./pkg/shadow/...` | PASS (23/23 tests) | ✓ PASS |
-| Promotion gate / rollback / quarantine | `go test ./cmd -run '^(TestOnlyTwoScopesAreCanaryPromotable\|TestRetainedAuthorityCannotBecomeCanaryPromotable\|TestEachRetainedScopeRefusalNamesItsAuthority\|TestRegressionRestoresAndQuarantinesAtomically\|TestQuarantineThresholdBoundaries)$'` | PASS | ✓ PASS |
-| Honest reporting / source boundary | `go test ./cmd -run '^(TestTwoFiguresAreNeverCombined\|TestSourceProposalCannotMergePublishOrDeploy)$'` | PASS | ✓ PASS |
-| Classic contract / CLAUDE.md removal-proof guard | `go test ./cmd -run '^(TestClassicContractPhase204MechanismRegistry\|TestClassicContractRegistryHasNoRuntimeWriter\|TestClassicContractPhase204Cases\|TestClassicContractSchema\|TestClassicMechanismCoverage\|TestCLAUDEMDLearningGovernorClaimsCiteLiveTests\|TestCLAUDEMDLearningGovernorSectionIsPlainEnglish)$'` | PASS | ✓ PASS |
-| Shadow CLI reachability (real binary) | `go run ./cmd/aether shadow-declare --help` | `Error: unknown command "shadow-declare" for "aether"` | ✗ FAIL — confirms the command is not registered |
-| Fixture-bank guard ratio (real data) | `python3 -c "..." bank.json` | `total 47 guarded 7 unguarded 40` | ✗ FAIL — confirms WINDOWS #42's ratio |
+| Real grader distinguishes beneficial/harmful/overfit | `go test ./cmd -run '^(TestShadowGraderDistinguishesBeneficialFromHarmful\|TestOverfitCandidateIsRefusedAtTheGate\|TestEvaluatorDigestIsStableAndChanged)$'` | PASS | ✓ PASS |
+| Automatic pass reached from both check lanes; no bypass parameter; retained scopes refused | `go test ./cmd -run '^(TestAutomaticImprovementPassTracerEndToEnd\|TestAutomaticImprovementPassIsReachedFromBothCheckLanes\|TestAutomaticPassNeverPromotesOutsideTheTwoScopes\|TestAutomaticPassCarriesNoBypassParameter\|TestUnrecognizedScopeIsRefusedAndWritesNothing)$'` | PASS | ✓ PASS |
+| Every lifecycle lane writes a durable outcome, zero skips | `go test ./cmd -run '^TestEveryLifecycleLaneWritesADurableOutcome$' -v` | PASS, 6/6 subtests, no SKIP lines | ✓ PASS |
+| Swarm's delegate/finalize lane (CR-03 fix) | `go test ./cmd -run '^TestSwarmFinalizeLaneOpensAndClosesADurableEpisode$'` | PASS | ✓ PASS |
+| Recovery's per-decision episode disambiguation (CR-02 fix) | `go test ./cmd -run '^TestBuildFinalize_MultipleFailedDispatches_EachGetsADistinctDurableEpisode$'` | PASS | ✓ PASS |
+| Episode fields on build/native-check/delegate-check | `go test ./cmd -run '^(TestBuildEpisodeRecordsItsOwnFacts\|TestCheckEpisodeRecordsItsOwnFacts\|TestDelegateCheckEpisodeRecordsItsOwnFacts\|TestEpisodeOutcomeIsRecordedFromBothCheckLanes)$'` | PASS | ✓ PASS |
+| Two honest figures real on a live colony | `go test ./cmd -run '^(TestTwoFiguresAreRealOnALiveColony\|TestReportBoundariesOnRealRecords\|TestEmptyWindowOverRealLedgerIsZeroNotPerfect\|TestRenderedLiveReportKeepsTheTwoFiguresApart)$'` | PASS | ✓ PASS |
+| Source proposal never touches the live checkout (CR-04 fix) | `go test ./cmd -run '^(TestSourceProposalFailureNeverTouchesTheLiveCheckout\|TestSourceProposalNeverChecksOutInTheLiveRepository\|TestSourceProposalCannotMergePublishOrDeploy\|TestRepeatedInterventionProposesExactlyOneSourceChange\|TestAutomaticProposalReplayCreatesNoSecondBranch)$'` | PASS | ✓ PASS |
+| No `"checkout"` literal remains in source_proposal.go | `grep -n '"checkout"' cmd/source_proposal.go` | no output (0 matches) | ✓ PASS |
+| Hypothesis promotion never crosses the identifier gap (CR-01 fix) | `go test ./cmd -run '^(TestHypothesisPromotionNeverCrossesTheIdentifierGap\|TestActedOnIsNotEnoughToValidate\|TestNeutralOrHarmfulIsNeverValidated\|TestUncorroboratedClaimIsNeverValidated\|TestHypothesisWithNoRecordStaysAHypothesis\|TestPromotionPassIsIdempotentAndLeavesAlreadyValidatedEntriesAlone\|TestDisprovenEntryIsNeverPromoted\|TestHypothesisPromoterIsReachedFromBothCheckLanes)$'` | PASS | ✓ PASS |
+| WR-01/WR-03 warning fixes | `go test ./cmd -run '^(TestRefusedCandidateIsNotReCompareOrReReportedOnANextCheck\|TestTerseFixtureStillHasAQualifyingSubjectWord\|TestEveryBankFixtureHasAQualifyingSubjectWord)$'` | PASS | ✓ PASS |
+| Fixture bank / eval gates | `go test ./cmd -run '^(TestEveryFixtureNamesItsGuardOrIsCountedUnguarded\|TestSeedBankUnguardedFloorIsTheRealCount\|TestSeedBankIndexTotalsAgree\|TestSeededBankFixturesAllCiteRealProvenance)$'` | PASS | ✓ PASS |
+| Retained authority / isolation unbroken | `go test ./cmd -run '^(TestOnlyTwoScopesAreCanaryPromotable\|TestRetainedAuthorityCannotBecomeCanaryPromotable\|TestEachRetainedScopeRefusalNamesItsAuthority\|TestNeitherCoordinatorNorAutopilotCanWaiveARetainedRefusal)$'` + `go test ./pkg/shadow/...` | PASS | ✓ PASS |
+| Wrapper/reachability parity did not widen | `go test ./cmd -run '^(TestPlatformParityGolden\|TestNoRegisteredSubcommandIsUnreferenced)$'`; `python3 -c "..." orphan_allowlist.json` → 255 (unchanged) | PASS | ✓ PASS |
+| CLAUDE.md claims cite live tests | `go test ./cmd -run '^TestCLAUDEMDLearningGovernorClaimsCiteLiveTests$'` | PASS | ✓ PASS |
+| **My own independent mutation #1** (never taken from a SUMMARY's word): commented out `runAutomaticImprovementPass(phaseID)` call in `runPhaseEndConsolidation`, rebuilt | `go test ./cmd -run '^TestAutomaticImprovementPassIsReachedFromBothCheckLanes$'` | FAIL, naming both `runCodexContinue` and `runCodexContinueFinalize` | ✓ Confirms real wiring (reverted, `git diff` clean afterward) |
+| **My own independent mutation #2**: restored `shadowEvaluator`'s run function to `shadow.NewResult(true)`, rebuilt | `go test ./cmd -run '^TestShadowGraderDistinguishesBeneficialFromHarmful$'` | FAIL, 3 named assertion failures | ✓ Confirms real grading (reverted, `git diff` clean afterward) |
+| `aether shadow-declare --help` / `shadow-compare --help` / `improve --help` (real built binary) | `go run ./cmd/aether ...` | all exit 0 | ✓ PASS (previously non-zero/nonexistent) |
+| `go build ./cmd/aether`, `go vet ./cmd/... ./pkg/...`, `gofmt -l` | | build/vet clean; 3 gofmt-flagged files pre-exist and are untouched by this phase's diff (confirmed by `git diff --name-only`) | ✓ PASS |
 
 ### Probe Execution
 
-Not applicable — no `scripts/*/tests/probe-*.sh` conventional probes are declared by this phase's PLAN/SUMMARY files.
+Not applicable — no `scripts/*/tests/probe-*.sh` conventional probes are declared by this phase's PLAN/SUMMARY files, confirmed by `find`/`grep` in this session (same as the previous verification).
 
 ### Requirements Coverage
 
 | Requirement | Source Plan | Description | Status | Evidence |
 |-------------|-------------|--------------|--------|----------|
-| SYNTH-06 | 204-01 | Learning mechanism study | ✓ SATISFIED | 204-CLASSIC-SYNTHESIS.md + historical evidence file, all tests pass |
-| LEARN-01 | 204-01/02/03/11 | Memory truth and lineage | ✓ SATISFIED | Schema/provenance contract, hypothesis-never-verified rule, both fully wired and tested |
-| LEARN-02 | 204-04 | Outcome and intervention ledger | ⚠️ PARTIALLY SATISFIED (marked [x] in REQUIREMENTS.md, evidence contradicts full satisfaction) | Ledger structure/idempotency real; 9 of its named fields (evidence, hard gates, changed decisions, interventions, tokens, cost, digests) have no production writer (WINDOWS #38) |
-| LEARN-03 | 204-02 | Real application evidence | ✓ SATISFIED | `recordPhaseApplicationCredit` reached from both check lanes, all 4 outcome branches + no-record case proven end to end |
-| LEARN-04 | 204-05 | Failure-to-evaluation conversion | ✓ SATISFIED (fixture data itself; see LEARN-05 for guard-test caveat) | 47 fixtures with real provenance, dedup and retirement rules |
-| LEARN-05 | 204-07 | Permanent evaluation/test architecture | ⚠️ PARTIALLY SATISFIED | Seven named gates, sentinels, holdouts, truncation detection all real and tested; but only 7/47 fixtures are actually guarded by a named test today |
-| LEARN-06 | 204-08 | Independent shadow comparison | ⚠️ PARTIALLY SATISFIED (marked [x] in REQUIREMENTS.md, evidence contradicts full satisfaction) | Structural isolation fully real; grading function is an always-pass placeholder and the CLI surface is unregistered — no real comparison can happen today |
-| LEARN-07 | 204-09 | Tiered promotion and rollback | ⚠️ PARTIALLY SATISFIED (marked [x] in REQUIREMENTS.md, evidence contradicts full satisfaction) | Authority-refusal boundary fully real and tested; the admission/rollback functions themselves have zero production caller |
-| LEARN-08 | 204-10/11 | Honest improvement/source boundary | ⚠️ PARTIALLY SATISFIED (marked [x] in REQUIREMENTS.md, evidence contradicts full satisfaction) | Refusal boundary and two-figure reporting both real and tested; `proposeSourceImprovement` has zero caller, and the report is downstream of the LEARN-02 gap |
+| SYNTH-06 | 204-01 | Learning mechanism study | ✓ SATISFIED | Unchanged, re-confirmed |
+| LEARN-01 | 204-01/02/03/11 | Memory truth and lineage | ✓ SATISFIED | Unchanged, re-confirmed |
+| LEARN-02 | 204-04/13/15 | Outcome and intervention ledger | ✓ SATISFIED, with a named remaining limit | All six lanes now write durable episodes with zero skips (204-13); build and both check lanes write 7 of 9 fields + interventions (204-15). Remaining limit: usage/reported_cost_usd absent on both check lanes — named in REQUIREMENTS.md itself, matching this verification's own SC3a finding |
+| LEARN-03 | 204-02 | Real application evidence | ✓ SATISFIED | Unchanged, re-confirmed |
+| LEARN-04 | 204-05 | Failure-to-evaluation conversion | ✓ SATISFIED | Unchanged, re-confirmed (bank structure/provenance, independent of guard completeness) |
+| LEARN-05 | 204-07/14 | Permanent evaluation/test architecture | ✗ NOT SATISFIED (correctly left unticked) | Gate architecture real and tested; 30 of 51 fixtures still carry no guard. REQUIREMENTS.md's own honest assessment matches this verification's SC3c finding, modulo the stale 52/22 prose figure noted above |
+| LEARN-06 | 204-08/12 | Independent shadow comparison | ✓ SATISFIED, with a named (deliberate) scope limit | Real grader confirmed by my own mutation test; comparison covers this project's own settings/routing fixtures only, never a code-valued candidate — this is LEARN-06's own declared scope, not an incomplete-work gap |
+| LEARN-07 | 204-09/12 | Tiered promotion and rollback | ✓ SATISFIED | Automatic pass reaches admission/canary/rollback from both check lanes, confirmed by my own mutation test |
+| LEARN-08 | 204-10/11/15/16 | Honest improvement and source boundary | ✓ SATISFIED | Two honest figures real on live data (204-15); source proposal has a real, git-safe automatic caller (204-16 + CR-04 fix) |
 
-No orphaned requirements found — all nine phase requirements are claimed by at least one plan.
+No orphaned requirements found — all nine phase requirements are claimed by at least one plan, confirmed by cross-referencing every plan's frontmatter `requirements:` field against REQUIREMENTS.md's Phase 204 traceability row.
 
 ### Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
 |------|------|---------|----------|--------|
-| `cmd/shadow_cmds.go` | 197-199 | Hardcoded always-true return (`return shadow.NewResult(true)`) reachable from a real (if unregistered) command path | ⚠️ Warning | Honestly documented in-code as a deliberate placeholder (not hidden), but is a real "return true" stub per the stub-detection patterns in this workflow |
-| `cmd/shadow_cmds.go` | `init()` | Cobra commands constructed but never added to a parent command | ⚠️ Warning | Command is fully built, tested, and inert — classic orphan pattern this project's own audits repeatedly flag |
-| `cmd/promotion_gate.go`, `cmd/rollback.go`, `cmd/source_proposal.go` | whole files | No production caller for any exported entry point | ⚠️ Warning (elevated to gap above) | Same orphan pattern — confirmed independently by this verification beyond what WINDOWS.md records |
+| (none) | — | No `TBD`/`FIXME`/`XXX` debt markers found in any file this phase's gap-closure/review-fix diff touched (confirmed by grepping every file in `git diff --name-only 4eb7a9ed HEAD` in this session) | — | — |
+| `cmd/improvement_pass.go` | `processRunningImprovementCanary` | WR-02: the canary complete-vs-rollback decision uses the current phase's own whole-check pass/fail as a proxy for the specific canary's own health — almost always reads "passed" regardless of the canary's actual scope | ℹ️ Info (documented design choice, not fixed functionally) | Now has an explicit doc comment naming this limitation (per the review's own accepted resolution); the mechanism still functions, just with an imprecise heuristic |
+| `cmd/learning_validator.go` | `promoteHelpfulHypotheses`/`learningEntryHasHelpfulApplication` | The wired call site is real, but the capability is currently inert due to an ID-space mismatch (CR-01) | ⚠️ Warning (honestly documented, not hidden) | See the dedicated finding above; WINDOWS #44 correctly reopened, CLAUDE.md corrected |
+| N/A | N/A | No `TODO`/`HACK`/`PLACEHOLDER` markers found in the touched files | — | — |
 
-No `TBD`/`FIXME`/`XXX` debt markers found in phase-modified files. No `TODO`/`HACK`/`PLACEHOLDER` markers found. All gaps above are explicitly documented in code comments, SUMMARY.md deviation sections, and WINDOWS.md — this phase's own honesty about its gaps is itself a positive finding, not a violation.
+No stub patterns (hardcoded empty returns, always-true placeholders reachable from production) remain: the one previously-flagged stub (`shadowEvaluator`'s always-pass placeholder) is now a real classifier, confirmed by my own revert-and-fail test.
 
 ### Human Verification Required
 
-None. Every gap above is independently confirmed by direct code inspection, live test execution, and a live CLI invocation in this session — none require subjective/visual/UX judgment.
+None. Every truth above was independently confirmed by direct code inspection, live scoped test execution, and — for the two highest-stakes claims (the real grader and the automatic cross-lane pass) — a mutation I personally performed, watched fail, and reverted myself in this session, leaving the tree byte-identical to its pre-mutation state (confirmed by `git diff`/`git status --porcelain`).
+
+### Documentation staleness (non-blocking, see frontmatter for full detail)
+
+Two small bookkeeping figures in the project's own truth-telling documents are one number off from the codebase's real current state, both traced to the code-review fix pass's own bank regeneration (which quietly shrank the fixture bank by one entry when WINDOWS #44 was honestly reopened): REQUIREMENTS.md/WINDOWS.md cite the fixture bank as 52 total/22 guarded where it is actually 51/21, and WINDOWS.md's own summary header (32 open/15 fixed) is off by one from its own table+JSON body (33 open/14 fixed — which agree perfectly with each other). Neither affects any test, ratchet, or gate, since those all read the bank/ledger live. Worth a one-line correction the next time either file is touched, but not a phase-blocking gap.
 
 ### Gaps Summary
 
-Phase 204 built substantial, well-tested infrastructure for every one of its five success criteria. The mechanism study (SC1) and the memory-truth/schema work (SC2) are genuinely complete and wired into production. The credit ledger's tracer path (a slice of SC3) is genuinely wired end to end.
+Phase 204's gap-closure round (204-12 through 204-16) closed 5 of the 7 gaps this verification previously found — and its own code review caught 4 additional Critical bugs the gap-closure plans' own SUMMARYs did not surface (a recovery-episode collision that silently dropped records on the primary interactive path, a swarm delegate lane that recorded no episode at all, an automatic pass that could leave the real repository on the wrong git branch, and an automatic promoter whose ID-space mismatch made it permanently unable to promote anything) — all of which are now genuinely fixed and independently re-confirmed in this session, except the last, which is honestly disclosed as an open limitation rather than falsely marked fixed.
 
-But the phase's second half — the parts of the goal statement that say "prove behavior changes... through immutable outcomes... independent shadow comparison, bounded promotion, and rollback" — is built as a library of correct, individually-tested functions with **no path connecting them to anything the running program actually does**:
+Two gaps remain, both substantially narrowed rather than newly discovered, and both are named accurately in this project's own REQUIREMENTS.md and WINDOWS.md rather than hidden under a tick:
 
-- The episode ledger's evidence/hard-gate/intervention/cost fields have emitters, but zero callers (SC3a).
-- Two of six lifecycle lanes never open an episode at all (SC3b).
-- 40 of 47 regression fixtures have no guarding test yet (SC3c).
-- The shadow-comparison grader always says "pass," and its CLI command isn't even registered in the shipped binary — confirmed by literally running it (SC4b).
-- The promotion gate and atomic rollback have zero production callers anywhere (SC5b) — a finding this verification makes explicit beyond what the project's own defect register (WINDOWS.md) already recorded for the CLI layer.
-- The honest two-figure report is correct but will show "unclassified" for every real episode today, because it depends on SC3a (SC5c).
-- The source-improvement proposal function has zero caller (SC5d).
+- **SC3a:** a watcher/reviewer worker's token usage and cost are not yet surfaced to the check-lane episode close, so those two fields stay honestly absent (never fabricated) on continue episodes specifically.
+- **SC3c:** 30 of this project's 51 confirmed incidents in the regression-fixture bank still have no guarding test, though the guarded count nearly tripled and the recorded floor can now only tighten, never loosen.
 
-All of these gaps were already honestly recorded by the team in `.planning/WINDOWS.md` entries 38–45 before this verification began, and each was independently reproduced here (via grep, direct JSON inspection, and one live CLI invocation) rather than taken on the SUMMARY's word. REQUIREMENTS.md currently marks LEARN-02, LEARN-06, LEARN-07 and LEARN-08 as fully satisfied; this verification's evidence does not support that for the running program, only for the isolated library/test layer.
-
-Recommended next step: a closure plan (or a small set of them) that wires the existing boundary callers — build/continue/swarm/oracle/recovery lanes into the episode-ledger emitters, a registered CLI or automatic trigger into shadow-compare and the promotion gate, and a caller into proposeSourceImprovement — rather than any redesign. Every piece needed already exists and is tested; it needs a caller.
+Recommended next step: a further plan (or a small set of them) restructuring `runCodexContinue`'s call chain to surface watcher usage to its already-registered episode-close boundary, and continuing to guard more of the 30 remaining fixture-bank incidents as their underlying fixes are individually confirmed — following the same honesty bar 204-14 already held itself to (never attach a guard to an incident that is not genuinely fixed). Separately, WINDOWS entry 44 (the inert hypothesis promoter) needs either a real identifier bridge between `learn.Entry` and the guidance-application ledger, or a real production writer of the Helpful/Neutral/Harmful terminal states — neither of which this closure attempted, correctly, since no honest bridge existed within its own reach.
 
 ---
 
-_Verified: 2026-09-14T16:20:22Z_
+_Verified: 2026-09-15_
 _Verifier: Claude (gsd-verifier)_
