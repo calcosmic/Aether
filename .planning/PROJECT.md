@@ -38,6 +38,7 @@ That means:
 - **Product version: v1.0.66** (installed and source binaries agree in the 2026-09-02 local check)
 - **v1.28 Classic Colony Restoration is active**: approved Phases 199-205 map 64 testable requirements and all 72 Classic capability rows. The authoritative brief is `.aether/dreams/2026-09-01-comprehensive-aether-colony-review.md`; the ledger is traceability, not another owner interview.
 - **Phase 199 — Front Door and Classic Contract is complete (2026-09-07)**: 34/34 plans and 12/12 owner UAT checks passed. The ordinary journey, shared lifecycle projection, safe pause/resume, honest seal/entomb split, expert maintenance boundary, and executable cross-platform Classic corpus are now delivered.
+- **Phase 204 -- Learning Governor is complete (2026-09-15)**: 16/16 plans including five gap-closure plans; re-verified 9/11 with two owner-accepted deferrals. The program's memory now carries versions and lineage, every run leaves a durable episode record, a real shadow grader and automatic canary pass run at the end of every check, and a source-improvement proposal can be drafted automatically but never merged, published or deployed by the program. Known open limits: the automatic hypothesis promoter cannot fire until the learning store and the guidance-application store share an identifier (WINDOWS.md entry 44); check-lane usage/cost recorded as absent (entry 48); 30 of 51 bank fixtures unguarded (entry 42).
 - The priority implementation spec v3 (Downloads, 2026-08-21) is the ratified governing backlog (ruling D1); its order was amended by D12 on 2026-08-22 so v1.27 leads with team judgement, single verification, the cost line, the next-action card and Classic display restoration
 - Phase 194's end-to-end proof reduced the measured one-task bug fix from 8 workers to exactly 1 Builder plus the program's free checks on both the proposed and automatic paths; an explicit heavy request still produces 4 workers, proving the review pipeline remains live. Broader owner-watched proof follows restoration rather than preceding it.
 - Four parallel execution paths have been reduced to two since v1.24: the Go runtime (authoritative) and the thin markdown wrappers; `control-ts/` retired in v1.25, the playbooks no longer loaded, 39 zero-reader config files and 8 dead commands deleted in v1.26
@@ -287,6 +288,7 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 - Overnight stamina: owner-eye work queues, genuine danger stops, replans survive restarts, elapsed/cost reporting is durable, blocker truth fails closed, external swarm evidence is issuance-bound, and the six-phase fixture completes unattended (STAM-01..06) -- v1.27 (Phase 198.3)
 - Front door and Classic lifecycle contract: one grouped normal journey, automatic territory freshness, one authoritative orientation model, exactly-once pause/resume, retained honest seal plus verified optional entomb, transaction-backed expert maintenance, and a versioned cross-platform behavior corpus (SYNTH-01, CEC-01/02/04/08, LIFE-01..06, PROOF-01) -- v1.28 (Phase 199)
 - Queen-led work cycle: the Queen picks and explains the smallest capable team, ordinary work stays proportionate, related tasks form coherent jobs and waves, build/continue/autopilot tell one story with one verification boundary, complete result truth (verdict, checks, cost, elapsed time, changed files, knowledge deltas) binds to the exact attempt, recovery checkpoints and restores, goal-level autopilot advances with declared stops, and worker turnaround is measured (SYNTH-03, CEC-06, WORK-01..08) -- v1.28 (Phase 201; verified 101/101, UAT 74/74)
+- Learning governor: versioned, lineage-carrying memory records where a hypothesis is never shown as verified; every lifecycle lane (build, continue, plan, oracle, swarm, recovery) leaves a durable episode record with evidence, gate results, changed decisions and interventions; a real per-fixture shadow grader plus an automatic compare/admit/canary/rollback pass at the end of every check on both check lanes; a regression-fixture bank seeded from the project's own confirmed incidents with a two-sided unguarded-count ratchet; seven budgeted test gates that prove they ran everything; automatic source-improvement proposals that structurally cannot merge, publish or deploy (SYNTH-06, LEARN-01..04, LEARN-06..08) -- v1.28 (Phase 204; verified 9/11 with two owner-accepted deferrals: check-lane token usage/cost stay recorded as absent, 30 of 51 fixtures still unguarded so LEARN-05 stays open)
 
 ### Active
 
@@ -345,6 +347,8 @@ Long-lived items not tied to a milestone:
 | Seal retains reviewable state; entomb separately verifies archive bytes before clearing (Phase 199) | Forced-incomplete closure remains owner-only and visibly unverified through status, archive, and replay | Good — shipped and UAT-verified |
 | Expert maintenance uses exact previewed targets and one rollback-capable transaction (Phase 199) | Read-only inspection stays mutation-free and Aether-managed cleanup preserves unmanaged/custom files | Good — shipped and UAT-verified |
 | Claude/OpenCode `/ant-*` surfaces and runtime-native Codex share Go-owned lifecycle truth (Phase 199) | A 73-row coverage ledger and executable public journeys prove behavior and state effects without claiming native Codex `$ant-*` support | Good — shipped and UAT-verified |
+| Truthful registers over ticked boxes (Phase 204, 2026-09-15) | A requirement is ticked only when its own wording is true of the running program and a named test fails when the wiring is removed; the two truths that remained partial were accepted as deferred by owner override with the exact remaining limit named (WINDOWS.md entries 42 and 48) rather than rounded up | Good -- the post-closure review still caught a green-tested feature that was dead in production (the automatic hypothesis promoter, WINDOWS.md entry 44), which is exactly the failure this rule exists to surface |
+| Fixture dates read by the compiled binary must move with the clock (2026-09-15) | Two families of planning fixtures with literal September dates crossed production's seven-day candidate window mid-phase and turned fifteen tests red with no code change; in-process fixtures now pin the candidate clock, binary-facing fixtures derive their instants from the wall clock | Good -- both detonations fixed; rule recorded in the fixture comments |
 
 ## Context
 
@@ -364,11 +368,13 @@ These remain promising but are not the next best move:
 
 ## Next Move
 
-Discuss Phase 200 and reconstruct the Classic Scout → Route-Setter planning loop before creating implementation plans for iterative planning.
+Plan Phase 205 -- Owner Acceptance and Restoration Seal: the owner-watched acceptance of the restored product, then the milestone seal.
 
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
+
+*Last updated: 2026-09-15 after Phase 204*
 
 ## Historical Milestone Briefs (superseded)
 

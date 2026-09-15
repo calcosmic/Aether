@@ -22,10 +22,10 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-09-07)
+See: .planning/PROJECT.md (updated 2026-09-15)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 204 — Learning Governor
+**Current focus:** Phase 205 — Owner Acceptance and Restoration Seal
 **Previous milestone:** v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02 (48/48 requirements; audit `tech_debt`, no blockers)
 **Product version:** v1.0.66 (installed and source binaries agree in the 2026-09-02 local check)
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
@@ -634,6 +634,10 @@ Last activity: 2026-09-15 — Phase 204 complete, transitioned to Phase 205
 - [Phase 202]: Recovery decisions now route onto the real open build/continue episode instead of a synthetic recovery-phase-N episode, closing CR-02 (the live-view hijack).
 - [Phase 202]: The live view selects the most recently started STILL-OPEN episode via a shared colonyLiveBoundaryDelta rule, never whichever episode owns the newest single event, so aether watch never abandons a running build for a closed one.
 - [Phase 202]: 202-17: Oracle's round-based run now opens/closes its own live-colony episode boundary and is judged abandoned by its own durable state and controller process (never another lane's spawn-run record), closing CR-01 (a running Oracle round could never register as live). The episode-open guard for a never-started run was applied: no boundary opens until the loaded state carries a non-empty StartedAt.
+- [Phase 204]: A requirement is ticked only when its own wording is true of the running program and a named test fails when the wiring is removed; two truths that stayed partial (check-lane usage/cost recorded as absent; 30 of 51 fixtures unguarded) were accepted as deferred by owner override with the limit named, not rounded up.
+- [Phase 204]: The post-closure code review caught a green-tested feature that is dead in production (the automatic hypothesis promoter: learn-entry IDs and guidance-application IDs come from disconnected pipelines, and no production writer records a helpful application at all). Recorded as WINDOWS.md entry 44 reopened and the CLAUDE.md claim corrected, never faked.
+- [Phase 204]: WINDOWS.md rows with status fixed seed the regression-fixture bank, so closing a ledger entry obliges a bank regeneration (`go test ./cmd -run '^TestSeededBankUpdate$' -update-bank`) plus a real guard for each new fixture; the unguarded floor is a two-sided ratchet and is never raised.
+- [Phase 204]: Fixture dates the compiled binary reads must derive from the wall clock; in-process fixtures pin the candidate clock instead. Two families of literal September dates crossed the seven-day candidate window mid-phase and turned fifteen tests red with no code change.
 
 ### Pending Todos
 
@@ -690,6 +694,8 @@ Last activity: 2026-09-15 — Phase 204 complete, transitioned to Phase 205
 
 - `gopkg.in/yaml.v3` is archived and author-declared unmaintained. v1.26 makes YAML the format a non-technical user hand-writes, which changes the risk profile. The migration to `go.yaml.in/yaml/v3` is a mechanical import swap and is deliberately unbundled — it gets its own plan, not a rider on the roster work
 - Phase 200 full and race gates remain nonzero because protected Phase 199 file 199-UAT.md contains legacy_pause and legacy_resume occurrences absent from the Phase 199 exhaustive vocabulary inventory; Phase 200-owned gates pass.
+- ℹ️ [Phase 204 carry-forward] The automatic hypothesis-to-validated promoter is wired but cannot fire in production (WINDOWS.md entry 44, reopened); check-lane token usage and cost stay recorded as absent (entry 48); 30 of 51 confirmed incidents still have no guard test (entry 42); swarm worker names can collide about one run in fifty and the manifest refuses instead of de-duplicating (entry 47).
+- ℹ️ [Phase 204 side finding] The fixture bank's sanitiser silently drops any confirmed incident whose text contains backticks or XML-looking tags; eight pre-existing incidents have never been in the bank for that reason and WINDOWS.md descriptions that must seed a fixture need plain names.
 
 ## Deferred Items
 
@@ -750,13 +756,12 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-14T16:42:10.770Z
+Last session: 2026-09-15T06:54:08Z
 Stopped at: Phase 204 complete, ready to plan Phase 205
-Resume file: .planning/phases/204-learning-governor/204-VERIFICATION.md
+Resume file: None
 
 ## Operator Next Steps
 
-- Phase 202 (Swarm, Oracle, and Live Colony) has all 15 plans plus both gap-closure plans (202-16, 202-17) summarized. Run `/gsd-verify-work 202` next.
-- Investigate the ~15 pre-existing, out-of-scope test failures logged in 202-15-SUMMARY.md's "Issues Encountered" section (build visuals, Queen orchestration, skill manifests, Phase 199 receipt fingerprint) before shipping v1.28.
-- Execute 200-55-PLAN.md to run the bounded normal/race suite in Wave 34, then rerun the unchanged final receipt Plan 200-40 in Wave 35.
-- Preserve the Phase 200 Scout/Route-Setter objective and do not waive normal or race gate failures.
+- Phase 204 (Learning Governor) is complete with two owner-accepted deferrals recorded as verification overrides. Run `/gsd-plan-phase 205` next (Owner Acceptance and Restoration Seal).
+- Before the milestone seal, decide whether WINDOWS.md entries 44 (dead hypothesis promoter), 47 (swarm name collision) and 48 (check-lane usage/cost) are fixed inside Phase 205 or carried as explicit debt.
+- The full suite's known-red baseline on oracle-reinstate is the same 17 tests recorded on 2026-09-14 plus two documented flakes (entries 36 and 47); a new red name is a regression, a listed one is not.
