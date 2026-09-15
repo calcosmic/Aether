@@ -1082,34 +1082,6 @@
       }
     },
     {
-      "id": "fixture-cd29310f9456",
-      "title": "[broad-invariant] unmet-truth: cmd/learning_cmds.go. FIXED by 204-16: promoteHelpfulHypotheses (cmd/learning_valid",
-      "failing_baseline": {
-        "description": "unmet-truth: cmd/learning_cmds.go. FIXED by 204-16: promoteHelpfulHypotheses (cmd/learning_validator.go), called from runPhaseEndConsolidation alongside the improvement pass, now automatically promotes a StatusHypothesis learning entry to StatusValidated -- but only when a corroborated guidance-application record for that entry's own identifier has independently reached the helpful state (never a worker's own claim, never merely rendered/consulted/acted-on). Writes through the same learnStore.Re",
-        "reference": "44"
-      },
-      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/learning_cmds.go. FIXED by 204-16: promoteHelpfulHypotheses (cmd/learning_validator.go), called from runPhaseEndConsolidation alongside the improvement pass, now automatically promotes a StatusHypothesis learning entry to StatusValidated -- but only when a corroborated guidance-application record for that entry's own identifier has independently reached the helpful state (never a worker's own claim, never merely rendered/consulted/acted-on). Writes through the same learnStore.Re",
-      "allowed_mutations": [
-        "wording",
-        "formatting",
-        "file_path",
-        "symbol_name"
-      ],
-      "provenance": [
-        {
-          "kind": "defect_register",
-          "identifier": "44"
-        }
-      ],
-      "privacy": "repo_local",
-      "severity": "medium",
-      "content_digest": "cd29310f9456d443dd8abc396ded5a98eb8a1de956381e40aa4149ba35aab9b4",
-      "guard": {
-        "test": "TestHypothesisPromoterIsReachedFromBothCheckLanes",
-        "package": "cmd"
-      }
-    },
-    {
       "id": "fixture-cfab44c9d745",
       "title": "[broad-invariant] dream. Dream's activity logging writes to activity-log.jsonl while the Dreamer's own context ste",
       "failing_baseline": {

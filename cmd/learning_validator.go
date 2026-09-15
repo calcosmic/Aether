@@ -1,24 +1,64 @@
 package cmd
 
-// WINDOWS.md entry 44 / LEARN-08 (204-16-PLAN.md, Task 2): the automatic
-// hypothesis-to-validated promoter. Before this file, learn.StatusValidated
-// was written only by the hand-run `learning-validate` command
-// (cmd/learning_cmds.go's learningValidateCmd) -- an owner-typed command a
-// worker's own genuinely-proven lesson never reaches on its own. The
-// filtering machinery that renders "verified" versus "not yet verified"
+// WINDOWS.md entry 44 (REOPENED by 204-REVIEW.md CR-01, 2026-09-15): the
+// automatic hypothesis-to-validated promoter. Before this file,
+// learn.StatusValidated was written only by the hand-run `learning-validate`
+// command (cmd/learning_cmds.go's learningValidateCmd) -- an owner-typed
+// command a worker's own genuinely-proven lesson never reaches on its own.
+// The filtering machinery that renders "verified" versus "not yet verified"
 // content (cmd/learning_status_vocabulary.go's learningVerifiedEntries/
 // learningUnverifiedEntries) was already correct and wired at both render
 // sites (cmd/colony_prime_context.go, cmd/autopilot_lessons.go) -- the gap
-// was purely that nothing durable ever moved a real entry INTO the
-// verified set automatically.
+// this file intended to close was that nothing durable ever moved a real
+// entry INTO the verified set automatically.
 //
-// promoteHelpfulHypotheses closes that gap using evidence this phase's
-// earlier plans already built: cmd/application_evidence.go's nine-state
-// guidanceApplicationState vocabulary, specifically its terminal
-// guidanceApplicationStateHelpful state -- a state that requires the
-// acted_on predecessor and is never written from a worker's own unverified
-// claim (guidanceClaimRecord), only from a corroborated application
-// (Assumption K, 204-06-PLAN.md).
+// promoteHelpfulHypotheses was intended to close that gap using evidence
+// this phase's earlier plans already built: cmd/application_evidence.go's
+// nine-state guidanceApplicationState vocabulary, specifically its terminal
+// guidanceApplicationStateHelpful state. IT CANNOT DO SO IN PRODUCTION
+// TODAY, for two compounding reasons confirmed by grep across cmd/
+// (excluding _test.go files) at review time:
+//
+//  1. Every non-test writer of a GuidanceApplications record
+//     (recordGuidanceApplicationState, cmd/application_evidence.go:541)
+//     keys it by an Instinct's own ID (colony.InstinctEntry.ID) --
+//     cmd/instinct_application.go:69,75 and cmd/application_evidence.go's
+//     claim/contradiction/ignored writers all pass inst.ID or
+//     claim.GuidanceID, itself always sourced from an Instinct. A
+//     learn.Entry (pkg/learn), the store this function reads, has an
+//     entirely separate ID generator (pkg/learn/colony_store.go's
+//     generateID) and no production writer ever links the two --
+//     learn.Entry.ParentID exists only for hypothesis-revision lineage
+//     (one learn.Entry to another), never entry-to-instinct, and no
+//     Lineage.SourceID writer ever names an Instinct either (confirmed by
+//     grep: cmd/codex_continue_finalize.go's worker-lesson capture and
+//     cmd/oracle_promote.go's promoteOracleFindingAsLearning both create a
+//     brand-new learn.Entry with a freshly generated ID and no lineage back
+//     to any instinct).
+//  2. Independently of (1), no non-test production call site anywhere in
+//     cmd/ ever writes guidanceApplicationStateHelpful (or
+//     …StateNeutral/…StateHarmful) at all -- confirmed by the same grep.
+//     The "helpful" outcome QUEEN promotion actually reads
+//     (recruitmentCreditOutcomeHelpful, cmd/recruitment_credit.go) lives in
+//     a different list (recruitmentCreditFile.Entries) than the one this
+//     function reads (recruitmentCreditFile.GuidanceApplications) and is
+//     never bridged into the guidance-application vocabulary's terminal
+//     states.
+//
+// Net effect: learningEntryHasHelpfulApplication returns false for every
+// learn.Entry, on every check, forever, so Promoted can never be non-empty
+// in production even though Ran is reported true. Do not "fix" this by
+// fabricating an identifier correlation a real production writer does not
+// produce (that is exactly the "false certificate... a fixture built in a
+// shape the runtime cannot produce" failure mode this repo's own CLAUDE.md
+// names by name) -- a genuine fix requires either a real production writer
+// linking a learn.Entry to the Instinct it came from (option (a) in
+// 204-REVIEW.md's CR-01), or the learning-propose/-validate pipeline itself
+// writing/reading GuidanceApplications under learn.Entry.ID from a real
+// call site (option (b)), AND a real writer of the Helpful/Neutral/Harmful
+// states themselves. Neither exists yet. See
+// cmd/learning_validator_test.go's TestHypothesisPromotionNeverCrossesTheIdentifierGap
+// for the test that locks in this honest, current limitation.
 import (
 	"fmt"
 	"os"
@@ -112,6 +152,18 @@ func learningEntryHasHelpfulApplication(guidanceID string) bool {
 // because a hypothesis's proof of helpfulness is not itself scoped to any
 // one phase -- a lesson that helped once, on any phase, has stopped being
 // merely a guess.
+//
+// CURRENT LIMITATION (WINDOWS.md entry 44, reopened by 204-REVIEW.md CR-01):
+// this function runs on every check (Ran is true) but summary.Promoted can
+// never be non-empty in today's running program. learningEntryHasHelpfulApplication
+// keys its lookup on entry.ID, and no production writer anywhere in cmd/
+// ever records a GuidanceApplications entry under a learn.Entry's own
+// identifier -- every real writer keys by an Instinct's ID instead, and no
+// real writer records the terminal Helpful/Neutral/Harmful states at all
+// yet. See this file's package doc comment for the full grep-confirmed
+// account. This is recorded, not silently accepted: fixing it for real
+// requires a genuine identifier bridge or a new production writer, not a
+// change to the selection/gating logic below, which is already correct.
 func promoteHelpfulHypotheses(phaseID int) learningValidationSummary {
 	_ = phaseID
 	summary := learningValidationSummary{}

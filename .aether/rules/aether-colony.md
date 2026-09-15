@@ -238,10 +238,14 @@ was measured afterward.
 A lesson the program recorded but never checked is no longer shown to a
 helper under a heading that calls it proven — one shared rule now decides,
 everywhere, what counts as verified. A lesson recorded only as a guess is
-now promoted to genuinely verified automatically, at the end of every
-check, on both check lanes — but only once the program's own records show
-it truly helped, checked independently rather than taken on a helper's own
-word.
+meant to be promoted to genuinely verified automatically, at the end of
+every check, on both check lanes, once the program's own records show it
+truly helped, checked independently rather than taken on a helper's own
+word — that gating rule is real, but the promotion itself cannot happen in
+the running program yet: nothing today connects a recorded guess to the
+proof that it helped, so this pass finds nothing to promote on any real
+check, a confirmed, openly recorded gap (WINDOWS.md entry 44, reopened
+2026-09-15), not a silent one.
 
 Every remembered record now carries its own version and says where it came
 from; an old record is read as the older shape it actually is, and every

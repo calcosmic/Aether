@@ -1568,14 +1568,19 @@ exactly one place, what counts as verified everywhere the program makes that
 claim (`TestHypothesisIsNeverRenderedAsVerified`, `TestOneLearningStatusVocabulary`,
 `TestAutopilotLessonsRequireValidatedStatus`).
 
-A lesson recorded only as a guess is now promoted to genuinely verified
-automatically, at the end of every check, on both check lanes — but only
-once the program's own records show it truly helped: a corroborated,
+A lesson recorded only as a guess is meant to be promoted to genuinely
+verified automatically, at the end of every check, on both check lanes,
+once the program's own records show it truly helped — a corroborated,
 independently-checked application, never a helper's own claim, and never
-merely having been read or acted on
-(`TestHelpfulHypothesisIsPromotedAutomatically`,
-`TestActedOnIsNotEnoughToValidate`, `TestUncorroboratedClaimIsNeverValidated`,
-`TestHypothesisPromoterIsReachedFromBothCheckLanes`).
+merely having been read or acted on. That gating rule is real and correctly
+refuses everything short of genuine proof
+(`TestActedOnIsNotEnoughToValidate`, `TestUncorroboratedClaimIsNeverValidated`,
+`TestHypothesisPromoterIsReachedFromBothCheckLanes`), but the promotion
+itself cannot happen in the running program yet: nothing today connects a
+recorded guess to the proof that it helped, so this pass finds nothing to
+promote on any real check, ever — a confirmed, openly recorded gap rather
+than a silent one (`TestHypothesisPromotionNeverCrossesTheIdentifierGap`;
+see WINDOWS.md entry 44, reopened 2026-09-15).
 
 Every remembered record — an instinct (a lesson the system learned and now
 reuses automatically), a logged failure, a learned entry — now carries its
