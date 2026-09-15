@@ -5,7 +5,7 @@ milestone_name: Classic Colony Restoration
 current_phase: 205
 current_phase_name: Owner Acceptance and Restoration Seal
 status: executing
-stopped_at: 205-11 merged; full/race release gates running; 205-12 snapshot and brief complete, readiness pending
+stopped_at: 205-11 merged; full suite complete with two harness failures under repair; 205-12 readiness pending
 last_updated: "2026-09-15T21:51:41Z"
 last_activity: 2026-09-15
 last_activity_desc: Phase 205 execution resumed (wave continue)
@@ -759,7 +759,7 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 ## Session Continuity
 
 Last session: 2026-09-15T21:51:41Z
-Stopped at: 205-11 merged; full/race release gates running; 205-12 snapshot and brief complete, readiness pending
+Stopped at: 205-11 merged; full suite complete with two harness failures under repair; 205-12 readiness pending
 Resume file: .planning/phases/205-owner-acceptance-and-restoration-seal/205-11-PLAN.md
 
 Resume evidence: HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
@@ -767,7 +767,8 @@ Resume evidence: HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each
 ## Active Execution — 2026-09-15
 
 - Plan 205-11 is implemented and merged at 7508fc73, with task commits d924fbe8/759cc446 and committed summary c2ede9fa. All 40 focused coverage/parity tests executed and passed. Phase tracking awaits the full integration gate.
-- Serial build, vet, full suite and race suite are running from `/tmp/aether-phase205-execution/gate-checkout`, pinned to 7508fc73. Build and vet passed. Durable logs/results: `/tmp/aether-phase205-execution/gates/`; baseline: `/tmp/aether-phase205-execution/baseline.json`. Never start a competing full run or publish before the complete accounting and baseline comparison have been reviewed.
+- The first gate at 7508fc73 passed build/vet and executed 5,573/5,573 normal-suite tests. Besides the exact 17-name baseline, it exposed TestDocumentedCommandNamesResolve (lazy help registration) and TestResolveAetherRoot_GitFallback (assumes the checkout path contains Aether). Release remains blocked until both verifier defects are repaired and the complete gate reruns. Original logs/results: `/tmp/aether-phase205-execution/gates/`; race was deliberately interrupted as obsolete, not counted as a result.
+- A bounded GSD repair executor owns those two test files and `205-GATE-REPAIR.md` in `.claude/worktrees/agent-p205-gatefix-codex-20260915`; manifest `/tmp/aether-phase205-execution/gatefix-wave.json`, log `/tmp/aether-phase205-execution/gatefix-executor.log`. It runs focused checks only. Parent must review/merge, start one serialized full/race run pinned to the repaired commit, then resume plan 205-12 with the new evidence location/hash. Do not broaden the accepted 17-name baseline or start competing full runs.
 - Plan 205-12 tasks 1–2 are complete in `.claude/worktrees/agent-p205-12-codex-20260915`; brief commit `72fd2768`. Manifest `/tmp/aether-phase205-execution/wave4.json`, detailed progress `/tmp/aether-phase205-execution/plan12-progress.json`. Executor session `01a0a6f9-871e-79b0-8a4b-e7fcd34ce615` stopped cleanly awaiting the parent gate; resume it for task 3 and SUMMARY, without repeating snapshots or Go tests.
 - Owner project is clean on `p205-owner-session-20260915` at `363fd07630d9028d2d1a18edf3f5cc21e7dece2d`; original `codex/skills-as-commands` remains at `ccf18264`. Snapshot `p205-owner-work-snapshot-20260915` at `e8941d6f5e1f3f1834357d4746e7ffcf0f77b962` preserves all 1,906 expanded changed entries (764 grouped entries). The nested research repository has the same named snapshot at `f09a3a27e7a81f3e50bb5e79b86d0d97c9a0f61f`; restore both named snapshots when retrieving the complete experiment.
 - All 383 data files, 1,305 extended record files and 12,605 ignored files were verified unchanged. The session carries the two pre-existing modified context/handoff records verbatim; the completed 3-phase/20-task colony remains unsealed. Three already-ignored cache paths retain their previous ignored classification via exact local `.git/info/exclude` entries (receipt in the progress JSON).
@@ -775,6 +776,6 @@ Resume evidence: HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each
 
 ## Operator Next Steps
 
-- Continue the active serialized gate, classify complete plain/race results against the recorded baseline, then finish 205-12 readiness, publish 205-13 and perform 205-14 preflight. Stop at the actual owner walkthrough checkpoint. Preserve the completed plans and existing snapshot branches.
+- Finish the bounded gate repair and rerun the serialized full/race gate, then finish 205-12 readiness, publish 205-13 and perform 205-14 preflight. Stop at the actual owner walkthrough checkpoint. Preserve the completed plans and existing snapshot branches.
 - Carry the owner-accepted limits and open WINDOWS.md entries into the limitations card under 205-CONTEXT.md D-10/D-15; fix defects that block the walk-through journeys. CAP-057's precision limit and the captured OpenCode provider-connection failure remain explicit in the plan 205-08/205-10 summaries.
-- The last committed gate report (5f14b056, run against c54d77ab) records build and vet passing and 5,563/5,563 tests executed, with exactly the 17 known baseline failures and no new failing names. The current full/race gate is still running. Release, owner walk-through, and acceptance remain pending.
+- The last committed gate report (5f14b056, run against c54d77ab) records build and vet passing and 5,563/5,563 tests executed, with exactly the 17 known baseline failures and no new failing names. The current gate repair and rerun are required. Release, owner walk-through, and acceptance remain pending.
