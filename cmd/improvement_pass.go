@@ -15,6 +15,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -31,6 +33,15 @@ const (
 	improvementPassEventStarted    improvementPassEventKind = "started"
 	improvementPassEventCompleted  improvementPassEventKind = "completed"
 	improvementPassEventRolledBack improvementPassEventKind = "rolled_back"
+	// improvementPassEventProposalWritten (204-16, SC5d) is the one
+	// card-worthy outcome the repeated-intervention proposal trigger below
+	// can ever add: a plain-English case was written to an isolated branch
+	// for a person to read. There is no "proposal refused" event here --
+	// triggerRepeatedInterventionProposal's own refusals (a dirty tree, a
+	// branch collision) are non-blocking and recorded only in
+	// summary.Failures, never a closing-card line, per this pass's existing
+	// non-blocking discipline.
+	improvementPassEventProposalWritten improvementPassEventKind = "proposal_written"
 )
 
 // improvementPassEvent is one thing this pass did (or refused to do) to one
@@ -261,17 +272,16 @@ func runAutomaticImprovementPass(phaseID int) improvementPassSummary {
 	if store == nil {
 		return summary
 	}
+	summary.Ran = true
 
 	var candidateFile shadowCandidateFile
 	if err := store.LoadJSON(shadowCandidateStorePath, &candidateFile); err != nil && !errorIsFileNotExist(err) {
-		summary.Ran = true
 		summary.recordFailure("", fmt.Sprintf("could not read the declared-candidate store: %v", err))
 		candidateFile = shadowCandidateFile{}
 	}
 
 	canaryFile, err := loadCanaryRunFile()
 	if err != nil {
-		summary.Ran = true
 		summary.recordFailure("", fmt.Sprintf("could not read the canary run store: %v", err))
 		canaryFile = canaryRunFile{}
 	}
@@ -282,15 +292,12 @@ func runAutomaticImprovementPass(phaseID int) improvementPassSummary {
 		}
 	}
 
-	if len(candidateFile.Entries) == 0 && len(runningRuns) == 0 {
-		// Nothing declared and nothing running: no comparison, no gate
-		// call, no canary file, no write of any kind (D-04's "costs
-		// nothing measurable" path).
-		summary.Ran = true
-		return summary
-	}
-	summary.Ran = true
-
+	// Nothing declared and nothing running: no comparison, no gate call, no
+	// canary file, no write of any kind (D-04's "costs nothing measurable"
+	// path) -- but the repeated-intervention proposal trigger below still
+	// runs, since it reads a completely independent signal (the durable
+	// episode ledger, not the shadow-candidate/canary stores) and is itself
+	// a genuine no-op read when the ledger names no repeated category.
 	for _, record := range candidateFile.Entries {
 		summary.CandidatesConsidered++
 		processNewImprovementCandidate(record, &summary)
@@ -303,7 +310,146 @@ func runAutomaticImprovementPass(phaseID int) improvementPassSummary {
 		}
 	}
 
+	// 204-16 (SC5d, D-01, D-04, D-05): the automatic, evidence-gated
+	// source-improvement trigger -- proposeSourceImprovement's first real
+	// production caller. Runs unconditionally at the end of every pass, on
+	// the same non-blocking contract as everything above: a refusal (dirty
+	// tree, branch collision, no store) is recorded into summary.Failures
+	// and the check continues.
+	triggerRepeatedInterventionProposal(&summary)
+
 	return summary
+}
+
+// triggerRepeatedInterventionProposal (204-16-PLAN.md Task 1, SC5d) is
+// proposeSourceImprovement's first real production caller: it builds the
+// preventable-intervention figure over every episode already on disk
+// (readEpisodeLedger, unbounded window -- no sentinel list is needed here,
+// only the declared episodeInterventionKind categories
+// collectPreventableInterventions already classifies), counts how many
+// DISTINCT episodes carry each declared category, and when any single
+// category reaches sourceProposalRepeatedInterventionThreshold, proposes a
+// source change naming that category and the real episode identifiers that
+// carried it.
+//
+// This function IS the "automatic trigger" WINDOWS.md entry 45 and this
+// plan's threat model (T-204-16-01) refer to, and its name is added to
+// cmd/source_proposal_test.go's sourceProposalReachabilityEntryPoints in
+// the same change that introduces it (T-204-16-01's own mitigation) -- so
+// TestSourceProposalCannotMergePublishOrDeploy's call-graph walk covers
+// this entry point too, not only proposeSourceImprovement itself.
+//
+// The candidate identity is derived deterministically from the repeated
+// category alone (never from the evidence list or a timestamp), so the
+// same repeated problem always proposes under the same identity and
+// proposeSourceImprovement's own existing replay rule collapses a second
+// run over unchanged evidence to no second branch. Evidence is always the
+// real episode identifiers the ledger holds -- never a synthesised or
+// hand-typed list. The one file the change set ever writes lives under
+// .aether/reviews-archive/proposals/ -- an existing, already-tracked
+// archive directory that cmd/install_cmd.go's hubExcludeDirs already
+// excludes from every hub sync (any path component named
+// "reviews-archive" is skipped, confirmed by reading
+// listFilesRecursiveWithExclusion/pathHasExcludedComponent), and which,
+// unlike .aether/data/, is NOT listed in this repository's own .gitignore
+// -- so the proposal file can actually be `git add`ed and committed onto
+// its own isolated branch. .aether/proposals/ (the plan's own suggested
+// path) was rejected for this reason: it carries no hubExcludeDirs entry
+// of its own today, so it would be synced into every downstream colony's
+// hub install the next time this project runs `aether publish` -- see
+// 204-16-SUMMARY.md for the full directory-safety check performed here.
+func triggerRepeatedInterventionProposal(summary *improvementPassSummary) {
+	if store == nil {
+		return
+	}
+	records, err := readEpisodeLedger()
+	if err != nil {
+		summary.recordFailure("", fmt.Sprintf("could not read the episode ledger for the automatic proposal check: %v", err))
+		return
+	}
+
+	episodesByCategory := map[string]map[string]bool{}
+	for _, entry := range collectPreventableInterventions(records) {
+		set := episodesByCategory[entry.Category]
+		if set == nil {
+			set = map[string]bool{}
+			episodesByCategory[entry.Category] = set
+		}
+		set[entry.EpisodeID] = true
+	}
+
+	categories := make([]string, 0, len(episodesByCategory))
+	for category := range episodesByCategory {
+		categories = append(categories, category)
+	}
+	sort.Strings(categories)
+
+	for _, category := range categories {
+		episodeSet := episodesByCategory[category]
+		if len(episodeSet) < sourceProposalRepeatedInterventionThreshold {
+			continue
+		}
+
+		evidence := make([]string, 0, len(episodeSet))
+		for episodeID := range episodeSet {
+			evidence = append(evidence, episodeID)
+		}
+		sort.Strings(evidence)
+
+		candidateID := sourceProposalRepeatedInterventionCandidateID(category)
+		changes := sourceProposalRepeatedInterventionChangeSet(category, evidence)
+
+		_, created, proposeErr := proposeSourceImprovement(candidateID, evidence, changes)
+		if proposeErr != nil {
+			summary.recordFailure(candidateID, fmt.Sprintf("could not propose a source change for a repeated intervention: %v", proposeErr))
+			continue
+		}
+		if created {
+			summary.addEvent(candidateID, improvementPassEventProposalWritten, category)
+		}
+	}
+}
+
+// sourceProposalRepeatedInterventionCandidateID derives the deterministic
+// candidate identity a repeated intervention category always proposes
+// under -- from the category text alone, so the same repeated problem
+// always resolves to the same candidate and the same proposal file path,
+// regardless of which or how many episodes happen to carry it on a given
+// run.
+func sourceProposalRepeatedInterventionCandidateID(category string) string {
+	return "repeated-intervention-" + sourceProposalSanitizeForBranch(category)
+}
+
+// sourceProposalRepeatedInterventionProposalsDir is the one directory a
+// repeated-intervention proposal ever writes into -- see
+// triggerRepeatedInterventionProposal's own doc comment for why this
+// directory, and not the plan's originally-suggested .aether/proposals/,
+// is the safe choice.
+const sourceProposalRepeatedInterventionProposalsDir = ".aether/reviews-archive/proposals"
+
+// sourceProposalRepeatedInterventionChangeSet builds the one-file change
+// set a repeated-intervention proposal ever writes: a plain-English case
+// naming the repeated category, the real episodes that carried it, and the
+// change being proposed -- no code, nothing outside this one file. This is
+// a case for a person to read, never an applied change.
+func sourceProposalRepeatedInterventionChangeSet(category string, evidence []string) sourceChangeSet {
+	path := filepath.Join(sourceProposalRepeatedInterventionProposalsDir, sourceProposalRepeatedInterventionCandidateID(category)+".md")
+
+	var body strings.Builder
+	fmt.Fprintf(&body, "# Repeated intervention: %s\n\n", category)
+	fmt.Fprintf(&body, "The owner has intervened %d or more times for the same reason -- %q -- across distinct episodes this colony recorded:\n\n", sourceProposalRepeatedInterventionThreshold, category)
+	for _, episodeID := range evidence {
+		fmt.Fprintf(&body, "- %s\n", episodeID)
+	}
+	body.WriteString("\nThis case is proposing that the running program change so this stops requiring a person every time. ")
+	body.WriteString("Nothing here has been merged, applied, or acted on automatically -- this is a written case on its own isolated branch, for a person to read, evaluate, and act on by hand.\n")
+
+	return sourceChangeSet{
+		Files: []sourceChangeSetFile{
+			{Path: path, Content: body.String()},
+		},
+		Message: fmt.Sprintf("propose: stop repeating the intervention %q", category),
+	}
 }
 
 // errorIsFileNotExist reports whether err is (or wraps) the standard

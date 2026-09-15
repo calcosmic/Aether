@@ -27,7 +27,7 @@
 | What | Count/Status |
 |------|--------------|
 | Version | v1.0.78 |
-| Slash commands | 60 (Claude) + 60 (OpenCode); Codex uses native CLI + 27 TOML agents |
+| Slash commands | 64 (Claude) + 64 (OpenCode); Codex uses native CLI + 27 TOML agents |
 | Agent definitions | 27 |
 | Skills | 86 (55 colony + 31 domain) |
 | Go binary | `aether` CLI (Go binary in cmd/) |
@@ -1568,6 +1568,15 @@ exactly one place, what counts as verified everywhere the program makes that
 claim (`TestHypothesisIsNeverRenderedAsVerified`, `TestOneLearningStatusVocabulary`,
 `TestAutopilotLessonsRequireValidatedStatus`).
 
+A lesson recorded only as a guess is now promoted to genuinely verified
+automatically, at the end of every check, on both check lanes — but only
+once the program's own records show it truly helped: a corroborated,
+independently-checked application, never a helper's own claim, and never
+merely having been read or acted on
+(`TestHelpfulHypothesisIsPromotedAutomatically`,
+`TestActedOnIsNotEnoughToValidate`, `TestUncorroboratedClaimIsNeverValidated`,
+`TestHypothesisPromoterIsReachedFromBothCheckLanes`).
+
 Every remembered record — an instinct (a lesson the system learned and now
 reuses automatically), a logged failure, a learned entry — now carries its
 own version number and says where it came from, so an old record already on
@@ -1618,6 +1627,23 @@ work it was kept from seeing — is named as exactly that, never reported as
 an improvement (`TestCandidateStoreIsAppendOnlyAndRefusesEdits`,
 `TestComparisonResultReachesTheDurableLedger`, `TestHoldoutResolutionHappensOnlyInTheCommandLayer`).
 
+The judge itself is now a real grader, not a placeholder that always said
+"pass" — it tells a genuinely beneficial idea apart from a harmful or
+overfit one by checking it against this project's own bank of confirmed
+past incidents (`TestShadowGraderDistinguishesBeneficialFromHarmful`,
+`TestOverfitCandidateIsRefusedAtTheGate`), and the whole sequence — compare,
+admit, and start the trial — now runs by itself, at the end of every check,
+on both check lanes, with no person needing to type a command
+(`TestAutomaticImprovementPassTracerEndToEnd`,
+`TestAutomaticImprovementPassIsReachedFromBothCheckLanes`).
+
+A new hand-run command, `aether improve`, lets you check on its own how well
+the program's own suggestions have actually been doing, without waiting for
+the next check to run: by itself it only reads and reports the two honest
+figures above, changing nothing on disk, and `--declare`/`--compare` reach
+the exact same mechanism this section describes, by hand, for trying one
+idea deliberately (`TestNoRegisteredSubcommandIsUnreferenced`).
+
 Exactly two kinds of thing may ever be changed this way — which facts the
 program remembers about a project, and how it routes a task — and nine
 kinds of thing may never be, no matter how confident the program becomes:
@@ -1632,11 +1658,16 @@ built (`TestOnlyTwoScopesAreCanaryPromotable`, `TestRetainedAuthorityCannotBecom
 Finally, how often the program's own suggestions genuinely helped and how
 often a person had to step in and stop something are now two separate,
 honestly-reported figures that can never be blended into one misleading
-score. And if the program ever proposes a change to its own source code,
-that proposal can only ever become an ordinary, reviewable code change
-waiting for a person to look at it — there is no code path anywhere that
-lets it approve, merge, publish or deploy itself (`TestTwoFiguresAreNeverCombined`,
-`TestSourceProposalCannotMergePublishOrDeploy`).
+score (`TestTwoFiguresAreNeverCombined`). And when the same reason for
+stepping in keeps recurring — the owner intervening for the same kind of
+reason on three or more separate runs — the program now genuinely writes up
+that case itself, on its own isolated branch, for a person to read
+(`TestRepeatedInterventionProposesExactlyOneSourceChange`,
+`TestAutomaticProposalReplayCreatesNoSecondBranch`); that proposal can only
+ever become an ordinary, reviewable code change waiting for a person to look
+at it — there is no code path anywhere that lets it approve, merge, publish
+or deploy itself, on this new automatic path any more than the old,
+never-yet-called one (`TestSourceProposalCannotMergePublishOrDeploy`).
 
 *For dummies: the program's memory of what it has learned is now honest, in
 a few ways. A guess it never checked is never shown to you or a helper as
@@ -1661,10 +1692,16 @@ preferences, a skill, a workflow, your actual code, a security setting, a
 permission, a verification step, sending or contacting something outside
 the program, or deleting anything — can never be changed this way, no
 matter how sure the program is; there simply is no route built for the
-program to do it without you. And if the program ever wants to improve its
-own code, the most it can do is write up the idea as an ordinary change for
-a person to review — it can never approve, merge, publish, or apply that
-change itself.*
+program to do it without you. A lesson also gets promoted from "just a
+guess" to genuinely proven automatically, at the end of every check, but
+only once it has actually helped someone, checked independently rather than
+taken on a helper's word. A new command, `aether improve`, lets you check
+how the program's own suggestions have been doing whenever you want,
+without waiting for the next check. And when the program notices it keeps
+needing you to step in for the same reason, it now writes up that pattern
+itself as a plain-English case on its own branch for you to read — but the
+most it can ever do with its own code is write up that idea for a person to
+review; it can never approve, merge, publish, or apply that change itself.*
 
 ---
 

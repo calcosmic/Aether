@@ -75,6 +75,7 @@ creating a second recovery effect.
 | Command | Purpose |
 |---------|---------|
 | `/ant-run` | Autopilot — build, verify, advance automatically |
+| `/ant-improve` | Check how the colony's own suggestions have been doing, or try one by hand |
 | `/ant-quick` | Quick one-shot task |
 | `/ant-swarm "<bug>"` | Parallel bug investigation |
 | `/ant-oracle` | Deep research (RALF loop) |
@@ -236,7 +237,11 @@ was measured afterward.
 
 A lesson the program recorded but never checked is no longer shown to a
 helper under a heading that calls it proven — one shared rule now decides,
-everywhere, what counts as verified.
+everywhere, what counts as verified. A lesson recorded only as a guess is
+now promoted to genuinely verified automatically, at the end of every
+check, on both check lanes — but only once the program's own records show
+it truly helped, checked independently rather than taken on a helper's own
+word.
 
 Every remembered record now carries its own version and says where it came
 from; an old record is read as the older shape it actually is, and every
@@ -263,7 +268,13 @@ project's own defect register.
 A proposed change to settings or routing can be tried beside current
 behaviour, graded by a judge it structurally cannot reach or edit, and a
 change that only looks better on the work it could see is named as exactly
-that.
+that. The judge is now a real grader, not a placeholder that always agreed,
+and the whole sequence — compare, admit, and start a small, watched,
+reversible trial — now runs by itself at the end of every check, on both
+check lanes, with no command required. A new hand-run command, `aether
+improve`, lets you check on its own how those suggestions have been doing,
+without waiting for the next check; by itself it only reads and reports,
+changing nothing on disk.
 
 Two kinds of thing may be changed this way — remembered project facts, and
 task routing — and nine may never be: preferences, skills, workflows,
@@ -273,9 +284,12 @@ at all.
 
 Finally, how often the program's own suggestions genuinely helped and how
 often a person had to step in are two separate figures that can never be
-blended into one, and a proposed source-code change can only ever become an
-ordinary, reviewable change — never something the program approves, merges,
-publishes, or deploys itself.
+blended into one. And when the same reason for stepping in keeps recurring
+— the owner intervening for the same reason on three or more separate runs
+— the program now genuinely writes up that case itself, on its own isolated
+branch, for a person to read; a proposed source-code change, automatic or
+hand-typed, can only ever become an ordinary, reviewable change — never
+something the program approves, merges, publishes, or deploys itself.
 
 See CLAUDE.md's "Learning Governor" section for the full account and the
 tests that lock every claim above.

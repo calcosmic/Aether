@@ -168,6 +168,12 @@ type phaseEndConsolidationSummary struct {
 	// completion/rollback -- or, with neither, an honest no-op. Non-
 	// blocking, exactly like every other field on this summary.
 	ImprovementPass improvementPassSummary
+	// LearningValidation is promoteHelpfulHypotheses' own summary for this
+	// same phase-end call (204-16, WINDOWS.md entry 44): every hypothesis
+	// whose own guidance application record has genuinely reached the
+	// helpful state is promoted to validated -- or, with none, an honest
+	// no-op. Non-blocking, exactly like every other field on this summary.
+	LearningValidation learningValidationSummary
 }
 
 // LearningBeatLine renders the single-line, caste-agnostic message body used
@@ -338,6 +344,13 @@ func runPhaseEndConsolidation(phaseID int) phaseEndConsolidationSummary {
 	// Never blocking: runAutomaticImprovementPass never returns an error
 	// type this function could propagate.
 	summary.ImprovementPass = runAutomaticImprovementPass(phaseID)
+
+	// 204-16 (WINDOWS.md entry 44): the automatic hypothesis-to-validated
+	// promoter runs here too, on the SAME call site as the improvement
+	// pass above -- reached from both check lanes for the same reason.
+	// Never blocking: promoteHelpfulHypotheses never returns an error type
+	// this function could propagate.
+	summary.LearningValidation = promoteHelpfulHypotheses(phaseID)
 
 	return summary
 }

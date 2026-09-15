@@ -32,6 +32,18 @@ const sourceProposalPath = "proposals/source.json"
 // output rather than ordinary human work.
 const sourceProposalBranchPrefix = "source-proposal/"
 
+// sourceProposalRepeatedInterventionThreshold is the number of DISTINCT
+// episodes a single declared episodeInterventionKind category must
+// accumulate before the automatic trigger in cmd/improvement_pass.go
+// proposes a source change for it -- "the same kind of thing keeps going
+// wrong", the same reading cmd/rollback.go's canaryRegressionQuarantineThreshold
+// already applies to a canary scope's regression count. Declared here,
+// separately from that constant, because the two domains count a
+// fundamentally different identity: a canary scope's regressions across
+// candidate attempts, versus a preventable-intervention category's distinct
+// episodes across the whole colony's history (204-16-PLAN.md, SC5d).
+const sourceProposalRepeatedInterventionThreshold = 3
+
 // sourceProposalVerificationState is the declared, closed vocabulary a
 // proposal's verification state may hold.
 type sourceProposalVerificationState string

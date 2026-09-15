@@ -2572,6 +2572,8 @@ func improvementPassEventSentence(e improvementPassEventView) string {
 		return "A trial run of a proposed change finished and kept passing -- the change stays."
 	case improvementPassEventRolledBack:
 		return "A trial run of a proposed change did not hold up -- your project has been put back exactly to the state it was saved in."
+	case improvementPassEventProposalWritten:
+		return fmt.Sprintf("The same kind of thing (%s) kept happening, so a plain-English case for a source change was written on its own isolated branch -- nothing has been merged, and a person must review it by hand before anything changes.", e.Detail)
 	default:
 		return ""
 	}
