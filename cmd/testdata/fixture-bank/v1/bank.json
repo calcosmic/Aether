@@ -410,6 +410,34 @@
       "content_digest": "4c5c7d22b094b947db6ecbc9f1ca434fee5db3e611ca5412bc1635130515921c"
     },
     {
+      "id": "fixture-539987569003",
+      "title": "[broad-invariant] deviation: cmd/episode_ledger_test.go. FIXED by 204-13: runSwarmDestroy (cmd/swarm_cmd.go) and o",
+      "failing_baseline": {
+        "description": "deviation: cmd/episode_ledger_test.go. FIXED by 204-13: runSwarmDestroy (cmd/swarm_cmd.go) and orchestrateRecovery (cmd/recovery_orchestrator.go, only when it owns the episode itself) now both open and close a durable episode via emitColonyLiveEpisodeStarted/Ended, proven by a FAILS-WHEN-UNWIRED mutation on each. TestEveryLifecycleLaneWritesADurableOutcome's t.Skipf branch is now a named t.Fatalf -- all six declared lifecycle lanes pass with zero skip lines.",
+        "reference": "41"
+      },
+      "invariant": "The confirmed defect must not recur: deviation: cmd/episode_ledger_test.go. FIXED by 204-13: runSwarmDestroy (cmd/swarm_cmd.go) and orchestrateRecovery (cmd/recovery_orchestrator.go, only when it owns the episode itself) now both open and close a durable episode via emitColonyLiveEpisodeStarted/Ended, proven by a FAILS-WHEN-UNWIRED mutation on each. TestEveryLifecycleLaneWritesADurableOutcome's t.Skipf branch is now a named t.Fatalf -- all six declared lifecycle lanes pass with zero skip lines.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "41"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "539987569003a5889154c0e19516900c60ceb724ff6ff61ab060e7d45dc1f476",
+      "guard": {
+        "test": "TestEveryLifecycleLaneWritesADurableOutcome",
+        "package": "cmd"
+      }
+    },
+    {
       "id": "fixture-54a932a1f824",
       "title": "[broad-invariant] deviation: .planning/REQUIREMENTS.md. BIO-08 and CEC-07 are ready (every declaring plan has a SU",
       "failing_baseline": {
@@ -532,6 +560,34 @@
       "privacy": "repo_local",
       "severity": "low",
       "content_digest": "5aced737d86d1f885b6fe1933a8a93989b60ca9d831209dff5441ef8fac93752"
+    },
+    {
+      "id": "fixture-5d1a3245223e",
+      "title": "[broad-invariant] unmet-truth: cmd/shadow_cmds.go. FIXED by 204-12: aether shadow-declare and aether shadow-compar",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/shadow_cmds.go. FIXED by 204-12: aether shadow-declare and aether shadow-compare are now registered, reachable commands (cmd/improvement_cmds.go), alongside a new inspection surface, aether improve (default: read-only report; --declare/--compare route to the same mutating forms). The owner-facing exposure the original entry asked for is the /ant-improve wrapper triplet (.aether/commands/improve.yaml, .claude/commands/ant/improve.md, .opencode/commands/ant/improve.md), whose rout",
+        "reference": "39"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/shadow_cmds.go. FIXED by 204-12: aether shadow-declare and aether shadow-compare are now registered, reachable commands (cmd/improvement_cmds.go), alongside a new inspection surface, aether improve (default: read-only report; --declare/--compare route to the same mutating forms). The owner-facing exposure the original entry asked for is the /ant-improve wrapper triplet (.aether/commands/improve.yaml, .claude/commands/ant/improve.md, .opencode/commands/ant/improve.md), whose rout",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "39"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "5d1a3245223e2d225897d5cd5318bdf5b6c54b4c8b1b390c09f460cdab565f13",
+      "guard": {
+        "test": "TestAutomaticImprovementPassIsReachedFromBothCheckLanes",
+        "package": "cmd"
+      }
     },
     {
       "id": "fixture-62074fb7e638",
@@ -790,6 +846,34 @@
       "content_digest": "901dfdf5d632fe303e977e934aea759af1a3a622357b1de5d06870ae5dfac93e"
     },
     {
+      "id": "fixture-919a43ce2999",
+      "title": "[broad-invariant] unmet-truth: cmd/live_events.go. FIXED by 204-15: all nine previously writerless episode-ledger ",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/live_events.go. FIXED by 204-15: all nine previously writerless episode-ledger fields (evidence_ids, hard_gate_results, changed_decision_ids, usage, reported_cost_usd, interventions, episode_revision, acceptance_digest, evaluator_digest) now have real production writers on the build lane, the native check lane (runCodexContinue), and the delegate check lane (runCodexContinueFinalize, which previously recorded no episode at all). The episode ledger also joined cmd/memory_schema.g",
+        "reference": "38"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/live_events.go. FIXED by 204-15: all nine previously writerless episode-ledger fields (evidence_ids, hard_gate_results, changed_decision_ids, usage, reported_cost_usd, interventions, episode_revision, acceptance_digest, evaluator_digest) now have real production writers on the build lane, the native check lane (runCodexContinue), and the delegate check lane (runCodexContinueFinalize, which previously recorded no episode at all). The episode ledger also joined cmd/memory_schema.g",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "38"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "919a43ce2999e3af7a5a006f88cbbc7b82eb81fd8b822da45a4cfdc8a90c24d1",
+      "guard": {
+        "test": "TestEveryMemoryStoreFieldHasALiveWriter",
+        "package": "cmd"
+      }
+    },
+    {
       "id": "fixture-b1cd712d7fae",
       "title": "[broad-invariant] continue: observation -\u0026gt; instinct -\u0026gt; QUEEN.md promotion. The old phase-end loop (memory-ca",
       "failing_baseline": {
@@ -946,34 +1030,6 @@
       "content_digest": "c44507ac47717d2eac4af0bb4e8387e95a0bbfd8258f38c1b7b77c96cbb689cc"
     },
     {
-      "id": "fixture-c4535d3ebd58",
-      "title": "[broad-invariant] unmet-truth: cmd/shadow_cmds.go. shadowEvaluator's run function is a deterministic always-pass p",
-      "failing_baseline": {
-        "description": "unmet-truth: cmd/shadow_cmds.go. shadowEvaluator's run function is a deterministic always-pass placeholder, not a real per-fixture classifier -- every real shadow-compare today reports a tied verdict against an unchanged baseline. The comparison also covers settings and rules only, never code changes (LEARN-06 explicitly scoped code-valued candidates out). Close by wiring a real grading function through the already-proven-safe FrozenEvaluator.Run(Candidate, Task) Result seam, and by extending is",
-        "reference": "40"
-      },
-      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/shadow_cmds.go. shadowEvaluator's run function is a deterministic always-pass placeholder, not a real per-fixture classifier -- every real shadow-compare today reports a tied verdict against an unchanged baseline. The comparison also covers settings and rules only, never code changes (LEARN-06 explicitly scoped code-valued candidates out). Close by wiring a real grading function through the already-proven-safe FrozenEvaluator.Run(Candidate, Task) Result seam, and by extending is",
-      "allowed_mutations": [
-        "wording",
-        "formatting",
-        "file_path",
-        "symbol_name"
-      ],
-      "provenance": [
-        {
-          "kind": "defect_register",
-          "identifier": "40"
-        }
-      ],
-      "privacy": "repo_local",
-      "severity": "medium",
-      "content_digest": "c4535d3ebd581e9aef7dbc6b236153867f938956c45fefb7964fd5ee6e43f7a2",
-      "guard": {
-        "test": "TestShadowGraderDistinguishesBeneficialFromHarmful",
-        "package": "cmd"
-      }
-    },
-    {
       "id": "fixture-c5c8f1407a68",
       "title": "[broad-invariant] dream. The Dreamer's only write target (.aether/dreams/{date}.md) is blocked by the PreToolUse h",
       "failing_baseline": {
@@ -996,6 +1052,62 @@
       "privacy": "repo_local",
       "severity": "high",
       "content_digest": "c5c8f1407a6874c9bdde0bef8b96e4cf302a81d0a1ccc93bf6e7c3817b4418df"
+    },
+    {
+      "id": "fixture-cc9a1a675f37",
+      "title": "[broad-invariant] unmet-truth: cmd/source_proposal.go. FIXED, both halves: (1) 204-13 declared episodeIntervention",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/source_proposal.go. FIXED, both halves: (1) 204-13 declared episodeInterventionKind, a closed, source-derived intervention-kind vocabulary with three real production writers, so collectPreventableInterventions now classifies against a curated set instead of treating every free-form string as its own category. (2) 204-16 gave proposeSourceImprovement its first real production caller, triggerRepeatedInterventionProposal (cmd/improvement_pass.go): when the same declared interventio",
+        "reference": "45"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/source_proposal.go. FIXED, both halves: (1) 204-13 declared episodeInterventionKind, a closed, source-derived intervention-kind vocabulary with three real production writers, so collectPreventableInterventions now classifies against a curated set instead of treating every free-form string as its own category. (2) 204-16 gave proposeSourceImprovement its first real production caller, triggerRepeatedInterventionProposal (cmd/improvement_pass.go): when the same declared interventio",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "45"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "cc9a1a675f3752225125aac195493d71dbb068b22f87f2df62022746b03f6cbe",
+      "guard": {
+        "test": "TestRepeatedInterventionProposesExactlyOneSourceChange",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-cd29310f9456",
+      "title": "[broad-invariant] unmet-truth: cmd/learning_cmds.go. FIXED by 204-16: promoteHelpfulHypotheses (cmd/learning_valid",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/learning_cmds.go. FIXED by 204-16: promoteHelpfulHypotheses (cmd/learning_validator.go), called from runPhaseEndConsolidation alongside the improvement pass, now automatically promotes a StatusHypothesis learning entry to StatusValidated -- but only when a corroborated guidance-application record for that entry's own identifier has independently reached the helpful state (never a worker's own claim, never merely rendered/consulted/acted-on). Writes through the same learnStore.Re",
+        "reference": "44"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/learning_cmds.go. FIXED by 204-16: promoteHelpfulHypotheses (cmd/learning_validator.go), called from runPhaseEndConsolidation alongside the improvement pass, now automatically promotes a StatusHypothesis learning entry to StatusValidated -- but only when a corroborated guidance-application record for that entry's own identifier has independently reached the helpful state (never a worker's own claim, never merely rendered/consulted/acted-on). Writes through the same learnStore.Re",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "44"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "cd29310f9456d443dd8abc396ded5a98eb8a1de956381e40aa4149ba35aab9b4",
+      "guard": {
+        "test": "TestHypothesisPromoterIsReachedFromBothCheckLanes",
+        "package": "cmd"
+      }
     },
     {
       "id": "fixture-cfab44c9d745",
@@ -1070,34 +1182,6 @@
       "content_digest": "d12096a6c6515d2c2bf19590f46f6afbf0bc8e0b05bce64649fa903c73e72e19",
       "guard": {
         "test": "TestMemoryDetailsIsNoLongerAnAliasOfMemoryMetrics",
-        "package": "cmd"
-      }
-    },
-    {
-      "id": "fixture-dd9837a62df7",
-      "title": "[broad-invariant] unmet-truth: cmd/shadow_cmds.go. 204-08 built and tested two CLI commands (shadow-declare, shado",
-      "failing_baseline": {
-        "description": "unmet-truth: cmd/shadow_cmds.go. 204-08 built and tested two CLI commands (shadow-declare, shadow-compare) for trying a candidate beside current behaviour, but no plan in Phase 204 gives them a caller: 204-09's promotion gate drives pkg/shadow through Go functions, and no wrapper, menu spec, hook or worker-discipline file names them. TestNoRegisteredSubcommandIsUnreferenced refuses a registered command nothing calls and its allowlist may only shrink, so the orchestrator left both commands unregi",
-        "reference": "39"
-      },
-      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/shadow_cmds.go. 204-08 built and tested two CLI commands (shadow-declare, shadow-compare) for trying a candidate beside current behaviour, but no plan in Phase 204 gives them a caller: 204-09's promotion gate drives pkg/shadow through Go functions, and no wrapper, menu spec, hook or worker-discipline file names them. TestNoRegisteredSubcommandIsUnreferenced refuses a registered command nothing calls and its allowlist may only shrink, so the orchestrator left both commands unregi",
-      "allowed_mutations": [
-        "wording",
-        "formatting",
-        "file_path",
-        "symbol_name"
-      ],
-      "provenance": [
-        {
-          "kind": "defect_register",
-          "identifier": "39"
-        }
-      ],
-      "privacy": "repo_local",
-      "severity": "medium",
-      "content_digest": "dd9837a62df76bfb82c1e9c5b6b8e61915a4a22313b4c4e18893e9476a050592",
-      "guard": {
-        "test": "TestAutomaticImprovementPassIsReachedFromBothCheckLanes",
         "package": "cmd"
       }
     },
