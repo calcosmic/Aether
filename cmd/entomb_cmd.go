@@ -364,6 +364,50 @@ func prepareEntombPreflight(input entombTransactionInput, state colony.ColonySta
 		return nil
 	}
 
+	// addRequiredOrSynthesizedTombstoneInput keeps every other aspect of
+	// addFile's behaviour (the same archived name, the same tombstone_input
+	// kind, the same closure-artifact verification, the same appending to
+	// the preflight's source list) and differs only in its failure branch:
+	// when the file genuinely cannot be found, it builds a minimal stand-in
+	// document from the colony state and seal outcome already in scope
+	// instead of failing the archive. A non-not-exist error (permission,
+	// symlink, corrupt content) still fails hard exactly like addFile.
+	addRequiredOrSynthesizedTombstoneInput := func(logical, archived, actual string) error {
+		if seenActual[actual] {
+			return fmt.Errorf("duplicate entomb source %q", actual)
+		}
+		if seenArchive[archived] {
+			return fmt.Errorf("duplicate entomb archive path %q", archived)
+		}
+		content, err := readEntombLiveFile(actual, input.Root, input.DataRoot)
+		synthesized := false
+		if err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				return fmt.Errorf("required source %q: %w", logical, err)
+			}
+			content = buildSynthesizedEntombTombstoneInput(state, outcome)
+			synthesized = true
+		}
+		if err := verifyEntombClosureArtifact(logical, "tombstone_input", content, outcome); err != nil {
+			return err
+		}
+		seenActual[actual], seenArchive[archived] = true, true
+		// Actual is left empty for a synthesised stand-in: there is no live
+		// file backing it, so verifyEntombLiveSources (which skips entries
+		// with an empty Actual) never tries to re-read a file that was never
+		// there, and entombSourceDigest reports the pre-declare baseline as
+		// "missing" rather than the digest of invented content.
+		liveActual := actual
+		if synthesized {
+			liveActual = ""
+		}
+		preflight.Sources = append(preflight.Sources, entombPreparedSource{
+			Manifest: entombArchiveSource{SourcePath: logical, ArchivePath: archived, Kind: "tombstone_input", Required: true, Synthesized: synthesized},
+			Actual:   liveActual, Content: content, Clear: false,
+		})
+		return nil
+	}
+
 	required := []struct {
 		logical  string
 		archived string
@@ -380,12 +424,14 @@ func prepareEntombPreflight(input entombTransactionInput, state colony.ColonySta
 		{".aether/data/seal/checkpoints.json", "seal/checkpoints.json", "owner_checkpoints", filepath.Join(input.DataRoot, "seal", "checkpoints.json"), true},
 		{".aether/data/seal/rollback.json", "seal/rollback.json", "rollback", filepath.Join(input.DataRoot, "seal", "rollback.json"), true},
 		{".aether/QUEEN.md", "QUEEN.md", "retained_memory", filepath.Join(input.Root, ".aether", "QUEEN.md"), false},
-		{".aether/HANDOFF.md", "HANDOFF.md", "tombstone_input", filepath.Join(input.Root, ".aether", "HANDOFF.md"), false},
 	}
 	for _, item := range required {
 		if err := addFile(item.logical, item.archived, item.kind, item.actual, item.clear); err != nil {
 			return entombPreflight{}, err
 		}
+	}
+	if err := addRequiredOrSynthesizedTombstoneInput(".aether/HANDOFF.md", "HANDOFF.md", filepath.Join(input.Root, ".aether", "HANDOFF.md")); err != nil {
+		return entombPreflight{}, err
 	}
 
 	xmlBytes, err := buildEntombArchiveXMLBytes(input.DataRoot, state, outcome, input.Now)
@@ -769,6 +815,15 @@ func verifyEntombDeclaredBaseline(tx *lifecycleTransaction, expected string) err
 func entombSourceDigest(sources []entombPreparedSource, kind string) string {
 	for _, source := range sources {
 		if source.Manifest.Kind == kind {
+			if source.Actual == "" {
+				// A synthesised stand-in never had a live file backing it, so
+				// the correct pre-declare baseline is "missing" (the same
+				// sentinel readLifecycleFileState reports for a genuinely
+				// absent file) rather than the digest of invented content —
+				// otherwise verifyEntombDeclaredBaseline would reject every
+				// synthesised entry as "changed" before the write.
+				return lifecycleTransactionMissingDigest
+			}
 			return lifecycleDigest(source.Content)
 		}
 	}
@@ -793,6 +848,37 @@ func buildEntombTombstone(preflight entombPreflight, manifest colony.ArchiveMani
 	}
 	lines = append(lines, "", `Next: /ant-init "next goal"`, "")
 	return strings.Join(lines, "\n")
+}
+
+// buildSynthesizedEntombTombstoneInput builds the minimal stand-in used when
+// .aether/HANDOFF.md is missing at archive time (e.g. a resume that removed
+// it before this runtime paired that removal with a fresh write — see
+// session_flow_cmds.go). It carries only facts already loaded in the same
+// preflight scope: the colony's goal, its phase count and completion state,
+// and the seal outcome's verdict. It never invents content the archive
+// cannot otherwise attest to.
+func buildSynthesizedEntombTombstoneInput(state colony.ColonyState, outcome colony.SealOutcome) []byte {
+	goal := "No goal set"
+	if state.Goal != nil && strings.TrimSpace(*state.Goal) != "" {
+		goal = strings.TrimSpace(*state.Goal)
+	}
+	totalPhases := len(state.Plan.Phases)
+	var b strings.Builder
+	b.WriteString("# Colony Handoff (synthesised stand-in)\n\n")
+	b.WriteString("The hand-off note was missing when this colony was archived. The archive\n")
+	b.WriteString("synthesised this minimal stand-in from the colony's own records rather than\n")
+	b.WriteString("failing the archive.\n\n")
+	b.WriteString("Goal: ")
+	b.WriteString(goal)
+	b.WriteString("\n")
+	b.WriteString("State: ")
+	b.WriteString(string(state.State))
+	b.WriteString("\n")
+	b.WriteString(fmt.Sprintf("Phase: %d/%d\n", state.CurrentPhase, totalPhases))
+	b.WriteString("Seal verdict: ")
+	b.WriteString(string(outcome.Disposition))
+	b.WriteString("\n")
+	return []byte(b.String())
 }
 
 func buildEntombContext(preflight entombPreflight, manifest colony.ArchiveManifest) string {
