@@ -1,0 +1,20 @@
+Platform: Claude Code CLI
+Version: 2.1.272 (Claude Code)
+Command: claude -p "/ant-status" --permission-mode bypassPermissions
+Working directory: /Users/callumcowie/.claude/jobs/d8ed0c97/tmp/platform-runs/aether-scratch (a disposable throwaway copy of this repository's HEAD, commit aa67c905, made so the real run never touches the live worktree, the main checkout, or the owner's own projects)
+Exit status: 0
+
+--- Captured output (stdout+stderr, ANSI color codes stripped) ---
+```
+━━ 📊 C O L O N Y   S T A T U S ━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+No colony initialized in this repo.
+
+━━ 🐜 N E X T   U P ━━
+➡️ Run `/ant-init "goal"` to start a colony.
+🔀 Run `/ant-lay-eggs` first if this repo has not been set up for Aether yet.
+```
+
+No project has been started in this folder yet. Next up: run `/ant-init "goal"` to start one, or `/ant-lay-eggs` first if this folder has never been set up for Aether.
+
+--- End of capture ---
