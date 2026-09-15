@@ -174,3 +174,8 @@ None — no external service configuration required.
 ---
 *Phase: 205-owner-acceptance-and-restoration-seal*
 *Completed: 2026-09-15*
+
+## Self-Check: PASSED
+
+- All 9 key files verified present on disk (`cmd/seal_wrapper_accuracy_test.go`, both YAML sources, both `ant/` copies, both legacy `ant-*.md` aliases, this SUMMARY).
+- All 4 task/metadata commit hashes (`07c1b9a9`, `6731468d`, `943ed352`, `1127878a`) verified present in `git log --oneline --all`.
