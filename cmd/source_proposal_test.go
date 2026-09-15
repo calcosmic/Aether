@@ -426,15 +426,19 @@ func TestProposalRecordNamesItsCandidateAndEvidence(t *testing.T) {
 // ---------------------------------------------------------------------
 
 // sourceProposalReachabilityEntryPoints names every function this checker
-// walks from: the whole public surface cmd/source_proposal.go exposes. No
-// command in this codebase invokes either one yet -- Task 2 declares the
-// library functions but wires no cobra command -- so these two entry
-// points ARE "the command that invokes it" in the only sense currently
-// reachable: everything outside this file that could call into a
-// proposal's lifecycle today calls one of these two.
+// walks from. Through 204-12/204-15, this list named only the two
+// cmd/source_proposal.go library functions, because nothing else in the
+// tree called either one. 204-16 (SC5d, WINDOWS.md entry 45) gave
+// proposeSourceImprovement its first real production caller,
+// triggerRepeatedInterventionProposal (cmd/improvement_pass.go) -- added to
+// this list in the SAME change that introduced that caller, per this
+// plan's own threat-model mitigation (T-204-16-01): a new path into
+// proposeSourceImprovement must be walked by this guard from the moment it
+// exists, never added later as an afterthought.
 var sourceProposalReachabilityEntryPoints = []string{
 	"proposeSourceImprovement",
 	"recordIndependentVerification",
+	"triggerRepeatedInterventionProposal",
 }
 
 // sourceProposalModulePath is this repository's own module path

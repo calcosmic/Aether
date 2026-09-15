@@ -1,16 +1,19 @@
 package cmd
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/events"
 )
 
 // seedZeroStateImprovementPassFixtures seeds an empty-but-valid consolidation
@@ -489,5 +492,255 @@ func TestUnrecognizedScopeIsRefusedAndWritesNothing(t *testing.T) {
 		t.Fatalf("load canary run: %v", err)
 	} else if found {
 		t.Fatal("expected no canary run to be created for an unrecognized scope")
+	}
+}
+
+// ---------------------------------------------------------------------
+// 204-16-PLAN.md, Task 1 (SC5d, WINDOWS.md entry 45): the automatic,
+// evidence-gated source-improvement proposal trigger
+// (triggerRepeatedInterventionProposal, cmd/improvement_pass.go),
+// proposeSourceImprovement's first real production caller. Every test
+// below drives the trigger through the real runAutomaticImprovementPass
+// entrypoint against a throwaway temporary git repository -- never this
+// test process's own working tree -- per this plan's own project-specific
+// rule and threat T-204-16-02. sourceProposalTestRepo/chdirTemp/
+// sourceProposalCurrentBranch/sourceProposalBranchesWithPrefix are shared
+// helpers declared in cmd/source_proposal_test.go, same package.
+// ---------------------------------------------------------------------
+
+// seedRepeatedInterventionEpisodes writes one intervention_recorded record
+// of kind on each of n freshly-minted, distinct episode identifiers, and
+// returns the episode identifiers written, in the order written.
+func seedRepeatedInterventionEpisodes(t *testing.T, kind episodeInterventionKind, n int) []string {
+	t.Helper()
+	episodeIDs := make([]string, 0, n)
+	for i := 0; i < n; i++ {
+		episodeID := fmt.Sprintf("episode-%s-%d", sourceProposalSanitizeForBranch(string(kind)), i)
+		emitColonyLiveInterventionRecorded(episodeID, events.EpisodeKindRecovery, kind)
+		episodeIDs = append(episodeIDs, episodeID)
+	}
+	return episodeIDs
+}
+
+// sourceProposalGitStatus returns root's own `git status --porcelain`
+// output verbatim, for a before/after identity comparison
+// (T-204-16-02's own working-tree-safety requirement).
+func sourceProposalGitStatus(t *testing.T, root string) string {
+	t.Helper()
+	out, err := exec.Command("git", "-C", root, "status", "--porcelain").CombinedOutput()
+	if err != nil {
+		t.Fatalf("git status --porcelain: %v\n%s", err, out)
+	}
+	return string(out)
+}
+
+// TestRepeatedInterventionProposesExactlyOneSourceChange is the plan's Test
+// 1: the same declared intervention kind appearing on three distinct
+// episodes triggers exactly one source proposal, on a branch carrying
+// exactly one new file naming those episodes, with the working tree and
+// checked-out branch unchanged afterwards (T-204-16-02).
+func TestRepeatedInterventionProposesExactlyOneSourceChange(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+	seedZeroStateImprovementPassFixtures(t)
+
+	root := sourceProposalTestRepo(t)
+	chdirTemp(t, root)
+
+	beforeBranch := sourceProposalCurrentBranch(t, root)
+	beforeStatus := sourceProposalGitStatus(t, root)
+
+	episodeIDs := seedRepeatedInterventionEpisodes(t, episodeInterventionKindAnsweredWorkerQuestion, sourceProposalRepeatedInterventionThreshold)
+
+	pass := runAutomaticImprovementPass(1)
+	if !pass.Ran {
+		t.Fatalf("expected the pass to report Ran == true, got %+v", pass)
+	}
+	if len(pass.Failures) != 0 {
+		t.Fatalf("expected no failures, got %v", pass.Failures)
+	}
+
+	var written []improvementPassEvent
+	for _, e := range pass.Events {
+		if e.Kind == improvementPassEventProposalWritten {
+			written = append(written, e)
+		}
+	}
+	if len(written) != 1 {
+		t.Fatalf("expected exactly one proposal_written event, got %+v", pass.Events)
+	}
+
+	branches := sourceProposalBranchesWithPrefix(t, root)
+	if len(branches) != 1 {
+		t.Fatalf("expected exactly one source-proposal branch, got %v", branches)
+	}
+
+	// Exactly one new file on the proposal branch, naming the repeated
+	// episodes -- read from the branch's own committed tree, never the
+	// (unchanged) current working tree.
+	diffOut, err := exec.Command("git", "-C", root, "diff", "--name-only", "main", branches[0]).CombinedOutput()
+	if err != nil {
+		t.Fatalf("git diff main %s: %v\n%s", branches[0], err, diffOut)
+	}
+	files := strings.Fields(string(diffOut))
+	if len(files) != 1 {
+		t.Fatalf("expected exactly one changed file on the proposal branch, got %v", files)
+	}
+
+	contentOut, err := exec.Command("git", "-C", root, "show", branches[0]+":"+files[0]).CombinedOutput()
+	if err != nil {
+		t.Fatalf("git show %s:%s: %v\n%s", branches[0], files[0], err, contentOut)
+	}
+	for _, episodeID := range episodeIDs {
+		if !strings.Contains(string(contentOut), episodeID) {
+			t.Fatalf("proposal file does not name episode %q:\n%s", episodeID, contentOut)
+		}
+	}
+
+	if got := sourceProposalCurrentBranch(t, root); got != beforeBranch {
+		t.Fatalf("checked-out branch changed: before=%q after=%q", beforeBranch, got)
+	}
+	if got := sourceProposalGitStatus(t, root); got != beforeStatus {
+		t.Fatalf("working tree status changed: before=%q after=%q", beforeStatus, got)
+	}
+}
+
+// TestAutomaticProposalReplayCreatesNoSecondBranch is the plan's Test 2:
+// the same evidence seen a second time creates no second proposal and no
+// second branch.
+func TestAutomaticProposalReplayCreatesNoSecondBranch(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+	seedZeroStateImprovementPassFixtures(t)
+
+	root := sourceProposalTestRepo(t)
+	chdirTemp(t, root)
+
+	seedRepeatedInterventionEpisodes(t, episodeInterventionKindReleasedQuarantine, sourceProposalRepeatedInterventionThreshold)
+
+	first := runAutomaticImprovementPass(1)
+	firstWritten := 0
+	for _, e := range first.Events {
+		if e.Kind == improvementPassEventProposalWritten {
+			firstWritten++
+		}
+	}
+	if firstWritten != 1 {
+		t.Fatalf("expected exactly one proposal_written event on the first run, got %+v", first.Events)
+	}
+	branchesAfterFirst := sourceProposalBranchesWithPrefix(t, root)
+	if len(branchesAfterFirst) != 1 {
+		t.Fatalf("expected exactly one branch after the first run, got %v", branchesAfterFirst)
+	}
+
+	second := runAutomaticImprovementPass(1)
+	if len(second.Failures) != 0 {
+		t.Fatalf("expected no failures on the replay run, got %v", second.Failures)
+	}
+	secondWritten := 0
+	for _, e := range second.Events {
+		if e.Kind == improvementPassEventProposalWritten {
+			secondWritten++
+		}
+	}
+	if secondWritten != 0 {
+		t.Fatalf("expected zero proposal_written events on a replay with unchanged evidence, got %+v", second.Events)
+	}
+	branchesAfterSecond := sourceProposalBranchesWithPrefix(t, root)
+	if len(branchesAfterSecond) != 1 {
+		t.Fatalf("expected still exactly one branch after the replay run, got %v", branchesAfterSecond)
+	}
+}
+
+// TestTwoOccurrencesProposeNothing is the plan's Test 3: two occurrences of
+// the same declared kind trigger nothing.
+func TestTwoOccurrencesProposeNothing(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+	seedZeroStateImprovementPassFixtures(t)
+
+	root := sourceProposalTestRepo(t)
+	chdirTemp(t, root)
+
+	seedRepeatedInterventionEpisodes(t, episodeInterventionKindDeclinedForcedReviewer, 2)
+
+	pass := runAutomaticImprovementPass(1)
+	if len(pass.Events) != 0 {
+		t.Fatalf("expected no events for only two occurrences, got %+v", pass.Events)
+	}
+	if branches := sourceProposalBranchesWithPrefix(t, root); len(branches) != 0 {
+		t.Fatalf("expected no proposal branch, got %v", branches)
+	}
+}
+
+// TestThresholdIsPerCategoryNotATotal is the plan's Test 4: three
+// occurrences of three DIFFERENT declared kinds trigger nothing -- the
+// threshold is per category, never a total across categories.
+func TestThresholdIsPerCategoryNotATotal(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+	seedZeroStateImprovementPassFixtures(t)
+
+	root := sourceProposalTestRepo(t)
+	chdirTemp(t, root)
+
+	seedRepeatedInterventionEpisodes(t, episodeInterventionKindAnsweredWorkerQuestion, 1)
+	seedRepeatedInterventionEpisodes(t, episodeInterventionKindDeclinedForcedReviewer, 1)
+	seedRepeatedInterventionEpisodes(t, episodeInterventionKindReleasedQuarantine, 1)
+
+	pass := runAutomaticImprovementPass(1)
+	if len(pass.Events) != 0 {
+		t.Fatalf("expected no events -- the threshold is per category, not a total across categories, got %+v", pass.Events)
+	}
+	if branches := sourceProposalBranchesWithPrefix(t, root); len(branches) != 0 {
+		t.Fatalf("expected no proposal branch, got %v", branches)
+	}
+}
+
+// TestDirtyTreeAutomaticProposalIsRefusedAndNeverBlocks is the plan's Test
+// 5: a dirty working tree is refused by name, creates nothing, and does
+// not fail the check (the pass's own non-blocking contract).
+func TestDirtyTreeAutomaticProposalIsRefusedAndNeverBlocks(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+	seedZeroStateImprovementPassFixtures(t)
+
+	root := sourceProposalTestRepo(t)
+	chdirTemp(t, root)
+
+	if err := os.WriteFile(filepath.Join(root, "uncommitted.txt"), []byte("wip\n"), 0o644); err != nil {
+		t.Fatalf("write uncommitted file: %v", err)
+	}
+
+	seedRepeatedInterventionEpisodes(t, episodeInterventionKindAnsweredWorkerQuestion, sourceProposalRepeatedInterventionThreshold)
+
+	pass := runAutomaticImprovementPass(1)
+	if !pass.Ran {
+		t.Fatalf("expected the pass to still report Ran == true on a refused proposal, got %+v", pass)
+	}
+	if len(pass.Failures) == 0 {
+		t.Fatal("expected the dirty-tree refusal to be recorded as a failure")
+	}
+	found := false
+	for _, f := range pass.Failures {
+		if strings.Contains(f, "dirty") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected a failure naming the dirty working tree, got %v", pass.Failures)
+	}
+	for _, e := range pass.Events {
+		if e.Kind == improvementPassEventProposalWritten {
+			t.Fatalf("expected no proposal_written event on a refused dirty-tree proposal, got %+v", pass.Events)
+		}
+	}
+	if branches := sourceProposalBranchesWithPrefix(t, root); len(branches) != 0 {
+		t.Fatalf("expected no proposal branch on a refused dirty-tree proposal, got %v", branches)
 	}
 }
