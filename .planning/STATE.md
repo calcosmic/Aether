@@ -5,8 +5,8 @@ milestone_name: Classic Colony Restoration
 current_phase: 205
 current_phase_name: Owner Acceptance and Restoration Seal
 status: executing
-stopped_at: 205-13 complete and merged; next is 205-14 automated preflight then owner-only walkthrough
-last_updated: "2026-09-15T23:55:16Z"
+stopped_at: 205-14 task 1 preflight executing; owner-only walkthrough has not begun
+last_updated: "2026-09-15T23:56:05Z"
 last_activity: 2026-09-16
 last_activity_desc: Local 1.0.79 release complete; owner-session preflight next
 state_head: 11d7eb27dcdca54a39c884b6e7b5a8d979fe6968
@@ -35,7 +35,7 @@ See: .planning/PROJECT.md (updated 2026-09-15)
 Phase: 205 (Owner Acceptance and Restoration Seal) — EXECUTING
 Next phase: 205 (Owner Acceptance and Restoration Seal)
 Status: Executing Phase 205
-Plan: 14 of 18 next — waves 1–5 complete; 13/18 plans have committed summaries
+Plan: 14 of 18 active — task 1 preflight; 13/18 plans have committed summaries
 Last activity: 2026-09-16 — Local release merged; final owner-session preflight next
 
 ## Performance Metrics
@@ -758,8 +758,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-15T23:55:16Z
-Stopped at: 205-13 complete and merged; next is 205-14 automated preflight then owner-only walkthrough
+Last session: 2026-09-15T23:56:05Z
+Stopped at: 205-14 task 1 preflight executing; owner-only walkthrough has not begun
 Resume file: .planning/phases/205-owner-acceptance-and-restoration-seal/205-14-PLAN.md
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
@@ -779,6 +779,8 @@ Initial resume evidence (superseded by active execution below): HEAD 5f14b056 re
 - Parent verified all 167 artifacts in `/Users/callumcowie/.aether-backups/phase205-release-20260916/evidence-manifest.json`; no Go, TypeScript-host or dependency changes occurred after the completed full gates. Focused version/package checks and all 11 npm tests passed. Full tests retain the same 17 known failures. Read `205-RELEASE-RECORD.md` for guarded shared-installation and target rollback commands.
 - Target update committed only `.claude/settings.json` and `.claude/rules/aether-colony.md` at `fe1ec13284bf60a3e3205cbc7028f1c275eee5e2`. Its installation marker intentionally changed from 1.0.63 to 1.0.79; all other 1,304 existing extended records (382 data files) kept bytes, modes and mtimes. Original colony SHA-256 remains `883c58156730f89d329acf97aeb1ce954ba96efb3c6b5996ccf3ec2a83cbaa0d`, completed and unsealed. The update's 70 new recovery records are retained and inventoried; one exact local journal exclusion keeps Git clean. Original and snapshot refs remain unchanged.
 - Known release limitations, including the existing js-yaml advisory reported by npm audit and preserved local Codex agent variants, remain documented in `205-13-SUMMARY.md` and `205-RELEASE-RECORD.md`; carry them into the limitations card. No owner acceptance is implied.
+
+- Plan 205-14 task 1 is executing in `.claude/worktrees/agent-p205-14-codex-20260916`, base `be9e2208c418fde074e0b450425c516f38b7fad4`. Manifest `/tmp/aether-phase205-execution/wave6.json`; process/log receipts `plan14-process.json` and `plan14-executor.log` in the same scratch directory. Executor may only perform read-only target preflight, commit the before-inventory/session opening/checkpoint, then stop at task 2. No owner session has begun. On resumption inspect its exit/result/progress before dispatching again.
 
 ## Operator Next Steps
 
