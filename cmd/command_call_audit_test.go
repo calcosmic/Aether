@@ -1038,6 +1038,9 @@ func TestExtractorDoesNotDesyncOnGluedFenceMarker(t *testing.T) {
 // stale command name in `.aether/commands/` or `colony/playbooks/` fails here
 // as its own distinct violation category.
 func TestDocumentedCommandNamesResolve(t *testing.T) {
+	// Cobra registers help lazily; initialize it before Find, as the flag audits do.
+	rootCmd.InitDefaultHelpCmd()
+
 	root, err := repoRootForCommandSourceTest()
 	if err != nil {
 		t.Fatalf("resolve repo root: %v", err)
