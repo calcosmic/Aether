@@ -444,3 +444,158 @@ func TestClassicCoverageMissingFileFailsByName(t *testing.T) {
 	}
 }
 
+func cloneClassicCoverageDocument(t *testing.T, document classicCoverageDocument) classicCoverageDocument {
+	t.Helper()
+	raw, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var clone classicCoverageDocument
+	if err := json.Unmarshal(raw, &clone); err != nil {
+		t.Fatal(err)
+	}
+	return clone
+}
+
+// TestClassicCoverageRatchetRejectsInvalidRows mirrors
+// TestClassicCoverage199RejectsInvalidRows: load the real Phase 203 document,
+// deep-copy it, and mutate one clone per validator, asserting each mutation
+// produces a non-nil error naming the offending CAP id. Every case operates
+// on an in-memory clone; none of these tests write to the real files on disk.
+func TestClassicCoverageRatchetRejectsInvalidRows(t *testing.T) {
+	root := findTestModuleRootForClassicCoverage199()
+	document := loadClassicCoveragePhase203(t, root)
+	routing, err := loadClassicCoverageLedgerRouting(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	targetID := document.Rows[0].ID
+
+	for name, mutate := range map[string]func(*classicCoverageDocument){
+		"missing row": func(d *classicCoverageDocument) {
+			d.Rows = d.Rows[1:]
+		},
+		"duplicated row": func(d *classicCoverageDocument) {
+			d.Rows = append(d.Rows, d.Rows[0])
+		},
+		"blanked modern_home": func(d *classicCoverageDocument) {
+			d.Rows[0].ModernHome = ""
+		},
+		"placeholder artifact": func(d *classicCoverageDocument) {
+			d.Rows[0].Artifact = "TODO"
+		},
+		"disposition outside enum": func(d *classicCoverageDocument) {
+			d.Rows[0].Disposition = "unsupported-value"
+		},
+		"nonpassing status": func(d *classicCoverageDocument) {
+			d.Rows[0].Status = "PENDING"
+		},
+		"nonexistent artifact path": func(d *classicCoverageDocument) {
+			d.Rows[0].Artifact = "cmd/does_not_exist_203_classic_coverage.go"
+		},
+		"proof only in a comment": func(d *classicCoverageDocument) {
+			// buildClassicCoverage199ProofIndex never registers a
+			// comment- or string-only occurrence as a real function
+			// (proven by TestClassicCoverage199ProofIndexRejectsCommentAndStringDecoys);
+			// this name is not a declared top-level function anywhere
+			// in cmd/*_test.go, so it resolves the same way a genuine
+			// comment decoy would: not at all.
+			d.Rows[0].Proofs = []string{"TestClassicCoverage203OnlyExistsInsideAComment"}
+		},
+		"disposition differs from ledger, no re-adjudication": func(d *classicCoverageDocument) {
+			route := routing[d.Rows[0].ID]
+			if route.Disposition == "restore-modern" {
+				d.Rows[0].Disposition = "replace-better"
+			} else {
+				d.Rows[0].Disposition = "restore-modern"
+			}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			clone := cloneClassicCoverageDocument(t, document)
+			mutate(&clone)
+			err := validateClassicCoverage(clone, root, "203")
+			if err == nil {
+				t.Fatalf("mutation %q unexpectedly passed validation", name)
+			}
+			if !strings.Contains(err.Error(), targetID) {
+				t.Fatalf("mutation %q error does not name %s: %v", name, targetID, err)
+			}
+		})
+	}
+}
+
+// TestClassicCoverageRatchetErrorsAreOrderedAndStable mutates three rows at
+// once and asserts the collected error text lists the offending ids in
+// ascending CAP id order and is identical across two consecutive runs of the
+// same validator.
+func TestClassicCoverageRatchetErrorsAreOrderedAndStable(t *testing.T) {
+	root := findTestModuleRootForClassicCoverage199()
+	document := loadClassicCoveragePhase203(t, root)
+	clone := cloneClassicCoverageDocument(t, document)
+	sort.Slice(clone.Rows, func(i, j int) bool { return clone.Rows[i].ID < clone.Rows[j].ID })
+
+	if len(clone.Rows) < 5 {
+		t.Fatalf("expected at least 5 Phase 203 rows, got %d", len(clone.Rows))
+	}
+	mutatedIndexes := []int{4, 1, 3} // deliberately out of ascending order
+	var ids []string
+	for _, idx := range mutatedIndexes {
+		clone.Rows[idx].ModernHome = ""
+		ids = append(ids, clone.Rows[idx].ID)
+	}
+	sort.Strings(ids)
+
+	err1 := validateClassicCoverageRequiredFields(clone)
+	err2 := validateClassicCoverageRequiredFields(clone)
+	if err1 == nil || err2 == nil {
+		t.Fatal("expected validation errors from a document with three blanked modern_home fields")
+	}
+	if err1.Error() != err2.Error() {
+		t.Fatalf("errors are not byte-identical across repeated runs:\nrun 1: %s\nrun 2: %s", err1, err2)
+	}
+
+	previousIndex := -1
+	for _, id := range ids {
+		idx := strings.Index(err1.Error(), id)
+		if idx == -1 {
+			t.Fatalf("error does not name %s: %v", id, err1)
+		}
+		if idx < previousIndex {
+			t.Fatalf("error does not list %s in ascending CAP id order: %v", id, err1)
+		}
+		previousIndex = idx
+	}
+}
+
+// TestClassicCoverageAuditRequiresTheRenderedCompanion: a document whose
+// companion markdown omits one row's id fails validateClassicCoverageAudit
+// naming that id. Operates entirely inside a temporary directory -- the real
+// coverage files are never touched.
+func TestClassicCoverageAuditRequiresTheRenderedCompanion(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, ".planning", "phases", "203-biological-runtime")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	document := classicCoverageDocument{
+		Version: "203/classic-coverage/v1",
+		Rows: []classicCoverageRow{
+			{Type: "GOAL", ID: "CAP-002", Disposition: "restore-modern"},
+			{Type: "GOAL", ID: "CAP-009", Disposition: "restore-modern"},
+		},
+	}
+	audit := "## GOAL\n\n| ID | Disposition |\n|---|---|\n| CAP-002 | restore-modern |\n"
+	if err := os.WriteFile(filepath.Join(dir, "203-CLASSIC-COVERAGE.md"), []byte(audit), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	err := validateClassicCoverageAudit(document, root, "203")
+	if err == nil {
+		t.Fatal("expected audit validation to fail on a companion missing a row")
+	}
+	if !strings.Contains(err.Error(), "CAP-009") {
+		t.Fatalf("error does not name the missing row's id: %v", err)
+	}
+}
+
