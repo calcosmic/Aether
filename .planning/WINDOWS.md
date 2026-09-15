@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 31
+open_count: 32
 waived_count: 0
 fixed_count: 15
-total_count: 46
-last_updated: 2026-09-15T00:22:57.000Z
+total_count: 47
+last_updated: 2026-09-15T01:08:31.907Z
 ---
 
 # Broken Windows Ledger
@@ -61,6 +61,7 @@ last_updated: 2026-09-15T00:22:57.000Z
 | 44 | 204 | unmet-truth | cmd/learning_cmds.go |  | FIXED by 204-16: promoteHelpfulHypotheses (cmd/learning_validator.go), called from runPhaseEndConsolidation alongside the improvement pass, now automatically promotes a StatusHypothesis learning entry to StatusValidated -- but only when a corroborated guidance-application record for that entry's own identifier has independently reached the helpful state (never a worker's own claim, never merely rendered/consulted/acted-on). Writes through the same learnStore.Replace call the hand-run learning-validate command already uses, never a second writer. Reached from both check lanes by the same call-graph technique as the improvement pass. | fixed |  | 2026-09-14T15:41:03.868Z | 2026-09-15T00:22:57.000Z |
 | 45 | 204 | unmet-truth | cmd/source_proposal.go |  | FIXED, both halves: (1) 204-13 declared episodeInterventionKind, a closed, source-derived intervention-kind vocabulary with three real production writers, so collectPreventableInterventions now classifies against a curated set instead of treating every free-form string as its own category. (2) 204-16 gave proposeSourceImprovement its first real production caller, triggerRepeatedInterventionProposal (cmd/improvement_pass.go): when the same declared intervention kind recurs on 3+ distinct episodes, it proposes a source change naming the real episodes, on an isolated branch, with sourceProposalReachabilityEntryPoints extended in the same change so TestSourceProposalCannotMergePublishOrDeploy's call-graph walk covers the new entry point too. | fixed |  | 2026-09-14T15:41:07.891Z | 2026-09-15T00:22:57.000Z |
 | 46 | 202.1 | unmet-truth | pkg/codex/platform_dispatch.go |  | workerProcessEnv (pkg/codex/process_tracker.go) had NO caller, so AETHER_WORKER_NAME never reached a spawned worker. aether hook-stop therefore could not tell an Aether build worker from a person: it blocked worker Weld-32 mid-build and advised aether pause, the worker ran it, and a live CosmicDashboard Autopilot colony was paused mid-phase. Wired the env at the spawn site and exempted Aether-spawned workers from hook-stop. Proven by a REAL spawned subprocess reading back its own environment (TestSpawnedWorkerCarriesItsIdentityInTheEnvironment) rather than by testing the builder in isolation -- an isolated builder test passed for the entire time the wiring was missing. Migrated 2026-09-14 by plan 204-11 from a stray, out-of-band duplicate row (originally id 14, colliding with the real phase-203 entry 14) that had drifted below the JSON ledger block; original recorded/resolved timestamps were 2026-09-12T21:30:00.000Z. | fixed |  | 2026-09-14T15:42:11.225Z | 2026-09-14T15:42:13.430Z |
+| 47 | 204 | unmet-truth | cmd/swarm_cmd.go |  | PRE-EXISTING latent collision in swarm worker naming, found at the Phase 204 gap-closure wave-3 gate (2026-09-15) and NOT introduced by it: no gap-closure plan touches swarm naming. deterministicAntName (cmd/codex_visuals.go) derives a worker name as prefix[hash mod len(prefixes)] plus a number from hash mod 99, seeded by the colony root path, caste and target; buildSwarmManifest (cmd/swarm_cmd.go, the duplicate dispatch name check near line 1256) then refuses the whole manifest when two dispatches land on the same name instead of de-duplicating. With five or six workers drawn from roughly six prefixes times 99 numbers, any two collide about one run in fifty to a hundred, and because the root path is part of the seed, a given colony can be stuck colliding on a given target every time. Observed as TestSwarmFinalizeRecordsExternalTaskResults/timeout failing with duplicate dispatch name Guard-95 once in a full-suite run at 05b0d453; the same test passed in the previous gate at 2eae06e3 and passed three of three re-runs in isolation. Close by making the manifest builder append a disambiguating suffix on collision (or fold the caste index into the seed) with a test that forces two workers onto one name and asserts both are dispatched under distinct names. | open |  | 2026-09-15T01:08:31.907Z |  |
 
 ````json
 [
@@ -615,6 +616,18 @@ last_updated: 2026-09-15T00:22:57.000Z
     "reason": "",
     "recorded_at": "2026-09-14T15:42:11.225Z",
     "resolved_at": "2026-09-14T15:42:13.430Z"
+  },
+  {
+    "id": 47,
+    "kind": "unmet-truth",
+    "phase": "204",
+    "file": "cmd/swarm_cmd.go",
+    "line": null,
+    "description": "PRE-EXISTING latent collision in swarm worker naming, found at the Phase 204 gap-closure wave-3 gate (2026-09-15) and NOT introduced by it: no gap-closure plan touches swarm naming. deterministicAntName (cmd/codex_visuals.go) derives a worker name as prefix[hash mod len(prefixes)] plus a number from hash mod 99, seeded by the colony root path, caste and target; buildSwarmManifest (cmd/swarm_cmd.go, the duplicate dispatch name check near line 1256) then refuses the whole manifest when two dispatches land on the same name instead of de-duplicating. With five or six workers drawn from roughly six prefixes times 99 numbers, any two collide about one run in fifty to a hundred, and because the root path is part of the seed, a given colony can be stuck colliding on a given target every time. Observed as TestSwarmFinalizeRecordsExternalTaskResults/timeout failing with duplicate dispatch name Guard-95 once in a full-suite run at 05b0d453; the same test passed in the previous gate at 2eae06e3 and passed three of three re-runs in isolation. Close by making the manifest builder append a disambiguating suffix on collision (or fold the caste index into the seed) with a test that forces two workers onto one name and asserts both are dispatched under distinct names.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-15T01:08:31.907Z",
+    "resolved_at": null
   }
 ]
 ````
