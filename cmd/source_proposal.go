@@ -240,6 +240,52 @@ func sourceProposalBranchExists(root, branch string) bool {
 	return cmd.Run() == nil
 }
 
+// sourceProposalIsolatedWorktree creates a temporary git worktree for
+// branch at baseCommit, in a directory OUTSIDE root entirely (os.MkdirTemp
+// against the OS temp directory, never a path under root) -- so that
+// creating and populating the proposal branch never requires switching
+// root's own live checkout (CR-04, 204-REVIEW.md). Returns the worktree's
+// absolute path and a cleanup function that removes the worktree checkout
+// -- and, best-effort, prunes git's own stale worktree metadata -- but
+// NEVER deletes branch itself: a source proposal's branch is the whole
+// point of this function and must survive for a human to review, unlike a
+// build worker's throwaway worktree branch (cmd/codex_build_worktree.go's
+// removeGitWorktree, which deletes its branch once the worker's own
+// changes have synced back -- a deliberately different lifecycle this
+// function does not reuse).
+func sourceProposalIsolatedWorktree(root, branch, baseCommit string) (string, func(), error) {
+	parent, err := os.MkdirTemp("", "aether-source-proposal-")
+	if err != nil {
+		return "", nil, fmt.Errorf("create temporary worktree directory: %w", err)
+	}
+	cleanup := func() { _ = os.RemoveAll(parent) }
+
+	// git worktree add refuses a target path that already exists (even
+	// empty, on some git versions) -- join a not-yet-created subdirectory
+	// so git creates the final directory itself, exactly as
+	// allocateBuildWorktree (cmd/codex_build_worktree.go) already does for
+	// the same reason.
+	worktreePath := filepath.Join(parent, "wt")
+	if _, err := gitOutputAt(root, "worktree", "add", "-b", branch, worktreePath, baseCommit); err != nil {
+		cleanup()
+		return "", nil, fmt.Errorf("git worktree add: %w", err)
+	}
+
+	removeWorktree := func() {
+		// Best-effort, in this order: `git worktree remove` first, so
+		// git's own administrative metadata stays consistent; if it fails
+		// for any reason (e.g. the directory was already partially
+		// removed), os.RemoveAll below still reclaims the disk space, and
+		// a later `git worktree prune` in root clears the stale entry.
+		// The branch is never touched by either step.
+		if _, err := gitOutputAt(root, "worktree", "remove", worktreePath, "--force"); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not cleanly remove source proposal worktree %q: %v\n", worktreePath, err)
+		}
+		cleanup()
+	}
+	return worktreePath, removeWorktree, nil
+}
+
 // sourceProposalApplyChangeSet writes every file in changes, stages them,
 // and commits on whatever branch is currently checked out in root. It
 // performs no other git operation -- no merge, no push, no fetch, no
@@ -294,9 +340,25 @@ func sourceProposalApplyChangeSet(root string, changes sourceChangeSet) error {
 // proposeSourceImprovement opens one isolated branch carrying changes,
 // records a durable proposal, and does nothing else. It refuses a dirty
 // working tree by name and creates nothing; refuses a branch-name collision
-// by name rather than overwriting; and returns the original branch checked
-// out and the working tree exactly as it found it, whether it succeeds or
-// fails partway through.
+// by name rather than overwriting.
+//
+// CR-04 (204-REVIEW.md): the branch is created and the change set applied
+// entirely inside a TEMPORARY, ISOLATED git worktree
+// (sourceProposalIsolatedWorktree) -- this function never runs `git
+// checkout` in root, the live working directory this process actually
+// runs in, at all. Before this fix, this function checked the proposal
+// branch out directly in root and checked back out to the original branch
+// afterward; if that final checkout itself failed, the real repository was
+// left on the new proposal branch with no retry and no recovery. This
+// matters because triggerRepeatedInterventionProposal
+// (cmd/improvement_pass.go) is this function's first real production
+// caller, firing automatically and unattended at the end of every check --
+// including inside unattended `aether run` autopilot loops -- with no
+// human confirming the moment it fires. Working entirely in an isolated
+// worktree means the live checkout's branch and working tree are never
+// touched, so an automatic trigger can never leave a shared repository on
+// the wrong branch or race a concurrent session's own checkout, whether
+// this function succeeds or fails partway through.
 func proposeSourceImprovement(candidateID string, evidence []string, changes sourceChangeSet) (sourceProposal, bool, error) {
 	if store == nil {
 		return sourceProposal{}, false, fmt.Errorf("no store initialized")
@@ -334,10 +396,6 @@ func proposeSourceImprovement(candidateID string, evidence []string, changes sou
 		)
 	}
 
-	originalBranch, err := gitOutputAt(root, "rev-parse", "--abbrev-ref", "HEAD")
-	if err != nil {
-		return sourceProposal{}, false, fmt.Errorf("resolve current branch: %w", err)
-	}
 	baseCommit, err := gitOutputAt(root, "rev-parse", "HEAD")
 	if err != nil {
 		return sourceProposal{}, false, fmt.Errorf("resolve base commit: %w", err)
@@ -350,21 +408,24 @@ func proposeSourceImprovement(candidateID string, evidence []string, changes sou
 		)
 	}
 
-	if _, err := gitOutputAt(root, "checkout", "-b", branch, baseCommit); err != nil {
-		return sourceProposal{}, false, fmt.Errorf("create proposal branch %q: %w", branch, err)
+	worktreePath, cleanupWorktree, err := sourceProposalIsolatedWorktree(root, branch, baseCommit)
+	if err != nil {
+		return sourceProposal{}, false, fmt.Errorf("create isolated proposal worktree for branch %q: %w", branch, err)
 	}
 
-	if err := sourceProposalApplyChangeSet(root, changes); err != nil {
-		_, _ = gitOutputAt(root, "checkout", originalBranch)
+	if err := sourceProposalApplyChangeSet(worktreePath, changes); err != nil {
+		cleanupWorktree()
 		_, _ = gitOutputAt(root, "branch", "-D", branch)
 		return sourceProposal{}, false, fmt.Errorf("apply proposal change set: %w", err)
 	}
 
-	if _, err := gitOutputAt(root, "checkout", originalBranch); err != nil {
-		return sourceProposal{}, false, fmt.Errorf(
-			"applied proposal changes on branch %q but failed to return to %q: %w", branch, originalBranch, err,
-		)
-	}
+	// The worktree checkout itself is disposable once the commit exists on
+	// branch -- the branch is real, durable git history in root's own
+	// repository regardless of whether this worktree directory survives.
+	// cleanupWorktree removes ONLY the worktree checkout, never the
+	// branch: unlike a build worker's throwaway worktree, a source
+	// proposal's branch must survive for a human to review.
+	cleanupWorktree()
 
 	proposal := sourceProposal{
 		ProposalID:        proposalID,

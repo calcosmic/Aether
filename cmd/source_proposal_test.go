@@ -264,6 +264,122 @@ func TestAbsolutePathChangeSetIsRefusedByName(t *testing.T) {
 	}
 }
 
+// sourceProposalPorcelainStatus returns root's own `git status --porcelain`
+// output, trimmed -- an empty string means a perfectly clean working tree.
+func sourceProposalPorcelainStatus(t *testing.T, root string) string {
+	t.Helper()
+	out, err := exec.Command("git", "-C", root, "status", "--porcelain").CombinedOutput()
+	if err != nil {
+		t.Fatalf("git status --porcelain: %v\n%s", err, out)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// sourceProposalWorktreeCount returns the number of worktrees `git worktree
+// list` reports for root -- 1 means only the main working tree itself,
+// with no leaked secondary worktree left registered.
+func sourceProposalWorktreeCount(t *testing.T, root string) int {
+	t.Helper()
+	out, err := exec.Command("git", "-C", root, "worktree", "list", "--porcelain").CombinedOutput()
+	if err != nil {
+		t.Fatalf("git worktree list: %v\n%s", err, out)
+	}
+	count := 0
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.HasPrefix(line, "worktree ") {
+			count++
+		}
+	}
+	return count
+}
+
+// TestSourceProposalFailureNeverTouchesTheLiveCheckout is CR-04's
+// fix-locking test (204-REVIEW.md): forces proposeSourceImprovement to fail
+// AFTER its isolated worktree has already been created (the absolute-path
+// change-set refusal, which fires inside sourceProposalApplyChangeSet, only
+// once the worktree exists) and asserts root's own live checkout --
+// branch, full `git status --porcelain` output, and worktree count -- is
+// byte-for-byte unchanged. Before this fix, this class of failure ran `git
+// checkout -b` directly in root and could, on a failed final `git checkout`
+// back to the original branch, leave root's real repository checked out on
+// the half-applied proposal branch with no retry and no recovery. Since the
+// fix works entirely in a temporary worktree outside root, root's own
+// checkout is provably untouched by ANY failure inside the proposal
+// pipeline, not merely the one this test forces.
+func TestSourceProposalFailureNeverTouchesTheLiveCheckout(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	root := sourceProposalTestRepo(t)
+	chdirTemp(t, root)
+
+	beforeBranch := sourceProposalCurrentBranch(t, root)
+	beforeStatus := sourceProposalPorcelainStatus(t, root)
+	beforeWorktrees := sourceProposalWorktreeCount(t, root)
+	beforeHead, err := exec.Command("git", "-C", root, "rev-parse", "HEAD").CombinedOutput()
+	if err != nil {
+		t.Fatalf("rev-parse HEAD: %v\n%s", err, beforeHead)
+	}
+
+	absTarget := filepath.Join(t.TempDir(), "live-checkout-escape.txt")
+	changes := sourceChangeSet{
+		Files:   []sourceChangeSetFile{{Path: absTarget, Content: "should never touch the live checkout\n"}},
+		Message: "force a mid-pipeline failure after the worktree exists",
+	}
+	_, created, err := proposeSourceImprovement("candidate-live-checkout-safety", nil, changes)
+	if err == nil {
+		t.Fatal("expected an error forcing the mid-pipeline failure, got nil")
+	}
+	if created {
+		t.Fatal("expected created=false on a forced mid-pipeline failure")
+	}
+
+	if got := sourceProposalCurrentBranch(t, root); got != beforeBranch {
+		t.Fatalf("live checkout branch changed: before=%q after=%q -- CR-04 regression", beforeBranch, got)
+	}
+	if got := sourceProposalPorcelainStatus(t, root); got != beforeStatus {
+		t.Fatalf("live checkout `git status --porcelain` changed: before=%q after=%q -- CR-04 regression", beforeStatus, got)
+	}
+	afterHead, err := exec.Command("git", "-C", root, "rev-parse", "HEAD").CombinedOutput()
+	if err != nil {
+		t.Fatalf("rev-parse HEAD: %v\n%s", err, afterHead)
+	}
+	if string(beforeHead) != string(afterHead) {
+		t.Fatalf("live checkout HEAD commit changed: before=%s after=%s -- CR-04 regression", beforeHead, afterHead)
+	}
+	if got := sourceProposalWorktreeCount(t, root); got != beforeWorktrees {
+		t.Fatalf("worktree count changed: before=%d after=%d -- a temporary proposal worktree leaked", beforeWorktrees, got)
+	}
+	if branches := sourceProposalBranchesWithPrefix(t, root); len(branches) != 0 {
+		t.Fatalf("expected no surviving source-proposal branch after a forced apply failure, got %v", branches)
+	}
+}
+
+// TestSourceProposalNeverChecksOutInTheLiveRepository is CR-04's structural
+// fix-locking test (204-REVIEW.md): the specific failure class the review
+// found -- a failed final `git checkout` back to the original branch
+// leaving the live repository on the half-applied proposal branch, with no
+// retry and no recovery -- is only reachable if proposeSourceImprovement's
+// own file ever asks git to check anything out in root at all. The fix
+// moved branch creation and file writes into an isolated, temporary git
+// worktree (sourceProposalIsolatedWorktree) so root's own checkout is
+// never switched, making this failure class categorically unreachable
+// rather than merely retried. This asserts, from the real source text
+// (never a hand-maintained summary of it), that the literal git subcommand
+// "checkout" does not appear anywhere in this file -- a regression that
+// reintroduces a checkout against root fails this test by name, before any
+// git behavior even runs.
+func TestSourceProposalNeverChecksOutInTheLiveRepository(t *testing.T) {
+	data, err := os.ReadFile("source_proposal.go")
+	if err != nil {
+		t.Fatalf("read source_proposal.go: %v", err)
+	}
+	if strings.Contains(string(data), `"checkout"`) {
+		t.Fatal("cmd/source_proposal.go contains a \"checkout\" git subcommand literal -- CR-04 (204-REVIEW.md) requires proposeSourceImprovement to never switch the live repository's checkout; use an isolated worktree instead")
+	}
+}
+
 // TestProposalReplayCreatesNoSecondBranch asserts proposing the same
 // improvement twice returns the first proposal and creates no second
 // branch.
