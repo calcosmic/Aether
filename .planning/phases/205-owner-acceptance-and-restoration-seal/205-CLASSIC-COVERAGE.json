@@ -1,0 +1,39 @@
+{
+  "version": "205/classic-coverage/v1",
+  "rows": [
+    {
+      "type": "GOAL",
+      "id": "CAP-023",
+      "disposition": "restore-modern",
+      "modern_home": ".aether/commands/seal.yaml and cmd/seal_wrapper_accuracy_test.go",
+      "plan_task": "205-04 Tasks 1-3",
+      "artifact": ".aether/commands/seal.yaml",
+      "proofs": [
+        "TestSealWrapperReviewClaimMatchesTheRuntime",
+        "TestSealWrapperTripletStaysIdentical",
+        "TestSealAndEntombWrappersRelayTheCard",
+        "TestEntombWrapperTripletStaysIdentical"
+      ],
+      "status": "PASS",
+      "historical_evidence": "The frozen v1.28-classic-capability-ledger.md routes Classic patrol documentation accuracy to PROOF-03. 205-04-SUMMARY.md records the real sealReviewRequiredCastes derivation across production, maintenance and discovery projects, the corrected conditional review-team claim, and the seal/entomb card-relay instructions mirrored from the command sources. The named tests in cmd/seal_wrapper_accuracy_test.go were each executed independently by 205-11. This signs the checked documentation claims and source parity; owner-visible card delivery in a live session remains a Journey 1 acceptance check, as 205-04 explicitly records."
+    },
+    {
+      "type": "GOAL",
+      "id": "CAP-054",
+      "disposition": "replace-better",
+      "modern_home": "pkg/codex/platform_contract.go",
+      "plan_task": "205-10 Tasks 1-3",
+      "artifact": "pkg/codex/platform_contract.go",
+      "proofs": [
+        "TestOpenCodeCardClaimsResolveToTheCapturedRun",
+        "TestCodexCardClaimsResolveToTheCapturedRun",
+        "TestClaudeCardClaimsResolveToTheCapturedRun",
+        "TestEveryContractedPlatformHasACardAndARun",
+        "TestPlatformCardsDoNotClaimUngovernedAbilityAsGoverned",
+        "TestPlatformCardsPromiseNoFutureWork"
+      ],
+      "status": "PASS",
+      "historical_evidence": "The frozen v1.28-classic-capability-ledger.md replaces Classic verify-castes proxy/model guidance with the versioned platform capability contract and truthful readiness reporting under PROOF-04. 205-10-SUMMARY.md and the three 205-PLATFORM-CARD files bind their claims to evidence/platform-runs captures; the named tests in cmd/platform_honesty_card_test.go were each executed independently by 205-11. The captures exercise status entry points: Claude Code and Codex reached the program, while OpenCode stopped at a provider connection error. They do not establish worker dispatch, named-helper routing or complete lifecycle parity; the versioned contract and the cards retain those limits, without promising later work or calling untracked platform behavior program-governed."
+    }
+  ]
+}
