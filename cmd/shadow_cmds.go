@@ -202,18 +202,44 @@ var shadowClassifierStopWords = map[string]bool{
 // stop word) lowercase words from fixture's own Title and Invariant text --
 // the subject matter it protects, resolved from the fixture itself at run
 // time rather than a hand-typed per-fixture table.
+//
+// WR-03 (204-REVIEW.md): a fixture whose Title and Invariant happen to
+// consist only of short (< shadowClassifierMinWordLength) or common
+// (shadowClassifierStopWords) words used to produce zero subject words
+// here -- silently making that fixture permanently un-addressable by ANY
+// real candidate (shadowTextNamesFixtureSubject returns false for every
+// possible text, forever, with no error or warning). When the
+// length-filtered pass finds nothing, this falls back to every non-stop
+// word regardless of length, so a terse fixture still has at least one
+// real word to match against rather than none at all. The stricter,
+// length-filtered set is still preferred whenever it is non-empty, so this
+// change is a pure safety net for the degenerate case, never a general
+// loosening of the match.
 func shadowFixtureSubjectWords(fixture regressionFixture) []string {
 	text := fixture.Title + " " + fixture.Invariant
-	var words []string
-	for _, w := range strings.FieldsFunc(strings.ToLower(text), func(r rune) bool {
+	rawWords := strings.FieldsFunc(strings.ToLower(text), func(r rune) bool {
 		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
-	}) {
+	})
+
+	var words []string
+	for _, w := range rawWords {
 		if len(w) < shadowClassifierMinWordLength || shadowClassifierStopWords[w] {
 			continue
 		}
 		words = append(words, w)
 	}
-	return words
+	if len(words) > 0 {
+		return words
+	}
+
+	var fallback []string
+	for _, w := range rawWords {
+		if shadowClassifierStopWords[w] {
+			continue
+		}
+		fallback = append(fallback, w)
+	}
+	return fallback
 }
 
 // shadowTextNamesFixtureSubject reports whether text shares at least one

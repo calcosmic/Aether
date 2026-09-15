@@ -77,6 +77,68 @@ func shadowGraderBaselineCandidate(t *testing.T) shadow.Candidate {
 // candidate's Harms() to name nothing at all.
 const shadowGraderBenignHarms = "zzqvexnil qqbrimtho fnorpplex declared harms placeholder"
 
+// TestTerseFixtureStillHasAQualifyingSubjectWord is WR-03's fix-locking
+// test (204-REVIEW.md): a fixture whose Title and Invariant consist ONLY
+// of words shorter than shadowClassifierMinWordLength (5) or words on
+// shadowClassifierStopWords still produces at least one subject word, via
+// shadowFixtureSubjectWords' fallback pass, so it can never become
+// permanently un-addressable by any real candidate. Before this fix, such
+// a fixture returned zero subject words, silently and with no error --
+// shadowTextNamesFixtureSubject would then return false for every possible
+// candidate text, forever.
+func TestTerseFixtureStillHasAQualifyingSubjectWord(t *testing.T) {
+	terse := regressionFixture{
+		ID:        "fixture-terse-title-only-short-words",
+		Title:     "seal it now",
+		Invariant: "keep it safe here",
+	}
+
+	// Fixture-honesty precondition: every word above really is either
+	// shorter than the length floor or a declared stop word, so this
+	// fixture genuinely exercises the fallback path rather than the
+	// ordinary length-filtered one.
+	for _, w := range strings.Fields(strings.ToLower(terse.Title + " " + terse.Invariant)) {
+		if len(w) >= shadowClassifierMinWordLength && !shadowClassifierStopWords[w] {
+			t.Fatalf("fixture setup broken: word %q is %d+ letters and not a stop word -- this fixture does not exercise the fallback", w, shadowClassifierMinWordLength)
+		}
+	}
+
+	words := shadowFixtureSubjectWords(terse)
+	if len(words) == 0 {
+		t.Fatal("expected at least one fallback subject word for a fixture whose text is entirely short/stop words, got none -- WR-03 regression")
+	}
+
+	// The fallback word must genuinely let a real candidate be credited:
+	// prove shadowTextNamesFixtureSubject actually returns true for text
+	// naming it, not just that the word list itself is non-empty.
+	if !shadowTextNamesFixtureSubject("addresses "+strings.Join(words, " "), terse) {
+		t.Fatalf("shadowTextNamesFixtureSubject returned false for text naming the fallback words %v -- the fallback is not actually usable", words)
+	}
+}
+
+// TestEveryBankFixtureHasAQualifyingSubjectWord is WR-03's suggested
+// startup/test-time check: every fixture in the REAL committed bank
+// carries at least one word shadowFixtureSubjectWords can return, so no
+// currently-committed fixture is silently unaddressable by any candidate.
+func TestEveryBankFixtureHasAQualifyingSubjectWord(t *testing.T) {
+	bank, err := loadFixtureBank()
+	if err != nil {
+		t.Fatalf("load the real committed fixture bank: %v", err)
+	}
+	if len(bank.Fixtures) == 0 {
+		t.Fatal("fixture-bank honesty check failed: the real committed bank has zero fixtures")
+	}
+	var unqualified []string
+	for _, f := range bank.Fixtures {
+		if len(shadowFixtureSubjectWords(f)) == 0 {
+			unqualified = append(unqualified, f.ID)
+		}
+	}
+	if len(unqualified) != 0 {
+		t.Fatalf("%d fixture(s) in the committed bank have no qualifying subject word at all, making them permanently unaddressable by any candidate: %v", len(unqualified), unqualified)
+	}
+}
+
 func TestShadowGraderDistinguishesBeneficialFromHarmful(t *testing.T) {
 	guardedFixture, unguardedFixture := shadowGraderResolveExampleFixtures(t)
 
