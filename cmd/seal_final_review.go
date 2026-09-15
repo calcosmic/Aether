@@ -1041,7 +1041,7 @@ func plannedSealFinalReviewDispatches(root string, state colony.ColonyState, pha
 			AgentTOMLPath:  dispatchAgentPath(root, invoker, agentName),
 			Caste:          spec.Caste,
 			TaskID:         fmt.Sprintf("seal-review-%s", spec.Caste),
-			TaskBrief:      renderSealFinalReviewBrief(root, state, phase, spec),
+			TaskBrief:      sealExternalBriefWithHandoffSchema(renderSealFinalReviewBrief(root, state, phase, spec)),
 			ContextCapsule: capsule,
 			// D-190-05-A / 190-06: renderRelatedWorkflowHandoffSection, not
 			// renderWorkerHandoffSection -- capsule (above) already renders
@@ -1087,6 +1087,26 @@ func sealFinalReviewSpecForCaste(caste string) (codexContinueReviewSpec, bool) {
 		return codexContinueReviewSpec{Caste: "chronicler", Task: "Review final documentation, changelog, and Crowned Anthill evidence completeness before seal."}, true
 	}
 	return codexContinueReviewSpec{}, false
+}
+
+// sealExternalBriefWithHandoffSchema appends the handoff/return schema note
+// to a wrapper-external seal review brief, mirroring
+// continueExternalBriefWithHandoffSchema (cmd/codex_continue_plan.go) and
+// composeBuildManifestBrief's identical append (cmd/codex_build.go) for the
+// continue and build lanes' own wrapper-external briefs. Seal's finalizer
+// (runSealFinalize -> mergeExternalSealReviewResults ->
+// mergeExternalContinueResults) enforces the exact same WorkerHandoff shape
+// those two lanes enforce, so a seal reviewer needs the same stated contract
+// to return a handoff the finalizer accepts on the first attempt (the
+// 2026-09-14 field report's first defect).
+//
+// Called at the dispatch call site (plannedSealFinalReviewDispatches) that
+// consumes the rendered brief, not inside renderSealFinalReviewBrief itself,
+// for the identical reason continue's own comment gives: a native-lane
+// worker already receives this contract through a separate response-contract
+// channel, so appending inside the shared renderer would deliver it twice.
+func sealExternalBriefWithHandoffSchema(rendered string) string {
+	return rendered + fmt.Sprintf("\nYour final result's handoff object must include %s. An empty handoff is rejected. %s\n", codex.HandoffFieldsSummary, codex.HandoffOpenDecisionsGuidance)
 }
 
 func renderSealFinalReviewBrief(root string, state colony.ColonyState, phase colony.Phase, spec codexContinueReviewSpec) string {
