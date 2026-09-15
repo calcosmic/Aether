@@ -5,16 +5,16 @@ milestone_name: Classic Colony Restoration
 current_phase: 205
 current_phase_name: Owner Acceptance and Restoration Seal
 status: executing
-stopped_at: Phase 205 planned — 18 plans in 10 waves, awaiting execution
-last_updated: "2026-09-15T08:32:28.548Z"
+stopped_at: Session resumed — Phase 205 waves 1–2 complete; next is 205-11 (wave 3)
+last_updated: "2026-09-15T21:13:40.184Z"
 last_activity: 2026-09-15
-last_activity_desc: Phase 205 execution started
-state_head: 28e07a9e52e886aa28e38615afa2dfdacb340899
+last_activity_desc: Phase 205 execution resumed (wave continue)
+state_head: 5f14b056d8e5e944d69c5a8becb2e7c7dada66a4
 progress:
   total_phases: 8
   completed_phases: 5
   total_plans: 182
-  completed_plans: 164
+  completed_plans: 174
   percent: 63
 ---
 
@@ -35,7 +35,8 @@ See: .planning/PROJECT.md (updated 2026-09-15)
 Phase: 205 (Owner Acceptance and Restoration Seal) — EXECUTING
 Next phase: 205 (Owner Acceptance and Restoration Seal)
 Status: Executing Phase 205
-Last activity: 2026-09-15 — Phase 205 execution started
+Plan: 11 of 18 next — waves 1–2 complete; 10/18 plans have committed summaries
+Last activity: 2026-09-15 — Phase 205 execution resumed (wave continue)
 
 ## Performance Metrics
 
@@ -665,7 +666,8 @@ Last activity: 2026-09-15 — Phase 205 execution started
 - [x] Initialize v1.28 Classic Colony Restoration from the comprehensive Dreams report — approved 2026-09-02
 - [x] Route the 72-row capability ledger without re-interviewing the owner — 72/72 routed; final dispositions require phase synthesis
 - [x] Discuss, plan, execute, and verify Phase 199 — 34/34 plans and 12/12 UAT checks complete 2026-09-07
-- [ ] Discuss Phase 200 and complete its Scout/Route-Setter Classic-to-Go synthesis before implementation planning ← **current**
+- [x] Discuss Phase 200 and complete its Scout/Route-Setter Classic-to-Go synthesis before implementation planning
+- [ ] Resume Phase 205 at plan 205-11 (wave 3); plans 205-01 through 205-10 are complete ← **current**
 - [ ] Run owner-watched proof only after v1.28 restoration is usable
 - [ ] Plan Phase 187: Crash-Safe Worktrees & Ecosystem Neutrality
 - [ ] Plan Phase 188: One Truth for Failures and Advances (independent — may run in parallel with 187)
@@ -756,12 +758,14 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-15T07:28:27.347Z
-Stopped at: Phase 205 context gathered
-Resume file: .planning/phases/205-owner-acceptance-and-restoration-seal/205-CONTEXT.md
+Last session: 2026-09-15T21:11:40Z
+Stopped at: Session resumed — Phase 205 waves 1–2 complete; next is 205-11 (wave 3)
+Resume file: .planning/phases/205-owner-acceptance-and-restoration-seal/205-11-PLAN.md
+
+Resume evidence: HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
 
 ## Operator Next Steps
 
-- Phase 204 (Learning Governor) is complete with two owner-accepted deferrals recorded as verification overrides. Run `/gsd-plan-phase 205` next (Owner Acceptance and Restoration Seal).
-- Before the milestone seal, decide whether WINDOWS.md entries 44 (dead hypothesis promoter), 47 (swarm name collision) and 48 (check-lane usage/cost) are fixed inside Phase 205 or carried as explicit debt.
-- The full suite's known-red baseline on oracle-reinstate is the same 17 tests recorded on 2026-09-14 plus two documented flakes (entries 36 and 47); a new red name is a regression, a listed one is not.
+- Run `/gsd-execute-phase 205` from plan 205-11 (wave 3): sign this phase's two capability rows and check all 72 rows across phases for complete, unique, correctly routed evidence. Preserve the ten completed plans.
+- Carry the owner-accepted limits and open WINDOWS.md entries into the limitations card under 205-CONTEXT.md D-10/D-15; fix defects that block the walk-through journeys. CAP-057's precision limit and the captured OpenCode provider-connection failure remain explicit in the plan 205-08/205-10 summaries.
+- The last committed gate report (5f14b056, run against c54d77ab) records build and vet passing and 5,563/5,563 tests executed, with exactly the 17 known baseline failures and no new failing names. This resume did not rerun tests. Later release, owner walk-through, and acceptance steps remain pending.
