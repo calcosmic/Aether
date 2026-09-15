@@ -830,8 +830,14 @@ func writeSealReusableLessonsToQueen(phase int, lessons []string) (int, string) 
 	}
 	entries := []string{}
 	for _, lesson := range lessons {
-		lesson = sanitizeQueenInline(lesson)
-		if lesson == "" {
+		// A worker-reported lesson is untrusted input -- run it through the
+		// same content-integrity filter every other worker-authored store
+		// already applies before it can reach the owner-facing habits file
+		// (2026-09-14 field report finding 6). A refused lesson is skipped
+		// exactly like the pre-existing empty-string case: one bad lesson
+		// must never fail the seal.
+		lesson, ok := sanitizeQueenPromotedLesson(lesson)
+		if !ok {
 			continue
 		}
 		entry := fmt.Sprintf("- %s (seal review phase %d, %s)", lesson, phase, time.Now().UTC().Format("2006-01-02"))

@@ -87,6 +87,27 @@ var shellInjectionRuleSpecs = []struct {
 	{"shell_injection", "content contains shell injection patterns (semicolon rm) which are not allowed", "semicolon rm", `;\s*rm\b`},
 }
 
+// secretsPathRuleSpecs catches content that names a secrets or credentials
+// file path -- e.g. a reviewer-reported "lesson" that is really a shell
+// command copying `.env.local` out of the project (the 2026-09-14 field
+// report's sixth finding, verbatim:
+// "cd .../dashboard && cp .../dashboard/.env.local . 2>/dev/null; npm install ...").
+// That command has neither a pipe/semicolon `rm`, a backtick, nor a `$()`
+// substitution, so none of shellInjectionRuleSpecs matched it -- it reached
+// QUEEN.md's "Learned habit" surface unfiltered. Living here, beside the
+// other rule lists DetectPromptIntegrityFindings already walks, means every
+// caller of the shared detector (pheromone signals via SanitizeSignalContent,
+// and seal-promoted lessons via sanitizeQueenPromotedLesson in cmd/queen.go)
+// gains the protection at once, rather than each caller hand-rolling its own
+// secrets-path list.
+var secretsPathRuleSpecs = []struct {
+	kind    string
+	message string
+	pattern string
+}{
+	{"secrets_path", "content references a secrets or credentials file path which is not allowed", `(?i)(\.env(\.[a-zA-Z0-9_-]+)?|credentials\.json|secrets\.json|id_rsa|\.pem|\.netrc|\.npmrc)\b`},
+}
+
 type compiledPromptRule struct {
 	kind    string
 	message string
@@ -127,6 +148,18 @@ var shellInjectionRules = func() []compiledShellRule {
 	return rules
 }()
 
+var secretsPathRules = func() []compiledPromptRule {
+	rules := make([]compiledPromptRule, 0, len(secretsPathRuleSpecs))
+	for _, spec := range secretsPathRuleSpecs {
+		rules = append(rules, compiledPromptRule{
+			kind:    spec.kind,
+			message: spec.message,
+			pattern: regexp.MustCompile(spec.pattern),
+		})
+	}
+	return rules
+}()
+
 func DetectPromptIntegrityFindings(content string) []PromptIntegrityFinding {
 	content = strings.TrimSpace(content)
 	if content == "" {
@@ -153,6 +186,16 @@ func DetectPromptIntegrityFindings(content string) []PromptIntegrityFinding {
 	}
 
 	for _, rule := range shellInjectionRules {
+		if evidence := rule.pattern.FindString(content); evidence != "" {
+			findings = append(findings, PromptIntegrityFinding{
+				Kind:     rule.kind,
+				Message:  rule.message,
+				Evidence: evidence,
+			})
+		}
+	}
+
+	for _, rule := range secretsPathRules {
 		if evidence := rule.pattern.FindString(content); evidence != "" {
 			findings = append(findings, PromptIntegrityFinding{
 				Kind:     rule.kind,
