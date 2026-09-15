@@ -5,16 +5,16 @@ milestone_name: Classic Colony Restoration
 current_phase: 205
 current_phase_name: Owner Acceptance and Restoration Seal
 status: executing
-stopped_at: 205-11 complete; repaired normal/race gate matches baseline; 205-12 readiness record finalizing
-last_updated: "2026-09-15T22:54:25Z"
+stopped_at: 205-12 complete; readiness reviewed and merged; 205-13 local release next
+last_updated: "2026-09-15T23:22:00Z"
 last_activity: 2026-09-15
 last_activity_desc: Phase 205 execution resumed (wave continue)
-state_head: 9d11672a70f590e0d31aa87ff4aabe5463ee313a
+state_head: c255fc42a6167a32de1f66e9cd83fa7bffd89d95
 progress:
   total_phases: 8
   completed_phases: 5
   total_plans: 182
-  completed_plans: 175
+  completed_plans: 176
   percent: 63
 ---
 
@@ -35,7 +35,7 @@ See: .planning/PROJECT.md (updated 2026-09-15)
 Phase: 205 (Owner Acceptance and Restoration Seal) — EXECUTING
 Next phase: 205 (Owner Acceptance and Restoration Seal)
 Status: Executing Phase 205
-Plan: 12 of 18 active — waves 1–3 complete; 11/18 plans have committed summaries
+Plan: 13 of 18 next — waves 1–4 complete; 12/18 plans have committed summaries
 Last activity: 2026-09-15 — Phase 205 execution resumed (wave continue)
 
 ## Performance Metrics
@@ -758,9 +758,9 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-15T22:54:25Z
-Stopped at: 205-11 complete; repaired normal/race gate matches baseline; 205-12 readiness record finalizing
-Resume file: .planning/phases/205-owner-acceptance-and-restoration-seal/205-12-PLAN.md
+Last session: 2026-09-15T23:22:00Z
+Stopped at: 205-12 complete; readiness reviewed and merged; 205-13 local release next
+Resume file: .planning/phases/205-owner-acceptance-and-restoration-seal/205-13-PLAN.md
 
 Resume evidence: HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
 
@@ -770,13 +770,13 @@ Resume evidence: HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each
 - The first complete normal gate exposed two verifier defects beyond the unchanged 17-name baseline. They are fixed in `10e5251d`, merged at `8391fef9cfc7ba122d8834d83009c4006ed5af3e`; see `205-GATE-REPAIR.md`. The superseded race run was deliberately interrupted, not counted as evidence.
 - The repaired gate is COMPLETE at `8391fef9`: build and vet pass; both normal and race runs execute 5,573/5,573 cmd tests across 59 lanes. Each raw suite exits 1 with exactly the 17 recorded pre-existing failures; all 18 other tested packages pass. No new failures, data races or timeouts. This satisfies plan 205-12's explicit baseline-comparison rule; it is not an all-green test claim or a new baseline exception.
 - Final review/results/logs are durably preserved at `/Users/callumcowie/.aether-backups/phase205-execution-evidence-20260915/repaired-gate/`; scratch copy `/tmp/aether-phase205-execution/repaired-gates/final-review.json`. The pinned checkout remains clean. Do not repeat these full suites without a new code change or unresolved failure.
-- Plan 205-12 tasks 1–2 are complete; executor `01a0a6f9-871e-79b0-8a4b-e7fcd34ce615` is now finalizing readiness and SUMMARY in `.claude/worktrees/agent-p205-12-codex-20260915`. Manifest `/tmp/aether-phase205-execution/wave4.json`; finalization log `/tmp/aether-phase205-execution/plan12-final-executor.log`. Do not repeat snapshots or switch target branches.
+- Plan 205-12 is complete and reviewed, merged at `c255fc42a6167a32de1f66e9cd83fa7bffd89d95`: original brief `72fd2768`, readiness/cost correction `bee656d1`, summary `92d71866`. Read `205-12-SUMMARY.md` and `205-PRE-SESSION-READINESS.md`. Its worktree was merged/removed through the recorded manifest. No Go checks were repeated. Live register: 34 open/14 fixed/0 waived; measured free space 12.44 GiB. Do not repeat snapshots or switch target branches.
 - Owner project is clean on `p205-owner-session-20260915` at `363fd07630d9028d2d1a18edf3f5cc21e7dece2d`; original `codex/skills-as-commands` remains at `ccf18264`. Snapshot `p205-owner-work-snapshot-20260915` at `e8941d6f5e1f3f1834357d4746e7ffcf0f77b962` preserves all 1,906 expanded changed entries (764 grouped entries). The nested research repository has the same named snapshot at `f09a3a27e7a81f3e50bb5e79b86d0d97c9a0f61f`; restore both named snapshots to retrieve the full experiment.
 - All 383 data files, 1,305 extended record files and 12,605 ignored files were verified unchanged. Two pre-existing modified context/handoff records are carried verbatim on the session branch; the completed 3-phase/20-task colony remains unsealed. Durable inventory/receipts: the evidence root's `owner-preparation/`. Three already-ignored cache paths retain their prior ignored classification via exact local `.git/info/exclude` entries.
 - Verified pre-release backup: `/Users/callumcowie/.aether-backups/phase205-pre-release-20260915T213324Z/manifest.json`, covering hub, binary and platform-home assets (1,427 verified files). Revalidate immediately before publishing. Source, installed binary and hub remain 1.0.78; no release has happened yet.
 
 ## Operator Next Steps
 
-- Review/merge completed 205-12 readiness, publish 205-13 and perform 205-14 preflight. Stop at the actual owner walkthrough checkpoint. Preserve the completed plans and existing snapshot branches.
+- Publish 205-13 from a clean commit-pinned copy with backup/version/integrity proof, then perform 205-14 preflight. Stop at the actual owner walkthrough checkpoint. Preserve the completed plans and existing snapshot branches.
 - Carry the owner-accepted limits and open WINDOWS.md entries into the limitations card under 205-CONTEXT.md D-10/D-15; fix defects that block the walk-through journeys. CAP-057's precision limit and the captured OpenCode provider-connection failure remain explicit in the plan 205-08/205-10 summaries.
 - Release, owner walkthrough, PROOF-05 acceptance and restoration seal remain pending. The 205-14 owner checkpoint is mandatory; never substitute assistant-run journeys or overwrite the original before-session inventory on resumption.
