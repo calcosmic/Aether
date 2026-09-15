@@ -48,7 +48,7 @@ Expected manifest:
 
 - `dispatch_mode`: `plan-only` or `agent-delegate`
 - `requires_finalizer`: `true`
-- `dispatches`: Gatekeeper, Auditor, and Probe final-review workers
+- `dispatches`: the runtime's own choice of reviewers for this project — picked from the project's own state and how deep the check runs, never a fixed list; a security reviewer joins only once the review reaches its deepest setting, which happens automatically after the project shipped real production work (or when the final phase is itself clearly security-related); the exact reviewers for this run are named in the plan the command prints before dispatching
 - `finalizer_command`: `AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <file>`
 
 ## Guided Boundary Gate

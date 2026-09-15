@@ -10,6 +10,7 @@ codex_orchestration:
   drift_guard: "Update this YAML, Claude/OpenCode wrappers, the Codex skill, and cmd/command_guide.go together."
 wrapper_contract:
   manifest: "result.seal_manifest"
+  review_team: "the runtime's own choice of reviewers for this project — picked from the project's own state and how deep the check runs, never a fixed list; a security reviewer joins only once the review reaches its deepest setting, which happens automatically after the project shipped real production work (or when the final phase is itself clearly security-related); the exact reviewers for this run are named in the plan the command prints before dispatching"
   finalizer: "AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <file>"
   instructions: |
     0. The Go runtime owns final review, preflight, confirmation, transaction, and rendering. Force flags pass only when directly supplied by the owner. A forced-incomplete closure is not verified success.
