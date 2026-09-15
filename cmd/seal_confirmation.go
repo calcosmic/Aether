@@ -339,8 +339,38 @@ func runSealConfirmationGate(state colony.ColonyState, blockers, issues []colony
 // compatibility gate above it performs no review or persistence before the
 // answer: the typed preflight is the only input, and every later effect belongs
 // to CommitSealTransaction.
+//
+// This gate has two callers with two different contracts. The direct,
+// interactive `aether seal` command (cmd/codex_workflow_cmds.go) deliberately
+// mixes this prose with its final JSON envelope on stdout — a real owner
+// benefits from seeing it, and a machine caller of THAT command already
+// extracts only the last JSON line (see cmd/seal_confirmation_test.go's
+// lastJSONLine and its executeSealForConfirmationTest doc comment: "prose and
+// the final JSON envelope together... after any prose emitted earlier in the
+// same run" — a documented, tested contract this fix must not disturb).
+// `aether seal-finalize` (cmd/seal_final_review.go) is different: it is a
+// machine-only finalizer a wrapper parses as pure JSON (the exact field
+// report this fixes — .planning/field-reports/2026-09-14-cosmic-seal-entomb-lifecycle.md,
+// finding 4), and never mixes prose with its envelope in any mode.
+//
+// Both human writes below are therefore gated on isExplicitlyQuietCommand,
+// the SAME "-finalize commands are quiet" classification
+// streamingAllowedForCurrentCommand already consults for this command family
+// (cmd/codex_visuals.go) — reused here rather than a new flag or environment
+// variable — combined with shouldRenderVisualOutput(stdout), the same
+// detection outputError/outputWorkflow already consult before choosing
+// between a rendered card and a JSON envelope. A quiet (-finalize) command in
+// machine-readable mode suppresses both writes entirely, matching the
+// established pattern this package already uses for other human-only inline
+// announcements (e.g. cmd/rollback.go's emitCanaryStarted/Completed/RolledBack):
+// return before writing, rather than redirecting to stderr. Any other caller
+// (the direct `aether seal` command, or a quiet command asked for human
+// output) keeps writing exactly as it does today — this is a routing fix
+// only, scoped to the one contract the field report actually names.
 func runSealPreflightConfirmationGate(preflight SealPreflight) (bool, map[string]interface{}) {
-	visualFprint(stdout, renderSealPreflightCard(preflight))
+	if sealPreflightGateShouldWriteHumanOutput() {
+		visualFprint(stdout, renderSealPreflightCard(preflight))
+	}
 	question := SealConfirmationCopy(preflight)
 	recordedAnswer := loadSealConfirmationRecordedAnswer(store, question)
 	named := make([]string, 0, len(preflight.UnresolvedItems))
@@ -356,13 +386,29 @@ func runSealPreflightConfirmationGate(preflight SealPreflight) (bool, map[string
 		source = "seal-force-confirmation"
 	}
 	next := sealConfirmationAnswerCommand(question, source)
-	visualFprint(stdout, renderSealPreflightConfirmationQuestionVisual(preflight, next))
+	if sealPreflightGateShouldWriteHumanOutput() {
+		visualFprint(stdout, renderSealPreflightConfirmationQuestionVisual(preflight, next))
+	}
 	return false, map[string]interface{}{
 		"sealed": false, "awaiting_owner_confirmation": true,
 		"outcome_kind": preflight.OutcomeKind, "disposition": preflight.Disposition,
 		"owner_reason": preflight.OwnerReason, "unresolved_items": preflight.UnresolvedItems,
 		"question": question, "next": next,
 	}
+}
+
+// sealPreflightGateShouldWriteHumanOutput decides whether
+// runSealPreflightConfirmationGate's two human writes go to stdout. It is
+// false only for the narrow case the field report actually names: a "quiet"
+// (-finalize) invocation whose caller asked for machine-readable output.
+// Every other combination — a quiet command asked for human output, or any
+// non-quiet command (the direct `aether seal` path) in any mode — keeps
+// writing, preserving that command's own documented, tested contract.
+func sealPreflightGateShouldWriteHumanOutput() bool {
+	if !isExplicitlyQuietCommand(currentStreamingCommand) {
+		return true
+	}
+	return shouldRenderVisualOutput(stdout)
 }
 
 func renderSealPreflightCard(preflight SealPreflight) string {
