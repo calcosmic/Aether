@@ -25,6 +25,12 @@ type entombArchiveSource struct {
 	ArchivePath string
 	Kind        string
 	Required    bool
+	// Synthesized marks a source whose content was built from other durable
+	// records (colony state, seal outcome) because the real file was
+	// genuinely absent, rather than read from disk. It is recorded on the
+	// resulting colony.ArchiveEntry as RecoveryProvenanceReconstructed so the
+	// archive never presents invented content as retrieved content.
+	Synthesized bool
 }
 
 // entombArchiveManifestInput contains only immutable inputs. Building or
@@ -144,13 +150,17 @@ func buildEntombArchiveManifest(input entombArchiveManifestInput) (colony.Archiv
 			return colony.ArchiveManifest{}, nil, err
 		}
 
+		entryProvenance := colony.RecoveryProvenanceConfirmed
+		if source.Synthesized {
+			entryProvenance = colony.RecoveryProvenanceReconstructed
+		}
 		entries = append(entries, colony.ArchiveEntry{
 			Path:          source.ArchivePath,
 			Kind:          kind,
 			Size:          int64(len(archiveBytes)),
 			SourceDigest:  sourceDigest,
 			ArchiveDigest: archiveDigest,
-			Provenance:    colony.RecoveryProvenanceConfirmed,
+			Provenance:    entryProvenance,
 		})
 		references = append(references, colony.ArchiveCrossReference{
 			Kind:     "source:" + kind,

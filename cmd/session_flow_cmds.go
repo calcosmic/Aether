@@ -677,7 +677,16 @@ func resumeColonyAt(now time.Time) (pauseResumeLifecycleOutcome, error) {
 	if err := tx.DeclareWrite(lifecycleTransactionRootRepository, filepath.Join(".aether", "CONTEXT.md"), []byte(contextText)); err != nil {
 		return pauseResumeLifecycleOutcome{}, err
 	}
-	if err := tx.DeclareRemoval(lifecycleTransactionRootRepository, filepath.Join(".aether", "HANDOFF.md")); err != nil {
+	// Pair the removal of the pre-resume hand-off note with a fresh, minimal
+	// one written in the same transaction (not a plain DeclareRemoval), so a
+	// "return to work then archive" sequence never sees an empty slot: entomb
+	// requires .aether/HANDOFF.md as a required tombstone_input source. The
+	// transaction coordinator refuses two declarations for the same target
+	// path, so this write is the single staged replacement — old stale
+	// content is gone, fresh content is committed, all inside this
+	// transaction's existing staging discipline.
+	freshHandoff := buildHandoffDocument(now.UTC(), state, session, session.SuggestedNext)
+	if err := tx.DeclareWrite(lifecycleTransactionRootRepository, filepath.Join(".aether", "HANDOFF.md"), []byte(freshHandoff)); err != nil {
 		return pauseResumeLifecycleOutcome{}, err
 	}
 	if staleSession {
