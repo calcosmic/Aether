@@ -658,6 +658,32 @@ func TestClassicSynthesisEveryArtifactHasEveryMandatorySection(t *testing.T) {
 	}
 }
 
+// classicSynthesisDoubleClaimedCapabilityRows is the pure detection rule
+// TestClassicSynthesisCapabilityRowsAreNotDoubleClaimed applies to the real
+// corpus: given each artifact's claimed capability rows, it returns every
+// capability row claimed by more than one artifact, mapped to the sorted
+// list of phases claiming it. Extracted as its own function so a dedicated
+// test (TestClassicSynthesisAuditRejectsADoubleClaimedCapabilityRow) can
+// prove this rule is actually capable of failing on synthetic input, not
+// only capable of passing on the real corpus (which today has no clash).
+func classicSynthesisDoubleClaimedCapabilityRows(perArtifact map[string][]string) map[string][]string {
+	claimedBy := make(map[string][]string)
+	for phase, rows := range perArtifact {
+		for _, cap := range rows {
+			claimedBy[cap] = append(claimedBy[cap], phase)
+		}
+	}
+	doubled := make(map[string][]string)
+	for cap, phases := range claimedBy {
+		if len(phases) > 1 {
+			sortedPhases := append([]string(nil), phases...)
+			sort.Strings(sortedPhases)
+			doubled[cap] = sortedPhases
+		}
+	}
+	return doubled
+}
+
 func TestClassicSynthesisCapabilityRowsAreNotDoubleClaimed(t *testing.T) {
 	root := classicSynthesisRepoRoot(t)
 	artifacts, err := classicSynthesisArtifactPaths(root)
@@ -665,32 +691,23 @@ func TestClassicSynthesisCapabilityRowsAreNotDoubleClaimed(t *testing.T) {
 		t.Fatalf("discover artifacts: %v", err)
 	}
 
-	claimedBy := make(map[string][]string)
 	perArtifact := make(map[string][]string)
-
 	for _, artifact := range artifacts {
 		rows, err := classicSynthesisArtifactCapabilityRows(artifact.Path)
 		if err != nil {
 			t.Fatalf("extract capability rows for %s: %v", artifact.Path, err)
 		}
 		perArtifact[artifact.Phase] = rows
-		for _, cap := range rows {
-			claimedBy[cap] = append(claimedBy[cap], artifact.Phase)
-		}
 	}
 
-	capIDs := make([]string, 0, len(claimedBy))
-	for cap := range claimedBy {
+	doubled := classicSynthesisDoubleClaimedCapabilityRows(perArtifact)
+	capIDs := make([]string, 0, len(doubled))
+	for cap := range doubled {
 		capIDs = append(capIDs, cap)
 	}
 	sort.Strings(capIDs)
 	for _, cap := range capIDs {
-		phases := claimedBy[cap]
-		if len(phases) > 1 {
-			sortedPhases := append([]string(nil), phases...)
-			sort.Strings(sortedPhases)
-			t.Errorf("capability row %s claimed by more than one artifact: phases %v", cap, sortedPhases)
-		}
+		t.Errorf("capability row %s claimed by more than one artifact: phases %v", cap, doubled[cap])
 	}
 
 	ledgerPhases := make([]string, 0, len(classicSynthesisLedgerCapabilities))
@@ -710,6 +727,42 @@ func TestClassicSynthesisCapabilityRowsAreNotDoubleClaimed(t *testing.T) {
 				phase, got, want,
 			)
 		}
+	}
+}
+
+// TestClassicSynthesisAuditRejectsADoubleClaimedCapabilityRow proves the
+// double-claim rule is actually capable of failing: the real corpus never
+// exercises the "claimed by more than one artifact" branch (no two real
+// artifacts claim the same row today), so without this test that branch of
+// classicSynthesisDoubleClaimedCapabilityRows would be an unproven check —
+// a rule that could silently never fire. This constructs a synthetic
+// two-artifact claim set with a genuine clash and asserts it is caught,
+// named by capability row and by both claiming phases.
+func TestClassicSynthesisAuditRejectsADoubleClaimedCapabilityRow(t *testing.T) {
+	perArtifact := map[string][]string{
+		"200": {"CAP-005", "CAP-010"},
+		"201": {"CAP-010", "CAP-022"},
+	}
+
+	doubled := classicSynthesisDoubleClaimedCapabilityRows(perArtifact)
+
+	phases, ok := doubled["CAP-010"]
+	if !ok {
+		t.Fatalf("expected CAP-010 to be reported as double-claimed, got %v", doubled)
+	}
+	want := []string{"200", "201"}
+	if !slices.Equal(phases, want) {
+		t.Errorf("CAP-010 claiming phases = %v, want %v", phases, want)
+	}
+
+	if _, ok := doubled["CAP-005"]; ok {
+		t.Errorf("CAP-005 was claimed by only one artifact and must not be reported as double-claimed")
+	}
+	if _, ok := doubled["CAP-022"]; ok {
+		t.Errorf("CAP-022 was claimed by only one artifact and must not be reported as double-claimed")
+	}
+	if len(doubled) != 1 {
+		t.Errorf("expected exactly one double-claimed row in this fixture, got %d: %v", len(doubled), doubled)
 	}
 }
 
