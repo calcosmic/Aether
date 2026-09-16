@@ -13,6 +13,15 @@ version: "1.0"
 
 # Aether Colony Research
 
+## Installed Codex entrypoints
+
+Use `$ant-oracle` and `$ant-discuss`. This document is installed as
+`support/aether-colony-research.md` beside the public skill directories;
+it is private support, not a separately discoverable helper skill. Public skills
+resolve its path relative to their installed `SKILL.md`, never the working directory.
+The executable commands and runtime-issued IDs remain `aether` identities.
+Full workflow coverage and native-worker parity remain pending.
+
 ## Purpose
 
 Give Codex the wrapper-equivalent intelligence for `oracle` and `discuss`.

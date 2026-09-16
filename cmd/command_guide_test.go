@@ -1,8 +1,13 @@
 package cmd
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -540,10 +545,10 @@ func TestCommandGuideInit199(t *testing.T) {
 	parts = append(parts, guide.RawBypass)
 	text := strings.Join(parts, "\n")
 	assertFrontDoorInitContract199(t, text)
-	if !strings.Contains(text, "Next Up: aether plan") {
+	if !strings.Contains(text, "Next Up: $ant-plan") {
 		t.Errorf("Codex guide does not render exact native closeout:\n%s", text)
 	}
-	for _, forbidden := range []string{"/ant-plan", "$ant-plan", "$ant-init", "aether lay-eggs"} {
+	for _, forbidden := range []string{"/ant-plan", "$ant-spec", "$ant-status", "aether lay-eggs"} {
 		if strings.Contains(text, forbidden) {
 			t.Errorf("Codex guide contains deferred or host-inappropriate guidance %q", forbidden)
 		}
@@ -567,10 +572,10 @@ func TestCommandGuideInit199(t *testing.T) {
 	if !strings.Contains(skillText, "aether command-guide init --platform codex") || !strings.Contains(skillText, "aether init") {
 		t.Error("Codex creation skill no longer orchestrates raw aether init through command-guide")
 	}
-	if !strings.HasSuffix(strings.TrimSpace(skillText), "Next Up: aether plan") {
-		t.Errorf("Codex creation skill does not close with exact aether plan:\n%s", skillText)
+	if !strings.HasSuffix(strings.TrimSpace(skillText), "Next Up: $ant-plan") {
+		t.Errorf("Codex creation skill does not close with exact $ant-plan:\n%s", skillText)
 	}
-	for _, forbidden := range []string{"/ant-plan", "$ant-", "aether lay-eggs"} {
+	for _, forbidden := range []string{"/ant-plan", "$ant-spec", "$ant-status", "aether lay-eggs"} {
 		if strings.Contains(skillText, forbidden) {
 			t.Errorf("Codex creation skill contains deferred native lifecycle vocabulary %q", forbidden)
 		}
@@ -735,7 +740,7 @@ func TestCommandGuideBuildCycle199(t *testing.T) {
 			"concrete repair/debt receipts",
 			"independent safe-path continuation",
 			"explicit seal",
-			"Phase 200–205/native `$ant-*` scope fence",
+			"Full workflow coverage and native-worker parity remain pending.",
 			"Force flags pass only when directly supplied by the owner.",
 			"A forced-incomplete closure is not verified success.",
 		} {
@@ -789,6 +794,29 @@ func TestCommandGuideAdaptsNonCodexPlatform(t *testing.T) {
 	}
 	if len(guide.PreSteps) == 0 || !strings.Contains(guide.PreSteps[0], "slash-command wrapper") {
 		t.Fatalf("Claude guide should point at wrapper orchestration, got %#v", guide.PreSteps)
+	}
+}
+
+func TestCodexAntSkillGuidesPreserveOtherPlatforms(t *testing.T) {
+	for _, platform := range []string{"claude", "opencode"} {
+		for _, expected := range codexAntGuideExpectations {
+			t.Run(platform+"/"+expected.command, func(t *testing.T) {
+				guide, err := buildCommandGuide(expected.command, platform)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if guide.Command != expected.command || guide.RunCommand != expected.runtime || guide.SkillReference != "" {
+					t.Errorf("platform route changed: %+v", guide)
+				}
+				text := strings.Join(guide.PreSteps, "\n") + strings.Join(guide.PostSteps, "\n")
+				if strings.Contains(text, "$ant-") || strings.Contains(text, "../support/") {
+					t.Error("Codex-only public/support spelling leaked to another platform")
+				}
+				if !strings.Contains(guide.PreSteps[0], "slash-command wrapper") {
+					t.Error("other platform lost its wrapper route")
+				}
+			})
+		}
 	}
 }
 
@@ -984,42 +1012,64 @@ func TestCodexLifecycleSkillsLiveOnlyInAetherSource(t *testing.T) {
 	}
 }
 
-func TestCodexGeneratedShimsIncludeCommandGuideSkills(t *testing.T) {
-	shims := map[string]codexSkillShim{}
-	for _, shim := range codexSkillShims() {
-		shims[shim.Name] = shim
-	}
-	for _, skill := range []string{commandGuideSkillCreation, commandGuideSkillResearch, commandGuideSkillBuildCycle} {
-		if _, ok := shims[skill]; !ok {
-			t.Fatalf("codex generated shims missing command-guide skill %q", skill)
-		}
-	}
-	creationShim := shims[commandGuideSkillCreation]
-	for _, want := range []string{"Colony Mode", "Orchestrator Mode", "--colony-mode"} {
-		if !strings.Contains(creationShim.Body, want) {
-			t.Fatalf("codex creation shim missing %q", want)
-		}
-	}
+// Independently specified public names, internal identities, and executable routes.
+var codexAntGuideExpectations = []struct{ command, support, runtime string }{
+	{"init", "aether-colony-creation", `AETHER_OUTPUT_MODE=visual aether init --colony-mode <selected colony|orchestrator> --charter-json '<synthesized charter JSON>' "<refined goal>"`},
+	{"discuss", "aether-colony-research", `AETHER_OUTPUT_MODE=visual aether discuss $ARGUMENTS`},
+	{"oracle", "aether-colony-research", `AETHER_OUTPUT_MODE=visual aether oracle --depth <depth> --confidence-target <percent> --template <template> --background "<synthesized prompt>"`},
+	{"colonize", "aether-colony-build-cycle", `AETHER_OUTPUT_MODE=json aether colonize-finalize --completion-file <approved temp completion JSON>`},
+	{"plan", "aether-colony-build-cycle", `AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <approved temp completion JSON>`},
+	{"build", "aether-colony-build-cycle", `AETHER_OUTPUT_MODE=json aether build-finalize <phase> --completion-file <Go-owned completion_path returned by build-completion-stage>`},
+	{"continue", "aether-colony-build-cycle", `AETHER_OUTPUT_MODE=visual aether continue --verification-depth standard $ARGUMENTS`},
+	{"swarm", "aether-colony-build-cycle", `AETHER_OUTPUT_MODE=json aether swarm-finalize --completion-file <worker completion JSON>`},
+	{"seal", "aether-colony-build-cycle", `AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <approved temp completion JSON>`},
+}
 
-	buildCycleShim := shims[commandGuideSkillBuildCycle]
-	for _, want := range []string{"colonize", "aether colonize", "plan-only", "finalize"} {
-		text := buildCycleShim.Description + "\n" + buildCycleShim.Body + "\n" + strings.Join(buildCycleShim.TaskKeywords, "\n")
-		if !strings.Contains(text, want) {
-			t.Fatalf("codex build-cycle shim missing %q", want)
+func TestCodexGeneratedShimsIncludeCommandGuideSkills(t *testing.T) {
+	payload, err := buildCodexSkillPayload(antSkillSourceRoot(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	supportFiles := map[string][]byte{}
+	for _, file := range payload.Files {
+		if strings.HasPrefix(file.RelativePath, "support/") {
+			supportFiles[file.RelativePath] = file.Content
 		}
 	}
-	rendered := renderCodexSkillShim(buildCycleShim)
-	fm := parseSkillFrontmatter(rendered)
+	if len(supportFiles) != 3 {
+		t.Fatalf("private supports = %d, want 3", len(supportFiles))
+	}
+	for _, skill := range []string{"aether-colony-creation", "aether-colony-research", "aether-colony-build-cycle"} {
+		source, err := os.ReadFile(filepath.Join(antSkillSourceRoot(t), ".aether", "skills", "colony", skill, "SKILL.md"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(supportFiles["support/"+skill+".md"], source) {
+			t.Errorf("private support %s is not the full source", skill)
+		}
+	}
+	for _, shim := range codexSkillShims() {
+		if !strings.HasPrefix(shim.Name, "ant-") {
+			t.Errorf("extra public helper %q", shim.Name)
+		}
+	}
+	for _, want := range []string{"Colony Mode", "Orchestrator Mode", "--colony-mode"} {
+		if !bytes.Contains(supportFiles["support/aether-colony-creation.md"], []byte(want)) {
+			t.Errorf("creation support missing %q", want)
+		}
+	}
+	buildCycle := string(supportFiles["support/aether-colony-build-cycle.md"])
+	fm := parseSkillFrontmatter(buildCycle)
 	if fm == nil {
-		t.Fatalf("generated build-cycle shim should have parseable frontmatter")
+		t.Fatal("private source lost frontmatter")
 	}
 	wantTriggers := []string{"colonize", "plan", "build", "continue", "swarm", "seal"}
-	if strings.Join(fm.WorkflowTriggers, ",") != strings.Join(wantTriggers, ",") {
-		t.Fatalf("build-cycle shim workflow triggers = %v, want %v", fm.WorkflowTriggers, wantTriggers)
+	if !reflect.DeepEqual(fm.WorkflowTriggers, wantTriggers) {
+		t.Errorf("build-cycle triggers = %v", fm.WorkflowTriggers)
 	}
 	for _, want := range []string{"aether colonize", "aether plan", "aether build", "aether continue", "aether swarm", "aether seal", "dispatch manifest", "plan-only", "finalize"} {
 		if !stringSliceContains(fm.TaskKeywords, want) {
-			t.Fatalf("build-cycle shim task keywords missing %q: %v", want, fm.TaskKeywords)
+			t.Errorf("private build-cycle keywords missing %q", want)
 		}
 	}
 }
@@ -1027,44 +1077,134 @@ func TestCodexGeneratedShimsIncludeCommandGuideSkills(t *testing.T) {
 func TestCodexGeneratedCommandShimsCoverIntelligentCommands(t *testing.T) {
 	shims := map[string]codexSkillShim{}
 	for _, shim := range codexSkillShims() {
+		if _, exists := shims[shim.Name]; exists {
+			t.Fatalf("duplicate shim %s", shim.Name)
+		}
 		shims[shim.Name] = shim
 	}
-	catalog := commandGuideCatalog()
-	for _, command := range []string{"init", "discuss", "oracle", "colonize", "plan", "build", "continue", "swarm", "seal"} {
-		def := catalog[command]
-		shim, ok := shims["aether-"+command]
-		if !ok {
-			t.Fatalf("codex generated shims missing command-shaped skill for %q", command)
-		}
-		if len(shim.WorkflowTriggers) != 1 || shim.WorkflowTriggers[0] != command {
-			t.Fatalf("%s workflow triggers = %v, want [%s]", shim.Name, shim.WorkflowTriggers, command)
-		}
-		for _, want := range []string{
-			"aether command-guide " + command + " --platform codex",
-			"aether " + command,
-			"/ant-" + command,
-			"Raw Bypass",
-		} {
-			text := shim.Description + "\n" + shim.Body + "\n" + strings.Join(shim.TaskKeywords, "\n")
-			if !strings.Contains(text, want) {
-				t.Fatalf("%s command shim missing %q", shim.Name, want)
+	if len(shims) != 9 {
+		t.Fatalf("public shim count = %d, want exactly nine", len(shims))
+	}
+	for _, expected := range codexAntGuideExpectations {
+		t.Run(expected.command, func(t *testing.T) {
+			name := "ant-" + expected.command
+			shim, ok := shims[name]
+			if !ok || shim.Dir != name {
+				t.Fatalf("missing canonical public skill %s", name)
 			}
+			if !reflect.DeepEqual(shim.WorkflowTriggers, []string{name, expected.command}) {
+				t.Errorf("%s triggers = %v", name, shim.WorkflowTriggers)
+			}
+			text := shim.Description + "\n" + shim.Body + "\n" + strings.Join(shim.TaskKeywords, "\n")
+			for _, want := range []string{"$" + name, "aether command-guide " + expected.command + " --platform codex", expected.runtime, "../support/" + expected.support + ".md", "Raw Bypass", "raw/exact/no-orchestration", "must not hand-edit `.aether/data`"} {
+				if !strings.Contains(text, want) {
+					t.Errorf("%s missing %q", name, want)
+				}
+			}
+			fm := parseSkillFrontmatter(renderCodexSkillShim(shim))
+			if fm == nil || fm.Name != name || !stringSliceContains(fm.TaskKeywords, "aether "+expected.command) {
+				t.Fatalf("bad frontmatter: %+v", fm)
+			}
+			guide, err := buildCommandGuide(expected.command, "codex")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if guide.Command != expected.command || guide.RunCommand != expected.runtime || guide.SkillReference != expected.support || guide.Literal {
+				t.Errorf("guide/runtime identity = %+v", guide)
+			}
+		})
+	}
+}
+
+var codexGuideSupportReference = regexp.MustCompile("`(\\.\\./support/[a-z-]+\\.md)`")
+
+func resolveInstalledCodexGuideSupport(skillPath, text string) error {
+	refs := codexGuideSupportReference.FindAllStringSubmatch(text, -1)
+	if len(refs) == 0 {
+		return fmt.Errorf("no private support references in %s", skillPath)
+	}
+	for _, ref := range refs {
+		path := filepath.Join(filepath.Dir(skillPath), filepath.FromSlash(ref[1]))
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
 		}
-		if def.SkillReference != "" && !strings.Contains(shim.Body, def.SkillReference) {
-			t.Fatalf("%s command shim missing lifecycle skill %q", shim.Name, def.SkillReference)
-		}
-		if def.RunCommand != "" && !strings.Contains(shim.Body, def.RunCommand) {
-			t.Fatalf("%s command shim missing runtime command %q", shim.Name, def.RunCommand)
-		}
-		rendered := renderCodexSkillShim(shim)
-		fm := parseSkillFrontmatter(rendered)
-		if fm == nil {
-			t.Fatalf("%s generated shim should have parseable frontmatter", shim.Name)
-		}
-		if !stringSliceContains(fm.TaskKeywords, "aether "+command) {
-			t.Fatalf("%s generated frontmatter missing command keyword: %v", shim.Name, fm.TaskKeywords)
+		if len(bytes.TrimSpace(content)) == 0 {
+			return fmt.Errorf("empty private support: %s", path)
 		}
 	}
+	return nil
+}
+
+func TestCodexAntSkillGuideSupport(t *testing.T) {
+	home := t.TempDir()
+	if ok, output := runAntSkillInstall(t, home); !ok {
+		t.Fatalf("install failed: %s", output)
+	}
+	root := filepath.Join(home, ".codex", "skills", "aether")
+	var names []string
+	for _, dir := range findSkillDirs(root) {
+		names = append(names, filepath.Base(dir))
+	}
+	sort.Strings(names)
+	if !reflect.DeepEqual(names, expectedAntSkills) {
+		t.Fatalf("installed public menu = %v", names)
+	}
+	for _, expected := range codexAntGuideExpectations {
+		t.Run(expected.command, func(t *testing.T) {
+			var output bytes.Buffer
+			stdout, stderr = &output, &output
+			rootCmd.SetArgs([]string{"command-guide", expected.command, "--platform", "codex"})
+			if err := rootCmd.Execute(); err != nil {
+				t.Fatal(err)
+			}
+			var envelope struct {
+				OK     bool               `json:"ok"`
+				Result commandGuideResult `json:"result"`
+			}
+			if err := json.Unmarshal(output.Bytes(), &envelope); err != nil || !envelope.OK {
+				t.Fatalf("guide output: %v: %s", err, output.String())
+			}
+			guide := envelope.Result
+			if guide.Command != expected.command || guide.RunCommand != expected.runtime || guide.SkillReference != expected.support {
+				t.Fatalf("runtime route changed: %+v", guide)
+			}
+			guideText := strings.Join(guide.PreSteps, "\n") + "\n" + strings.Join(guide.PostSteps, "\n") + "\n" + strings.Join(guide.DriftGuards, "\n")
+			if !strings.Contains(guideText, "$ant-"+expected.command) {
+				t.Errorf("guide does not teach public invocation")
+			}
+			skillPath := filepath.Join(root, "ant-"+expected.command, "SKILL.md")
+			skill, err := os.ReadFile(skillPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for label, text := range map[string]string{"guide": guideText, "installed skill": string(skill)} {
+				if err := resolveInstalledCodexGuideSupport(skillPath, text); err != nil {
+					t.Errorf("%s support: %v", label, err)
+				}
+				for _, forbidden := range []string{"Load the aether-", "`aether-colony-creation` Codex skill", "`aether-colony-research` Codex skill", "`aether-colony-build-cycle` Codex skill", "$ant-status", "$ant-help", "$ant-spec", "$ant-maintenance", "deferred Codex-native lifecycle surface", "scope fence remains intact"} {
+					if strings.Contains(text, forbidden) {
+						t.Errorf("%s advertises obsolete guidance %q", label, forbidden)
+					}
+				}
+			}
+			t.Logf("%s: route=%s support=../support/%s.md", expected.command, guide.RunCommand, expected.support)
+		})
+	}
+	t.Run("missing private support refuses resolution", func(t *testing.T) {
+		path := filepath.Join(root, "support", "aether-colony-build-cycle.md")
+		if err := os.Remove(path); err != nil {
+			t.Fatal(err)
+		}
+		guide, err := buildCommandGuide("plan", "codex")
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = resolveInstalledCodexGuideSupport(filepath.Join(root, "ant-plan", "SKILL.md"), strings.Join(guide.PreSteps, "\n"))
+		if !os.IsNotExist(err) {
+			t.Fatalf("removed support must fail resolution: %v", err)
+		}
+	})
 }
 
 func stringSliceContains(values []string, want string) bool {
@@ -1210,7 +1350,7 @@ var phase200PlanGuidanceAnchors = []string{
 	"divergent replay",
 	"Go validates",
 	"never synthesize",
-	"aether build 1",
+	"$ant-build 1",
 	"aether run",
 }
 
@@ -1246,8 +1386,11 @@ func TestCommandGuidePlan200StagedAuthority(t *testing.T) {
 			t.Errorf("Codex plan guide still teaches retired planning contract %q", retired)
 		}
 	}
-	if strings.Contains(text, "/ant-") || strings.Contains(text, "$ant-") {
-		t.Errorf("Codex plan guide must use direct aether spelling:\n%s", text)
+	if strings.Contains(text, "/ant-") || strings.Contains(text, "$ant-spec") || strings.Contains(text, "$ant-maintenance") {
+		t.Errorf("Codex plan guide advertises unsupported spelling:\n%s", text)
+	}
+	if !strings.Contains(text, "$ant-plan") || !strings.Contains(text, "$ant-build 1") {
+		t.Error("plan guide missing supported ant invocations")
 	}
 	if guide.RunCommand != "AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <approved temp completion JSON>" {
 		t.Errorf("plan finalizer command = %q", guide.RunCommand)

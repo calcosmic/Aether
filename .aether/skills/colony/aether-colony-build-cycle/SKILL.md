@@ -13,6 +13,15 @@ version: "1.0"
 
 # Aether Colony Build Cycle
 
+## Installed Codex entrypoints
+
+Use `$ant-colonize`, `$ant-plan`, `$ant-build`, `$ant-continue`, `$ant-swarm`, and `$ant-seal`. This document is installed as
+`support/aether-colony-build-cycle.md` beside the public skill directories;
+it is private support, not a separately discoverable helper skill. Public skills
+resolve its path relative to their installed `SKILL.md`, never the working directory.
+The executable commands and runtime-issued IDs remain `aether` identities.
+Full workflow coverage and native-worker parity remain pending.
+
 ## Purpose
 
 Give Codex the wrapper-equivalent behavior for the lifecycle commands where AI
@@ -42,9 +51,8 @@ the skill.
   preselecting either route. Show displayed Autopilot bounds before it runs.
 - Keep concrete repair/debt receipts from runtime results, and allow independent safe-path continuation while only the unsafe or blocked path pauses.
 - Autopilot stops at explicit seal. Force flags pass only when directly supplied by the owner. A forced-incomplete closure is not verified success.
-- Phase 200–205/native `$ant-*` scope fence: this existing Codex lifecycle
-  skill documents runtime behavior only; it neither creates nor implies a new
-  native lifecycle surface.
+- The nine installed public skills coordinate the existing runtime routes.
+  Full workflow coverage and native-worker parity remain pending.
 
 ## Raw Bypass
 
@@ -178,8 +186,8 @@ AETHER_OUTPUT_MODE=json aether plan --candidate
     shortcut. Stale or divergent acceptance leaves the active plan unchanged
     and routes back to `aether plan --candidate`.
 20. Only a successful `acceptance_receipt` makes the PlanRevision READY. Then
-    render plan closeout and offer the equal direct Codex choices
-    `aether build 1` and `aether run`; preselect neither. For a revision, report
+    render plan closeout and offer the equal Codex choices
+    `$ant-build 1` and `aether run`; preselect neither. For a revision, report
     preserved/affected/superseded/replacement IDs and discard every stale
     stage packet, answer token, candidate view, and acceptance command.
 
