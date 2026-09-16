@@ -645,70 +645,17 @@ type codexSkillShim struct {
 }
 
 func codexSkillShims() []codexSkillShim {
-	shims := []codexSkillShim{
-		{
-			Dir:         "aether-command-guide",
-			Name:        "aether-command-guide",
-			Description: "Use for Aether lifecycle commands; ask the runtime for current orchestration guidance before acting.",
-			Body:        "Run `aether command-guide <command> --platform codex` before intelligent Aether flows. Follow the guide over stale local notes. For raw user commands, run the literal command.",
-		},
-		{
-			Dir:         "aether-skill-loader",
-			Name:        "aether-skill-loader",
-			Description: "Explains where Aether worker skill content comes from -- no on-demand loader command exists.",
-			Body:        "Skill content is already included automatically in the worker brief text returned by `aether build`, `aether colonize`, `aether plan`, and `aether continue` -- it is assembled in-process from the matched shipped and custom Aether skills. There is no separate command to fetch it on demand (skill-inject, the CLI command this shim used to call, was deleted in Phase 191 as dead CLI surface -- its underlying matching logic is what dispatches use automatically). Do not preload full skill mirrors.",
-		},
-		{
-			Dir:         "aether-colony-creation",
-			Name:        "aether-colony-creation",
-			Description: "Use when initializing an Aether colony in Codex; refine intent before calling the runtime.",
-			Body:        "For `aether init` or setup requests, use `aether command-guide init --platform codex`, ask compact clarifying questions when needed, ask the user to choose Colony Mode or Orchestrator Mode, synthesize a precise charter, then run the runtime with `--colony-mode <selected>` so it creates state.",
-		},
-		{
-			Dir:         "aether-colony-research",
-			Name:        "aether-colony-research",
-			Description: "Use when running Oracle or discuss flows in Codex; scope research before persistence begins.",
-			Body:        "For `aether oracle` or `aether discuss`, use `aether command-guide <oracle|discuss> --platform codex`, clarify output shape, scope, depth, and confidence, then run the runtime flow.",
-		},
-		{
-			Dir:              "aether-colony-build-cycle",
-			Name:             "aether-colony-build-cycle",
-			Description:      "Use when Codex is asked to colonize, plan, build, continue, swarm, or seal an Aether colony and must mirror wrapper orchestration safely.",
-			Body:             "For `aether colonize`, `aether plan`, `aether build`, `aether continue`, `aether swarm`, or `aether seal`, run `aether command-guide <command> --platform codex`, use runtime JSON manifests and finalizers, pass worker briefs verbatim, honor loop guards, and never hand-edit `.aether/data`.",
-			WorkflowTriggers: []string{"colonize", "plan", "build", "continue", "swarm", "seal"},
-			TaskKeywords:     []string{"aether colonize", "aether plan", "aether build", "aether continue", "aether swarm", "aether seal", "dispatch manifest", "plan-only", "finalize"},
-		},
-	}
-	return append(shims, codexCommandSkillShims()...)
+	return codexCommandSkillShims()
 }
 
 func codexCommandSkillShims() []codexSkillShim {
-	commands := []string{"init", "discuss", "oracle", "colonize", "plan", "build", "continue", "swarm", "seal"}
-	catalog := commandGuideCatalog()
+	commands, catalog := codexPublicSkillCommands(), commandGuideCatalog()
+	if validateCodexSkillInventory(commands, catalog) != nil {
+		return nil // Production installation uses the error-returning payload builder.
+	}
 	shims := make([]codexSkillShim, 0, len(commands))
 	for _, command := range commands {
-		def, ok := catalog[command]
-		if !ok || def.Literal {
-			continue
-		}
-		keywords := []string{
-			"aether " + command,
-			"/ant-" + command,
-			"ant-" + command,
-			"command-guide " + command,
-			"aether command-guide " + command,
-		}
-		if def.SkillReference != "" {
-			keywords = append(keywords, def.SkillReference)
-		}
-		shims = append(shims, codexSkillShim{
-			Dir:              "aether-" + command,
-			Name:             "aether-" + command,
-			Description:      fmt.Sprintf("Use when Codex is asked to run `aether %s` or the equivalent Aether lifecycle action.", command),
-			Body:             renderCodexCommandSkillShimBody(command, def),
-			WorkflowTriggers: []string{command},
-			TaskKeywords:     keywords,
-		})
+		shims = append(shims, codexPublicSkillShim(command, catalog[command]))
 	}
 	return shims
 }
@@ -718,12 +665,13 @@ func renderCodexCommandSkillShimBody(command string, def commandGuideDefinition)
 	fmt.Fprintf(&b, "This is the Codex command-shaped skill for `aether %s`. Use it instead of relying on free-form natural language for this lifecycle action.\n\n", command)
 	fmt.Fprintf(&b, "1. Run `aether command-guide %s --platform codex` first and treat that runtime guide as authoritative.\n", command)
 	if def.SkillReference != "" {
-		fmt.Fprintf(&b, "2. Load or follow `%s`; this command-specific skill is the entrypoint, not a replacement for the shared lifecycle skill.\n", def.SkillReference)
+		fmt.Fprintf(&b, "2. Read `../support/%s.md`, resolved relative to this installed SKILL.md (not the working directory). References to `%s` in runtime guidance mean this private support document.\n", def.SkillReference, def.SkillReference)
 	} else {
 		b.WriteString("2. Follow the runtime guide directly.\n")
 	}
 	b.WriteString("3. Preserve runtime ownership of state: wrappers and skills may interview, synthesize, spawn workers, and summarize, but must not hand-edit `.aether/data`.\n")
 	b.WriteString("4. Honor raw/exact/no-orchestration requests by using the raw bypass below.\n\n")
+	b.WriteString("Worker skill content is included automatically in runtime worker briefs. There is no separate skill-loader command; do not preload full skill mirrors. Follow command-guide over stale local notes.\n\n")
 
 	if def.Intent != "" {
 		fmt.Fprintf(&b, "## Intent\n%s\n\n", def.Intent)
@@ -751,59 +699,25 @@ func writeCodexCommandSkillList(b *strings.Builder, heading string, values []str
 	b.WriteString("\n")
 }
 
+// Compatibility for internal callers: all writes use the same payload planner
+// and transaction. This entrypoint never directly writes or prunes skills.
 func syncCodexSkillShims(destDir string) syncResult {
-	result := syncResult{}
-	if err := os.MkdirAll(destDir, 0755); err != nil {
-		result.errors = append(result.errors, fmt.Sprintf("mkdir %s: %v", destDir, err))
-		return result
+	home := filepath.Dir(filepath.Dir(filepath.Dir(destDir)))
+	if filepath.Clean(destDir) != filepath.Join(home, ".codex", "skills", "aether") {
+		return syncResult{errors: []string{"codex skills: destination must be <home>/.codex/skills/aether"}}
 	}
-
-	allowed := map[string]bool{}
-	for _, shim := range codexSkillShims() {
-		allowed[filepath.ToSlash(shim.Dir)] = true
+	packageDir, cleanup, err := resolveInstallPackageDir("")
+	if err != nil {
+		return syncResult{errors: []string{err.Error()}}
 	}
-
-	for _, dir := range findSkillDirs(destDir) {
-		rel, err := filepath.Rel(destDir, dir)
-		if err != nil {
-			result.errors = append(result.errors, fmt.Sprintf("rel %s: %v", dir, err))
-			continue
-		}
-		rel = filepath.ToSlash(rel)
-		if allowed[rel] {
-			continue
-		}
-		if skillDirDeclaresSource(dir, "custom") {
-			result.skipped++
-			continue
-		}
-		if err := os.RemoveAll(dir); err != nil && !os.IsNotExist(err) {
-			result.errors = append(result.errors, fmt.Sprintf("remove %s: %v", dir, err))
-			continue
-		}
-		result.removed = append(result.removed, rel)
+	if cleanup != nil {
+		defer cleanup()
 	}
-
-	for _, shim := range codexSkillShims() {
-		skillPath := filepath.Join(destDir, filepath.FromSlash(shim.Dir), "SKILL.md")
-		content := renderCodexSkillShim(shim)
-		if current, err := os.ReadFile(skillPath); err == nil && string(current) == content {
-			result.skipped++
-			continue
-		}
-		if err := os.MkdirAll(filepath.Dir(skillPath), 0755); err != nil {
-			result.errors = append(result.errors, fmt.Sprintf("mkdir %s: %v", filepath.Dir(skillPath), err))
-			continue
-		}
-		if err := os.WriteFile(skillPath, []byte(content), 0644); err != nil {
-			result.errors = append(result.errors, fmt.Sprintf("write %s: %v", skillPath, err))
-			continue
-		}
-		result.copied++
+	payload, err := buildCodexSkillPayload(packageDir)
+	if err != nil {
+		return syncResult{errors: []string{err.Error()}}
 	}
-
-	cleanEmptyDirs(destDir)
-	return result
+	return syncCodexSkillsFromPayload(payload, home)
 }
 
 func renderCodexSkillShim(shim codexSkillShim) string {

@@ -1,0 +1,269 @@
+{
+  "schema_version": "codex-skill-discovery-tracer/v1",
+  "status": "qualified",
+  "scope": "ant-plan discovery and first read-only command-guide step only; codex-cli 0.154.0; no workflow or all-nine host parity claim",
+  "raw_evidence_root": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01",
+  "raw_run": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334",
+  "source_revision": "1afd7b0373f684410067c501e5451b17a984f0ac",
+  "cases": [
+    {
+      "schema_version": "codex-skill-discovery/v1",
+      "source_revision": "1afd7b0373f684410067c501e5451b17a984f0ac",
+      "source_status": "?? cmd/codex_skill_live_test.go",
+      "candidate_path": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334/bin/aether",
+      "candidate_sha256": "sha256:ff152987388228f57c910e9591b54ca55c3d71e0e9727c75ecfe0821c1b67e55",
+      "candidate_version": "{\"ok\":true,\"result\":\"1.0.79\"}",
+      "client_path": "/Users/callumcowie/.codex-5x/packages/standalone/releases/0.154.0-aarch64-apple-darwin/bin/codex",
+      "client_sha256": "sha256:4f85982624b3898c8991cb80c0981b2aa71070e3537046c9a95950318a95afcc",
+      "client_version": "codex-cli 0.154.0",
+      "model": "gpt-6-astra",
+      "payload_identity": "sha256:10d92b57b09f353b4879b291c880a63e3fe879a8d1a25c9534e7bb2ef9fd80bd",
+      "discovery_root": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334/plan/home/.codex/skills/aether",
+      "skill_path": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334/plan/home/.codex/skills/aether/ant-plan/SKILL.md",
+      "installed_skill_sha256": "sha256:5840279bd8d241fb4397067202f282fd0c27e3ba33acd5b9cf80139f56844db4",
+      "loaded_path": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334/plan/home/.codex/skills/aether/ant-plan/SKILL.md",
+      "loaded_sha256": "sha256:5840279bd8d241fb4397067202f282fd0c27e3ba33acd5b9cf80139f56844db4",
+      "skill_load_event": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334/plan/events.jsonl:5#item_1",
+      "guide_event": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334/plan/events.jsonl:9#item_3",
+      "guide_command": "AETHER_OUTPUT_MODE=json aether command-guide plan --platform codex",
+      "candidate_resolution_event": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334/plan/events.jsonl:7#item_2",
+      "raw_events": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334/plan/events.jsonl",
+      "raw_stderr": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334/plan/stderr.txt",
+      "client_args": [
+        "exec",
+        "--ignore-user-config",
+        "--ignore-rules",
+        "-s",
+        "read-only",
+        "--json",
+        "--color",
+        "never",
+        "-C",
+        "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334/plan/repository",
+        "-c",
+        "cli_auth_credentials_store=\"file\"",
+        "-c",
+        "approval_policy=\"never\"",
+        "-c",
+        "shell_environment_policy.set.PATH=\"/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin\"",
+        "-c",
+        "shell_environment_policy.set.AETHER_OUTPUT_MODE=\"json\"",
+        "-m",
+        "gpt-6-astra",
+        "-c",
+        "model_reasoning_effort=\"xhigh\"",
+        "-"
+      ],
+      "exit_status": 0,
+      "missing_skill_control": false,
+      "temporary_auth_removed": true,
+      "outcome": "qualified"
+    },
+    {
+      "schema_version": "codex-skill-discovery/v1",
+      "source_revision": "1afd7b0373f684410067c501e5451b17a984f0ac",
+      "source_status": "?? cmd/codex_skill_live_test.go",
+      "candidate_path": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334/bin/aether",
+      "candidate_sha256": "sha256:ff152987388228f57c910e9591b54ca55c3d71e0e9727c75ecfe0821c1b67e55",
+      "candidate_version": "{\"ok\":true,\"result\":\"1.0.79\"}",
+      "client_path": "/Users/callumcowie/.codex-5x/packages/standalone/releases/0.154.0-aarch64-apple-darwin/bin/codex",
+      "client_sha256": "sha256:4f85982624b3898c8991cb80c0981b2aa71070e3537046c9a95950318a95afcc",
+      "client_version": "codex-cli 0.154.0",
+      "model": "gpt-6-astra",
+      "payload_identity": "sha256:10d92b57b09f353b4879b291c880a63e3fe879a8d1a25c9534e7bb2ef9fd80bd",
+      "discovery_root": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334/plan-missing-skill/home/.codex/skills/aether",
+      "skill_path": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334/plan-missing-skill/home/.codex/skills/aether/ant-plan/SKILL.md",
+      "installed_skill_sha256": "sha256:5840279bd8d241fb4397067202f282fd0c27e3ba33acd5b9cf80139f56844db4",
+      "raw_events": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334/plan-missing-skill/events.jsonl",
+      "raw_stderr": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334/plan-missing-skill/stderr.txt",
+      "client_args": [
+        "exec",
+        "--ignore-user-config",
+        "--ignore-rules",
+        "-s",
+        "read-only",
+        "--json",
+        "--color",
+        "never",
+        "-C",
+        "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334/plan-missing-skill/repository",
+        "-c",
+        "cli_auth_credentials_store=\"file\"",
+        "-c",
+        "approval_policy=\"never\"",
+        "-c",
+        "shell_environment_policy.set.PATH=\"/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin\"",
+        "-c",
+        "shell_environment_policy.set.AETHER_OUTPUT_MODE=\"json\"",
+        "-m",
+        "gpt-6-astra",
+        "-c",
+        "model_reasoning_effort=\"xhigh\"",
+        "-"
+      ],
+      "exit_status": 0,
+      "missing_skill_control": true,
+      "temporary_auth_removed": true,
+      "outcome": "rejected-missing-skill",
+      "reason": "selected installed skill unavailable: open /Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334/plan-missing-skill/home/.codex/skills/aether/ant-plan/SKILL.md: no such file or directory"
+    }
+  ],
+  "test_accounting": {
+    "task1-red.jsonl": {
+      "raw": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/task1-red.jsonl",
+      "counts": {
+        "fail": 2
+      },
+      "top_level": 2,
+      "subtests": 0,
+      "tests": {
+        "TestCodexAntSkillInstallTracer": "fail",
+        "TestCodexAntSkillCleanInstallCollision": "fail"
+      }
+    },
+    "task1-green.jsonl": {
+      "raw": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/task1-green.jsonl",
+      "counts": {
+        "pass": 30
+      },
+      "top_level": 3,
+      "subtests": 27,
+      "tests": {
+        "TestCodexAntSkillInstallTracer": "pass",
+        "TestCodexAntSkillCleanInstallCollision": "pass",
+        "TestCodexAntSkillInventory/nil": "pass",
+        "TestCodexAntSkillInventory/empty": "pass",
+        "TestCodexAntSkillInventory/missing": "pass",
+        "TestCodexAntSkillInventory/duplicate": "pass",
+        "TestCodexAntSkillInventory/case": "pass",
+        "TestCodexAntSkillInventory/unicode": "pass",
+        "TestCodexAntSkillInventory/missing-guide": "pass",
+        "TestCodexAntSkillInventory/literal-guide": "pass",
+        "TestCodexAntSkillInventory/empty-route": "pass",
+        "TestCodexAntSkillInventory/invalid-support": "pass",
+        "TestCodexAntSkillInventory/payload-null": "pass",
+        "TestCodexAntSkillInventory/payload-empty": "pass",
+        "TestCodexAntSkillInventory/payload-schema": "pass",
+        "TestCodexAntSkillInventory/payload-missing-command": "pass",
+        "TestCodexAntSkillInventory/payload-duplicate-command": "pass",
+        "TestCodexAntSkillInventory/payload-case": "pass",
+        "TestCodexAntSkillInventory/payload-unicode": "pass",
+        "TestCodexAntSkillInventory/payload-missing-file": "pass",
+        "TestCodexAntSkillInventory/payload-duplicate-file": "pass",
+        "TestCodexAntSkillInventory/payload-escape": "pass",
+        "TestCodexAntSkillInventory/payload-mode": "pass",
+        "TestCodexAntSkillInventory/payload-digest": "pass",
+        "TestCodexAntSkillInventory/payload-yaml-name": "pass",
+        "TestCodexAntSkillInventory/payload-future-runtime": "pass",
+        "TestCodexAntSkillInventory/payload-empty-version": "pass",
+        "TestCodexAntSkillInventory/missing-support": "pass",
+        "TestCodexAntSkillInventory/deterministic": "pass",
+        "TestCodexAntSkillInventory": "pass"
+      }
+    },
+    "task1-missing-generator.jsonl": {
+      "raw": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/task1-missing-generator.jsonl",
+      "counts": {
+        "fail": 1
+      },
+      "top_level": 1,
+      "subtests": 0,
+      "tests": {
+        "TestCodexAntSkillInstallTracer": "fail"
+      }
+    },
+    "task2-validator.jsonl": {
+      "raw": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/task2-validator.jsonl",
+      "counts": {
+        "pass": 10,
+        "skip": 1
+      },
+      "top_level": 2,
+      "subtests": 9,
+      "tests": {
+        "TestCodexAntSkillLiveEvidence/host-events": "pass",
+        "TestCodexAntSkillLiveEvidence/model-claim": "pass",
+        "TestCodexAntSkillLiveEvidence/command-without-load": "pass",
+        "TestCodexAntSkillLiveEvidence/wrong-candidate": "pass",
+        "TestCodexAntSkillLiveEvidence/no-turn-completion": "pass",
+        "TestCodexAntSkillLiveEvidence/echo-not-invocation": "pass",
+        "TestCodexAntSkillLiveEvidence/wrong-loaded-bytes": "pass",
+        "TestCodexAntSkillLiveEvidence/failed-tool": "pass",
+        "TestCodexAntSkillLiveEvidence/missing-skill-despite-known-route": "pass",
+        "TestCodexAntSkillLiveEvidence": "pass",
+        "TestCodexAntSkillFreshHost": "skip"
+      }
+    },
+    "task2-live.jsonl": {
+      "raw": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/task2-live.jsonl",
+      "counts": {
+        "pass": 3
+      },
+      "top_level": 1,
+      "subtests": 2,
+      "tests": {
+        "TestCodexAntSkillFreshHost/plan": "pass",
+        "TestCodexAntSkillFreshHost/plan-missing-skill": "pass",
+        "TestCodexAntSkillFreshHost": "pass"
+      }
+    }
+  },
+  "original_phase205_before_inventory_sha256": "3b2b678284a26332addeadd2bd700bd4f51c4e2b0e6907a987116c85e5c2a8dd",
+  "owner_project_accessed": false,
+  "shared_codex_configuration_modified": false,
+  "temporary_auth_files_removed": true,
+  "configuration_references": [
+    "https://learn.chatgpt.com/docs/auth",
+    "https://learn.chatgpt.com/docs/config-file/config-reference"
+  ],
+  "raw_artifacts": [
+    {
+      "path": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334/plan/events.jsonl",
+      "sha256": "c82638ccced5e1742b3f36148ccce77178c69cb8c8b5f70afd156da46ff6769f"
+    },
+    {
+      "path": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334/plan/stderr.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334/plan/receipt.json",
+      "sha256": "25d43b8420b7ca67d93f99502c9f057331af7faf85ea99d77d62fe2e6b995169"
+    },
+    {
+      "path": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334/plan/install.json",
+      "sha256": "5233d0308068442109f3ad0874a3220bf92f8efb74ed320382c201137e0f5382"
+    },
+    {
+      "path": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334/plan/prompt.txt",
+      "sha256": "cbbf71df1b36fe4187bc434a8c3d2e137e3fa6a7523984b624d45cc4a3e41f3c"
+    },
+    {
+      "path": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334/plan/installed-ant-plan.md",
+      "sha256": "5840279bd8d241fb4397067202f282fd0c27e3ba33acd5b9cf80139f56844db4"
+    },
+    {
+      "path": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334/plan-missing-skill/events.jsonl",
+      "sha256": "b01b282daca06005a49c44c2fe4020d7631e6b88f8d14cb032bfbaf7b79f1810"
+    },
+    {
+      "path": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334/plan-missing-skill/stderr.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334/plan-missing-skill/receipt.json",
+      "sha256": "5d1408324ef218f04ae1fa2cd7967e77fc8b3a4b44dec62abcb2be2369f389c0"
+    },
+    {
+      "path": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334/plan-missing-skill/install.json",
+      "sha256": "f25948aa0a01fe508e2f88746907550e023e54d2bf2a381f5ca0475ffaa387cd"
+    },
+    {
+      "path": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334/plan-missing-skill/prompt.txt",
+      "sha256": "cbbf71df1b36fe4187bc434a8c3d2e137e3fa6a7523984b624d45cc4a3e41f3c"
+    },
+    {
+      "path": "/Users/callumcowie/.aether-backups/phase204-1-execution-evidence-20260916/plan-01/fresh-host-1811947334/plan-missing-skill/installed-ant-plan.md",
+      "sha256": "5840279bd8d241fb4397067202f282fd0c27e3ba33acd5b9cf80139f56844db4"
+    }
+  ]
+}
