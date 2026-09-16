@@ -4,12 +4,12 @@ milestone: v1.28
 milestone_name: Classic Colony Restoration
 current_phase: 205
 current_phase_name: Owner Acceptance and Restoration Seal
-status: executing
-stopped_at: 205-14 task 1 preflight executing; owner-only walkthrough has not begun
-last_updated: "2026-09-15T23:56:05Z"
+status: paused
+stopped_at: 205-14 task 2 blocking-human; preflight complete, awaiting actual owner walkthrough
+last_updated: "2026-09-16T00:12:36Z"
 last_activity: 2026-09-16
-last_activity_desc: Local 1.0.79 release complete; owner-session preflight next
-state_head: 11d7eb27dcdca54a39c884b6e7b5a8d979fe6968
+last_activity_desc: Preflight merged; awaiting the actual owner walkthrough and verdicts
+state_head: aa535593e0b7ea139cf618eff0bf945c2aba26bc
 progress:
   total_phases: 8
   completed_phases: 5
@@ -32,11 +32,11 @@ See: .planning/PROJECT.md (updated 2026-09-15)
 
 ## Current Position
 
-Phase: 205 (Owner Acceptance and Restoration Seal) — EXECUTING
+Phase: 205 (Owner Acceptance and Restoration Seal) — AWAITING OWNER WALKTHROUGH
 Next phase: 205 (Owner Acceptance and Restoration Seal)
-Status: Executing Phase 205
-Plan: 14 of 18 active — task 1 preflight; 13/18 plans have committed summaries
-Last activity: 2026-09-16 — Local release merged; final owner-session preflight next
+Status: Paused at the required owner-only checkpoint; automated preflight complete
+Plan: 14 of 18 active — task 1 complete, task 2 blocking-human, task 3 pending; 13/18 plans have committed summaries
+Last activity: 2026-09-16 — Final preflight merged; owner-only walkthrough is next
 
 ## Performance Metrics
 
@@ -758,9 +758,9 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-15T23:56:05Z
-Stopped at: 205-14 task 1 preflight executing; owner-only walkthrough has not begun
-Resume file: .planning/phases/205-owner-acceptance-and-restoration-seal/205-14-PLAN.md
+Last session: 2026-09-16T00:12:36Z
+Stopped at: 205-14 task 2 blocking-human; preflight complete, awaiting actual owner walkthrough
+Resume file: .planning/phases/205-owner-acceptance-and-restoration-seal/205-14-CHECKPOINT.md
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
 
@@ -780,10 +780,14 @@ Initial resume evidence (superseded by active execution below): HEAD 5f14b056 re
 - Target update committed only `.claude/settings.json` and `.claude/rules/aether-colony.md` at `fe1ec13284bf60a3e3205cbc7028f1c275eee5e2`. Its installation marker intentionally changed from 1.0.63 to 1.0.79; all other 1,304 existing extended records (382 data files) kept bytes, modes and mtimes. Original colony SHA-256 remains `883c58156730f89d329acf97aeb1ce954ba96efb3c6b5996ccf3ec2a83cbaa0d`, completed and unsealed. The update's 70 new recovery records are retained and inventoried; one exact local journal exclusion keeps Git clean. Original and snapshot refs remain unchanged.
 - Known release limitations, including the existing js-yaml advisory reported by npm audit and preserved local Codex agent variants, remain documented in `205-13-SUMMARY.md` and `205-RELEASE-RECORD.md`; carry them into the limitations card. No owner acceptance is implied.
 
-- Plan 205-14 task 1 is executing in `.claude/worktrees/agent-p205-14-codex-20260916`, base `be9e2208c418fde074e0b450425c516f38b7fad4`. Manifest `/tmp/aether-phase205-execution/wave6.json`; process/log receipts `plan14-process.json` and `plan14-executor.log` in the same scratch directory. Executor may only perform read-only target preflight, commit the before-inventory/session opening/checkpoint, then stop at task 2. No owner session has begun. On resumption inspect its exit/result/progress before dispatching again.
+- Plan 205-14 **task 1 is complete**, task commit `34b7f24d9cee227c735abc5902b7d82e7520d1bf`, durable checkpoint `5bf3164d90d1763758a75f4d5cc11459fb5b092c`, merged at `aa535593e0b7ea139cf618eff0bf945c2aba26bc`. The executor finished and its manifest-owned worktree was removed; the unrelated pre-existing worktree remains untouched. All 32 preflight checks passed; parent independently verified the three artifact hashes, four scope digests and all 1,375 live records, plus clean repositories and original/snapshot refs. Drift/UI checks were nonblocking. No runtime code or tests changed.
+- Durable authority: `205-14-CHECKPOINT.md`, `205-SESSION-LOG.md` and `205-SESSION-BEFORE-INVENTORY.json` beside the plan. Inventory artifact SHA-256 `3b2b678284a26332addeadd2bd700bd4f51c4e2b0e6907a987116c85e5c2a8dd`; data aggregate `49fa826817d0f6caa8c4d10a0fdb5724c8d85466c972c45977187ccc2273f3ee`. Captured 2026-09-16T00:02:04.612544+00:00 (02:02 Europe/Zurich): 398 data files, 1,320 extended records including those data files, plus 55 existing update-journal files. Release maintenance is explicitly pre-session evidence. **Never rerun task 1 or overwrite this before-inventory after the owner session.**
+- Task 2 is the explicit **blocking-human** owner walkthrough. No owner session has begun or verdict been received. Task 3 readback is pending. No `205-14-SUMMARY.md` exists and plan 14, phase 205 and PROOF-05 remain incomplete. Resume only after the actual owner action; silence, elapsed time or auto-approval cannot satisfy it.
+- Execution receipts and capture script are preserved at `/Users/callumcowie/.aether-backups/phase205-execution-evidence-20260915/owner-preflight/`, with a manifest and parent review. `/tmp/aether-phase205-execution/plan14-progress.json` now points at merged artifact paths; the archive retains the original executor receipt as well. The committed checkpoint remains sufficient if scratch files disappear.
 
 ## Operator Next Steps
 
-- Perform 205-14 preflight and save a durable per-file before-session inventory. Stop at its actual owner-only walkthrough checkpoint. Preserve the completed plans and existing snapshot branches.
-- Carry the owner-accepted limits and open WINDOWS.md entries into the limitations card under 205-CONTEXT.md D-10/D-15; fix defects that block the walk-through journeys. CAP-057's precision limit and the captured OpenCode provider-connection failure remain explicit in the plan 205-08/205-10 summaries.
-- The local release is complete. Owner walkthrough, PROOF-05 acceptance and restoration seal remain pending. The 205-14 owner checkpoint is mandatory; never substitute assistant-run journeys or overwrite the original before-session inventory on resumption.
+- Owner: open a fresh Claude Code chat in `/Users/callumcowie/Documents/Max 9/M4L-AnalogWave-System` and follow `205-BRIEF.md`'s ten tasks alone. One deliberate close/reopen for the stop/return task; if stuck, record failure and move on. Return **“session done” with ten personal verdict lines and the overall yes/no answer**. No monitoring, coaching or assistant-run journeys.
+- After the owner response, use a **fresh continuation executor** with `205-14-CHECKPOINT.md`, the completed-task commit and the actual response. Continue at task 2's completion and task 3's read-only evidence comparison; preserve the original inventory and never repeat preparation. Then complete plans 15–18 in their approved order, preserving any further owner gates.
+- Carry accepted limits and open WINDOWS.md entries into the limitations card under D-10/D-15, including the release's documented dependency advisory and preserved local Codex variants. CAP-057's precision limit and OpenCode's captured provider-connection failure remain explicit. Actual failed journeys are triaged through plan 16.
+- Local release is complete. Owner walkthrough, PROOF-05 acceptance and restoration seal remain pending; do not mark them complete or substitute an assistant verdict.

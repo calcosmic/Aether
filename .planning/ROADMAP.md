@@ -728,7 +728,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 205-14-PLAN.md — The owner's walk-through session (wave 6)
+- [ ] 205-14-PLAN.md — The owner's walk-through session (wave 6) — task 1 preflight complete; task 2 awaits the owner ([checkpoint](phases/205-owner-acceptance-and-restoration-seal/205-14-CHECKPOINT.md))
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
