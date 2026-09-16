@@ -120,11 +120,11 @@ func TestCodexAntSkillLegacyMigration(t *testing.T) {
 	home := t.TempDir()
 	root := filepath.Join(home, ".codex", "skills", "aether")
 	antSeedLegacy(t, root)
-	for _, rel := range []string{"aether-plan/notes.md", "custom/SKILL.md", "domain/typescript/SKILL.md"} {
+	for _, rel := range []string{"aether-plan/notes.md", "custom/SKILL.md", "domain/typescript/SKILL.md", "aether-unknown/SKILL.md"} {
 		writeMaintenanceMutation199File(t, filepath.Join(root, rel), []byte("owner: "+rel))
 	}
-	if ok, output := runAntSkillInstall(t, home); !ok {
-		t.Fatalf("registered install: %s", output)
+	if ok, output := runAntSkillInstall(t, home); !ok || !strings.Contains(output, "aether-unknown/SKILL.md") {
+		t.Fatalf("registered install missing success/preservation report: %s", output)
 	}
 	for _, f := range antLegacy(t).Files {
 		if _, err := os.Lstat(filepath.Join(root, f.RelativePath)); !os.IsNotExist(err) {
@@ -136,7 +136,7 @@ func TestCodexAntSkillLegacyMigration(t *testing.T) {
 			t.Error(err)
 		}
 	}
-	for _, rel := range []string{"aether-plan/notes.md", "custom/SKILL.md", "domain/typescript/SKILL.md"} {
+	for _, rel := range []string{"aether-plan/notes.md", "custom/SKILL.md", "domain/typescript/SKILL.md", "aether-unknown/SKILL.md"} {
 		if got := string(mustReadLifecycleFixtureFile(t, filepath.Join(root, rel))); got != "owner: "+rel {
 			t.Fatalf("custom bytes lost: %s", rel)
 		}

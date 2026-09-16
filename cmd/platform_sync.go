@@ -37,24 +37,26 @@ type maintenanceMutationTarget struct {
 	Content        []byte
 	Mode           os.FileMode
 	ExpectedDigest string
+	ExpectedMode   *os.FileMode
 	Managed        bool
 }
 
 type maintenanceMutationPlan struct {
-	SchemaVersion   string
-	Operation       string
-	TransactionID   string
-	SourceRoot      string
-	DestinationRoot string
-	Channel         runtimeChannel
-	CurrentVersion  string
-	DesiredVersion  string
-	Checkpoint      string
-	Recovery        string
-	Allowlist       lifecycleTransactionAllowlist
-	Targets         []maintenanceMutationTarget
-	Rename          func(oldPath, newPath string) error
-	Fault           lifecycleTransactionFaultHook
+	SchemaVersion        string
+	Operation            string
+	TransactionID        string
+	SourceRoot           string
+	DestinationRoot      string
+	Channel              runtimeChannel
+	CurrentVersion       string
+	DesiredVersion       string
+	Checkpoint           string
+	Recovery             string
+	Allowlist            lifecycleTransactionAllowlist
+	Targets              []maintenanceMutationTarget
+	PreservedCodexSkills []string
+	Rename               func(oldPath, newPath string) error
+	Fault                lifecycleTransactionFaultHook
 }
 
 type maintenanceMutationTargetPreview struct {
@@ -71,18 +73,19 @@ type maintenanceMutationTargetPreview struct {
 }
 
 type maintenanceMutationPreview struct {
-	SchemaVersion   string                             `json:"schema_version"`
-	Operation       string                             `json:"operation"`
-	TransactionID   string                             `json:"transaction_id"`
-	SourceRoot      string                             `json:"source_root"`
-	DestinationRoot string                             `json:"destination_root"`
-	Channel         runtimeChannel                     `json:"channel,omitempty"`
-	CurrentVersion  string                             `json:"current_version,omitempty"`
-	DesiredVersion  string                             `json:"desired_version,omitempty"`
-	Checkpoint      string                             `json:"checkpoint"`
-	CommitOrder     []string                           `json:"commit_order"`
-	Targets         []maintenanceMutationTargetPreview `json:"targets"`
-	Recovery        string                             `json:"recovery"`
+	SchemaVersion        string                             `json:"schema_version"`
+	Operation            string                             `json:"operation"`
+	TransactionID        string                             `json:"transaction_id"`
+	SourceRoot           string                             `json:"source_root"`
+	DestinationRoot      string                             `json:"destination_root"`
+	Channel              runtimeChannel                     `json:"channel,omitempty"`
+	CurrentVersion       string                             `json:"current_version,omitempty"`
+	DesiredVersion       string                             `json:"desired_version,omitempty"`
+	Checkpoint           string                             `json:"checkpoint"`
+	CommitOrder          []string                           `json:"commit_order"`
+	Targets              []maintenanceMutationTargetPreview `json:"targets"`
+	Recovery             string                             `json:"recovery"`
+	PreservedCodexSkills []string                           `json:"preserved_codex_skills,omitempty"`
 }
 
 type maintenanceMutationResult struct {
@@ -102,16 +105,17 @@ type maintenanceMutationResult struct {
 // journal.
 func prepareMaintenanceMutation(plan maintenanceMutationPlan) (maintenanceMutationPreview, error) {
 	preview := maintenanceMutationPreview{
-		SchemaVersion:   plan.SchemaVersion,
-		Operation:       strings.TrimSpace(plan.Operation),
-		TransactionID:   strings.TrimSpace(plan.TransactionID),
-		SourceRoot:      filepath.Clean(plan.SourceRoot),
-		DestinationRoot: filepath.Clean(plan.DestinationRoot),
-		Channel:         plan.Channel,
-		CurrentVersion:  normalizeVersion(plan.CurrentVersion),
-		DesiredVersion:  normalizeVersion(plan.DesiredVersion),
-		Checkpoint:      strings.TrimSpace(plan.Checkpoint),
-		Recovery:        strings.TrimSpace(plan.Recovery),
+		SchemaVersion:        plan.SchemaVersion,
+		Operation:            strings.TrimSpace(plan.Operation),
+		TransactionID:        strings.TrimSpace(plan.TransactionID),
+		SourceRoot:           filepath.Clean(plan.SourceRoot),
+		DestinationRoot:      filepath.Clean(plan.DestinationRoot),
+		Channel:              plan.Channel,
+		CurrentVersion:       normalizeVersion(plan.CurrentVersion),
+		DesiredVersion:       normalizeVersion(plan.DesiredVersion),
+		Checkpoint:           strings.TrimSpace(plan.Checkpoint),
+		Recovery:             strings.TrimSpace(plan.Recovery),
+		PreservedCodexSkills: append([]string(nil), plan.PreservedCodexSkills...),
 	}
 	if preview.SchemaVersion != maintenanceMutationSchemaVersion {
 		return preview, fmt.Errorf("maintenance mutation: schema_version must be %s", maintenanceMutationSchemaVersion)

@@ -256,10 +256,11 @@ func isInstallPackageDir(dir string) bool {
 
 // syncResult holds the outcome of a directory sync operation.
 type syncResult struct {
-	copied  int
-	skipped int
-	removed []string
-	errors  []string
+	preserved []string
+	copied    int
+	skipped   int
+	removed   []string
+	errors    []string
 }
 
 type syncOptions struct {
@@ -526,6 +527,9 @@ func syncPlatformHomeAssets(packageDir, homeDir string, channel runtimeChannel, 
 		"skipped": shimResult.skipped,
 		"removed": len(shimResult.removed),
 		"scope":   "selected home; stable platform skills",
+	}
+	if len(shimResult.preserved) > 0 {
+		shimEntry["preserved"] = shimResult.preserved
 	}
 	if len(shimResult.errors) > 0 {
 		shimEntry["errors"] = shimResult.errors
