@@ -87,11 +87,11 @@ func TestRootCodexHelpShowsRestoredLifecycleOrder(t *testing.T) {
 
 	last := -1
 	for _, command := range []string{
-		`aether init "goal"`,
-		"aether discuss",
+		`$ant-init "goal"`,
+		"$ant-discuss",
 		"aether spec",
-		"aether plan",
-		"aether build",
+		"$ant-plan",
+		"$ant-build",
 		"aether run",
 	} {
 		index := strings.Index(compact, command)
@@ -113,7 +113,7 @@ func TestRootCodexHelpShowsRestoredLifecycleOrder(t *testing.T) {
 			t.Errorf("Codex root help is missing authority copy %q", want)
 		}
 	}
-	for _, unsupported := range []string{"/ant-", "$ant-"} {
+	for _, unsupported := range []string{"/ant-", "$ant-spec", "$ant-status", "$ant-run", "$ant-maintenance"} {
 		if strings.Contains(output, unsupported) {
 			t.Errorf("Codex root help exposes unsupported syntax %q:\n%s", unsupported, output)
 		}
@@ -128,7 +128,7 @@ func TestRootHelpSeparatesSpecificationAndPlanAuthority(t *testing.T) {
 			switch entry.command {
 			case "aether spec":
 				specificationDescription = entry.description
-			case "aether plan":
+			case "$ant-plan":
 				planDescription = entry.description
 			}
 		}

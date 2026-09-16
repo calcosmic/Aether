@@ -19,7 +19,7 @@ func TestFirstRunShowsWelcomeWhenNoMarkerAndNoColony(t *testing.T) {
 	}{
 		{"claude", []string{"/ant-lay-eggs", "/ant-init", "/ant-status"}},
 		{"opencode", []string{"/ant-lay-eggs", "/ant-init", "/ant-status"}},
-		{"codex", []string{"aether lay-eggs", "aether init", "aether status"}},
+		{"codex", []string{"aether lay-eggs", "$ant-init", "aether status"}},
 	} {
 		t.Run(tc.platform, func(t *testing.T) {
 			tmpDir := t.TempDir()
