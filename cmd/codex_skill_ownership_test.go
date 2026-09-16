@@ -598,6 +598,7 @@ func TestCodexAntSkillRollback(t *testing.T) {
 	}
 }
 func TestCodexAntSkillChannelIsolation(t *testing.T) {
+	t.Setenv("AETHER_HUB_DIR", "")
 	home := t.TempDir()
 	root := filepath.Join(home, ".codex/skills/aether")
 	antSeedLegacy(t, root)
@@ -612,6 +613,9 @@ func TestCodexAntSkillChannelIsolation(t *testing.T) {
 		skillRoot := filepath.Join(collisionHome, ".codex/skills/aether")
 		writeMaintenanceMutation199File(t, filepath.Join(skillRoot, "ant-plan/SKILL.md"), []byte("custom"))
 		saved := antSnapshot(t, skillRoot)
+		if _, err := publishCodexSkillPayload(filepath.Join(collisionHome, ".aether"), antPayload(t)); err != nil {
+			t.Fatal(err)
+		}
 		_, errs := syncPlatformHomeAssets(antSkillSourceRoot(t), collisionHome, channelStable, optIn)
 		if len(errs) == 0 || !strings.Contains(strings.Join(errs, " "), "collision") {
 			t.Fatalf("force=%v authorized custom collision: %v", optIn, errs)

@@ -92,3 +92,19 @@ func assertCodexSkillFixtureInstalled(t *testing.T, packageDir, homeDir string) 
 		}
 	}
 }
+
+// seedCodexSkillPublishedFixture gives registered-update fixtures the same
+// validated payload a current publisher supplies, without syncing home skills.
+func seedCodexSkillPublishedFixture(t *testing.T, hubDir, version string) {
+	t.Helper()
+	source := t.TempDir()
+	seedCodexSkillSupportFixture(t, source)
+	writeMaintenanceMutation199File(t, filepath.Join(source, ".aether", "version.json"), []byte(`{"version":"`+version+`"}`))
+	payload, err := buildCodexSkillPayload(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := publishCodexSkillPayload(hubDir, payload); err != nil {
+		t.Fatal(err)
+	}
+}

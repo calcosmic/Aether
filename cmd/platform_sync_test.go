@@ -132,6 +132,7 @@ func TestSyncCodexSkillShimsPreservesUnprovenMirrorAndCustom(t *testing.T) {
 }
 
 func TestDevPlatformHomeSyncRequiresExplicitOptIn(t *testing.T) {
+	t.Setenv("AETHER_HUB_DIR", "")
 	sourceDir := t.TempDir()
 	homeDir := t.TempDir()
 	for _, rel := range []string{
@@ -163,6 +164,10 @@ func TestDevPlatformHomeSyncRequiresExplicitOptIn(t *testing.T) {
 		t.Fatalf("dev default should not write Codex command shims, stat err: %v", err)
 	}
 
+	hubResult := setupInstallHub(filepath.Join(homeDir, ".aether-dev"), sourceDir, resolveVersion(sourceDir))
+	if errs := installHubErrors(hubResult); len(errs) > 0 {
+		t.Fatal(errs)
+	}
 	results, errors = syncPlatformHomeAssets(sourceDir, homeDir, channelDev, true)
 	if len(errors) > 0 {
 		t.Fatalf("dev opt-in sync returned errors: %v", errors)

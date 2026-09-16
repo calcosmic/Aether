@@ -129,15 +129,23 @@ func runMaintenanceUpdate(cmd *cobra.Command, _ []string) error {
 			},
 		},
 	}
-	if err := appendMaintenanceUpdateRepositoryTargets(&plan, hubRoot, repositoryRoot, force, now); err != nil {
+	preservedProjectDocs, err := appendMaintenanceUpdateRepositoryTargets(&plan, hubRoot, repositoryRoot, force, now)
+	if err != nil {
 		return emitMaintenanceUpdateFailure(err, "Repair the selected hub or repository target named in the error, then rerun `aether update`.", nil)
 	}
+	var skillPayload codexSkillPayload
 	if shouldSyncPlatformHomes(channel, syncPlatformHomes) {
 		if channel == channelDev {
 			return emitMaintenanceUpdateFailure(fmt.Errorf("maintenance update: dev channel is isolated from stable platform homes"), "Rerun `aether update --channel dev` without `--sync-platform-homes`.", nil)
 		}
 		if err := appendMaintenanceUpdatePlatformTargets(&plan, hubRoot, homeDir); err != nil {
 			return emitMaintenanceUpdateFailure(err, "Run `aether install` to establish platform homes, then rerun `aether update`.", nil)
+		}
+		skillPayload, err = appendMaintenanceUpdateCodexSkillTargets(&plan, hubRoot, homeDir)
+		if err != nil {
+			return emitMaintenanceUpdateFailure(err, "Repair or republish the selected Codex skill payload; preserve custom files before retrying.", nil, map[string]interface{}{
+				"codex_skill_disposition": map[string]interface{}{"status": "refused", "reason": err.Error()},
+			})
 		}
 	}
 	installedBinary := ""
@@ -180,12 +188,15 @@ func runMaintenanceUpdate(cmd *cobra.Command, _ []string) error {
 			"binary_refresh_mode": updateBinaryRefreshMode(downloadBinary, true), "recovery": plan.Recovery,
 		}
 		details, copied, skipped := maintenancePreviewSyncDetails(preview)
+		details, preservationMessage := maintenanceUpdateDispositions(result, details, skillPayload, plan.PreservedCodexSkills, preservedProjectDocs)
+		result["message"] = strings.TrimSpace("Preview only; no files changed. " + preservationMessage)
+		skipped += len(preservedProjectDocs)
 		result["stale_publish"] = staleResultToMap(stale)
 		visual := renderUpdateVisual(repositoryRoot, hubVersion, binaryVersion, renderRepoVersionTransition(repoVersionBefore, hubVersion, true), force, true, details, copied, skipped, nil, updateBinaryRefreshMode(downloadBinary, true), hubVersion == binaryVersion, result)
 		if stale.Classification != staleOK {
 			visual += renderStalePublishBanner(stale)
 		}
-		outputWorkflow(result, visual)
+		outputWorkflow(result, visual+preservationMessage+"\n")
 		return nil
 	}
 
@@ -198,10 +209,15 @@ func runMaintenanceUpdate(cmd *cobra.Command, _ []string) error {
 		"local_version": binaryVersion, "binary_refresh_mode": updateBinaryRefreshMode(downloadBinary, false),
 	}
 	details, copied, skipped := maintenancePreviewSyncDetails(mutation.Preview)
+	details, preservationMessage := maintenanceUpdateDispositions(result, details, skillPayload, plan.PreservedCodexSkills, preservedProjectDocs)
+	skipped += len(preservedProjectDocs)
 	aliasRepairReport := diffAliasRepairs(aliasSurfacesMissingBefore)
 	message := fmt.Sprintf("Updated: %d files copied, %d unchanged", copied, skipped)
 	if repair := aliasRepairReport.Message(); repair != "" {
 		message += ". " + repair
+	}
+	if preservationMessage != "" {
+		message += ". " + preservationMessage
 	}
 	result["message"] = message
 	result["alias_wrapper_repairs"] = aliasRepairReport.Repairs
@@ -221,19 +237,25 @@ func runMaintenanceUpdate(cmd *cobra.Command, _ []string) error {
 	}
 	closeLifecycleCommand(result, updateLastCommandFact(aliasRepairReport.Message()), "", "")
 	restartTargets := platformRestartTargets(details)
+	result["restart_targets"] = restartTargets
 	visual := renderUpdateVisual(repositoryRoot, hubVersion, binaryVersion, renderRepoVersionTransition(repoVersionBefore, hubVersion, false), force, false, details, copied, skipped, restartTargets, updateBinaryRefreshMode(downloadBinary, false), hubVersion == binaryVersion, result)
 	if stale.Classification != staleOK {
 		visual += renderStalePublishBanner(stale)
 	}
-	outputWorkflow(result, visual)
+	outputWorkflow(result, visual+preservationMessage+"\n")
 	return nil
 }
 
-func emitMaintenanceUpdateFailure(err error, recovery string, stale *stalePublishResult) error {
+func emitMaintenanceUpdateFailure(err error, recovery string, stale *stalePublishResult, details ...map[string]interface{}) error {
 	result := map[string]interface{}{
 		"operation": "update", "outcome": "no_change", "error": err.Error(),
 		"preview": nil, "targets": []interface{}{}, "transaction": "", "receipt": nil,
 		"state_effect": "none", "verification": []interface{}{}, "recovery": strings.TrimSpace(recovery),
+	}
+	for _, detail := range details {
+		for key, value := range detail {
+			result[key] = value
+		}
 	}
 	visual := renderVisualError("Update stopped without changes", result)
 	if stale != nil {
@@ -302,6 +324,35 @@ func maintenancePreviewSyncDetails(preview maintenanceMutationPreview) ([]map[st
 	return details, totalCopied, totalSkipped
 }
 
+// Report preservation without manufacturing mutation targets for custom files.
+func maintenanceUpdateDispositions(result map[string]interface{}, details []map[string]interface{}, payload codexSkillPayload, skills, docs []string) ([]map[string]interface{}, string) {
+	var messages []string
+	if payload.SchemaVersion != "" {
+		identity := map[string]interface{}{"identity": codexSkillPayloadIdentity(payload), "source_version": payload.SourceVersion, "generator_identity": payload.GeneratorIdentity}
+		result["codex_skill_payload"] = identity
+		for _, entry := range details {
+			if entry["label"] == "Skills (codex shims)" {
+				entry["payload_identity"] = codexSkillPayloadIdentity(payload)
+				entry["payload_version"] = payload.SourceVersion
+				entry["preserved"] = skills
+			}
+		}
+	}
+	if len(skills) > 0 {
+		result["preserved_codex_skills"] = skills
+		messages = append(messages, "Preserved custom or unproven Codex skills: "+strings.Join(skills, "; ")+".")
+	}
+	if len(docs) > 0 {
+		result["preserved_project_docs"] = docs
+		messages = append(messages, "Preserved custom project documents: "+strings.Join(docs, ", ")+".")
+		for _, doc := range docs {
+			details = append(details, map[string]interface{}{"label": doc, "copied": 0, "skipped": 1, "removed": 0, "preserved_local": true, "reason": "preserved local custom file"})
+		}
+	}
+	result["details"] = details
+	return details, strings.Join(messages, " ")
+}
+
 func maintenanceHubChannel(channel runtimeChannel) lifecycleTransactionHubChannel {
 	if channel == channelDev {
 		return lifecycleTransactionHubDev
@@ -309,7 +360,7 @@ func maintenanceHubChannel(channel runtimeChannel) lifecycleTransactionHubChanne
 	return lifecycleTransactionHubStable
 }
 
-func appendMaintenanceUpdateRepositoryTargets(plan *maintenanceMutationPlan, hubRoot, repositoryRoot string, force bool, now time.Time) error {
+func appendMaintenanceUpdateRepositoryTargets(plan *maintenanceMutationPlan, hubRoot, repositoryRoot string, force bool, now time.Time) ([]string, error) {
 	hubSystem := filepath.Join(hubRoot, "system")
 	localAether := filepath.Join(repositoryRoot, ".aether")
 	if !isAetherSourceCheckout(repositoryRoot) {
@@ -325,36 +376,38 @@ func appendMaintenanceUpdateRepositoryTargets(plan *maintenanceMutationPlan, hub
 					spec.CleanupOwned = func(relativePath string, _ []byte) bool { return isManagedAetherSystemPath(relativePath) }
 				}
 				if err := appendMaintenanceSyncTargets(plan, spec); err != nil {
-					return fmt.Errorf("plan %s: %w", pair.label, err)
+					return nil, fmt.Errorf("plan %s: %w", pair.label, err)
 				}
 			}
 		}
 		if err := appendMaintenanceLegacyRepositoryTargets(plan, hubSystem, repositoryRoot); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	if err := appendMaintenanceProjectDocTargets(plan, hubSystem, repositoryRoot); err != nil {
-		return err
+	preserved, err := appendMaintenanceProjectDocTargets(plan, hubSystem, repositoryRoot)
+	if err != nil {
+		return nil, err
 	}
 	if err := appendMaintenanceTsHostTargets(plan, hubRoot); err != nil {
-		return err
+		return nil, err
 	}
 	if err := appendMaintenanceScaffoldTargets(plan, localAether); err != nil {
-		return err
+		return nil, err
 	}
 	marker, err := json.MarshalIndent(installedVersionMarker{Version: normalizeVersion(plan.DesiredVersion), UpdatedAt: now.Format(time.RFC3339)}, "", "  ")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	plan.Targets = append(plan.Targets, maintenanceMutationTarget{
 		Root: lifecycleTransactionRootRepository, RelativeTarget: filepath.Join(".aether", filepath.FromSlash(installedVersionMarkerRel)),
 		Source: "selected hub version manifest", Action: lifecycleTransactionWrite, Content: append(marker, '\n'), Managed: true,
 	})
-	return nil
+	return preserved, nil
 }
 
-func appendMaintenanceProjectDocTargets(plan *maintenanceMutationPlan, hubSystem, repositoryRoot string) error {
+func appendMaintenanceProjectDocTargets(plan *maintenanceMutationPlan, hubSystem, repositoryRoot string) ([]string, error) {
+	var preserved []string
 	for _, spec := range []projectDocSpec{
 		{templateRel: filepath.Join("templates", "agents-md-template.md"), destRel: "AGENTS.md", managedFn: isAetherManagedAgentsDoc},
 		{templateRel: filepath.Join("templates", "codex-md-template.md"), destRel: filepath.Join(".codex", "CODEX.md"), managedFn: isAetherManagedCodexDoc},
@@ -366,17 +419,18 @@ func appendMaintenanceProjectDocTargets(plan *maintenanceMutationPlan, hubSystem
 			continue
 		}
 		if err != nil {
-			return err
+			return nil, err
 		}
 		destination := filepath.Join(repositoryRoot, spec.destRel)
 		if existing, readErr := os.ReadFile(destination); readErr == nil && !spec.managedFn(string(existing)) {
+			preserved = append(preserved, filepath.ToSlash(spec.destRel))
 			continue
 		} else if readErr != nil && !os.IsNotExist(readErr) {
-			return readErr
+			return nil, readErr
 		}
 		plan.Targets = append(plan.Targets, maintenanceMutationTarget{Root: lifecycleTransactionRootRepository, RelativeTarget: spec.destRel, Label: filepath.ToSlash(spec.destRel), Source: source, Action: lifecycleTransactionWrite, Content: []byte(renderProjectDocTemplate(string(data))), Managed: true})
 	}
-	return nil
+	return preserved, nil
 }
 
 func appendMaintenanceScaffoldTargets(plan *maintenanceMutationPlan, localAether string) error {
@@ -776,8 +830,14 @@ func compareVersions(a, b string) int {
 	if a == b {
 		return 0
 	}
-	aParts := strings.Split(a, ".")
-	bParts := strings.Split(b, ".")
+	// Compare numeric release components before prerelease identifiers. Parsing
+	// "99-test" as an integer silently produced zero and refused newer runtimes.
+	a, _, _ = strings.Cut(a, "+")
+	b, _, _ = strings.Cut(b, "+")
+	aCore, aPre, aIsPre := strings.Cut(a, "-")
+	bCore, bPre, bIsPre := strings.Cut(b, "-")
+	aParts := strings.Split(aCore, ".")
+	bParts := strings.Split(bCore, ".")
 	maxLen := len(aParts)
 	if len(bParts) > maxLen {
 		maxLen = len(bParts)
@@ -796,6 +856,45 @@ func compareVersions(a, b string) int {
 		if aInt > bInt {
 			return 1
 		}
+	}
+	if !aIsPre && !bIsPre {
+		return 0
+	}
+	if !aIsPre {
+		return 1
+	}
+	if !bIsPre {
+		return -1
+	}
+	aParts, bParts = strings.Split(aPre, "."), strings.Split(bPre, ".")
+	for i := 0; i < len(aParts) && i < len(bParts); i++ {
+		if aParts[i] == bParts[i] {
+			continue
+		}
+		aNum, aErr := strconv.Atoi(aParts[i])
+		bNum, bErr := strconv.Atoi(bParts[i])
+		if aErr == nil && bErr == nil {
+			if aNum < bNum {
+				return -1
+			}
+			if aNum > bNum {
+				return 1
+			}
+			continue
+		}
+		if aErr == nil {
+			return -1
+		}
+		if bErr == nil {
+			return 1
+		}
+		return strings.Compare(aParts[i], bParts[i])
+	}
+	if len(aParts) < len(bParts) {
+		return -1
+	}
+	if len(aParts) > len(bParts) {
+		return 1
 	}
 	return 0
 }
