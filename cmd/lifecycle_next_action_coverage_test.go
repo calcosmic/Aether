@@ -179,16 +179,50 @@ func lifecycleCoverageCases(t *testing.T) []lifecycleCoverageCase {
 
 func lifecycleUpdateVisual(t *testing.T) string {
 	t.Helper()
-	homeDir, repoDir := setUpAliasReconcileProject(t)
+	homeDir, repoDir := lifecycleUpdateProject(t)
 	visual, _ := runSessionUpdate(t, homeDir, repoDir, false)
 	return visual
 }
 
 func lifecycleUpdateEnvelope(t *testing.T) map[string]interface{} {
 	t.Helper()
-	homeDir, repoDir := setUpAliasReconcileProject(t)
+	homeDir, repoDir := lifecycleUpdateProject(t)
 	_, envelope := runSessionUpdate(t, homeDir, repoDir, true)
 	return envelope
+}
+
+// Give the isolated coverage child a contained repository and a complete
+// current package. The older alias fixture relies on ambient store state and
+// omits the private support files now required by install.
+func lifecycleUpdateProject(t *testing.T) (homeDir, repoDir string) {
+	t.Helper()
+	saveGlobals(t)
+	t.Setenv("AETHER_HUB_DIR", "")
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	packageDir := buildAliasReconcilePackageDir(t)
+	seedCodexSkillSupportFixture(t, packageDir)
+	homeDir, repoDir = t.TempDir(), t.TempDir()
+	bindCommandTestRepositoryAt(t, repoDir)
+	for _, args := range [][]string{
+		{"install", "--package-dir", packageDir, "--home-dir", homeDir, "--skip-build-binary"},
+		{"setup", "--repo-dir", repoDir, "--home-dir", homeDir},
+	} {
+		resetRootCmd(t)
+		var buf bytes.Buffer
+		stdout, stderr = &buf, &buf
+		rootCmd.SetArgs(args)
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("%s fixture failed: %v\n%s", args[0], err, buf.String())
+		}
+		var result struct {
+			OK bool `json:"ok"`
+		}
+		if err := json.Unmarshal(buf.Bytes(), &result); err != nil || !result.OK {
+			t.Fatalf("%s fixture did not report success: %v\n%s", args[0], err, buf.String())
+		}
+	}
+	assertCodexSkillFixtureInstalled(t, packageDir, homeDir)
+	return homeDir, repoDir
 }
 
 func lifecycleRecoverVisual(t *testing.T) string {
@@ -308,7 +342,7 @@ func testEveryLifecycleCommandEndsWithNextAction(t *testing.T) {
 					c.name, nextActionCommandKey, nextActionChoicesKey)
 			}
 			for _, envelopeCommand := range envelopeCommands {
-				if !strings.Contains(visual, "`"+envelopeCommand+"`") {
+				if !strings.Contains(visual, "`"+expectedCodexDisplayCommand(envelopeCommand)+"`") {
 					t.Errorf("%s: the machine-readable answer names %q, which does not appear on the screen card",
 						c.name, envelopeCommand)
 				}
@@ -414,7 +448,7 @@ func assertLifecyclePlatformCorrectness(t *testing.T, cases []lifecycleCoverageC
 	platforms := []struct{ platform, prefix string }{
 		{"claude", "/ant-"},
 		{"opencode", "/ant-"},
-		{"codex", "aether "},
+		{"codex", "$ant-"},
 	}
 	for _, tc := range platforms {
 		newNextActionFixtureStore(t)
@@ -463,22 +497,24 @@ func assertResumingPlatformCorrectness(t *testing.T) {
 		t.Fatal("resuming resolved no executable next action")
 	}
 
-	platforms := []struct{ platform, prefix string }{
-		{"claude", "/ant-"},
-		{"opencode", "/ant-"},
-		{"codex", "aether "},
+	platforms := []struct {
+		platform string
+		displays map[string]string
+	}{
+		{"claude", map[string]string{"aether build 1": "/ant-build 1", "aether run": "/ant-run"}},
+		{"opencode", map[string]string{"aether build 1": "/ant-build 1", "aether run": "/ant-run"}},
+		{"codex", map[string]string{"aether build 1": "$ant-build 1", "aether run": "aether run"}},
 	}
 	for _, tc := range platforms {
 		t.Setenv("AETHER_PLATFORM", tc.platform)
 		rendered := stripANSI(renderNextActionCardForPlatform(answer, tc.platform))
 		for _, command := range commands {
-			display := lifecycleProjectionCommand(command, tc.platform)
+			display, ok := tc.displays[command]
+			if !ok {
+				t.Fatalf("resuming on %s issued unexpected runtime command %q", tc.platform, command)
+			}
 			if !strings.Contains(rendered, "`"+display+"`") {
 				t.Errorf("resuming on %s omits %q from its card:\n%s", tc.platform, display, rendered)
-			}
-			if !strings.HasPrefix(display, tc.prefix) {
-				t.Errorf("resuming on %s shows %q; this platform's owner types commands beginning %q",
-					tc.platform, display, tc.prefix)
 			}
 		}
 	}

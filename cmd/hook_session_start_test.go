@@ -106,7 +106,7 @@ func TestSessionStartCardReflectsState(t *testing.T) {
 					fixturePhase(2, "Billing engine", colony.PhaseInProgress),
 				}},
 			},
-			wantCommand:  "aether continue",
+			wantCommand:  "$ant-continue",
 			wantContains: []string{"Ship the billing rewrite", "Billing engine"},
 		},
 		{
@@ -124,7 +124,7 @@ func TestSessionStartCardReflectsState(t *testing.T) {
 					fixturePhase(2, "Billing engine", colony.PhaseCompleted),
 				}},
 			},
-			wantCommand:  "aether seal",
+			wantCommand:  "$ant-seal",
 			wantContains: []string{"Ship the billing rewrite"},
 		},
 	}
@@ -175,10 +175,10 @@ func TestSessionStartCardReflectsState(t *testing.T) {
 
 		card := runSessionStartHook(t)
 		answer := resolveNextAction(loadNextActionInput())
-		if !strings.Contains(card, answer.Command) {
+		if !strings.Contains(card, expectedCodexDisplayCommand(answer.Command)) {
 			t.Errorf("the greeting names a different command from the one resolver (%q):\n%s", answer.Command, card)
 		}
-		if !strings.Contains(card, nextCommandForHookState(state)) {
+		if !strings.Contains(card, expectedCodexDisplayCommand(nextCommandForHookState(state))) {
 			t.Errorf("the hook decider in cmd/hook_cmds.go answered %q, which the card does not name:\n%s",
 				nextCommandForHookState(state), card)
 		}

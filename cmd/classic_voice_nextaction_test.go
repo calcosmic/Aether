@@ -66,7 +66,7 @@ func TestNextStepMenuNamesItsEffectBesideItsCommand(t *testing.T) {
 		wantCommand string
 	}{
 		{platform: "claude", wantCommand: "/ant-continue"},
-		{platform: "codex", wantCommand: "aether continue"},
+		{platform: "codex", wantCommand: "$ant-continue"},
 	}
 
 	for _, tc := range cases {

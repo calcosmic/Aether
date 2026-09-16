@@ -22,7 +22,7 @@ func TestLifecycleHealth199Verified(t *testing.T) {
 		t.Fatalf("verified health evidence = %#v", result.Health)
 	}
 	output := stripANSI(renderLifecycleHealth(result, 80))
-	for _, want := range []string{"Health: Verified", "Readiness: Verified", "Evidence: tests", "Next Up", "aether continue"} {
+	for _, want := range []string{"Health: Verified", "Readiness: Verified", "Evidence: tests", "Next Up", "$ant-continue"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("verified health output missing %q\n%s", want, output)
 		}

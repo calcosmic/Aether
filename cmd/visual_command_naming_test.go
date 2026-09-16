@@ -115,13 +115,29 @@ func TestVisualOutputNeverLeaksRawWrapperCommands(t *testing.T) {
 		writeVisualOutput(&buf, sample)
 		got := buf.String()
 
-		// Codex is runtime-native: it has no slash wrappers, so the raw CLI
-		// form is the only correct naming there.
+		// Codex exposes only nine public skills. Other actions and literal
+		// shell invocations must keep their executable CLI spelling.
 		if strings.Contains(got, "/ant-") {
 			t.Errorf("codex output must not name slash wrappers, got:\n%s", got)
 		}
-		if !strings.Contains(got, "aether continue") {
-			t.Errorf("expected codex output to keep the raw CLI form, got:\n%s", got)
+		for _, want := range []string{
+			"Run `$ant-continue`", "Run `$ant-plan`",
+			"$ant-build 2 --force", "$ant-continue --skip-watchers --reconcile-task 2.1",
+			"aether lay-eggs", "aether patrol", "aether status", "aether publish", "aether integrity",
+			"aether update --force --download-binary", "aether maintenance recovery-inspect",
+			"aether skip-phase 2 --force", "AETHER_OUTPUT_MODE=visual aether build 1",
+		} {
+			if !strings.Contains(got, want) {
+				t.Errorf("codex output missing %q:\n%s", want, got)
+			}
+		}
+		for _, forbidden := range []string{
+			"Run `aether continue", "Run `aether plan", "Run `aether build",
+			"$ant-status", "$ant-patrol", "$ant-maintenance", "$ant-update", "$ant-skip-phase",
+		} {
+			if strings.Contains(got, forbidden) {
+				t.Errorf("codex output advertises incorrect spelling %q:\n%s", forbidden, got)
+			}
 		}
 	})
 }

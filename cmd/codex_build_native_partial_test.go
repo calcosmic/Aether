@@ -224,7 +224,7 @@ func TestPartialBuildDoesNotShowTheOrdinaryBuildDoneScreen(t *testing.T) {
 	if !ok {
 		t.Fatalf("native partial result has no typed partial_recovery projection: %#v", result["partial_recovery"])
 	}
-	wantCommand := buildUnfinishedRetryRedispatchCommand(1, pending)
+	wantCommand := "aether build 1 --force --task 1.5 --task 1.6"
 	if !reflect.DeepEqual(partial.UnfinishedTaskIDs, pending) || partial.RedispatchCommand != wantCommand {
 		t.Fatalf("typed native partial projection = %+v, want unfinished=%v command=%q", partial, pending, wantCommand)
 	}
@@ -244,6 +244,7 @@ func TestPartialBuildDoesNotShowTheOrdinaryBuildDoneScreen(t *testing.T) {
 		// a still-flat, unvoiced ordinary-build line would have satisfied the
 		// fragment too, proving nothing about which screen actually renders.
 		voiceLine("evidence", "Verification happens during `aether continue`."),
+		voiceLine("evidence", "Verification happens during `$ant-continue`."),
 		"follows after continue",
 		"after the work is implemented",
 	} {
@@ -251,7 +252,7 @@ func TestPartialBuildDoesNotShowTheOrdinaryBuildDoneScreen(t *testing.T) {
 			t.Errorf("a partially built phase still shows the ordinary finished-build line %q:\n%s", claim, out)
 		}
 	}
-	for _, want := range append([]string{wantCommand}, pending...) {
+	for _, want := range append([]string{"$ant-build 1 --force --task 1.5 --task 1.6"}, pending...) {
 		if !strings.Contains(out, want) {
 			t.Errorf("the partial-build screen never mentions %q, so the owner is not told what is left or how to finish it:\n%s", want, out)
 		}

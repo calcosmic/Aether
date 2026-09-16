@@ -448,7 +448,7 @@ func TestBuildVisualOutputShowsSpawnPlan(t *testing.T) {
 	// no-proposal keyword-scoring fallback entirely -- Scout used to ride
 	// along here on task 2's "Document" wording, but the fallback no longer
 	// scores anything, so the dispatch count drops to 1 (builder alone).
-	for _, want := range []string{"🔨", "B U I L D   D I S P A T C H   1", "S P A W N   P L A N", "Builder", "Total planned dispatches: 1", "Execution: serial", "single task in this wave", "aether continue", "── Context ──", "── Tasks ──", "── Dispatch ──", "── Verification [standard] ──", "── Housekeeping ──", "── Colony Complete ──", "it is safe to close this chat"} {
+	for _, want := range []string{"🔨", "B U I L D   D I S P A T C H   1", "S P A W N   P L A N", "Builder", "Total planned dispatches: 1", "Execution: serial", "single task in this wave", "$ant-continue", "── Context ──", "── Tasks ──", "── Dispatch ──", "── Verification [standard] ──", "── Housekeeping ──", "── Colony Complete ──", "it is safe to close this chat"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("build visual output missing %q\n%s", want, output)
 		}
@@ -1006,7 +1006,7 @@ func TestContinueVisualOutputShowsColonyCompleteStageMarker(t *testing.T) {
 		// which is unchanged.
 		"── Project Complete (Colony) ──",
 		"Every phase in the plan is finished.",
-		"aether seal",
+		"$ant-seal",
 		"it is safe to close this chat",
 	} {
 		if !strings.Contains(output, want) {
@@ -1453,7 +1453,7 @@ func TestSetupVisualOutput(t *testing.T) {
 	if strings.Contains(output, `{"ok":true`) {
 		t.Fatalf("expected visual output, got JSON: %s", output)
 	}
-	for _, want := range []string{"🥚", "L A Y   E G G S", "aether init"} {
+	for _, want := range []string{"🥚", "L A Y   E G G S", "$ant-init"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("setup visual output missing %q\n%s", want, output)
 		}

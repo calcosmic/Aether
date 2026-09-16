@@ -31,10 +31,33 @@ func readSourceFile(t *testing.T, name string) string {
 	return string(data)
 }
 
-// cardCommandRe finds every command a rendered card offers, in either spelling:
-// the runtime form on the command line, the slash form on the wrapper
-// platforms. Both are matched so the duplicate check works on any platform.
-var cardCommandRe = regexp.MustCompile("`(/ant-[a-z][a-z0-9-]*|aether [a-z][^`]*)`")
+// expectedCodexSkillDisplays is deliberately independent of the production
+// inventory and formatter: only these nine public skills change spelling.
+var expectedCodexSkillDisplays = map[string]string{
+	"aether init":     "$ant-init",
+	"aether discuss":  "$ant-discuss",
+	"aether oracle":   "$ant-oracle",
+	"aether colonize": "$ant-colonize",
+	"aether plan":     "$ant-plan",
+	"aether build":    "$ant-build",
+	"aether continue": "$ant-continue",
+	"aether swarm":    "$ant-swarm",
+	"aether seal":     "$ant-seal",
+}
+
+// Inputs are whole runtime commands issued by the fixtures, not arbitrary prose.
+func expectedCodexDisplayCommand(command string) string {
+	for runtime, display := range expectedCodexSkillDisplays {
+		if command == runtime || strings.HasPrefix(command, runtime+" ") {
+			return display + strings.TrimPrefix(command, runtime)
+		}
+	}
+	return command
+}
+
+// cardCommandRe includes runtime, slash and Codex skill spellings, with their
+// arguments, so duplicate and availability checks inspect every offered action.
+var cardCommandRe = regexp.MustCompile("`((?:/ant-|\\$ant-|aether )[a-z][^`]*)`")
 
 // commandsOfferedBy lists every command a rendered card puts in front of the
 // owner, in the order they appear.
@@ -44,6 +67,32 @@ func commandsOfferedBy(rendered string) []string {
 		commands = append(commands, strings.TrimSpace(match[1]))
 	}
 	return commands
+}
+
+// A matcher that skips the skill line can silently select the following run
+// choice and bypass the duplicate/availability assertions. Exercise the guard.
+func TestCardCommandMatchersIncludeCodexSkills(t *testing.T) {
+	card := "Run `$ant-build 1`\nRun `aether run`\nRun `/ant-continue`\nRun `$ant-status`\n"
+	want := []string{"$ant-build 1", "aether run", "/ant-continue", "$ant-status"}
+	if got := commandsOfferedBy(card); !reflect.DeepEqual(got, want) {
+		t.Fatalf("commands offered = %q, want %q", got, want)
+	}
+	if got := commandInClosing(t, "skill choice", spacedTitle("Next Up")+"\n"+card); got != "$ant-build 1" {
+		t.Fatalf("first coequal choice = %q, want $ant-build 1", got)
+	}
+	for _, command := range want[:3] {
+		if _, ok := closingCommandCobraTarget(command); !ok {
+			t.Errorf("supported command %q did not resolve", command)
+		}
+	}
+	if _, ok := closingCommandCobraTarget("$ant-status"); ok {
+		t.Fatal("unsupported Codex skill $ant-status resolved")
+	}
+	skill, _ := closingCommandCobraTarget("$ant-build 1")
+	runtime, _ := closingCommandCobraTarget("aether build 1")
+	if skill != runtime {
+		t.Fatal("skill and runtime spellings do not share the same command for duplicate detection")
+	}
 }
 
 // fullNextActionAnswer is an answer with every field populated, so a renderer
@@ -202,6 +251,14 @@ func closingCommandCobraTarget(command string) (*cobra.Command, bool) {
 	if runtimeForm, ok := strings.CutPrefix(command, "/ant-"); ok {
 		command = "aether " + runtimeForm
 	}
+	if strings.HasPrefix(command, "$ant-") {
+		for runtime, display := range expectedCodexSkillDisplays {
+			if command == display || strings.HasPrefix(command, display+" ") {
+				command = runtime + strings.TrimPrefix(command, display)
+				break
+			}
+		}
+	}
 	fields := strings.Fields(command)
 	if len(fields) < 2 || fields[0] != "aether" {
 		return nil, false
@@ -282,7 +339,7 @@ func TestNextActionCardRendersEveryField(t *testing.T) {
 		"The payment provider has not been chosen yet.",
 		"Pay close attention to the checkout path.",
 		"Phase 2 has produced work that has not been checked yet.",
-		"aether continue",
+		"$ant-continue",
 		"aether status",
 		"aether history",
 		"safe to close this chat",
@@ -330,7 +387,7 @@ func TestNextActionCardTranslatesOnlyOnTheWayOut(t *testing.T) {
 	}{
 		{platform: "claude", want: "/ant-continue", notWant: "aether continue"},
 		{platform: "opencode", want: "/ant-continue", notWant: "aether continue"},
-		{platform: "codex", want: "aether continue", notWant: "/ant-continue"},
+		{platform: "codex", want: "$ant-continue", notWant: "aether continue"},
 	}
 
 	for _, tc := range cases {
@@ -346,12 +403,15 @@ func TestNextActionCardTranslatesOnlyOnTheWayOut(t *testing.T) {
 				t.Errorf("on %s the card still shows %q, which is not what the owner types:\n%s",
 					tc.platform, tc.notWant, rendered)
 			}
+			if tc.platform == "codex" && strings.Contains(rendered, "/ant-") {
+				t.Errorf("Codex card advertises slash wrappers:\n%s", rendered)
+			}
 			if answer.Command != "aether continue" {
 				t.Errorf("rendering on %s changed the answer's own command to %q; it must stay the runtime form",
 					tc.platform, answer.Command)
 			}
 			for _, alternative := range answer.Alternatives {
-				if strings.HasPrefix(alternative.Command, "/ant-") {
+				if !strings.HasPrefix(alternative.Command, "aether ") {
 					t.Errorf("rendering on %s rewrote an alternative to %q inside the answer",
 						tc.platform, alternative.Command)
 				}
@@ -489,8 +549,11 @@ func TestNextActionEnvelopeCarriesTheSameFields(t *testing.T) {
 	if command != answer.Command {
 		t.Fatalf("envelope command = %q, want %q", command, answer.Command)
 	}
-	if !strings.Contains(card, command) {
-		t.Errorf("the card never shows the command the envelope names (%q):\n%s", command, card)
+	if command != "aether continue" {
+		t.Fatalf("envelope command = %q, want executable aether continue", command)
+	}
+	if !strings.Contains(card, "$ant-continue") {
+		t.Errorf("the card never shows $ant-continue for the envelope command (%q):\n%s", command, card)
 	}
 
 	alternatives, ok := envelope[nextActionAlternativesKey].([]nextActionAlternative)

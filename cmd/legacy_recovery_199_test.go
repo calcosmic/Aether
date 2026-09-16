@@ -247,7 +247,7 @@ func TestLegacyRecoveryCommands199AbandonZeroWrite(t *testing.T) {
 	}
 	after := fixture.fingerprint(t)
 	assertLegacyRecovery199Unchanged(t, before, after)
-	for _, want := range []string{"aether seal --force --reason", "direct owner", "did not invoke"} {
+	for _, want := range []string{"$ant-seal --force --reason", "direct owner", "did not invoke"} {
 		if !strings.Contains(strings.ToLower(output), strings.ToLower(want)) {
 			t.Errorf("legacy abandon guidance missing %q:\n%s", want, output)
 		}

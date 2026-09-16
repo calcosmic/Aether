@@ -212,7 +212,7 @@ func TestPlanningExpiryPresentation200(t *testing.T) {
 		for _, want := range []string{
 			"Candidate status: expired", "Standing: expired", "Expires: " + result.candidate.ExpiresAt.UTC().Format(time.RFC3339Nano),
 			"Why unavailable: candidate_expired", "State: candidate marked expired", "Active plan: unchanged",
-			"Next: " + planCandidateRefreshCommand,
+			"Next: $ant-plan --refresh",
 		} {
 			if !strings.Contains(result.stderr, want) {
 				t.Errorf("visual refusal missing %q:\n%s", want, result.stderr)

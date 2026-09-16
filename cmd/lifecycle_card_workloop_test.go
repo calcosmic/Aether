@@ -380,8 +380,8 @@ func TestRedispatchOverrideReachesBothTheCardAndTheEnvelope(t *testing.T) {
 		t.Errorf("the machine-readable answer says %q; the run's own command for the unfinished work is %q",
 			envelopeCommand, recovery.RedispatchCommand)
 	}
-	if !strings.Contains(run.visual, recovery.RedispatchCommand) {
-		t.Errorf("the screen never names %q at all:\n%s", recovery.RedispatchCommand, run.visual)
+	if display := expectedCodexDisplayCommand(recovery.RedispatchCommand); !strings.Contains(run.visual, display) {
+		t.Errorf("the screen never names %q at all:\n%s", display, run.visual)
 	}
 	if legacy := strings.TrimSpace(stringValue(run.envelope["next"])); legacy != recovery.RedispatchCommand {
 		t.Errorf("the older `next` key says %q while the card says %q -- the two answers separated again",

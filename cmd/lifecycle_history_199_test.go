@@ -224,7 +224,7 @@ func TestLifecycleHistory199FocusedProjection(t *testing.T) {
 			t.Errorf("history visual missing %q\n%s", heading, plain)
 		}
 	}
-	if !strings.Contains(plain, "aether continue") {
+	if !strings.Contains(plain, "$ant-continue") {
 		t.Errorf("history visual missing the shared Next Up command\n%s", plain)
 	}
 	for _, forbidden := range []string{
