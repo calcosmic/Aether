@@ -412,7 +412,8 @@ aether publish
 aether publish --channel dev
 ```
 
-Companion file completeness checks verify expected counts:
+Current source inventories contain the following. Legacy count diagnostics are
+a coarse lower bound, not proof that every current entry was published:
 - 64 Claude commands
 - 64 OpenCode commands
 - 28 OpenCode agent assets (27 castes plus `aether-worker-router`)
