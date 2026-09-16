@@ -144,7 +144,12 @@ func platformRestartTargets(details []map[string]interface{}) []string {
 	seen := make(map[string]bool, len(order))
 	var targets []string
 	for _, candidate := range order {
-		if !assetCopied(details, candidate.label) || seen[candidate.target] {
+		changed := assetCopied(details, candidate.label)
+		if candidate.label == "Skills (codex shims)" {
+			// A removed public name remains cached until Codex starts a new chat.
+			changed = changed || assetCountPositive(details, candidate.label, "removed")
+		}
+		if !changed || seen[candidate.target] {
 			continue
 		}
 		seen[candidate.target] = true
@@ -154,11 +159,15 @@ func platformRestartTargets(details []map[string]interface{}) []string {
 }
 
 func assetCopied(details []map[string]interface{}, label string) bool {
+	return assetCountPositive(details, label, "copied")
+}
+
+func assetCountPositive(details []map[string]interface{}, label, field string) bool {
 	for _, entry := range details {
 		if strings.TrimSpace(stringValue(entry["label"])) != label {
 			continue
 		}
-		if intValue(entry["copied"]) > 0 {
+		if intValue(entry[field]) > 0 {
 			return true
 		}
 	}
