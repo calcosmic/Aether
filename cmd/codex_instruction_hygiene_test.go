@@ -41,15 +41,15 @@ func TestCodexLiteralCommandGuidanceStaysMinimal(t *testing.T) {
 		{
 			path: ".aether/templates/codex-md-template.md",
 			required: []string{
-				"Do not announce that you are \"checking the repo\", \"interpreting the workflow\",",
-				"your own wrapper should be at most one short sentence.",
+				"Do not preface\nliteral passthrough execution with repo archaeology or skill narration",
+				"output is primary, with at most one short sentence of extra explanation.",
 			},
 		},
 		{
 			path: ".aether/templates/agents-md-template.md",
 			required: []string{
-				"do not preface execution with \"I'm checking the repo\" or similar commentary",
-				"keep any extra explanation to one short sentence unless the user asks for more",
+				"Do not preface\nliteral passthrough execution with repo archaeology or skill narration",
+				"output is primary, with at most one short sentence of extra explanation.",
 			},
 		},
 	}
