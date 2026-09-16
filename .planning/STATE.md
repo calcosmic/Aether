@@ -5,11 +5,11 @@ milestone_name: Classic Colony Restoration
 current_phase: 205
 current_phase_name: Owner Acceptance and Restoration Seal
 status: paused
-stopped_at: 205-14 task 2 blocking-human; preflight complete, awaiting actual owner walkthrough
-last_updated: "2026-09-16T00:12:36Z"
+stopped_at: 205-14 task 2 blocking-human; owner walkthrough deferred until the next Claude limit reset
+last_updated: "2026-09-16T07:46:54Z"
 last_activity: 2026-09-16
-last_activity_desc: Preflight merged; awaiting the actual owner walkthrough and verdicts
-state_head: aa535593e0b7ea139cf618eff0bf945c2aba26bc
+last_activity_desc: Owner postponed walkthrough until Claude usage limit resets; preparation preserved
+state_head: 8bce5099833530eafb652f93a69b52abcc969c8b
 progress:
   total_phases: 8
   completed_phases: 5
@@ -758,8 +758,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-16T00:12:36Z
-Stopped at: 205-14 task 2 blocking-human; preflight complete, awaiting actual owner walkthrough
+Last session: 2026-09-16T07:46:54Z
+Stopped at: 205-14 task 2 blocking-human; owner walkthrough deferred until the next Claude limit reset
 Resume file: .planning/phases/205-owner-acceptance-and-restoration-seal/205-14-CHECKPOINT.md
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
@@ -787,6 +787,7 @@ Initial resume evidence (superseded by active execution below): HEAD 5f14b056 re
 
 ## Operator Next Steps
 
+- Owner availability update: the owner must wait for the next Claude usage-limit reset (described as “tomorrow” in their message). Keep phase 205 paused at plan 14 task 2. Preserve the existing release, snapshot branches and original before-session inventory. No owner journey has been reported complete; resume when the owner returns.
 - Owner: open a fresh Claude Code chat in `/Users/callumcowie/Documents/Max 9/M4L-AnalogWave-System` and follow `205-BRIEF.md`'s ten tasks alone. One deliberate close/reopen for the stop/return task; if stuck, record failure and move on. Return **“session done” with ten personal verdict lines and the overall yes/no answer**. No monitoring, coaching or assistant-run journeys.
 - After the owner response, use a **fresh continuation executor** with `205-14-CHECKPOINT.md`, the completed-task commit and the actual response. Continue at task 2's completion and task 3's read-only evidence comparison; preserve the original inventory and never repeat preparation. Then complete plans 15–18 in their approved order, preserving any further owner gates.
 - Carry accepted limits and open WINDOWS.md entries into the limitations card under D-10/D-15, including the release's documented dependency advisory and preserved local Codex variants. CAP-057's precision limit and OpenCode's captured provider-connection failure remain explicit. Actual failed journeys are triaged through plan 16.
