@@ -34,6 +34,7 @@ That means:
 
 ## Current State
 
+- **Phase 204.1 — Codex Ant Skill Surface implemented (2026-09-16), verification pending**: all seven plans and the fresh-install review repair are merged. Nine canonical dollar skills have clean-install and normal legacy-update proof on fresh Codex CLI 0.154.0 sessions; immutable executable version metadata fixes unstamped Go-build installation. Eighteen positive live cases and four rejecting controls pass. Three recorded human-verification items remain, and the full suite retains the same 17 historical failures. This is bounded entrypoint/distribution proof, not full workflow/native-helper parity, release qualification or owner acceptance.
 - **v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02**: 9 phases, 84 plans, 195 recorded tasks, and 48/48 requirements. The audit found no blocking requirement, integration, or end-to-end gaps; one Phase 198.2 real-project memory observation and documented warnings carry as explicit debt.
 - **Product version: v1.0.79** (last verified local release, recorded in Phase 205-13; Codex parity changes require a new qualified candidate)
 - **v1.28 Classic Colony Restoration is active**: approved Phases 199-205, including inserted 204.1-204.5, map 81 testable requirements and all 72 Classic capability rows. The authoritative brief is `.aether/dreams/2026-09-01-comprehensive-aether-colony-review.md`; the ledger is traceability, not another owner interview.

@@ -707,29 +707,29 @@ For dummies: The owner can find and use the expected ant actions, and an update 
 
 **Context and research:** [204.1-CONTEXT.md](phases/204.1-codex-ant-skill-surface/204.1-CONTEXT.md), [204.1-RESEARCH.md](phases/204.1-codex-ant-skill-surface/204.1-RESEARCH.md).
 
-**Plans:** 7 plans across 5 waves — independently checked and ready to execute; implementation has not started.
+**Plans:** 7/7 executed across 5 waves, including the confirmed bootstrap review repair. Technical proof and review are recorded; phase verification remains `human_needed` for three pending items in [204.1-UAT.md](phases/204.1-codex-ant-skill-surface/204.1-UAT.md).
 
 **Wave 1**
 
-- [ ] 204.1-01-PLAN.md — Clean installation and fresh-client discovery tracer
+- [x] 204.1-01-PLAN.md — Clean installation and fresh-client discovery tracer
 
-**Wave 2** *(blocked on Wave 1 completion)*
+**Wave 2** *(executed)*
 
-- [ ] 204.1-02-PLAN.md — Content-proven migration, ownership and recovery
-- [ ] 204.1-04-PLAN.md — Public ant names, runtime identity and helper guidance
+- [x] 204.1-02-PLAN.md — Content-proven migration, ownership and recovery
+- [x] 204.1-04-PLAN.md — Public ant names, runtime identity and helper guidance
 
-**Wave 3** *(blocked on Wave 2 completion)*
+**Wave 3** *(executed)*
 
-- [ ] 204.1-03-PLAN.md — Versioned publish payload and ordinary update wiring
-- [ ] 204.1-05-PLAN.md — Generated instructions, documentation and restart notices
+- [x] 204.1-03-PLAN.md — Versioned publish payload and ordinary update wiring
+- [x] 204.1-05-PLAN.md — Generated instructions, documentation and restart notices
 
-**Wave 4** *(blocked on Wave 3 completion)*
+**Wave 4** *(executed)*
 
-- [ ] 204.1-06-PLAN.md — Adversarial update checks and broken-wiring controls
+- [x] 204.1-06-PLAN.md — Adversarial update checks and broken-wiring controls
 
-**Wave 5** *(blocked on Wave 4 completion)*
+**Wave 5** *(executed)*
 
-- [ ] 204.1-07-PLAN.md — All-nine fresh-session proof and explicit phase verification
+- [x] 204.1-07-PLAN.md — All-nine fresh-session proof and explicit phase verification
 
 ### Phase 204.2: Codex Native Worker Lifecycle (INSERTED)
 

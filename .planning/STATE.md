@@ -4,12 +4,12 @@ milestone: v1.28
 milestone_name: Classic Colony Restoration
 current_phase: 204.1
 current_phase_name: Codex Ant Skill Surface
-status: executing
-stopped_at: "Phase 204.1 all seven plans merged; confirmed review CR-01 bootstrap repair running; verification human_needed."
-last_updated: "2026-09-16T15:26:04.416393+00:00"
+status: verifying
+stopped_at: "Phase 204.1 all seven plans and CR-01 repair merged; final gate has only 17 historical failures; three human verification items pending."
+last_updated: "2026-09-16T16:40:21.765542+00:00"
 last_activity: 2026-09-16
-last_activity_desc: "80-file review confirmed unstamped fresh-install regression; final gate interrupted; isolated repair and candidate proof refresh running"
-state_head: 5c70ab2ea76aa02e9149055d701e0cded7ddc1b7
+last_activity_desc: "Implementation, repaired candidate proof, final regression comparison and clean review complete; next gsd verify-work 204.1"
+state_head: 9c9eaaf02fcdc1db61810681fbb375ff73cea785
 progress:
   total_phases: 13
   completed_phases: 5
@@ -34,9 +34,9 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 
 Phase: 204.1 — Codex Ant Skill Surface
 Next phase: 204.1 (Codex Ant Skill Surface)
-Status: Executing — confirmed code-review repair
-Plan: 7 of 7 implemented — 18 final-candidate live positives and four rejecting controls passed; final gate and review pending; standard verification remains human_needed with three flags
-Last activity: 2026-09-16 — Wave 5 merged; final proof artifacts independently checked
+Status: Awaiting human verification — three recorded items
+Plan: 7 of 7 implemented — CR-01 resolved; required live/focused/race proof passes; final 5620/5620 command tests retain 17 historical failures; no new regressions found; phase remains human_needed
+Last activity: 2026-09-16 — final integration and review complete; three UAT items persisted
 
 ## Performance Metrics
 
@@ -686,6 +686,7 @@ Last activity: 2026-09-16 — Wave 5 merged; final proof artifacts independently
 
 ### Blockers/Concerns
 
+- [Phase 204.1] Implementation is complete, but standard verification remains human_needed for ANT-03/unclassified and two descriptor-less prohibition reviews. CR-01 is resolved. Final broad-suite raw exit 1 retains 17 historical failures with no new diagnostic regression; details are in 204.1-FINAL-GATE.md. Do not call phase.complete or advance before the verification workflow records a passed disposition.
 - ⛔ [Classic preservation] No historical capability may be deleted merely because current code has no caller. The report and 72-row ledger must inform v1.28 requirements and phase traceability.
 - 🧭 [Owner intent] Do not repeat the Golden Era discovery interview. Ask only genuinely unresolved choices not answered by the comprehensive report.
 - ℹ️ [Phase 198.2 verification] One real-world memory-pack UAT remains untested because the owner has not yet used the finished behavior on another project. It is acknowledged debt; review with `$gsd-audit-uat` and rerun with `$gsd-verify-work 198.2` after field use.
@@ -764,9 +765,9 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-16T10:04:20.012Z
-Stopped at: Phase 204.1 Plans 01/02/04 and fixture/audit repair merged. Wave 2 full gate executed 5596/5596 command tests; prior 30 additional failures cleared, 29 remaining presentation expectations under repair alongside Wave 3 Plans 03/05. Do not mark phase complete.
-Resume file: .planning/phases/204.1-codex-ant-skill-surface/204.1-01-SUMMARY.md
+Last session: 2026-09-16T16:40:21.765542+00:00
+Stopped at: Phase 204.1 implementation and review complete; human_needed with three pending UAT items. Run gsd verify-work 204.1. Do not advance or infer owner acceptance.
+Resume file: .planning/phases/204.1-codex-ant-skill-surface/204.1-UAT.md
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
 
@@ -795,7 +796,7 @@ Historical receipts below describe the prepared 1.0.79 candidate. The owner subs
 
 ## Operator Next Steps
 
-- **Next GSD action: execute Phase 204.1 — Codex Ant Skill Surface.** Seven plans across five waves passed independent review after one preservation-contract amendment. Read its CONTEXT.md, RESEARCH.md, CHECK.md and numbered PLAN.md files, plus .planning/research/ant-codex-parity-2026-09-16/GSD-INTEGRATION.md. Phases 204.2-204.5 still need detailed planning. No implementation, installation or owner acceptance has been performed by this planning workflow.
+- **Next GSD action: `gsd verify-work 204.1`.** All seven plans and the confirmed bootstrap repair are merged, the repair recheck is clean, and final live/focused proof passes. Three original human-verification items remain in 204.1-UAT.md; the final broad suite retains exactly 17 historical failures. Phase 204.2 is the next implementation dependency after verification; 204.2–204.5 still need detailed planning. No shared installation, release or owner acceptance is claimed.
 - Follow the inserted dependency order: names/updates, native worker lifecycle, full workflow coverage, shared recruitment/recovery, then real parity proof and candidate handoff. GSD plan checking remains enabled. Use disposable projects for engineering work.
 - **Preserved owner checkpoint:** .planning/phases/205-owner-acceptance-and-restoration-seal/205-14-CHECKPOINT.md. Plans 205-01..13 and task 205-14.1 remain complete; task 2 is still blocking-human and task 3 is pending. The Claude limit reset alone no longer determines the next engineering action.
 - Before the remaining owner walkthrough, Phase 204.5 must produce 205-CODEX-PARITY-HANDOFF.md for the exact new candidate and any controlled local preparation. Preserve the original release receipts, snapshots, and before-inventory; any new pre-session inventory is separately named and linked with preparation changes distinguished from owner evidence. If a session has already begun, preserve it and its original baseline.
