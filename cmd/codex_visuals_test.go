@@ -3315,3 +3315,54 @@ func TestCodexVisualsSpecIdentityContract(t *testing.T) {
 		t.Fatalf("specification visual used forbidden full-label abbreviation:\n%s", output)
 	}
 }
+
+// Fixed expectations are independent of the production public-skill inventory.
+func TestCodexAntSkillDisplayRoutes(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_PLATFORM", "codex")
+	t.Setenv("NO_COLOR", "1")
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	setupBuildFlowTest(t)
+	var help bytes.Buffer
+	rootCmd.SetOut(&help)
+	rootCmd.SetArgs([]string{"--help"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ verb, display string }{
+		{"init", "$ant-init"}, {"discuss", "$ant-discuss"}, {"oracle", "$ant-oracle"},
+		{"colonize", "$ant-colonize"}, {"plan", "$ant-plan"}, {"build", "$ant-build"},
+		{"continue", "$ant-continue"}, {"swarm", "$ant-swarm"}, {"seal", "$ant-seal"},
+	} {
+		t.Run(tc.verb, func(t *testing.T) {
+			if !strings.Contains(help.String(), tc.display) {
+				t.Errorf("real root help missing %s", tc.display)
+			}
+			hint := renderNextUp("Run `aether " + tc.verb + "`.")
+			if !strings.Contains(hint, "`"+tc.display+"`") {
+				t.Errorf("next action = %q", hint)
+			}
+			for _, platform := range []string{"claude", "opencode"} {
+				if got := frontDoorCommandForPlatform("/ant-"+tc.verb, platform); got != "/ant-"+tc.verb {
+					t.Errorf("%s help = %q", platform, got)
+				}
+			}
+		})
+	}
+	for _, verb := range []string{"run", "status", "help", "spec", "publish", "maintenance", "plan-finalize", "build-finalize"} {
+		if got := frontDoorCommandForPlatform("/ant-"+verb, "codex"); got != "aether "+verb {
+			t.Errorf("unavailable help = %q", got)
+		}
+		if got := renderNextUp("aether " + verb); !strings.Contains(got, "aether "+verb) || strings.Contains(got, "$ant-"+verb) {
+			t.Errorf("unavailable next = %q", got)
+		}
+	}
+	banner := renderWelcomeBanner()
+	for _, want := range []string{`$ant-init "your goal"`, "aether lay-eggs", "aether status"} {
+		if !strings.Contains(banner, want) {
+			t.Errorf("first-run banner missing %q", want)
+		}
+	}
+	t.Logf("root help:\n%s\nfirst-run:\n%s", help.String(), banner)
+}
