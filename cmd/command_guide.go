@@ -125,9 +125,18 @@ func adaptCommandGuideDefinitionForPlatform(command, platform string, def comman
 	}
 	adapted := def
 	adapted.SkillReference = ""
-	if len(adapted.PreSteps) > 0 && strings.HasPrefix(adapted.PreSteps[0], "Load the ") {
+	if len(adapted.PreSteps) > 0 && strings.HasPrefix(adapted.PreSteps[0], "Use `$ant-") {
 		adapted.PreSteps = append([]string(nil), adapted.PreSteps...)
 		adapted.PreSteps[0] = fmt.Sprintf("Use the generated %s slash-command wrapper for `%s`; do not load Codex lifecycle skills.", platform, command)
+	}
+	// Public suggestions retain each host's spelling. Executable commands and
+	// raw bypass instructions are not display text and are never rewritten.
+	for _, steps := range []*[]string{&adapted.PreSteps, &adapted.PostSteps, &adapted.DriftGuards} {
+		rendered := append([]string(nil), (*steps)...)
+		for i := range rendered {
+			rendered[i] = strings.ReplaceAll(rendered[i], "$ant-", "/ant-")
+		}
+		*steps = rendered
 	}
 	return adapted
 }
@@ -214,7 +223,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 		Intent:         "Start a guided colony for one goal.",
 		Literal:        false,
 		PreSteps: []string{
-			"Load the aether-colony-creation Codex skill.",
+			codexGuideSupportStep("init", commandGuideSkillCreation),
 			"Stage 1 — Queen opening: name the requested goal and repository, then run `AETHER_OUTPUT_MODE=json aether init-research --goal \"<raw goal>\" --target .` for deterministic codebase context.",
 			"An existing active colony is refused before storage opens; the refusal changes no files.",
 			"Stage 2 — Setup: do not require a separate setup command; aether init performs safe automatic bootstrap and reports Ready, Bootstrapped, or an actionable failure.",
@@ -231,7 +240,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 		PostSteps: []string{
 			"Stage 4 — Territory: read the typed territory outcome from the runtime result rather than inspecting survey files or inferring freshness. Territory result is exactly one of Fresh, Refreshed, Stale—refresh required, or Unavailable.",
 			"Stage 5 — Closeout: summarize the colony name, accepted goal, runtime-created artifacts, approved strategic pheromones, and typed territory result.",
-			"Render the exact Codex-native closeout `Next Up: aether plan`; do not translate it into Claude/OpenCode or a deferred Codex-native lifecycle surface.",
+			"Render the exact Codex skill closeout `Next Up: $ant-plan`; the executable route remains `aether plan`.",
 		},
 		DriftGuards: intelligentCommandDriftGuards("init", commandGuideSkillCreation),
 		RawBypass:   "If the user explicitly asks for raw/exact/no-interview init, run their literal `aether init ...` command and say the synthesis layer was bypassed.",
@@ -243,7 +252,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 		Intent:         "Turn a loose research request into a scoped Oracle prompt, template, and confidence target before starting the Oracle loop.",
 		Literal:        false,
 		PreSteps: []string{
-			"Load the aether-colony-research Codex skill.",
+			codexGuideSupportStep("oracle", commandGuideSkillResearch),
 			"Ask one compact batch of 3-6 questions when topic, audience, decision criteria, output type, constraints, or persistence expectations are unclear.",
 			"Infer the Oracle template: PRD -> prd, tech comparison -> tech-eval, architecture -> architecture-review, bug/root cause -> bug-investigation, best practices -> research-brief.",
 			"Synthesize the answers into a precise research prompt; do not pass a vague raw prompt through unchanged.",
@@ -272,7 +281,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 		Intent:         "Plan from one approved Specification through one Go-authorized Scout or Route-Setter stage at a time, then review and explicitly accept the exact stopped candidate.",
 		Literal:        false,
 		PreSteps: []string{
-			"Load the aether-colony-build-cycle Codex skill.",
+			codexGuideSupportStep("plan", commandGuideSkillBuildCycle),
 			"Run `AETHER_OUTPUT_MODE=visual aether status` and use its lifecycle facts as context; do not infer planning authority by reading state files.",
 			"Run `AETHER_OUTPUT_MODE=json aether spec --inspect` before selecting a preset. Continue only when Go reports the exact current Specification revision/hash APPROVED, its projection synchronized, and affected scope reconciled. Follow the runtime's exact repair or approval action otherwise; Specification approval is not plan acceptance.",
 			"When no explicit valid policy was supplied, request `aether host plan` with no preset and render `preset_required` as four equal choices only: Fast 80/up to 4 passes, Balanced 90/up to 6, Deep 95/up to 8, and Exhaustive 99/up to 12. Do not preselect or recommend one; cancelled or invalid input dispatches no worker.",
@@ -302,7 +311,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 			"Continue only from a returned `scout_stage_manifest` targeting the weakest evidenced gap. A later material decision pauses only after the completed card. Routine phase research remains automatic and never creates a separate approval command.",
 			"When Go returns a stopped `plan_candidate`, label it NOT ACTIVE and run `AETHER_OUTPUT_MODE=json aether plan --candidate`. Render the full proposal, approved Specification/base/timeline bindings, every card, five scores, residual gaps and evidence that would change them, semantic delta, and Queen recommendation with producer/rationale/evidence.",
 			"Only after explicit owner confirmation execute the review result's full `acceptance_command` verbatim. The generic legacy acceptance flag is never a shortcut. Stale or divergent acceptance leaves the active plan unchanged and routes back to `aether plan --candidate`.",
-			"Only a successful `acceptance_receipt` makes the new PlanRevision READY. Then render plan closeout and offer an equal guided-build/Autopilot choice; neither route is preselected or recommended. Route guided work to `aether build 1` or the runtime-surfaced exact command, and Autopilot to `aether run`.",
+			"Only a successful `acceptance_receipt` makes the new PlanRevision READY. Then render plan closeout and offer an equal guided-build/Autopilot choice; neither route is preselected or recommended. Route guided work to `$ant-build 1` or the runtime-surfaced exact command, and Autopilot to `aether run`.",
 			"For a revision, surface preserved, affected, superseded, and replacement semantic IDs from the accepted revision and discard all stale stage packets, decisions, candidates, and acceptance commands.",
 			"Treat exact replay as idempotent receipt retention. A stale or divergent replay stops with state unchanged and the runtime's exact recovery command; never substitute current IDs into an old packet.",
 		},
@@ -316,7 +325,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 		Intent:         "Use the runtime survey manifest to spawn visible platform surveyors and finalize survey state without hand-writing data files.",
 		Literal:        false,
 		PreSteps: []string{
-			"Load the aether-colony-build-cycle Codex skill.",
+			codexGuideSupportStep("colonize", commandGuideSkillBuildCycle),
 			"Do not copy repo-local legacy commands back into target repos; the published platform wrappers and TS host are the orchestration surface.",
 			"Run `aether host colonize $ARGUMENTS` to fetch the survey manifest via the TS host. Parse `result.colonize_manifest`; do not parse visual output.",
 			"Save the full JSON envelope to a temporary manifest file, then render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow colonize --manifest-file <manifest file>`.",
@@ -334,7 +343,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 		PostSteps: []string{
 			"After the JSON finalizer succeeds, run `AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow colonize --completion-file <approved temp completion JSON>`.",
 			"Summarize actual surveyors, survey files, and any runtime-surfaced warning.",
-			"Route first to `aether plan`.",
+			"Route first to `$ant-plan`.",
 		},
 		DriftGuards: intelligentCommandDriftGuards("colonize", commandGuideSkillBuildCycle),
 		RawBypass:   "If the user explicitly asks for raw/exact/no-orchestration colonize, run their literal `aether colonize ...` command.",
@@ -346,6 +355,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 		Intent:         "Use the runtime swarm manifest to spawn visible bug-destroyer workers and finalize swarm artifacts without hand-writing data files.",
 		Literal:        false,
 		PreSteps: []string{
+			codexGuideSupportStep("swarm", commandGuideSkillBuildCycle),
 			"If the user provides no problem description, use the generated wrapper's direct watch path: `AETHER_OUTPUT_MODE=visual aether swarm --watch`.",
 			"For bug-destroyer targets, run `AETHER_OUTPUT_MODE=json aether swarm --plan-only $ARGUMENTS` and parse `result.swarm_manifest`.",
 			"Save the full JSON envelope to a temporary manifest file, then render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow swarm --manifest-file <manifest file>`.",
@@ -372,7 +382,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 		Intent:         "Use the runtime dispatch manifest to spawn platform workers and finalize the phase without hand-writing state.",
 		Literal:        false,
 		PreSteps: []string{
-			"Load the aether-colony-build-cycle Codex skill.",
+			codexGuideSupportStep("build", commandGuideSkillBuildCycle),
 			"Run `AETHER_OUTPUT_MODE=visual aether status` and surface active REDIRECT, FOCUS, and FEEDBACK signals compactly.",
 			"Run `aether build <phase> --plan-only` to fetch the dispatch manifest directly from the Go runtime without dispatching workers. Parse `result.dispatch_manifest`; do not parse visual output.",
 			"Save the full JSON envelope to a temporary manifest file for later ceremony rendering.",
@@ -415,7 +425,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 		Intent:         "Run runtime-owned verification by default, with Codex orchestration only for heavy external review manifests.",
 		Literal:        false,
 		PreSteps: []string{
-			"Load the aether-colony-build-cycle Codex skill.",
+			codexGuideSupportStep("continue", commandGuideSkillBuildCycle),
 			"Run `AETHER_OUTPUT_MODE=visual aether status` and frame continue as verification, not another build pass.",
 			"Use the default runtime path unless the user requested `--classic-ceremony`, `--verification-depth heavy`, or runtime asks for wrapper-spawned review workers.",
 			"For classic/heavy external review, run `aether host continue --dry-run --classic-ceremony $ARGUMENTS` (or `aether host continue --dry-run --verification-depth heavy $ARGUMENTS`) to fetch the manifest via the TS host without dispatching reviewers. Parse `result.manifest.continue_manifest`; do not parse visual output.",
@@ -433,9 +443,9 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 		RunCommand: "AETHER_OUTPUT_MODE=visual aether continue --verification-depth standard $ARGUMENTS",
 		PostSteps: []string{
 			"For heavy external review, after `continue-finalize` succeeds, run `AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow continue --completion-file <approved temp completion JSON>`.",
-			"If phase advanced, summarize verification and route to the next `aether build <phase>`.",
+			"If phase advanced, summarize verification and route to the next `$ant-build <phase>`.",
 			"If blocked, follow the runtime recovery command first.",
-			"If complete, route to `aether seal`.",
+			"If complete, route to `$ant-seal`.",
 		},
 		DriftGuards: intelligentCommandDriftGuards("continue", commandGuideSkillBuildCycle),
 		RawBypass:   "If the user explicitly asks for raw/exact/no-orchestration continue, run their literal `aether continue ...` command.",
@@ -447,8 +457,8 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 		Intent:         "Use the runtime seal manifest to spawn visible final-review workers, then finalize sealing through the runtime.",
 		Literal:        false,
 		PreSteps: []string{
-			"Load the aether-colony-build-cycle Codex skill.",
-			"Keep explicit seal: Force flags pass only when directly supplied by the owner. The Go runtime owns final review, preflight, confirmation, transaction, and rendering. A forced-incomplete closure is not verified success. Phase 200–205/native `$ant-*` scope fence remains intact.",
+			codexGuideSupportStep("seal", commandGuideSkillBuildCycle),
+			"Keep explicit seal: Force flags pass only when directly supplied by the owner. The Go runtime owns final review, preflight, confirmation, transaction, and rendering. A forced-incomplete closure is not verified success. Full workflow coverage and native-worker parity remain pending.",
 			"Run `AETHER_OUTPUT_MODE=visual aether status` and confirm the colony is ready to seal.",
 			"Run `aether host seal $ARGUMENTS` to fetch the seal manifest via the TS host. Parse `result.seal_manifest`; do not parse visual output.",
 			"If runtime reports blockers or recovery guidance, surface that output and stop.",
@@ -483,14 +493,14 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 		Intent:         "Use codebase-aware analysis to ask better clarification questions before planning.",
 		Literal:        false,
 		PreSteps: []string{
-			"Load the aether-colony-research Codex skill.",
+			codexGuideSupportStep("discuss", commandGuideSkillResearch),
 			"Run `AETHER_OUTPUT_MODE=json aether discuss-analyze --target .` for suggested codebase-aware questions.",
 			"Present a compact set of questions covering architecture, dependencies, testing, deployment, performance, and user intent where relevant.",
 		},
 		RunCommand: "AETHER_OUTPUT_MODE=visual aether discuss $ARGUMENTS",
 		PostSteps: []string{
 			"Persist answers with `aether discuss --resolve <id> --answer \"<answer>\"` when runtime supplies IDs.",
-			"If discussion_status is settled, route back to `aether plan`.",
+			"If discussion_status is settled, route back to `$ant-plan`.",
 		},
 		DriftGuards: intelligentCommandDriftGuards("discuss", commandGuideSkillResearch),
 		RawBypass:   "If the user explicitly asks for raw/exact/no-orchestration discuss, run their literal `aether discuss ...` command.",
@@ -558,9 +568,15 @@ func commandGuideLiteralCommands() []string {
 	}
 }
 
+// The support path is relative to the selected public skill, never the repo.
+// SkillReference remains the stable internal identity used by YAML metadata.
+func codexGuideSupportStep(command, support string) string {
+	return fmt.Sprintf("Use `$ant-%s` in Codex. Read `../support/%s.md`, resolved relative to the installed ant-%s/SKILL.md, not the working directory; this is private support, not a separately discoverable helper skill.", command, support, command)
+}
+
 func intelligentCommandDriftGuards(command, skill string) []string {
 	return []string{
-		fmt.Sprintf("When changing `%s` wrapper intelligence, update `.aether/commands/%s.yaml`, Claude/OpenCode wrappers, `%s` Codex skill, and `command-guide` together.", command, command, skill),
+		fmt.Sprintf("When changing `%s` wrapper intelligence, update `.aether/commands/%s.yaml`, Claude/OpenCode wrappers, `.aether/skills/colony/%s/SKILL.md` (source for installed `../support/%s.md`), and `command-guide` together.", command, command, skill, skill),
 		"Runtime owns state mutation; wrappers and Codex skills may interview, synthesize, spawn, and summarize, but must not hand-edit state files.",
 		"Choose exactly one worker launch owner per run: platform-native Task/subagent panels after a dry-run manifest, or Go-adapter subprocess execution through the TS host/direct runtime. Never dispatch both paths for the same manifest.",
 		"Treat AETHER_WORKER_PLATFORM as a hard provider pin. If that provider is unavailable, stop with the Go-owned diagnostic; never fall back to another provider.",

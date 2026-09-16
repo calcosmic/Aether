@@ -109,10 +109,12 @@ func TestDiscussAndSpecRegisteredAcrossPublicSurfaces(t *testing.T) {
 		if got, want := platformCommandName(publicName, "opencode"), "/ant-"+publicName; got != want {
 			t.Fatalf("OpenCode spelling for %s = %q, want %q", publicName, got, want)
 		}
-		if got, want := platformCommandName(publicName, "codex"), "aether "+publicName; got != want {
+		want := "$ant-" + publicName
+		if publicName == "spec" {
+			want = "aether spec" // Specification skills remain deferred.
+		}
+		if got := platformCommandName(publicName, "codex"); got != want {
 			t.Fatalf("Codex spelling for %s = %q, want %q", publicName, got, want)
-		} else if strings.Contains(got, "$ant-") {
-			t.Fatalf("Codex spelling for %s advertises unsupported native alias %q", publicName, got)
 		}
 	}
 }

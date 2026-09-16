@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -104,7 +106,7 @@ func TestLifecycleProjectionAcceptedPlanChoicesAreCoequal(t *testing.T) {
 		wantBuild string
 		wantRun   string
 	}{
-		{name: "codex", wantBuild: "aether build 1", wantRun: "aether run"},
+		{name: "codex", wantBuild: "$ant-build 1", wantRun: "aether run"},
 		{name: "claude", wantBuild: "/ant-build 1", wantRun: "/ant-run"},
 		{name: "opencode", wantBuild: "/ant-build 1", wantRun: "/ant-run"},
 	} {
@@ -240,4 +242,65 @@ func lifecycleProjectionSectionIDs(sections []LifecycleProjectionSection) []stri
 		ids = append(ids, section.ID)
 	}
 	return ids
+}
+
+func TestCodexAntSkillRuntimeIdentity(t *testing.T) {
+	facts := projectionFacts(projectionState(colony.StateREADY, true, false))
+	got := projectLifecycle(facts, LifecycleViewJSON, "codex")
+	if got.NextAction.ID != "choose_execution_mode" || len(got.NextAction.Choices) != 2 {
+		t.Fatalf("action = %+v", got.NextAction)
+	}
+	build := got.NextAction.Choices[0]
+	if build.ID != "build" || build.RuntimeCommand != "aether build 1" || build.DisplayCommand != "$ant-build 1" {
+		t.Errorf("build = %+v", build)
+	}
+	raw, err := json.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"runtime_command":"aether build 1"`) {
+		t.Errorf("machine route missing: %s", raw)
+	}
+	t.Logf("accepted plan action: %+v", got.NextAction)
+	for _, tc := range []struct{ runtime, display string }{
+		{`aether init "Ship café 🐜"`, `$ant-init "Ship café 🐜"`},
+		{"aether oracle  'quoted topic'  --flag=é ", "$ant-oracle  'quoted topic'  --flag=é "},
+		{"aether build 1 --force", "$ant-build 1 --force"},
+		{`aether init "fix aether build and café"`, `$ant-init "fix aether build and café"`},
+		{`AETHER_NOTE="two words" aether plan`, `AETHER_NOTE="two words" aether plan`},
+		{"aether run", "aether run"}, {"aether status", "aether status"},
+		{"aether spec", "aether spec"}, {"aether publish --channel dev", "aether publish --channel dev"},
+		{"aether maintenance skills inspect", "aether maintenance skills inspect"},
+		{"aether plan-finalize --completion-file packet.json", "aether plan-finalize --completion-file packet.json"},
+		{"AETHER_OUTPUT_MODE=json aether plan", "AETHER_OUTPUT_MODE=json aether plan"},
+		{"AETHER_OUTPUT_MODE=visual aether build 1", "AETHER_OUTPUT_MODE=visual aether build 1"},
+		{"FOO=bar AETHER_OUTPUT_MODE=json aether plan-finalize", "FOO=bar AETHER_OUTPUT_MODE=json aether plan-finalize"},
+	} {
+		t.Run(tc.runtime, func(t *testing.T) {
+			action := lifecycleAction("stable-id", tc.runtime, "reason", nil)
+			action, alternatives := lifecycleApplyPlatform(action, []LifecycleActionChoice{lifecycleChoice("alternative-id", tc.runtime, "reason")}, "codex")
+			if action.ID != "stable-id" || action.RuntimeCommand != tc.runtime || action.DisplayCommand != tc.display {
+				t.Errorf("action changed = %+v", action)
+			}
+			if alternatives[0].ID != "alternative-id" || alternatives[0].RuntimeCommand != tc.runtime || alternatives[0].DisplayCommand != tc.display {
+				t.Errorf("alternative changed = %+v", alternatives[0])
+			}
+			if hint := translateHintCommandsForPlatform(tc.runtime, "codex"); hint != tc.display {
+				t.Errorf("hint = %q, want %q", hint, tc.display)
+			}
+		})
+	}
+	// Only platform/display fields may differ; sources, IDs, evidence and state facts stay identical.
+	other := projectLifecycle(facts, LifecycleViewJSON, "claude")
+	other.Platform = got.Platform
+	other.NextAction.DisplayCommand = got.NextAction.DisplayCommand
+	for i := range other.NextAction.Choices {
+		other.NextAction.Choices[i].DisplayCommand = got.NextAction.Choices[i].DisplayCommand
+	}
+	for i := range other.Alternatives {
+		other.Alternatives[i].DisplayCommand = got.Alternatives[i].DisplayCommand
+	}
+	if !reflect.DeepEqual(other, got) {
+		t.Fatal("display spelling changed semantic projection fields")
+	}
 }

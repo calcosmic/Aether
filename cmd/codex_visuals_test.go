@@ -14,12 +14,8 @@ import (
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
-// pinRawCommandNames fixes the rendering platform for tests that assert the raw
-// `aether <verb>` next-step wording. translateHintCommandsForPlatform rewrites
-// those verbs to `/ant-<verb>` on every platform except Codex, and
-// detectPlatform falls back to "claude" when nothing in the environment says
-// otherwise — so without this pin the same test passes or fails depending on
-// which agent runtime happens to be running it.
+// pinRawCommandNames pins legacy visual fixtures to Codex. Public lifecycle
+// suggestions now use its nine ant skills; other suggestions remain raw CLI.
 func pinRawCommandNames(t *testing.T) {
 	t.Helper()
 	t.Setenv("AETHER_PLATFORM", "codex")
@@ -300,7 +296,7 @@ func TestCeremonyCloseoutBlockedPathRendersBlockedNotCompletion(t *testing.T) {
 		"C O N T I N U E   B L O C K E D",
 		"Verification blocked the phase",
 		"go test ./... failed",
-		"Run `aether build 1 --force`",
+		"Run `$ant-build 1 --force`",
 	} {
 		if !strings.Contains(visual, want) {
 			t.Fatalf("blocked closeout missing %q\n%s", want, visual)
@@ -308,8 +304,8 @@ func TestCeremonyCloseoutBlockedPathRendersBlockedNotCompletion(t *testing.T) {
 	}
 	for _, forbidden := range []string{
 		"C O N T I N U E   S U M M A R Y",
-		"Run `aether build 1` to dispatch the next phase.",
-		"Run `aether seal`",
+		"Run `$ant-build 1` to dispatch the next phase.",
+		"Run `$ant-seal`",
 	} {
 		if strings.Contains(visual, forbidden) {
 			t.Fatalf("blocked closeout hid blocked state behind %q\n%s", forbidden, visual)
@@ -574,7 +570,7 @@ func TestColonizeVisualOutputShowsDispatchPreview(t *testing.T) {
 	if strings.Contains(output, `{"ok":true`) {
 		t.Fatalf("expected visual output, got JSON: %s", output)
 	}
-	for _, want := range []string{"🗺️", "C O L O N I Z E   D I S P A T C H", "Survey Wave 1 starting", "Surveyors", "C O L O N I Z E", "aether plan"} {
+	for _, want := range []string{"🗺️", "C O L O N I Z E   D I S P A T C H", "Survey Wave 1 starting", "Surveyors", "C O L O N I Z E", "$ant-plan"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("colonize visual output missing %q\n%s", want, output)
 		}
@@ -929,7 +925,7 @@ func TestBlockedContinueRecoveryHintsTranslateFromCanonicalCommands(t *testing.T
 		want     []string
 		notWant  []string
 	}{
-		{platform: "codex", want: []string{"aether continue", "aether unblock --dispatch", "aether flag-resolve"}, notWant: []string{"/ant-"}},
+		{platform: "codex", want: []string{"$ant-continue", "aether unblock --dispatch", "aether flag-resolve"}, notWant: []string{"/ant-"}},
 		{platform: "claude", want: []string{"/ant-continue", "/ant-unblock --dispatch", "aether flag-resolve"}, notWant: []string{"Fix manually and run aether continue", "Run aether unblock"}},
 		{platform: "opencode", want: []string{"/ant-continue", "/ant-unblock --dispatch", "aether flag-resolve"}, notWant: []string{"Fix manually and run aether continue", "Run aether unblock"}},
 	} {
@@ -1120,7 +1116,7 @@ func TestPrintNextUpVisualOutput(t *testing.T) {
 	if strings.Contains(output, `{"ok":true`) {
 		t.Fatalf("expected visual output, got JSON: %s", output)
 	}
-	for _, want := range []string{"N E X T   U P", "aether continue"} {
+	for _, want := range []string{"N E X T   U P", "$ant-continue"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("next-up visual output missing %q\n%s", want, output)
 		}
@@ -1601,7 +1597,7 @@ func TestPauseResumePatrolPhaseAndHistoryVisualOutput(t *testing.T) {
 	}
 
 	checkVisual([]string{"pause"}, "💾", "P A U S E   C O L O N Y", "HANDOFF.md", "aether resume")
-	checkVisual([]string{"resume"}, "💾", "R E S U M E   C O L O N Y", "Session UX", "Active Signals", "Blockers", "Survey Context", "Source:", "aether build 1")
+	checkVisual([]string{"resume"}, "💾", "R E S U M E   C O L O N Y", "Session UX", "Active Signals", "Blockers", "Survey Context", "Source:", "$ant-build 1")
 	checkVisual([]string{"patrol"}, "📊", "P A T R O L", "Signals: 1 active")
 	checkVisual([]string{"phase"}, "🧱", "Session UX", "Write resume orientation")
 	checkVisual([]string{"history"}, "📜", "Colony initialized", "Worker wave launched")
@@ -3314,4 +3310,55 @@ func TestCodexVisualsSpecIdentityContract(t *testing.T) {
 	if strings.Contains(output, "Command: Spec\n") || strings.Contains(output, "Identity: Spec\n") {
 		t.Fatalf("specification visual used forbidden full-label abbreviation:\n%s", output)
 	}
+}
+
+// Fixed expectations are independent of the production public-skill inventory.
+func TestCodexAntSkillDisplayRoutes(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_PLATFORM", "codex")
+	t.Setenv("NO_COLOR", "1")
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	setupBuildFlowTest(t)
+	var help bytes.Buffer
+	rootCmd.SetOut(&help)
+	rootCmd.SetArgs([]string{"--help"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ verb, display string }{
+		{"init", "$ant-init"}, {"discuss", "$ant-discuss"}, {"oracle", "$ant-oracle"},
+		{"colonize", "$ant-colonize"}, {"plan", "$ant-plan"}, {"build", "$ant-build"},
+		{"continue", "$ant-continue"}, {"swarm", "$ant-swarm"}, {"seal", "$ant-seal"},
+	} {
+		t.Run(tc.verb, func(t *testing.T) {
+			if !strings.Contains(help.String(), tc.display) {
+				t.Errorf("real root help missing %s", tc.display)
+			}
+			hint := renderNextUp("Run `aether " + tc.verb + "`.")
+			if !strings.Contains(hint, "`"+tc.display+"`") {
+				t.Errorf("next action = %q", hint)
+			}
+			for _, platform := range []string{"claude", "opencode"} {
+				if got := frontDoorCommandForPlatform("/ant-"+tc.verb, platform); got != "/ant-"+tc.verb {
+					t.Errorf("%s help = %q", platform, got)
+				}
+			}
+		})
+	}
+	for _, verb := range []string{"run", "status", "help", "spec", "publish", "maintenance", "plan-finalize", "build-finalize"} {
+		if got := frontDoorCommandForPlatform("/ant-"+verb, "codex"); got != "aether "+verb {
+			t.Errorf("unavailable help = %q", got)
+		}
+		if got := renderNextUp("aether " + verb); !strings.Contains(got, "aether "+verb) || strings.Contains(got, "$ant-"+verb) {
+			t.Errorf("unavailable next = %q", got)
+		}
+	}
+	banner := renderWelcomeBanner()
+	for _, want := range []string{`$ant-init "your goal"`, "aether lay-eggs", "aether status"} {
+		if !strings.Contains(banner, want) {
+			t.Errorf("first-run banner missing %q", want)
+		}
+	}
+	t.Logf("root help:\n%s\nfirst-run:\n%s", help.String(), banner)
 }

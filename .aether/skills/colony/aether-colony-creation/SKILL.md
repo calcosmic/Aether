@@ -13,10 +13,19 @@ version: "1.0"
 
 # Aether Colony Creation
 
+## Installed Codex entrypoints
+
+Use `$ant-init`. This document is installed as
+`support/aether-colony-creation.md` beside the public skill directories;
+it is private support, not a separately discoverable helper skill. Public skills
+resolve its path relative to their installed `SKILL.md`, never the working directory.
+The executable commands and runtime-issued IDs remain `aether` identities.
+Full workflow coverage and native-worker parity remain pending.
+
 ## Purpose
 
 Give Codex the same intelligent init behavior that Claude Code and OpenCode get
-from their guided wrappers while keeping Codex's native `aether` vocabulary.
+from their guided wrappers through the public `$ant-init` skill.
 Codex owns the clarification conversation; the Go runtime owns every durable
 fact and mutation.
 
@@ -106,8 +115,8 @@ Relay its evidence and any safe recovery guidance exactly.
 ## Stage 5 — Closeout
 
 Summarize the colony name, accepted goal, runtime-created artifacts, and typed
-territory result. Do not translate the next command into Claude/OpenCode or a
-deferred Codex-native lifecycle surface.
+territory result. Display `$ant-plan` as the next public Codex action; its
+executable route remains `aether plan`.
 
 ## Guardrails
 
@@ -119,4 +128,4 @@ deferred Codex-native lifecycle surface.
 - If Claude/OpenCode init wrapper behavior changes, update
   `.aether/commands/init.yaml`, this skill, and `cmd/command_guide.go` together.
 
-Next Up: aether plan
+Next Up: $ant-plan

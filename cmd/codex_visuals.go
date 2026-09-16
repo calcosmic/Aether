@@ -762,43 +762,44 @@ func renderNextUp(primary string, alternatives ...string) string {
 
 // hintCommandRe matches an `aether <verb>` mention, capturing any preceding
 // VAR=value assignment so literal shell invocations can be left alone.
-var hintCommandRe = regexp.MustCompile(`([A-Za-z_][A-Za-z0-9_]*=\S*\s+)?\baether ([a-z][a-z0-9-]*)`)
+// Quoted argument spans are matched separately and retained byte for byte.
+var hintCommandRe = regexp.MustCompile(`([A-Za-z_][A-Za-z0-9_]*=(?:'[^']*'|"(?:\\.|[^"\\])*"|\S*)\s+)?\baether ([a-z][a-z0-9-]*)|(?:^|[\s=(])(?:'[^']*'|"(?:\\.|[^"\\])*")`)
 
 // translateHintCommandsForPlatform rewrites next-step hints so they name the
 // command the user actually types. In Claude Code and OpenCode the lifecycle
 // commands are slash wrappers, so "Run `aether continue`" is not a command the
 // user can run — it is the runtime describing itself to itself.
 //
-// Only verbs in wrapperCommandNames are rewritten; `aether publish`,
+// Only available public skills or wrapperCommandNames are rewritten; `aether publish`,
 // `aether host plan`, `aether flag-resolve` and friends have no wrapper and
 // must survive verbatim. Invocations carrying an env prefix
 // (AETHER_OUTPUT_MODE=visual aether ...) are literal shell commands wrappers
 // execute, never something the user types, so they are left alone too.
 func translateHintCommandsForPlatform(s, platform string) string {
-	if platform == "codex" {
-		return s
-	}
 	return hintCommandRe.ReplaceAllStringFunc(s, func(match string) string {
 		groups := hintCommandRe.FindStringSubmatch(match)
-		if len(groups) != 3 {
+		if len(groups) != 3 || groups[2] == "" {
 			return match
 		}
 		if strings.TrimSpace(groups[1]) != "" {
 			return match
 		}
-		if !wrapperCommandNames[groups[2]] {
-			return match
-		}
-		return "/ant-" + groups[2]
+		return platformCommandName(groups[2], platform)
 	})
 }
 
 // platformCommandName returns the way a user on this platform types a runtime
-// verb: the slash wrapper where one exists, the raw CLI form otherwise. Use it
+// verb: the available Codex skill or slash wrapper, the raw CLI form otherwise. Use it
 // when building a command name for layout (padding, tables) — plain prose can
 // just say `aether <verb>` and let writeVisualOutput translate it.
 func platformCommandName(verb, platform string) string {
-	if platform != "codex" && wrapperCommandNames[verb] {
+	if platform == "codex" {
+		for _, command := range codexPublicSkillCommands() {
+			if command == verb {
+				return "$ant-" + command
+			}
+		}
+	} else if wrapperCommandNames[verb] {
 		return "/ant-" + verb
 	}
 	return "aether " + verb

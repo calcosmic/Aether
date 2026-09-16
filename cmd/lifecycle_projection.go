@@ -253,8 +253,16 @@ func lifecycleProjectionOpenItems(facts LifecycleFacts, receiptBlockers []colony
 }
 
 func lifecycleProjectionCommand(runtimeCommand, platform string) string {
+	if platform == "codex" {
+		// Change only the command prefix, preserving every argument byte.
+		if !strings.HasPrefix(runtimeCommand, "aether ") {
+			return runtimeCommand
+		}
+		verb, _, _ := strings.Cut(strings.TrimPrefix(runtimeCommand, "aether "), " ")
+		return platformCommandName(verb, platform) + strings.TrimPrefix(runtimeCommand, "aether "+verb)
+	}
 	runtimeCommand = strings.TrimSpace(runtimeCommand)
-	if runtimeCommand == "" || platform == "codex" {
+	if runtimeCommand == "" {
 		return runtimeCommand
 	}
 	if !strings.HasPrefix(runtimeCommand, "aether ") {
