@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -449,4 +450,232 @@ func maintenancePreviewHasTarget199(preview maintenanceMutationPreview, target s
 		}
 	}
 	return false
+}
+
+// Capture the exact registered update plan after its controller preview. The
+// existing locker seam stops before mutation; fault tests then use the existing
+// plan.Fault and transaction interfaces without rebuilding any target/baseline.
+func captureAntRegisteredUpdatePlan(t *testing.T) maintenanceMutationPlan {
+	t.Helper()
+	original := maintenanceCodexSkillLocker
+	stop := errors.New("capture registered update for transaction fault injection")
+	var captured maintenanceMutationPlan
+	maintenanceCodexSkillLocker = func(plan maintenanceMutationPlan) (func() error, error) {
+		captured = plan
+		return nil, stop
+	}
+	t.Cleanup(func() { maintenanceCodexSkillLocker = original })
+	result, _, err := antUpdateRun(t)
+	maintenanceCodexSkillLocker = original
+	if !errors.Is(err, stop) || captured.Operation != "update" || result["receipt"] != nil || len(captured.Targets) == 0 {
+		t.Fatalf("registered plan capture did not reach commit: %v", err)
+	}
+	return captured
+}
+
+func antUpdateTargetStates(t *testing.T, plan maintenanceMutationPlan) map[string]lifecycleFileState {
+	t.Helper()
+	tx, err := beginLifecycleTransaction(lifecycleTransactionConfig{TransactionID: plan.TransactionID, Command: plan.Operation, Allowlist: plan.Allowlist})
+	if err != nil {
+		t.Fatal(err)
+	}
+	states := map[string]lifecycleFileState{}
+	for _, target := range plan.Targets {
+		_, path, _, err := tx.resolveTarget(target.Root, target.RelativeTarget)
+		if err != nil {
+			t.Fatal(err)
+		}
+		state, err := readLifecycleFileState(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		states[path] = state
+	}
+	return states
+}
+
+func TestCodexAntSkillUpdateFailureRecovery(t *testing.T) {
+	for _, kind := range []string{"legacy-after-write", "legacy-after-removal", "owned-after-write", "owned-after-removal", "interrupted-rollback", "interrupted-resume", "interrupted-edit", "verified-rollback-refused"} {
+		t.Run(kind, func(t *testing.T) {
+			f := newAntUpdateFixture(t)
+			if strings.HasPrefix(kind, "owned-") {
+				if _, _, err := antUpdateRun(t); err != nil {
+					t.Fatal(err)
+				}
+				antSeedLegacy(t, f.skills)
+				if err := os.Chmod(filepath.Join(f.skills, ".aether-owned.json"), 0600); err != nil {
+					t.Fatal(err)
+				}
+				p := f.payload
+				p.Files = append([]codexSkillPayloadFile(nil), p.Files...)
+				p.Files[0].Content = append(append([]byte(nil), p.Files[0].Content...), []byte("\nRevised guidance.\n")...)
+				p.Files[0].SHA256 = lifecycleDigest(p.Files[0].Content)
+				antPublishUpdatePayload(t, f, p)
+			}
+			custom := filepath.Join(f.skills, "custom/SKILL.md")
+			writeMaintenanceMutation199File(t, custom, []byte("custom survives rollback"))
+			if err := os.Chmod(custom, 0600); err != nil {
+				t.Fatal(err)
+			}
+			customBefore, err := readLifecycleFileState(custom)
+			if err != nil {
+				t.Fatal(err)
+			}
+			plan := captureAntRegisteredUpdatePlan(t)
+			before := antUpdateTargetStates(t, plan)
+			preview, err := prepareMaintenanceMutation(plan)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Derive fault IDs from the actual declarations, preserving target order.
+			id := 0
+			writePoint, removePoint, editPath := "", "", ""
+			for i, target := range plan.Targets {
+				if preview.Targets[i].Change == maintenanceMutationChangeUnchanged {
+					continue
+				}
+				id++
+				if !isCodexSkillTarget(target) {
+					continue
+				}
+				point := fmt.Sprintf("after_target_commit:target-%04d", id)
+				if target.Action == lifecycleTransactionRemove && removePoint == "" {
+					removePoint = point
+				}
+				if target.Action != lifecycleTransactionRemove && strings.HasSuffix(target.RelativeTarget, "SKILL.md") && writePoint == "" {
+					writePoint, editPath = point, filepath.Join(plan.Allowlist.CodexHome, target.RelativeTarget)
+				}
+			}
+			if writePoint == "" || removePoint == "" {
+				t.Fatal("fixture has no real skill write/removal")
+			}
+			point := removePoint
+			if strings.HasSuffix(kind, "after-write") {
+				point = writePoint
+			}
+			injected := errors.New("injected after actual skill mutation")
+			reached := false
+			plan.Fault = func(at string) error {
+				if at != point {
+					return nil
+				}
+				reached = true
+				current, err := readLifecycleFileState(editPath)
+				if err != nil || current.Digest == before[editPath].Digest {
+					t.Fatal("fault did not follow real skill write")
+				}
+				if point == removePoint {
+					removed := false
+					for path, old := range before {
+						if !old.Exists || !strings.Contains(path, "skills/aether/aether-") {
+							continue
+						}
+						state, err := readLifecycleFileState(path)
+						if err != nil {
+							t.Fatal(err)
+						}
+						removed = removed || !state.Exists
+					}
+					if !removed {
+						t.Fatal("fault did not follow real legacy removal")
+					}
+				}
+				return injected
+			}
+			config := lifecycleTransactionConfig{TransactionID: plan.TransactionID, Command: plan.Operation, Allowlist: plan.Allowlist}
+			if strings.HasPrefix(kind, "interrupted-") {
+				unlock, err := lockCodexSkillTargets(plan)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer unlock()
+				faultConfig := config
+				faultConfig.Fault = plan.Fault
+				tx, err := beginLifecycleTransaction(faultConfig)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for i, target := range plan.Targets {
+					if preview.Targets[i].Change == maintenanceMutationChangeUnchanged {
+						continue
+					}
+					if target.Action == lifecycleTransactionRemove {
+						err = tx.DeclareRemoval(target.Root, target.RelativeTarget)
+					} else {
+						err = tx.DeclareWriteWithMode(target.Root, target.RelativeTarget, target.Content, target.Mode)
+					}
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+				if _, err := tx.Commit(); !errors.Is(err, injected) || !reached {
+					t.Fatalf("no interruption: %v", err)
+				}
+				if _, err := os.Stat(filepath.Join(tx.journalPath(), "receipt.json")); !os.IsNotExist(err) {
+					t.Fatal("unverified interruption has success receipt")
+				}
+				fresh, err := beginLifecycleTransaction(config)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if kind == "interrupted-edit" {
+					writeMaintenanceMutation199File(t, editPath, []byte("owner intervened during interruption"))
+					if err := os.Chmod(editPath, 0600); err != nil {
+						t.Fatal(err)
+					}
+					ownerEdit, _ := readLifecycleFileState(editPath)
+					receipt, err := resumeLifecycleTransaction(config)
+					if err == nil || receipt.StateEffect != colony.LifecycleStateEffectRecoveryRequired {
+						t.Fatalf("conflict not recovery-required: %+v %v", receipt, err)
+					}
+					after, _ := readLifecycleFileState(editPath)
+					if !reflect.DeepEqual(after, ownerEdit) {
+						t.Fatal("recovery lost intervening owner edit")
+					}
+				} else if kind == "interrupted-resume" {
+					receipt, err := resumeLifecycleTransaction(config)
+					if err != nil || receipt.Transaction.Stage != colony.TransactionStageVerified {
+						t.Fatalf("fresh resume failed: %+v %v", receipt, err)
+					}
+					antAssertPublishedHome(t, f.hub, f.home)
+				} else {
+					if err := fresh.Rollback(); err != nil {
+						t.Fatal(err)
+					}
+					if !reflect.DeepEqual(before, antUpdateTargetStates(t, plan)) {
+						t.Fatal("fresh rollback lost old bytes/modes/ownership or left new names")
+					}
+				}
+			} else if kind == "verified-rollback-refused" {
+				plan.Fault = nil
+				result, err := commitMaintenanceMutation(plan)
+				if err != nil || result.Receipt == nil || result.Receipt.Transaction.Stage != colony.TransactionStageVerified {
+					t.Fatalf("commit: %v", err)
+				}
+				after := antUpdateTargetStates(t, plan)
+				fresh, err := beginLifecycleTransaction(config)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := fresh.Rollback(); err == nil || !strings.Contains(err.Error(), "cannot be rolled back") {
+					t.Fatalf("verified rollback promised: %v", err)
+				}
+				if !reflect.DeepEqual(after, antUpdateTargetStates(t, plan)) {
+					t.Fatal("verified files changed")
+				}
+			} else {
+				result, err := commitMaintenanceMutation(plan)
+				if !reached || !errors.Is(err, injected) || result.StateEffect != colony.LifecycleStateEffectRolledBack {
+					t.Fatalf("fault/rollback missing: %+v %v", result, err)
+				}
+				if !reflect.DeepEqual(before, antUpdateTargetStates(t, plan)) {
+					t.Fatal("rollback lost original bytes/modes/ownership or left new names")
+				}
+			}
+			customAfter, err := readLifecycleFileState(custom)
+			if err != nil || !reflect.DeepEqual(customBefore, customAfter) {
+				t.Fatal("custom skill changed during recovery")
+			}
+		})
+	}
 }
