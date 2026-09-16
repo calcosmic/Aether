@@ -27,7 +27,7 @@
 | What | Count/Status |
 |------|--------------|
 | Version | v1.0.79 |
-| Slash commands | 64 (Claude) + 64 (OpenCode); Codex uses native CLI + 27 TOML agents |
+| Slash commands | 64 (Claude) + 64 (OpenCode); Codex uses nine public ant skills + native CLI + 27 TOML agents |
 | Agent definitions | 27 |
 | Skills | 86 (55 colony + 31 domain) |
 | Go binary | `aether` CLI (Go binary in cmd/) |
@@ -39,6 +39,55 @@
 - **Primary platforms:** Claude Code and OpenCode. These are the main maintained user surfaces.
 - **Secondary platform:** Codex CLI. Codex has best-effort support for the direct `aether` workflow.
 - **Expectation:** keep Claude/OpenCode command and agent UX aligned first. Keep Codex safe, usable, and accurate about its native CLI capabilities.
+
+## Codex Public Entrypoints
+
+Pick an ant skill in Codex to start the matching workflow. The skill reads Aether's
+instructions; the `aether` executable still owns state, checks, and authorization.
+
+Aether's Codex actions use skills, with exactly nine public names:
+
+| Skill | Workflow |
+|-------|----------|
+| `$ant-init` | Start a colony |
+| `$ant-discuss` | Clarify intent |
+| `$ant-oracle` | Research a concern |
+| `$ant-colonize` | Survey existing code |
+| `$ant-plan` | Plan phases |
+| `$ant-build` | Build a phase |
+| `$ant-continue` | Verify and advance |
+| `$ant-swarm` | Route work or watch workers |
+| `$ant-seal` | Seal and retain work for review |
+
+The remaining 55 action skills and native-worker parity belong to later inserted
+phases. These nine names establish entrypoints, not complete lifecycle parity.
+
+The selected installation root is `~/.codex/skills/aether/`, qualified with Codex
+CLI 0.154.0. Each public `ant-<command>/SKILL.md` reads private support relative to
+its own installed file, not the working directory:
+
+- `support/aether-colony-creation.md`
+- `support/aether-colony-research.md`
+- `support/aether-colony-build-cycle.md`
+
+These three ordinary files are private support, not public helper skills. Worker
+skills still arrive automatically in runtime dispatch briefs. Start a fresh Codex
+session after skill files are copied or removed; unchanged updates need no refresh.
+
+When a user types a literal `aether ...` passthrough command such as `status`,
+`update`, `focus`, `pheromones`, or `reference-list`, execute that exact command
+first. The installed binary and `aether --help` are the runtime source of truth.
+
+For the nine lifecycle actions above, run or inspect
+`aether command-guide <command> --platform codex` and follow the matching public
+skill and its private support. If the user explicitly says raw, exact,
+no-interview, or no-orchestration, execute the requested CLI command directly.
+Do not reinterpret a literal passthrough command as a vague workflow request.
+
+For lifecycle shell execution, prefer `AETHER_OUTPUT_MODE=visual aether ...`
+unless the user explicitly wants JSON. Preserve exact arguments. Do not preface
+literal passthrough execution with repo archaeology or skill narration; the CLI
+output is primary, with at most one short sentence of extra explanation.
 
 ## Definition of Done
 
@@ -147,7 +196,7 @@ Aether uses a hybrid UX model: the Go runtime owns truth, platform wrappers own 
 | State mutations | Go runtime (`cmd/`) | Colony state, phase transitions, verification, gating |
 | Visual rendering | Go runtime (`cmd/codex_visuals.go`) | Banners, progress bars, caste identity, stage markers |
 | Colony framing | Wrapper markdown (`.claude/`, `.opencode/`) | Queen persona, narration, pacing, pre/post-build context |
-| Codex UX | Go runtime only | No wrapper markdown — Codex is runtime-native |
+| Codex UX | Go runtime visuals + nine public skills | Skills coordinate runtime-owned operations; no new state authority |
 
 ### Caste Identity System
 
@@ -180,7 +229,7 @@ cmd/codex_*.go                   ← Go runtime (authoritative)
 Full contract documented in `.aether/docs/wrapper-runtime-ux-contract.md`. Key rules:
 - Wrappers may add colony framing and narration but must not mutate state
 - Wrappers must not duplicate verification or gating logic
-- Codex gets UX improvements through the runtime renderer only
+- Codex visuals come from the runtime renderer; public skill instructions follow runtime command guides
 
 ### Queen-Owned Orchestration
 
@@ -649,7 +698,7 @@ Runtime note:
 
 ```
 .claude/
-├── commands/ant/        # 60 slash commands
+├── commands/ant/        # 64 slash commands
 │   ├── init.md          # Colony initialization
 │   ├── discuss.md       # Clarify intent before planning
 │   ├── plan.md          # Phase planning
@@ -829,7 +878,7 @@ on demand. They come in two categories:
 | `~/.aether/system/skills/` | Published hub mirror of shipped skills |
 | `~/.aether/skills/domain/` | Custom user-created domain skills |
 | repo `.aether/skills/` | Repo-specific custom skills only |
-| `~/.codex/skills/aether/` | Small Codex shim set; the `aether-skill-loader` shim explains that skill content already arrives automatically in dispatch responses |
+| `~/.codex/skills/aether/` | Nine public `ant-*/SKILL.md` entrypoints plus three private `support/*.md` bodies |
 
 ### How Matching Works
 
