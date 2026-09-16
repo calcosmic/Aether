@@ -5,11 +5,11 @@ milestone_name: Classic Colony Restoration
 current_phase: 204.1
 current_phase_name: Codex Ant Skill Surface
 status: executing
-stopped_at: "Phase 204.1 Plans 01–06 merged; Wave 4 integration gate next; Plan 07 live proof remains."
-last_updated: "2026-09-16T13:56:10.005656Z"
+stopped_at: "Phase 204.1 Plans 01–06 merged; Wave 4 has no new failures; Plan 07 live proof next."
+last_updated: "2026-09-16T14:23:39.956513Z"
 last_activity: 2026-09-16
-last_activity_desc: "Six plans merged; adversarial update and source-validation proof passed; fresh all-nine clean/upgrade host evidence remains"
-state_head: 58747b91a196a8a93d075910eecd9eda39be9445
+last_activity_desc: "Wave 4 executed 5615/5615 command tests with only the 17 historical failures; Plan 07 fresh clean/upgrade captures remain"
+state_head: 3f7d345d1c0dcb25b13c9c3d7ee74bd1068afd71
 progress:
   total_phases: 13
   completed_phases: 5
@@ -34,9 +34,9 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 
 Phase: 204.1 — Codex Ant Skill Surface
 Next phase: 204.1 (Codex Ant Skill Surface)
-Status: Executing — Wave 4 integration gate; Plan 07 live proof remains
-Plan: 6 of 7 implemented — Plans 01–06 merged; Plan 06 passed 41 ordinary tests normally and with race detection, with one explicit live opt-in skip; three causal controls failed as intended; Wave 4 full gate next
-Last activity: 2026-09-16 — Plan 06 merged; deterministic proof complete; live host qualification remains
+Status: Executing — Wave 5 fresh-host proof next
+Plan: 6 of 7 implemented — Wave 4 build passed; 5615/5615 command tests executed with no new failure identities or diagnostic changes beyond runtime fixtures; 17 historical failures remain; Plan 07 live proof and final verification remain
+Last activity: 2026-09-16 — Wave 4 integration review complete; ready for Plan 07
 
 ## Performance Metrics
 
