@@ -266,6 +266,8 @@ func TestCodexAntSkillRuntimeIdentity(t *testing.T) {
 		{`aether init "Ship café 🐜"`, `$ant-init "Ship café 🐜"`},
 		{"aether oracle  'quoted topic'  --flag=é ", "$ant-oracle  'quoted topic'  --flag=é "},
 		{"aether build 1 --force", "$ant-build 1 --force"},
+		{`aether init "fix aether build and café"`, `$ant-init "fix aether build and café"`},
+		{`AETHER_NOTE="two words" aether plan`, `AETHER_NOTE="two words" aether plan`},
 		{"aether run", "aether run"}, {"aether status", "aether status"},
 		{"aether spec", "aether spec"}, {"aether publish --channel dev", "aether publish --channel dev"},
 		{"aether maintenance skills inspect", "aether maintenance skills inspect"},

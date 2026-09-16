@@ -458,6 +458,29 @@ func frontDoorRenderedHelpGroups(platform string) []frontDoorHelpGroup {
 		}
 		groups = append(groups, rendered)
 	}
+	if platform == "codex" {
+		// The Classic journey map predates the installed skill surface. Include
+		// its missing actions using the same inventory and registered descriptions.
+		seen := make(map[string]bool)
+		for _, group := range groups {
+			for _, entry := range group.entries {
+				name, _, _ := strings.Cut(entry.command, " ")
+				seen[name] = true
+			}
+		}
+		for _, command := range codexPublicSkillCommands() {
+			name := platformCommandName(command, platform)
+			if seen[name] {
+				continue
+			}
+			for _, registered := range rootCmd.Commands() {
+				if registered.Name() == command {
+					groups[0].entries = append(groups[0].entries, frontDoorHelpEntry{name, registered.Short})
+					break
+				}
+			}
+		}
+	}
 	return groups
 }
 
