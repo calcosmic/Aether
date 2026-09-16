@@ -5,7 +5,7 @@ milestone_name: Classic Colony Restoration
 current_phase: 204.1
 current_phase_name: Codex Ant Skill Surface
 status: executing
-stopped_at: "Phase 204.1 Plan 01 merged; Wave 1 integration gate failed, Wave 2 and regression repair in progress."
+stopped_at: "Phase 204.1 Plans 01/02/04 merged; Wave 3 and presentation regression repair in progress."
 last_updated: "2026-09-16T10:04:20.391Z"
 last_activity: 2026-09-16
 last_activity_desc: "Planned Phase 204.1: seven plans across five waves; independent recheck passed with no blockers or warnings"
@@ -34,8 +34,8 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 
 Phase: 204.1 — Codex Ant Skill Surface
 Next phase: 204.1 (Codex Ant Skill Surface)
-Status: Executing — Wave 2 and post-merge regression repair
-Plan: 1 of 7 implemented — Plan 01 merged; full integration gate has 17 inherited and 30 additional failures under repair
+Status: Executing — Wave 3 and presentation regression repair
+Plan: 3 of 7 implemented — Plans 01/02/04 and fixture repair merged; Wave 2 gate executed 5596/5596 tests, retaining 17 historical and 29 obsolete presentation-expectation failures under repair
 Last activity: 2026-09-16 — Planned Phase 204.1: seven plans across five waves; independent recheck passed with no blockers or warnings
 
 ## Performance Metrics
@@ -765,7 +765,7 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 ## Session Continuity
 
 Last session: 2026-09-16T10:04:20.012Z
-Stopped at: Phase 204.1 Plan 01 merged with passing fresh Codex discovery proof. Wave 1 full gate executed 5578/5578 command tests; 17 historical and 30 additional failures. Continue Wave 2 and bounded regression repair; do not mark phase complete.
+Stopped at: Phase 204.1 Plans 01/02/04 and fixture/audit repair merged. Wave 2 full gate executed 5596/5596 command tests; prior 30 additional failures cleared, 29 remaining presentation expectations under repair alongside Wave 3 Plans 03/05. Do not mark phase complete.
 Resume file: .planning/phases/204.1-codex-ant-skill-surface/204.1-01-SUMMARY.md
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
