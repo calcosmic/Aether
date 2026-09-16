@@ -114,9 +114,9 @@ For dummies: keep the reliable modern engine and brakes, then restore the dashbo
 
 Added by owner direction on 2026-09-16 before the remaining Phase 205 acceptance. The [GSD integration record](research/ant-codex-parity-2026-09-16/GSD-INTEGRATION.md) supersedes the earlier Codex deferral and preserves all existing acceptance history.
 
-- [ ] **ANT-01** — Canonical Codex names: Fresh supported Codex sessions discover and invoke the existing nine public workflows as $ant-*; obsolete Aether-owned public $aether-* entries migrate without a duplicate default menu, and internal helpers remain supporting instructions.
-- [ ] **ANT-02** — Safe skill distribution: Clean install, publish, supported update, repeated update, and failed-update rollback install the intended versioned skills while preserving custom skills, edited files, ownership boundaries, and channel isolation.
-- [ ] **ANT-03** — Consistent guidance: Generated project instructions, help, next actions, command guides, and discovery guidance teach the actual supported $ant-* surface and remain correct after updates; machine-facing runtime identities stay stable.
+- [x] **ANT-01** — Canonical Codex names: Fresh supported Codex sessions discover and invoke the existing nine public workflows as $ant-*; obsolete Aether-owned public $aether-* entries migrate without a duplicate default menu, and internal helpers remain supporting instructions.
+- [x] **ANT-02** — Safe skill distribution: Clean install, publish, supported update, repeated update, and failed-update rollback install the intended versioned skills while preserving custom skills, edited files, ownership boundaries, and channel isolation.
+- [x] **ANT-03** — Consistent guidance: Generated project instructions, help, next actions, command guides, and discovery guidance teach the actual supported $ant-* surface and remain correct after updates; machine-facing runtime identities stay stable.
 - [ ] **ANT-04** — Governed native dispatch: Exactly one launcher binds each real Codex helper to the Go-issued assignment, attempt, role, workspace, and result contract; duplicate or stale launches/results cannot earn completion credit.
 - [ ] **ANT-05** — Durable native recovery: Helper completion is persisted before aggregate finalization, and interruption followed by a fresh-session resume preserves finished work, identifies unfinished work, and avoids repeated writes or completion credit.
 - [ ] **ANT-06** — Complete helper context: Native helpers receive the current runtime capsule, matched skills, applicable steering, prior handoffs, and scope-bound owner answers; questions return through the governed decision path and stale answers are refused.
@@ -154,7 +154,7 @@ Added by owner direction on 2026-09-16 before the remaining Phase 205 acceptance
 | Phase 202.1 — Classic Visual Voice | CEC-09 | 1 |
 | Phase 203 — Biological Runtime | SYNTH-05, CEC-07, BIO-01..08 | 10 |
 | Phase 204 — Learning Governor | SYNTH-06, LEARN-01..08 (8/9 satisfied; LEARN-05 partial, 30/51 fixtures unguarded) | 9 |
-| Phase 204.1 — Codex Ant Skill Surface | ANT-01, ANT-02, ANT-03 | 3 |
+| Phase 204.1 — Codex Ant Skill Surface | ANT-01, ANT-02, ANT-03 (3/3 verified within the recorded entrypoint/distribution scope) | 3 |
 | Phase 204.2 — Codex Native Worker Lifecycle | ANT-04, ANT-05, ANT-06, ANT-07 | 4 |
 | Phase 204.3 — Codex Workflow Parity | ANT-08, ANT-09, ANT-10 | 3 |
 | Phase 204.4 — Governed Recruitment and Recovery | ANT-11, ANT-12, ANT-13 | 3 |
@@ -178,4 +178,4 @@ Added by owner direction on 2026-09-16 before the remaining Phase 205 acceptance
 
 ---
 
-*Requirements approved: 2026-09-02 after the Classic-to-Go synthesis adjustment; Codex scope/order amended by owner direction 2026-09-16. All new ANT requirements remain unfulfilled pending implementation and evidence.*
+*Requirements approved: 2026-09-02 after the Classic-to-Go synthesis adjustment; Codex scope/order amended by owner direction 2026-09-16. ANT-01..03 verified in Phase 204.1 on 2026-09-16, including delegated guidance/scope review; ANT-04..16 remain pending. This does not establish complete workflow/native-helper parity or Phase 205 owner acceptance.*

@@ -70,7 +70,7 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 - [x] **Phase 202.1 — Classic Visual Voice** (completed 2026-09-12)
 - [x] **Phase 203 — Biological Runtime** (completed 2026-09-14)
 - [x] **Phase 204 — Learning Governor** (completed 2026-09-15)
-- [ ] **Phase 204.1 — Codex Ant Skill Surface** (INSERTED 2026-09-16)
+- [x] **Phase 204.1 — Codex Ant Skill Surface** (INSERTED 2026-09-16) (completed 2026-09-16)
 - [ ] **Phase 204.2 — Codex Native Worker Lifecycle** (INSERTED 2026-09-16)
 - [ ] **Phase 204.3 — Codex Workflow Parity** (INSERTED 2026-09-16)
 - [ ] **Phase 204.4 — Governed Recruitment and Recovery** (INSERTED 2026-09-16)
@@ -543,7 +543,7 @@ Plans:
 
 For dummies: the colony went quiet-looking. The information is right, but the personality drained out of the screens between February and now. This phase puts it back on the screens you actually read, and adds a check that fails if it ever drains away again.
 
-**Plans:** 7/7 plans complete
+**Plans:** 7/7 plans complete across 5 waves, including the confirmed bootstrap repair. Verification passed on 2026-09-16 after the user delegated the three scope reviews; [204.1-UAT.md](phases/204.1-codex-ant-skill-surface/204.1-UAT.md) records the assistant's assessment and evidence. The final broad suite retains 17 historical failures. Full workflow/native-helper parity and Phase 205 owner acceptance remain pending.
 
 Plans:
 **Wave 1**
@@ -707,7 +707,7 @@ For dummies: The owner can find and use the expected ant actions, and an update 
 
 **Context and research:** [204.1-CONTEXT.md](phases/204.1-codex-ant-skill-surface/204.1-CONTEXT.md), [204.1-RESEARCH.md](phases/204.1-codex-ant-skill-surface/204.1-RESEARCH.md).
 
-**Plans:** 7/7 executed across 5 waves, including the confirmed bootstrap review repair. Technical proof and review are recorded; phase verification remains `human_needed` for three pending items in [204.1-UAT.md](phases/204.1-codex-ant-skill-surface/204.1-UAT.md).
+**Plans:** 7/7 plans complete
 
 **Wave 1**
 

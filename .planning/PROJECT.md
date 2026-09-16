@@ -34,7 +34,7 @@ That means:
 
 ## Current State
 
-- **Phase 204.1 — Codex Ant Skill Surface implemented (2026-09-16), verification pending**: all seven plans and the fresh-install review repair are merged. Nine canonical dollar skills have clean-install and normal legacy-update proof on fresh Codex CLI 0.154.0 sessions; immutable executable version metadata fixes unstamped Go-build installation. Eighteen positive live cases and four rejecting controls pass. Three recorded human-verification items remain, and the full suite retains the same 17 historical failures. This is bounded entrypoint/distribution proof, not full workflow/native-helper parity, release qualification or owner acceptance.
+- **Phase 204.1 — Codex Ant Skill Surface complete (2026-09-16)**: all seven plans and the fresh-install review repair are merged. Nine canonical dollar skills have clean-install and normal legacy-update proof on fresh Codex CLI 0.154.0 sessions; immutable executable version metadata fixes unstamped Go-build installation. Eighteen positive live cases and four rejecting controls pass. The user delegated the three remaining guidance/scope reviews; the assistant passed them with provenance in 204.1-UAT.md. The full suite retains the same 17 historical failures. Qualification remains bounded to entrypoints/distribution; full workflows, native helpers, release qualification and Phase 205 owner acceptance remain pending.
 - **v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02**: 9 phases, 84 plans, 195 recorded tasks, and 48/48 requirements. The audit found no blocking requirement, integration, or end-to-end gaps; one Phase 198.2 real-project memory observation and documented warnings carry as explicit debt.
 - **Product version: v1.0.79** (last verified local release, recorded in Phase 205-13; Codex parity changes require a new qualified candidate)
 - **v1.28 Classic Colony Restoration is active**: approved Phases 199-205, including inserted 204.1-204.5, map 81 testable requirements and all 72 Classic capability rows. The authoritative brief is `.aether/dreams/2026-09-01-comprehensive-aether-colony-review.md`; the ledger is traceability, not another owner interview.
@@ -230,6 +230,7 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 
 ### Validated
 
+- ANT-01..03: nine canonical Codex skill entrypoints, safe distribution and consistent bounded guidance — Phase 204.1, 2026-09-16; scoped evidence and delegated review in 204.1-UAT.md.
 - Colony ceremony and runtime visibility -- v1.0
 - Context proof and skill routing -- v1.1
 - Worker dispatch honesty -- v1.2
@@ -341,7 +342,7 @@ Long-lived items not tied to a milestone:
 | Survey-map content and previous-phase outcomes use two separate named brief budgets; neither adds a worker or owner check-in (198.2-06/07, 2026-08-30) | More grounding reaches helpers without crowding out the task or making small jobs heavier | Good |
 | Owner chose to advance from Phase 198.2 while its real-world WIRE-06 confirmation remains untested (2026-08-31) | Carry as verification debt; do not treat it as passed or as a known defect; revisit with `$gsd-verify-work 198.2` | Pending evidence |
 | v1.27 ends at Phase 198.3; Classic restoration is v1.28, not a Phase 198.4 questionnaire (2026-09-02) | The comprehensive report already records owner intent; the 72-row ledger is traceability and owner-watched proof follows restoration | Good |
-| Codex `$ant-*` parity precedes remaining Phase 205 owner acceptance (2026-09-16) | Owner requested GSD integration before the pending phase; insert 204.1-204.5, retain completed evidence, and qualify the changed candidate | Planned — ANT-01..16 |
+| Codex `$ant-*` parity precedes remaining Phase 205 owner acceptance (2026-09-16) | Owner requested GSD integration before the pending phase; insert 204.1-204.5, retain completed evidence, and qualify the changed candidate | ANT-01..03 verified within Phase 204.1 scope; ANT-04..16 pending |
 | Historical behavior is evidence, while the modern Go runtime remains state and safety authority | Restore outcomes and experience without reviving shell/wrapper state mutation | — Locked for v1.28 |
 | Classic feature names are investigation headings, not predetermined solutions (2026-09-02) | Every Phase 199-204 must reconstruct the exact historical mechanism and owner value, trace the current Go implementation, compare keep/restore/replace options, and plan from a written synthesis | — Locked for v1.28 |
 | One read-only lifecycle projection owns orientation and Next Up (Phase 199) | Help, status, phase, history, recovery, and closeouts agree; missing evidence remains explicitly unknown rather than being repaired or invented | Good — shipped and UAT-verified |
@@ -370,7 +371,7 @@ These remain promising but are not the next best move:
 
 ## Next Move
 
-Execute Phase 204.1 — Codex Ant Skill Surface from its seven independently checked plans across five waves. Continue the inserted sequence through 204.5, then resume the remaining Phase 205 owner-only walkthrough and acceptance with the qualified candidate handoff.
+Plan Phase 204.2 — Codex Native Worker Lifecycle from its existing context. Phase 204.1 is verified and complete. Continue the inserted sequence through 204.5, then resume the remaining Phase 205 owner-only walkthrough and acceptance with the qualified candidate handoff.
 
 ## Evolution
 
@@ -446,4 +447,4 @@ This document evolves at phase transitions and milestone boundaries.
 - Do not move install/update/publish safety out of Go
 - Do not make visual output parsing authoritative
 
-*Last updated: 2026-09-11 after Phase 201*
+*Last updated: 2026-09-16 after Phase 204.1 verification and transition to Phase 204.2*

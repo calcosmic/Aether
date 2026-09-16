@@ -2,20 +2,20 @@
 gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
-current_phase: 204.1
-current_phase_name: Codex Ant Skill Surface
-status: verifying
-stopped_at: "Phase 204.1 all seven plans and CR-01 repair merged; final gate has only 17 historical failures; three human verification items pending."
-last_updated: "2026-09-16T16:40:21.765542+00:00"
+current_phase: 204.2
+current_phase_name: Codex Native Worker Lifecycle
+status: planning
+stopped_at: Phase 204.1 complete, ready to plan Phase 204.2
+last_updated: "2026-09-16T20:32:51.736Z"
 last_activity: 2026-09-16
-last_activity_desc: "Implementation, repaired candidate proof, final regression comparison and clean review complete; next gsd verify-work 204.1"
-state_head: 9c9eaaf02fcdc1db61810681fbb375ff73cea785
+last_activity_desc: Phase 204.1 complete, transitioned to Phase 204.2
+state_head: 21057dc43242f9157163ab7032a59031ddc9333a
 progress:
   total_phases: 13
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 189
-  completed_plans: 178
-  percent: 38
+  completed_plans: 184
+  percent: 46
 ---
 
 # Project State
@@ -25,18 +25,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-16)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 204.1 — Codex Ant Skill Surface; inserted parity sequence precedes remaining Phase 205 owner acceptance
+**Current focus:** Phase 204.2 — Codex Native Worker Lifecycle; Phase 204.1 verified and complete, with the remaining inserted parity sequence preceding Phase 205 owner acceptance
 **Previous milestone:** v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02 (48/48 requirements; audit `tech_debt`, no blockers)
 **Product version:** v1.0.79 — last verified local release from 205-13; the inserted work requires a new qualified candidate before owner acceptance.
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
 
 ## Current Position
 
-Phase: 204.1 — Codex Ant Skill Surface
-Next phase: 204.1 (Codex Ant Skill Surface)
-Status: Awaiting human verification — three recorded items
-Plan: 7 of 7 implemented — CR-01 resolved; required live/focused/race proof passes; final 5620/5620 command tests retain 17 historical failures; no new regressions found; phase remains human_needed
-Last activity: 2026-09-16 — final integration and review complete; three UAT items persisted
+Phase: 204.2 — Codex Native Worker Lifecycle
+Next phase: 204.2 (Codex Native Worker Lifecycle)
+Status: Ready to plan
+Plan: Not started
+Last activity: 2026-09-16 — Phase 204.1 complete, transitioned to Phase 204.2
 
 ## Performance Metrics
 
@@ -220,6 +220,8 @@ Last activity: 2026-09-16 — final integration and review complete; three UAT i
 - Phase 204.5 inserted after Phase 204: Codex Parity Proof and Acceptance Handoff; owner-requested Codex ant parity before the remaining Phase 205 walkthrough (2026-09-16) (URGENT)
 
 ### Decisions
+
+- [Phase 204.1, 2026-09-16]: User response “i trust you” delegated the three guidance/claim-boundary reviews. Record assistant provenance, retain the 17 historical suite failures, and keep the separate Phase 205 owner walkthrough and verdict pending.
 
 - **The organising finding: most of v1.26 already exists and was never wired to a caller.** Four independent researchers converged on this by reading and *running* this repo's code. The recursion policy engine (`.aether/ts-host/src/spawn-orchestrator.ts`), the depth guard (`spawn-can-spawn` ignores its own `--depth`), the 27-caste roster (`colony/agents/*.yaml`, zero readers), the skill lifecycle (8 of 9 commands unreferenced), the selection rationale (composed, carried to the manifest, discarded), and token measurement (parsed, never persisted). The framing is **switch on and prove**, not **design and build**
 - **Phase ordering is load-bearing, not stylistic.** WIRE first (a ratchet written after the capabilities gets shaped to whatever shipped) → SPAWN before SPEND (parent/depth linkage is recorded at spawn time and cannot be retrofitted to past runs) → SPEND before ROSTER/SKILL (extensibility changes what workers cost; without a ledger every later claim is unfalsifiable) → ROSTER reader before the user path → SKILL security inside the skill phase → PROOF last
@@ -686,7 +688,7 @@ Last activity: 2026-09-16 — final integration and review complete; three UAT i
 
 ### Blockers/Concerns
 
-- [Phase 204.1] Implementation is complete, but standard verification remains human_needed for ANT-03/unclassified and two descriptor-less prohibition reviews. CR-01 is resolved. Final broad-suite raw exit 1 retains 17 historical failures with no new diagnostic regression; details are in 204.1-FINAL-GATE.md. Do not call phase.complete or advance before the verification workflow records a passed disposition.
+- [Phase 204.1] Verified and complete after the user delegated the three guidance/scope reviews; 204.1-UAT.md records 3/3 assistant-reviewed passes and the explicit authority boundary. CR-01 is resolved. Final broad-suite raw exit 1 retains 17 historical failures with no new diagnostic regression; details are in 204.1-FINAL-GATE.md. These failures are not waived, and full workflow/native-helper parity plus Phase 205 owner acceptance remain pending.
 - ⛔ [Classic preservation] No historical capability may be deleted merely because current code has no caller. The report and 72-row ledger must inform v1.28 requirements and phase traceability.
 - 🧭 [Owner intent] Do not repeat the Golden Era discovery interview. Ask only genuinely unresolved choices not answered by the comprehensive report.
 - ℹ️ [Phase 198.2 verification] One real-world memory-pack UAT remains untested because the owner has not yet used the finished behavior on another project. It is acknowledged debt; review with `$gsd-audit-uat` and rerun with `$gsd-verify-work 198.2` after field use.
@@ -765,9 +767,9 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-16T16:40:21.765542+00:00
-Stopped at: Phase 204.1 implementation and review complete; human_needed with three pending UAT items. Run gsd verify-work 204.1. Do not advance or infer owner acceptance.
-Resume file: .planning/phases/204.1-codex-ant-skill-surface/204.1-UAT.md
+Last session: 2026-09-16T20:34:19.449187+00:00
+Stopped at: Phase 204.1 complete, ready to plan Phase 204.2
+Resume file: None — next action is gsd plan-phase 204.2; the separate Phase 205 owner checkpoint remains preserved below.
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
 
@@ -796,7 +798,7 @@ Historical receipts below describe the prepared 1.0.79 candidate. The owner subs
 
 ## Operator Next Steps
 
-- **Next GSD action: `gsd verify-work 204.1`.** All seven plans and the confirmed bootstrap repair are merged, the repair recheck is clean, and final live/focused proof passes. Three original human-verification items remain in 204.1-UAT.md; the final broad suite retains exactly 17 historical failures. Phase 204.2 is the next implementation dependency after verification; 204.2–204.5 still need detailed planning. No shared installation, release or owner acceptance is claimed.
+- **Next GSD action: `gsd plan-phase 204.2`.** Phase 204.1 is complete: all seven plans and the bootstrap repair are merged, required proof passes, and the user-delegated scope reviews passed 3/3. GSD's combined UAT/verification completion predicate passed before phase.complete advanced to 204.2. The final broad suite retains exactly 17 historical failures. Phases 204.2–204.5 still need detailed planning. No shared installation, release or Phase 205 owner acceptance is claimed.
 - Follow the inserted dependency order: names/updates, native worker lifecycle, full workflow coverage, shared recruitment/recovery, then real parity proof and candidate handoff. GSD plan checking remains enabled. Use disposable projects for engineering work.
 - **Preserved owner checkpoint:** .planning/phases/205-owner-acceptance-and-restoration-seal/205-14-CHECKPOINT.md. Plans 205-01..13 and task 205-14.1 remain complete; task 2 is still blocking-human and task 3 is pending. The Claude limit reset alone no longer determines the next engineering action.
 - Before the remaining owner walkthrough, Phase 204.5 must produce 205-CODEX-PARITY-HANDOFF.md for the exact new candidate and any controlled local preparation. Preserve the original release receipts, snapshots, and before-inventory; any new pre-session inventory is separately named and linked with preparation changes distinguished from owner evidence. If a session has already begun, preserve it and its original baseline.
