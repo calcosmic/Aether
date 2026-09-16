@@ -24,7 +24,7 @@ success.
 
 - `aether publish` is the source-checkout publish command. It builds the local channel binary, refreshes the shared hub, and verifies binary/hub version agreement.
 - `aether install --package-dir "$PWD"` still publishes companion files and rebuilds the local binary for backward compatibility, but maintainers should prefer `aether publish`.
-- `aether update` in another repo refreshes repo-local scaffolding, syncs managed guidance/settings/rules, and prunes stale generated asset copies. It does not publish source-checkout changes by itself.
+- `aether update` in another repo refreshes repo-local scaffolding, syncs managed guidance/settings/rules and the supported Codex skill payload, and prunes stale generated asset copies. It does not publish source-checkout changes by itself.
 - `aether update --force` should be the default downstream refresh when you need stale Aether-managed repo-local files removed.
 - `aether update --download-binary` downloads a published release binary. Use it when you need the released runtime, not an unreleased local source change.
 - `.aether/version.json` is the source-checkout release version file. `npm/package.json` must use the exact same version.
@@ -55,7 +55,8 @@ after that public release exists.
 
 ## Publish Command
 
-`aether publish` is the primary recommended command for publishing Aether from source. It builds the binary, syncs companion files to the hub, and verifies that binary and hub versions agree atomically.
+`aether publish` is the primary recommended command for publishing Aether from source. It builds the binary, syncs companion files to the hub, and verifies that binary and hub versions agree. The Codex payload transaction does
+not make unrelated binary and companion-file work one atomic operation.
 
 ```bash
 # In the Aether repo (stable channel, inferred from binary name)
@@ -81,13 +82,14 @@ Flags:
 | `--channel` | Runtime channel (`stable` or `dev`; default: infer from binary/env) |
 | `--binary-dest` | Destination directory for the built binary |
 | `--skip-build-binary` | Skip `go build`; use existing binary |
+| `--sync-platform-homes` | Explicit dev install/publish opt-in to shared stable platform homes |
 
 Behavior:
 - Builds the binary (unless `--skip-build-binary`)
 - Validates channel isolation (rejects cross-channel publish, e.g. dev binary targeting stable hub)
 - Syncs companion files to the hub
 - On the stable channel, refreshes user-level Claude/OpenCode/Codex assets from the same source checkout; OpenCode is written to the active `~/.opencode/command` and `~/.opencode/agent` paths plus the legacy `~/.config/opencode/...` paths
-- On the dev channel, intentionally skips user-level platform asset sync so development does not overwrite the stable command surface
+- On the dev channel, skips user-level platform asset sync by default; explicit `--sync-platform-homes` opts into shared stable homes and reports that scope
 - Verifies binary and hub versions agree after sync
 - Prints an actionable warning if the hub version changed, including the publish recovery command, `version --check`, `integrity`, and downstream `update --force` commands for the active channel
 - Prints actionable TS host warnings if build or hub sync is skipped, including the npm rebuild command and the publish command to rerun
@@ -137,6 +139,104 @@ Why this works:
 - the dev channel uses `~/.aether-dev/system/` instead of `~/.aether/system/`
 - the dev binary installs as `aether-dev`
 - stable `aether` and npm installs remain untouched
+
+## Codex Skill Upgrade and Recovery
+
+The nine ant names and their helper instructions travel as one checked package.
+Your own skills and custom project instructions stay intact. A changed skill menu
+needs a new Codex chat; an unchanged update stays quiet.
+
+This is the Phase 204.1 distribution contract, to be verified on the combined
+candidate at merge. Plan 03 owns the install/publish/update controllers and custom
+preservation result plumbing; Plan 05's documentation and notice tests alone do
+not establish that wiring. Plan 06 supplies registered-update checks, and Plan 07
+supplies the full fresh-client receipt. No release is published by these docs.
+
+### Upgrade the Runtime Before Using the New Payload Route
+
+If the installed executable predates this feature, first bootstrap from the
+current source checkout (after the clean-tree preflight):
+
+```bash
+go run ./cmd/aether publish --channel stable --binary-dest "$HOME/.local/bin"
+aether version --check
+# Then, in a disposable consumer for validation:
+aether update --dry-run
+aether update
+```
+
+Alternatively install a published release that includes payload support. An
+ordinary `aether update` refreshes companions; it cannot add this feature to an
+old executable. `--download-binary` remains the published-release path, not a way
+to fetch an unreleased source change. A runtime rejected by a payload's minimum
+version needs upgrading first, even if it would otherwise download a binary later.
+
+### Payload, Ownership and Channels
+
+- The selected hub publishes `system/codex-skills/manifest.json`, nine public
+  `ant-*/SKILL.md` entries and three private `support/*.md` bodies. Manifest schema
+  `codex-skill-payload/v1` binds versions, inventory, paths, modes and SHA-256
+  digests. Install, publish and normal update use the same validated bytes.
+- The qualified home destination is `~/.codex/skills/aether/`. Plan 01 observed
+  fresh ant-plan discovery on Codex CLI 0.154.0. Private creation, research and
+  build-cycle support files resolve relative to the installed public skill.
+- `.aether-owned.json` records exact content and modes, not just names. Only
+  matching owned files or the frozen fourteen-file v1.0.79 legacy inventory may
+  be adopted/retired. Edited or unknown legacy files are preserved and reported.
+- A custom canonical-name collision or edited owned support file stops the skill
+  transaction, even with `--force`. That flag does not widen custom-skill
+  ownership. Custom `AGENTS.md` and `.codex/CODEX.md` keep their bytes and receive
+  preservation results; documents retaining Aether's managed sentinels still
+  follow the existing managed-document refresh policy.
+- Missing, partial, corrupt, unknown-schema or incompatible payloads refuse skill
+  synchronization. Compatible newer inventories are not pruned to an older
+  executable's nine names; installed-version downgrades are refused.
+- A copied or removed skill produces one Codex refresh notice, even for removal
+  only. Unchanged updates do not. Start a fresh Codex session when advised.
+- Dev install/publish leave stable homes untouched by default. Their explicit
+  `--sync-platform-homes` opt-in writes the existing stable-home destinations;
+  dev update refuses that flag and never implicitly syncs shared homes.
+
+### Recover Without Overwriting Owner Changes
+
+Keep the failed transaction's journal and receipt, then follow its returned
+recovery instructions. Failed/interrupted **unverified** transactions can restore
+previous bytes and modes. An intervening edit remains preserved and produces
+recovery-required status. Do not delete custom files or ownership records to
+bypass a refusal. Repair a missing/incompatible payload by installing or publishing
+a matching supported version. `LifecycleTransaction.Rollback` refuses an already
+verified successful receipt; it is not a post-success downgrade command.
+
+See [Runtime Update Architecture](../../RUNTIME%20UPDATE%20ARCHITECTURE.md#codex-skill-distribution-contract)
+for the complete file ownership and transaction boundary.
+
+### Focused Proof and Merge Checks
+
+The [Plan 01 receipt](../../.planning/phases/204.1-codex-ant-skill-surface/evidence/discovery-tracer.json)
+proves its recorded client/root and ant-plan entry routing only. The following
+named checks map the distribution claims to their owners:
+
+| Claim | Named checks | Evidence owner |
+|-------|--------------|----------------|
+| Clean install, strict inventory and private support | `TestCodexAntSkillInstallTracer`, `TestCodexAntSkillInventory`, `TestCodexAntSkillCleanInstallCollision` | Plan 01 |
+| Exact legacy retirement, edited-file preservation, mode/absence guards, recovery | `TestCodexAntSkillLegacyMigration`, `TestCodexAntSkillOwnership`, `TestCodexAntSkillPostPlanCreationRefused`, `TestCodexAntSkillPostPlanModeChangeRefused`, `TestCodexAntSkillRollback` | Plan 02 |
+| Shared published payload, refusal, repeat, channels, newer versions | `TestCodexAntSkillPublishedPayload`, `TestCodexAntSkillPayloadValidation`, `TestCodexAntSkillPublishRepeat`, `TestCodexAntSkillPublishChannel`, `TestCodexAntSkillRegisteredUpdate`, `TestCodexAntSkillRegisteredUpdateRepeat`, `TestCodexAntSkillUpdatePreview`, `TestCodexAntSkillUpdateVersions`, `TestCodexAntSkillUpdateChannel` | Plan 03; check at merge |
+| Managed docs, custom docs, copied/removal-only notices | `TestCodexAntSkillManagedGuidance`, `TestCodexAntSkillCustomGuidancePreserved`, `TestCodexAntSkillRestartNotice` | Plan 05 |
+| Combined update, custom preservation receipts, interruption/conflict recovery | `TestCodexAntSkillUpdateMatrix`, `TestCodexAntSkillUpdatePostPlanCreationRefused`, `TestCodexAntSkillUpdatePostPlanModeChangeRefused`, `TestCodexAntSkillUpdateFailureRecovery`, `TestCodexAntSkillUpdatePreservationReceipt` | Plan 06; check at merge |
+| All nine names in fresh clients after install/upgrade | `TestCodexAntSkillFreshHost`, `TestCodexAntSkillFreshHostUpgrade`, `TestCodexAntSkillReceiptValidation` | Plan 07; actual receipt required |
+
+Run the focused generated-guidance check from source:
+
+```bash
+go test ./cmd -run '^TestCodexAntSkill(ManagedGuidance|CustomGuidancePreserved|RestartNotice)$' -count=1 -timeout 90m
+```
+
+After Plans 03 and 06 are merged, discover then execute their named checks. Zero
+matched tests is not success; retain exact discovered/executed identities and raw
+exit statuses. See [Plan 06's normal/race commands](../../.planning/phases/204.1-codex-ant-skill-surface/204.1-06-PLAN.md)
+and [Plan 07's explicit live command](../../.planning/phases/204.1-codex-ant-skill-surface/204.1-07-PLAN.md).
+A skipped or unavailable live client does not qualify the surface. These checks
+prove installation and entry routing, not full lifecycle or native-worker parity.
 
 ## Published Release Workflow
 
@@ -313,12 +413,15 @@ aether publish --channel dev
 ```
 
 Companion file completeness checks verify expected counts:
-- 60 Claude commands
-- 60 OpenCode commands
+- 64 Claude commands
+- 64 OpenCode commands
 - 28 OpenCode agent assets (27 castes plus `aether-worker-router`)
 - 27 Codex agents
 - 86 hub shipped skills
-- 5 Codex skill shims
+
+The Codex payload has nine public skills and three private support bodies plus
+its manifest. Validate its actual bytes and ownership with the focused checks
+above; legacy companion counts alone are not a skill-surface receipt.
 
 ## Release Gate
 
@@ -432,16 +535,18 @@ find "$HOME/.aether/system/commands"/claude -maxdepth 1 -type f | wc -l
 find "$HOME/.aether/system/commands"/opencode -maxdepth 1 -type f | wc -l
 find ~/.aether/system/agents -maxdepth 1 -type f | wc -l
 find ~/.aether/system/codex -maxdepth 1 -type f | wc -l
-find "$HOME/.aether/system" -path '*/SKILL.md' | wc -l
+find "$HOME/.aether/system/skills" -name SKILL.md | wc -l
+find "$HOME/.aether/system/codex-skills" -name SKILL.md | wc -l
 ```
 
 Expected counts:
-- Claude commands: `60`
-- OpenCode commands: `60`
+- Claude commands: `64`
+- OpenCode commands: `64`
 - OpenCode agents: `28` (27 castes plus the restricted router)
 - Codex agents: `27`
 - Hub shipped skills: `86`
-- Codex skill shims: `5`
+- Codex public skill payload: `9` public `SKILL.md` entries, plus `3` ordinary
+  private support files and the versioned manifest (not counted as public skills)
 
 Release metadata should also agree:
 - `.aether/version.json` version equals `npm/package.json` version
