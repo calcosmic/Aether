@@ -16,6 +16,10 @@ import (
 
 const sourceCheckResultSchemaVersion = "source-check-result/v1"
 
+// The source checker inspects the production renderer output in memory.
+// A seam permits negative subject fixtures without touching installed skills.
+var sourceCheckCodexShims = codexCommandSkillShims
+
 type sourceCheckIssue struct {
 	Area     string `json:"area"`
 	Path     string `json:"path"`
