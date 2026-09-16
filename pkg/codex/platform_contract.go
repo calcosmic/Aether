@@ -109,7 +109,15 @@ func PlatformContractFor(platform Platform) (PlatformContract, bool) {
 					"narrow write scopes inside the project workspace are behavioral rather than path-enforced",
 				},
 			},
-			NativeCommandSurface: CapabilitySupport{Level: CapabilityUnavailable, Mechanism: "Codex has no slash-command wrapper mechanism", Limitations: []string{"Codex uses direct CLI lifecycle commands, command-guide, and installed lifecycle skills"}},
+			NativeCommandSurface: CapabilitySupport{
+				Level:     CapabilityLimited,
+				Mechanism: "Codex CLI 0.154.0 discovers nine installed dollar skills at ~/.codex/skills/aether: $ant-init, $ant-discuss, $ant-oracle, $ant-colonize, $ant-plan, $ant-build, $ant-continue, $ant-swarm, $ant-seal; direct aether CLI commands remain available",
+				Limitations: []string{
+					"proof covers fresh-session selection/loading, private support reads, and the first read-only command-guide step after clean installation and supported legacy update",
+					"the remaining 55 actions, complete workflow parity, and native-helper behavior are unverified by this surface proof",
+					"other client versions/discovery roots and preserved custom collisions are outside the qualification",
+				},
+			},
 		}, true
 	case PlatformFake:
 		return PlatformContract{
