@@ -1,0 +1,1 @@
+No external API integration: this phase packages and distributes local Codex skill files, preserves existing Go runtime routes, and invokes an already installed Codex host only to qualify discovery and entry routing; it adds no external service API or SDK capability.

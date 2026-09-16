@@ -2,41 +2,41 @@
 gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
-current_phase: 205
-current_phase_name: Owner Acceptance and Restoration Seal
-status: paused
-stopped_at: 205-14 task 2 blocking-human; owner walkthrough deferred until the next Claude limit reset
-last_updated: "2026-09-16T07:46:54Z"
+current_phase: 204.1
+current_phase_name: Codex Ant Skill Surface
+status: executing
+stopped_at: "Phase 204.1 planning complete: seven plans across five waves passed independent review after one targeted revision. Ready to execute Phase 204.1; no implementation has started. Phase 205 owner evidence remains preserved."
+last_updated: "2026-09-16T10:04:20.391Z"
 last_activity: 2026-09-16
-last_activity_desc: Owner postponed walkthrough until Claude usage limit resets; preparation preserved
-state_head: 8bce5099833530eafb652f93a69b52abcc969c8b
+last_activity_desc: "Planned Phase 204.1: seven plans across five waves; independent recheck passed with no blockers or warnings"
+state_head: 404731ccffda7bbca64ce801b74b0752a7161315
 progress:
-  total_phases: 8
+  total_phases: 13
   completed_phases: 5
-  total_plans: 182
+  total_plans: 189
   completed_plans: 177
-  percent: 63
+  percent: 38
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-09-15)
+See: .planning/PROJECT.md (updated 2026-09-16)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 205 — Owner Acceptance and Restoration Seal
+**Current focus:** Phase 204.1 — Codex Ant Skill Surface; inserted parity sequence precedes remaining Phase 205 owner acceptance
 **Previous milestone:** v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02 (48/48 requirements; audit `tech_debt`, no blockers)
-**Product version:** v1.0.79 — source, installed binary and hub agree; owner project updated and verified.
+**Product version:** v1.0.79 — last verified local release from 205-13; the inserted work requires a new qualified candidate before owner acceptance.
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
 
 ## Current Position
 
-Phase: 205 (Owner Acceptance and Restoration Seal) — AWAITING OWNER WALKTHROUGH
-Next phase: 205 (Owner Acceptance and Restoration Seal)
-Status: Paused at the required owner-only checkpoint; automated preflight complete
-Plan: 14 of 18 active — task 1 complete, task 2 blocking-human, task 3 pending; 13/18 plans have committed summaries
-Last activity: 2026-09-16 — Final preflight merged; owner-only walkthrough is next
+Phase: 204.1 — Codex Ant Skill Surface
+Next phase: 204.1 (Codex Ant Skill Surface)
+Status: Ready to execute
+Plan: 0 of 7 — planning and independent review complete; execution has not started
+Last activity: 2026-09-16 — Planned Phase 204.1: seven plans across five waves; independent recheck passed with no blockers or warnings
 
 ## Performance Metrics
 
@@ -213,6 +213,11 @@ Last activity: 2026-09-16 — Final preflight merged; owner-only walkthrough is 
 - v1.26 roadmap created 2026-08-08 from 35 requirements across 7 categories (WIRE, SPAWN, SPEND, SEEN, ROSTER, SKILL, PROOF), continuing phase numbering from v1.25's Phase 171
 - Research suggested 7 phases; the roadmap ships 8. The single deviation is splitting ROSTER into **176 Roster Reader** (ROSTER-01..02, the shipped 27 YAMLs) and **177 Operator-Authored Agents** (ROSTER-03..08, the user path), so the reader must demonstrably change dispatch output before the user-extension path is planned
 - Research's suggested sixth phase ("Delegation Delivery") is **not** in this milestone. The SPAWN requirements cover the *guard* only; nothing gains the ability to delegate recursively in v1.26. Delivery (child result plumbing, follow-on-wave channel, parent-direct spawn) carries a research flag and belongs to a later milestone
+- Phase 204.1 inserted after Phase 204: Codex Ant Skill Surface; owner-requested Codex ant parity before the remaining Phase 205 walkthrough (2026-09-16) (URGENT)
+- Phase 204.2 inserted after Phase 204: Codex Native Worker Lifecycle; owner-requested Codex ant parity before the remaining Phase 205 walkthrough (2026-09-16) (URGENT)
+- Phase 204.3 inserted after Phase 204: Codex Workflow Parity; owner-requested Codex ant parity before the remaining Phase 205 walkthrough (2026-09-16) (URGENT)
+- Phase 204.4 inserted after Phase 204: Governed Recruitment and Recovery; owner-requested Codex ant parity before the remaining Phase 205 walkthrough (2026-09-16) (URGENT)
+- Phase 204.5 inserted after Phase 204: Codex Parity Proof and Acceptance Handoff; owner-requested Codex ant parity before the remaining Phase 205 walkthrough (2026-09-16) (URGENT)
 
 ### Decisions
 
@@ -639,6 +644,7 @@ Last activity: 2026-09-16 — Final preflight merged; owner-only walkthrough is 
 - [Phase 204]: The post-closure code review caught a green-tested feature that is dead in production (the automatic hypothesis promoter: learn-entry IDs and guidance-application IDs come from disconnected pipelines, and no production writer records a helpful application at all). Recorded as WINDOWS.md entry 44 reopened and the CLAUDE.md claim corrected, never faked.
 - [Phase 204]: WINDOWS.md rows with status fixed seed the regression-fixture bank, so closing a ledger entry obliges a bank regeneration (`go test ./cmd -run '^TestSeededBankUpdate$' -update-bank`) plus a real guard for each new fixture; the unguarded floor is a two-sided ratchet and is never raised.
 - [Phase 204]: Fixture dates the compiled binary reads must derive from the wall clock; in-process fixtures pin the candidate clock instead. Two families of literal September dates crossed the seven-day candidate window mid-phase and turned fifteen tests red with no code change.
+- [Phase 204.1-204.5]: Owner moved canonical Codex ant skills and behavioral parity into v1.28 before remaining Phase 205 acceptance (2026-09-16); prior later-milestone deferral is superseded. — Five inserted phases own ANT-01..16; preserve completed 205 evidence and original inventory, and qualify the changed candidate before any owner walkthrough.
 
 ### Pending Todos
 
@@ -690,7 +696,7 @@ Last activity: 2026-09-16 — Final preflight merged; owner-only walkthrough is 
 - **Phases 176, 177 and 178 are cut, not deferred.** If a future session finds Phase 173's delegation guards bounding a capability nobody has, that is expected and accepted — Phase 177 was the grant, and it was cut deliberately. Do not "restore" it.
 - **Phase 173 and Phase 178 carry research flags from the research phase.** Platform nested-spawn behaviour is MEDIUM confidence and both vendors broke it within the last quarter (Claude Code strips the Agent tool from some subagent types; OpenCode has an open "subagents can infinitely recurse, no max depth" defect). The skill supply-chain threat surface is actively evolving. Re-verify vendor docs and open issues at planning time for both
 - **OpenCode hook parity is unverified.** No confirmed equivalent to Claude Code's `PreToolUse` deny gate was found. If SPAWN-04's guard must hold on OpenCode, Go-side depth enforcement becomes mandatory rather than defence-in-depth — verify before planning that requirement
-- **Codex has no native subagent nesting.** Delegation on the Codex lane must be *off* and reported honestly, never emulated. Emulation would create a second divergent orchestration path — the exact failure v1.24 and v1.25 spent two milestones unwinding
+- **Codex host capability must be revalidated.** The old blanket no-delegation assumption is superseded by the 2026-09-16 native-agent research. Phase 204.2 proves the supported nesting/permission/cancellation behavior, and Phase 204.4 binds recruitment to Go admission and useful result handback. Do not infer either availability or absence from the historical note, and never emulate success or create a second state authority.
 - Two gaps surfaced during roadmapping that have **no supporting requirement** and were deliberately not added to scope (see Coverage Notes in the roadmap return): the char-budget-vs-spend naming guardrail (Pitfall 8), and orphaned-child reaping with an operator command (Pitfall 5). Both are recorded as phase guardrails; if either is to be enforced, it needs a requirement and a user decision
 - ~~`pkg/trace/cost.go` holds a stale model-price table~~ — **RESOLVED, found stale 2026-08-27.** The file no longer exists and no price table or token-to-dollar arithmetic remains anywhere in the Go source (`grep -rln 'CalculateCost|pricePerToken|costPerToken|InputPrice' --include='*.go'` returns nothing). The owner ruling this blocker demanded — delete as dead code, or fix its arithmetic — is moot; it was deleted at some point between v1.26 and now. Phase 174's D-02 ("no model-price table is ever built") therefore holds in fact as well as in principle, which is what Phase 196 needs before it puts a cost line on screen.
 
@@ -758,13 +764,15 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-16T07:46:54Z
-Stopped at: 205-14 task 2 blocking-human; owner walkthrough deferred until the next Claude limit reset
-Resume file: .planning/phases/205-owner-acceptance-and-restoration-seal/205-14-CHECKPOINT.md
+Last session: 2026-09-16T10:04:20.012Z
+Stopped at: Phase 204.1 planning complete: seven plans across five waves passed independent review after one targeted revision. Ready to execute Phase 204.1; no implementation has started. Phase 205 owner evidence remains preserved.
+Resume file: .planning/phases/204.1-codex-ant-skill-surface/204.1-CHECK.md
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
 
-## Active Execution — 2026-09-16 (Europe/Zurich)
+## Preserved Phase 205 Execution — 2026-09-16 (Europe/Zurich)
+
+Historical receipts below describe the prepared 1.0.79 candidate. The owner subsequently inserted Phases 204.1-204.5 before the remaining walkthrough. These receipts remain valid for their recorded candidate and do not qualify later code changes.
 
 - Plan 205-11 is complete: 72 distinct capabilities reconciled across seven phase records; all 40 focused coverage/parity tests passed. Task commits `d924fbe8`/`759cc446`, summary `c2ede9fa`, merge `7508fc73`.
 - The first complete normal gate exposed two verifier defects beyond the unchanged 17-name baseline. They are fixed in `10e5251d`, merged at `8391fef9cfc7ba122d8834d83009c4006ed5af3e`; see `205-GATE-REPAIR.md`. The superseded race run was deliberately interrupted, not counted as evidence.
@@ -787,8 +795,9 @@ Initial resume evidence (superseded by active execution below): HEAD 5f14b056 re
 
 ## Operator Next Steps
 
-- Owner availability update: the owner must wait for the next Claude usage-limit reset (described as “tomorrow” in their message). Keep phase 205 paused at plan 14 task 2. Preserve the existing release, snapshot branches and original before-session inventory. No owner journey has been reported complete; resume when the owner returns.
-- Owner: open a fresh Claude Code chat in `/Users/callumcowie/Documents/Max 9/M4L-AnalogWave-System` and follow `205-BRIEF.md`'s ten tasks alone. One deliberate close/reopen for the stop/return task; if stuck, record failure and move on. Return **“session done” with ten personal verdict lines and the overall yes/no answer**. No monitoring, coaching or assistant-run journeys.
-- After the owner response, use a **fresh continuation executor** with `205-14-CHECKPOINT.md`, the completed-task commit and the actual response. Continue at task 2's completion and task 3's read-only evidence comparison; preserve the original inventory and never repeat preparation. Then complete plans 15–18 in their approved order, preserving any further owner gates.
-- Carry accepted limits and open WINDOWS.md entries into the limitations card under D-10/D-15, including the release's documented dependency advisory and preserved local Codex variants. CAP-057's precision limit and OpenCode's captured provider-connection failure remain explicit. Actual failed journeys are triaged through plan 16.
-- Local release is complete. Owner walkthrough, PROOF-05 acceptance and restoration seal remain pending; do not mark them complete or substitute an assistant verdict.
+- **Next GSD action: execute Phase 204.1 — Codex Ant Skill Surface.** Seven plans across five waves passed independent review after one preservation-contract amendment. Read its CONTEXT.md, RESEARCH.md, CHECK.md and numbered PLAN.md files, plus .planning/research/ant-codex-parity-2026-09-16/GSD-INTEGRATION.md. Phases 204.2-204.5 still need detailed planning. No implementation, installation or owner acceptance has been performed by this planning workflow.
+- Follow the inserted dependency order: names/updates, native worker lifecycle, full workflow coverage, shared recruitment/recovery, then real parity proof and candidate handoff. GSD plan checking remains enabled. Use disposable projects for engineering work.
+- **Preserved owner checkpoint:** .planning/phases/205-owner-acceptance-and-restoration-seal/205-14-CHECKPOINT.md. Plans 205-01..13 and task 205-14.1 remain complete; task 2 is still blocking-human and task 3 is pending. The Claude limit reset alone no longer determines the next engineering action.
+- Before the remaining owner walkthrough, Phase 204.5 must produce 205-CODEX-PARITY-HANDOFF.md for the exact new candidate and any controlled local preparation. Preserve the original release receipts, snapshots, and before-inventory; any new pre-session inventory is separately named and linked with preparation changes distinguished from owner evidence. If a session has already begun, preserve it and its original baseline.
+- After that handoff, the owner still performs the original ten journeys alone in a fresh Claude Code chat, supplies the ten personal verdicts and overall answer, and only then can a fresh continuation executor complete 205-14 and proceed through 205-15..18. No assistant-run Codex proof substitutes for those owner actions.
+- Carry existing and newly discovered limitations, unreported usage, relevant WINDOWS.md entries, the exact known-failure comparison, preserved local variants, and platform limitations into the candidate handoff and final limitations card. The milestone seal still requires the owner's explicit acceptance.

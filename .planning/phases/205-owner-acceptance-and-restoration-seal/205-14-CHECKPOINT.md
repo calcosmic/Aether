@@ -8,9 +8,13 @@
 
 **Current task:** Task 2 — the owner's walk-through
 
-**Status:** Awaiting the actual owner session and personal verdicts.
+**Status:** Paused behind inserted Phases 204.1-204.5; the actual owner session and personal verdicts remain pending.
 
-The project is ready for the owner to try the ten tasks himself. The completed preparation establishes the starting state; it does not establish that any journey worked. **No owner session has begun and no owner verdict has been received.**
+The completed preparation qualified local version 1.0.79. The owner has since requested Codex parity before this walkthrough. After Phases 204.1-204.5, a new candidate-specific handoff must establish readiness and identify the correct session baseline. The original preparation and before-inventory remain immutable history. **No owner session has begun and no owner verdict has been received.**
+
+## Sequencing amendment — 2026-09-16
+
+Read [GSD-INTEGRATION.md](../../research/ant-codex-parity-2026-09-16/GSD-INTEGRATION.md). Resume this checkpoint only after Phase 204.5 verification and its `205-CODEX-PARITY-HANDOFF.md` exist. Preserve task 1 as complete; any new candidate preparation is separately recorded under Phase 204.5. The original inventory must not be overwritten, and engineering proof never satisfies task 2.
 
 ## Completed task
 

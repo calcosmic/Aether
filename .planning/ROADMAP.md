@@ -36,7 +36,7 @@
 
 ### v1.28 Classic Colony Restoration
 
-**Status:** Approved 2026-09-02
+**Status:** Approved 2026-09-02; owner-requested Codex scope and sequence amendment 2026-09-16
 
 **Goal:** Reunite Aether's modern Go safety kernel with the understandable, visible, Queen-led colony experience from the February-April era.
 
@@ -44,7 +44,9 @@
 
 **Sequencing:** Restoration is the milestone. The executable Classic corpus is built alongside visible restoration, not as a separate planning gate. Owner-watched proof is the final phase, after the product slices are usable.
 
-For dummies: Phases 199-204 rebuild the house; Phase 205 is the walk-through with Callum. There is no extra phase whose job is to decide whether to rebuild it.
+For dummies: Phases 199-204 restored the colony. Phases 204.1-204.5 now make the ant workflows work properly in Codex. The remaining Phase 205 walkthrough tests the qualified result with Callum.
+
+**Scope amendment — 2026-09-16:** The owner moved Codex `$ant-*` naming and behavioral parity ahead of the remaining Phase 205 acceptance work. Five inserted phases own 16 new requirements. The earlier later-milestone deferral is superseded. [Sequencing and evidence rules](research/ant-codex-parity-2026-09-16/GSD-INTEGRATION.md).
 
 ### Mandatory Classic-to-Go synthesis protocol
 
@@ -57,6 +59,8 @@ The phase names below identify areas to investigate, not predetermined implement
 5. **Plan and implement from the conclusion:** every implementation task and acceptance test cites the study decision it realizes. No task may begin from “bring feature X back” without the mechanism comparison.
 6. **Verify four dimensions:** prove outcome, behavior, experience, and safety through the real public path, then update the relevant CAP dispositions with delivered evidence.
 
+The inserted Codex phases reuse the completed Classic studies and the 2026-09-16 comparison, then revalidate their affected current paths and record the chosen synthesis in phase research before implementation planning.
+
 Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase research artifact using `.planning/research/v1.28-classic-synthesis-template.md`. This is targeted engineering archaeology within the implementation phase, not a standalone pre-restoration phase and not another owner questionnaire. The comprehensive report is the starting map; it does not substitute for examining the relevant old and current implementations.
 
 - [x] **Phase 199 — Front Door and Classic Contract** (completed 2026-09-07)
@@ -66,7 +70,12 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 - [x] **Phase 202.1 — Classic Visual Voice** (completed 2026-09-12)
 - [x] **Phase 203 — Biological Runtime** (completed 2026-09-14)
 - [x] **Phase 204 — Learning Governor** (completed 2026-09-15)
-- [ ] **Phase 205 — Owner Acceptance and Restoration Seal**
+- [ ] **Phase 204.1 — Codex Ant Skill Surface** (INSERTED 2026-09-16)
+- [ ] **Phase 204.2 — Codex Native Worker Lifecycle** (INSERTED 2026-09-16)
+- [ ] **Phase 204.3 — Codex Workflow Parity** (INSERTED 2026-09-16)
+- [ ] **Phase 204.4 — Governed Recruitment and Recovery** (INSERTED 2026-09-16)
+- [ ] **Phase 204.5 — Codex Parity Proof and Acceptance Handoff** (INSERTED 2026-09-16)
+- [ ] **Phase 205 — Owner Acceptance and Restoration Seal** — remaining walkthrough follows Phase 204.5
 
 ## Phase Details
 
@@ -679,11 +688,142 @@ Plans:
 
 - [x] 204-16-PLAN.md — A repeated preventable intervention automatically becomes a source-improvement proposal, a hypothesis is validated only on a corroborated helpful application, and REQUIREMENTS.md plus WINDOWS.md 38-45 are made truthful.
 
+### Phase 204.1: Codex Ant Skill Surface (INSERTED)
+
+**Goal:** Make the existing nine Codex workflows available under canonical $ant-* skills, with reliable discovery, installation, upgrades, and matching guidance.
+
+**Depends on:** Phase 204
+
+**Requirements:** ANT-01, ANT-02, ANT-03
+
+**Success criteria:**
+
+1. A fresh supported Codex session discovers and invokes all nine intended ant skills; the managed legacy public names and helper presentation follow the declared migration policy without touching custom skills.
+2. Clean install, existing-install migration, normal update, repeated update, collision handling, channel isolation, and rollback preserve the intended skill payload and owned-file boundaries.
+3. Generated project instructions, command guides, help, and Next Up agree on the nine available entrypoints; later command coverage is named as pending rather than advertised as finished.
+4. Focused tests and a real fresh-session discovery/invocation receipt fail when the actual generation or update wiring is removed.
+
+For dummies: The owner can find and use the expected ant actions, and an update keeps those names working.
+
+**Context and research:** [204.1-CONTEXT.md](phases/204.1-codex-ant-skill-surface/204.1-CONTEXT.md), [204.1-RESEARCH.md](phases/204.1-codex-ant-skill-surface/204.1-RESEARCH.md).
+
+**Plans:** 7 plans across 5 waves — independently checked and ready to execute; implementation has not started.
+
+**Wave 1**
+
+- [ ] 204.1-01-PLAN.md — Clean installation and fresh-client discovery tracer
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 204.1-02-PLAN.md — Content-proven migration, ownership and recovery
+- [ ] 204.1-04-PLAN.md — Public ant names, runtime identity and helper guidance
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 204.1-03-PLAN.md — Versioned publish payload and ordinary update wiring
+- [ ] 204.1-05-PLAN.md — Generated instructions, documentation and restart notices
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 204.1-06-PLAN.md — Adversarial update checks and broken-wiring controls
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 204.1-07-PLAN.md — All-nine fresh-session proof and explicit phase verification
+
+### Phase 204.2: Codex Native Worker Lifecycle (INSERTED)
+
+**Goal:** Connect real native Codex helpers to Go-authorized assignments, complete context, durable results, and interruption-safe recovery.
+
+**Depends on:** Phase 204.1
+
+**Requirements:** ANT-04, ANT-05, ANT-06, ANT-07
+
+**Success criteria:**
+
+1. An installed ant-build skill launches a real named Builder for a runtime-accepted assignment and credits its returned edits and result exactly once; the parent does not substitute its own work for the promised helper.
+2. A proof with explicitly requested independent review launches a real Watcher and records its findings; a separate ordinary small job preserves the existing proportionate Builder-plus-checks policy.
+3. Full context and scope-bound owner answers reach the intended worker, while stale, duplicated, or mismatched assignments/results are refused.
+4. Interruption after one helper completes but before finalization survives a fresh-session resume, retaining finished work and identifying unfinished work without duplicate credit.
+5. Real host evidence establishes the actual permission, cancellation, workspace, nesting, activity, and available usage behavior; unreported values remain absent.
+
+For dummies: A worker actually receives the job, does it, and returns saved work that remains usable after a chat stops.
+
+**Context and research:** [204.2-CONTEXT.md](phases/204.2-codex-native-worker-lifecycle/204.2-CONTEXT.md), [204.2-RESEARCH.md](phases/204.2-codex-native-worker-lifecycle/204.2-RESEARCH.md).
+
+**Plans:** 0 plans — ready for detailed GSD planning; implementation has not started.
+
+### Phase 204.3: Codex Workflow Parity (INSERTED)
+
+**Goal:** Align current lifecycle behavior with Claude Code and complete the 64-command ant skill surface using one explicit route inventory.
+
+**Depends on:** Phase 204.2
+
+**Requirements:** ANT-08, ANT-09, ANT-10
+
+**Success criteria:**
+
+1. Unseeded init/discuss/spec/plan reaches a genuinely accepted plan through current owner-decision boundaries; stale or refused candidates cannot start work.
+2. Build/continue/run, Oracle approved-brief flow, owner check-ins, pending seal confirmation, retained review, and optional archive use the current runtime contract and proportionate team policy.
+3. All 64 command names map explicitly to verified runtime operations or adapted prompt workflows; six nontrivial mappings and five prompt-only bodies receive targeted behavior checks.
+4. Arguments containing spaces/quotes are preserved, inspection remains read-only, and generated hints never offer fabricated aether subcommands.
+5. Claude/OpenCode regression checks show shared behavior remains intact, and no stale reference-only playbook overrides runtime-authorized assignments.
+
+For dummies: The same ant action asks the right questions, does the expected work, and explains the same outcome in Codex.
+
+**Context and research:** [204.3-CONTEXT.md](phases/204.3-codex-workflow-parity/204.3-CONTEXT.md), [204.3-RESEARCH.md](phases/204.3-codex-workflow-parity/204.3-RESEARCH.md).
+
+**Plans:** 0 plans — ready for detailed GSD planning; implementation has not started.
+
+### Phase 204.4: Governed Recruitment and Recovery (INSERTED)
+
+**Goal:** Close shared native-path gaps in additional-helper recruitment, isolated workspace ownership, and staged Swarm recovery.
+
+**Depends on:** Phase 204.3
+
+**Requirements:** ANT-11, ANT-12, ANT-13
+
+**Success criteria:**
+
+1. A real admitted recruitment request reaches the selected production provider/bridge and returns useful findings to the requesting parent with linked runtime identity; a refused request remains visible and safe.
+2. Go-owned admission still enforces depth, budget, cancellation, and authorization boundaries; a fake recruitment binary cannot satisfy live acceptance.
+3. In-repo and worktree native jobs have correct runtime workspace ownership and helper cwd, merge accepted edits once, and retain/refuse conflicts or interrupted changes explicitly.
+4. Native Swarm checkpoints and rollback/preservation occur at actual execution stages rather than being asserted by a final narration.
+5. Affected Claude/OpenCode and direct-runtime paths receive focused regression proof; fixes stay in shared authority rather than another independent orchestration engine.
+
+For dummies: Extra helpers return useful answers, parallel workers keep their files separate, and a failed bug hunt does not lose work.
+
+**Context and research:** [204.4-CONTEXT.md](phases/204.4-governed-recruitment-and-recovery/204.4-CONTEXT.md), [204.4-RESEARCH.md](phases/204.4-governed-recruitment-and-recovery/204.4-RESEARCH.md).
+
+**Plans:** 0 plans — ready for detailed GSD planning; implementation has not started.
+
+### Phase 204.5: Codex Parity Proof and Acceptance Handoff (INSERTED)
+
+**Goal:** Prove the installed public workflows on real hosts and qualify the exact candidate and evidence baseline for the remaining Phase 205 owner walkthrough.
+
+**Depends on:** Phase 204.4
+
+**Requirements:** ANT-14, ANT-15, ANT-16
+
+**Success criteria:**
+
+1. The research acceptance matrix is resolved with real installed skill journeys, actual helpers, native result use, interruption/recovery, both workspace modes, and a bounded current Claude comparison; remaining limits are explicit.
+2. Fresh install, consumer upgrade, repeated update, rollback, and fresh-session discovery work for the source-pinned candidate, with exact binary/skill/version identities recorded.
+3. Relevant focused and full normal/race gates record complete execution and exact outcomes. New failures or failed behavior required by ANT-* remain blockers; the historical known-red list is not a blanket waiver.
+4. A new 205-CODEX-PARITY-HANDOFF.md identifies the qualified candidate, requirement evidence, limitations, controlled local preparation, and the precise session baseline. The original before-inventory remains byte-identical.
+5. Phase 205 plans/checkpoint are ready to resume against that candidate while the actual ten owner-run journeys and personal verdict remain pending; no assistant receipt is recorded as owner acceptance.
+
+For dummies: The owner tests the version we actually checked, and every claim is backed by what the program really did.
+
+**Context and research:** [204.5-CONTEXT.md](phases/204.5-codex-parity-proof-and-acceptance-handoff/204.5-CONTEXT.md), [204.5-RESEARCH.md](phases/204.5-codex-parity-proof-and-acceptance-handoff/204.5-RESEARCH.md).
+
+**Plans:** 0 plans — ready for detailed GSD planning; implementation has not started.
+
 ### Phase 205: Owner Acceptance and Restoration Seal
 
 **Goal:** Reconcile every promise to public evidence, prove the complete restored journey in real repositories, and obtain owner acceptance before sealing v1.28.
 
-**Depends on:** Phases 199-204
+**Depends on:** Phases 199-204 and 204.1-204.5; completed plans 205-01..13 remain recorded, and remaining owner acceptance requires the new candidate handoff
 
 **Requirements:** SYNTH-07, PROOF-02..06
 
@@ -692,7 +832,7 @@ Plans:
 1. Every Phase 199-204 synthesis artifact cites exact old/current evidence, records alternatives and conclusions, links into plans, tests, CAP dispositions, and verification, and rejects label-only restoration or unjustified legacy copying.
 2. Every `CAP-001` through `CAP-072` row has one evidence-backed route and a final disposition signed by its relevant synthesis; every slice passes outcome, behavior, experience, and safety parity while retaining the modern Go kernel.
 3. Real public-path UAT covers a clean small change, dirty worktree, iterative plan, stubborn Swarm defect, Oracle research, interruption/resume, governed recruitment, queued owner-only work, and learned-candidate rollback.
-4. Claude Code, OpenCode, and runtime-native Codex outcomes are demonstrated or fail early with truthful limitations; residual risk, costs, unreported values, physical evidence, and owner decisions remain explicit.
+4. Claude Code, OpenCode, and the declared Codex `$ant-*`/runtime outcomes are demonstrated or fail early with truthful limitations; Phase 204.5 supplies source-pinned Codex proof, and residual risk, costs, unreported values, physical evidence, and owner decisions remain explicit.
 5. Callum accepts that the result feels like Aether again and is trustworthy to operate; only then is the restoration sealed.
 
 **Plans:** 13/18 plans executed
@@ -726,9 +866,9 @@ Plans:
 
 - [x] 205-13-PLAN.md — The v1.28 release publish, backed up and integrity-checked (wave 5)
 
-**Wave 6** *(blocked on Wave 5 completion)*
+**Wave 6** *(blocked on Wave 5 completion and inserted Phases 204.1-204.5 with a qualified candidate handoff)*
 
-- [ ] 205-14-PLAN.md — The owner's walk-through session (wave 6) — task 1 preflight complete; task 2 awaits the owner ([checkpoint](phases/205-owner-acceptance-and-restoration-seal/205-14-CHECKPOINT.md))
+- [ ] 205-14-PLAN.md — The owner's walk-through session (wave 6) — task 1 preflight preserved; task 2 waits for Phase 204.5 handoff and the owner ([checkpoint](phases/205-owner-acceptance-and-restoration-seal/205-14-CHECKPOINT.md))
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
@@ -757,8 +897,13 @@ Plans:
 | 202.1 | 1 | Classic rendered voice on ordinary lifecycle screens, asserted against the reference |
 | 203 | 10 | Biological synthesis, recruitment, result return, trophallaxis, operational pheromones |
 | 204 | 9 | Learning synthesis, truthful memory, outcome ledger, evaluation and rollback |
+| 204.1 | 3 | Codex Ant Skill Surface |
+| 204.2 | 4 | Codex Native Worker Lifecycle |
+| 204.3 | 3 | Codex Workflow Parity |
+| 204.4 | 3 | Governed Recruitment and Recovery |
+| 204.5 | 3 | Codex Parity Proof and Acceptance Handoff |
 | 205 | 6 | Research-to-execution ratchet, 72-row reconciliation, real UAT, owner acceptance |
-| **Total** | **65** | **All v1.28 requirements mapped exactly once** |
+| **Total** | **81** | **All v1.28 requirements mapped exactly once** |
 
 ## Pending Todo Routing
 
@@ -773,8 +918,8 @@ Plans:
 - The Go runtime remains state and authorization authority; historical source supplies behavioral evidence, not code to copy blindly.
 - Feature names are investigation headings, not preselected solutions; every phase must complete the Classic-to-Go synthesis protocol before implementation plans are approved.
 - There is no standalone capability-reconciliation phase or second discovery interview.
-- Owner-watched acceptance happens after implementation Phases 199-204, inside Phase 205.
-- Codex lifecycle-skill work is a later milestone.
+- The remaining owner-watched acceptance happens inside Phase 205 after inserted Phases 204.1-204.5 qualify the new candidate. Existing completed evidence remains historical evidence for its original candidate.
+- Codex lifecycle skills are now in scope by owner direction on 2026-09-16; preserve Go-owned state, exact result binding, and all owner-only acceptance gates.
 - See `REQUIREMENTS.md` for the complete exclusion and safety contract.
 
 ## Archived Milestones

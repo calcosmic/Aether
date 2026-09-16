@@ -1,0 +1,97 @@
+{
+  "date": "2026-09-16",
+  "scope": "Planning integration only; no implementation, live product proof, or owner acceptance claimed",
+  "source_head": "404731ccffda7bbca64ce801b74b0752a7161315",
+  "insertions": [
+    {
+      "phase_number": "204.1",
+      "after_phase": "204",
+      "name": "Codex Ant Skill Surface",
+      "slug": "codex-ant-skill-surface",
+      "directory": ".planning/phases/204.1-codex-ant-skill-surface"
+    },
+    {
+      "phase_number": "204.2",
+      "after_phase": "204",
+      "name": "Codex Native Worker Lifecycle",
+      "slug": "codex-native-worker-lifecycle",
+      "directory": ".planning/phases/204.2-codex-native-worker-lifecycle"
+    },
+    {
+      "phase_number": "204.3",
+      "after_phase": "204",
+      "name": "Codex Workflow Parity",
+      "slug": "codex-workflow-parity",
+      "directory": ".planning/phases/204.3-codex-workflow-parity"
+    },
+    {
+      "phase_number": "204.4",
+      "after_phase": "204",
+      "name": "Governed Recruitment and Recovery",
+      "slug": "governed-recruitment-and-recovery",
+      "directory": ".planning/phases/204.4-governed-recruitment-and-recovery"
+    },
+    {
+      "phase_number": "204.5",
+      "after_phase": "204",
+      "name": "Codex Parity Proof and Acceptance Handoff",
+      "slug": "codex-parity-proof-and-acceptance-handoff",
+      "directory": ".planning/phases/204.5-codex-parity-proof-and-acceptance-handoff"
+    }
+  ],
+  "integrity": {
+    "total_unique_requirements": 81,
+    "new_unchecked_requirements": 16,
+    "inserted_phase_order": [
+      "204.1",
+      "204.2",
+      "204.3",
+      "204.4",
+      "204.5"
+    ],
+    "new_execution_plans": 0,
+    "existing_phase_details_preserved": true,
+    "new_document_local_links_checked": 33,
+    "original_owner_inventory_preserved": true,
+    "changes_scoped_to_planning": true
+  },
+  "gsd_checks": [
+    {
+      "query": [
+        "validate.consistency"
+      ],
+      "exit_code": 0,
+      "result": {
+        "passed": true,
+        "errors": [],
+        "warnings": [],
+        "warning_count": 0
+      }
+    },
+    {
+      "query": [
+        "roadmap.validate"
+      ],
+      "exit_code": 0,
+      "result": {
+        "warnings": []
+      }
+    },
+    {
+      "query": [
+        "state.validate"
+      ],
+      "exit_code": 0,
+      "result": {
+        "valid": true,
+        "warnings": [],
+        "scope": "complete"
+      }
+    }
+  ],
+  "current_phase": "204.1",
+  "next_phase": "204.1",
+  "historical_parser_note": "roadmap.analyze still reports current_phase 199 because pre-existing phases 199/200 are classified partial; this was also present before insertion. STATE current_phase and roadmap next_phase both point to 204.1. Existing completion evidence was not rewritten.",
+  "new_execution_plans": 0,
+  "original_owner_inventory_sha256": "3b2b678284a26332addeadd2bd700bd4f51c4e2b0e6907a987116c85e5c2a8dd"
+}

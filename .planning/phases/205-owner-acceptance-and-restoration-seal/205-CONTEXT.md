@@ -1,7 +1,11 @@
 # Phase 205: Owner Acceptance and Restoration Seal - Context
 
 **Gathered:** 2026-09-15
-**Status:** Ready for planning
+**Status:** Execution partially complete; remaining owner acceptance follows inserted Phases 204.1-204.5.
+
+## Owner sequencing amendment — 2026-09-16
+
+The owner requested Codex `$ant-*` parity in GSD before the pending walkthrough. [GSD-INTEGRATION.md](../../research/ant-codex-parity-2026-09-16/GSD-INTEGRATION.md) now governs this dependency, the candidate handoff, and preservation of original evidence. It supersedes the earlier Codex-later scope below. Completed plans and task 205-14.1 remain historical facts; the actual owner session and verdict are still required. The original Claude owner-only ten-journey format remains in place; the inserted phases provide the separate Codex engineering proof.
 
 <domain>
 ## Phase Boundary
@@ -319,8 +323,8 @@ Classic era (the comprehensive report and ledger already hold those answers).
 <deferred>
 ## Deferred Ideas
 
-- **Codex driven by "skills as commands"** — the owner wants this later; ROADMAP already parks Codex lifecycle-skill work for a later milestone. The in-flight `codex/skills-as-commands` branch in the target project is the owner's own experiment and is preserved by D-06, not adopted.
-- **Making OpenCode or Codex actually work end-to-end** — beyond the honest card (D-13), not this phase.
+- **Codex driven by "skills as commands"** — the original later-milestone deferral was superseded on 2026-09-16: Phases 204.1-204.5 now own canonical `$ant-*` skills and proof before the remaining walkthrough. The owner's experimental `codex/skills-as-commands` branch remains preserved by D-06 and is not adopted.
+- **Codex end-to-end engineering work** — now owned by inserted Phases 204.1-204.5, with their evidence consumed here. Broader OpenCode expansion remains outside this phase; affected shared paths receive regression checks.
 - **Closing the open WINDOWS.md entries** — listed on the card (D-15); fixed only where a journey fails on one (D-10).
 - **Guarding the remaining 30 fixture-bank entries; check-episode token/cost capture** — the two Phase 204 owner-accepted deferrals (WINDOWS 42, 48); they appear on the card, they are not reopened here.
 

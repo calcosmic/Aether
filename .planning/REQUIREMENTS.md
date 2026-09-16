@@ -2,7 +2,7 @@
 
 **Defined:** 2026-09-02
 
-**Status:** Approved 2026-09-02
+**Status:** Approved 2026-09-02; owner-requested Codex scope amendment 2026-09-16
 
 **Authoritative brief:** `.aether/dreams/2026-09-01-comprehensive-aether-colony-review.md`
 
@@ -106,9 +106,30 @@ For dummies: keep the reliable modern engine and brakes, then restore the dashbo
 - [x] **PROOF-01** — Executable Classic corpus: From each phase's historical/current mechanism study, build versioned outcome, behavior, and experience fixtures for the public commands and journeys that slice changes; snapshots or remembered feature names alone cannot prove causality.
 - [ ] **PROOF-02** — Complete capability traceability: Every `CAP-001` through `CAP-072` row maps exactly once to a v1.28 requirement and phase, while its final implementation disposition is signed only after the relevant phase study demonstrates the historical mechanism, current successor, and chosen synthesis; missing, duplicate, or unsupported dispositions fail the planning and completion ratchets.
 - [ ] **PROOF-03** — Three-dimensional parity: Each phase proves useful outcome parity, actual behavior parity, and understandable experience parity while preserving the modern kernel's fail-closed safety; endpoint counts or broad percentage claims are not completion evidence.
-- [ ] **PROOF-04** — Honest supported-platform contract: Real public entry points prove the declared Claude Code, OpenCode, and runtime-native Codex outcomes or fail early with a truthful limitation; native platform ability is never called Aether-governed without ledger binding, and Codex lifecycle-skill integration remains a later milestone.
+- [ ] **PROOF-04** — Honest supported-platform contract: Real public entry points prove the declared outcomes for Claude Code, OpenCode, and Codex `$ant-*` skills and runtime commands, or fail early with a truthful limitation; native platform ability is never called Aether-governed without ledger binding. Inserted ANT-01..16 supply the Codex implementation and proof before final acceptance.
 - [ ] **PROOF-05** — Real-repository journeys: Owner-visible UAT covers at least a clean small change, a dirty-worktree change, iterative planning, a stubborn Swarm defect, multi-round Oracle research, pause/resume and interruption recovery, governed recruitment/result use, queued physical or authority work, and a learned candidate that can be rolled back.
 - [ ] **PROOF-06** — Owner acceptance and seal: v1.28 cannot complete until the full restored journey is usable and Callum accepts that it feels like Aether again and is trustworthy to operate; residual limitations and deferred proof remain explicit rather than being converted into green metrics.
+
+### Codex Ant Skills and Behavioral Parity
+
+Added by owner direction on 2026-09-16 before the remaining Phase 205 acceptance. The [GSD integration record](research/ant-codex-parity-2026-09-16/GSD-INTEGRATION.md) supersedes the earlier Codex deferral and preserves all existing acceptance history.
+
+- [ ] **ANT-01** — Canonical Codex names: Fresh supported Codex sessions discover and invoke the existing nine public workflows as $ant-*; obsolete Aether-owned public $aether-* entries migrate without a duplicate default menu, and internal helpers remain supporting instructions.
+- [ ] **ANT-02** — Safe skill distribution: Clean install, publish, supported update, repeated update, and failed-update rollback install the intended versioned skills while preserving custom skills, edited files, ownership boundaries, and channel isolation.
+- [ ] **ANT-03** — Consistent guidance: Generated project instructions, help, next actions, command guides, and discovery guidance teach the actual supported $ant-* surface and remain correct after updates; machine-facing runtime identities stay stable.
+- [ ] **ANT-04** — Governed native dispatch: Exactly one launcher binds each real Codex helper to the Go-issued assignment, attempt, role, workspace, and result contract; duplicate or stale launches/results cannot earn completion credit.
+- [ ] **ANT-05** — Durable native recovery: Helper completion is persisted before aggregate finalization, and interruption followed by a fresh-session resume preserves finished work, identifies unfinished work, and avoids repeated writes or completion credit.
+- [ ] **ANT-06** — Complete helper context: Native helpers receive the current runtime capsule, matched skills, applicable steering, prior handoffs, and scope-bound owner answers; questions return through the governed decision path and stale answers are refused.
+- [ ] **ANT-07** — Honest host capabilities and visibility: Supported permission, cancellation, nesting, and workspace behavior are verified on the real Codex host; activity reflects actual helpers, and missing usage/cost or unavailable abilities remain explicitly unreported or refused.
+- [ ] **ANT-08** — Current lifecycle decisions: Codex follows the current init/discuss/spec/plan acceptance sequence, approved Oracle brief, build/continue/run transitions, and seal/retained-review/archive boundaries through the same Go-owned decisions as Claude Code.
+- [ ] **ANT-09** — Proportionate team and verification parity: Codex explains the smallest justified team, relays owner check-ins and worker answers, runs the authoritative checks without duplicate review or weakened gates, and honors bounded repair and owner-only confirmations.
+- [ ] **ANT-10** — Complete public command coverage: One tested inventory covers all 64 current Claude/OpenCode command names as $ant-* skills, with explicit runtime aliases and adapted prompt-only workflows, faithful arguments, correct read-only behavior, and no fabricated executable routes.
+- [ ] **ANT-11** — Useful governed recruitment: An admitted additional helper launches through the actual selected provider/native bridge, returns a linked usable result that reaches the requesting parent, and respects refusal, depth, budget, cancellation, and authorization limits across affected platforms.
+- [ ] **ANT-12** — Native workspace integrity: In-repo and isolated-worktree native paths allocate the correct runtime-owned workspace, bind the helper working directory, reconcile accepted edits once, and preserve or refuse conflicting and interrupted edits honestly.
+- [ ] **ANT-13** — Swarm recovery parity: Native Swarm execution saves checkpoints at the required stage boundaries and restores or preserves work on failure/interruption under the same runtime rules as the direct path, with shared-platform regression proof.
+- [ ] **ANT-14** — Real public-path parity proof: Source-pinned installed $ant-* journeys prove discovery, planning, actual worker/result use, checks, failure/repair, resume, research, recruitment, workspace modes, and closure against the current Claude reference; synthetic providers or status-only runs cannot stand in for those claims.
+- [ ] **ANT-15** — Qualified candidate: Disposable consumer install/upgrade/rollback and fresh-session discovery are proven for the exact candidate, relevant focused and full normal/race gates have complete recorded outcomes, and old failures are distinguished from regressions and unresolved required behavior.
+- [ ] **ANT-16** — Versioned owner handoff: Phase 205 resumes only after a candidate-specific handoff names phase verification, release/installation identities, limitations, and the correct preserved or separately captured pre-session inventory; prior preparation and assistant-run proof never count as owner evidence or acceptance.
 
 ## Explicit exclusions
 
@@ -119,7 +140,7 @@ For dummies: keep the reliable modern engine and brakes, then restore the dashbo
 - No fake recursive delegation, unbounded worker spawning, or weakened immutable-attempt checks.
 - No direct self-edit/self-merge/publish/deploy authority for learned source candidates.
 - No automatic weakening of security, deletion, permission, verification, or external-action gates.
-- No Codex lifecycle-skill integration inside v1.28; that is a later milestone after the general colony experience is stable.
+- Codex lifecycle-skill integration is now in v1.28 through Phases 204.1-204.5 by owner direction; this amendment does not weaken Go authority, native-result binding, or owner-only acceptance.
 - No owner-watched showdown against the fragmented interim experience; final proof follows the implemented restoration slices.
 
 ## Requirement-to-phase traceability
@@ -133,8 +154,13 @@ For dummies: keep the reliable modern engine and brakes, then restore the dashbo
 | Phase 202.1 — Classic Visual Voice | CEC-09 | 1 |
 | Phase 203 — Biological Runtime | SYNTH-05, CEC-07, BIO-01..08 | 10 |
 | Phase 204 — Learning Governor | SYNTH-06, LEARN-01..08 (8/9 satisfied; LEARN-05 partial, 30/51 fixtures unguarded) | 9 |
+| Phase 204.1 — Codex Ant Skill Surface | ANT-01, ANT-02, ANT-03 | 3 |
+| Phase 204.2 — Codex Native Worker Lifecycle | ANT-04, ANT-05, ANT-06, ANT-07 | 4 |
+| Phase 204.3 — Codex Workflow Parity | ANT-08, ANT-09, ANT-10 | 3 |
+| Phase 204.4 — Governed Recruitment and Recovery | ANT-11, ANT-12, ANT-13 | 3 |
+| Phase 204.5 — Codex Parity Proof and Acceptance Handoff | ANT-14, ANT-15, ANT-16 | 3 |
 | Phase 205 — Owner Acceptance and Restoration Seal | SYNTH-07, PROOF-02..06 | 6 |
-| **Total** | **65 requirements mapped exactly once** | **65** |
+| **Total** | **81 requirements mapped exactly once** | **81** |
 
 ## Coverage summary
 
@@ -147,8 +173,9 @@ For dummies: keep the reliable modern engine and brakes, then restore the dashbo
 - Biological Runtime: 8 requirements
 - Learning Governor: 8 requirements
 - Restoration Proof: 6 requirements
-- **Total: 64**
+- Codex Ant Skills and Behavioral Parity: 16 requirements
+- **Total: 81** (65 existing requirements, including CEC-09, plus 16 ANT requirements)
 
 ---
 
-*Requirements approved: 2026-09-02 after the Classic-to-Go synthesis adjustment.*
+*Requirements approved: 2026-09-02 after the Classic-to-Go synthesis adjustment; Codex scope/order amended by owner direction 2026-09-16. All new ANT requirements remain unfulfilled pending implementation and evidence.*

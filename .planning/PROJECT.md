@@ -35,8 +35,8 @@ That means:
 ## Current State
 
 - **v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02**: 9 phases, 84 plans, 195 recorded tasks, and 48/48 requirements. The audit found no blocking requirement, integration, or end-to-end gaps; one Phase 198.2 real-project memory observation and documented warnings carry as explicit debt.
-- **Product version: v1.0.66** (installed and source binaries agree in the 2026-09-02 local check)
-- **v1.28 Classic Colony Restoration is active**: approved Phases 199-205 map 64 testable requirements and all 72 Classic capability rows. The authoritative brief is `.aether/dreams/2026-09-01-comprehensive-aether-colony-review.md`; the ledger is traceability, not another owner interview.
+- **Product version: v1.0.79** (last verified local release, recorded in Phase 205-13; Codex parity changes require a new qualified candidate)
+- **v1.28 Classic Colony Restoration is active**: approved Phases 199-205, including inserted 204.1-204.5, map 81 testable requirements and all 72 Classic capability rows. The authoritative brief is `.aether/dreams/2026-09-01-comprehensive-aether-colony-review.md`; the ledger is traceability, not another owner interview.
 - **Phase 199 — Front Door and Classic Contract is complete (2026-09-07)**: 34/34 plans and 12/12 owner UAT checks passed. The ordinary journey, shared lifecycle projection, safe pause/resume, honest seal/entomb split, expert maintenance boundary, and executable cross-platform Classic corpus are now delivered.
 - **Phase 204 -- Learning Governor is complete (2026-09-15)**: 16/16 plans including five gap-closure plans; re-verified 9/11 with two owner-accepted deferrals. The program's memory now carries versions and lineage, every run leaves a durable episode record, a real shadow grader and automatic canary pass run at the end of every check, and a source-improvement proposal can be drafted automatically but never merged, published or deployed by the program. Known open limits: the automatic hypothesis promoter cannot fire until the learning store and the guidance-application store share an identifier (WINDOWS.md entry 44); check-lane usage/cost recorded as absent (entry 48); 30 of 51 bank fixtures unguarded (entry 42).
 - The priority implementation spec v3 (Downloads, 2026-08-21) is the ratified governing backlog (ruling D1); its order was amended by D12 on 2026-08-22 so v1.27 leads with team judgement, single verification, the cost line, the next-action card and Classic display restoration
@@ -48,11 +48,11 @@ That means:
 
 **Goal:** Reunite the modern Go safety kernel with the understandable, visible, Queen-led February-April colony experience.
 
-**Approved delivery:** seven implementation and acceptance phases, 199-205: front door and executable Classic contract; iterative planning; Queen-led work; Swarm/Oracle/live colony; biological recruitment and information flow; Learning Governor; owner acceptance and restoration seal.
+**Approved delivery:** Phases 199-205, including Classic Visual Voice (202.1) and owner-requested Codex parity insertions (204.1-204.5). The remaining Phase 205 walkthrough and restoration seal follow the qualified Codex candidate. See the [2026-09-16 scope amendment](research/ant-codex-parity-2026-09-16/GSD-INTEGRATION.md).
 
-**Approved planning contract:** 64 requirements in `.planning/REQUIREMENTS.md`; 72/72 Classic capability rows routed in `.planning/research/v1.28-classic-capability-ledger.md`; no unsupported retirement and no repeat owner discovery round. Each Phase 199-204 must reconstruct the relevant Classic mechanism from historical source, audit the current Go path, explain what created the owner value, compare alternatives, and record an evidence-backed modern synthesis before implementation plans are approved. The three pending todos route to Phase 200 spec output, Phase 201 turnaround, and Phase 203 platform preflight.
+**Approved planning contract:** 81 requirements (65 existing plus 16 Codex ANT requirements) in `.planning/REQUIREMENTS.md`; 72/72 Classic capability rows routed in `.planning/research/v1.28-classic-capability-ledger.md`; no unsupported retirement and no repeat owner discovery round. Each Phase 199-204 must reconstruct the relevant Classic mechanism from historical source, audit the current Go path, explain what created the owner value, compare alternatives, and record an evidence-backed modern synthesis before implementation plans are approved. The three pending todos route to Phase 200 spec output, Phase 201 turnaround, and Phase 203 platform preflight.
 
-**Sequence:** Phases 199-204 restore the product. Phase 205 runs the owner-watched acceptance after those slices are usable. Codex lifecycle skills remain a later milestone.
+**Sequence:** Phases 199-204 restored the product; Phase 205 already completed plans 01-13 and plan 14 task 1. Owner direction on 2026-09-16 inserts Phases 204.1-204.5 before the remaining owner walkthrough, superseding the later-Codex deferral. Preserve completed evidence and the original before-inventory, then qualify a new candidate and separately record any new preparation before resuming acceptance.
 
 ## Previous Milestone: v1.27 The Queen Decides, the Program Checks — Shipped 2026-09-02
 
@@ -186,7 +186,7 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 
 - **Go runtime is authoritative** for state mutations, verification, and CLI truth
 - **Wrappers are presentation-only** on Claude/OpenCode
-- **Codex is runtime-native**; no markdown wrapper ceremony
+- **Codex uses the Go runtime as authority**; inserted Phases 204.1-204.5 add canonical `$ant-*` orchestration skills with governed native workers
 - **YAML remains source-of-truth** for generated wrapper commands
 - **Runtime proof beats wrapper theater**
 - **Shared lifecycle truth matters**; `build`, `plan`, `colonize`, `watch`, `status`, and `continue` should agree on what a worker is doing
@@ -292,13 +292,13 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 
 ### Active
 
-The active scope is v1.28 Classic Colony Restoration: restore the February–April front door, iterative planning, Queen-led work, substantive Swarm/Oracle/live visibility, biological recruitment and information exchange, and governed learning around the modern safety kernel. The approved contract contains 64 requirements across Phases 199-205 and maps all 72 Classic capability rows. Every restoration phase treats its feature names as research headings, reconstructs the exact old causal mechanisms, audits the present Go architecture, and implements only the evidence-backed synthesis.
+The active scope is v1.28 Classic Colony Restoration: restore the February–April front door, iterative planning, Queen-led work, substantive Swarm/Oracle/live visibility, biological recruitment and information exchange, and governed learning around the modern safety kernel. The amended contract contains 81 requirements across Phases 199-205, including 204.1-204.5, and maps all 72 Classic capability rows. Every restoration phase treats its feature names as research headings, reconstructs the exact old causal mechanisms, audits the present Go architecture, and implements only the evidence-backed synthesis.
 
 Long-lived items not tied to a milestone:
 
 - [ ] QUEEN-02: Deterministic commands and small lifecycle steps do not spawn unnecessary agents — *re-expressed as v1.27 feature 2*
 - [ ] CATALOG-01/02, TEST-01/02: command/test truth is absorbed into LIFE-06, LEARN-05, and restoration proof rather than a separate pre-milestone gate
-- [ ] SKILL-03/04: skill validation on the Claude path remains outside the v1.28 Golden Path; Codex lifecycle skills are a later milestone
+- [ ] SKILL-03/04: skill validation on the Claude path remains outside the v1.28 Golden Path. Codex lifecycle skills now have their own ANT-01..16 requirements in Phases 204.1-204.5.
 
 ### Out of Scope
 
@@ -340,6 +340,7 @@ Long-lived items not tied to a milestone:
 | Survey-map content and previous-phase outcomes use two separate named brief budgets; neither adds a worker or owner check-in (198.2-06/07, 2026-08-30) | More grounding reaches helpers without crowding out the task or making small jobs heavier | Good |
 | Owner chose to advance from Phase 198.2 while its real-world WIRE-06 confirmation remains untested (2026-08-31) | Carry as verification debt; do not treat it as passed or as a known defect; revisit with `$gsd-verify-work 198.2` | Pending evidence |
 | v1.27 ends at Phase 198.3; Classic restoration is v1.28, not a Phase 198.4 questionnaire (2026-09-02) | The comprehensive report already records owner intent; the 72-row ledger is traceability and owner-watched proof follows restoration | Good |
+| Codex `$ant-*` parity precedes remaining Phase 205 owner acceptance (2026-09-16) | Owner requested GSD integration before the pending phase; insert 204.1-204.5, retain completed evidence, and qualify the changed candidate | Planned — ANT-01..16 |
 | Historical behavior is evidence, while the modern Go runtime remains state and safety authority | Restore outcomes and experience without reviving shell/wrapper state mutation | — Locked for v1.28 |
 | Classic feature names are investigation headings, not predetermined solutions (2026-09-02) | Every Phase 199-204 must reconstruct the exact historical mechanism and owner value, trace the current Go implementation, compare keep/restore/replace options, and plan from a written synthesis | — Locked for v1.28 |
 | One read-only lifecycle projection owns orientation and Next Up (Phase 199) | Help, status, phase, history, recovery, and closeouts agree; missing evidence remains explicitly unknown rather than being repaired or invented | Good — shipped and UAT-verified |
@@ -368,13 +369,13 @@ These remain promising but are not the next best move:
 
 ## Next Move
 
-Plan Phase 205 -- Owner Acceptance and Restoration Seal: the owner-watched acceptance of the restored product, then the milestone seal.
+Execute Phase 204.1 — Codex Ant Skill Surface from its seven independently checked plans across five waves. Continue the inserted sequence through 204.5, then resume the remaining Phase 205 owner-only walkthrough and acceptance with the qualified candidate handoff.
 
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
 
-*Last updated: 2026-09-15 after Phase 204*
+*Last updated: 2026-09-16 after owner-requested Codex parity insertion before remaining Phase 205 acceptance*
 
 ## Historical Milestone Briefs (superseded)
 
