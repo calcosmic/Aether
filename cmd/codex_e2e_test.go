@@ -21,6 +21,7 @@ func TestCodexInstallCopiesAgents(t *testing.T) {
 	resetRootCmd(t)
 
 	tmpDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, tmpDir)
 	homeDir := t.TempDir()
 	srcDir := filepath.Join(tmpDir, ".codex", "agents")
 	destDir := filepath.Join(homeDir, ".codex", "agents")
@@ -47,6 +48,7 @@ func TestCodexInstallCopiesAgents(t *testing.T) {
 	if _, err := os.Stat(destFile); os.IsNotExist(err) {
 		t.Errorf("expected file %s to exist after install", destFile)
 	}
+	assertCodexSkillFixtureInstalled(t, tmpDir, homeDir)
 }
 
 // TestCodexInstallCopiesAgentsToHub verifies that install syncs .codex/
@@ -58,6 +60,7 @@ func TestCodexInstallCopiesAgentsToHub(t *testing.T) {
 	resetRootCmd(t)
 
 	tmpDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, tmpDir)
 	homeDir := t.TempDir()
 	srcDir := filepath.Join(tmpDir, ".codex", "agents")
 
@@ -83,6 +86,7 @@ func TestCodexInstallCopiesAgentsToHub(t *testing.T) {
 	if _, err := os.Stat(hubCodexFile); os.IsNotExist(err) {
 		t.Errorf("expected file %s to exist after install", hubCodexFile)
 	}
+	assertCodexSkillFixtureInstalled(t, tmpDir, homeDir)
 }
 
 // TestCodexInstallAgentsEmpty verifies that install handles missing .codex/
@@ -94,6 +98,7 @@ func TestCodexInstallAgentsEmpty(t *testing.T) {
 	resetRootCmd(t)
 
 	tmpDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, tmpDir)
 	homeDir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(tmpDir, ".aether"), 0755); err != nil {
 		t.Fatalf("failed to create .aether dir: %v", err)
@@ -128,6 +133,7 @@ func TestCodexInstallAgentsEmpty(t *testing.T) {
 	if _, err := os.Stat(destDir); err == nil {
 		t.Error("expected .codex/agents/ to NOT exist when source is missing")
 	}
+	assertCodexSkillFixtureInstalled(t, tmpDir, homeDir)
 }
 
 // TestCodexInstallAgentContent verifies that copied Codex agent files have
@@ -139,6 +145,7 @@ func TestCodexInstallAgentContent(t *testing.T) {
 	resetRootCmd(t)
 
 	tmpDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, tmpDir)
 	homeDir := t.TempDir()
 	srcDir := filepath.Join(tmpDir, ".codex", "agents")
 
@@ -180,6 +187,7 @@ func TestCodexInstallAgentContent(t *testing.T) {
 	if string(hubActual) != string(expectedContent) {
 		t.Errorf("content mismatch in hub ~/.aether/system/codex/\ngot:  %s\nwant: %s", string(hubActual), string(expectedContent))
 	}
+	assertCodexSkillFixtureInstalled(t, tmpDir, homeDir)
 }
 
 // TestCodexSetupCopiesAgents verifies that setup copies Codex agent files
@@ -191,6 +199,7 @@ func TestCodexSetupCopiesAgents(t *testing.T) {
 	resetRootCmd(t)
 
 	packageDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, packageDir)
 	homeDir := t.TempDir()
 	repoDir := t.TempDir()
 
@@ -240,6 +249,7 @@ func TestCodexSetupCopiesAgents(t *testing.T) {
 	} else if !os.IsNotExist(err) {
 		t.Fatalf("stat repo codex agent: %v", err)
 	}
+	assertCodexSkillFixtureInstalled(t, packageDir, homeDir)
 }
 
 // TestCodexUpdateCopiesAgents verifies that update does not copy Codex agent
@@ -251,6 +261,7 @@ func TestCodexUpdateCopiesAgents(t *testing.T) {
 	resetRootCmd(t)
 
 	packageDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, packageDir)
 	homeDir := t.TempDir()
 	repoDir := t.TempDir()
 
@@ -329,6 +340,7 @@ func TestCodexUpdateCopiesAgents(t *testing.T) {
 	} else if !os.IsNotExist(err) {
 		t.Fatalf("stat repo codex agent: %v", err)
 	}
+	assertCodexSkillFixtureInstalled(t, packageDir, homeDir)
 }
 
 // TestCodexE2EFullLifecycle verifies the complete install -> setup -> update
@@ -340,6 +352,7 @@ func TestCodexE2EFullLifecycle(t *testing.T) {
 	resetRootCmd(t)
 
 	packageDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, packageDir)
 	homeDir := t.TempDir()
 	repoDir := t.TempDir()
 
@@ -485,6 +498,7 @@ func TestCodexE2EFullLifecycle(t *testing.T) {
 			t.Fatalf("stat builder.toml from repo: %v", err)
 		}
 	})
+	assertCodexSkillFixtureInstalled(t, packageDir, homeDir)
 }
 
 // TestCodexInstallMultipleAgents verifies that install correctly handles
@@ -496,6 +510,7 @@ func TestCodexInstallMultipleAgents(t *testing.T) {
 	resetRootCmd(t)
 
 	tmpDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, tmpDir)
 	homeDir := t.TempDir()
 	srcDir := filepath.Join(tmpDir, ".codex", "agents")
 
@@ -543,6 +558,7 @@ func TestCodexInstallMultipleAgents(t *testing.T) {
 			t.Errorf("expected file %s to exist in hub after install", f)
 		}
 	}
+	assertCodexSkillFixtureInstalled(t, tmpDir, homeDir)
 }
 
 func TestCodexInstallPreservesModifiedHomeAgent(t *testing.T) {
@@ -552,6 +568,7 @@ func TestCodexInstallPreservesModifiedHomeAgent(t *testing.T) {
 	resetRootCmd(t)
 
 	packageDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, packageDir)
 	homeDir := t.TempDir()
 	srcDir := filepath.Join(packageDir, ".codex", "agents")
 
@@ -591,15 +608,17 @@ Keep my local builder instructions.
 	if string(got) != string(local) {
 		t.Fatalf("expected install to preserve modified home agent\ngot:\n%s\nwant:\n%s", string(got), string(local))
 	}
+	assertCodexSkillFixtureInstalled(t, packageDir, homeDir)
 }
 
-func TestCodexInstallPrunesHomeFullSkillMirrorAndWritesShims(t *testing.T) {
+func TestCodexInstallPreservesUnknownHomeSkillAndWritesAntSkills(t *testing.T) {
 	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
 	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
 	packageDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, packageDir)
 	homeDir := t.TempDir()
 	srcDir := filepath.Join(packageDir, ".aether", "skills", "colony", "build-discipline")
 
@@ -653,14 +672,12 @@ Local skill override
 		t.Fatalf("install command failed: %v", err)
 	}
 
-	if _, err := os.Stat(destFile); !os.IsNotExist(err) {
-		t.Fatalf("expected full Codex skill mirror to be pruned, stat err: %v", err)
+	// A familiar path/frontmatter is not ownership proof. Plan 02 retires
+	// only exact known legacy bytes; unknown or edited files must survive.
+	if got, err := os.ReadFile(destFile); err != nil || !bytes.Equal(got, local) {
+		t.Fatalf("install changed unknown home skill: %v\n%s", err, got)
 	}
-	for _, shim := range codexSkillShims() {
-		if _, err := os.Stat(filepath.Join(homeDir, ".codex", "skills", "aether", shim.Dir, "SKILL.md")); err != nil {
-			t.Fatalf("expected generated shim %s: %v", shim.Dir, err)
-		}
-	}
+	assertCodexSkillFixtureInstalled(t, packageDir, homeDir)
 }
 
 // all25AgentNames is the canonical list of all 25 Aether agent names.
@@ -709,6 +726,7 @@ func TestCodexInstallSetupUpdate_All24Agents(t *testing.T) {
 	resetRootCmd(t)
 
 	packageDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, packageDir)
 	homeDir := t.TempDir()
 	repoDir := t.TempDir()
 
@@ -784,6 +802,7 @@ func TestCodexInstallSetupUpdate_All24Agents(t *testing.T) {
 			t.Fatalf("stat repo codex dir: %v", err)
 		}
 	})
+	assertCodexSkillFixtureInstalled(t, packageDir, homeDir)
 }
 
 func listShippedAetherCodexAgentBaseNames(t *testing.T, dir string) []string {

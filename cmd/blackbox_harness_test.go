@@ -78,7 +78,20 @@ func blackBoxBinaries(t *testing.T, sourceRoot string) (string, string) {
 			{name: "aether", output: sharedBlackBoxBinaries.binary, packagePath: "./cmd/aether"},
 			{name: "deterministic adapter", output: sharedBlackBoxBinaries.adapter, packagePath: "./cmd/testdata/adapter-fixture"},
 		} {
-			build := exec.Command("go", "build", "-o", target.output, target.packagePath)
+			args := []string{"build", "-o", target.output}
+			if target.name == "aether" {
+				// Match a release build's runtime identity. Outside its source
+				// checkout an unstamped binary resolves to 0.0.0-dev, correctly
+				// refusing the versioned Codex skill payload during install.
+				version := readRepoVersion(sourceRoot)
+				if version == "" {
+					sharedBlackBoxBinaries.err = fmt.Errorf("read black-box source version")
+					return
+				}
+				args = append(args, "-ldflags", "-X github.com/calcosmic/Aether/cmd.Version="+version)
+			}
+			args = append(args, target.packagePath)
+			build := exec.Command("go", args...)
 			build.Dir = sourceRoot
 			if output, err := build.CombinedOutput(); err != nil {
 				sharedBlackBoxBinaries.err = fmt.Errorf("build black-box %s: %w\n%s", target.name, err, output)

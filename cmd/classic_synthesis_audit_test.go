@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -37,17 +38,19 @@ type classicSynthesisFinding struct {
 	Status   classicSynthesisSectionStatus
 }
 
-// classicSynthesisPhaseDirPattern matches a phase directory in the SYNTH-07
-// corpus (Phase 199 through Phase 204, including inserted decimal phases
-// such as 202.1). Phase 205 (this phase) and any phase outside 199-204 are
-// deliberately excluded — SYNTH-07 requires a synthesis artifact only for
-// Phase 199-204.
+// classicSynthesisPhaseDirPattern parses candidate phase directories. The
+// parity-record audit also uses its two captures (integer and decimal suffix).
 var classicSynthesisPhaseDirPattern = regexp.MustCompile(`^(19[9]|20[0-4])(\.[0-9]+)?-`)
+
+// This is the corpus audited by Phase 205, which owns the audit, not an eighth
+// synthesis. GSD-INTEGRATION.md retains the 72 Classic rows' original owners;
+// later ANT insertions (204.1-204.5) reuse these studies, not new CAP rows.
+var classicSynthesisRequiredPhases = []string{"199", "200", "201", "202", "202.1", "203", "204"}
 
 // classicSynthesisArtifactPaths returns the SYNTH-07 corpus artifacts in
 // ascending phase order, derived from the phase directories actually present
 // on disk under .planning/phases/ — never a hard-coded list of directory
-// names. A phase directory that exists but carries no
+// names. Every original phase is required; a scoped directory with no
 // "{phase}-CLASSIC-SYNTHESIS.md" file is an error naming the phase, never a
 // silent skip.
 func classicSynthesisArtifactPaths(root string) ([]classicSynthesisArtifact, error) {
@@ -63,6 +66,7 @@ func classicSynthesisArtifactPaths(root string) ([]classicSynthesisArtifact, err
 		dirName string
 	}
 	var candidates []candidate
+	seen := make(map[string]bool)
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
@@ -72,11 +76,23 @@ func classicSynthesisArtifactPaths(root string) ([]classicSynthesisArtifact, err
 			continue
 		}
 		phase := m[1] + m[2]
+		if !slices.Contains(classicSynthesisRequiredPhases, phase) {
+			continue
+		}
+		if seen[phase] {
+			return nil, fmt.Errorf("phase %s: duplicate synthesis phase directory", phase)
+		}
+		seen[phase] = true
 		num, err := strconv.ParseFloat(phase, 64)
 		if err != nil {
 			return nil, fmt.Errorf("parse phase number from directory %q: %w", e.Name(), err)
 		}
 		candidates = append(candidates, candidate{phase: phase, num: num, dirName: e.Name()})
+	}
+	for _, phase := range classicSynthesisRequiredPhases {
+		if !seen[phase] {
+			return nil, fmt.Errorf("phase %s: required synthesis phase directory missing", phase)
+		}
 	}
 
 	sort.Slice(candidates, func(i, j int) bool { return candidates[i].num < candidates[j].num })
@@ -424,6 +440,67 @@ func classicSynthesisRenameHeading(t *testing.T, path, section, newTitle string)
 }
 
 // --- Task 1: one artifact, audited end to end ---
+
+func TestClassicSynthesisDiscoveryScope(t *testing.T) {
+	// These IDs are the signed Phase 205 corpus, independently specified so
+	// dropping an original phase from discovery cannot make the audit green.
+	phases := []string{"199", "200", "201", "202", "202.1", "203", "204"}
+	fixture := func(t *testing.T) string {
+		t.Helper()
+		root := t.TempDir()
+		for _, phase := range append(append([]string(nil), phases...), "198", "204.1", "204.2", "204.3", "204.4", "204.5", "205", "206") {
+			dir := filepath.Join(root, ".planning", "phases", phase+"-fixture")
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if slices.Contains(phases, phase) {
+				if err := os.WriteFile(filepath.Join(dir, phase+"-CLASSIC-SYNTHESIS.md"), []byte("study\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		return root
+	}
+	t.Run("original-corpus-with-ant-insertions", func(t *testing.T) {
+		artifacts, err := classicSynthesisArtifactPaths(fixture(t))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []string
+		for _, artifact := range artifacts {
+			got = append(got, artifact.Phase)
+		}
+		if !slices.Equal(got, phases) {
+			t.Fatalf("discovered phases = %v, want %v", got, phases)
+		}
+	})
+	for _, phase := range phases {
+		for _, missing := range []string{"artifact", "directory"} {
+			t.Run(phase+"-missing-"+missing, func(t *testing.T) {
+				root := fixture(t)
+				path := filepath.Join(root, ".planning", "phases", phase+"-fixture")
+				if missing == "artifact" {
+					path = filepath.Join(path, phase+"-CLASSIC-SYNTHESIS.md")
+				}
+				if err := os.RemoveAll(path); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := classicSynthesisArtifactPaths(root); err == nil || !strings.Contains(err.Error(), "phase "+phase+":") {
+					t.Fatalf("missing original %s must name phase %s: %v", missing, phase, err)
+				}
+			})
+		}
+	}
+}
+
+func TestClassicSynthesisPhase205AuditExists(t *testing.T) {
+	// Phase 205 supplies the audit of the seven studies, not an eighth study.
+	path := filepath.Join(classicSynthesisRepoRoot(t), ".planning", "phases", "205-owner-acceptance-and-restoration-seal", "205-SYNTH-07-AUDIT.md")
+	data, err := os.ReadFile(path)
+	if err != nil || len(bytes.TrimSpace(data)) == 0 {
+		t.Fatalf("required Phase 205 SYNTH-07 audit missing or empty: %v", err)
+	}
+}
 
 func TestClassicSynthesisPhase203HasEveryMandatorySection(t *testing.T) {
 	root := classicSynthesisRepoRoot(t)

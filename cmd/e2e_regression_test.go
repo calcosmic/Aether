@@ -46,6 +46,7 @@ func TestE2ERegressionStablePublishUpdate(t *testing.T) {
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("stable publish failed: %v", err)
 	}
+	assertCodexSkillFixtureInstalled(t, sourceDir, homeDir)
 
 	// Step 3: Verify hub has correct version
 	hubDir := filepath.Join(homeDir, ".aether")
@@ -267,6 +268,7 @@ func TestE2ERegressionChannelIsolation(t *testing.T) {
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("stable publish failed: %v", err)
 	}
+	assertCodexSkillFixtureInstalled(t, stableSource, homeDir)
 
 	// Step 2: Record stable hub state
 	stableHubDir := filepath.Join(homeDir, ".aether")
@@ -348,6 +350,7 @@ func TestE2ERegressionStuckPlanInvestigation(t *testing.T) {
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("publish failed: %v", err)
 	}
+	assertCodexSkillFixtureInstalled(t, sourceDir, homeDir)
 
 	// Step 3: Create downstream repo and update from hub
 	repoDir := t.TempDir()

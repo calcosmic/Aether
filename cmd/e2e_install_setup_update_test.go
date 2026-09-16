@@ -25,8 +25,9 @@ func TestE2EInstallSetupUpdateFlow(t *testing.T) {
 
 	// --- Setup: create temp directories ---
 	packageDir := t.TempDir() // simulates the Aether npm package
-	homeDir := t.TempDir()    // simulates $HOME
-	repoDir := t.TempDir()    // simulates a target repository
+	seedCodexSkillSupportFixture(t, packageDir)
+	homeDir := t.TempDir() // simulates $HOME
+	repoDir := t.TempDir() // simulates a target repository
 
 	// Create package structure: .aether/ with companion files
 	pkgAether := filepath.Join(packageDir, ".aether")
@@ -114,6 +115,8 @@ func TestE2EInstallSetupUpdateFlow(t *testing.T) {
 		if ok, _ := result["ok"].(bool); !ok {
 			t.Fatalf("install returned ok:false, output: %s", output)
 		}
+
+		assertCodexSkillFixtureInstalled(t, packageDir, homeDir)
 
 		// Verify hub was created
 		hubDir := filepath.Join(homeDir, ".aether")
