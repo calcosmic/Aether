@@ -510,7 +510,14 @@ func syncPlatformHomeAssets(packageDir, homeDir string, channel runtimeChannel, 
 		results = append(results, entry)
 	}
 
-	shimResult := syncCodexSkillShims(filepath.Join(homeDir, ".codex", "skills", "aether"))
+	payload, payloadErr := buildCodexSkillPayload(packageDir)
+	shimResult := syncResult{}
+	if payloadErr != nil {
+		shimResult.errors = append(shimResult.errors, payloadErr.Error())
+	} else {
+		// Dev's explicit home opt-in targets the stable platform home, as before.
+		shimResult = syncCodexSkillsFromPayload(payload, homeDir)
+	}
 	shimEntry := map[string]interface{}{
 		"label":   "Skills (codex shims)",
 		"src":     "generated",
@@ -518,6 +525,7 @@ func syncPlatformHomeAssets(packageDir, homeDir string, channel runtimeChannel, 
 		"copied":  shimResult.copied,
 		"skipped": shimResult.skipped,
 		"removed": len(shimResult.removed),
+		"scope":   "selected home; stable platform skills",
 	}
 	if len(shimResult.errors) > 0 {
 		shimEntry["errors"] = shimResult.errors

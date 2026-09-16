@@ -30,7 +30,7 @@ func runAntSkillInstall(t *testing.T, home string) (bool, string) {
 	t.Setenv("AETHER_HUB_DIR", "")
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
 	var output bytes.Buffer
-	stdout = &output
+	stdout, stderr = &output, &output
 	rootCmd.SetArgs([]string{"install", "--package-dir", antSkillSourceRoot(t), "--home-dir", home, "--channel", "stable", "--skip-build-binary"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatal(err)
@@ -74,7 +74,7 @@ func TestCodexAntSkillInstallTracer(t *testing.T) {
 	if err := json.Unmarshal(raw, &ownership); err != nil {
 		t.Fatal(err)
 	}
-	if ownership.SchemaVersion != "codex-skill-ownership/v1" || len(ownership.PayloadIdentity) != 64 || len(ownership.Files) != 12 {
+	if ownership.SchemaVersion != "codex-skill-ownership/v1" || !strings.HasPrefix(ownership.PayloadIdentity, "sha256:") || len(ownership.PayloadIdentity) != 71 || len(ownership.Files) != 12 {
 		t.Fatalf("incomplete ownership: %+v", ownership)
 	}
 	for _, file := range ownership.Files {
@@ -145,4 +145,122 @@ func TestCodexAntSkillCleanInstallCollision(t *testing.T) {
 	if dirs := findSkillDirs(root); len(dirs) != 1 {
 		t.Fatalf("partial skill install on collision: %v", dirs)
 	}
+}
+
+func TestCodexAntSkillInventory(t *testing.T) {
+	commands := []string{"init", "discuss", "oracle", "colonize", "plan", "build", "continue", "swarm", "seal"}
+	for _, name := range []string{"nil", "empty", "missing", "duplicate", "case", "unicode", "missing-guide", "literal-guide", "empty-route", "invalid-support"} {
+		t.Run(name, func(t *testing.T) {
+			inventory := append([]string(nil), commands...)
+			catalog := commandGuideCatalog()
+			switch name {
+			case "nil":
+				inventory = nil
+			case "empty":
+				inventory = []string{}
+			case "missing":
+				inventory = inventory[:8]
+			case "duplicate":
+				inventory[8] = inventory[0]
+			case "case":
+				inventory[4] = "Plan"
+			case "unicode":
+				inventory[4] = "plаn" // Cyrillic a, not ASCII a.
+			case "missing-guide":
+				delete(catalog, "plan")
+			default:
+				def := catalog["plan"]
+				switch name {
+				case "literal-guide":
+					def.Literal = true
+				case "empty-route":
+					def.RunCommand = ""
+				case "invalid-support":
+					def.SkillReference = "../custom"
+				}
+				catalog["plan"] = def
+			}
+			payload, err := buildCodexSkillPayloadFromInventory(antSkillSourceRoot(t), inventory, catalog)
+			if err == nil {
+				t.Fatalf("accepted invalid inventory %s", name)
+			}
+			fixture := newMaintenanceMutation199Fixture(t)
+			plan := fixture.plan("invalid-inventory")
+			if err := planCodexSkillTargets(&plan, payload); err == nil || len(plan.Targets) != 0 {
+				t.Fatalf("invalid generator output planned targets: %v", err)
+			}
+			entries, err := os.ReadDir(fixture.codex)
+			if err != nil || len(entries) != 0 {
+				t.Fatalf("validation wrote targets: %v %v", entries, err)
+			}
+		})
+	}
+	for _, name := range []string{"null", "empty", "schema", "missing-command", "duplicate-command", "case", "unicode", "missing-file", "duplicate-file", "escape", "mode", "digest", "yaml-name", "future-runtime", "empty-version"} {
+		t.Run("payload-"+name, func(t *testing.T) {
+			payload, err := buildCodexSkillPayload(antSkillSourceRoot(t))
+			if err != nil {
+				t.Fatal(err)
+			}
+			switch name {
+			case "null":
+				payload.Commands = nil
+			case "empty":
+				payload.Commands = []string{}
+			case "schema":
+				payload.SchemaVersion = "unknown/v2"
+			case "missing-command":
+				payload.Commands = payload.Commands[:8]
+			case "duplicate-command":
+				payload.Commands[8] = payload.Commands[0]
+			case "case":
+				payload.Commands[4] = "PLAN"
+			case "unicode":
+				payload.Commands[4] = "plаn"
+			case "missing-file":
+				payload.Files = payload.Files[:11]
+			case "duplicate-file":
+				payload.Files[11] = payload.Files[0]
+			case "escape":
+				payload.Files[0].RelativePath = "../.agents/skills/ant-init/SKILL.md"
+			case "mode":
+				payload.Files[0].Mode = 0o777
+			case "digest":
+				payload.Files[0].Content = []byte("tampered")
+			case "yaml-name":
+				payload.Files[0].Content = []byte(strings.Replace(string(payload.Files[0].Content), "name: ant-init", "name: Ant-init", 1))
+				payload.Files[0].SHA256 = lifecycleDigest(payload.Files[0].Content)
+			case "future-runtime":
+				payload.MinRuntimeVersion = "9999.0.0"
+			case "empty-version":
+				payload.SourceVersion = ""
+			}
+			fixture := newMaintenanceMutation199Fixture(t)
+			plan := fixture.plan("invalid-payload")
+			if err := planCodexSkillTargets(&plan, payload); err == nil || len(plan.Targets) != 0 {
+				t.Fatalf("invalid payload planned targets: %v", err)
+			}
+			entries, err := os.ReadDir(fixture.codex)
+			if err != nil || len(entries) != 0 {
+				t.Fatalf("validation wrote targets: %v %v", entries, err)
+			}
+		})
+	}
+	t.Run("missing-support", func(t *testing.T) {
+		if _, err := buildCodexSkillPayload(t.TempDir()); err == nil {
+			t.Fatal("accepted missing support")
+		}
+	})
+	t.Run("deterministic", func(t *testing.T) {
+		first, err := buildCodexSkillPayload(antSkillSourceRoot(t))
+		if err != nil {
+			t.Fatal(err)
+		}
+		second, err := buildCodexSkillPayload(antSkillSourceRoot(t))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(first, second) || codexSkillPayloadIdentity(first) != codexSkillPayloadIdentity(second) {
+			t.Fatal("nondeterministic payload")
+		}
+	})
 }
