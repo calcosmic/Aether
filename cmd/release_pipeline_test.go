@@ -188,6 +188,7 @@ func TestReleasePipelineE2E(t *testing.T) {
 
 	// 10. Run install logic to a fresh mock home (simulate install from source to fresh home)
 	freshHome := t.TempDir()
+	t.Setenv("AETHER_HUB_DIR", hubDir)
 	_, platformErrors := syncPlatformHomeAssets(sourceDir, freshHome, channelStable, false)
 	if len(platformErrors) > 0 {
 		t.Fatalf("platform home sync errors: %v", platformErrors)

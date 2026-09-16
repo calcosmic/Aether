@@ -77,7 +77,7 @@ func TestCodexAntSkillPublishedPayload(t *testing.T) {
 			home := t.TempDir()
 			source := createMockSourceCheckout(t, "1.0.80")
 			out, err := antPayloadCommand(t, command, "--package-dir", source, "--home-dir", home, "--channel", "stable", "--skip-build-binary")
-			if err != nil || !strings.Contains(out, `"ok": true`) {
+			if err != nil || !strings.Contains(out, `"ok":true`) {
 				t.Fatalf("%s failed: %v %s", command, err, out)
 			}
 			p := antAssertPublishedHome(t, filepath.Join(home, ".aether"), home)
@@ -142,7 +142,7 @@ func TestCodexAntSkillPayloadValidation(t *testing.T) {
 				home := t.TempDir()
 				writeMaintenanceMutation199File(t, filepath.Join(source, ".codex", "agents", "aether-bad.toml"), []byte("malformed = ["))
 				out, err := antPayloadCommand(t, command, "--package-dir", source, "--home-dir", home, "--skip-build-binary")
-				if err == nil && strings.Contains(out, `"ok": true`) {
+				if err == nil && strings.Contains(out, `"ok":true`) {
 					t.Fatalf("hidden hub error: %s", out)
 				}
 				if _, e := os.Stat(filepath.Join(home, ".codex", "skills", "aether")); !os.IsNotExist(e) {

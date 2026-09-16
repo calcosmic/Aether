@@ -107,17 +107,19 @@ func runPublish(cmd *cobra.Command, args []string) error {
 	oldHubVersion := readHubVersionAtPath(hubDir)
 
 	hubResult := setupInstallHub(hubDir, packageDir, version)
-	if errVal, ok := hubResult["error"].(string); ok && errVal != "" {
-		return fmt.Errorf("hub sync failed: %v", errVal)
+	if errors := installHubErrors(hubResult); len(errors) > 0 {
+		return fmt.Errorf("hub sync failed: %s", strings.Join(errors, "; "))
 	}
 
 	if tsHostErr := syncTsHostToHub(hubDir, sourceRoot); tsHostErr != nil {
 		return fmt.Errorf("TS host hub sync failed: %w", tsHostErr)
 	}
 
+	var platformResults []map[string]interface{}
 	syncPlatformHomes, _ := cmd.Flags().GetBool("sync-platform-homes")
 	if shouldSyncPlatformHomes(channel, syncPlatformHomes) {
-		_, platformErrors := syncPlatformHomeAssets(packageDir, homeDir, channel, syncPlatformHomes)
+		var platformErrors []string
+		platformResults, platformErrors = syncPlatformHomeAssets(packageDir, homeDir, channel, syncPlatformHomes)
 		if len(platformErrors) > 0 {
 			return fmt.Errorf("platform home sync failed: %s", strings.Join(platformErrors, "; "))
 		}
@@ -136,12 +138,20 @@ func runPublish(cmd *cobra.Command, args []string) error {
 		warnHubVersionUpdated(channel, oldHubVersion, version)
 	}
 
-	outputWorkflow(map[string]interface{}{
+	result := map[string]interface{}{
 		"ok":      true,
 		"message": fmt.Sprintf("Publish complete: Aether v%s published to %s", version, hubDir),
 		"version": version,
 		"hub":     hubDir,
-	}, renderBinaryActionVisual("Publish Complete", fmt.Sprintf("Aether v%s published", version), version, hubDir))
+		"channel": string(channel),
+		"details": append([]map[string]interface{}{hubResult}, platformResults...),
+	}
+	visual := renderBinaryActionVisual("Publish Complete", fmt.Sprintf("Aether v%s published", version), version, hubDir)
+	if channel == channelDev && syncPlatformHomes {
+		result["platform_home_scope"] = "Explicit dev home sync updates stable platform skills in the selected home."
+		visual += result["platform_home_scope"].(string) + "\n"
+	}
+	outputWorkflow(result, visual)
 
 	warnBinaryCoLocation(channel, homeDir)
 

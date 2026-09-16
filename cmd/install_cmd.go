@@ -104,18 +104,20 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	results := []map[string]interface{}{}
 	var syncErrors []string
 
-	syncPlatformHomes, _ := cmd.Flags().GetBool("sync-platform-homes")
-	platformResults, platformErrors := syncPlatformHomeAssets(packageDir, homeDir, channel, syncPlatformHomes)
-	results = append(results, platformResults...)
-	syncErrors = append(syncErrors, platformErrors...)
-
-	// Set up hub directory
+	// Publish once before touching platform homes; consumers read those exact bytes.
 	hubDir := resolveHubPathForHome(homeDir, channel)
-	// install resolves its own version explicitly, preserving today's behavior.
-	hubResult := setupInstallHub(hubDir, packageDir, resolveVersion(packageDir))
+	version := readRepoVersion(packageDir)
+	if version == "" {
+		version = resolveVersion(packageDir)
+	}
+	hubResult := setupInstallHub(hubDir, packageDir, version)
 	results = append(results, hubResult)
-	if errVal, ok := hubResult["error"].(string); ok && errVal != "" {
-		syncErrors = append(syncErrors, errVal)
+	syncErrors = append(syncErrors, installHubErrors(hubResult)...)
+	if len(syncErrors) == 0 {
+		syncPlatformHomes, _ := cmd.Flags().GetBool("sync-platform-homes")
+		platformResults, platformErrors := syncPlatformHomeAssets(packageDir, homeDir, channel, syncPlatformHomes)
+		results = append(results, platformResults...)
+		syncErrors = append(syncErrors, platformErrors...)
 	}
 
 	totalCopied := 0
@@ -141,7 +143,13 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		"binary_refresh_mode": installBinaryRefreshMode(cmd, packageDir),
 		"binary_refresh_note": installBinaryRefreshNote(installBinaryRefreshMode(cmd, packageDir), channel),
 	}
-	outputWorkflow(result, renderInstallVisual(homeDir, results, totalCopied, totalSkipped, installBinaryRefreshMode(cmd, packageDir)))
+	visual := renderInstallVisual(homeDir, results, totalCopied, totalSkipped, installBinaryRefreshMode(cmd, packageDir))
+	explicitHomeSync, _ := cmd.Flags().GetBool("sync-platform-homes")
+	if channel == channelDev && explicitHomeSync {
+		result["platform_home_scope"] = "Explicit dev home sync updates stable platform skills in the selected home."
+		visual += result["platform_home_scope"].(string) + "\n"
+	}
+	outputWorkflow(result, visual)
 
 	// In a source checkout, install should keep the local binary in sync with
 	// the companion files it just published to the hub. Otherwise fast-moving
@@ -479,6 +487,11 @@ func syncPlatformHomeAssets(packageDir, homeDir string, channel runtimeChannel, 
 		}), syncErrors
 	}
 
+	payload, payloadErr := loadCodexSkillPayload(resolveHubPathForHome(homeDir, channel))
+	if payloadErr != nil {
+		return []map[string]interface{}{{"label": "Skills (codex shims)", "errors": []string{payloadErr.Error()}}}, []string{payloadErr.Error()}
+	}
+
 	for _, pair := range installSyncPairs() {
 		srcDir := filepath.Join(packageDir, filepath.FromSlash(pair.srcRel))
 		destDir := filepath.Join(homeDir, filepath.FromSlash(pair.destRel))
@@ -511,22 +524,19 @@ func syncPlatformHomeAssets(packageDir, homeDir string, channel runtimeChannel, 
 		results = append(results, entry)
 	}
 
-	payload, payloadErr := buildCodexSkillPayload(packageDir)
-	shimResult := syncResult{}
-	if payloadErr != nil {
-		shimResult.errors = append(shimResult.errors, payloadErr.Error())
-	} else {
-		// Dev's explicit home opt-in targets the stable platform home, as before.
-		shimResult = syncCodexSkillsFromPayload(payload, homeDir)
-	}
+	// Dev's explicit home opt-in targets the stable platform home, as before.
+	shimResult := syncCodexSkillsFromPayload(payload, homeDir)
+
 	shimEntry := map[string]interface{}{
-		"label":   "Skills (codex shims)",
-		"src":     "generated",
-		"dest":    ".codex/skills/aether",
-		"copied":  shimResult.copied,
-		"skipped": shimResult.skipped,
-		"removed": len(shimResult.removed),
-		"scope":   "selected home; stable platform skills",
+		"label":            "Skills (codex shims)",
+		"src":              "hub/system/codex-skills",
+		"payload_identity": codexSkillPayloadIdentity(payload),
+		"payload_version":  payload.SourceVersion,
+		"dest":             ".codex/skills/aether",
+		"copied":           shimResult.copied,
+		"skipped":          shimResult.skipped,
+		"removed":          len(shimResult.removed),
+		"scope":            "selected home; stable platform skills",
 	}
 	if len(shimResult.preserved) > 0 {
 		shimEntry["preserved"] = shimResult.preserved
@@ -779,6 +789,26 @@ func setupInstallHub(hubDir, packageDir, version string) map[string]interface{} 
 		"dest":  hubDir,
 	}
 
+	resolved := strings.TrimSpace(version)
+	if resolved == "" {
+		resolved = resolveVersion(packageDir)
+	}
+	payload, err := buildCodexSkillPayload(packageDir)
+	if err == nil {
+		payload.SourceVersion = resolved
+		err = validateCodexSkillPayload(payload)
+	}
+	if err != nil {
+		result["error"] = err.Error()
+		return result
+	}
+	if _, err := publishCodexSkillPayload(hubDir, payload); err != nil {
+		result["error"] = err.Error()
+		return result
+	}
+	result["skill_payload_identity"] = codexSkillPayloadIdentity(payload)
+	result["skill_payload_version"] = payload.SourceVersion
+
 	if err := os.MkdirAll(hubDir, 0755); err != nil {
 		result["error"] = fmt.Sprintf("failed to create hub: %v", err)
 		return result
@@ -892,10 +922,6 @@ func setupInstallHub(hubDir, packageDir, version string) map[string]interface{} 
 	// Write version.json using the version the caller resolved (never re-derive
 	// it here — see the function comment above for why).
 	versionPath := filepath.Join(hubDir, "version.json")
-	resolved := strings.TrimSpace(version)
-	if resolved == "" {
-		resolved = resolveVersion(packageDir)
-	}
 	versionContent := fmt.Sprintf(`{"version":"%s","updated_at":"now"}`, resolved)
 	if err := os.WriteFile(versionPath, []byte(versionContent), 0644); err != nil {
 		result["version_error"] = fmt.Sprintf("failed to write version: %v", err)
@@ -910,15 +936,19 @@ func setupInstallHub(hubDir, packageDir, version string) map[string]interface{} 
 // skipping excluded directories and unchanged files (by SHA-256 hash).
 // Also removes stale files in dest that no longer exist in src.
 func syncDirToHub(src, dest string) syncResult {
-	return syncDirToHubWithExclusion(src, dest, hubExcludeDirs, hubExcludeFiles, nil, nil)
+	return syncDirToHubWithExclusion(src, dest, hubExcludeDirs, hubExcludeFiles, nil, nil, map[string]bool{"codex-skills": true})
 }
 
 // syncDirToHubWithExclusion is like syncDirToHub but accepts custom exclusion
 // maps for directories and exact file paths. Pass nil to exclude nothing.
-func syncDirToHubWithExclusion(src, dest string, exclude map[string]bool, excludeFiles map[string]bool, validate syncValidator, include syncFilter) syncResult {
+func syncDirToHubWithExclusion(src, dest string, exclude map[string]bool, excludeFiles map[string]bool, validate syncValidator, include syncFilter, protected ...map[string]bool) syncResult {
 	// Default to no exclusions if nil
 	if exclude == nil {
 		exclude = map[string]bool{}
+	}
+	var protectedDirs map[string]bool
+	if len(protected) > 0 {
+		protectedDirs = protected[0]
 	}
 	result := syncResult{}
 
@@ -948,6 +978,9 @@ func syncDirToHubWithExclusion(src, dest string, exclude map[string]bool, exclud
 	if len(excludeFiles) > 0 {
 		kept := make([]string, 0, len(srcFiles))
 		for _, relPath := range srcFiles {
+			if syncPathProtected(relPath, protectedDirs, nil) {
+				continue
+			}
 			if hubExcludedFile(excludeFiles, relPath) {
 				result.skipped++
 				continue
@@ -1010,6 +1043,9 @@ func syncDirToHubWithExclusion(src, dest string, exclude map[string]bool, exclud
 		srcSet[f] = struct{}{}
 	}
 	for _, relPath := range destFiles {
+		if syncPathProtected(relPath, protectedDirs, nil) {
+			continue
+		}
 		if syncPathIgnored(relPath) || hubExcludedFile(excludeFiles, relPath) {
 			destPath := filepath.Join(dest, relPath)
 			if err := os.Remove(destPath); err == nil {
@@ -1039,7 +1075,7 @@ func syncDirToHubWithExclusion(src, dest string, exclude map[string]bool, exclud
 	if len(result.removed) > 0 {
 		cleanEmptyDirs(dest)
 	}
-	removed, errors := removeExcludedDirsRecursive(dest, exclude)
+	removed, errors := removeExcludedDirsRecursive(dest, exclude, protectedDirs)
 	result.removed = append(result.removed, removed...)
 	result.errors = append(result.errors, errors...)
 
@@ -1127,7 +1163,7 @@ func removeIgnoredDirsRecursive(baseDir string, protectedDirs map[string]bool, i
 	return removed, errs
 }
 
-func removeExcludedDirsRecursive(baseDir string, exclude map[string]bool) ([]string, []string) {
+func removeExcludedDirsRecursive(baseDir string, exclude map[string]bool, protected ...map[string]bool) ([]string, []string) {
 	var removed []string
 	var errs []string
 	if len(exclude) == 0 {
@@ -1138,6 +1174,9 @@ func removeExcludedDirsRecursive(baseDir string, exclude map[string]bool) ([]str
 			return nil
 		}
 		rel, relErr := filepath.Rel(baseDir, path)
+		if relErr == nil && len(protected) > 0 && syncPathProtected(rel, protected[0], nil) {
+			return filepath.SkipDir
+		}
 		if relErr != nil || !pathHasExcludedComponent(rel, exclude) {
 			return nil
 		}

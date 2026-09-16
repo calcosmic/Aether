@@ -169,6 +169,7 @@ func TestInstallDevChannelUsesSeparateHubAndSkipsPlatformHomes(t *testing.T) {
 
 	homeDir := t.TempDir()
 	packageDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, packageDir)
 
 	if err := os.MkdirAll(filepath.Join(packageDir, ".aether"), 0755); err != nil {
 		t.Fatalf("failed to create .aether dir: %v", err)
