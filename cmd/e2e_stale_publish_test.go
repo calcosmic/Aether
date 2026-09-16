@@ -165,6 +165,7 @@ func TestE2EUpdateDetectsInfoStale(t *testing.T) {
 
 	hubDir := filepath.Join(homeDir, ".aether")
 	createHubWithExpectedCounts(t, hubDir)
+	seedCodexSkillPublishedFixture(t, hubDir, "1.0.79")
 	// Remove most claude commands to trigger info
 	claudeDir := filepath.Join(hubDir, "system", "commands", "claude")
 	entries, _ := os.ReadDir(claudeDir)
@@ -180,7 +181,7 @@ func TestE2EUpdateDetectsInfoStale(t *testing.T) {
 			t.Fatalf("failed to write %s: %v", name, err)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(hubDir, "version.json"), []byte(`{"version":"1.0.20"}`), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(hubDir, "version.json"), []byte(`{"version":"1.0.79"}`), 0644); err != nil {
 		t.Fatalf("failed to write hub version: %v", err)
 	}
 
@@ -195,7 +196,7 @@ func TestE2EUpdateDetectsInfoStale(t *testing.T) {
 	}
 
 	oldVersion := Version
-	Version = "1.0.20"
+	Version = "1.0.79"
 	defer func() { Version = oldVersion }()
 
 	var buf bytes.Buffer
@@ -257,7 +258,8 @@ func TestE2EUpdateDetectsOK(t *testing.T) {
 
 	hubDir := filepath.Join(homeDir, ".aether")
 	createHubWithExpectedCounts(t, hubDir)
-	if err := os.WriteFile(filepath.Join(hubDir, "version.json"), []byte(`{"version":"1.0.20"}`), 0644); err != nil {
+	seedCodexSkillPublishedFixture(t, hubDir, "1.0.79")
+	if err := os.WriteFile(filepath.Join(hubDir, "version.json"), []byte(`{"version":"1.0.79"}`), 0644); err != nil {
 		t.Fatalf("failed to write hub version: %v", err)
 	}
 
@@ -272,7 +274,7 @@ func TestE2EUpdateDetectsOK(t *testing.T) {
 	}
 
 	oldVersion := Version
-	Version = "1.0.20"
+	Version = "1.0.79"
 	defer func() { Version = oldVersion }()
 
 	var buf bytes.Buffer
@@ -442,6 +444,7 @@ func TestE2EUpdateVisualBannerForInfoStale(t *testing.T) {
 
 	hubDir := filepath.Join(homeDir, ".aether")
 	createHubWithExpectedCounts(t, hubDir)
+	seedCodexSkillPublishedFixture(t, hubDir, "1.0.79")
 	claudeDir := filepath.Join(hubDir, "system", "commands", "claude")
 	entries, _ := os.ReadDir(claudeDir)
 	for _, entry := range entries {
@@ -455,7 +458,7 @@ func TestE2EUpdateVisualBannerForInfoStale(t *testing.T) {
 			t.Fatalf("failed to write %s: %v", name, err)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(hubDir, "version.json"), []byte(`{"version":"1.0.20"}`), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(hubDir, "version.json"), []byte(`{"version":"1.0.79"}`), 0644); err != nil {
 		t.Fatalf("failed to write hub version: %v", err)
 	}
 
@@ -470,7 +473,7 @@ func TestE2EUpdateVisualBannerForInfoStale(t *testing.T) {
 	}
 
 	oldVersion := Version
-	Version = "1.0.20"
+	Version = "1.0.79"
 	defer func() { Version = oldVersion }()
 
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
@@ -508,7 +511,8 @@ func TestE2EUpdateVisualBannerForWarningStale(t *testing.T) {
 	createInstalledUpdatePlatformRoots(t, homeDir)
 	hubDir := filepath.Join(homeDir, ".aether")
 	createHubWithExpectedCounts(t, hubDir)
-	if err := os.WriteFile(filepath.Join(hubDir, "version.json"), []byte(`{"version":"1.0.21"}`), 0o644); err != nil {
+	seedCodexSkillPublishedFixture(t, hubDir, "1.0.80")
+	if err := os.WriteFile(filepath.Join(hubDir, "version.json"), []byte(`{"version":"1.0.80"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	repoDir := t.TempDir()
@@ -521,7 +525,7 @@ func TestE2EUpdateVisualBannerForWarningStale(t *testing.T) {
 		t.Fatal(err)
 	}
 	oldVersion := Version
-	Version = "1.0.20"
+	Version = "1.0.79"
 	defer func() { Version = oldVersion }()
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	var buf bytes.Buffer

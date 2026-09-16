@@ -155,3 +155,25 @@ func installHubErrors(result map[string]interface{}) []string {
 	}
 	return errors
 }
+
+// Join the registered update's existing transaction before preview/commit. The
+// producer's complete manifest owns the inventory, including future commands.
+func appendMaintenanceUpdateCodexSkillTargets(plan *maintenanceMutationPlan, hubRoot, homeDir string) (codexSkillPayload, error) {
+	payload, err := loadCodexSkillPayload(hubRoot)
+	if err != nil {
+		return payload, err
+	}
+	if normalizeVersion(payload.SourceVersion) != normalizeVersion(plan.DesiredVersion) {
+		return payload, fmt.Errorf("codex skills: payload version %s does not match hub version %s", payload.SourceVersion, plan.DesiredVersion)
+	}
+	codexRoot := filepath.Join(homeDir, ".codex")
+	info, err := os.Lstat(codexRoot)
+	if err != nil {
+		return payload, fmt.Errorf("codex skills: home unavailable; run aether install first: %w", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return payload, fmt.Errorf("codex skills: home is not a real directory")
+	}
+	plan.Allowlist.CodexHome = codexRoot
+	return payload, planCodexSkillTargets(plan, payload)
+}

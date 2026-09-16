@@ -1466,17 +1466,22 @@ func TestUpdateDryRunVisualOutput(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
+	originalVersion := Version
+	Version = "1.0.79"
+	t.Cleanup(func() { Version = originalVersion })
 	homeDir := t.TempDir()
+	createInstalledUpdatePlatformRoots(t, homeDir)
 	repoDir := t.TempDir()
 	hubDir := filepath.Join(homeDir, ".aether")
 	hubSystem := filepath.Join(hubDir, "system")
 	if err := os.MkdirAll(hubSystem, 0755); err != nil {
 		t.Fatalf("failed to create hub system dir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(hubDir, "version.json"), []byte(`{"version":"1.0.0"}`), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(hubDir, "version.json"), []byte(`{"version":"1.0.79"}`), 0644); err != nil {
 		t.Fatalf("failed to create hub version: %v", err)
 	}
 
+	seedCodexSkillPublishedFixture(t, hubDir, "1.0.79")
 	oldDir, _ := os.Getwd()
 	if err := os.Chdir(repoDir); err != nil {
 		t.Fatalf("failed to chdir to repo: %v", err)

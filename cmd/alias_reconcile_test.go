@@ -27,6 +27,7 @@ func aliasReconcileWrapperBody(yamlName, wrapperName string) string {
 func buildAliasReconcilePackageDir(t *testing.T) string {
 	t.Helper()
 	packageDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, packageDir)
 
 	mustMkdirAllForAliasFixture(t, filepath.Join(packageDir, ".aether"))
 	mustWriteFileForAliasFixture(t, filepath.Join(packageDir, ".aether", "workers.md"), "# Workers\n")
@@ -66,6 +67,7 @@ func setUpAliasReconcileProject(t *testing.T) (homeDir, repoDir string) {
 		t.Fatalf("install failed: %v", err)
 	}
 
+	assertCodexSkillFixtureInstalled(t, packageDir, homeDir)
 	resetRootCmd(t)
 	buf.Reset()
 	stdout = &buf

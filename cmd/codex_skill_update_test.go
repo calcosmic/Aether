@@ -228,6 +228,21 @@ func antPublishUpdatePayload(t *testing.T, f antUpdateFixture, p codexSkillPaylo
 	writeMaintenanceMutation199File(t, filepath.Join(f.hub, "version.json"), []byte(`{"version":"`+p.SourceVersion+`"}`))
 }
 func TestCodexAntSkillUpdateVersions(t *testing.T) {
+	t.Run("prerelease-comparison", func(t *testing.T) {
+		for _, tc := range []struct {
+			a, b string
+			want int
+		}{
+			{"1.0.99-test", "1.0.79", 1}, {"1.0.79-rc.1", "1.0.79", -1},
+			{"1.0.79", "1.0.79-rc.1", 1}, {"1.0.80-rc.2", "1.0.80-rc.10", -1},
+			{"1.0.80-2", "1.0.80-beta", -1}, {"1.0.80-beta", "1.0.80-2", 1},
+		} {
+			if got := compareVersions(tc.a, tc.b); got != tc.want {
+				t.Errorf("compare %s %s = %d want %d", tc.a, tc.b, got, tc.want)
+			}
+		}
+	})
+
 	t.Run("compatible-newer-inventory", func(t *testing.T) {
 		f := newAntUpdateFixture(t)
 		p := f.payload
