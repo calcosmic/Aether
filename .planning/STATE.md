@@ -5,10 +5,10 @@ milestone_name: Classic Colony Restoration
 current_phase: 204.1
 current_phase_name: Codex Ant Skill Surface
 status: executing
-stopped_at: "Phase 204.1 all seven plans merged; final integration gate and code review pending; verification human_needed."
+stopped_at: "Phase 204.1 all seven plans merged; confirmed review CR-01 bootstrap repair running; verification human_needed."
 last_updated: "2026-09-16T15:26:04.416393+00:00"
 last_activity: 2026-09-16
-last_activity_desc: "All 18 fresh-client cases and four controls passed; final candidate proof merged; three verification flags remain"
+last_activity_desc: "80-file review confirmed unstamped fresh-install regression; final gate interrupted; isolated repair and candidate proof refresh running"
 state_head: 5c70ab2ea76aa02e9149055d701e0cded7ddc1b7
 progress:
   total_phases: 13
@@ -34,7 +34,7 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 
 Phase: 204.1 — Codex Ant Skill Surface
 Next phase: 204.1 (Codex Ant Skill Surface)
-Status: Executing — final integration gate and code review
+Status: Executing — confirmed code-review repair
 Plan: 7 of 7 implemented — 18 final-candidate live positives and four rejecting controls passed; final gate and review pending; standard verification remains human_needed with three flags
 Last activity: 2026-09-16 — Wave 5 merged; final proof artifacts independently checked
 
