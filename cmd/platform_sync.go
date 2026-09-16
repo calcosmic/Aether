@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -193,6 +194,12 @@ func prepareMaintenanceMutation(plan maintenanceMutationPlan) (maintenanceMutati
 		if err != nil {
 			return preview, fmt.Errorf("maintenance mutation: read target baseline: %w", err)
 		}
+		if isCodexSkillTarget(target) && (target.ExpectedDigest == "" || target.ExpectedMode == nil) {
+			return preview, fmt.Errorf("maintenance mutation: complete original baseline required for Codex skill target %q", targetPath)
+		}
+		if target.ExpectedMode != nil && current.Mode.Perm() != (*target.ExpectedMode).Perm() {
+			return preview, fmt.Errorf("maintenance mutation: baseline mode changed for %q", targetPath)
+		}
 		if target.ExpectedDigest != "" && current.Digest != target.ExpectedDigest {
 			return preview, fmt.Errorf("maintenance mutation: baseline changed for %q", targetPath)
 		}
@@ -224,19 +231,26 @@ func prepareMaintenanceMutation(plan maintenanceMutationPlan) (maintenanceMutati
 	return preview, nil
 }
 
-func commitMaintenanceMutation(plan maintenanceMutationPlan) (maintenanceMutationResult, error) {
-	preview, err := prepareMaintenanceMutation(plan)
-	result := maintenanceMutationResult{
+func commitMaintenanceMutation(plan maintenanceMutationPlan) (result maintenanceMutationResult, retErr error) {
+	result = maintenanceMutationResult{
 		SchemaVersion: maintenanceMutationSchemaVersion,
 		Operation:     strings.TrimSpace(plan.Operation),
-		Preview:       preview,
-		Targets:       append([]maintenanceMutationTargetPreview(nil), preview.Targets...),
 		StateEffect:   colony.LifecycleStateEffectNone,
 		Recovery:      strings.TrimSpace(plan.Recovery),
 	}
+	unlock, err := maintenanceCodexSkillLocker(plan)
 	if err != nil {
 		return result, err
 	}
+	defer func() { retErr = errors.Join(retErr, unlock()) }()
+	// This observation can validate the frozen ownership baseline, never replace it.
+	preview, err := prepareMaintenanceMutation(plan)
+	result.Preview = preview
+	result.Targets = append([]maintenanceMutationTargetPreview(nil), preview.Targets...)
+	if err != nil {
+		return result, err
+	}
+
 	tx, err := beginLifecycleTransaction(lifecycleTransactionConfig{
 		TransactionID: plan.TransactionID,
 		Command:       plan.Operation,
@@ -265,6 +279,12 @@ func commitMaintenanceMutation(plan maintenanceMutationPlan) (maintenanceMutatio
 			return result, err
 		}
 		declaration := tx.declarations[len(tx.declarations)-1]
+		if target.ExpectedDigest != "" && (declaration.BeforeDigest != target.ExpectedDigest || declaration.BeforeExists != (target.ExpectedDigest != lifecycleTransactionMissingDigest)) {
+			return result, fmt.Errorf("maintenance mutation: original baseline changed for %q", declaration.TargetPath)
+		}
+		if target.ExpectedMode != nil && declaration.BeforeMode.Perm() != (*target.ExpectedMode).Perm() {
+			return result, fmt.Errorf("maintenance mutation: original baseline mode changed for %q", declaration.TargetPath)
+		}
 		if declaration.BeforeDigest != preview.Targets[index].CurrentDigest {
 			return result, fmt.Errorf("maintenance mutation: baseline changed for %q", declaration.TargetPath)
 		}
@@ -272,6 +292,11 @@ func commitMaintenanceMutation(plan maintenanceMutationPlan) (maintenanceMutatio
 			return result, fmt.Errorf("maintenance mutation: baseline mode changed for %q", declaration.TargetPath)
 		}
 		declared++
+	}
+	// Include unchanged targets in the final pre-journal check as well. They do
+	// not get transaction declarations, but their ownership evidence still matters.
+	if _, err := prepareMaintenanceMutation(plan); err != nil {
+		return result, err
 	}
 	if declared == 0 {
 		if receipt, ok, loadErr := tx.loadCommittedReceipt(); ok || loadErr != nil {

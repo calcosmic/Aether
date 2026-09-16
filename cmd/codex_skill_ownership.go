@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"crypto/sha256"
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
@@ -8,8 +9,11 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
+
+	"github.com/calcosmic/Aether/pkg/storage"
 )
 
 const codexSkillOwnershipSchema = "codex-skill-ownership/v1"
@@ -257,3 +261,57 @@ func planCodexSkillTargets(plan *maintenanceMutationPlan, payload codexSkillPayl
 	plan.PreservedCodexSkills = append(plan.PreservedCodexSkills, preserved...)
 	return nil
 }
+
+func isCodexSkillTarget(target maintenanceMutationTarget) bool {
+	relative := filepath.ToSlash(filepath.Clean(target.RelativeTarget))
+	return target.Root == lifecycleTransactionRootCodexHome && (relative == codexSkillTargetPrefix || strings.HasPrefix(relative, codexSkillTargetPrefix+"/"))
+}
+
+// One identity per physical Codex home, independent of the project/coordinator.
+// A new locker per commit also serializes independent goroutines in this process.
+// Preview never calls this function and therefore creates no lock artifacts.
+func lockCodexSkillTargets(plan maintenanceMutationPlan) (func() error, error) {
+	needed := false
+	for _, target := range plan.Targets {
+		if isCodexSkillTarget(target) {
+			needed = true
+			break
+		}
+	}
+	if !needed {
+		return func() error { return nil }, nil
+	}
+	if _, err := validateLifecycleDirectoryRoot(lifecycleTransactionRootCodexHome, plan.Allowlist.CodexHome); err != nil {
+		return nil, err
+	}
+	root, err := filepath.EvalSymlinks(plan.Allowlist.CodexHome)
+	if err != nil {
+		return nil, err
+	}
+	identity := filepath.Join(root, filepath.FromSlash(codexSkillTargetPrefix), ".aether-owned.json")
+	locks := filepath.Join(root, ".aether-skill-locks")
+	// FileLocker names are the digest of the normalized complete identity. Check
+	// the exact file as well as its ancestors, never follow a pre-existing link.
+	normalized := filepath.ToSlash(identity)
+	if runtime.GOOS == "windows" {
+		normalized = strings.ToLower(normalized)
+	}
+	sum := sha256.Sum256([]byte(normalized))
+	lockPath := filepath.Join(locks, hex.EncodeToString(sum[:])+".lock")
+	if err := rejectLifecycleSymlinkTarget(root, lockPath); err != nil {
+		return nil, err
+	}
+	locker, err := storage.NewFileLocker(locks)
+	if err != nil {
+		return nil, err
+	}
+	if err := rejectLifecycleSymlinkTarget(root, lockPath); err != nil {
+		return nil, err
+	}
+	if err := locker.Lock(identity); err != nil {
+		return nil, err
+	}
+	return func() error { return locker.Unlock(identity) }, nil
+}
+
+var maintenanceCodexSkillLocker = lockCodexSkillTargets

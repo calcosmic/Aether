@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"io"
 	"os/exec"
 	"time"
 
@@ -232,48 +234,61 @@ func TestCodexAntSkillOwnership(t *testing.T) {
 
 func TestCodexAntSkillNewerInventory(t *testing.T) {
 	f := newMaintenanceMutation199Fixture(t)
-	p := antPayload(t)
-	root := filepath.Join(f.codex, "skills", "aether")
-	antCommit(t, antPlan(t, f, "seed", p))
-	ownerPath := filepath.Join(root, ".aether-owned.json")
-	var o codexSkillOwnership
-	if err := json.Unmarshal(mustReadLifecycleFixtureFile(t, ownerPath), &o); err != nil {
-		t.Fatal(err)
-	}
-	// An unfamiliar owned entry is not an implicit retirement request.
+	future := antPayload(t)
+	future.SourceVersion = "1.0.80"
+	future.Commands = append(future.Commands, "future")
 	rel := "ant-future/SKILL.md"
-	body := []byte("future content")
-	writeMaintenanceMutation199File(t, filepath.Join(root, rel), body)
-	o.Files = append(o.Files, codexSkillPayloadFile{RelativePath: rel, SHA256: lifecycleDigest(body), Mode: 0644})
-	raw, _ := json.Marshal(o)
-	writeMaintenanceMutation199File(t, ownerPath, raw)
-	antCommit(t, antPlan(t, f, "retain", p))
-	if got := string(mustReadLifecycleFixtureFile(t, filepath.Join(root, rel))); got != string(body) {
+	body := []byte("---\nname: ant-future\n---\nFuture content\n")
+	future.Files = append(future.Files, codexSkillPayloadFile{RelativePath: rel, SHA256: lifecycleDigest(body), Mode: 0644, Content: body})
+	root := filepath.Join(f.codex, "skills/aether")
+	antCommit(t, antPlan(t, f, "newer-producer", future))
+	// A compatible later payload that omits an unfamiliar entry cannot retire it.
+	next := antPayload(t)
+	next.SourceVersion = "1.0.81"
+	antCommit(t, antPlan(t, f, "retain", next))
+	if got := mustReadLifecycleFixtureFile(t, filepath.Join(root, rel)); !bytes.Equal(got, body) {
 		t.Fatal("newer entry lost")
 	}
-	if !strings.Contains(string(mustReadLifecycleFixtureFile(t, ownerPath)), rel) {
+	if !strings.Contains(string(mustReadLifecycleFixtureFile(t, filepath.Join(root, ".aether-owned.json"))), rel) {
 		t.Fatal("newer ownership forgotten")
 	}
-	p.SourceVersion = "0.9.0"
 	before := antSnapshot(t, root)
 	plan := f.plan("downgrade")
-	if err := planCodexSkillTargets(&plan, p); err == nil {
-		t.Fatal("downgrade allowed")
+	if err := planCodexSkillTargets(&plan, antPayload(t)); err == nil || !strings.Contains(err.Error(), "downgrade") {
+		t.Fatalf("downgrade allowed: %v", err)
 	}
 	antAssertSnapshot(t, root, before)
+}
+
+func antLogExecutionIdentity(t *testing.T, payload codexSkillPayload) {
+	t.Helper()
+	exe, err := os.Open(os.Args[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer exe.Close()
+	hash := sha256.New()
+	if _, err := io.Copy(hash, exe); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("Executed test binary sha256:%x; payload %s; source version %s; generator %s", hash.Sum(nil), codexSkillPayloadIdentity(payload), payload.SourceVersion, payload.GeneratorIdentity)
 }
 
 func TestCodexAntSkillBaselineCapture(t *testing.T) {
 	f := newMaintenanceMutation199Fixture(t)
 	p := antPayload(t)
+	antLogExecutionIdentity(t, p)
 	root := filepath.Join(f.codex, "skills", "aether")
 	antSeedLegacy(t, root)
 	for _, id := range []string{"migration", "unchanged"} {
-		plan := antPlan(t, f, id, p)
-		want := 27
 		if id == "unchanged" {
-			want = 27
-		} // 12 desired, 14 exact retirement baselines, 1 ownership.
+			// The manifest's desired mode is 0644, but classification must capture 0600.
+			if err := os.Chmod(filepath.Join(root, ".aether-owned.json"), 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		plan := antPlan(t, f, id, p)
+		want := 27 // 12 desired, 14 exact retirement baselines, 1 ownership.
 		if len(plan.Targets) != want {
 			t.Errorf("%s: got %d targets want %d", id, len(plan.Targets), want)
 		}
@@ -344,10 +359,42 @@ func TestCodexAntSkillPostPlanModeChangeRefused(t *testing.T) {
 	}
 }
 func TestCodexAntSkillBaselineCompatibility(t *testing.T) {
-	for _, kind := range []string{"missing-digest", "missing-mode", "zero-mode", "other-caller"} {
+	for _, kind := range []string{"missing-digest", "missing-mode", "zero-mode", "other-caller", "lock-directory-symlink", "lock-file-symlink"} {
 		t.Run(kind, func(t *testing.T) {
 			f := newMaintenanceMutation199Fixture(t)
 			plan := antPlan(t, f, "compat", antPayload(t))
+			if strings.HasPrefix(kind, "lock-") {
+				physical, err := filepath.EvalSymlinks(f.codex)
+				if err != nil {
+					t.Fatal(err)
+				}
+				lockDir := filepath.Join(physical, ".aether-skill-locks")
+				outside := t.TempDir()
+				marker := filepath.Join(outside, "owner")
+				writeMaintenanceMutation199File(t, marker, []byte("untouched"))
+				if kind == "lock-directory-symlink" {
+					err = os.Symlink(outside, lockDir)
+				} else {
+					if err = os.MkdirAll(lockDir, 0755); err != nil {
+						t.Fatal(err)
+					}
+					identity := filepath.Join(physical, "skills/aether/.aether-owned.json")
+					filename := strings.TrimPrefix(lifecycleDigest([]byte(filepath.ToSlash(identity))), "sha256:") + ".lock"
+					err = os.Symlink(marker, filepath.Join(lockDir, filename))
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				before := antSnapshot(t, outside)
+				if result, err := commitMaintenanceMutation(plan); err == nil || result.Receipt != nil {
+					t.Fatalf("unsafe lock accepted: %+v %v", result, err)
+				}
+				antAssertSnapshot(t, outside, before)
+				if _, err := os.Stat(filepath.Join(f.data, "transactions")); !os.IsNotExist(err) {
+					t.Fatal("unsafe lock created journal")
+				}
+				return
+			}
 			switch kind {
 			case "missing-digest":
 				plan.Targets[0].ExpectedDigest = ""
@@ -417,6 +464,9 @@ func TestCodexAntSkillPreview(t *testing.T) {
 		t.Fatal(err)
 	}
 	antAssertSnapshot(t, f.codex, before)
+	if _, err := os.Stat(filepath.Join(f.codex, ".aether-skill-locks")); !os.IsNotExist(err) {
+		t.Fatalf("preview created lock directory: %v", err)
+	}
 	for rel, want := range times {
 		info, err := os.Stat(filepath.Join(f.codex, rel))
 		if err != nil || !info.ModTime().Equal(want) {
@@ -464,10 +514,12 @@ func TestCodexAntSkillRollback(t *testing.T) {
 			if strings.HasSuffix(kind, "after-write") {
 				point = "after_target_commit:target-0001"
 			}
+			faultReached := false
 			plan.Fault = func(at string) error {
 				if at != point {
 					return nil
 				}
+				faultReached = true
 				if kind == "later-edit" || kind == "interrupted-edit" {
 					writeMaintenanceMutation199File(t, editPath, []byte("later owner edit"))
 					if err := os.Chmod(editPath, 0600); err != nil {
@@ -479,6 +531,11 @@ func TestCodexAntSkillRollback(t *testing.T) {
 			var result maintenanceMutationResult
 			var err error
 			if strings.HasPrefix(kind, "interrupted") {
+				unlock, lockErr := lockCodexSkillTargets(plan)
+				if lockErr != nil {
+					t.Fatal(lockErr)
+				}
+				defer unlock()
 				tx, e := beginLifecycleTransaction(lifecycleTransactionConfig{TransactionID: plan.TransactionID, Command: plan.Operation, Allowlist: plan.Allowlist, Fault: plan.Fault})
 				if e != nil {
 					t.Fatal(e)
@@ -516,7 +573,7 @@ func TestCodexAntSkillRollback(t *testing.T) {
 				}
 			} else {
 				result, err = commitMaintenanceMutation(plan)
-				if !errors.Is(err, injected) {
+				if !faultReached || err == nil {
 					t.Fatalf("fault not observed: %v", err)
 				}
 			}
@@ -581,13 +638,19 @@ func TestCodexAntSkillConcurrentCommit(t *testing.T) {
 		if _, err := prepareMaintenanceMutation(plan); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(config+".planned", []byte("planned before acquiring shared home lock"), 0600); err != nil {
-			t.Fatal(err)
+		original := maintenanceCodexSkillLocker
+		maintenanceCodexSkillLocker = func(p maintenanceMutationPlan) (func() error, error) {
+			if err := os.WriteFile(config+".planned", []byte("entered common commit lock boundary"), 0600); err != nil {
+				return nil, err
+			}
+			return lockCodexSkillTargets(p)
 		}
+		t.Cleanup(func() { maintenanceCodexSkillLocker = original })
 		antCommit(t, plan)
 		return
 	}
 	f := newMaintenanceMutation199Fixture(t)
+	antLogExecutionIdentity(t, antPayload(t))
 	old := antPlan(t, f, "parent-old", antPayload(t))
 	physical, err := filepath.EvalSymlinks(f.codex)
 	if err != nil {
