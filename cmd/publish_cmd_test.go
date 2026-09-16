@@ -77,6 +77,7 @@ func TestPublishVerificationFailure(t *testing.T) {
 
 	// Create mock source checkout with version 1.0.20
 	packageDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, packageDir)
 	rootDir := packageDir
 	if err := os.WriteFile(filepath.Join(rootDir, "go.mod"), []byte("module github.com/calcosmic/Aether\n"), 0644); err != nil {
 		t.Fatalf("failed to write go.mod: %v", err)
@@ -118,6 +119,7 @@ func TestPublishVerificationFailure(t *testing.T) {
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("publish failed: %v", err)
 	}
+	assertCodexSkillFixtureInstalled(t, packageDir, homeDir)
 
 	// Verify hub version was updated to 1.0.20
 	hubVersion := readHubVersionAtPath(hubDir)
@@ -154,6 +156,7 @@ func TestPublishHubVersionWarningIncludesRecoveryAndVerificationCommands(t *test
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("publish failed: %v", err)
 	}
+	assertCodexSkillFixtureInstalled(t, packageDir, homeDir)
 
 	warning := errBuf.String()
 	for _, want := range []string{
@@ -203,6 +206,7 @@ func TestPublishSyncsStablePlatformHomeCommands(t *testing.T) {
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("publish failed: %v", err)
 	}
+	assertCodexSkillFixtureInstalled(t, packageDir, homeDir)
 
 	if _, err := os.Stat(filepath.Join(homeDir, ".claude", "commands", "ant-build.md")); err != nil {
 		t.Fatalf("expected publish to sync flat Claude command: %v", err)
@@ -218,6 +222,7 @@ func TestPublishSyncsStablePlatformHomeCommands(t *testing.T) {
 func createMockSourceCheckout(t *testing.T, version string) string {
 	t.Helper()
 	dir := t.TempDir()
+	seedCodexSkillSupportFixture(t, dir)
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module github.com/calcosmic/Aether\n"), 0644); err != nil {
 		t.Fatalf("failed to write go.mod: %v", err)
 	}
@@ -280,6 +285,7 @@ func TestPublishSyncsBuiltTsHostToHub(t *testing.T) {
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("publish failed: %v", err)
 	}
+	assertCodexSkillFixtureInstalled(t, packageDir, homeDir)
 
 	for _, rel := range []string{"package.json", "package-lock.json", filepath.Join("dist", "host.js")} {
 		path := filepath.Join(homeDir, ".aether", "system", "ts-host", rel)
@@ -308,6 +314,7 @@ func TestPublishChannelIsolation(t *testing.T) {
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("stable publish failed: %v", err)
 	}
+	assertCodexSkillFixtureInstalled(t, stableSource, homeDir)
 
 	stableHubVersion := readHubVersionAtPath(filepath.Join(homeDir, ".aether"))
 	if stableHubVersion != "1.0.20-stable" {

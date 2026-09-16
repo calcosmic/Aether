@@ -22,6 +22,7 @@ func TestE2EPublishVersionAgreement(t *testing.T) {
 
 	// Create mock source checkout with version 1.0.20
 	packageDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, packageDir)
 	if err := os.WriteFile(filepath.Join(packageDir, "go.mod"), []byte("module github.com/calcosmic/Aether\n"), 0644); err != nil {
 		t.Fatalf("failed to write go.mod: %v", err)
 	}
@@ -62,6 +63,7 @@ func TestE2EPublishVersionAgreement(t *testing.T) {
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("publish failed: %v", err)
 	}
+	assertCodexSkillFixtureInstalled(t, packageDir, homeDir)
 
 	// Verify hub version was updated to 1.0.20
 	hubVersion := readHubVersionAtPath(hubDir)
@@ -101,8 +103,9 @@ func TestPublishSucceedsOnFirstRunAfterVersionBump(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
 
-	// Create mock source checkout with the BUMPED version 1.0.21.
+	// Create mock source checkout with the BUMPED version 1.0.80.
 	packageDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, packageDir)
 	if err := os.WriteFile(filepath.Join(packageDir, "go.mod"), []byte("module github.com/calcosmic/Aether\n"), 0644); err != nil {
 		t.Fatalf("failed to write go.mod: %v", err)
 	}
@@ -117,7 +120,7 @@ func TestPublishSucceedsOnFirstRunAfterVersionBump(t *testing.T) {
 	if err := os.MkdirAll(aetherDir, 0755); err != nil {
 		t.Fatalf("failed to create .aether: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(aetherDir, "version.json"), []byte(`{"version":"1.0.21","updated_at":"now"}`), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(aetherDir, "version.json"), []byte(`{"version":"1.0.80","updated_at":"now"}`), 0644); err != nil {
 		t.Fatalf("failed to write version.json: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(aetherDir, "workers.md"), []byte("# Workers\n"), 0644); err != nil {
@@ -125,7 +128,7 @@ func TestPublishSucceedsOnFirstRunAfterVersionBump(t *testing.T) {
 	}
 	writeBuiltTsHostFixture(t, packageDir)
 
-	// Pre-seed the hub at the OLD version 1.0.20 in BOTH the legacy top-level
+	// Pre-seed the hub at the OLD version 1.0.79 in BOTH the legacy top-level
 	// version.json and system/version.json — mirroring a hub that was last
 	// published before this bump.
 	hubDir := filepath.Join(homeDir, ".aether")
@@ -133,20 +136,21 @@ func TestPublishSucceedsOnFirstRunAfterVersionBump(t *testing.T) {
 	if err := os.MkdirAll(hubSystemDir, 0755); err != nil {
 		t.Fatalf("failed to create hub system dir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(hubDir, "version.json"), []byte(`{"version":"1.0.20","updated_at":"old"}`), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(hubDir, "version.json"), []byte(`{"version":"1.0.79","updated_at":"old"}`), 0644); err != nil {
 		t.Fatalf("failed to write stale hub version.json: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(hubSystemDir, "version.json"), []byte(`{"version":"1.0.20","updated_at":"old"}`), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(hubSystemDir, "version.json"), []byte(`{"version":"1.0.79","updated_at":"old"}`), 0644); err != nil {
 		t.Fatalf("failed to write stale hub system/version.json: %v", err)
 	}
 
+	// Keep the stale runtime at the supported payload minimum (1.0.79).
 	// This is the part that reproduces the bug: override the package-level
-	// Version to the STALE 1.0.20, standing in for "the binary executing
+	// Version to the STALE 1.0.79, standing in for "the binary executing
 	// publish was built before the bump." Without the fix, setupInstallHub
 	// calls resolveVersion(packageDir), which returns this stale override
 	// instead of the source checkout's bumped version.json.
 	oldVersion := Version
-	Version = "1.0.20"
+	Version = "1.0.79"
 	t.Cleanup(func() {
 		Version = oldVersion
 	})
@@ -162,6 +166,7 @@ func TestPublishSucceedsOnFirstRunAfterVersionBump(t *testing.T) {
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("publish failed on first run after version bump: %v", err)
 	}
+	assertCodexSkillFixtureInstalled(t, packageDir, homeDir)
 
 	output := buf.String()
 	var result map[string]interface{}
@@ -172,20 +177,20 @@ func TestPublishSucceedsOnFirstRunAfterVersionBump(t *testing.T) {
 		t.Fatalf("publish returned ok:false, output: %s", output)
 	}
 	inner, _ := result["result"].(map[string]interface{})
-	if v, _ := inner["version"].(string); v != "1.0.21" {
-		t.Errorf("publish envelope version = %q, want %q", v, "1.0.21")
+	if v, _ := inner["version"].(string); v != "1.0.80" {
+		t.Errorf("publish envelope version = %q, want %q", v, "1.0.80")
 	}
 
 	// Assert on the filesystem, not just the envelope — asserting only the
 	// envelope would pass even if the legacy top-level file stayed stale,
 	// which is the exact defect this test guards against.
 	legacyVersion := readVersionJSONFile(filepath.Join(hubDir, "version.json"))
-	if legacyVersion != "1.0.21" {
-		t.Errorf("hub legacy version.json = %q, want %q", legacyVersion, "1.0.21")
+	if legacyVersion != "1.0.80" {
+		t.Errorf("hub legacy version.json = %q, want %q", legacyVersion, "1.0.80")
 	}
 	systemVersion := readVersionJSONFile(filepath.Join(hubSystemDir, "version.json"))
-	if systemVersion != "1.0.21" {
-		t.Errorf("hub system/version.json = %q, want %q", systemVersion, "1.0.21")
+	if systemVersion != "1.0.80" {
+		t.Errorf("hub system/version.json = %q, want %q", systemVersion, "1.0.80")
 	}
 }
 
