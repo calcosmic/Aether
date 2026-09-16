@@ -236,6 +236,13 @@ func runSourceCheck(root string) sourceCheckResult {
 	})
 	result.Issues = append(result.Issues, commandIssues...)
 
+	codexChecked, codexIssues := checkCodexSkillSurface(root)
+	result.Components = append(result.Components, sourceCheckComponent{
+		Name: "generated Codex skill surface", Status: sourceCheckStatus(codexIssues), Checked: codexChecked,
+		Message: sourceCheckMessage(codexIssues, "nine generated ant skills have valid names, routes and private support; 55 later actions are intentionally absent"),
+	})
+	result.Issues = append(result.Issues, codexIssues...)
+
 	sortSourceCheckIssues(result.Issues)
 	result.OK = len(result.Issues) == 0
 	if result.OK {
@@ -326,6 +333,8 @@ func sourceCheckComponentPaths(name string) []string {
 		return []string{".aether/commands", ".aether/docs", ".aether/exchange", ".aether/skills", ".aether/templates", ".aether/utils", ".aether/workers.md", ".claude/agents/ant", ".claude/commands/ant", ".codex/agents", ".opencode/agents", ".opencode/commands/ant"}
 	case "retired source mirrors":
 		return []string{".aether/agents-claude", ".aether/agents-codex", ".aether/commands/claude", ".aether/commands/opencode", ".aether/skills-codex"}
+	case "generated Codex skill surface":
+		return []string{"cmd/codex_skill_surface.go", "cmd/platform_sync.go", ".aether/skills/colony/aether-colony-creation/SKILL.md", ".aether/skills/colony/aether-colony-research/SKILL.md", ".aether/skills/colony/aether-colony-build-cycle/SKILL.md"}
 	case "generated command wrappers":
 		return []string{".aether/commands", ".claude/commands/ant", ".opencode/commands/ant"}
 	default:
@@ -837,4 +846,104 @@ func renderSourceCheckVisual(result sourceCheckResult) string {
 		b.WriteString(renderNextUp(result.Next, "Use Aether repo source files as the authority: YAML for wrapper specs, platform source dirs for agents, and .aether/skills for shipped skills. Publish/install populates the global hub and platform homes; target repos keep only local state."))
 	}
 	return b.String()
+}
+
+// Check the same renderer used by payload generation without materializing a
+// repo/home skill mirror. This contract is deliberately independent of the
+// generator inventory and guide catalog: mutually drifting producers must fail.
+func checkCodexSkillSurface(root string) (int, []sourceCheckIssue) {
+	type contract struct{ command, runtime, support string }
+	contracts := []contract{
+		{"init", "init", "aether-colony-creation"},
+		{"discuss", "discuss", "aether-colony-research"},
+		{"oracle", "oracle", "aether-colony-research"},
+		{"colonize", "colonize-finalize", "aether-colony-build-cycle"},
+		{"plan", "plan-finalize", "aether-colony-build-cycle"},
+		{"build", "build-finalize", "aether-colony-build-cycle"},
+		{"continue", "continue", "aether-colony-build-cycle"},
+		{"swarm", "swarm-finalize", "aether-colony-build-cycle"},
+		{"seal", "seal-finalize", "aether-colony-build-cycle"},
+	}
+	byName := map[string]contract{}
+	for _, want := range contracts {
+		byName["ant-"+want.command] = want
+	}
+	var issues []sourceCheckIssue
+	add := func(path, message, expected, actual string) {
+		issues = append(issues, sourceCheckIssue{Area: "codex_skills", Path: path, Message: message, Expected: expected, Actual: actual})
+	}
+	checked := 0
+	for _, support := range []string{"aether-colony-creation", "aether-colony-research", "aether-colony-build-cycle"} {
+		checked++
+		rel := ".aether/skills/colony/" + support + "/SKILL.md"
+		content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil {
+			add(rel, "private support source is unavailable", "readable nonempty source for support/"+support+".md", err.Error())
+		} else if strings.TrimSpace(string(content)) == "" {
+			add(rel, "private support source is empty", "nonempty private support", "empty")
+		}
+	}
+	guidePattern := regexp.MustCompile("(?m)^1\\. Run `([^`\\n]+)` first")
+	runtimePattern := regexp.MustCompile("(?m)^## Runtime Command\\n`([^`\\n]+)`")
+	supportPattern := regexp.MustCompile("`(\\.\\./support/[^`\\n]+)`")
+	names, directories := map[string]int{}, map[string]int{}
+	for _, shim := range sourceCheckCodexShims() {
+		checked++
+		// This identifies generated payload output, not a repo-local mirror.
+		rel := "system/codex-skills/" + shim.Dir + "/SKILL.md"
+		directories[shim.Dir]++
+		if directories[shim.Dir] > 1 {
+			add(rel, "duplicate public directory", "one generated entry per directory", shim.Dir)
+		}
+		want, ok := byName[shim.Dir]
+		if !ok {
+			add(rel, "unexpected public skill", "one of the nine declared ant names", shim.Dir)
+		}
+		// Reuse the strict YAML parser; its first line is a wrapper header.
+		fm, body, err := parseSourceCheckWrapper([]byte("generated Codex payload\n" + renderCodexSkillShim(shim)))
+		if err != nil {
+			add(rel, "generated Codex frontmatter is invalid", "YAML frontmatter with name and description", err.Error())
+			continue
+		}
+		names[fm.Name]++
+		if names[fm.Name] > 1 {
+			add(rel, "duplicate public name", "unique frontmatter name", fm.Name)
+		}
+		if fm.Name != shim.Dir || strings.TrimSpace(fm.Description) == "" {
+			add(rel, "generated Codex frontmatter does not match its directory", shim.Dir+" with a nonempty description", fmt.Sprintf("name=%q description=%q", fm.Name, fm.Description))
+		}
+		if !ok {
+			continue
+		}
+		guide := guidePattern.FindAllStringSubmatch(body, -1)
+		expectedGuide := "aether command-guide " + want.command + " --platform codex"
+		if len(guide) != 1 || guide[0][1] != expectedGuide {
+			add(rel, "invalid command-guide route", expectedGuide, fmt.Sprint(guide))
+		}
+		routes := runtimePattern.FindAllStringSubmatch(body, -1)
+		expectedRoute := "aether " + want.runtime
+		if len(routes) != 1 || sourceCheckRuntimeCommandAnchor(routes[0][1]) != expectedRoute {
+			add(rel, "invalid runtime route", expectedRoute, fmt.Sprint(routes))
+		}
+		registered, _, err := rootCmd.Find([]string{want.runtime})
+		if err != nil || registered == nil || registered.Name() != want.runtime {
+			add(rel, "runtime route is not registered", want.runtime, fmt.Sprintf("command=%v error=%v", registered, err))
+		}
+		refs := supportPattern.FindAllStringSubmatch(body, -1)
+		expectedRef := "../support/" + want.support + ".md"
+		validRefs := len(refs) > 0
+		for _, ref := range refs {
+			validRefs = validRefs && ref[1] == expectedRef
+		}
+		if !validRefs {
+			add(rel, "unresolved private support reference", expectedRef, fmt.Sprint(refs))
+		}
+	}
+	for _, want := range contracts {
+		name := "ant-" + want.command
+		if names[name] == 0 || directories[name] == 0 {
+			add("system/codex-skills/"+name+"/SKILL.md", "missing public skill", name, "absent name or directory")
+		}
+	}
+	return checked, issues
 }
