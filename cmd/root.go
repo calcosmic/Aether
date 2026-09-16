@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	aetherassets "github.com/calcosmic/Aether"
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/calcosmic/Aether/pkg/trace"
@@ -24,6 +25,19 @@ import (
 
 // Version is set via -ldflags at build time.
 var Version = "0.0.0-dev"
+
+// executingRuntimeVersion uses only metadata belonging to this executable.
+// Compatibility must not be authorized by a desired package, cwd or mutable hub.
+// An explicit release stamp remains authoritative, including older runtimes.
+func executingRuntimeVersion() string {
+	if Version != "0.0.0-dev" {
+		return normalizeVersion(Version)
+	}
+	if version, err := aetherassets.SourceReleaseVersion(); err == nil && version != "" {
+		return normalizeVersion(version)
+	}
+	return Version
+}
 
 // resolveVersion returns the best available version in priority order:
 // 1. ldflags Version (set by goreleaser for release builds)

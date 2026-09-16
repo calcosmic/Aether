@@ -2,6 +2,7 @@ package aetherassets
 
 import (
 	"embed"
+	"encoding/json"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -11,7 +12,25 @@ import (
 //
 //go:embed all:.claude/commands/ant all:.claude/agents/ant all:.opencode/commands/ant all:.opencode/agents .opencode/opencode.json all:.codex all:.aether/commands all:.aether/docs all:.aether/exchange all:.aether/references all:.aether/rules all:.aether/schemas all:.aether/skills all:.aether/templates .aether/ts/dist/narrator.js .aether/ts/narrator.ts .aether/ts/package-lock.json .aether/ts/package.json .aether/ts/tsconfig.build.json .aether/ts/tsconfig.json all:.aether/utils .aether/workers.md
 //go:embed all:.aether/ts-host/dist .aether/ts-host/package-lock.json .aether/ts-host/package.json
+//go:embed .aether/version.json
 var installAssets embed.FS
+
+// SourceReleaseVersion identifies the source compiled into this executable,
+// including builds made by go install without release linker flags. The same
+// immutable metadata is materialized with the bundled installation package.
+func SourceReleaseVersion() (string, error) {
+	data, err := installAssets.ReadFile(".aether/version.json")
+	if err != nil {
+		return "", err
+	}
+	var metadata struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(data, &metadata); err != nil {
+		return "", err
+	}
+	return metadata.Version, nil
+}
 
 // MaterializeInstallPackage writes the embedded install assets into dest.
 func MaterializeInstallPackage(dest string) error {
