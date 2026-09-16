@@ -240,8 +240,11 @@ func TestCheckAndAutopilotCloseoutsCarryAVerdict(t *testing.T) {
 		if actionErr != nil {
 			t.Fatalf("recommendedActionForWorkOutcome: %v", actionErr)
 		}
-		if !strings.Contains(screen, action.Command) {
-			t.Fatalf("autopilot terminal screen does not name the recommended command %q:\n%s", action.Command, screen)
+		if action.Command != "aether continue" {
+			t.Fatalf("autopilot runtime recommendation = %q, want aether continue", action.Command)
+		}
+		if !strings.Contains(screen, "$ant-continue") {
+			t.Fatalf("autopilot terminal screen does not name $ant-continue:\n%s", screen)
 		}
 		if got := strings.Count(stripANSI(screen), spendCostLineHeading); got != 1 {
 			t.Fatalf("autopilot terminal screen carries %d cost-and-time block(s), want exactly 1:\n%s", got, screen)

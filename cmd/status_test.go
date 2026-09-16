@@ -98,7 +98,7 @@ func TestStatusNoColonyVisual(t *testing.T) {
 	}
 
 	output := buf.String()
-	for _, want := range []string{"📊", "C O L O N Y   S T A T U S", "No colony initialized in this repo.", "aether init", "aether lay-eggs"} {
+	for _, want := range []string{"📊", "C O L O N Y   S T A T U S", "No colony initialized in this repo.", "$ant-init", "aether lay-eggs"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("visual no-colony status missing %q\n%s", want, output)
 		}
@@ -1451,7 +1451,7 @@ func TestStatusShowsRecoveryDoorway(t *testing.T) {
 	for _, want := range []string{
 		"Recovery",
 		"Recover the failed builder task before re-verifying",
-		"aether build 2 --task 2.1",
+		"$ant-build 2 --task 2.1",
 		".aether/data/build/phase-2/continue.json",
 	} {
 		if !strings.Contains(output, want) {

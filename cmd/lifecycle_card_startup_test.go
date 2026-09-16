@@ -80,8 +80,8 @@ func runLifecycleSurface(t *testing.T, c lifecycleSurfaceCase, jsonMode bool) li
 		t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	}
 	// Pin the platform so the card the command renders and the card this test
-	// renders for comparison are spelled the same way. The runtime form is
-	// pinned here; the slash spellings get their own test.
+	// renders for comparison are spelled the same way. Codex skill display is
+	// pinned here; executable envelope fields must still use aether.
 	t.Setenv("AETHER_PLATFORM", "codex")
 
 	if c.prepare != nil {
@@ -356,7 +356,7 @@ func assertPhase200StartupBoundary(t *testing.T, surface lifecycleSurfaceCase, v
 				t.Errorf("%s lost Phase 200 discuss boundary %q\n%s", surface.name, want, visual)
 			}
 		}
-		if strings.Contains(visual, "Run `aether plan`") {
+		if strings.Contains(visual, "Run `aether plan`") || strings.Contains(visual, "Run `$ant-plan`") {
 			t.Errorf("%s skipped exact Specification approval\n%s", surface.name, visual)
 		}
 	case "plan":
@@ -413,10 +413,18 @@ func assertEnvelopeMatchesCard(t *testing.T, label string, run lifecycleRun) {
 		t.Errorf("%s: the envelope says %q, the card says %q -- the screen and the wrapper disagree",
 			label, command, run.answer.Command)
 	}
-	if !strings.Contains(run.card, command) {
-		t.Errorf("%s: the envelope names %q, which does not appear on the card at all", label, command)
+	for _, runtimeCommand := range envelopeNextActionCommands(run.envelope) {
+		if !strings.HasPrefix(runtimeCommand, "aether ") {
+			t.Errorf("%s: machine-readable command %q lost its executable route", label, runtimeCommand)
+		}
+		if display := expectedCodexDisplayCommand(runtimeCommand); !strings.Contains(run.card, "`"+display+"`") {
+			t.Errorf("%s: the envelope names %q, whose display %q does not appear on the card", label, runtimeCommand, display)
+		}
 	}
 	for _, alternative := range run.answer.Alternatives {
+		if !strings.HasPrefix(alternative.Command, "aether ") {
+			t.Errorf("%s: machine-readable alternative %q lost its executable route", label, alternative.Command)
+		}
 		if !envelopeCarriesAlternative(run.envelope, alternative.Command) {
 			t.Errorf("%s: the card offers %q as another way forward and the envelope does not carry it",
 				label, alternative.Command)

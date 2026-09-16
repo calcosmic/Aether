@@ -68,7 +68,7 @@ func TestWrapperPartialFinalizeDoesNotShowTheFinishedBuildScreen(t *testing.T) {
 	if !ok {
 		t.Fatalf("wrapper partial result has no typed partial_recovery projection: %#v", result["partial_recovery"])
 	}
-	wantCommand := buildUnfinishedRetryRedispatchCommand(1, pending)
+	wantCommand := "aether build 1 --force --task 1.5 --task 1.6"
 	if !reflect.DeepEqual(partial.UnfinishedTaskIDs, pending) || partial.RedispatchCommand != wantCommand {
 		t.Fatalf("typed wrapper partial projection = %+v, want unfinished=%v command=%q", partial, pending, wantCommand)
 	}
@@ -86,7 +86,7 @@ func TestWrapperPartialFinalizeDoesNotShowTheFinishedBuildScreen(t *testing.T) {
 			t.Errorf("a half-built phase still shows the ordinary finished-build line %q on the wrapper lane:\n%s", claim, out)
 		}
 	}
-	for _, want := range append([]string{wantCommand}, pending...) {
+	for _, want := range append([]string{"$ant-build 1 --force --task 1.5 --task 1.6"}, pending...) {
 		if !strings.Contains(out, want) {
 			t.Errorf("the wrapper lane's screen never mentions %q, so the owner is not told what is left or how to finish it:\n%s", want, out)
 		}

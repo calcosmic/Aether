@@ -58,7 +58,7 @@ func TestLifecycleNextAction(t *testing.T) {
 			wantBuild string
 			wantRun   string
 		}{
-			{name: "codex", wantBuild: "aether build 1", wantRun: "aether run"},
+			{name: "codex", wantBuild: "$ant-build 1", wantRun: "aether run"},
 			{name: "claude", wantBuild: "/ant-build 1", wantRun: "/ant-run"},
 			{name: "opencode", wantBuild: "/ant-build 1", wantRun: "/ant-run"},
 		} {
@@ -82,7 +82,10 @@ func TestNextActionCardUsesProjection(t *testing.T) {
 		t.Fatalf("card changed or omitted projection reason %q:\n%s", answer.Projection.NextAction.Reason, card)
 	}
 	for _, choice := range answer.Projection.NextAction.Choices {
-		want := lifecycleProjectionCommand(choice.RuntimeCommand, "claude")
+		want, ok := map[string]string{"aether build 1": "/ant-build 1", "aether run": "/ant-run"}[choice.RuntimeCommand]
+		if !ok {
+			t.Fatalf("unexpected runtime choice %q", choice.RuntimeCommand)
+		}
 		if !strings.Contains(card, want) {
 			t.Fatalf("card omitted projected choice %q:\n%s", want, card)
 		}

@@ -189,13 +189,13 @@ func TestFrontDoor200InitCodexUsesNativeCommands(t *testing.T) {
 	got := output.String()
 	for _, want := range []string{
 		"Discuss settles intent before specification review; it does not approve a specification or a plan.",
-		"Next Up: aether discuss",
+		"Next Up: $ant-discuss",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("direct Codex init is missing %q:\n%s", want, got)
 		}
 	}
-	for _, forbidden := range []string{"/ant-", "$ant-", "Next Up: aether plan"} {
+	for _, forbidden := range []string{"/ant-", "$ant-spec", "$ant-status", "Next Up: aether plan", "Next Up: $ant-plan"} {
 		if strings.Contains(got, forbidden) {
 			t.Errorf("direct Codex init advertises unsupported or premature syntax %q:\n%s", forbidden, got)
 		}

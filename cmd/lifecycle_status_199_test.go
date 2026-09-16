@@ -126,7 +126,7 @@ func TestLifecycleStatus199FullOrder(t *testing.T) {
 	for _, want := range []string{
 		"Atlas", "Ship the complete status", "Mason-1", "Coordinator (Queen) → Mason-1", "FOCUS",
 		"research/front-door.md", "dreams/2026-09-03-status.md", "Unverified local note",
-		"1500 tokens", "gate-tests", "history-entry", "owner-decision", "aether continue",
+		"1500 tokens", "gate-tests", "history-entry", "owner-decision", "$ant-continue",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("full status missing recorded fact %q\n%s", want, output)
@@ -168,7 +168,7 @@ func TestLifecycleStatus199CompactSubset(t *testing.T) {
 			t.Fatalf("compact status rendered non-selected section %q\n%s", forbidden, output)
 		}
 	}
-	for _, want := range []string{"Atlas", "Phase 1/1", "No ants are active", "1500 tokens", "aether continue"} {
+	for _, want := range []string{"Atlas", "Phase 1/1", "No ants are active", "1500 tokens", "$ant-continue"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("compact status missing %q\n%s", want, output)
 		}

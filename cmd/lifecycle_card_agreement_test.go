@@ -22,10 +22,10 @@ import (
 )
 
 // closingCommandRe pulls the command out of a rendered closing block. It
-// deliberately accepts BOTH spellings -- the slash form the wrapper platforms
-// show and the runtime form the command line shows -- because which one appears
+// accepts all three spellings -- slash wrappers, Codex skills, and runtime
+// commands -- because which one appears
 // is exactly what the platform test below is measuring.
-var closingCommandRe = regexp.MustCompile("Run `((?:/ant-|aether )[^`]+)`")
+var closingCommandRe = regexp.MustCompile("Run `((?:/ant-|\\$ant-|aether )[^`]+)`")
 
 // commandInClosing returns the command the closing block recommends.
 func commandInClosing(t *testing.T, label, rendered string) string {
@@ -126,6 +126,7 @@ func TestMigratedLifecycleSurfacesAgree(t *testing.T) {
 		t.Fatal("the one resolver named no command for this project at all")
 	}
 
+	want = expectedCodexDisplayCommand(want)
 	for label, rendered := range migratedSurfaceRenderings(t, state) {
 		got := commandInClosing(t, label, rendered)
 		if got != want {
@@ -145,7 +146,7 @@ func TestMigratedLifecycleSurfacesArePlatformCorrect(t *testing.T) {
 	}{
 		{"claude", "/ant-"},
 		{"opencode", "/ant-"},
-		{"codex", "aether "},
+		{"codex", "$ant-"},
 	}
 
 	for _, tc := range cases {
@@ -279,8 +280,8 @@ func TestEveryCommandTheMigratedSurfacesRenderResolves(t *testing.T) {
 
 	for label, rendered := range migratedSurfaceRenderings(t, state) {
 		t.Run(label, func(t *testing.T) {
-			for _, command := range allCommandsInCard(rendered) {
-				if _, ok := availableCommand(command); !ok {
+			for _, command := range commandsOfferedBy(rendered) {
+				if _, ok := closingCommandCobraTarget(command); !ok {
 					t.Errorf("%s offers %q, which this build of the program does not have", label, command)
 				}
 			}

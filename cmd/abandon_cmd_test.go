@@ -83,7 +83,7 @@ func TestAbandonPreviewNamesWhatWouldBeLost(t *testing.T) {
 	for _, want := range []string{
 		"standalone abandon command is retired",
 		"did not change state",
-		"aether seal --force --reason",
+		"$ant-seal --force --reason",
 		"aether status",
 	} {
 		if !strings.Contains(got, want) {

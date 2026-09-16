@@ -156,7 +156,7 @@ func TestDiscussVisualPendingQuestionsAvoidsWorkerTheatre(t *testing.T) {
 		"Questions: 1",
 		"Owner decisions required",
 		"Queen recommends:",
-		"Answer exactly: aether discuss --resolve pd_visual_scope",
+		"Answer exactly: $ant-discuss --resolve pd_visual_scope",
 		"This answer becomes a hard constraint.",
 	} {
 		if !strings.Contains(output, want) {
