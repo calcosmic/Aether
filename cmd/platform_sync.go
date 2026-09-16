@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -37,24 +38,26 @@ type maintenanceMutationTarget struct {
 	Content        []byte
 	Mode           os.FileMode
 	ExpectedDigest string
+	ExpectedMode   *os.FileMode
 	Managed        bool
 }
 
 type maintenanceMutationPlan struct {
-	SchemaVersion   string
-	Operation       string
-	TransactionID   string
-	SourceRoot      string
-	DestinationRoot string
-	Channel         runtimeChannel
-	CurrentVersion  string
-	DesiredVersion  string
-	Checkpoint      string
-	Recovery        string
-	Allowlist       lifecycleTransactionAllowlist
-	Targets         []maintenanceMutationTarget
-	Rename          func(oldPath, newPath string) error
-	Fault           lifecycleTransactionFaultHook
+	SchemaVersion        string
+	Operation            string
+	TransactionID        string
+	SourceRoot           string
+	DestinationRoot      string
+	Channel              runtimeChannel
+	CurrentVersion       string
+	DesiredVersion       string
+	Checkpoint           string
+	Recovery             string
+	Allowlist            lifecycleTransactionAllowlist
+	Targets              []maintenanceMutationTarget
+	PreservedCodexSkills []string
+	Rename               func(oldPath, newPath string) error
+	Fault                lifecycleTransactionFaultHook
 }
 
 type maintenanceMutationTargetPreview struct {
@@ -71,18 +74,19 @@ type maintenanceMutationTargetPreview struct {
 }
 
 type maintenanceMutationPreview struct {
-	SchemaVersion   string                             `json:"schema_version"`
-	Operation       string                             `json:"operation"`
-	TransactionID   string                             `json:"transaction_id"`
-	SourceRoot      string                             `json:"source_root"`
-	DestinationRoot string                             `json:"destination_root"`
-	Channel         runtimeChannel                     `json:"channel,omitempty"`
-	CurrentVersion  string                             `json:"current_version,omitempty"`
-	DesiredVersion  string                             `json:"desired_version,omitempty"`
-	Checkpoint      string                             `json:"checkpoint"`
-	CommitOrder     []string                           `json:"commit_order"`
-	Targets         []maintenanceMutationTargetPreview `json:"targets"`
-	Recovery        string                             `json:"recovery"`
+	SchemaVersion        string                             `json:"schema_version"`
+	Operation            string                             `json:"operation"`
+	TransactionID        string                             `json:"transaction_id"`
+	SourceRoot           string                             `json:"source_root"`
+	DestinationRoot      string                             `json:"destination_root"`
+	Channel              runtimeChannel                     `json:"channel,omitempty"`
+	CurrentVersion       string                             `json:"current_version,omitempty"`
+	DesiredVersion       string                             `json:"desired_version,omitempty"`
+	Checkpoint           string                             `json:"checkpoint"`
+	CommitOrder          []string                           `json:"commit_order"`
+	Targets              []maintenanceMutationTargetPreview `json:"targets"`
+	Recovery             string                             `json:"recovery"`
+	PreservedCodexSkills []string                           `json:"preserved_codex_skills,omitempty"`
 }
 
 type maintenanceMutationResult struct {
@@ -102,16 +106,17 @@ type maintenanceMutationResult struct {
 // journal.
 func prepareMaintenanceMutation(plan maintenanceMutationPlan) (maintenanceMutationPreview, error) {
 	preview := maintenanceMutationPreview{
-		SchemaVersion:   plan.SchemaVersion,
-		Operation:       strings.TrimSpace(plan.Operation),
-		TransactionID:   strings.TrimSpace(plan.TransactionID),
-		SourceRoot:      filepath.Clean(plan.SourceRoot),
-		DestinationRoot: filepath.Clean(plan.DestinationRoot),
-		Channel:         plan.Channel,
-		CurrentVersion:  normalizeVersion(plan.CurrentVersion),
-		DesiredVersion:  normalizeVersion(plan.DesiredVersion),
-		Checkpoint:      strings.TrimSpace(plan.Checkpoint),
-		Recovery:        strings.TrimSpace(plan.Recovery),
+		SchemaVersion:        plan.SchemaVersion,
+		Operation:            strings.TrimSpace(plan.Operation),
+		TransactionID:        strings.TrimSpace(plan.TransactionID),
+		SourceRoot:           filepath.Clean(plan.SourceRoot),
+		DestinationRoot:      filepath.Clean(plan.DestinationRoot),
+		Channel:              plan.Channel,
+		CurrentVersion:       normalizeVersion(plan.CurrentVersion),
+		DesiredVersion:       normalizeVersion(plan.DesiredVersion),
+		Checkpoint:           strings.TrimSpace(plan.Checkpoint),
+		Recovery:             strings.TrimSpace(plan.Recovery),
+		PreservedCodexSkills: append([]string(nil), plan.PreservedCodexSkills...),
 	}
 	if preview.SchemaVersion != maintenanceMutationSchemaVersion {
 		return preview, fmt.Errorf("maintenance mutation: schema_version must be %s", maintenanceMutationSchemaVersion)
@@ -189,6 +194,12 @@ func prepareMaintenanceMutation(plan maintenanceMutationPlan) (maintenanceMutati
 		if err != nil {
 			return preview, fmt.Errorf("maintenance mutation: read target baseline: %w", err)
 		}
+		if isCodexSkillTarget(target) && (target.ExpectedDigest == "" || target.ExpectedMode == nil) {
+			return preview, fmt.Errorf("maintenance mutation: complete original baseline required for Codex skill target %q", targetPath)
+		}
+		if target.ExpectedMode != nil && current.Mode.Perm() != (*target.ExpectedMode).Perm() {
+			return preview, fmt.Errorf("maintenance mutation: baseline mode changed for %q", targetPath)
+		}
 		if target.ExpectedDigest != "" && current.Digest != target.ExpectedDigest {
 			return preview, fmt.Errorf("maintenance mutation: baseline changed for %q", targetPath)
 		}
@@ -220,19 +231,26 @@ func prepareMaintenanceMutation(plan maintenanceMutationPlan) (maintenanceMutati
 	return preview, nil
 }
 
-func commitMaintenanceMutation(plan maintenanceMutationPlan) (maintenanceMutationResult, error) {
-	preview, err := prepareMaintenanceMutation(plan)
-	result := maintenanceMutationResult{
+func commitMaintenanceMutation(plan maintenanceMutationPlan) (result maintenanceMutationResult, retErr error) {
+	result = maintenanceMutationResult{
 		SchemaVersion: maintenanceMutationSchemaVersion,
 		Operation:     strings.TrimSpace(plan.Operation),
-		Preview:       preview,
-		Targets:       append([]maintenanceMutationTargetPreview(nil), preview.Targets...),
 		StateEffect:   colony.LifecycleStateEffectNone,
 		Recovery:      strings.TrimSpace(plan.Recovery),
 	}
+	unlock, err := maintenanceCodexSkillLocker(plan)
 	if err != nil {
 		return result, err
 	}
+	defer func() { retErr = errors.Join(retErr, unlock()) }()
+	// This observation can validate the frozen ownership baseline, never replace it.
+	preview, err := prepareMaintenanceMutation(plan)
+	result.Preview = preview
+	result.Targets = append([]maintenanceMutationTargetPreview(nil), preview.Targets...)
+	if err != nil {
+		return result, err
+	}
+
 	tx, err := beginLifecycleTransaction(lifecycleTransactionConfig{
 		TransactionID: plan.TransactionID,
 		Command:       plan.Operation,
@@ -261,6 +279,12 @@ func commitMaintenanceMutation(plan maintenanceMutationPlan) (maintenanceMutatio
 			return result, err
 		}
 		declaration := tx.declarations[len(tx.declarations)-1]
+		if target.ExpectedDigest != "" && (declaration.BeforeDigest != target.ExpectedDigest || declaration.BeforeExists != (target.ExpectedDigest != lifecycleTransactionMissingDigest)) {
+			return result, fmt.Errorf("maintenance mutation: original baseline changed for %q", declaration.TargetPath)
+		}
+		if target.ExpectedMode != nil && declaration.BeforeMode.Perm() != (*target.ExpectedMode).Perm() {
+			return result, fmt.Errorf("maintenance mutation: original baseline mode changed for %q", declaration.TargetPath)
+		}
 		if declaration.BeforeDigest != preview.Targets[index].CurrentDigest {
 			return result, fmt.Errorf("maintenance mutation: baseline changed for %q", declaration.TargetPath)
 		}
@@ -268,6 +292,11 @@ func commitMaintenanceMutation(plan maintenanceMutationPlan) (maintenanceMutatio
 			return result, fmt.Errorf("maintenance mutation: baseline mode changed for %q", declaration.TargetPath)
 		}
 		declared++
+	}
+	// Include unchanged targets in the final pre-journal check as well. They do
+	// not get transaction declarations, but their ownership evidence still matters.
+	if _, err := prepareMaintenanceMutation(plan); err != nil {
+		return result, err
 	}
 	if declared == 0 {
 		if receipt, ok, loadErr := tx.loadCommittedReceipt(); ok || loadErr != nil {
