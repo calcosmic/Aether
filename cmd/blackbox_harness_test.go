@@ -80,9 +80,9 @@ func blackBoxBinaries(t *testing.T, sourceRoot string) (string, string) {
 		} {
 			args := []string{"build", "-o", target.output}
 			if target.name == "aether" {
-				// Match a release build's runtime identity. Outside its source
-				// checkout an unstamped binary resolves to 0.0.0-dev, correctly
-				// refusing the versioned Codex skill payload during install.
+				// Exercise stamped release identity here. The distinct
+				// TestCodexAntSkillUnstampedEmbeddedInstall covers the supported
+				// go-install path without linker flags and outside the checkout.
 				version := readRepoVersion(sourceRoot)
 				if version == "" {
 					sharedBlackBoxBinaries.err = fmt.Errorf("read black-box source version")

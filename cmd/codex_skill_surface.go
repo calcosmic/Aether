@@ -75,7 +75,7 @@ func buildCodexSkillPayloadFromInventory(packageDir string, commands []string, c
 	}
 	payload = codexSkillPayload{
 		SchemaVersion: codexSkillPayloadSchema, SourceVersion: version,
-		MinRuntimeVersion: "1.0.79", GeneratorIdentity: "aether/" + resolveVersion(),
+		MinRuntimeVersion: "1.0.79", GeneratorIdentity: "aether/" + executingRuntimeVersion(),
 		Commands: append([]string(nil), commands...),
 	}
 	if info, ok := debug.ReadBuildInfo(); ok {
@@ -124,8 +124,8 @@ func validateCodexSkillPayload(payload codexSkillPayload) error {
 	if !codexSkillVersionPattern.MatchString(payload.SourceVersion) || !codexSkillVersionPattern.MatchString(payload.MinRuntimeVersion) || payload.GeneratorIdentity == "" {
 		return fmt.Errorf("codex skills: missing or invalid payload identity/version")
 	}
-	if compareVersions(payload.MinRuntimeVersion, resolveVersion()) > 0 {
-		return fmt.Errorf("codex skills: runtime %s is older than required %s", resolveVersion(), payload.MinRuntimeVersion)
+	if runtimeVersion := executingRuntimeVersion(); compareVersions(payload.MinRuntimeVersion, runtimeVersion) > 0 {
+		return fmt.Errorf("codex skills: runtime %s is older than required %s", runtimeVersion, payload.MinRuntimeVersion)
 	}
 	expected := map[string]string{}
 	seenCommands := map[string]bool{}
