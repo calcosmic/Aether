@@ -362,6 +362,9 @@
         "model": {
           "type": "string"
         },
+        "model_routing_reason": {
+          "type": "string"
+        },
         "name": {
           "type": "string"
         },
@@ -390,6 +393,9 @@
           "type": "string"
         },
         "job_source": {
+          "type": "string"
+        },
+        "attempt_id": {
           "type": "string"
         },
         "covered_task_ids": {
@@ -907,7 +913,12 @@
         },
         "handoff": {
           "$ref": "#/$defs/WorkerHandoff"
-        }
+        },
+        "artifacts": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "scout_report": true
       },
       "additionalProperties": false,
       "type": "object",
