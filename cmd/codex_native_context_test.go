@@ -409,14 +409,7 @@ func TestCodexNativeContextDeliveryBinding(t *testing.T) {
 					t.Fatal(err)
 				}
 			case "superseded-attempt":
-				var pointer latestBuildAttemptPointer
-				if err := store.LoadJSON(latestBuildAttemptPointerPath(1), &pointer); err != nil {
-					t.Fatal(err)
-				}
-				pointer.AttemptID = "new-attempt"
-				if err := store.SaveJSON(latestBuildAttemptPointerPath(1), pointer); err != nil {
-					t.Fatal(err)
-				}
+				supersedeNativeAttemptPointerForTest(t, "new-attempt")
 			case "no-event":
 				delete(wire, "source_event_id")
 			case "send-pending":

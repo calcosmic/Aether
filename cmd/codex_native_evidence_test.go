@@ -648,7 +648,7 @@ func nativeEvidenceRegressionIdentity(r nativeEvidenceRegression, qualification,
 
 // Source-owned affected boundaries: native lifecycle, public pause/resume, scoped
 // decisions/flags/context, finalization, semantic repair, installed guides and schema.
-const nativeEvidenceFocusedSelection = "^(TestCodexNative|TestPauseResume199|TestPauseWrapperContract199|TestResumeWrapperContract199|Example_pauseResume199Contract$|TestResumeShows|TestResumeView|TestResumeDetail|TestDriftNote|TestColonyPrime|TestClarifiedIntent|TestDiscuss|TestDetectDecisionConflicts|TestPendingDecision|TestDecisionAnswer|TestRecordDecisionAnswer|TestGenericPendingDecisionResolver|TestFlag|TestSemanticDependencies|TestCrossPhaseDependencies|TestRepairArtifact|TestPlanRepairArtifact|TestAcceptedSemanticDependencies|TestCompletionPacketSchemaMatchesStructs$|TestAuditCatalogGolden$|TestCommandGuide|TestCodexLifecycle|TestCodexAntSkill(Inventory|InstallTracer|GuidesPreserveOtherPlatforms|GuideSupport)|TestCodexGenerated|TestSyncCodex|TestBuildManifestCarriesContext|TestBuildWorkerBrief|TestComposeBuildManifestBrief|TestStageBuildAttemptCompletion|TestBuildAttempt|TestNativePartialCredit|TestPartialBuildDoesNotShow)"
+const nativeEvidenceFocusedSelection = "^(TestCodexNative|TestPauseResume199|TestPauseWrapperContract199|TestResumeWrapperContract199|Example_pauseResume199Contract$|TestResumeShows|TestResumeView|TestResumeDetail|TestDriftNote|TestColonyPrime|TestClarifiedIntent|TestDiscuss|TestDetectDecisionConflicts|TestPendingDecision|TestDecisionAnswer|TestRecordDecisionAnswer|TestGenericPendingDecisionResolver|TestFlag|TestSemanticDependencies|TestCrossPhaseDependencies|TestRepairArtifact|TestPlanRepairArtifact|TestAcceptedSemanticDependencies|TestCompletionPacketSchemaMatchesStructs$|TestAuditCatalogGolden$|TestCommandGuide|TestCodexLifecycle|TestCodexAntSkill(Inventory|InstallTracer|GuidesPreserveOtherPlatforms|GuideSupport)|TestCodexGenerated|TestSyncCodex|TestBuildManifestCarriesContext|TestBuildWorkerBrief|TestComposeBuildManifestBrief|TestStageBuildAttemptCompletion|TestBuildAttempt|TestNativePartialCredit|TestPartialBuildDoesNotShow|TestBuildStartCallers200$|TestStartupLifecycleCardsComeFromTheResolver$|TestInternalBuildAdapterStagesCompletionWhenAllWorkersAreTerminal$|TestRepair(BadManifest|DirtyWorktree)_DestructiveNeedsConfirmation$|TestBriefPathReferencedAcrossAllFourSurfaces$|TestBuildCommandYAMLCoherentJobsParity$|TestLifecycleFlatMirrorsMatchCanonical$|TestLifecycleGuidesDocumentApprovedTempCompletionContract$|TestLifecycleOrchestratorsMentionReadCacheLoopHandling$|TestNextActionNeverHardcoded$|TestNoRegisteredSubcommandIsUnreferenced$|TestPlanAndColonizeWrappersAreByteIdentical$|TestPlanWrapperCardsParity$|TestPlanWrapperStageSkeleton$|TestTerritoryWrapperAuthority199$)"
 
 func nativeEvidenceRunContract(name string, argv []string) error {
 	if len(argv) < 2 || argv[0] != "go" || argv[1] != "test" {
@@ -874,6 +874,7 @@ func nativeEvidenceRegressionRunCheck(name string, run nativeEvidenceRegressionR
 		return err
 	}
 	started, ended, packages, output := map[string]int{}, map[string]string{}, map[string]string{}, map[string]string{}
+	casePackages := map[string]string{}
 	diagnosticEcho := map[string]bool{}
 	packageStarts := map[string]int{}
 	if err := nativeEvidenceGoEvents(raw, func(e nativeEvidenceGoEvent) error {
@@ -936,6 +937,7 @@ func nativeEvidenceRegressionRunCheck(name string, run nativeEvidenceRegressionR
 				return fmt.Errorf("duplicate real run or run before package start: %s", key)
 			}
 			started[key]++
+			casePackages[key] = e.Package
 		case "pass", "fail", "skip":
 			if started[key] != 1 {
 				return fmt.Errorf("terminal without one prior run: %s", key)
@@ -1011,7 +1013,7 @@ func nativeEvidenceRegressionRunCheck(name string, run nativeEvidenceRegressionR
 	packageFailed := false
 	for pkg, result := range packages {
 		for key, terminal := range ended {
-			if strings.HasPrefix(key, pkg+"/") && terminal == "fail" && result != "fail" {
+			if casePackages[key] == pkg && terminal == "fail" && result != "fail" {
 				return fmt.Errorf("package terminal contradicts failed case")
 			}
 		}
@@ -1021,7 +1023,7 @@ func nativeEvidenceRegressionRunCheck(name string, run nativeEvidenceRegressionR
 		packageFailed = true
 		found := false
 		for key, result := range ended {
-			if strings.HasPrefix(key, pkg+"/") && result == "fail" {
+			if casePackages[key] == pkg && result == "fail" {
 				found = true
 			}
 		}
@@ -1241,6 +1243,57 @@ func TestCodexNativeEvidenceParser(t *testing.T) {
 			}[mutation]
 			if err == nil || !strings.Contains(err.Error(), want) {
 				t.Fatalf("%s did not fail at intended parser boundary: got %v; want %q", mutation, err, want)
+			}
+		})
+	}
+}
+
+func TestCodexNativeEvidencePackageOwnership(t *testing.T) {
+	const rootPackage = "github.com/calcosmic/Aether"
+	const commandPackage = rootPackage + "/cmd"
+	discovery := map[string][]string{
+		rootPackage:    {},
+		commandPackage: {"Example_pauseResume199Contract", "TestGoldenBuildVisualOutput"},
+	}
+	for _, mutation := range []string{"distinct-package-outcomes", "unexplained-root-failure", "command-success-with-failure"} {
+		t.Run(mutation, func(t *testing.T) {
+			run, events := nativeEvidenceParserFixture(t)
+			raw, err := json.Marshal(discovery)
+			if err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(t.TempDir(), "discovery.json")
+			if err := os.WriteFile(path, raw, 0600); err != nil {
+				t.Fatal(err)
+			}
+			run.Discovery = nativeEvidenceFile{path, lifecycleDigest(raw)}
+			events = append([]nativeEvidenceGoEvent{{Action: "start", Package: rootPackage}, {Action: "skip", Package: rootPackage}}, events...)
+			run.RawJSON = nativeEvidenceParserWriteEvents(t, filepath.Join(t.TempDir(), "baseline.jsonl"), events)
+			if err := nativeEvidenceRegressionRunCheck("normal", run, discovery); err != nil {
+				t.Fatalf("root skip and separate reviewed cmd failure must validate before mutation: %v", err)
+			}
+			switch mutation {
+			case "distinct-package-outcomes":
+				return
+			case "unexplained-root-failure":
+				events[1].Action = "fail"
+			case "command-success-with-failure":
+				// Remove diagnostic echo so the actual test/package mismatch
+				// is the boundary under test, not the echo's failing-package rule.
+				for i, event := range events {
+					if strings.HasPrefix(event.Output, "full-suite controller failed:") {
+						events = append(events[:i], nativeEvidenceGoEvent{Action: "pass", Package: commandPackage})
+						break
+					}
+				}
+			}
+			run.RawJSON = nativeEvidenceParserWriteEvents(t, filepath.Join(t.TempDir(), "mutated.jsonl"), events)
+			want := "package failure outside accounted test cases"
+			if mutation == "command-success-with-failure" {
+				want = "package terminal contradicts failed case"
+			}
+			if err := nativeEvidenceRegressionRunCheck("normal", run, discovery); err == nil || !strings.Contains(err.Error(), want) {
+				t.Fatalf("%s did not reject at exact package boundary: %v; want %q", mutation, err, want)
 			}
 		})
 	}
