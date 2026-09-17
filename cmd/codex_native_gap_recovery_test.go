@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -267,6 +269,30 @@ func nativeGapFinishedWorkerStable(r codexNativeLiveReceipt) bool {
 }
 
 func TestCodexNativeGapRecovery(t *testing.T) {
+	t.Run("finalizer_comparison_exact_scope", func(t *testing.T) {
+		root := t.TempDir()
+		path := filepath.Join(root, "coordinator.py")
+		script := []byte("coord = pathlib.Path(" + strconv.Quote(root) + ")\n")
+		liveSkillWrite(t, path, script)
+		r := codexNativeLiveReceipt{CoordinatorPath: path, CoordinatorSHA256: lifecycleDigest(script), FixtureRoot: root}
+		command := "diff -s " + filepath.Join(root, "post-finalize-1-state.json") + " " + filepath.Join(root, "post-finalize-2-state.json")
+		if !nativeParentCoordinationCommand(&r, []string{"/bin/sh", "-c", command}, root) {
+			t.Fatal("exact read-only comparison rejected")
+		}
+		for _, bad := range []string{strings.Replace(command, "diff -s", "diff --output=clamp.go", 1), command + "; touch clamp.go", strings.Replace(command, "-2-state", "-2-attempt", 1), strings.Replace(command, "-1-state", "-3-state", 1), strings.Replace(command, root, "/foreign", 1)} {
+			if nativeParentCoordinationCommand(&r, []string{"/bin/sh", "-c", bad}, root) {
+				t.Fatal("unowned or mutating comparison accepted")
+			}
+		}
+		if nativeParentCoordinationCommand(&r, []string{"/bin/sh", "-c", command}, "/foreign") {
+			t.Fatal("foreign cwd accepted")
+		}
+		liveSkillWrite(t, path, append(script, []byte("changed")...))
+		if nativeParentCoordinationCommand(&r, []string{"/bin/sh", "-c", command}, root) {
+			t.Fatal("modified coordinator accepted")
+		}
+	})
+
 	t.Run("recovery_does_not_erase_qualification_gaps", func(t *testing.T) {
 		r := codexNativeLiveReceipt{Scenario: "early-resume", ExitStatus: 0, TerminalCorroborated: true, SourceEventCorroborated: true, ChecksPassed: false, ParentSubstitution: true}
 		if !nativeGapEarlyResumeReady(r) {
@@ -467,4 +493,31 @@ func nativeGapRecoveryInventory(root string) map[string]string {
 // suppressing the actual fresh-parent leg for an accepted durable terminal.
 func nativeGapEarlyResumeReady(r codexNativeLiveReceipt) bool {
 	return nativeGapParentExitAccepted(r) && r.TerminalCorroborated && r.SourceEventCorroborated && r.CompletionPath == "" && !r.CreditObserved
+}
+
+// Recognize only comparison of the two immutable outputs from this reviewed
+// coordinator. Code-mode callers still require their actual unique command
+// events via nativeCorroboratedBatch; this does not authorize script execution.
+func nativeGapFinalizerComparison(r codexNativeLiveReceipt, words []string) bool {
+	if len(words) != 4 || words[0] != "diff" || words[1] != "-s" {
+		return false
+	}
+	raw, err := r.readEvidence(r.CoordinatorPath)
+	if err != nil || lifecycleDigest(raw) != r.CoordinatorSHA256 {
+		return false
+	}
+	match := regexp.MustCompile(`(?m)^coord = pathlib.Path\((.+)\)$`).FindStringSubmatch(string(raw))
+	if len(match) != 2 {
+		return false
+	}
+	root, err := strconv.Unquote(match[1])
+	if err != nil || !filepath.IsAbs(root) {
+		return false
+	}
+	for _, kind := range []string{"state", "attempt"} {
+		if words[2] == filepath.Join(root, "post-finalize-1-"+kind+".json") && words[3] == filepath.Join(root, "post-finalize-2-"+kind+".json") {
+			return true
+		}
+	}
+	return false
 }

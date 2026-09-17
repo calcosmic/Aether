@@ -3532,6 +3532,8 @@ func nativeParentCoordinationCommand(r *codexNativeLiveReceipt, command []string
 		return true
 	case "cmp":
 		return len(words) == 3 && !strings.HasPrefix(words[1], "-") && !strings.HasPrefix(words[2], "-")
+	case "diff":
+		return nativeGapFinalizerComparison(*r, words)
 	case "git":
 		if len(words) == 2 {
 			return words[1] == "status" || words[1] == "diff"
