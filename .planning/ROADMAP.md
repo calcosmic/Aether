@@ -796,7 +796,7 @@ Plans:
 
 **Wave 10**
 
-- [ ] 204.2-12-PLAN.md — Qualify fresh-parent early, partial and spawn-gap recovery; depends on 11.
+- [x] 204.2-12-PLAN.md — Qualify fresh-parent early, partial and spawn-gap recovery; depends on 11.
 
 **Wave 11**
 
