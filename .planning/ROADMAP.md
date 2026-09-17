@@ -751,7 +751,7 @@ For dummies: A worker actually receives the job, does it, and returns saved work
 
 **Context and research:** [204.2-CONTEXT.md](phases/204.2-codex-native-worker-lifecycle/204.2-CONTEXT.md), [204.2-RESEARCH.md](phases/204.2-codex-native-worker-lifecycle/204.2-RESEARCH.md).
 
-**Plans:** 9/9 execution reports delivered in 7 waves; verification is `gaps_found`. Required current-candidate native proof remains incomplete, and ANT-04 through ANT-07 remain pending.
+**Plans:** 16 plans: 9 execution reports delivered in 7 waves, plus 7 gap-closure plans in waves 8–13. Verification remains `gaps_found`; current-candidate native proof and ANT-04 through ANT-07 remain pending.
 
 Plans:
 
@@ -784,6 +784,33 @@ Plans:
 **Wave 7**
 
 - [x] 204.2-08-PLAN.md — Account for final candidate regressions and produce standard phase verification.
+
+**Wave 8 — gap closure**
+
+- [ ] 204.2-10-PLAN.md — Repair native attribution and prove ordinary, early-resume and independent-review tracers.
+- [ ] 204.2-13-PLAN.md — Diagnose readiness cleanup and enforce disposable NPM/regression preparation.
+
+**Wave 9**
+
+- [ ] 204.2-11-PLAN.md — Prove exact context and uncontaminated scoped answer delivery; depends on 10.
+
+**Wave 10**
+
+- [ ] 204.2-12-PLAN.md — Qualify fresh-parent early, partial and spawn-gap recovery; depends on 11.
+
+**Wave 11**
+
+- [ ] 204.2-14-PLAN.md — Measure actual sentinels, cancellation and unsupported-control refusals; depends on 12.
+
+**Wave 12**
+
+- [ ] 204.2-15-PLAN.md — Freeze source and run the complete current-candidate native/Claude matrix; depends on 13 and 14.
+
+**Wave 13**
+
+- [ ] 204.2-16-PLAN.md — Account exact final normal/race regressions and refresh canonical verification after archiving its original bytes; depends on 15.
+
+Gap plans preserve original reports/evidence, current Go/host/candidate identity, the exact historical failure comparison, partial NPM recovery disclosure, the installed narrow CalVault hotfix and Phase205 owner authority. Missing actual proof or authentication remains a gap. See [gap planning audit](phases/204.2-codex-native-worker-lifecycle/204.2-GAP-PLAN-AUDIT.md).
 
 ### Phase 204.3: Codex Workflow Parity (INSERTED)
 
