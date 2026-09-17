@@ -440,6 +440,9 @@
         "brief": {
           "type": "string"
         },
+        "brief_sha256": {
+          "type": "string"
+        },
         "brief_path": {
           "type": "string"
         },
@@ -599,6 +602,15 @@
           "type": "string"
         },
         "worker_briefs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "context_scope": {
+          "$ref": "#/$defs/codexNativeContextScope"
+        },
+        "context_decision_ids": {
           "items": {
             "type": "string"
           },
@@ -962,6 +974,22 @@
         "matches",
         "sources",
         "reason"
+      ]
+    },
+    "codexNativeContextScope": {
+      "properties": {
+        "goal_hash": {
+          "type": "string"
+        },
+        "session_id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "goal_hash",
+        "session_id"
       ]
     },
     "codexQueenExecutionPolicy": {
