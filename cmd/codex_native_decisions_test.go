@@ -383,3 +383,257 @@ func TestCodexNativeDecisionFactsOnce(t *testing.T) {
 		t.Fatal("replay emitted another fact")
 	}
 }
+
+func nativeDecisionCommandForTest(t *testing.T, args ...string) (map[string]any, error) {
+	t.Helper()
+	command, rest, err := rootCmd.Find(args)
+	if err != nil {
+		return nil, err
+	}
+	if command.Name() != args[0] && len(args) < 2 {
+		return nil, fmt.Errorf("command missing")
+	}
+	resetFlags(command)
+	defer resetFlags(command)
+	if err = command.ParseFlags(rest); err != nil {
+		return nil, err
+	}
+	oldOut, oldErr := stdout, stderr
+	var out, errors bytes.Buffer
+	stdout, stderr = &out, &errors
+	defer func() { stdout, stderr = oldOut, oldErr }()
+	if command.RunE == nil {
+		return nil, fmt.Errorf("registered operation missing: %v", args)
+	}
+	if err = command.RunE(command, nil); err != nil {
+		return nil, err
+	}
+	var envelope struct {
+		OK     bool           `json:"ok"`
+		Result map[string]any `json:"result"`
+	}
+	if err = json.Unmarshal(out.Bytes(), &envelope); err != nil {
+		return nil, fmt.Errorf("command output %s / %s: %w", out.String(), errors.String(), err)
+	}
+	if !envelope.OK {
+		return nil, fmt.Errorf("command refused: %s", out.String())
+	}
+	return envelope.Result, nil
+}
+func nativeQuestionCommandForTest(t *testing.T, request codexNativeWorkerRequest, key, question string) map[string]any {
+	t.Helper()
+	wire := nativeContextWireForTest(t, request)
+	if key != "" {
+		wire["question"] = map[string]any{"question_id": key, "question": question}
+	}
+	result, err := nativeDecisionCommandForTest(t, "codex-native-worker", "question", "--request", writeCodexNativeRequestForTest(t, wire))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, ok := result["decisions"].([]any)
+	if !ok || len(rows) != 1 {
+		t.Fatalf("missing bound runtime question: %#v", result)
+	}
+	return rows[0].(map[string]any)
+}
+func answerNativeViewForTest(t *testing.T, view map[string]any, answer string) {
+	t.Helper()
+	path, ok := view["answer_request_path"].(string)
+	if !ok {
+		t.Fatalf("missing exact answer request path: %#v", view)
+	}
+	if view["answer_command"] != "aether decision-answer --native-request "+shellQuote(path) {
+		t.Fatalf("answer command not bound to returned runtime file: %#v", view)
+	}
+	request, err := loadCodexNativeDecisionAnswerRequest(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if request.Answer != "" {
+		t.Fatal("runtime invented the owner answer")
+	}
+	request.Answer = answer
+	raw, _ := json.Marshal(request)
+	if err = os.WriteFile(path, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = nativeDecisionCommandForTest(t, "decision-answer", "--native-request", path); err != nil {
+		t.Fatal(err)
+	}
+}
+func TestCodexNativeDecisionDelivered(t *testing.T) {
+	_, requests := nativeDecisionWorkersFixture(t, 2)
+	question := "Which archive boundary applies to this fixture?"
+	view := nativeQuestionCommandForTest(t, requests[0], "harness-live-event", question)
+	if view["status"] != "pending" {
+		t.Fatalf("unanswered choice not pending: %#v", view)
+	}
+	answer := "HARNESS_DELIVERED_ONLY_TO_CHILD café 日本語"
+	answerNativeViewForTest(t, view, answer)
+	before := nativeDecisionStoreBytes(t)
+	result, err := nativeDecisionCommandForTest(t, "codex-native-worker", "context", "--request", nativeRequestPath(t, requests[0]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	delivery, ok := result["context_delivery"].(map[string]any)
+	if !ok {
+		t.Fatalf("no actual returned delivery: %#v", result)
+	}
+	payload := delivery["payload"].(string)
+	if strings.Count(payload, answer) != 1 || !strings.Contains(payload, question) || delivery["child_id"] != requests[0].ChildID || delivery["payload_sha256"] != lifecycleDigest([]byte(payload)) {
+		t.Fatalf("wrong downstream message bytes: %#v", delivery)
+	}
+	other, err := nativeDecisionCommandForTest(t, "codex-native-worker", "context", "--request", nativeRequestPath(t, requests[1]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if other["context_status"] != "no_updates" || other["context_delivery"] != nil {
+		t.Fatalf("answer crossed child: %#v", other)
+	}
+	if !reflect.DeepEqual(before, nativeDecisionStoreBytes(t)) {
+		t.Fatal("context read acknowledged or mutated answer")
+	}
+	ack := nativeContextAckForTest(t, requests[0], delivery)
+	if _, err = nativeDecisionCommandForTest(t, "codex-native-worker", "observe", "--request", writeCodexNativeRequestForTest(t, ack)); err != nil {
+		t.Fatal(err)
+	}
+	after := nativeDecisionStoreBytes(t)
+	if _, err = nativeDecisionCommandForTest(t, "codex-native-worker", "observe", "--request", writeCodexNativeRequestForTest(t, ack)); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(after, nativeDecisionStoreBytes(t)) {
+		t.Fatal("ACK replay changed durable facts")
+	}
+	result, err = nativeDecisionCommandForTest(t, "codex-native-worker", "context", "--request", nativeRequestPath(t, requests[0]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result["context_status"] != "no_updates" {
+		t.Fatal("same answer delivered again")
+	}
+	view = nativeQuestionCommandForTest(t, requests[0], "harness-live-event", question)
+	if view["status"] != "answered" || view["answer_request_path"] != nil {
+		t.Fatalf("resolved question reopened: %#v", view)
+	}
+}
+func TestCodexNativeDecisionStaleInterleaving(t *testing.T) {
+	for _, operation := range []string{"question", "answer", "context"} {
+		t.Run(operation, func(t *testing.T) {
+			request, d := nativeDecisionFixture(t)
+			change := func() {
+				var state colony.ColonyState
+				_ = store.LoadJSON("COLONY_STATE.json", &state)
+				*state.Goal += " changed after request"
+				if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var before map[string]string
+			hook := func() { change(); before = nativeDecisionStoreBytes(t) }
+			switch operation {
+			case "question":
+				_, err := admitCodexNativeDecision(request, codexNativeQuestion{QuestionID: "interleaved", Question: "Late question?"}, codexNativeDecisionHooks{BeforeWrite: hook})
+				if err == nil {
+					t.Fatal("stale question crossed lock")
+				}
+			case "answer":
+				_, _, err := answerCodexNativeDecision(nativeAnswerForTest(d), codexNativeDecisionHooks{BeforeWrite: hook})
+				if err == nil {
+					t.Fatal("stale answer crossed lock")
+				}
+			case "context":
+				if _, _, err := answerCodexNativeDecision(nativeAnswerForTest(d), codexNativeDecisionHooks{}); err != nil {
+					t.Fatal(err)
+				}
+				_, err := runCodexNativeWorkerWithHooks("context", nativeRequestPath(t, request), codexNativeWorkerHooks{AfterContextRender: hook})
+				if err == nil {
+					t.Fatal("stale native answer returned after rendering")
+				}
+			}
+			if !reflect.DeepEqual(before, nativeDecisionStoreBytes(t)) {
+				t.Fatal("stale operation added a mutation")
+			}
+		})
+	}
+	t.Run("changed-answer-after-render", func(t *testing.T) {
+		request, d := nativeDecisionFixture(t)
+		if _, _, err := answerCodexNativeDecision(nativeAnswerForTest(d), codexNativeDecisionHooks{}); err != nil {
+			t.Fatal(err)
+		}
+		var before map[string]string
+		_, err := runCodexNativeWorkerWithHooks("context", nativeRequestPath(t, request), codexNativeWorkerHooks{AfterContextRender: func() {
+			var file PendingDecisionFile
+			_ = store.LoadJSON(pendingDecisionsFile, &file)
+			file.Decisions[0].Resolution = "changed after rendering"
+			_ = store.SaveJSON(pendingDecisionsFile, file)
+			before = nativeDecisionStoreBytes(t)
+		}})
+		if err == nil {
+			t.Fatal("changed answer returned under stale payload identity")
+		}
+		if !reflect.DeepEqual(before, nativeDecisionStoreBytes(t)) {
+			t.Fatal("read changed state")
+		}
+	})
+}
+func TestCodexNativeDecisionTerminalHandoff(t *testing.T) {
+	manifest, requests := nativeDecisionWorkersFixture(t, 1)
+	request := requests[0]
+	terminal := nativeTerminalRequestForTest(t, request, manifest.Dispatches[0].Caste, "blocked")
+	question := "Which terminal handoff boundary needs owner input?"
+	terminal.Result.Handoff.OpenDecisions = []string{question}
+	if _, err := nativeDecisionCommandForTest(t, "codex-native-worker", "record", "--request", nativeRequestPath(t, terminal)); err != nil {
+		t.Fatal(err)
+	}
+	journal := nativeJournalBytes(t)
+	view := nativeQuestionCommandForTest(t, request, "", "")
+	if view["status"] != "pending" || view["worker_terminal"] != true {
+		t.Fatalf("terminal question not preserved: %#v", view)
+	}
+	answerNativeViewForTest(t, view, "HARNESS_TERMINAL_ANSWER")
+	view = nativeQuestionCommandForTest(t, request, "", "")
+	if view["status"] != "answered" || view["worker_terminal"] != true {
+		t.Fatal("terminal decision reopened")
+	}
+	if _, err := nativeDecisionCommandForTest(t, "codex-native-worker", "context", "--request", nativeRequestPath(t, request)); err == nil {
+		t.Fatal("terminal child implicitly reopened for answer")
+	}
+	if !bytes.Equal(journal, nativeJournalBytes(t)) {
+		t.Fatal("terminal result changed while answering")
+	}
+}
+func TestCodexNativeDecisionGuideContract(t *testing.T) {
+	for _, platform := range []string{"codex", "claude", "opencode"} {
+		t.Run(platform, func(t *testing.T) {
+			guide, err := buildCommandGuide("build", platform)
+			if err != nil {
+				t.Fatal(err)
+			}
+			text := strings.Join(append(append(guide.PreSteps, guide.PostSteps...), guide.DriftGuards...), "\n")
+			markers := []string{"codex-native-worker question", "codex-native-worker context", "decision-answer --native-request", "context_delivered"}
+			for _, marker := range markers {
+				if strings.Contains(text, marker) != (platform == "codex") {
+					t.Errorf("%s native guide marker %q isolation failed", platform, marker)
+				}
+			}
+			if platform != "codex" {
+				if guide.RunCommand != "AETHER_OUTPUT_MODE=json aether build-finalize <phase> --completion-file <Go-owned completion_path returned by build-completion-stage>" {
+					t.Fatal("primary platform finalizer changed")
+				}
+				wrapper := "generated " + platform + " slash-command wrapper"
+				if !strings.Contains(text, wrapper) {
+					t.Fatalf("primary wrapper guidance missing: %s", wrapper)
+				}
+			}
+		})
+	}
+	source, err := os.ReadFile("../.aether/skills/colony/aether-colony-build-cycle/SKILL.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, marker := range []string{"codex-native-worker question", "codex-native-worker context", "decision-answer --native-request", "context_delivered"} {
+		if !bytes.Contains(source, []byte(marker)) {
+			t.Errorf("canonical support lacks %s", marker)
+		}
+	}
+}
