@@ -1283,6 +1283,21 @@ func TestCodexNativeWorkerReceiptValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	var header struct {
+		SchemaVersion string `json:"schema_version"`
+	}
+	if err := json.Unmarshal(raw, &header); err != nil {
+		t.Fatal(err)
+	}
+	switch header.SchemaVersion {
+	case "aether-native-final-qualification/v1":
+		TestCodexNativePhaseEvidence(t)
+		return
+	case "", "codex-native-tracer/v1":
+		// Legacy unversioned raw receipts retain the original full replay checks.
+	default:
+		t.Fatalf("unsupported native receipt schema %q", header.SchemaVersion)
+	}
 	var receipt codexNativeLiveReceipt
 	if err := json.Unmarshal(raw, &receipt); err != nil {
 		t.Fatal(err)
