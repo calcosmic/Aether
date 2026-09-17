@@ -555,3 +555,52 @@ func TestCodexNativeRecoveryProcessLane(t *testing.T) {
 		t.Fatalf("ordinary subprocess recovery regressed: %+v %v", outcome, err)
 	}
 }
+
+func TestCodexNativeRecoveryContextActivityTimestamp(t *testing.T) {
+	for _, running := range []bool{false, true} {
+		t.Run(fmt.Sprint(running), func(t *testing.T) {
+			_, request := nativeBoundForTest(t)
+			observed := time.Now().UTC()
+			if running {
+				if _, err := runCodexNativeWorker("observe", nativeObservationPath(t, request, "running", observed)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			path, attempt, _ := loadLatestBuildAttempt(1)
+			// Retained Plan 03 context-send event shape, pinned at de76511c.
+			// This pure projection control exercises Plan 06's timestamp/status
+			// fields; Plan 03 separately owns admission and HostStatus filtering.
+			attempt.WorkerRuns[0].Native.Observations = append(attempt.WorkerRuns[0].Native.Observations, codexNativeHostObservation{
+				SchemaVersion: 1, Status: "context_delivered", ChildID: request.ChildID,
+				ObservedAt:    observed.Add(time.Minute).Format(time.RFC3339Nano),
+				SourceEventID: "context-send-event", SourceEventSHA256: strings.Repeat("c", 64),
+			})
+			if err := store.SaveJSON(path, attempt); err != nil {
+				t.Fatal(err)
+			}
+			before := nativeRecoveryStoreSnapshot(t)
+			var state colony.ColonyState
+			if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+				t.Fatal(err)
+			}
+			recovery := buildCodexNativeRecovery(state)
+			if recovery == nil || !recovery.Valid {
+				t.Fatalf("context event invalidated accepted native recovery: %+v", recovery)
+			}
+			workers := append(recovery.Active, recovery.Unresolved...)
+			if len(workers) != 1 {
+				t.Fatalf("lost native assignment: %+v", recovery)
+			}
+			wantTime, wantStatus := "", ""
+			if running {
+				wantTime, wantStatus = observed.Format(time.RFC3339Nano), "running"
+			}
+			if workers[0].ObservedAt != wantTime || workers[0].LastHostStatus != wantStatus {
+				t.Fatalf("context delivery replaced host activity time/status: %+v; want %q %q", workers[0], wantTime, wantStatus)
+			}
+			if !reflect.DeepEqual(before, nativeRecoveryStoreSnapshot(t)) {
+				t.Fatal("activity projection rewrote retained context evidence")
+			}
+		})
+	}
+}
