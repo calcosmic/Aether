@@ -117,9 +117,13 @@ func buildCodexNativeRecovery(state colony.ColonyState) *codexNativeRecovery {
 		projected := projectCodexNativeWorkerState(*saved)
 		item.LaunchID, item.HostSessionID, item.ChildID = saved.ProviderRunID, saved.Native.HostSessionID, saved.Native.ChildID
 		item.HostStatus, item.CancelRequested = projected.HostStatus, projected.CancelRequested
-		if n := len(saved.Native.Observations); n > 0 {
-			item.ObservedAt = saved.Native.Observations[n-1].ObservedAt
-			item.LastHostStatus = saved.Native.Observations[n-1].Status
+		for i := len(saved.Native.Observations) - 1; i >= 0; i-- {
+			observation := saved.Native.Observations[i]
+			if observation.Status == "context_delivered" {
+				continue
+			}
+			item.ObservedAt, item.LastHostStatus = observation.ObservedAt, observation.Status
+			break
 		}
 		if !projected.Terminal {
 			if item.ChildID == "" {
