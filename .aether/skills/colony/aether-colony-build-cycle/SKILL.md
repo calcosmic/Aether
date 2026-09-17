@@ -321,8 +321,9 @@ aether codex-native-worker reserve --request <absolute temporary request file>
    Unsupported workspace/permission requests refuse before launch. Only a fresh
    `launch_allowed: true` permits one native `spawn_agent`. Use the returned
    dispatch's role and name; pass `worker.native.prompt` verbatim, including its
-   wait instruction. It contains the capsule, exact brief-file bytes (inline
-   fallback only when no path exists), matched skills and current new answers.
+   wait instruction. Go assembles it from the capsule, verified
+   `dispatch.brief_path` bytes (using inline `dispatch.brief` only when no path
+   exists), matched skills and current new answers. Do not reconstruct the prompt.
    The child must wait without checks or edits. Never launch on replay.
    Per-child read-only or narrow write restrictions, separate native worktrees,
    and Aether-governed nesting are unsupported. A request that requires governed
@@ -427,15 +428,20 @@ aether codex-native-worker context --request <same bound worker request file>
     the missing capability; never invent it or respawn the finished helper.
     Resume only saved never-started assignments that the runtime admits.
     An unresolved launch stays unresolved; reconnect only to its actual child.
-    Record real observations with `aether codex-native-worker observe --request
-    <file>`. An interrupt request records `cancel_requested`, never `cancelled`.
+    Record real observations with `aether codex-native-worker observe --request <file>`.
+    An interrupt request records `cancel_requested`, never `cancelled`.
     Only an actual host cancellation acknowledgement permits `cancelled`;
     idle, close, release, elapsed time and process loss are not that evidence.
     Never copy native results to legacy subprocess result files. The existing
     native journal and Go-owned stage remain the saved-result authority.
 13. Task receipts cover actual proved work. Assigned `covered_task_ids` are scope,
-    not credit. Only the Go finalizer can grant `completed_task_ids`; never edit
-    runtime state, assignment fields, or completion credit by hand.
+    not credit. A worker that finishes only part of its job submits a
+    `task_receipts` array: one entry per proved task with `task_id`, `status`,
+    `summary`, `files_created`, `files_modified`, `tests_written`, and its own
+    `handoff`. A task with no receipt is unfinished; never infer completion from
+    a related file change.
+    An accepted task receipt is admission, not completion credit: only the runtime's root-backed finalization can grant `completed_task_ids`.
+    Never author `covered_task_ids` or `completed_task_ids` by hand in a manifest or in colony state; the runtime owns both.
 14. Once required terminal records exist, stage from the existing journal with
     schema version, phase, and execution binding only:
 

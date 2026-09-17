@@ -10,6 +10,8 @@ Use the Go `aether` CLI as the source of truth. This wrapper presents structured
 
 ## Explicit Dependency Repair
 
+**Purpose:** Validate or repair dependency artifacts through the owner-requested Go route without starting planning workers.
+
 If the owner supplied `--repair-artifact`, run `AETHER_OUTPUT_MODE=json aether plan --repair-artifact` before the planning steps below, then render its result and stop this flow. Do not select a preset or launch workers. Conflicting generation/revision flags must be refused, not discarded.
 
 The result names its scope: an accepted revision is validated without changing its plan or approval bindings; only the legacy `.aether/data/planning/phase-plan.json` staging artifact may be repaired when there is no accepted revision. Numeric task IDs and semantic IDs identify the same tasks, including across phases. Never rewrite only `plan.phases`, the accepted candidate, or approval records as a dependency workaround. Follow the returned next command; invalid approved work needs the existing candidate review and acceptance path.

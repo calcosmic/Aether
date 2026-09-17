@@ -212,10 +212,13 @@ func TestCodexLifecycleGuidesRequireVisibleWorkerActivity(t *testing.T) {
 }
 
 func TestLifecycleGuidesDocumentApprovedTempCompletionContract(t *testing.T) {
-	for _, command := range []string{"colonize", "plan", "build", "continue", "seal"} {
-		guide, err := buildCommandGuide(command, "codex")
+	for _, surface := range []struct{ command, platform string }{
+		{"colonize", "codex"}, {"plan", "codex"}, {"continue", "codex"}, {"seal", "codex"},
+		{"build", "claude"}, {"build", "opencode"},
+	} {
+		guide, err := buildCommandGuide(surface.command, surface.platform)
 		if err != nil {
-			t.Fatalf("buildCommandGuide(%q): %v", command, err)
+			t.Fatalf("buildCommandGuide(%q, %q): %v", surface.command, surface.platform, err)
 		}
 		text := strings.Join(append(append([]string{}, guide.PreSteps...), append([]string{guide.RunCommand}, guide.PostSteps...)...), "\n")
 		for _, want := range []string{
@@ -224,8 +227,27 @@ func TestLifecycleGuidesDocumentApprovedTempCompletionContract(t *testing.T) {
 			"<approved temp completion JSON>",
 		} {
 			if !strings.Contains(text, want) {
-				t.Errorf("%s command-guide missing approved temp completion contract %q", command, want)
+				t.Errorf("%s/%s command-guide missing approved temp completion contract %q", surface.platform, surface.command, want)
 			}
+		}
+	}
+	guide, err := buildCommandGuide("build", "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := strings.Join(append(append([]string{}, guide.PreSteps...), append([]string{guide.RunCommand}, guide.PostSteps...)...), "\n")
+	for _, want := range []string{
+		"strict JSON requests", "absolute regular file", "aether-worker-request-*", "system temporary directory",
+		"aether codex-native-worker record --request", "aether codex-native-worker stage --request",
+		"result.completion_path", "--completion-file <Go-owned completion_path returned by codex-native-worker stage>",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("codex/build guide missing native request/journal completion contract %q", want)
+		}
+	}
+	for _, forbidden := range []string{"<approved temp completion JSON>", "<workflow>-completion.json", "aether build-completion-stage"} {
+		if strings.Contains(text, forbidden) {
+			t.Errorf("codex/build guide still teaches parent-authored aggregate completion through %q", forbidden)
 		}
 	}
 }
