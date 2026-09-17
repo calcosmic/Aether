@@ -697,8 +697,24 @@ func nativePrepareLiveFixture(t *testing.T, root, runRoot string) {
 	liveSkillWriteJSON(t, filepath.Join(runRoot, "prepared-plan-candidate.json"), candidate)
 }
 
+func resetCodexNativeDerivedEvidence(r *codexNativeLiveReceipt) {
+	r.SessionID, r.ChildID, r.ChildEvents = "", "", ""
+	r.AttemptPath, r.AttemptID, r.RunID, r.LaunchID, r.WorkerName, r.TaskID = "", "", "", "", "", ""
+	r.PromptSHA256, r.ResultSHA256, r.CompletionPath, r.BoundHostSessionID = "", "", "", ""
+	r.SavedTerminal, r.SavedSourceEventID, r.SavedSourceEventSHA256 = nil, "", ""
+	r.ObservedTools, r.ParentUnclassified = nil, nil
+	r.ChecksPassed, r.ChildEditObserved, r.CreditObserved, r.ParentSubstitution = false, false, false, false
+	r.SkillRead, r.SupportRead, r.GuideRead = false, false, false
+	r.NativeSpawnCount, r.TerminalCorroborated, r.SourceEventCorroborated = 0, false, false
+	r.EmptyResultRefused, r.FinalSource = false, ""
+	r.LaunchMessageEncoding, r.PromptDeliveryVerification = "", ""
+	r.ResumeSessionID = ""
+	r.ResumeWorkerStable, r.ResumeNoSpawn, r.ResumeInspectObserved, r.FinalizationReplayStable = false, false, false, false
+}
+
 func nativeCollectLiveEvidence(t *testing.T, r *codexNativeLiveReceipt, runRoot, fixtureHome string) {
 	t.Helper()
+	resetCodexNativeDerivedEvidence(r)
 	if source, err := os.ReadFile(filepath.Join(r.FixtureRoot, "clamp.go")); err == nil {
 		r.FinalSource = string(source)
 	}

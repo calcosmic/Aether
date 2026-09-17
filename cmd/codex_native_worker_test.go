@@ -1200,6 +1200,25 @@ func TestCodexNativeFixtureQuestionCommandBoundary(t *testing.T) {
 	}
 }
 
+func TestCodexNativeEvidenceRederivation(t *testing.T) {
+	root := t.TempDir()
+	events := filepath.Join(root, "events.jsonl")
+	if err := os.WriteFile(events, []byte("{}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	r := codexNativeLiveReceipt{FixtureRoot: root, RawEvents: events, SessionID: "cached-parent", ChildID: "cached-child", AttemptID: "cached-attempt", ResultSHA256: "cached-result", ObservedTools: []string{"cached-tool"}, ParentUnclassified: []string{"cached-command"}, ChecksPassed: true, ChildEditObserved: true, CreditObserved: true, SkillRead: true, SupportRead: true, GuideRead: true, TerminalCorroborated: true, SourceEventCorroborated: true, EmptyResultRefused: true, NativeSpawnCount: 1, ResumeSessionID: "cached-resume", ResumeWorkerStable: true, ResumeNoSpawn: true, ResumeInspectObserved: true, FinalizationReplayStable: true}
+	nativeCollectLiveEvidence(t, &r, t.TempDir(), root)
+	if r.SessionID != "" || r.ChildID != "" || r.AttemptID != "" || r.ResultSHA256 != "" || len(r.ObservedTools) != 0 || len(r.ParentUnclassified) != 0 || r.ChecksPassed || r.ChildEditObserved || r.CreditObserved || r.SkillRead || r.SupportRead || r.GuideRead || r.TerminalCorroborated || r.SourceEventCorroborated || r.EmptyResultRefused || r.NativeSpawnCount != 0 || r.ResumeSessionID != "" || r.ResumeWorkerStable || r.ResumeNoSpawn || r.ResumeInspectObserved || r.FinalizationReplayStable {
+		t.Fatalf("missing current source retained cached qualification: %+v", r)
+	}
+	before, _ := json.Marshal(r)
+	nativeCollectLiveEvidence(t, &r, t.TempDir(), root)
+	after, _ := json.Marshal(r)
+	if !bytes.Equal(before, after) {
+		t.Fatal("re-deriving unchanged evidence changed the derived receipt")
+	}
+}
+
 func TestCodexNativeWorkerReceiptValidation(t *testing.T) {
 	if err := validateCodexNativeLiveReceipt(codexNativeLiveReceipt{ExitStatus: 0}); err == nil {
 		t.Fatal("empty live evidence passed")
@@ -1232,6 +1251,15 @@ func TestCodexNativeWorkerReceiptValidation(t *testing.T) {
 	}
 	if err := validateCodexNativeLiveReceipt(receipt); err != nil {
 		t.Fatalf("raw receipt replay: %v", err)
+	}
+	firstDerived, _ := json.Marshal(receipt)
+	nativeCollectLiveEvidence(t, &receipt, t.TempDir(), filepath.Join(filepath.Dir(receipt.FixtureRoot), "home"))
+	if receipt.Scenario == "early-resume" {
+		nativeCollectResumeEvidence(t, &receipt, t.TempDir(), filepath.Join(filepath.Dir(receipt.FixtureRoot), "home"), filepath.Join(filepath.Dir(receipt.FixtureRoot), "coordination"))
+	}
+	secondDerived, _ := json.Marshal(receipt)
+	if !bytes.Equal(firstDerived, secondDerived) {
+		t.Fatal("unchanged raw capture produced different derived receipt")
 	}
 	t.Logf("raw native receipt replay passed for attempt %s child %s", receipt.AttemptID, receipt.ChildID)
 	// Evidence-derived facts are mandatory; a terminal claim alone cannot pass.
