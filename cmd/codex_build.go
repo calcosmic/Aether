@@ -135,6 +135,7 @@ type codexBuildDispatch struct {
 	// BriefPath is the repo-display path to the file holding the verbatim
 	// composed brief (the same bytes as Brief above); the wrapper may read
 	// this instead of the inline Brief field.
+	BriefSHA256       string                  `json:"brief_sha256,omitempty"`
 	BriefPath         string                  `json:"brief_path,omitempty"`
 	SkillSection      string                  `json:"skill_section,omitempty"`
 	SkillCount        int                     `json:"skill_count,omitempty"`
@@ -189,6 +190,8 @@ type codexBuildManifest struct {
 	// the hosted/subprocess path already computes and shares its own capsule
 	// (see executeCodexBuildDispatches), and the finalize record does not
 	// deliver prompts.
+	ContextScope              *codexNativeContextScope              `json:"context_scope,omitempty"`
+	ContextDecisionIDs        []string                              `json:"context_decision_ids,omitempty"`
 	ContextCapsule            string                                `json:"context_capsule,omitempty"`
 	Dispatches                []codexBuildDispatch                  `json:"dispatches"`
 	JobDecisions              []coherentJobDecision                 `json:"job_decisions,omitempty"`
@@ -2941,8 +2944,11 @@ func buildCodexBuildManifest(root string, state colony.ColonyState, phase colony
 	// never be computed inside a per-dispatch loop (that would reintroduce
 	// the duplication CONTEXT-03 exists to prevent).
 	contextCapsule := ""
+	var contextDecisionIDs []string
+	var contextScope *codexNativeContextScope
 	if planOnly {
-		contextCapsule = resolveCodexWorkerContext()
+		contextCapsule, _, contextDecisionIDs = resolveCodexWorkerContextSnapshot()
+		contextScope = codexNativeContextScopeFromState(state)
 	}
 
 	return codexBuildManifest{
@@ -2970,6 +2976,8 @@ func buildCodexBuildManifest(root string, state colony.ColonyState, phase colony
 		ClaimsPath:              claimsPath,
 		WorkerBriefs:            briefs,
 		ContextCapsule:          contextCapsule,
+		ContextDecisionIDs:      contextDecisionIDs,
+		ContextScope:            contextScope,
 		Dispatches:              append([]codexBuildDispatch{}, dispatches...),
 		SelectedTasks:           append([]string{}, selectedTaskIDs...),
 		Tasks:                   codexBuildTaskPlans(phase),
@@ -3243,6 +3251,7 @@ func prepareBuildWorkerBriefFiles(root string, phase colony.Phase, buildDirRel s
 		briefPaths = append(briefPaths, displayPath)
 		prepared = append(prepared, preparedBuildWorkerBriefFile{RelativePath: briefRel, Content: content})
 		dispatches[i].BriefPath = displayPath
+		dispatches[i].BriefSHA256 = lifecycleDigest([]byte(content))
 		if clearInlineBrief {
 			// The prepared file becomes the single source of truth once the
 			// durable start receipt exists and persistBuildWorkerBriefFiles runs.

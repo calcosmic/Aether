@@ -115,9 +115,11 @@ type clarifiedIntentEntry struct {
 }
 
 type clarifiedIntentRenderResult struct {
-	Lines    []string
-	Blocked  []colonyPrimeLedgerItem
-	Warnings []string
+	// DecisionIDs correspond one-for-one with admitted Lines, after integrity and budget checks.
+	DecisionIDs []string
+	Lines       []string
+	Blocked     []colonyPrimeLedgerItem
+	Warnings    []string
 }
 
 type pendingDecisionScope struct {
@@ -2016,6 +2018,7 @@ func renderClarifiedIntentPromptEntriesWithIntegrity(entries []clarifiedIntentEn
 			break
 		}
 		result.Lines = append(result.Lines, item.line)
+		result.DecisionIDs = append(result.DecisionIDs, item.entry.ID)
 		sectionChars += lineChars
 	}
 	return result

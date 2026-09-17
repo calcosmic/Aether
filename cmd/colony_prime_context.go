@@ -29,18 +29,19 @@ const (
 const charterNoGovernanceFallback = "No formal governance detected -- colony should establish conventions"
 
 type colonyPrimeOutput struct {
-	Context       string            `json:"context"`
-	PromptSection string            `json:"prompt_section"`
-	SignalCount   int               `json:"signal_count"`
-	InstinctCount int               `json:"instinct_count"`
-	ReviewCount   int               `json:"review_count"`
-	LogLine       string            `json:"log_line"`
-	Budget        int               `json:"budget"`
-	Used          int               `json:"used"`
-	Sections      int               `json:"sections"`
-	Trimmed       []string          `json:"trimmed"`
-	Warnings      []string          `json:"warnings,omitempty"`
-	Ledger        colonyPrimeLedger `json:"ledger"`
+	ContextDecisionIDs []string          `json:"context_decision_ids,omitempty"`
+	Context            string            `json:"context"`
+	PromptSection      string            `json:"prompt_section"`
+	SignalCount        int               `json:"signal_count"`
+	InstinctCount      int               `json:"instinct_count"`
+	ReviewCount        int               `json:"review_count"`
+	LogLine            string            `json:"log_line"`
+	Budget             int               `json:"budget"`
+	Used               int               `json:"used"`
+	Sections           int               `json:"sections"`
+	Trimmed            []string          `json:"trimmed"`
+	Warnings           []string          `json:"warnings,omitempty"`
+	Ledger             colonyPrimeLedger `json:"ledger"`
 }
 
 type colonyPrimeLedger struct {
@@ -881,6 +882,8 @@ func buildColonyPrimeOutputOpts(opts colonyPrimeOptions) colonyPrimeOutput {
 	}
 
 	clarifiedIntent := clarifiedIntentPromptRenderResultForScope(pendingDecisionScopeFromState(state))
+	var clarifiedIntentContent string
+	var clarifiedIntentEnds []int
 	if len(clarifiedIntent.Warnings) > 0 {
 		result.Warnings = append(result.Warnings, clarifiedIntent.Warnings...)
 	}
@@ -892,8 +895,10 @@ func buildColonyPrimeOutputOpts(opts colonyPrimeOptions) colonyPrimeOutput {
 		writeSectionHeader(&clarifySB, "clarified_intent", "## CLARIFIED INTENT\n\n")
 		for _, clarification := range clarifiedIntent.Lines {
 			clarifySB.WriteString(clarification)
+			clarifiedIntentEnds = append(clarifiedIntentEnds, clarifySB.Len())
 			clarifySB.WriteString("\n")
 		}
+		clarifiedIntentContent = clarifySB.String()
 		intentProtected, intentPreserveReason := protectedSectionPolicy("clarified_intent")
 		sections = append(sections, colonyPrimeSection{
 			name:              "clarified_intent",
@@ -1071,6 +1076,15 @@ func buildColonyPrimeOutputOpts(opts colonyPrimeOptions) colonyPrimeOutput {
 	ranking := colony.RankContextCandidates(allowedCandidates, budget)
 	var assembled strings.Builder
 	for _, item := range ranking.Included {
+		if item.Name == "clarified_intent" {
+			// Carry identity only for complete renderer-produced lines that survived
+			// packing. This is an exact byte-prefix check, never a prose search.
+			for i, end := range clarifiedIntentEnds {
+				if strings.HasPrefix(item.Content, clarifiedIntentContent[:end]) {
+					result.ContextDecisionIDs = append(result.ContextDecisionIDs, clarifiedIntent.DecisionIDs[i])
+				}
+			}
+		}
 		if assembled.Len() > 0 {
 			assembled.WriteString("\n")
 		}
@@ -1216,7 +1230,15 @@ func resolveCodexWorkerContext() string {
 // delegates here so there is one assembly path and the capsule's side effects
 // (hive retrieval recording, ledger writes) happen once per call, not twice.
 func resolveCodexWorkerContextWithTrim() (string, []string) {
+	context, trimmed, _ := resolveCodexWorkerContextSnapshot()
+	return context, trimmed
+}
+
+// Snapshot retains answer identity from the same assembly that produced the
+// capsule. Existing consumers retain their exact text and fallback behavior.
+func resolveCodexWorkerContextSnapshot() (string, []string, []string) {
 	output := buildColonyPrimeOutput(true)
+	decisionIDs := append([]string(nil), output.ContextDecisionIDs...)
 	context := strings.TrimSpace(output.PromptSection)
 	trimmed := append([]string(nil), output.Trimmed...)
 	if context == "" {
@@ -1224,10 +1246,11 @@ func resolveCodexWorkerContextWithTrim() (string, []string) {
 		// colony-prime trim ledger above does not describe it.
 		context = buildContextCapsuleOutput(true, 8, 3, 2, 220).PromptSection
 		trimmed = nil
+		decisionIDs = nil
 	}
 	if len(context) < 128 {
 		fmt.Fprintf(os.Stderr, "⚠ Context capsule below minimum threshold (%d chars, min 128) — dispatch blocked to prevent zero-context worker execution\n", len(context))
-		return "", trimmed
+		return "", trimmed, nil
 	}
-	return context, trimmed
+	return context, trimmed, decisionIDs
 }
