@@ -1266,10 +1266,6 @@ func runCodexPlanWithOptionsInSession(session *planningMutationSession, opts cod
 	if opts.Accept {
 		return nil, fmt.Errorf("--accept no longer accepts or activates a plan. Review the pending candidate, then use `aether plan --accept-candidate <candidate-id>`")
 	}
-	preset, err := resolvePlanningPreset(opts)
-	if err != nil {
-		return nil, err
-	}
 	if store == nil {
 		return nil, fmt.Errorf("no store initialized")
 	}
@@ -1283,6 +1279,16 @@ func runCodexPlanWithOptionsInSession(session *planningMutationSession, opts cod
 	}
 	if state.Goal == nil || strings.TrimSpace(*state.Goal) == "" {
 		return nil, fmt.Errorf("No active colony goal. Run `aether init \"goal\"` first.")
+	}
+	if opts.RepairArtifact {
+		if opts.PlanOnly || opts.Refresh || opts.Synthetic || opts.PresetSet || opts.DepthSet || opts.TargetConfidenceSet || opts.MaxIterationsSet || opts.Preset != "" || opts.Depth != "" || opts.PlanningDepth != "" || opts.VerificationDepth != "" || opts.RevisionType != "" || opts.RevisionReason != "" || len(opts.RevisionEvidence) > 0 || len(opts.ResearchDocs) > 0 {
+			return nil, fmt.Errorf("--repair-artifact cannot be combined with plan generation, preset, revision or research options")
+		}
+		return runCodexPlanDependencyRepair(root, state)
+	}
+	preset, err := resolvePlanningPreset(opts)
+	if err != nil {
+		return nil, err
 	}
 	if preset.PresetRequired {
 		return planningPresetRequiredResult(state, preset), nil
@@ -1362,10 +1368,6 @@ func runCodexPlanWithOptionsInSession(session *planningMutationSession, opts cod
 	if opts.PlanOnly {
 		return runCodexPlanPlanOnlyInSession(session, state, granularity, planDepth, unresolvedClarifications, clarificationWarning, researchChanged, opts)
 	}
-	if opts.RepairArtifact {
-		return runCodexPlanRepairArtifact(root)
-	}
-
 	if len(state.Plan.Phases) > 0 && !opts.Refresh {
 		// Persist resolved verification depth only for non-plan-only paths.
 		state.VerificationDepth = verificationDepth
@@ -3510,6 +3512,31 @@ func firstKnownTaskIDExample(knownIDs map[string]bool) string {
 	return ids[0]
 }
 
+func runCodexPlanDependencyRepair(root string, state colony.ColonyState) (map[string]interface{}, error) {
+	if state.Plan.AcceptancePolicy == colony.PlanAcceptanceExplicitOwner && state.Plan.ActiveRevisionID != "" {
+		revision, found := activePlanRevision(state.Plan)
+		if !found {
+			return nil, fmt.Errorf("accepted plan revision %q is missing; restore its original approval-bound records", state.Plan.ActiveRevisionID)
+		}
+		if err := colony.DetectCycles(state.Plan.Phases); err != nil {
+			return nil, fmt.Errorf("accepted revision dependency validation failed: %w; submit a corrected candidate through the existing owner acceptance route; do not mutate the active projection", err)
+		}
+		phase := firstBuildablePhase(state.Plan.Phases)
+		next := "aether status"
+		if phase > 0 {
+			next = fmt.Sprintf("aether build %d --plan-only", phase)
+		}
+		return map[string]interface{}{
+			"status": "accepted_plan_validated", "repair_source": "accepted revision dependency resolver", "repair_scope": "accepted_revision", "validated": true, "repaired": false,
+			"planned": false, "dispatch_count": 0, "state_effect": "unchanged", "active_plan_changed": false, "approval_bindings_changed": false,
+			"revision_id": revision.ID, "revision_hash": revision.PlanHash, "candidate_id": revision.CandidateID, "candidate_content_hash": revision.CandidateContentHash,
+			"phase_count": len(state.Plan.Phases), "task_count": buildablePlanTaskCount(state.Plan.Phases), "next": next,
+			"summary": "The accepted plan's numeric and semantic dependencies are valid. No plan, approval or staging artifact was rewritten; this runtime resolves those references when building.",
+		}, nil
+	}
+	return runCodexPlanRepairArtifact(root)
+}
+
 func runCodexPlanRepairArtifact(root string) (map[string]interface{}, error) {
 	if store == nil {
 		return nil, fmt.Errorf("no store initialized")
@@ -3550,16 +3577,26 @@ func runCodexPlanRepairArtifact(root string) (map[string]interface{}, error) {
 		}
 	}
 	next := "aether plan-finalize --completion-file <file>"
-	updateSessionSummary("plan", next, "Repaired and validated phase-plan dependency references")
+	status := "legacy_artifact_validated"
+	if repaired {
+		status = "legacy_artifact_repaired"
+	}
 	return map[string]interface{}{
-		"repaired":      repaired,
-		"repairs":       repairs,
-		"validated":     true,
-		"phase_plan":    relPath,
-		"phase_count":   len(phases),
-		"task_count":    buildablePlanTaskCount(phases),
-		"next":          next,
-		"repair_source": "phase-plan dependency normalizer",
+		"status":                    status,
+		"repair_scope":              "legacy_phase_plan_artifact",
+		"planned":                   false,
+		"dispatch_count":            0,
+		"state_effect":              "unchanged",
+		"active_plan_changed":       false,
+		"approval_bindings_changed": false,
+		"repaired":                  repaired,
+		"repairs":                   repairs,
+		"validated":                 true,
+		"phase_plan":                relPath,
+		"phase_count":               len(phases),
+		"task_count":                buildablePlanTaskCount(phases),
+		"next":                      next,
+		"repair_source":             "phase-plan dependency normalizer",
 	}, nil
 }
 

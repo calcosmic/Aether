@@ -128,12 +128,18 @@ func buildPlanningSemanticSnapshot(source planningSemanticSnapshotSource) (plann
 		return snapshot, err
 	}
 
-	type taskLocation struct {
-		phaseIndex int
-		taskIndex  int
-		semanticID string
+	referencePhases := clonePhases(phases)
+	for p := range referencePhases {
+		for t := range referencePhases[p].Tasks {
+			if referencePhases[p].Tasks[t].SemanticID == "" && !currentSchema {
+				referencePhases[p].Tasks[t].SemanticID = legacyPlanningTaskSemanticID(referencePhases[p].ID, t, referencePhases[p].Tasks[t].ID)
+			}
+		}
 	}
-	taskIDs := make(map[string]taskLocation)
+	taskIDs, err := colony.NewTaskReferenceIndex(referencePhases)
+	if err != nil {
+		return snapshot, err
+	}
 	allSemanticIDs := []string{planSemanticID}
 
 	for phaseIndex := range phases {
@@ -181,18 +187,6 @@ func buildPlanningSemanticSnapshot(source planningSemanticSnapshotSource) (plann
 				return snapshot, err
 			}
 			allSemanticIDs = append(allSemanticIDs, taskSemanticID)
-
-			runtimeID := canonicalPlanningText(ptrStr(task.ID))
-			if runtimeID != "" {
-				if prior, exists := taskIDs[runtimeID]; exists {
-					return snapshot, fmt.Errorf("%s.id %q duplicates phases[%d].tasks[%d].id", taskPath, runtimeID, prior.phaseIndex, prior.taskIndex)
-				}
-				taskIDs[runtimeID] = taskLocation{phaseIndex: phaseIndex, taskIndex: taskIndex, semanticID: taskSemanticID}
-			}
-			if prior, exists := taskIDs[taskSemanticID]; exists && prior.semanticID != taskSemanticID {
-				return snapshot, fmt.Errorf("%s.semantic_id %q conflicts with a runtime task id", taskPath, taskSemanticID)
-			}
-			taskIDs[taskSemanticID] = taskLocation{phaseIndex: phaseIndex, taskIndex: taskIndex, semanticID: taskSemanticID}
 
 			taskEntry, err := newPlanningSemanticEntry(taskSemanticID, struct {
 				Goal        string   `json:"goal"`
@@ -243,15 +237,21 @@ func buildPlanningSemanticSnapshot(source planningSemanticSnapshotSource) (plann
 			}
 			for dependencyIndex, dependency := range task.DependsOn {
 				dependency = canonicalPlanningText(dependency)
-				target, ok := taskIDs[dependency]
+				target, ok := taskIDs.Resolve(dependency)
 				if !ok {
 					return snapshot, fmt.Errorf("%s.depends_on[%d] %q does not resolve to a task", taskPath, dependencyIndex, dependency)
 				}
-				edgeID := planningSemanticRelationID(taskSemanticID, "depends_on", target.semanticID)
+				targetPhase := phases[target.PhaseIndex]
+				targetTask := targetPhase.Tasks[target.TaskIndex]
+				targetSemanticID := canonicalPlanningText(targetTask.SemanticID)
+				if targetSemanticID == "" {
+					targetSemanticID = legacyPlanningTaskSemanticID(targetPhase.ID, target.TaskIndex, targetTask.ID)
+				}
+				edgeID := planningSemanticRelationID(taskSemanticID, "depends_on", targetSemanticID)
 				entry, err := newPlanningSemanticEntry(edgeID, struct {
 					From string `json:"from"`
 					To   string `json:"to"`
-				}{From: taskSemanticID, To: target.semanticID})
+				}{From: taskSemanticID, To: targetSemanticID})
 				if err != nil {
 					return snapshot, fmt.Errorf("hash %s.depends_on[%d]: %w", taskPath, dependencyIndex, err)
 				}
@@ -346,7 +346,10 @@ func validatePlanProposalContract(proposal planProposalContract, predecessor *pl
 
 	phaseLocations := make(map[string]string)
 	taskLocations := make(map[string]planProposalTaskLocation)
-	taskReferences := make(map[string]planProposalTaskLocation)
+	taskReferences, err := colony.NewTaskReferenceIndex(proposal.Revision.Phases)
+	if err != nil {
+		return empty, err
+	}
 	for phaseIndex := range proposal.Revision.Phases {
 		phase := proposal.Revision.Phases[phaseIndex]
 		phasePath := fmt.Sprintf("phases[%d]", phaseIndex)
@@ -372,16 +375,6 @@ func validatePlanProposalContract(proposal planProposalContract, predecessor *pl
 				SemanticID: taskSemanticID,
 			}
 			taskLocations[taskSemanticID] = location
-			if prior, duplicate := taskReferences[taskSemanticID]; duplicate && prior.Path != taskPath {
-				return empty, fmt.Errorf("%s.semantic_id %q conflicts with task reference at %s", taskPath, taskSemanticID, prior.Path)
-			}
-			taskReferences[taskSemanticID] = location
-			if runtimeID := canonicalPlanningText(ptrStr(task.ID)); runtimeID != "" {
-				if prior, duplicate := taskReferences[runtimeID]; duplicate && prior.Path != taskPath {
-					return empty, fmt.Errorf("%s.id %q conflicts with task reference at %s", taskPath, runtimeID, prior.Path)
-				}
-				taskReferences[runtimeID] = location
-			}
 		}
 	}
 
@@ -465,10 +458,11 @@ func validatePlanProposalContract(proposal planProposalContract, predecessor *pl
 				if dependency == "" {
 					return empty, fmt.Errorf("%s is required", dependencyPath)
 				}
-				target, resolved := taskReferences[dependency]
+				targetReference, resolved := taskReferences.Resolve(dependency)
 				if !resolved {
 					return empty, fmt.Errorf("%s %q does not resolve to a task", dependencyPath, dependency)
 				}
+				target := taskLocations[canonicalPlanningText(proposal.Revision.Phases[targetReference.PhaseIndex].Tasks[targetReference.TaskIndex].SemanticID)]
 				if _, duplicate := seenTargets[target.SemanticID]; duplicate {
 					return empty, fmt.Errorf("%s duplicates dependency on %q", dependencyPath, target.SemanticID)
 				}

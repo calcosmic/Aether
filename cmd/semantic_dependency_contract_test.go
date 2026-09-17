@@ -1,9 +1,12 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/calcosmic/Aether/pkg/colony"
@@ -24,6 +27,7 @@ func TestSemanticDependenciesReachCoherentDispatch(t *testing.T) {
 	if len(dispatches) == 0 {
 		t.Fatal("no dispatch assignments")
 	}
+	assertDependencyDispatchOrder(t, dispatches, "1.1", "1.2")
 	after, _ := json.Marshal(phase)
 	if string(before) != string(after) {
 		t.Fatal("dispatch rewrote the accepted dependency")
@@ -58,6 +62,8 @@ func TestCrossPhaseDependenciesReachCoherentDispatch(t *testing.T) {
 
 func TestRepairArtifactRouteBypassesPreset(t *testing.T) {
 	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
 	dataDir := setupBuildFlowTest(t)
 	root := filepath.Dir(filepath.Dir(dataDir))
 	goal := "Repair the saved staging dependency references"
@@ -68,9 +74,31 @@ func TestRepairArtifactRouteBypassesPreset(t *testing.T) {
 	if err := store.SaveJSON("planning/phase-plan.json", artifact); err != nil {
 		t.Fatal(err)
 	}
-	result, err := runCodexPlanWithOptions(root, codexPlanOptions{RepairArtifact: true})
-	if err != nil || result["validated"] != true || result["repaired"] != true {
-		t.Fatalf("repair flag never reached repair: result=%+v err=%v", result, err)
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(oldDir) })
+	var output bytes.Buffer
+	stdout = &output
+	if err := planCmd.ParseFlags([]string{"--repair-artifact"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := planCmd.RunE(planCmd, nil); err != nil {
+		t.Fatal(err)
+	}
+	var envelope struct {
+		Result map[string]interface{} `json:"result"`
+	}
+	if err := json.Unmarshal(output.Bytes(), &envelope); err != nil {
+		t.Fatalf("invalid repair output: %v %s", err, output.String())
+	}
+	result := envelope.Result
+	if result["validated"] != true || result["repaired"] != true || result["repair_scope"] != "legacy_phase_plan_artifact" {
+		t.Fatalf("repair flag never reached repair: result=%+v", result)
 	}
 	var saved codexWorkerPlanArtifact
 	if err := store.LoadJSON("planning/phase-plan.json", &saved); err != nil {
@@ -100,6 +128,15 @@ func TestAcceptedSemanticDependenciesPreserveApprovalAtBuild(t *testing.T) {
 	if state.Plan.Phases[0].Tasks[1].DependsOn[0] != result.Proposal.Phases[0].Tasks[0].SemanticID {
 		t.Fatal("fixture no longer represents an already-accepted semantic dependency")
 	}
+	snapshot := planCandidateTestSnapshot(t, root)
+	repair, err := runCodexPlanWithOptions(root, codexPlanOptions{RepairArtifact: true})
+	if err != nil || repair["status"] != "accepted_plan_validated" || repair["repaired"] != false || repair["state_effect"] != "unchanged" || repair["revision_id"] != state.Plan.ActiveRevisionID || repair["candidate_id"] != candidate.ID {
+		t.Fatalf("existing accepted plan did not receive honest validation-only recovery: %+v %v", repair, err)
+	}
+	planCandidateTestAssertSnapshot(t, root, snapshot)
+	if visual := renderPlanVisual(repair); !strings.Contains(visual, "approval are unchanged") || strings.Contains(visual, "Repaired phase-plan") {
+		t.Fatalf("misleading accepted repair output: %s", visual)
+	}
 	_, _, _, dispatches, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{LightFlag: true})
 	if err != nil {
 		t.Fatalf("accepted dependency rejected by actual build preparation: %v", err)
@@ -107,8 +144,56 @@ func TestAcceptedSemanticDependenciesPreserveApprovalAtBuild(t *testing.T) {
 	if len(dispatches) == 0 {
 		t.Fatal("accepted plan produced no dispatch")
 	}
+	assertDependencyDispatchOrder(t, dispatches, "1.1", "1.2")
 	after, _ := json.Marshal(mustReadSpecificationTestState(t, root).Plan)
 	if string(before) != string(after) {
 		t.Fatal("build changed accepted revision, candidate or approval hashes")
+	}
+}
+
+func assertDependencyDispatchOrder(t *testing.T, dispatches []codexBuildDispatch, first, second string) {
+	t.Helper()
+	var predecessor, dependent *codexBuildDispatch
+	firstIndex, secondIndex := -1, -1
+	for i := range dispatches {
+		ids := dispatches[i].CoveredTaskIDs
+		if len(ids) == 0 {
+			ids = []string{normalizedDispatchTaskID(dispatches[i])}
+		}
+		for position, id := range ids {
+			if id == first {
+				predecessor, firstIndex = &dispatches[i], position
+			}
+			if id == second {
+				dependent, secondIndex = &dispatches[i], position
+			}
+		}
+	}
+	if predecessor == nil || dependent == nil {
+		t.Fatal("dependency task missing from dispatch")
+	}
+	if predecessor == dependent {
+		if firstIndex >= secondIndex {
+			t.Fatal("coherent job runs dependent before its prerequisite")
+		}
+	} else if predecessor.ExecutionWave >= dependent.ExecutionWave || !containsString(dependent.DependsOn, predecessor.Name) {
+		t.Fatalf("dependency edge missing from real dispatch schedule: %+v -> %+v", predecessor, dependent)
+	}
+}
+
+func TestRepairArtifactRejectsConflictingOperations(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	setupBuildFlowTest(t)
+	for _, flags := range [][]string{{"--plan-only"}, {"--preset", "fast"}, {"--print-brief"}, {"--refresh"}, {"--full"}} {
+		t.Run(strings.Join(flags, " "), func(t *testing.T) {
+			resetFlags(planCmd)
+			if err := planCmd.ParseFlags(append([]string{"--repair-artifact"}, flags...)); err != nil {
+				t.Fatal(err)
+			}
+			if err := planCmd.RunE(planCmd, nil); err == nil || !strings.Contains(err.Error(), "cannot be combined") {
+				t.Fatalf("conflicting repair operation was ignored: %v", err)
+			}
+		})
 	}
 }

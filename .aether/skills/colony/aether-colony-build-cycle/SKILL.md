@@ -81,6 +81,16 @@ answer, or store boundary questions in Codex chat or wrapper state.
 
 ## Plan Flow
 
+If the user explicitly supplies `--repair-artifact`, run
+`AETHER_OUTPUT_MODE=json aether plan --repair-artifact` before these planning
+steps, render its scoped result, and stop this flow. No preset or worker is
+needed; conflicting generation/revision flags are refused. An accepted
+revision receives dependency validation only, preserving its plan and approval
+bindings. Otherwise only the legacy `.aether/data/planning/phase-plan.json`
+staging artifact may be repaired. Numeric and semantic task IDs share one
+dependency contract across phases. Never rewrite only the active projection,
+an accepted candidate or approval records; follow the runtime's next command.
+
 1. Run `AETHER_OUTPUT_MODE=visual aether status` and use the runtime's lifecycle
    facts as context. Do not inspect or edit state files to infer authority.
 2. Inspect the owner contract first:
