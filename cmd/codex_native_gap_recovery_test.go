@@ -267,6 +267,20 @@ func nativeGapFinishedWorkerStable(r codexNativeLiveReceipt) bool {
 }
 
 func TestCodexNativeGapRecovery(t *testing.T) {
+	t.Run("recovery_does_not_erase_qualification_gaps", func(t *testing.T) {
+		r := codexNativeLiveReceipt{Scenario: "early-resume", ExitStatus: 0, TerminalCorroborated: true, SourceEventCorroborated: true, ChecksPassed: false, ParentSubstitution: true}
+		if !nativeGapEarlyResumeReady(r) {
+			t.Fatal("valid terminal cannot exercise recovery")
+		}
+		if validateCodexNativeLiveReceipt(r) == nil {
+			t.Fatal("recovery eligibility erased missing qualification proof")
+		}
+		r.SourceEventCorroborated = false
+		if nativeGapEarlyResumeReady(r) {
+			t.Fatal("uncorroborated terminal allowed recovery")
+		}
+	})
+
 	for _, order := range [][]int{{0, 1}, {1, 0}} {
 		t.Run(fmt.Sprint("equal_wave_credit_", order), func(t *testing.T) {
 			root, manifest, requests := nativeFinalizeFixture(t, 2)
@@ -446,4 +460,11 @@ func nativeGapRecoveryInventory(root string) map[string]string {
 		}
 	}
 	return inventory
+}
+
+// The controller has independently corroborated the cut before this gate.
+// Missing check attribution must remain a final qualification failure, without
+// suppressing the actual fresh-parent leg for an accepted durable terminal.
+func nativeGapEarlyResumeReady(r codexNativeLiveReceipt) bool {
+	return nativeGapParentExitAccepted(r) && r.TerminalCorroborated && r.SourceEventCorroborated && r.CompletionPath == "" && !r.CreditObserved
 }

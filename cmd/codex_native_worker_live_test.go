@@ -494,7 +494,11 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 		}()
 	}
 	if scenario == "early-resume" {
-		if !nativeGapParentExitAccepted(receipt) || !receipt.TerminalCorroborated || !receipt.ChildEditObserved || !receipt.ChecksPassed || receipt.CompletionPath != "" || receipt.CreditObserved {
+		// Recovery admission and complete helper qualification are separate.
+		// A real, durable terminal may be recovered even when unrelated exported
+		// operations remain unclassified. The final validator still requires
+		// child-only edits/checks and rejects those qualification gaps.
+		if !nativeGapEarlyResumeReady(receipt) {
 			fail("first parent did not stop at a proved terminal-before-stage boundary")
 		}
 		before, err := os.ReadFile(receipt.AttemptPath)
