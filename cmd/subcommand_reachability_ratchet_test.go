@@ -54,6 +54,12 @@ var callerWrapperCorpora = []string{
 	filepath.Join(".aether", "commands"),
 }
 
+// This exact source is copied into the installed private support payload and
+// read by ant-build. Do not widen this to arbitrary skill/document trees.
+var codexSupportCallerFiles = []string{
+	filepath.Join(".aether", "skills", "colony", "aether-colony-build-cycle", "SKILL.md"),
+}
+
 // hookScriptCorpora are the D-01(c) "shipped hook or script" trees.
 //
 // Phase 197 plan 03 added the third entry. The first two cover files that
@@ -369,6 +375,10 @@ func enumerateRegisteredCommands(root *cobra.Command) []registeredCommandInfo {
 			if child.Annotations["aether.io/internal-only"] == "true" {
 				continue
 			}
+			if !child.Runnable() && child.HasSubCommands() {
+				walk(child) // A namespace is not executable; every runnable descendant still is.
+				continue
+			}
 			path := child.CommandPath()
 			aliasPaths := make([]string, 0, len(child.Aliases))
 			for _, alias := range child.Aliases {
@@ -500,6 +510,13 @@ func buildCommandDefinitionIndex(t *testing.T, cmdDir string) map[string]string 
 				continue
 			}
 			ast.Inspect(body, func(inner ast.Node) bool {
+				if loop, ok := inner.(*ast.RangeStmt); ok {
+					for _, command := range literalRangeCommandNames(loop) {
+						if _, exists := index[command]; !exists {
+							index[command] = name
+						}
+					}
+				}
 				// Case 1: a direct `&cobra.Command{Use: "..."}` composite
 				// literal — the common shape.
 				if cl, ok := inner.(*ast.CompositeLit); ok {
@@ -571,6 +588,156 @@ func buildCommandDefinitionIndex(t *testing.T, cmdDir string) map[string]string 
 		}
 	}
 	return index
+}
+
+// Model only an unconditional AddCommand of a directly constructed command
+// whose Use is the unmodified value of a finite []string literal range. The
+// optional `operation := operation` closure capture is an identity binding.
+// Unknown expressions, mutations and conditional registrations earn no credit.
+func literalRangeCommandNames(loop *ast.RangeStmt) []string {
+	value, ok := loop.Value.(*ast.Ident)
+	if !ok || value.Obj == nil || loop.Tok != token.DEFINE {
+		return nil
+	}
+	list, ok := loop.X.(*ast.CompositeLit)
+	if !ok || len(list.Elts) == 0 {
+		return nil
+	}
+	array, ok := list.Type.(*ast.ArrayType)
+	if !ok || array.Len != nil {
+		return nil
+	}
+	element, ok := array.Elt.(*ast.Ident)
+	if !ok || element.Name != "string" {
+		return nil
+	}
+	var names []string
+	for _, item := range list.Elts {
+		literal, ok := item.(*ast.BasicLit)
+		if !ok || literal.Kind != token.STRING {
+			return nil
+		}
+		name, err := strconv.Unquote(literal.Value)
+		if err != nil || !subcommandNameShapeRe.MatchString(name) {
+			return nil
+		}
+		names = append(names, name)
+	}
+	current := value.Obj
+	var capture *ast.AssignStmt
+	children := map[*ast.Object]bool{}
+	declarations := map[*ast.AssignStmt]bool{}
+	allowedChildUses := map[*ast.Ident]bool{}
+	registered := false
+	for _, statement := range loop.Body.List {
+		if assignment, ok := statement.(*ast.AssignStmt); ok && assignment.Tok == token.DEFINE && len(assignment.Lhs) == 1 && len(assignment.Rhs) == 1 {
+			lhs, ok := assignment.Lhs[0].(*ast.Ident)
+			if !ok {
+				continue
+			}
+			if rhs, ok := assignment.Rhs[0].(*ast.Ident); ok && lhs.Name == value.Name && rhs.Obj == current && capture == nil {
+				capture, current = assignment, lhs.Obj
+				continue
+			}
+			address, ok := assignment.Rhs[0].(*ast.UnaryExpr)
+			if !ok || address.Op != token.AND {
+				continue
+			}
+			literal, ok := address.X.(*ast.CompositeLit)
+			if !ok {
+				continue
+			}
+			typ, ok := literal.Type.(*ast.SelectorExpr)
+			if !ok {
+				continue
+			}
+			pkg, ok := typ.X.(*ast.Ident)
+			if !ok || pkg.Name != "cobra" || typ.Sel.Name != "Command" {
+				continue
+			}
+			for _, item := range literal.Elts {
+				field, ok := item.(*ast.KeyValueExpr)
+				if !ok {
+					continue
+				}
+				key, keyOK := field.Key.(*ast.Ident)
+				use, useOK := field.Value.(*ast.Ident)
+				if keyOK && useOK && key.Name == "Use" && use.Obj == current {
+					children[lhs.Obj] = true
+					declarations[assignment], allowedChildUses[lhs] = true, true
+				}
+			}
+		}
+		if expression, ok := statement.(*ast.ExprStmt); ok {
+			if call, ok := expression.X.(*ast.CallExpr); ok {
+				if selector, ok := call.Fun.(*ast.SelectorExpr); ok && selector.Sel.Name == "AddCommand" {
+					for _, arg := range call.Args {
+						if child, ok := arg.(*ast.Ident); ok && children[child.Obj] {
+							registered = true
+							allowedChildUses[child] = true
+						}
+					}
+				}
+			}
+		}
+	}
+	mutated := false
+	ast.Inspect(loop.Body, func(node ast.Node) bool {
+		if _, ok := node.(*ast.FuncLit); ok {
+			return false // Handler return statements do not govern registration.
+		}
+		switch node.(type) {
+		case *ast.ReturnStmt, *ast.BranchStmt, *ast.RangeStmt, *ast.ForStmt:
+			mutated = true // No registration proof across an early exit or another loop.
+		}
+		return true
+	})
+	ast.Inspect(loop.Body, func(node ast.Node) bool {
+		// Captured-variable writes remain unknown even inside a closure: unlike
+		// a handler return, an immediately invoked closure can change the Use.
+		if assignment, ok := node.(*ast.AssignStmt); ok && assignment != capture {
+			for _, lhs := range assignment.Lhs {
+				if id, ok := lhs.(*ast.Ident); ok && (id.Name == value.Name || children[id.Obj]) {
+					// The command's initial declaration is allowed; reassignment is not.
+					if id.Name == value.Name || !declarations[assignment] {
+						mutated = true
+					}
+				}
+			}
+		}
+		if call, ok := node.(*ast.CallExpr); ok && len(call.Args) == 0 {
+			if method, ok := call.Fun.(*ast.SelectorExpr); ok && method.Sel.Name == "Flags" {
+				if child, ok := method.X.(*ast.Ident); ok && children[child.Obj] {
+					allowedChildUses[child] = true
+				}
+			}
+		}
+		if address, ok := node.(*ast.UnaryExpr); ok && address.Op == token.AND {
+			if id, ok := address.X.(*ast.Ident); ok && id.Name == value.Name {
+				mutated = true
+			}
+		}
+		if assignment, ok := node.(*ast.AssignStmt); ok {
+			for _, lhs := range assignment.Lhs {
+				if field, ok := lhs.(*ast.SelectorExpr); ok && field.Sel.Name == "Use" {
+					if id, ok := field.X.(*ast.Ident); ok && children[id.Obj] {
+						mutated = true
+					}
+				}
+			}
+		}
+		return true
+	})
+	ast.Inspect(loop.Body, func(node ast.Node) bool {
+		if child, ok := node.(*ast.Ident); ok && children[child.Obj] && !allowedChildUses[child] {
+			mutated = true // No aliasing or passing the command to an unknown mutator.
+		}
+		return true
+	})
+	if !registered || mutated {
+		return nil
+	}
+	return names
 }
 
 // ---------------------------------------------------------------------------
@@ -992,7 +1159,7 @@ func collectCallerEvidence(t *testing.T, root string, skipFiles map[string]bool)
 		}
 	}
 
-	for _, f := range workerDisciplineCallerFiles {
+	for _, f := range append(append([]string{}, workerDisciplineCallerFiles...), codexSupportCallerFiles...) {
 		p := filepath.Join(root, f)
 		if _, statErr := os.Stat(p); statErr != nil {
 			continue
@@ -1051,7 +1218,7 @@ func listCallerCorpusFiles(root string) []string {
 			files = append(files, callerFileKey(root, filepath.Join(dir, e.Name())))
 		}
 	}
-	for _, f := range workerDisciplineCallerFiles {
+	for _, f := range append(append([]string{}, workerDisciplineCallerFiles...), codexSupportCallerFiles...) {
 		p := filepath.Join(root, f)
 		if _, statErr := os.Stat(p); statErr != nil {
 			continue
@@ -1543,6 +1710,139 @@ func TestNoRegisteredSubcommandIsUnreferenced(t *testing.T) {
 	for _, e := range allowlist {
 		if e.OwnerPhase == "178" {
 			t.Errorf("%q still carries owner_phase \"178\", but Phase 191 deleted the entire reviewed skill-lifecycle set (SKILL-01) rather than wiring it — no live orphan should carry this owner_phase anymore", e.Name)
+		}
+	}
+}
+
+func TestNativeReachabilityFiniteRegistration(t *testing.T) {
+	for _, tc := range []struct {
+		name, source string
+		want         bool
+	}{
+		{"literal", `for _, operation := range []string{"native-first", "native-second"} { child := &cobra.Command{Use: operation}; parent.AddCommand(child) }`, true},
+		{"captured", `for _, operation := range []string{"native-first", "native-second"} { operation := operation; child := &cobra.Command{Use: operation}; parent.AddCommand(child) }`, true},
+		{"handler-and-flags", `for _, operation := range []string{"native-first", "native-second"} { operation := operation; child := &cobra.Command{Use: operation, RunE: func() error { return nil }}; if operation == "native-first" { child.Flags().Int("phase", 0, "phase") }; parent.AddCommand(child) }`, true},
+		{"nonliteral-list", `for _, operation := range operations { child := &cobra.Command{Use: operation}; parent.AddCommand(child) }`, false},
+		{"nonliteral-entry", `for _, operation := range []string{"native-first", computed} { child := &cobra.Command{Use: operation}; parent.AddCommand(child) }`, false},
+		{"computed-use", `for _, operation := range []string{"native-first", "native-second"} { child := &cobra.Command{Use: prefix + operation}; parent.AddCommand(child) }`, false},
+		{"reassigned", `for _, operation := range []string{"native-first", "native-second"} { operation = replacement; child := &cobra.Command{Use: operation}; parent.AddCommand(child) }`, false},
+		{"different-binding", `for _, operation := range []string{"native-first", "native-second"} { other := replacement; child := &cobra.Command{Use: other}; parent.AddCommand(child) }`, false},
+		{"unregistered", `for _, operation := range []string{"native-first", "native-second"} { child := &cobra.Command{Use: operation}; _ = child }`, false},
+		{"conditional-continue", `for _, operation := range []string{"native-first", "native-second"} { if stop { continue }; child := &cobra.Command{Use: operation}; parent.AddCommand(child) }`, false},
+		{"conditional-return", `for _, operation := range []string{"native-first", "native-second"} { if stop { return }; child := &cobra.Command{Use: operation}; parent.AddCommand(child) }`, false},
+		{"child-short-reassignment", `for _, operation := range []string{"native-first", "native-second"} { child := &cobra.Command{Use: operation}; child, extra := replacement, value; parent.AddCommand(child) }`, false},
+		{"child-use-reassigned", `for _, operation := range []string{"native-first", "native-second"} { child := &cobra.Command{Use: operation}; child.Use = replacement; parent.AddCommand(child) }`, false},
+		{"child-unknown-mutator", `for _, operation := range []string{"native-first", "native-second"} { child := &cobra.Command{Use: operation}; mutate(child); parent.AddCommand(child) }`, false},
+		{"addressed-range-value", `for _, operation := range []string{"native-first", "native-second"} { mutate(&operation); child := &cobra.Command{Use: operation}; parent.AddCommand(child) }`, false},
+		{"closure-mutation", `for _, operation := range []string{"native-first", "native-second"} { func() { operation = replacement }(); child := &cobra.Command{Use: operation}; parent.AddCommand(child) }`, false},
+		{"conditional-registration", `for _, operation := range []string{"native-first", "native-second"} { child := &cobra.Command{Use: operation}; if selected { parent.AddCommand(child) } }`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			if err := os.WriteFile(filepath.Join(root, "native.go"), []byte("package fixture\nfunc init() { "+tc.source+" }\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			index := buildCommandDefinitionIndex(t, root)
+			for _, name := range []string{"native-first", "native-second"} {
+				if got := index[name] == "native.go"; got != tc.want {
+					t.Fatalf("definition %s attributed=%t, want %t: %+v", name, got, tc.want, index)
+				}
+			}
+		})
+	}
+}
+
+func TestNativeReachabilityNamespacesKeepRunnableDescendants(t *testing.T) {
+	root := &cobra.Command{Use: "aether"}
+	for _, runnable := range []bool{false, true} {
+		parent := &cobra.Command{Use: fmt.Sprintf("parent-%t", runnable)}
+		if runnable {
+			parent.Run = func(*cobra.Command, []string) {}
+		}
+		parent.AddCommand(&cobra.Command{Use: "child", Run: func(*cobra.Command, []string) {}})
+		root.AddCommand(parent)
+	}
+	paths := map[string]bool{}
+	for _, command := range enumerateRegisteredCommands(root) {
+		paths[command.Path] = true
+	}
+	if paths["aether parent-false"] || !paths["aether parent-true"] || !paths["aether parent-false child"] || !paths["aether parent-true child"] || len(paths) != 3 {
+		t.Fatalf("namespace handling hid a runnable command or required a non-runnable parent: %+v", paths)
+	}
+}
+
+func TestNativeReachabilityUsesInstalledSupport(t *testing.T) {
+	root, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(".aether", "skills", "colony", "aether-colony-build-cycle", "SKILL.md")
+	body, err := os.ReadFile(filepath.Join(root, source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := buildCodexSkillPayload(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var support, shim []byte
+	for _, file := range payload.Files {
+		switch file.RelativePath {
+		case "support/aether-colony-build-cycle.md":
+			support = file.Content
+		case "ant-build/SKILL.md":
+			shim = file.Content
+		}
+	}
+	if !bytes.Equal(support, body) || !strings.Contains(string(shim), "Read `../support/aether-colony-build-cycle.md`") {
+		t.Fatal("caller evidence is no longer the installed ant-build support")
+	}
+	fixture := t.TempDir()
+	path := filepath.Join(fixture, source)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	before := collectCallerEvidence(t, fixture, nil)
+	for _, operation := range []string{"reserve", "bind", "record", "stage", "inspect", "observe", "context", "question"} {
+		if !before["aether codex-native-worker "+operation] {
+			t.Errorf("installed support did not credit native %s", operation)
+		}
+	}
+	if collectCallerEvidence(t, fixture, map[string]bool{filepath.ToSlash(source): true})["aether codex-native-worker observe"] {
+		t.Fatal("removing the actual support caller retained native observe credit")
+	}
+	removed := strings.ReplaceAll(string(body), "aether codex-native-worker observe", "aether codex-native-worker no-observation-call")
+	if removed == string(body) {
+		t.Fatal("observation-call mutation changed nothing")
+	}
+	if err := os.WriteFile(path, []byte(removed), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	after := collectCallerEvidence(t, fixture, nil)
+	if after["aether codex-native-worker observe"] || !after["aether codex-native-worker bind"] {
+		t.Fatalf("removing observe did not remove exactly that native caller: %+v", after)
+	}
+	other := &cobra.Command{Use: "ratchet-native-other"}
+	other.AddCommand(&cobra.Command{Use: "observe", Run: func(*cobra.Command, []string) {}})
+	rootCmd.AddCommand(other)
+	defer rootCmd.RemoveCommand(other)
+	for _, content := range []string{
+		"The command aether codex-native-worker observe is discussed here.\n",
+		"```sh\naether codex-native-worker\n```\n",
+		"```sh\naether ratchet-native-other observe\n```\n",
+	} {
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		names := collectCallerEvidence(t, fixture, nil)
+		if names["aether codex-native-worker observe"] {
+			t.Fatalf("non-caller credited native observe: %q", content)
+		}
+		if strings.Contains(content, "ratchet-native-other") && !names["aether ratchet-native-other observe"] {
+			t.Fatal("same-leaf negative failed to recognize its actual different parent")
 		}
 	}
 }
