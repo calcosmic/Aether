@@ -101,7 +101,7 @@ func TestCodexAntSkillInstallTracer(t *testing.T) {
 			t.Fatalf("invalid YAML name in %s", name)
 		}
 		command := strings.TrimPrefix(name, "ant-")
-		def := commandGuideCatalog()[command]
+		def := adaptCommandGuideDefinitionForPlatform(command, "codex", commandGuideCatalog()[command])
 		for _, required := range []string{"aether command-guide " + command + " --platform codex", def.RunCommand, "../support/" + def.SkillReference + ".md", "automatically", "raw/exact"} {
 			if required == "" || !strings.Contains(string(raw), required) {
 				t.Errorf("%s missing %q", name, required)
@@ -123,6 +123,41 @@ func TestCodexAntSkillInstallTracer(t *testing.T) {
 	journal, err := filepath.Glob(filepath.Join(home, ".aether", "data", "transactions", "*", "receipt.json"))
 	if err != nil || len(journal) == 0 {
 		t.Fatalf("no durable transaction receipt: %v %v", journal, err)
+	}
+}
+
+func TestCodexNativeInstalledBuildGuidance(t *testing.T) {
+	home := t.TempDir()
+	if ok, output := runAntSkillInstall(t, home); !ok {
+		t.Fatalf("install: %s", output)
+	}
+	raw, err := os.ReadFile(filepath.Join(home, ".codex", "skills", "aether", "ant-build", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{"codex-native-worker reserve", "codex-native-worker bind", "worker.native.release", "codex-native-worker record", "codex-native-worker stage", "codex-native-worker observe", "codex-native-worker context", "codex-native-worker question", "aether resume", "inspect --phase", "normalizedDispatchTaskID"} {
+		if !strings.Contains(string(raw), required) {
+			t.Errorf("installed native skill missing %q", required)
+		}
+	}
+	for _, forbidden := range []string{"build-wave playbook", "visible live Task/subagent", "Write per-worker JSON and the final completion JSON", "build-completion-stage", "In worktree mode one job"} {
+		if strings.Contains(string(raw), forbidden) {
+			t.Errorf("installed native skill retained %q", forbidden)
+		}
+	}
+	for _, command := range codexPublicSkillCommands() {
+		if command == "build" {
+			continue
+		}
+		p := filepath.Join(home, ".codex", "skills", "aether", "ant-"+command, "SKILL.md")
+		got, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		def := commandGuideCatalog()[command]
+		if !strings.Contains(string(got), def.RunCommand) || strings.Contains(string(got), "codex-native-worker") {
+			t.Errorf("unrelated %s installed skill changed route", command)
+		}
 	}
 }
 

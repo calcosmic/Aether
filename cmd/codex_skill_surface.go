@@ -106,6 +106,7 @@ func buildCodexSkillPayloadFromInventory(packageDir string, commands []string, c
 }
 
 func codexPublicSkillShim(command string, def commandGuideDefinition) codexSkillShim {
+	def = adaptCommandGuideDefinitionForPlatform(command, "codex", def)
 	return codexSkillShim{
 		Dir: "ant-" + command, Name: "ant-" + command,
 		Description:      fmt.Sprintf("Use $ant-%s to run the Aether %s lifecycle action with runtime-owned guidance.", command, command),

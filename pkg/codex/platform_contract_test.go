@@ -52,6 +52,54 @@ func TestUnknownPlatformHasNoContract(t *testing.T) {
 	}
 }
 
+func TestCodexNativePlatformContract(t *testing.T) {
+	contract, _ := PlatformContractFor(PlatformCodex)
+	if contract.NativeWorkers == nil {
+		t.Fatal("native support must be separately declared")
+	}
+	native := contract.NativeWorkers
+	if native.Client != "codex-cli 0.154.0" || native.Evidence == "" || native.Dispatch.Level != CapabilityLimited || native.PerChildIsolation.Level != CapabilityUnavailable || native.WorktreeAllocation.Level != CapabilityUnavailable || native.GovernedNesting.Level != CapabilityUnavailable || native.Cancellation.Level != CapabilityUnavailable {
+		t.Fatalf("native contract overstates observed support: %+v", native)
+	}
+	if !strings.Contains(native.Usage.Mechanism, "token_usage_record") || !strings.Contains(strings.Join(native.Usage.Limitations, " "), "uncollected") {
+		t.Fatal("exposed provider usage must be distinct from uncollected measurements")
+	}
+	if !strings.Contains(contract.WorkerDispatch.Mechanism, "codex exec") || !strings.Contains(contract.PermissionIsolation.Mechanism, "sandbox mode") {
+		t.Fatal("native claims replaced accurate subprocess claims")
+	}
+	for _, platform := range []Platform{PlatformClaude, PlatformOpenCode, PlatformFake} {
+		other, _ := PlatformContractFor(platform)
+		if other.NativeWorkers != nil {
+			t.Fatalf("Codex native contract leaked to %s", platform)
+		}
+	}
+	profile := PermissionProfileForCaste("builder")
+	for _, tc := range []struct {
+		name    string
+		mutate  func(*NativeWorkerRequirements)
+		allowed bool
+	}{
+		{"inherited-workspace", func(*NativeWorkerRequirements) {}, true},
+		{"read-only-host", func(r *NativeWorkerRequirements) { r.HostPermission = "repository_read_only" }, false},
+		{"other-workspace", func(r *NativeWorkerRequirements) { r.Workspace = "/other" }, false},
+		{"worktree", func(r *NativeWorkerRequirements) { r.ParallelMode = "worktree" }, false},
+		{"governed-nesting", func(r *NativeWorkerRequirements) { r.RequireGovernedNesting = true }, false},
+		{"read-only-profile", func(r *NativeWorkerRequirements) { r.Profile = PermissionProfileForCaste("includer") }, false},
+		{"narrow-write", func(r *NativeWorkerRequirements) { r.Profile.WriteScopes = []string{"tests"} }, false},
+		{"shell-disabled", func(r *NativeWorkerRequirements) { r.Profile.Shell = "deny" }, false},
+		{"network-disabled", func(r *NativeWorkerRequirements) { r.Profile.Network = "deny" }, false},
+		{"approval-control", func(r *NativeWorkerRequirements) { r.Profile.Approval = "always" }, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := NativeWorkerRequirements{Profile: profile, HostPermission: "workspace_write", Workspace: "/fixture", AcceptedWorkspace: "/fixture", ParallelMode: "in-repo"}
+			tc.mutate(&r)
+			if err := ValidateNativeWorkerRequirements(r); (err == nil) != tc.allowed {
+				t.Fatalf("allowed=%v, err=%v", tc.allowed, err)
+			}
+		})
+	}
+}
+
 func TestCodexAntSkillPlatformContract(t *testing.T) {
 	contract, ok := PlatformContractFor(PlatformCodex)
 	if !ok || contract.NativeCommandSurface.Level != CapabilityLimited {

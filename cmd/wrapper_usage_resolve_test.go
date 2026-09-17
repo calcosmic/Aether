@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"go/ast"
@@ -15,6 +16,55 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/codex"
 )
+
+func TestCodexNativeUsageUnreported(t *testing.T) {
+	for _, usage := range []codex.WorkerUsage{{}, {InputTokens: 42}, {Source: " "}} {
+		res := resolveWrapperWorkerUsage(wrapperUsageRequest{Platform: "codex", WorkerNames: []string{"native-child"}, Attached: map[string]codex.WorkerUsage{"native-child": usage}})
+		assertNoFigure(t, res.Workers[0])
+		raw, err := json.Marshal(res.Workers[0].Usage)
+		if err != nil || string(raw) != "{}" {
+			t.Fatalf("unreported usage serialized a measurement: %s %v", raw, err)
+		}
+	}
+	// Trusted provider parsing is an existing direct-lane boundary. Its genuine
+	// zero must stay reported; a native result is never attached through it.
+	res := resolveWrapperWorkerUsage(wrapperUsageRequest{Platform: "codex", WorkerNames: []string{"direct-child"}, Attached: map[string]codex.WorkerUsage{"direct-child": {Source: codex.UsageSourceProvider}}})
+	if !res.Workers[0].Reported || res.Workers[0].Usage.USDCost != 0 {
+		t.Fatal("provider-reported zero lost its provenance")
+	}
+}
+
+func TestCodexNativeUsageRejectsParentAttribution(t *testing.T) {
+	for _, field := range []string{"worker-prose", "parent-total", "missing-source", "wrong-session", "wrong-child", "provider-zero"} {
+		t.Run(field, func(t *testing.T) {
+			manifest, request := nativeBoundForTest(t)
+			request = nativeTerminalRequestForTest(t, request, manifest.Dispatches[0].Caste, buildWorkerCompleted)
+			switch field {
+			case "worker-prose":
+				request.Result.Usage = codex.WorkerUsage{TotalTokens: 42, Source: "worker-prose"}
+			case "parent-total":
+				request.Result.Usage = codex.WorkerUsage{TotalTokens: 5000, Source: codex.UsageSourceProvider}
+			case "missing-source":
+				request.Result.Usage = codex.WorkerUsage{TotalTokens: 42}
+			case "provider-zero":
+				request.Result.Usage = codex.WorkerUsage{Source: codex.UsageSourceProvider}
+			case "wrong-session":
+				request.HostSessionID = "other-parent"
+			case "wrong-child":
+				request.ChildID = "other-child"
+			}
+			before := nativeJournalBytes(t)
+			if _, err := runCodexNativeWorker("record", nativeRequestPath(t, request)); err == nil {
+				t.Fatal("untrusted/misattributed usage accepted")
+			}
+			if !bytes.Equal(before, nativeJournalBytes(t)) {
+				t.Fatal("refused attribution changed journal")
+			}
+			res := resolveWrapperWorkerUsage(wrapperUsageRequest{Platform: "codex", WorkerNames: []string{request.WorkerName}})
+			assertNoFigure(t, res.Workers[0])
+		})
+	}
+}
 
 // Every expected figure in this file is written out by hand from the fixture
 // lines below. Nothing here is produced by calling the resolver, either reader,

@@ -307,6 +307,13 @@ AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --work
    `execution_binding`. Reserve also requires `worker_name`, `task_id`, actual
    `host_session_id`, canonical `workspace`, and `host_permission: workspace_write`.
 
+   For a task dispatch use its nonempty `task_id`. Auxiliary jobs such as an
+   independent Watcher may omit that raw field. Use the runtime's
+   `normalizedDispatchTaskID` convention: trim `stage`, `caste`, and `name`,
+   join them with hyphens, lowercase, replace spaces with hyphens, then trim
+   outer hyphens. Keep the accepted manifest unchanged; after reservation use
+   the saved `worker.task_id` for all later operations.
+
 ```bash
 aether codex-native-worker reserve --request <absolute temporary request file>
 ```
@@ -317,6 +324,10 @@ aether codex-native-worker reserve --request <absolute temporary request file>
    wait instruction. It contains the capsule, exact brief-file bytes (inline
    fallback only when no path exists), matched skills and current new answers.
    The child must wait without checks or edits. Never launch on replay.
+   Per-child read-only or narrow write restrictions, separate native worktrees,
+   and Aether-governed nesting are unsupported. A request that requires governed
+   nesting sets `require_governed_nesting: true` and is refused. Inherited
+   permissions do not prove separate child isolation. Never silently change lanes.
 10. Save the actual child ID returned by the host. Bind with the same identity
     fields plus `launch_id` from `worker.provider_run_id`, `child_id`,
     `dispatch_sha256` and `prompt_sha256` from `worker.native`:
@@ -348,6 +359,11 @@ aether codex-native-worker record --request <absolute temporary request file>
     terminal result.
     Missing/empty or mismatched results refuse. Never supply provider usage from
     worker prose. Unknown outcomes remain incomplete, never reported as success.
+    Raw child-attributed `token_usage_record` events exist, but native usage is
+    uncollected by Aether. Empty saved Usage means unreported, not zero cost.
+    Parent totals and worker text cannot supply child measurements. Encrypted
+    message exports show call/child linkage but cannot independently prove exact
+    plaintext delivery.
     Keep `spawn-log`/`spawn-complete` and the visible native child panel truthful;
     render `ceremony worker-complete` after a saved terminal result.
 
@@ -395,7 +411,7 @@ aether codex-native-worker context --request <same bound worker request file>
     `source_event_id` and `source_event_sha256`. Failed or queued sends remain
     unacknowledged; delivery alone does not prove consultation or useful influence.
 
-    On resume, inspect first, then run `question` for that same child.
+    After public resume and inspection, run `question` for that same child.
     `answered` means do not re-ask; `no_updates` means no message is needed,
     and `delivered` is a historical receipt. A stale or paused refusal keeps the
     choice pending: use the runtime recovery path, never relabel old text.
@@ -403,11 +419,20 @@ aether codex-native-worker context --request <same bound worker request file>
     Do not reopen a terminal child or forward its answer to another worker;
     surface the runtime-returned `next_command`.
 
-12. A stopped parent can read the retained attempt with
-    `aether codex-native-worker inspect --request <file>` (schema version, phase,
-    execution binding). This is read-only. Reuse saved terminal results without
+12. A fresh parent first runs public `aether resume`, then
+    `aether codex-native-worker inspect --phase <phase>`; the exact saved-binding
+    `inspect --request <file>` route remains available. Inspection is read-only.
+    Reuse saved terminal results without
     repeating the helper's edits. If real host evidence is inaccessible, report
     the missing capability; never invent it or respawn the finished helper.
+    Resume only saved never-started assignments that the runtime admits.
+    An unresolved launch stays unresolved; reconnect only to its actual child.
+    Record real observations with `aether codex-native-worker observe --request
+    <file>`. An interrupt request records `cancel_requested`, never `cancelled`.
+    Only an actual host cancellation acknowledgement permits `cancelled`;
+    idle, close, release, elapsed time and process loss are not that evidence.
+    Never copy native results to legacy subprocess result files. The existing
+    native journal and Go-owned stage remain the saved-result authority.
 13. Task receipts cover actual proved work. Assigned `covered_task_ids` are scope,
     not credit. Only the Go finalizer can grant `completed_task_ids`; never edit
     runtime state, assignment fields, or completion credit by hand.
@@ -441,11 +466,13 @@ AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion
    attempt to the original one, and `recovery_command` is the exact command
    that redispatches only the unfinished tasks. Relay `recovery_command`;
    never ask a new worker to redo credited work.
-17. In worktree mode one job takes one worktree, one branch, and one
+17. The separate direct/subprocess route's worktree mode takes one job, one worktree, one branch, and one
    merge-back. The runtime admits receipts, syncs only what it admitted back
    to the project root, then credits. Anything the worker touched but never
    proved is neither synced nor destroyed -- it stays on a preserved branch
    the runtime names. Report that plainly rather than as lost or as done.
+   Native build admission refuses worktree mode; the native route must not
+   apply these subprocess instructions or allocate replacement worktrees.
 
 ## Continue Flow
 

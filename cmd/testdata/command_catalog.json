@@ -1802,6 +1802,7 @@
     "short_description": "Record the owner's answer to a worker's open decision",
     "flags": [
       "answer",
+      "native-request",
       "phase",
       "question",
       "source",
@@ -3390,6 +3391,7 @@
     "name": "instinct-apply",
     "short_description": "Mark an instinct as applied and update stats",
     "flags": [
+      "outcome",
       "success"
     ],
     "parent_command": "",
@@ -4897,7 +4899,20 @@
     "short_description": "Display active pheromone signals in formatted table",
     "flags": [
       "active-only",
-      "type"
+      "actor",
+      "actor-name",
+      "appeal",
+      "defer",
+      "defer-until",
+      "dry-run",
+      "expire",
+      "pin",
+      "reason",
+      "reinforce",
+      "revoke",
+      "type",
+      "unpin",
+      "weaken"
     ],
     "parent_command": "",
     "has_subcommands": false,
@@ -5182,6 +5197,7 @@
       "refresh",
       "repair-artifact",
       "research",
+      "retire-candidate",
       "revision-evidence",
       "revision-reason",
       "revision-type",
@@ -5847,6 +5863,7 @@
       "cost-slots",
       "declared-path",
       "evidence",
+      "max-depth",
       "objective",
       "parent",
       "reason",
@@ -7249,9 +7266,14 @@
     "name": "spawn-can-spawn",
     "short_description": "Check if spawning is allowed at given depth",
     "flags": [
+      "caste",
+      "cost-slots",
       "depth",
       "enforce",
-      "name"
+      "name",
+      "recruitment",
+      "task",
+      "workspace"
     ],
     "parent_command": "",
     "has_subcommands": false,
@@ -7756,6 +7778,8 @@
     "name": "suggest-approve",
     "short_description": "Review, edit, and approve pheromone suggestions and quarantined imports",
     "flags": [
+      "actor",
+      "actor-name",
       "approve",
       "dismiss",
       "dismiss-all",
