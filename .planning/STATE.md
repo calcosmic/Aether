@@ -5,16 +5,16 @@ milestone_name: Classic Colony Restoration
 current_phase: 204.2
 current_phase_name: Codex Native Worker Lifecycle
 status: executing
-stopped_at: Phase 204.2 Plan 07 executing; scope split retains all work in Plans 07/09/08
-last_updated: "2026-09-17T11:46:10.037977+00:00"
+stopped_at: Phase 204.2 Plan 07 complete; Plan 09 capability and final qualification next
+last_updated: "2026-09-17T13:39:13.139740+00:00"
 last_activity: 2026-09-17
-last_activity_desc: Measured Plan 07 scope split into Plans 07 and 09; all scenarios and final verification retained
+last_activity_desc: Plan 07 reviewed and merged; 157 focused integration cases passed; final qualification and broad regression remain
 state_head: 299f02468e1a9e6d667838b0c07ca2648c70cf5e
 progress:
   total_phases: 13
   completed_phases: 6
   total_plans: 198
-  completed_plans: 190
+  completed_plans: 191
   percent: 46
 ---
 
@@ -35,8 +35,8 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 Phase: 204.2 (Codex Native Worker Lifecycle) — EXECUTING
 Next phase: 204.2 (Codex Native Worker Lifecycle)
 Status: Executing Phase 204.2
-Plan: 6 of 9 complete; Plan 07 executing; capability/final qualification split into Plan 09
-Last activity: 2026-09-17 — Plan 04 and semantic dependency repair reviewed and merged; build and all 138 combined focused cases passed; all wave gates passed
+Plan: 7 of 9 complete; Plan 09 capability and final qualification next; Plan 08 broad verification follows
+Last activity: 2026-09-17 — Plan 07 reviewed and merged at 66072657; build and all 157 focused cases passed with no skips; all wave gates passed. Original live outcomes remain ten incomplete and one observed refusal.
 
 ## Performance Metrics
 
@@ -814,7 +814,7 @@ Historical receipts below describe the prepared 1.0.79 candidate. The owner subs
 
 ## Operator Next Steps
 
-- **Next GSD action: `gsd execute-phase 204.2`.** Phase 204.2 has eight checked plans in six waves, covering ANT-04 through ANT-07. Independent plan review passed after one targeted revision; execution, real-host proof, and phase verification remain pending. Phase 204.1 is complete: all seven plans and the bootstrap repair are merged, required proof passes, and the user-delegated scope reviews passed 3/3. GSD's combined UAT/verification completion predicate passed before phase.complete advanced to 204.2. Its final broad suite retains exactly 17 historical failures. Phases 204.3–204.5 still need detailed planning. No shared installation, release or Phase 205 owner acceptance is claimed.
+- **Next GSD action: `gsd execute-phase 204.2`.** Phase 204.2 has nine plans in seven waves after its documented scope amendment, covering ANT-04 through ANT-07. Seven plans are complete; Plan 09 capability and final candidate qualification and Plan 08 broad regression/verification remain pending. Earlier incomplete real-host captures are preserved. Phase 204.1 is complete: all seven plans and the bootstrap repair are merged, required proof passes, and the user-delegated scope reviews passed 3/3. GSD's combined UAT/verification completion predicate passed before phase.complete advanced to 204.2. Its final broad suite retains exactly 17 historical failures. Phases 204.3–204.5 still need detailed planning. No shared installation, release or Phase 205 owner acceptance is claimed.
 - Follow the inserted dependency order: names/updates, native worker lifecycle, full workflow coverage, shared recruitment/recovery, then real parity proof and candidate handoff. GSD plan checking remains enabled. Use disposable projects for engineering work.
 - **Preserved owner checkpoint:** .planning/phases/205-owner-acceptance-and-restoration-seal/205-14-CHECKPOINT.md. Plans 205-01..13 and task 205-14.1 remain complete; task 2 is still blocking-human and task 3 is pending. The Claude limit reset alone no longer determines the next engineering action.
 - Before the remaining owner walkthrough, Phase 204.5 must produce 205-CODEX-PARITY-HANDOFF.md for the exact new candidate and any controlled local preparation. Preserve the original release receipts, snapshots, and before-inventory; any new pre-session inventory is separately named and linked with preparation changes distinguished from owner evidence. If a session has already begun, preserve it and its original baseline.
