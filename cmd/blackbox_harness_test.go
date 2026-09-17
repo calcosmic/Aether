@@ -8,6 +8,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -689,19 +691,13 @@ func TestCLIInterruptedBuildResumesThroughForceRedispatch(t *testing.T) {
 	command := exec.Command(harness.binary, "build", "1", "--light", "--worker-timeout", "30s")
 	command.Dir = harness.repo
 	command.Env = replaceProcessEnv(harness.env, env)
-	var stdoutBuffer, stderrBuffer bytes.Buffer
-	command.Stdout = &stdoutBuffer
-	command.Stderr = &stderrBuffer
-	if err := command.Start(); err != nil {
-		t.Fatalf("start interrupted build: %v", err)
-	}
 	partialPath := filepath.Join(harness.repo, "interrupted-worker-output.txt")
-	waitForBlackBoxFile(t, partialPath, 10*time.Second)
-	if err := command.Process.Kill(); err != nil {
-		t.Fatalf("kill interrupted build: %v", err)
+	process := startBlackBoxOwnedProcess(t, command, logPath)
+	if err := process.ready(partialPath, 10*time.Second); err != nil {
+		t.Fatal(err)
 	}
-	_ = command.Wait()
-	killFixtureAdapterProcesses(t, logPath)
+	process.stop()
+	t.Log(process.diagnostics(partialPath))
 
 	interruptedState := harness.loadColonyState(t)
 	if interruptedState.State != colony.StateEXECUTING || interruptedState.BuildStartedAt == nil || interruptedState.Plan.Phases[0].Status != colony.PhaseInProgress {
@@ -1462,5 +1458,183 @@ func killFixtureAdapterProcesses(t *testing.T, logPath string) {
 		if process, findErr := os.FindProcess(entry.PID); findErr == nil {
 			_ = process.Kill()
 		}
+	}
+}
+
+// blackBoxOwnedProcess has one Wait owner. stop is registered before any
+// readiness assertion, and output is inspected only after Wait synchronizes it.
+type blackBoxOwnedProcess struct {
+	t                   *testing.T
+	command             *exec.Cmd
+	stdout, stderr      bytes.Buffer
+	done                chan struct{}
+	once                sync.Once
+	err                 error
+	started, stopped    time.Time
+	readyAt             time.Time
+	exitedBeforeCleanup bool
+	logPath             string
+}
+
+func startBlackBoxOwnedProcess(t *testing.T, command *exec.Cmd, logPath string) *blackBoxOwnedProcess {
+	t.Helper()
+	p := &blackBoxOwnedProcess{t: t, command: command, done: make(chan struct{}), logPath: logPath, started: time.Now()}
+	command.Stdout, command.Stderr = &p.stdout, &p.stderr
+	command.WaitDelay = 2 * time.Second
+	if err := command.Start(); err != nil {
+		t.Fatalf("start fixture: %v", err)
+	}
+	t.Cleanup(p.stop)
+	go func() { p.err = command.Wait(); close(p.done) }()
+	return p
+}
+
+func (p *blackBoxOwnedProcess) stop() {
+	p.once.Do(func() {
+		// Stop new dispatches first, then only PIDs recorded by this fixture.
+		select {
+		case <-p.done:
+			p.exitedBeforeCleanup = true
+		default:
+		}
+		_ = p.command.Process.Kill()
+		<-p.done
+		data, _ := os.ReadFile(p.logPath)
+		var children []*os.Process
+		for _, line := range strings.Split(string(data), "\n") {
+			var entry struct {
+				PID int `json:"pid"`
+			}
+			if json.Unmarshal([]byte(line), &entry) == nil && entry.PID > 0 && entry.PID != os.Getpid() {
+				if child, err := os.FindProcess(entry.PID); err == nil {
+					_ = child.Kill()
+					children = append(children, child)
+				}
+			}
+		}
+		// Descendants are not our children: Wait cannot reap them. On Unix poll
+		// their state until dead (a zombie cannot write). Never kill by name/group.
+		if runtime.GOOS != "windows" {
+			deadline := time.Now().Add(2 * time.Second)
+			for _, child := range children {
+				for time.Now().Before(deadline) && blackBoxPIDRunning(child.Pid) {
+					time.Sleep(10 * time.Millisecond)
+				}
+				if blackBoxPIDRunning(child.Pid) {
+					p.t.Errorf("adapter PID %d survived cleanup", child.Pid)
+				}
+			}
+		}
+		p.stopped = time.Now()
+	})
+}
+
+func blackBoxPIDRunning(pid int) bool {
+	out, err := exec.Command("ps", "-p", strconv.Itoa(pid), "-o", "stat=").Output()
+	return err == nil && strings.TrimSpace(string(out)) != "" && !strings.HasPrefix(strings.TrimSpace(string(out)), "Z")
+}
+
+func (p *blackBoxOwnedProcess) diagnostics(path string) string {
+	p.stop()
+	data, _ := os.ReadFile(p.logPath)
+	return fmt.Sprintf("ready=%s exited_before_cleanup=%t started=%s stopped=%s elapsed=%s pid=%d exited=true wait=%v sentinel=%s\nstdout:\n%s\nstderr:\n%s\nadapter log:\n%s", p.readyAt.UTC().Format(time.RFC3339Nano), p.exitedBeforeCleanup, p.started.UTC().Format(time.RFC3339Nano), p.stopped.UTC().Format(time.RFC3339Nano), p.stopped.Sub(p.started), p.command.Process.Pid, p.err, path, p.stdout.String(), p.stderr.String(), data)
+}
+
+func (p *blackBoxOwnedProcess) ready(path string, timeout time.Duration) error {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if _, err := os.Stat(path); err == nil {
+			p.readyAt = time.Now()
+			return nil
+		}
+		select {
+		case <-p.done:
+			return fmt.Errorf("fixture exited before readiness: %s", p.diagnostics(path))
+		case <-timer.C:
+			return fmt.Errorf("readiness timeout (%s): %s", timeout, p.diagnostics(path))
+		case <-ticker.C:
+		}
+	}
+}
+
+func TestCLIInterruptedBuildReadinessCleanup(t *testing.T) {
+	// Re-exec this test for a portable writer/early-exit process. The writer
+	// never creates the readiness sentinel and would keep writing after a leak.
+	if mode := os.Getenv("AETHER_READINESS_HELPER"); mode != "" {
+		fmt.Fprintln(os.Stdout, "fixture stdout")
+		fmt.Fprintln(os.Stderr, "fixture stderr")
+		if mode == "exit" {
+			os.Exit(17)
+		}
+		path := os.Getenv("AETHER_READINESS_HEARTBEAT")
+		if mode == "descendant" {
+			child := exec.Command(os.Args[0], "-test.run=^TestCLIInterruptedBuildReadinessCleanup$")
+			child.Env = replaceProcessEnv(os.Environ(), map[string]string{"AETHER_READINESS_HELPER": "writer"})
+			if err := child.Start(); err != nil {
+				panic(err)
+			}
+			data, _ := json.Marshal(map[string]int{"pid": child.Process.Pid})
+			if err := os.WriteFile(os.Getenv("AETHER_READINESS_LOG"), data, 0600); err != nil {
+				panic(err)
+			}
+			_ = child.Wait()
+			os.Exit(0)
+		}
+		for {
+			_ = os.WriteFile(path, []byte(time.Now().String()), 0600)
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	t.Parallel()
+	for _, mode := range []string{"missing", "exit", "success", "descendant"} {
+		t.Run(mode, func(t *testing.T) {
+			root := t.TempDir()
+			unrelatedBeat := filepath.Join(root, "unrelated-heartbeat")
+			unrelatedCmd := exec.Command(os.Args[0], "-test.run=^TestCLIInterruptedBuildReadinessCleanup$")
+			unrelatedCmd.Env = replaceProcessEnv(os.Environ(), map[string]string{"AETHER_READINESS_HELPER": "writer", "AETHER_READINESS_HEARTBEAT": unrelatedBeat})
+			unrelated := startBlackBoxOwnedProcess(t, unrelatedCmd, "")
+			if err := unrelated.ready(unrelatedBeat, 2*time.Second); err != nil {
+				t.Fatal(err)
+			}
+			beat := filepath.Join(root, "heartbeat")
+			command := exec.Command(os.Args[0], "-test.run=^TestCLIInterruptedBuildReadinessCleanup$")
+			command.Env = replaceProcessEnv(os.Environ(), map[string]string{"AETHER_READINESS_HELPER": mode, "AETHER_READINESS_HEARTBEAT": beat, "AETHER_READINESS_LOG": filepath.Join(root, "adapter.jsonl")})
+			p := startBlackBoxOwnedProcess(t, command, filepath.Join(root, "adapter.jsonl"))
+			sentinel := filepath.Join(root, "never-written")
+			if mode == "success" {
+				sentinel = beat
+			}
+			err := p.ready(sentinel, 2*time.Second)
+			if mode == "success" && err != nil {
+				t.Fatal(err)
+			}
+			if mode != "success" && (err == nil || !strings.Contains(err.Error(), "fixture stderr") || !strings.Contains(err.Error(), sentinel)) {
+				t.Fatalf("missing diagnostics: %v", err)
+			}
+			p.stop()
+			stopped := p.stopped
+			p.stop()
+			if p.stopped != stopped || p.command.ProcessState == nil {
+				t.Fatal("cleanup was not exactly once with Wait")
+			}
+			before, _ := os.ReadFile(beat)
+			unrelatedBefore, _ := os.ReadFile(unrelatedBeat)
+			time.Sleep(60 * time.Millisecond)
+			after, _ := os.ReadFile(beat)
+			unrelatedAfter, _ := os.ReadFile(unrelatedBeat)
+			if bytes.Equal(unrelatedBefore, unrelatedAfter) {
+				t.Fatal("cleanup stopped unrelated writer")
+			}
+			if !bytes.Equal(before, after) {
+				t.Fatal("writer survived cleanup")
+			}
+			if runtime.GOOS != "windows" && blackBoxPIDRunning(p.command.Process.Pid) {
+				t.Fatal("fixture process survived cleanup")
+			}
+			t.Log(p.diagnostics(sentinel))
+		})
 	}
 }
