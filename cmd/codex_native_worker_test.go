@@ -195,7 +195,7 @@ func TestCodexNativeWorkerTracer(t *testing.T) {
 		"prompt_sha256": request.PromptSHA256, "source_event_id": request.SourceEventID, "source_event_sha256": request.SourceEventSHA256,
 		"result": map[string]any{"ant_name": dispatch.Name, "caste": dispatch.Caste, "task_id": request.TaskID,
 			"status": "code_written", "summary": "Builder wire regression", "files_created": []string{"evidence.txt"},
-			"tdd": map[string]any{"cycles_completed": 1, "tests_added": 0, "coverage_percent": nil, "all_passing": true},
+			"tdd":     map[string]any{"cycles_completed": 1, "tests_added": 0, "coverage_percent": nil, "all_passing": true},
 			"handoff": codex.WorkerHandoff{ChangedFiles: []string{"evidence.txt"}, VerificationStatus: "pass", CommandsRun: []string{"fixture check"}}}}
 	loaded, err := loadCodexNativeWorkerRequest(writeCodexNativeRequestForTest(t, wire))
 	if err != nil || loaded.Result == nil || loaded.Result.Name != dispatch.Name || loaded.Result.Status != "completed" {

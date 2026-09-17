@@ -326,10 +326,12 @@ aether codex-native-worker record --request <absolute temporary request file>
 ```
 
     Include all bound fields, `result` (the actual child's JSON terminal result),
-    `source_event_id` (child log path and terminal line number), and
+    `source_event_id` (the terminal AgentMessage item's actual host ID), and
     `source_event_sha256` (SHA-256 of that exact raw JSONL line, excluding its
     trailing newline). Preserve the source line without reserializing it.
-    The child's result must use `name`, not `ant_name`; every handoff's
+    The runtime accepts the installed Builder's `ant_name`, `tdd`, and
+    `code_written` result, normalizing name/status in Go while preserving raw
+    child JSON. If both `name` and `ant_name` appear they must agree. Every handoff's
     `verification_status` must be `pass`, `fail`, `partial`, `not_run`, or
     `unknown`. If the runtime rejects malformed output, ask the same child to
     correct its response before recording; never rewrite or replace an accepted

@@ -35,6 +35,7 @@ type codexNativeWorkerBinding struct {
 	Release           string                  `json:"release,omitempty"`
 	SourceEventID     string                  `json:"source_event_id,omitempty"`
 	SourceEventSHA256 string                  `json:"source_event_sha256,omitempty"`
+	RawResult         json.RawMessage         `json:"raw_result,omitempty"`
 }
 
 type codexNativeWorkerRequest struct {
@@ -53,6 +54,7 @@ type codexNativeWorkerRequest struct {
 	SourceEventID     string                 `json:"source_event_id,omitempty"`
 	SourceEventSHA256 string                 `json:"source_event_sha256,omitempty"`
 	Result            *internalWorkerResult  `json:"result,omitempty"`
+	RawResult         json.RawMessage        `json:"-"`
 }
 
 type codexNativeWorkerResponse struct {
@@ -126,9 +128,14 @@ func loadCodexNativeWorkerRequest(path string) (codexNativeWorkerRequest, error)
 	if len(data) > internalWorkerRequestMaxBytes {
 		return request, fmt.Errorf("native request exceeds %d bytes", internalWorkerRequestMaxBytes)
 	}
+	type requestFields codexNativeWorkerRequest
+	wire := struct {
+		*requestFields
+		Result json.RawMessage `json:"result"`
+	}{requestFields: (*requestFields)(&request)}
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&request); err != nil {
+	if err := decoder.Decode(&wire); err != nil {
 		return request, fmt.Errorf("parse native request: %w", err)
 	}
 	if err := decoder.Decode(new(any)); err != io.EOF {
@@ -137,7 +144,54 @@ func loadCodexNativeWorkerRequest(path string) (codexNativeWorkerRequest, error)
 	if request.SchemaVersion != codexNativeWorkerSchemaVersion || request.Phase <= 0 {
 		return request, fmt.Errorf("native request requires schema_version 1 and a positive phase")
 	}
+	if len(wire.Result) != 0 && string(wire.Result) != "null" {
+		result, err := normalizeCodexNativeResult(wire.Result)
+		if err != nil {
+			return request, err
+		}
+		request.Result, request.RawResult = &result, wire.Result
+	}
 	return request, nil
+}
+
+// The installed Builder's public wire contract has ant_name, tdd and
+// code_written. Normalize only these supported aliases, retaining the original
+// JSON alongside its source event. TDD prose never becomes provider telemetry.
+func normalizeCodexNativeResult(raw []byte) (internalWorkerResult, error) {
+	var wire struct {
+		internalWorkerResult
+		AntName string `json:"ant_name"`
+		TDD     *struct {
+			CyclesCompleted int      `json:"cycles_completed"`
+			TestsAdded      int      `json:"tests_added"`
+			CoveragePercent *float64 `json:"coverage_percent"`
+			AllPassing      bool     `json:"all_passing"`
+		} `json:"tdd,omitempty"`
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&wire); err != nil {
+		return internalWorkerResult{}, fmt.Errorf("native terminal wire: %w", err)
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return internalWorkerResult{}, fmt.Errorf("native terminal requires exactly one JSON object")
+	}
+	if wire.Name != "" && wire.AntName != "" && wire.Name != wire.AntName {
+		return internalWorkerResult{}, fmt.Errorf("native name and ant_name conflict")
+	}
+	if wire.Name == "" {
+		wire.Name = wire.AntName
+	}
+	wire.Status = strings.ToLower(strings.TrimSpace(wire.Status))
+	if wire.Status == "code_written" {
+		wire.Status = buildWorkerCompleted
+	}
+	for i := range wire.TaskReceipts {
+		if wire.TaskReceipts[i].Status == "code_written" {
+			wire.TaskReceipts[i].Status = "completed"
+		}
+	}
+	return wire.internalWorkerResult, nil
 }
 
 // This bridge cannot launch processes or providers. Only the host's spawn_agent
@@ -336,6 +390,26 @@ func runCodexNativeWorker(operation, path string) (codexNativeWorkerResponse, er
 			if native.SourceEventID != "" && (native.SourceEventID != request.SourceEventID || native.SourceEventSHA256 != request.SourceEventSHA256) {
 				return fmt.Errorf("native terminal source event conflicts with saved evidence")
 			}
+			// Exercise the same applicable completion semantics before freezing the
+			// first result. Limit the projection to this dispatch; other workers
+			// need not have finished yet. No journal bytes are mutated on refusal.
+			preview := updated
+			previewWorker := *worker
+			previewWorker.ResultSHA256 = ""
+			preview.WorkerRuns = []buildAttemptWorkerRun{previewWorker}
+			previewManifest := *updated.PlanManifest
+			previewManifest.Dispatches = []codexBuildDispatch{*dispatch}
+			preview.PlanManifest = &previewManifest
+			if err := applyBuildWorkerTerminal(&preview, &preview.WorkerRuns[0], &result, now); err != nil {
+				return err
+			}
+			completion, ok := buildCompletionFromWorkerRuns(preview)
+			if !ok {
+				return fmt.Errorf("native result cannot form a terminal completion")
+			}
+			if violations := validateCompletionPacketSemantics(updated.PlanManifest.Root, completion); len(violations) != 0 {
+				return fmt.Errorf("native terminal completion semantics: %v", violations)
+			}
 			if err := applyBuildWorkerTerminal(&updated, worker, &result, now); err != nil {
 				if errors.Is(err, errCodexNativeReplay) {
 					response.Replay = true
@@ -343,6 +417,7 @@ func runCodexNativeWorker(operation, path string) (codexNativeWorkerResponse, er
 				return err
 			}
 			native.SourceEventID, native.SourceEventSHA256, native.LaunchState = request.SourceEventID, request.SourceEventSHA256, "terminal"
+			native.RawResult = append(json.RawMessage(nil), request.RawResult...)
 			return nil
 		default:
 			return fmt.Errorf("unsupported native worker operation %q", operation)
@@ -388,6 +463,6 @@ func codexNativeLaunchPrompt(manifest codexBuildManifest, dispatch codexBuildDis
 			prompt += "\n" + line
 		}
 	}
-	prompt += fmt.Sprintf("\nReturn one JSON terminal result with exactly these permitted fields: name=%q (not ant_name), caste=%q, task_id=%q, status (completed/failed/blocked/timeout), summary, files_created, files_modified, tests_written, task_receipts, handoff. Each task receipt has task_id, status, summary, files_created, files_modified, tests_written, handoff. Every handoff uses %s. verification_status is one enum value: pass, fail, partial, not_run, or unknown; put explanations in summary/known_failures, never in verification_status. Report only actual checks; omit usage. Do not stage, finalize, commit, recruit or launch helpers. Parent saves your terminal response.\n", dispatch.Name, dispatch.Caste, normalizedDispatchTaskID(dispatch), codex.HandoffFieldsSummary)
+	prompt += fmt.Sprintf("\nReturn one JSON terminal result: name or ant_name=%q (if both are supplied they must agree), caste=%q, task_id=%q, status (code_written/completed/failed/blocked/timeout), summary, files_created, files_modified, tests_written, task_receipts, blockers, spawns, handoff; optional installed Builder tdd fields cycles_completed/tests_added/coverage_percent/all_passing are preserved without becoming provider telemetry. Each task receipt has task_id, status, summary, files_created, files_modified, tests_written, handoff. Every handoff uses %s. verification_status MUST be one enum value: pass, fail, partial, not_run, or unknown; put explanations in summary/known_failures, never in verification_status. Report only actual checks; omit usage. Do not stage, finalize, commit, recruit or launch helpers. Parent saves your terminal response.\n", dispatch.Name, dispatch.Caste, normalizedDispatchTaskID(dispatch), codex.HandoffFieldsSummary)
 	return prompt, nil
 }
