@@ -521,6 +521,36 @@ func TestCodexNativeFinalizeChecks(t *testing.T) {
 		if !ok || attempt.FreeChecks == nil || attempt.FreeChecks.Passed || !containsString(attempt.FreeChecks.Failed, "tests") {
 			t.Fatalf("worker success replaced failing actual check: %+v", attempt.FreeChecks)
 		}
+		// Owner ruling D11 rule 2 keeps receipt-backed BUILD credit while
+		// deterministic failures block VERIFIED advancement at continue.
+		var collection codexResultCollectionReport
+		if err := store.LoadJSON("build/phase-1/result-collection.json", &collection); err != nil {
+			t.Fatal(err)
+		}
+		var assignedTasks []string
+		for _, dispatch := range manifest.Dispatches {
+			assignedTasks = append(assignedTasks, dispatchCoveredTaskIDs(dispatch)...)
+		}
+		wantCredit := uniqueSortedStrings(assignedTasks)
+		if len(wantCredit) == 0 || !reflect.DeepEqual(collection.CreditedTaskIDs, wantCredit) || len(collection.UnfinishedTaskIDs) != 0 || attempt.Status != buildAttemptBuilt {
+			t.Fatalf("failed free check changed receipt-backed build credit: attempt=%s collection=%+v want=%v", attempt.Status, collection, wantCredit)
+		}
+		var durable colony.ColonyState
+		if err := store.LoadJSON("COLONY_STATE.json", &durable); err != nil {
+			t.Fatal(err)
+		}
+		for label, observed := range map[string]colony.ColonyState{"returned": state, "durable": durable} {
+			var completed []string
+			for i, task := range observed.Plan.Phases[0].Tasks {
+				if task.Status == colony.TaskCompleted {
+					completed = append(completed, buildTaskID(task, i))
+				}
+			}
+			if observed.State != colony.StateBUILT || observed.Plan.Phases[0].Status != colony.PhaseInProgress || !reflect.DeepEqual(uniqueSortedStrings(completed), wantCredit) {
+				t.Fatalf("%s state lost build credit or claimed verified advancement: state=%s phase=%s completed=%v", label, observed.State, observed.Plan.Phases[0].Status, completed)
+			}
+		}
+		t.Logf("failed-check build outcome: state=%s phase=%s attempt=%s credited_task_ids=%v", durable.State, durable.Plan.Phases[0].Status, attempt.Status, collection.CreditedTaskIDs)
 		witness, err := os.ReadFile(filepath.Join(root, "native-check-count"))
 		if err != nil || string(witness) != "run\n" {
 			t.Fatalf("build check did not execute exactly once: %q %v", witness, err)
