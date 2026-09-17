@@ -278,14 +278,23 @@ type nativeGapBoundary struct {
 	ContextMode string          `json:"context_mode"`
 }
 
-func nativeGapHostBoundary(raw []byte, parent, child, task, kind, expected string) (nativeGapBoundary, error) {
+func nativeGapHostBoundary(raw []byte, parent, child, task, kind, expected string, after ...string) (nativeGapBoundary, error) {
 	var result nativeGapBoundary
+	var notBefore time.Time
+	if len(after) > 0 && after[0] != "" {
+		var err error
+		notBefore, err = time.Parse(time.RFC3339Nano, after[0])
+		if err != nil {
+			return result, fmt.Errorf("invalid answer selection time: %w", err)
+		}
+	}
 	lines := bytes.Split(bytes.TrimSpace(raw), []byte{'\n'})
 	matches := 0
 	for ai, line := range lines {
 		var e struct {
-			Type    string
-			Payload struct {
+			Type      string
+			Timestamp string
+			Payload   struct {
 				Type     string
 				ThreadID string `json:"thread_id"`
 				TurnID   string `json:"turn_id"`
@@ -298,6 +307,12 @@ func nativeGapHostBoundary(raw []byte, parent, child, task, kind, expected strin
 		}
 		if json.Unmarshal(line, &e) != nil || e.Type != "event_msg" || e.Payload.Type != "item_completed" || e.Payload.ThreadID != parent || e.Payload.Item.Type != "SubAgentActivity" || e.Payload.Item.Child != child || e.Payload.Item.Path != task {
 			continue
+		}
+		if !notBefore.IsZero() {
+			at, err := time.Parse(time.RFC3339Nano, e.Timestamp)
+			if err != nil || !at.After(notBefore) {
+				continue
+			}
 		}
 		want := "interacted"
 		if kind == "spawn_agent" {
@@ -466,7 +481,7 @@ func nativeGapCaptureContext(r codexNativeLiveReceipt, runRoot string) nativeGap
 	if delivery.ChildID != r.ChildID || !strings.Contains(delivery.Payload, challenge.Answer) || delivery.PayloadSHA256 != lifecycleDigest([]byte(delivery.Payload)) {
 		gap(fmt.Errorf("stale/wrong-child/altered answer envelope"))
 	}
-	report.Send, err = nativeGapHostBoundary(parent, r.SessionID, r.ChildID, r.ChildTaskPath, "send_message", delivery.Payload)
+	report.Send, err = nativeGapHostBoundary(parent, r.SessionID, r.ChildID, r.ChildTaskPath, "send_message", delivery.Payload, challenge.SelectedAt)
 	gap(err)
 	// Another answer-bearing host message is an alternate causal path, even if
 	// the intended exact send later succeeds. Never qualify that contamination.
@@ -640,7 +655,7 @@ func TestCodexNativeGapContext(t *testing.T) {
 	t.Run("host-boundary", func(t *testing.T) {
 		expected := "exact café 日本語 é\r\nbytes  "
 		for _, kind := range []string{"spawn_agent", "send_message"} {
-			for _, mode := range []string{"valid", "empty-result", "whitespace", "unicode", "wrong-child", "failed-send", "inspect-only", "missing-result", "duplicate-result", "encrypted", "inherited", "stale", "wrong-turn"} {
+			for _, mode := range []string{"valid", "empty-result", "old-release", "whitespace", "unicode", "wrong-child", "failed-send", "inspect-only", "missing-result", "duplicate-result", "encrypted", "inherited", "stale", "wrong-turn"} {
 				t.Run(kind+"/"+mode, func(t *testing.T) {
 					activityKind := "interacted"
 					if kind == "spawn_agent" {
@@ -653,7 +668,7 @@ func TestCodexNativeGapContext(t *testing.T) {
 					if mode == "unicode" {
 						msg = strings.ReplaceAll(msg, "é", "é")
 					}
-					if mode == "encrypted" {
+					if mode == "encrypted" || mode == "old-release" {
 						msg = "gAAAAopaque"
 					}
 					if mode == "stale" {
@@ -674,7 +689,7 @@ func TestCodexNativeGapContext(t *testing.T) {
 					if mode == "wrong-child" {
 						child = "other"
 					}
-					activity := map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": "parent", "turn_id": "turn", "item": map[string]any{"type": "SubAgentActivity", "id": "call", "kind": activityKind, "agent_thread_id": child, "agent_path": "/root/worker"}}}
+					activity := map[string]any{"type": "event_msg", "timestamp": "2026-09-17T22:00:02Z", "payload": map[string]any{"type": "item_completed", "thread_id": "parent", "turn_id": "turn", "item": map[string]any{"type": "SubAgentActivity", "id": "call", "kind": activityKind, "agent_thread_id": child, "agent_path": "/root/worker"}}}
 					output := "{}"
 					if kind == "spawn_agent" {
 						output = `{"task_name":"/root/worker"}`
@@ -702,7 +717,17 @@ func TestCodexNativeGapContext(t *testing.T) {
 						b, _ := json.Marshal(e)
 						raw = append(raw, append(b, '\n')...)
 					}
-					_, err := nativeGapHostBoundary(raw, "parent", "child", "/root/worker", kind, expected)
+					after := ""
+					if mode == "old-release" {
+						old := bytes.ReplaceAll(raw, []byte(`"call"`), []byte(`"release"`))
+						old = bytes.ReplaceAll(old, []byte("22:00:02Z"), []byte("22:00:00Z"))
+						raw = append(old, raw...)
+						after = "2026-09-17T22:00:01Z"
+					}
+					_, err := nativeGapHostBoundary(raw, "parent", "child", "/root/worker", kind, expected, after)
+					if mode == "old-release" && (err == nil || !strings.Contains(err.Error(), "plaintext unavailable")) {
+						t.Fatalf("old release confused with answer send: %v", err)
+					}
 					valid := mode == "valid" || ((mode == "inherited" || mode == "empty-result") && kind == "send_message")
 					if (err == nil) != valid {
 						t.Fatalf("valid=%v err=%v", valid, err)
