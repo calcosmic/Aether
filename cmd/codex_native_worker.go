@@ -33,24 +33,28 @@ const (
 type codexNativeWorkerHooks struct {
 	BeforeWrite        func()
 	AfterCurrencyCheck func()
+	AfterContextRender func()
 	AfterTransition    func(codexNativeWorkerReceipt)
 }
 
 // Receipt identifies one accepted transition independently of later worker
 // observations. Replays return these original values, never a new timestamp.
 type codexNativeWorkerReceipt struct {
-	Operation         string `json:"operation"`
-	LaunchID          string `json:"launch_id"`
-	ChildID           string `json:"child_id,omitempty"`
-	At                string `json:"at"`
-	DispatchSHA256    string `json:"dispatch_sha256"`
-	PromptSHA256      string `json:"prompt_sha256"`
-	SourceEventID     string `json:"source_event_id,omitempty"`
-	SourceEventSHA256 string `json:"source_event_sha256,omitempty"`
-	ResultSHA256      string `json:"result_sha256,omitempty"`
+	ContextDeliveryID    string `json:"context_delivery_id,omitempty"`
+	ContextPayloadSHA256 string `json:"context_payload_sha256,omitempty"`
+	Operation            string `json:"operation"`
+	LaunchID             string `json:"launch_id"`
+	ChildID              string `json:"child_id,omitempty"`
+	At                   string `json:"at"`
+	DispatchSHA256       string `json:"dispatch_sha256"`
+	PromptSHA256         string `json:"prompt_sha256"`
+	SourceEventID        string `json:"source_event_id,omitempty"`
+	SourceEventSHA256    string `json:"source_event_sha256,omitempty"`
+	ResultSHA256         string `json:"result_sha256,omitempty"`
 }
 
 type codexNativeHostObservation struct {
+	ContextDeliveryID string `json:"context_delivery_id,omitempty"`
 	SchemaVersion     int    `json:"schema_version"`
 	Status            string `json:"status"`
 	ChildID           string `json:"child_id,omitempty"`
@@ -61,20 +65,22 @@ type codexNativeHostObservation struct {
 }
 
 type codexNativeWorkerState struct {
-	WorkerName      string `json:"worker_name"`
-	TaskID          string `json:"task_id"`
-	LaunchID        string `json:"launch_id"`
-	ChildID         string `json:"child_id,omitempty"`
-	LaunchState     string `json:"launch_state"`
-	HostStatus      string `json:"host_status"`
-	Terminal        bool   `json:"terminal"`
-	CancelRequested bool   `json:"cancel_requested,omitempty"`
-	ResultSHA256    string `json:"result_sha256,omitempty"`
+	ContextDeliveryIDs []string `json:"context_delivery_ids,omitempty"`
+	WorkerName         string   `json:"worker_name"`
+	TaskID             string   `json:"task_id"`
+	LaunchID           string   `json:"launch_id"`
+	ChildID            string   `json:"child_id,omitempty"`
+	LaunchState        string   `json:"launch_state"`
+	HostStatus         string   `json:"host_status"`
+	Terminal           bool     `json:"terminal"`
+	CancelRequested    bool     `json:"cancel_requested,omitempty"`
+	ResultSHA256       string   `json:"result_sha256,omitempty"`
 }
 
 // Native provenance extends the existing worker journal, never its credit authority.
 // Prompt is retained verbatim so replay never silently recomposes an assignment.
 type codexNativeWorkerBinding struct {
+	ContextDeliveries  []codexNativeContextReceipt  `json:"context_deliveries,omitempty"`
 	SchemaVersion      int                          `json:"schema_version"`
 	LaunchState        string                       `json:"launch_state"`
 	BoundAt            string                       `json:"bound_at,omitempty"`
@@ -96,49 +102,65 @@ type codexNativeWorkerBinding struct {
 }
 
 type codexNativeWorkerRequest struct {
-	ObservationStatus string                 `json:"observation_status,omitempty"`
-	ObservedAt        string                 `json:"observed_at,omitempty"`
-	ObservationDetail string                 `json:"observation_detail,omitempty"`
-	SchemaVersion     int                    `json:"schema_version"`
-	Phase             int                    `json:"phase"`
-	ExecutionBinding  codex.ExecutionBinding `json:"execution_binding"`
-	WorkerName        string                 `json:"worker_name,omitempty"`
-	TaskID            string                 `json:"task_id,omitempty"`
-	LaunchID          string                 `json:"launch_id,omitempty"`
-	HostSessionID     string                 `json:"host_session_id,omitempty"`
-	ChildID           string                 `json:"child_id,omitempty"`
-	DispatchSHA256    string                 `json:"dispatch_sha256,omitempty"`
-	PromptSHA256      string                 `json:"prompt_sha256,omitempty"`
-	Workspace         string                 `json:"workspace,omitempty"`
-	HostPermission    string                 `json:"host_permission,omitempty"`
-	SourceEventID     string                 `json:"source_event_id,omitempty"`
-	SourceEventSHA256 string                 `json:"source_event_sha256,omitempty"`
-	Result            *internalWorkerResult  `json:"result,omitempty"`
-	RawResult         json.RawMessage        `json:"-"`
+	ContextDeliveryID string                      `json:"context_delivery_id,omitempty"`
+	ContextDelivery   *codexNativeContextDelivery `json:"context_delivery,omitempty"`
+	ContextSend       *codexNativeContextSend     `json:"context_send,omitempty"`
+	ObservationStatus string                      `json:"observation_status,omitempty"`
+	ObservedAt        string                      `json:"observed_at,omitempty"`
+	ObservationDetail string                      `json:"observation_detail,omitempty"`
+	SchemaVersion     int                         `json:"schema_version"`
+	Phase             int                         `json:"phase"`
+	ExecutionBinding  codex.ExecutionBinding      `json:"execution_binding"`
+	WorkerName        string                      `json:"worker_name,omitempty"`
+	TaskID            string                      `json:"task_id,omitempty"`
+	LaunchID          string                      `json:"launch_id,omitempty"`
+	HostSessionID     string                      `json:"host_session_id,omitempty"`
+	ChildID           string                      `json:"child_id,omitempty"`
+	DispatchSHA256    string                      `json:"dispatch_sha256,omitempty"`
+	PromptSHA256      string                      `json:"prompt_sha256,omitempty"`
+	Workspace         string                      `json:"workspace,omitempty"`
+	HostPermission    string                      `json:"host_permission,omitempty"`
+	SourceEventID     string                      `json:"source_event_id,omitempty"`
+	SourceEventSHA256 string                      `json:"source_event_sha256,omitempty"`
+	Result            *internalWorkerResult       `json:"result,omitempty"`
+	RawResult         json.RawMessage             `json:"-"`
 }
 
 type codexNativeWorkerResponse struct {
-	Receipt          *codexNativeWorkerReceipt `json:"receipt,omitempty"`
-	WorkerStates     []codexNativeWorkerState  `json:"worker_states,omitempty"`
-	Disposition      codexNativeDisposition    `json:"disposition,omitempty"`
-	SchemaVersion    int                       `json:"schema_version"`
-	ExecutionBinding codex.ExecutionBinding    `json:"execution_binding"`
-	LaunchAllowed    bool                      `json:"launch_allowed"`
-	Replay           bool                      `json:"replay,omitempty"`
-	Dispatch         *codexBuildDispatch       `json:"dispatch,omitempty"`
-	Worker           *buildAttemptWorkerRun    `json:"worker,omitempty"`
-	Workers          []buildAttemptWorkerRun   `json:"workers,omitempty"`
-	CompletionPath   string                    `json:"completion_path,omitempty"`
-	Complete         bool                      `json:"complete,omitempty"`
+	ContextStatus    string                      `json:"context_status,omitempty"`
+	ContextDelivery  *codexNativeContextDelivery `json:"context_delivery,omitempty"`
+	Receipt          *codexNativeWorkerReceipt   `json:"receipt,omitempty"`
+	WorkerStates     []codexNativeWorkerState    `json:"worker_states,omitempty"`
+	Disposition      codexNativeDisposition      `json:"disposition,omitempty"`
+	SchemaVersion    int                         `json:"schema_version"`
+	ExecutionBinding codex.ExecutionBinding      `json:"execution_binding"`
+	LaunchAllowed    bool                        `json:"launch_allowed"`
+	Replay           bool                        `json:"replay,omitempty"`
+	Dispatch         *codexBuildDispatch         `json:"dispatch,omitempty"`
+	Worker           *buildAttemptWorkerRun      `json:"worker,omitempty"`
+	Workers          []buildAttemptWorkerRun     `json:"workers,omitempty"`
+	CompletionPath   string                      `json:"completion_path,omitempty"`
+	Complete         bool                        `json:"complete,omitempty"`
 }
 
 func init() {
 	command := &cobra.Command{Use: "codex-native-worker", Short: "Internal non-launching native worker journal bridge", Hidden: true}
-	for _, operation := range []string{"reserve", "bind", "record", "stage", "inspect", "observe"} {
+	for _, operation := range []string{"reserve", "bind", "record", "stage", "inspect", "observe", "context"} {
 		operation := operation
 		child := &cobra.Command{Use: operation, Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 			path, _ := cmd.Flags().GetString("request")
-			response, err := runCodexNativeWorker(operation, path)
+			var response codexNativeWorkerResponse
+			var err error
+			if cmd.Flags().Changed("phase") {
+				if cmd.Flags().Changed("request") {
+					err = fmt.Errorf("native --phase and --request are mutually exclusive")
+				} else {
+					phase, _ := cmd.Flags().GetInt("phase")
+					response, err = runCodexNativeWorkerForPhase(operation, phase)
+				}
+			} else {
+				response, err = runCodexNativeWorker(operation, path)
+			}
 			if err != nil {
 				outputError(1, sanitizeInternalWorkerAdapterError(err.Error()), nil)
 				return renderedErrorExit(1)
@@ -147,6 +169,9 @@ func init() {
 			return nil
 		}}
 		child.Flags().String("request", "", "Absolute regular JSON file under an aether-worker-request-* temporary directory")
+		if operation == "inspect" || operation == "stage" {
+			child.Flags().Int("phase", 0, "Use the exact current saved execution binding for this phase")
+		}
 		command.AddCommand(child)
 	}
 	rootCmd.AddCommand(command)
@@ -268,7 +293,26 @@ func runCodexNativeWorkerWithHooks(operation, path string, hooks codexNativeWork
 	if err != nil {
 		return codexNativeWorkerResponse{}, err
 	}
+	return executeCodexNativeWorkerRequest(operation, request, hooks)
+}
+
+// Phase-only recovery derives identity from the current journal without
+// creating a temporary request file. Stage delegates to its existing authority.
+func runCodexNativeWorkerForPhase(operation string, phase int) (codexNativeWorkerResponse, error) {
+	if (operation != "inspect" && operation != "stage") || phase <= 0 {
+		return codexNativeWorkerResponse{}, fmt.Errorf("native --phase requires inspect/stage and a positive phase")
+	}
+	_, record, ok := loadLatestBuildAttempt(phase)
+	if !ok || record.PlanManifest == nil || record.PlanManifest.ExecutionBinding == nil {
+		return codexNativeWorkerResponse{}, fmt.Errorf("native phase has no current saved binding")
+	}
+	request := codexNativeWorkerRequest{SchemaVersion: 1, Phase: phase, ExecutionBinding: *record.PlanManifest.ExecutionBinding}
+	return executeCodexNativeWorkerRequest(operation, request, codexNativeWorkerHooks{})
+}
+
+func executeCodexNativeWorkerRequest(operation string, request codexNativeWorkerRequest, hooks codexNativeWorkerHooks) (codexNativeWorkerResponse, error) {
 	response := codexNativeWorkerResponse{SchemaVersion: 1, ExecutionBinding: request.ExecutionBinding}
+	var err error
 	attemptPath, current, ok := loadLatestBuildAttempt(request.Phase)
 	if !ok {
 		return response, fmt.Errorf("native worker requires a durable accepted build attempt")
@@ -339,6 +383,33 @@ func runCodexNativeWorkerWithHooks(operation, path string, hooks codexNativeWork
 	}
 	if operation != "observe" && (request.ObservationStatus != "" || request.ObservedAt != "" || request.ObservationDetail != "") {
 		return response, fmt.Errorf("host observations require the observe operation")
+	}
+	if operation == "context" {
+		response, err = readCodexNativeContext(current, request)
+		if err != nil {
+			return response, err
+		}
+		if hooks.AfterContextRender != nil {
+			hooks.AfterContextRender()
+		}
+		if err := validateCodexNativeContextScope(*current.PlanManifest); err != nil {
+			return codexNativeWorkerResponse{}, err
+		}
+		// Recheck currency and journal identity after rendering; reads never
+		// take a mutation session or create delivery acknowledgements.
+		if err := validate(current); err != nil {
+			return codexNativeWorkerResponse{}, err
+		}
+		_, latest, ok := loadLatestBuildAttempt(request.Phase)
+		firstDigest, _ := jsonSHA256(current)
+		latestDigest, _ := jsonSHA256(latest)
+		if !ok || firstDigest != latestDigest {
+			return codexNativeWorkerResponse{}, fmt.Errorf("native context changed during inspection; reread current assignment")
+		}
+		return response, nil
+	}
+	if operation != "observe" && (request.ContextDeliveryID != "" || request.ContextDelivery != nil || request.ContextSend != nil) {
+		return response, fmt.Errorf("context evidence requires context/observe operation")
 	}
 	var updated buildAttemptRecord
 	if hooks.BeforeWrite != nil {
@@ -423,6 +494,9 @@ func runCodexNativeWorkerWithHooks(operation, path string, hooks codexNativeWork
 				if err != nil {
 					return err
 				}
+				if err := validateCodexNativeContextScope(*updated.PlanManifest); err != nil {
+					return err
+				}
 				prompt, err := composeCodexNativePrompt(*updated.PlanManifest, *dispatch, launch)
 				if err != nil {
 					return err
@@ -488,6 +562,10 @@ func runCodexNativeWorkerWithHooks(operation, path string, hooks codexNativeWork
 			case "observe":
 				receipt, err := observeCodexNativeWorker(&updated, worker, *dispatch, request, now)
 				response.Receipt = receipt
+				if receipt != nil && receipt.ContextDeliveryID != "" {
+					response.ContextStatus = "delivered"
+					response.ContextDelivery = request.ContextDelivery
+				}
 				return err
 			default:
 				return fmt.Errorf("unsupported native worker operation %q", operation)
@@ -536,8 +614,11 @@ func projectCodexNativeWorkerState(worker buildAttemptWorkerRun) codexNativeWork
 	if native.ChildID != "" {
 		state.HostStatus = "unavailable"
 	}
-	if len(native.Observations) > 0 {
-		state.HostStatus = native.Observations[len(native.Observations)-1].Status
+	state.ContextDeliveryIDs = append([]string(nil), native.ContextDeliveryIDs...)
+	for _, observation := range native.Observations {
+		if observation.Status != "context_delivered" {
+			state.HostStatus = observation.Status
+		}
 	}
 	for _, observation := range native.Observations {
 		if observation.Status == "cancel_requested" {
@@ -580,6 +661,12 @@ func emitCodexNativeTransition(operation string, assignment codexBuildDispatch, 
 }
 
 func observeCodexNativeWorker(record *buildAttemptRecord, worker *buildAttemptWorkerRun, dispatch codexBuildDispatch, request codexNativeWorkerRequest, now string) (*codexNativeWorkerReceipt, error) {
+	if request.ObservationStatus == "context_delivered" {
+		return observeCodexNativeContext(record, worker, dispatch, request, now)
+	}
+	if request.ContextDeliveryID != "" || request.ContextDelivery != nil || request.ContextSend != nil {
+		return nil, fmt.Errorf("native context evidence requires context_delivered observation")
+	}
 	native := worker.Native
 	digest, err := canonicalCodexNativeEventHash(request.SourceEventID, request.SourceEventSHA256)
 	if err != nil {

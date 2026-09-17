@@ -190,6 +190,7 @@ type codexBuildManifest struct {
 	// the hosted/subprocess path already computes and shares its own capsule
 	// (see executeCodexBuildDispatches), and the finalize record does not
 	// deliver prompts.
+	ContextScope              *codexNativeContextScope              `json:"context_scope,omitempty"`
 	ContextDecisionIDs        []string                              `json:"context_decision_ids,omitempty"`
 	ContextCapsule            string                                `json:"context_capsule,omitempty"`
 	Dispatches                []codexBuildDispatch                  `json:"dispatches"`
@@ -2944,8 +2945,10 @@ func buildCodexBuildManifest(root string, state colony.ColonyState, phase colony
 	// the duplication CONTEXT-03 exists to prevent).
 	contextCapsule := ""
 	var contextDecisionIDs []string
+	var contextScope *codexNativeContextScope
 	if planOnly {
 		contextCapsule, _, contextDecisionIDs = resolveCodexWorkerContextSnapshot()
+		contextScope = codexNativeContextScopeFromState(state)
 	}
 
 	return codexBuildManifest{
@@ -2974,6 +2977,7 @@ func buildCodexBuildManifest(root string, state colony.ColonyState, phase colony
 		WorkerBriefs:            briefs,
 		ContextCapsule:          contextCapsule,
 		ContextDecisionIDs:      contextDecisionIDs,
+		ContextScope:            contextScope,
 		Dispatches:              append([]codexBuildDispatch{}, dispatches...),
 		SelectedTasks:           append([]string{}, selectedTaskIDs...),
 		Tasks:                   codexBuildTaskPlans(phase),

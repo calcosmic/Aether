@@ -5,9 +5,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/calcosmic/Aether/pkg/codex"
+	"github.com/calcosmic/Aether/pkg/colony"
 )
 
 type codexNativePrompt struct {
@@ -20,16 +22,20 @@ type codexNativePrompt struct {
 // native-question renderer. Ordinary answers still use the one current-scope
 // resolver and integrity/budget renderer. Filter delivered IDs BEFORE packing
 // so older answers cannot crowd out newly applicable ones.
-func renderCodexNativeContextAnswers(manifest codexBuildManifest, dispatch codexBuildDispatch, launch, child string, excluded []string) clarifiedIntentRenderResult {
+func renderCodexNativeContextAnswers(manifest codexBuildManifest, dispatch codexBuildDispatch, launch, child string, excluded, onlyIDs []string) clarifiedIntentRenderResult {
 	file, _ := loadScopedPendingDecisionFile(loadCurrentPendingDecisionScope())
 	entries := resolvedClarifiedIntentEntries(file)
 	seen := make(map[string]bool, len(excluded))
 	for _, id := range excluded {
 		seen[id] = true
 	}
+	included := make(map[string]bool, len(onlyIDs))
+	for _, id := range onlyIDs {
+		included[id] = true
+	}
 	pending := entries[:0]
 	for _, entry := range entries {
-		if !seen[entry.ID] {
+		if !seen[entry.ID] && (onlyIDs == nil || included[entry.ID]) {
 			pending = append(pending, entry)
 		}
 	}
@@ -63,6 +69,10 @@ func composeCodexNativePrompt(manifest codexBuildManifest, dispatch codexBuildDi
 		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 			return codexNativePrompt{}, fmt.Errorf("native brief is outside accepted workspace")
 		}
+		info, err := os.Stat(resolved)
+		if err != nil || !info.Mode().IsRegular() {
+			return codexNativePrompt{}, fmt.Errorf("native brief must be a readable regular file")
+		}
 		raw, err := os.ReadFile(resolved)
 		if err != nil {
 			return codexNativePrompt{}, err
@@ -80,7 +90,7 @@ func composeCodexNativePrompt(manifest codexBuildManifest, dispatch codexBuildDi
 	}
 	prompt := fmt.Sprintf("You are %s (%s), assigned workspace %s. You are not alone; preserve others' edits.\nWAIT: do not read files, run checks or edit until the parent sends AETHER_NATIVE_RELEASE %s with your actual child ID and the runtime release token after binding. If no release arrives, remain waiting; do not do the job.\n", dispatch.Name, dispatch.Caste, manifest.Root, launch)
 	prompt += manifest.ContextCapsule + "\n\n" + brief + "\n\n" + dispatch.SkillSection
-	answers := renderCodexNativeContextAnswers(manifest, dispatch, launch, "", manifest.ContextDecisionIDs)
+	answers := renderCodexNativeContextAnswers(manifest, dispatch, launch, "", manifest.ContextDecisionIDs, nil)
 	if len(answers.Lines) > 0 {
 		prompt += "\n\n" + codexNativeAnswerSection(answers)
 	}
@@ -91,4 +101,234 @@ func composeCodexNativePrompt(manifest codexBuildManifest, dispatch codexBuildDi
 	ids := append([]string(nil), manifest.ContextDecisionIDs...)
 	ids = append(ids, answers.DecisionIDs...)
 	return codexNativePrompt{Prompt: prompt, SHA256: lifecycleDigest([]byte(prompt)), DecisionIDs: ids}, nil
+}
+
+// codexNativeContextScope pins both colony identities. The ordinary decision
+// resolver retains its legacy compatibility rules; native delivery may not.
+type codexNativeContextScope struct {
+	GoalHash  string `json:"goal_hash"`
+	SessionID string `json:"session_id"`
+}
+
+type codexNativeContextDelivery struct {
+	SchemaVersion    int                     `json:"schema_version"`
+	DeliveryID       string                  `json:"delivery_id"`
+	ExecutionBinding codex.ExecutionBinding  `json:"execution_binding"`
+	Scope            codexNativeContextScope `json:"scope"`
+	WorkerName       string                  `json:"worker_name"`
+	TaskID           string                  `json:"task_id"`
+	LaunchID         string                  `json:"launch_id"`
+	HostSessionID    string                  `json:"host_session_id"`
+	ChildID          string                  `json:"child_id"`
+	Workspace        string                  `json:"workspace"`
+	DispatchSHA256   string                  `json:"dispatch_sha256"`
+	PromptSHA256     string                  `json:"prompt_sha256"`
+	Payload          string                  `json:"payload"`
+	PayloadSHA256    string                  `json:"payload_sha256"`
+	DecisionIDs      []string                `json:"decision_ids"`
+}
+
+// This is an observed successful host send, not a render/queue receipt.
+// Source event identity/hash and time accompany it in the observe request.
+// As with other host observations, hashes retain provenance, not authentication.
+type codexNativeContextSend struct {
+	Status        string `json:"status"`
+	ChildID       string `json:"child_id"`
+	MessageSHA256 string `json:"message_sha256"`
+}
+
+type codexNativeContextReceipt struct {
+	Delivery    codexNativeContextDelivery `json:"delivery"`
+	Observation codexNativeHostObservation `json:"observation"`
+}
+
+func codexNativeContextScopeFromState(state colony.ColonyState) *codexNativeContextScope {
+	scope := pendingDecisionScopeFromState(state)
+	return &codexNativeContextScope{GoalHash: scope.GoalHash, SessionID: scope.SessionID}
+}
+
+func validateCodexNativeContextScope(manifest codexBuildManifest) error {
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		return err
+	}
+	current := codexNativeContextScopeFromState(state)
+	if manifest.ContextScope == nil || *manifest.ContextScope != *current || current.GoalHash != pendingDecisionGoalHash(manifest.Goal) {
+		return fmt.Errorf("native context goal/session no longer matches accepted manifest")
+	}
+	return nil
+}
+
+func validateCodexNativeContextTarget(record buildAttemptRecord, request codexNativeWorkerRequest) (*codexBuildDispatch, *buildAttemptWorkerRun, error) {
+	if err := validateCodexNativeContextScope(*record.PlanManifest); err != nil {
+		return nil, nil, err
+	}
+	for i := range record.PlanManifest.Dispatches {
+		dispatch := &record.PlanManifest.Dispatches[i]
+		if dispatch.Name != request.WorkerName || normalizedDispatchTaskID(*dispatch) != request.TaskID {
+			continue
+		}
+		for j := range record.WorkerRuns {
+			worker := &record.WorkerRuns[j]
+			if worker.WorkerName != request.WorkerName || worker.TaskID != request.TaskID {
+				continue
+			}
+			if err := validateCodexNativeSavedWorker(record, *dispatch, *worker); err != nil {
+				return nil, nil, err
+			}
+			native := worker.Native
+			if request.ChildID == "" || request.ChildID != native.ChildID || request.LaunchID != worker.ProviderRunID || request.HostSessionID != native.HostSessionID || request.PromptSHA256 != native.PromptSHA256 || request.DispatchSHA256 != native.DispatchSHA256 || request.Workspace != native.Workspace || (request.HostPermission != "" && request.HostPermission != string(native.PermissionProfile.Name)) {
+				return nil, nil, fmt.Errorf("native context requires the exact saved child/launch/session/workspace/prompt binding")
+			}
+			return dispatch, worker, nil
+		}
+	}
+	return nil, nil, fmt.Errorf("native context requires a saved bound assignment")
+}
+
+func validateCodexNativeContextLive(record buildAttemptRecord, worker buildAttemptWorkerRun) error {
+	if worker.Native.ChildID == "" || worker.Native.LaunchState != "bound" || codexNativeWorkerIsTerminal(worker) {
+		return fmt.Errorf("native context requires a live bound child")
+	}
+	for _, event := range worker.Native.Observations {
+		if event.Status == "cancel_requested" {
+			return fmt.Errorf("native context cannot message a child pending cancellation")
+		}
+	}
+	return validateCodexNativeLaunchCurrency(record)
+}
+
+func composeCodexNativeContextDelivery(record buildAttemptRecord, dispatch codexBuildDispatch, worker buildAttemptWorkerRun, onlyIDs []string) (*codexNativeContextDelivery, error) {
+	if err := validateCodexNativeContextLive(record, worker); err != nil {
+		return nil, err
+	}
+	excluded := append([]string(nil), worker.Native.ContextDecisionIDs...)
+	for _, saved := range worker.Native.ContextDeliveries {
+		excluded = append(excluded, saved.Delivery.DecisionIDs...)
+	}
+	answers := renderCodexNativeContextAnswers(*record.PlanManifest, dispatch, worker.ProviderRunID, worker.Native.ChildID, excluded, onlyIDs)
+	if len(answers.DecisionIDs) == 0 {
+		return nil, nil
+	}
+	delivery := &codexNativeContextDelivery{
+		SchemaVersion: 1, ExecutionBinding: *record.PlanManifest.ExecutionBinding, Scope: *record.PlanManifest.ContextScope,
+		WorkerName: worker.WorkerName, TaskID: worker.TaskID, LaunchID: worker.ProviderRunID,
+		HostSessionID: worker.Native.HostSessionID, ChildID: worker.Native.ChildID, Workspace: worker.Native.Workspace,
+		DispatchSHA256: worker.Native.DispatchSHA256, PromptSHA256: worker.Native.PromptSHA256,
+		Payload: codexNativeAnswerSection(answers), DecisionIDs: append([]string(nil), answers.DecisionIDs...),
+	}
+	delivery.PayloadSHA256 = lifecycleDigest([]byte(delivery.Payload))
+	digest, err := jsonSHA256(delivery)
+	if err != nil {
+		return nil, err
+	}
+	delivery.DeliveryID = digest
+	return delivery, nil
+}
+
+func readCodexNativeContext(record buildAttemptRecord, request codexNativeWorkerRequest) (codexNativeWorkerResponse, error) {
+	response := codexNativeWorkerResponse{SchemaVersion: 1, ExecutionBinding: request.ExecutionBinding}
+	if request.Result != nil || request.SourceEventID != "" || request.SourceEventSHA256 != "" || request.ContextDelivery != nil || request.ContextSend != nil {
+		return response, fmt.Errorf("read-only native context cannot submit delivery evidence")
+	}
+	dispatch, worker, err := validateCodexNativeContextTarget(record, request)
+	if err != nil {
+		return response, err
+	}
+	if request.ContextDeliveryID != "" {
+		for _, saved := range worker.Native.ContextDeliveries {
+			if saved.Delivery.DeliveryID == request.ContextDeliveryID {
+				delivery := saved.Delivery
+				response.ContextDelivery, response.ContextStatus = &delivery, "delivered"
+				return response, nil
+			}
+		}
+	}
+	delivery, err := composeCodexNativeContextDelivery(record, *dispatch, *worker, nil)
+	if err != nil {
+		return response, err
+	}
+	if request.ContextDeliveryID != "" && (delivery == nil || delivery.DeliveryID != request.ContextDeliveryID) {
+		return response, fmt.Errorf("native context delivery is not current or acknowledged")
+	}
+	response.ContextStatus = "no_updates"
+	if delivery != nil {
+		response.ContextDelivery, response.ContextStatus = delivery, "awaiting_delivery"
+	}
+	return response, nil
+}
+
+func observeCodexNativeContext(record *buildAttemptRecord, worker *buildAttemptWorkerRun, dispatch codexBuildDispatch, request codexNativeWorkerRequest, now string) (*codexNativeWorkerReceipt, error) {
+	if _, _, err := validateCodexNativeContextTarget(*record, request); err != nil {
+		return nil, err
+	}
+	delivery, send := request.ContextDelivery, request.ContextSend
+	if delivery == nil || send == nil || request.Result != nil || request.ContextDeliveryID != "" || send.Status != "completed" || send.ChildID != request.ChildID || send.MessageSHA256 != delivery.PayloadSHA256 {
+		return nil, fmt.Errorf("context delivery requires an observed completed send of the exact payload to its bound child")
+	}
+	digest, err := canonicalCodexNativeEventHash(request.SourceEventID, request.SourceEventSHA256)
+	if err != nil {
+		return nil, err
+	}
+	at, err := time.Parse(time.RFC3339Nano, request.ObservedAt)
+	if err != nil {
+		return nil, fmt.Errorf("context send requires an actual observed_at timestamp")
+	}
+	observation := codexNativeHostObservation{SchemaVersion: 1, Status: "context_delivered", ChildID: request.ChildID, ObservedAt: at.UTC().Format(time.RFC3339Nano), Detail: request.ObservationDetail, SourceEventID: request.SourceEventID, SourceEventSHA256: digest, ContextDeliveryID: delivery.DeliveryID}
+	receipt := codexNativeTransitionReceipt("observe", *worker)
+	receipt.At, receipt.SourceEventID, receipt.SourceEventSHA256 = observation.ObservedAt, observation.SourceEventID, digest
+	receipt.ContextDeliveryID, receipt.ContextPayloadSHA256 = delivery.DeliveryID, delivery.PayloadSHA256
+	submitted := *delivery
+	submitted.DeliveryID = ""
+	expectedID, err := jsonSHA256(submitted)
+	if err != nil || expectedID != delivery.DeliveryID || delivery.PayloadSHA256 != lifecycleDigest([]byte(delivery.Payload)) {
+		return nil, fmt.Errorf("native context payload or delivery identity changed")
+	}
+	native := worker.Native
+	for _, saved := range native.ContextDeliveries {
+		if saved.Delivery.DeliveryID != delivery.DeliveryID {
+			continue
+		}
+		savedDigest, _ := jsonSHA256(saved.Delivery)
+		receivedDigest, _ := jsonSHA256(delivery)
+		if savedDigest != receivedDigest || saved.Observation != observation {
+			return nil, fmt.Errorf("native context acknowledgement conflicts with saved delivery")
+		}
+		return &receipt, errCodexNativeReplay
+	}
+	for _, saved := range native.Observations {
+		if saved.SourceEventID == observation.SourceEventID {
+			return nil, fmt.Errorf("native context source event already belongs to another observation")
+		}
+	}
+	if len(native.Observations) > 0 {
+		previous, _ := time.Parse(time.RFC3339Nano, native.Observations[len(native.Observations)-1].ObservedAt)
+		if !at.After(previous) {
+			return nil, fmt.Errorf("native context send observation arrived out of order")
+		}
+	}
+	seen := make(map[string]bool)
+	for _, id := range delivery.DecisionIDs {
+		if id == "" || seen[id] {
+			return nil, fmt.Errorf("native context answer IDs must be nonempty and unique")
+		}
+		seen[id] = true
+	}
+	if len(seen) == 0 {
+		return nil, fmt.Errorf("native context delivery contains no answers")
+	}
+	// Revalidate only the sent answer set: a newer answer arriving during send
+	// must not invalidate a successful delivery of still-current instructions.
+	expected, err := composeCodexNativeContextDelivery(*record, dispatch, *worker, delivery.DecisionIDs)
+	if err != nil {
+		return nil, err
+	}
+	if expected == nil || expected.DeliveryID != delivery.DeliveryID {
+		return nil, fmt.Errorf("native context delivery is stale or differs from runtime-rendered answers")
+	}
+	native.ContextDeliveryIDs = append(native.ContextDeliveryIDs, delivery.DeliveryID)
+	native.ContextDeliveries = append(native.ContextDeliveries, codexNativeContextReceipt{Delivery: *expected, Observation: observation})
+	native.Observations = append(native.Observations, observation)
+	worker.UpdatedAt, record.UpdatedAt = now, now
+	return &receipt, nil
 }

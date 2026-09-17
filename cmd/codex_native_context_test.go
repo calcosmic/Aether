@@ -488,3 +488,173 @@ func TestCodexNativeContextReadOnly(t *testing.T) {
 		t.Fatal("rendering acknowledged an unsent message")
 	}
 }
+
+func TestCodexNativeContextPacking(t *testing.T) {
+	root := setupExternalBuildAttemptTest(t)
+	ids := []string{}
+	for i := 0; i < clarifiedIntentMaxEntries+3; i++ {
+		answer, err := recordDecisionAnswer("Instruction "+strings.Repeat("q", i+1), "PACKED_"+strings.Repeat("a", clarifiedIntentMaxAnswerChars+40), 1, "native-context-test")
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, answer.ID)
+	}
+	manifest := prepareBoundBuildManifestOnly(t, root)
+	if len(manifest.ContextDecisionIDs) != 3 || !reflect.DeepEqual(manifest.ContextDecisionIDs, ids[:3]) {
+		t.Fatalf("capsule packing lost exact rendered IDs: %v", manifest.ContextDecisionIDs)
+	}
+	// The section itself survives the existing protected-intent policy; each
+	// long answer was bounded by the existing renderer before its ID was captured.
+	rendered := clarifiedIntentPromptRenderResult()
+	if !reflect.DeepEqual(rendered.DecisionIDs, manifest.ContextDecisionIDs) {
+		t.Fatal("identity came from a different render/budget")
+	}
+	for _, line := range rendered.Lines {
+		if strings.Count(manifest.ContextCapsule, line) != 1 {
+			t.Fatal("saved identity is not represented exactly once in capsule")
+		}
+	}
+	dispatch := manifest.Dispatches[0]
+	canonical, _ := filepath.EvalSymlinks(root)
+	request := codexNativeWorkerRequest{SchemaVersion: 1, Phase: 1, ExecutionBinding: *manifest.ExecutionBinding, WorkerName: dispatch.Name, TaskID: dispatch.TaskID, HostSessionID: "packed-host", Workspace: canonical, HostPermission: "workspace_write"}
+	_, response := nativeLaunchPayloadForTest(t, request)
+	if !reflect.DeepEqual(response.Worker.Native.ContextDecisionIDs, ids[:6]) {
+		t.Fatal("previously packed IDs starved remaining answers at launch")
+	}
+	request.LaunchID, request.ChildID = response.Worker.ProviderRunID, "packed-child"
+	request.DispatchSHA256, request.PromptSHA256 = response.Worker.Native.DispatchSHA256, response.Worker.Native.PromptSHA256
+	if _, err := runCodexNativeWorker("bind", nativeRequestPath(t, request)); err != nil {
+		t.Fatal(err)
+	}
+	delivery := nativeContextResponseForTest(t, request)["context_delivery"].(map[string]any)
+	expectedIDs := []any{ids[6], ids[7], ids[8]}
+	if !reflect.DeepEqual(delivery["decision_ids"], expectedIDs) {
+		t.Fatalf("packing did not leave exactly the still-undelivered answers: %v", delivery["decision_ids"])
+	}
+}
+
+func TestCodexNativeContextConcurrentAck(t *testing.T) {
+	_, request := nativeContextBoundFixture(t)
+	if _, err := recordDecisionAnswer("Concurrent delivery?", "CONCURRENT_DELTA", 1, "native-context-test"); err != nil {
+		t.Fatal(err)
+	}
+	delivery := nativeContextResponseForTest(t, request)["context_delivery"].(map[string]any)
+	path := writeCodexNativeRequestForTest(t, nativeContextAckForTest(t, request, delivery))
+	ready, release := make(chan struct{}, 2), make(chan struct{})
+	type outcome struct {
+		response codexNativeWorkerResponse
+		err      error
+	}
+	results := make(chan outcome, 2)
+	for i := 0; i < 2; i++ {
+		go func() {
+			response, err := runCodexNativeWorkerWithHooks("observe", path, codexNativeWorkerHooks{BeforeWrite: func() { ready <- struct{}{}; <-release }})
+			results <- outcome{response, err}
+		}()
+	}
+	<-ready
+	<-ready
+	close(release)
+	accepted, replayed := 0, 0
+	for i := 0; i < 2; i++ {
+		result := <-results
+		if result.err != nil {
+			t.Fatal(result.err)
+		}
+		if result.response.Disposition == codexNativeAccepted {
+			accepted++
+		}
+		if result.response.Disposition == codexNativeReplayed {
+			replayed++
+		}
+	}
+	_, record, _ := loadLatestBuildAttempt(1)
+	if accepted != 1 || replayed != 1 || len(record.WorkerRuns[0].Native.ContextDeliveryIDs) != 1 {
+		t.Fatal("concurrent send acknowledgement duplicated delivery")
+	}
+}
+
+func TestCodexNativeContextStaleInterleaving(t *testing.T) {
+	for _, operation := range []string{"context", "observe"} {
+		t.Run(operation, func(t *testing.T) {
+			_, request := nativeContextBoundFixture(t)
+			if _, err := recordDecisionAnswer("Interleaved instruction?", "INTERLEAVED_DELTA", 1, "native-context-test"); err != nil {
+				t.Fatal(err)
+			}
+			delivery := nativeContextResponseForTest(t, request)["context_delivery"].(map[string]any)
+			path := nativeRequestPath(t, request)
+			hooks := codexNativeWorkerHooks{}
+			var after map[string][]byte
+			change := func() {
+				var state colony.ColonyState
+				if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+					t.Fatal(err)
+				}
+				replacement := "changed-during-context"
+				state.SessionID = &replacement
+				if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+					t.Fatal(err)
+				}
+				after = nativeContextStateBytesForTest(t)
+			}
+			if operation == "context" {
+				hooks.AfterContextRender = change
+			} else {
+				hooks.BeforeWrite = change
+				path = writeCodexNativeRequestForTest(t, nativeContextAckForTest(t, request, delivery))
+			}
+			if _, err := runCodexNativeWorkerWithHooks(operation, path, hooks); err == nil {
+				t.Fatal("stale interleaving was accepted")
+			}
+			if !reflect.DeepEqual(after, nativeContextStateBytesForTest(t)) {
+				t.Fatal("refused interleaving wrote state")
+			}
+		})
+	}
+}
+
+func TestCodexNativeRecoveryPhaseRoute(t *testing.T) {
+	_, request := nativeContextBoundFixture(t)
+	before := nativeContextStateBytesForTest(t)
+	command, _, err := rootCmd.Find([]string{"codex-native-worker", "inspect"})
+	if err != nil || command.Name() != "inspect" || command.Flags().Lookup("phase") == nil {
+		t.Fatal("registered inspect --phase route missing")
+	}
+	if err := command.Flags().Set("phase", "1"); err != nil {
+		t.Fatal(err)
+	}
+	var runErr error
+	var buffer bytes.Buffer
+	original := stdout
+	stdout = &buffer
+	t.Cleanup(func() { stdout = original })
+	runErr = command.RunE(command, nil)
+	raw := buffer.String()
+	if runErr != nil || !strings.Contains(raw, request.ChildID) {
+		t.Fatalf("phase inspection did not return bound child: %v %s", runErr, raw)
+	}
+	if !reflect.DeepEqual(before, nativeContextStateBytesForTest(t)) {
+		t.Fatal("inspect --phase mutated state")
+	}
+	if err := command.Flags().Set("request", nativeRequestPath(t, request)); err != nil {
+		t.Fatal(err)
+	}
+	runErr = command.RunE(command, nil)
+	if runErr == nil {
+		t.Fatal("ambiguous --phase and --request accepted")
+	}
+	for _, operation := range []string{"inspect", "stage"} {
+		if _, err := runCodexNativeWorkerForPhase(operation, 2); err == nil {
+			t.Fatal("missing phase accepted")
+		}
+	}
+	if _, err := runCodexNativeWorkerForPhase("stage", 1); err == nil {
+		t.Fatal("unfinished native work staged")
+	}
+	if _, err := runCodexNativeWorkerForPhase("reserve", 1); err == nil {
+		t.Fatal("phase-only route allowed a mutation other than staging")
+	}
+	if !reflect.DeepEqual(before, nativeContextStateBytesForTest(t)) {
+		t.Fatal("phase route refusal wrote state")
+	}
+}
