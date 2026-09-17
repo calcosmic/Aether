@@ -446,7 +446,14 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 		liveSkillWriteJSON(t, filepath.Join(runRoot, "before-missing-skill.json"), nativeFixtureStateInventory(repo))
 	}
 	start := time.Now()
+	var stopController func()
+	if scenario == "question" {
+		stopController = nativeGapStartController(runRoot, repo, fixtureHome, coord)
+	}
 	err = host.Run()
+	if stopController != nil {
+		stopController()
+	}
 	if scenario == "missing-skill" {
 		liveSkillWriteJSON(t, filepath.Join(runRoot, "after-missing-skill.json"), nativeFixtureStateInventory(repo))
 	}
@@ -584,14 +591,16 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 				}
 			}
 		}
+		if scenario == "question" {
+			gap := nativeGapCaptureContext(receipt, runRoot)
+			liveSkillWriteJSON(t, filepath.Join(runRoot, "context-causality.json"), gap)
+			receipt.Assertions["exact_context_causality"] = len(gap.Gaps) == 0
+		}
 		receipt.FinalizationReplayStable = nativeFinalizationReplayEvidence(receipt, filepath.Join(runRoot, "coordination"))
 		if err := validateCodexNativeQualificationScenario(receipt, runRoot); err != nil {
 			fail(err.Error())
 		}
 		receipt.Outcome, receipt.Reason = "passed", ""
-		if scenario == "question" {
-			receipt.Limitations = append(receipt.Limitations, "Actual host send is child-attributed; encrypted exported message bytes cannot independently corroborate the entire context envelope plaintext.")
-		}
 		if scenario == "cancellation" || scenario == "spawn-gap" {
 			receipt.Outcome = "observed"
 			receipt.Limitations = []string{"Saved work remains incomplete and uncredited; no replacement launch or terminal cancellation is inferred.", "Actual host interrupt is a pending request only; spawn-before-bind recovery preserves unresolved identity."}
@@ -1181,12 +1190,17 @@ func nativeVerifyQuestionBehavior(t *testing.T, r codexNativeLiveReceipt, runRoo
 	if !r.ChildEditObserved {
 		return false
 	}
+	var challenge nativeGapChallenge
+	challengeBytes, err := os.ReadFile(filepath.Join(runRoot, "controller", "challenge.json"))
+	if err != nil || json.Unmarshal(challengeBytes, &challenge) != nil || challenge.PanicText == "" {
+		return false
+	}
 	dir := filepath.Join(runRoot, "answer-behavior-check")
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		t.Fatal(err)
 	}
 	liveSkillWrite(t, filepath.Join(dir, "go.mod"), []byte("module example.invalid/nativeanswercheck\n\ngo 1.23\n\nrequire example.invalid/nativefixture v0.0.0\nreplace example.invalid/nativefixture => "+strconv.Quote(r.FixtureRoot)+"\n"))
-	liveSkillWrite(t, filepath.Join(dir, "main.go"), []byte("package main\nimport (\"fmt\"; fixture \"example.invalid/nativefixture\")\nfunc main(){for _,c:=range [][4]int{{5,10,0,5},{15,10,0,10},{-3,10,0,0}} {if got:=fixture.Clamp(c[0],c[1],c[2]);got!=c[3]{panic(fmt.Sprintf(\"reversed bounds: got %d want %d\",got,c[3]))}};fmt.Println(\"FIXTURE_SCOPED_REVERSED_BOUNDS_PASS\")}\n"))
+	liveSkillWrite(t, filepath.Join(dir, "main.go"), []byte(fmt.Sprintf("package main\nimport (\"fmt\"; fixture \"example.invalid/nativefixture\")\nfunc main(){defer func(){if got:=recover();got!=%q{panic(fmt.Sprintf(\"wrong panic: %%v\",got))};fmt.Println(\"FIXTURE_SCOPED_REVERSED_BOUNDS_PASS\")}();fixture.Clamp(5,10,0);panic(\"no reversed-bound panic\")}\n", challenge.PanicText)))
 	before, _ := json.Marshal(nativeFixtureStateInventory(r.FixtureRoot))
 	command := exec.Command("go", "run", ".")
 	command.Dir, command.Env = dir, env
@@ -1711,6 +1725,9 @@ func validateCodexNativeQualificationScenario(r codexNativeLiveReceipt, runRoot 
 		return fmt.Errorf("partial public resume continuity incomplete")
 	}
 	if r.Scenario == "question" {
+		if gap := nativeGapCaptureContext(r, runRoot); len(gap.Gaps) != 0 {
+			return fmt.Errorf("context causality incomplete: %v", gap.Gaps)
+		}
 		raw, err := r.readEvidence(r.AttemptPath)
 		var attempt buildAttemptRecord
 		if err != nil || json.Unmarshal(raw, &attempt) != nil || len(attempt.WorkerRuns) != 1 || attempt.WorkerRuns[0].Native == nil || len(attempt.WorkerRuns[0].Native.ContextDeliveries) != 1 {
@@ -2026,7 +2043,7 @@ func nativeQualificationPrompt(r codexNativeLiveReceipt, scenario string) string
 	case "partial-resume":
 		prompt += "There are exactly two independent accepted Builder jobs. Launch and complete ONLY the first manifest dispatch. It runs its own TestClamp; the other TestDouble is intentionally still failing. Immediately after the first terminal is durable, STOP THIS PARENT. Do not reserve/spawn the second job, stage or finalize. The harness will start a fresh actual parent which runs public aether resume, then installed ant-build only for the never-started saved assignment.\n"
 	case "question":
-		prompt += "The Builder must ask the material reversed-bounds question before editing. After its actual JSON question arrives, invoke question, then answer (only this exact case has a predeclared harness response), then context for that same child. Send the returned context_delivery.payload unchanged through the actual native messaging tool. Only after the completed host message invoke context-ack. Then let the same child implement the scoped choice, check, and return its real result. Do not answer in an unbound message or disclose the predeclared response before the question.\n"
+		prompt += "Spawn the Builder with fork_turns=none: no inherited conversation. It must ask the material reversed-bounds question before editing. After its actual JSON question arrives, invoke question, then answer (the independent fixture controller selects fresh answer material only after that question; the helper also exercises stale and wrong-child answer refusals), then context for that same child. Send the returned context_delivery.payload unchanged through the actual native messaging tool. Only after the completed host message invoke context-ack. Then let the same child implement the scoped choice, check, and return its real result. Do not answer in an unbound message, read controller evidence, or guess a fallback. The same child must run its own answer-dependent check, in addition to the existing tests, and report that actual check. If exact plaintext send evidence is unavailable, context-ack must refuse; preserve the incomplete result.\n"
 	case "cancellation":
 		prompt += "After reserve/spawn/bind/release, observe the actual child active. Use the host's actual interrupt/cancellation tool while it is active, then inspect the real returned status. A close/release or missing process is NOT cancellation. Invoke cancel-requested/cancelled only if the actual event supports that exact fact. Run public pause and inspect to retain the truthful pending/terminal outcome. Do not record invented completion, stage, finalize or relaunch. If no real interruption tool/status exists, report the explicit limitation and leave the saved assignment incomplete.\n"
 	case "spawn-gap":
@@ -2057,7 +2074,7 @@ def scoped(name):
 }
 
 // Each submitted event comes from the actual host export. Unknown outcomes
-// remain unknown, and the predeclared answer stays explicit harness provenance.
+// remain unknown. The independent controller supplies only delayed fixture authority.
 const nativeQualificationOperations = `elif op == "prompt":
     result = read("reservation.json")["worker"]["native"]["prompt"]
 elif op == "release":
@@ -2073,15 +2090,29 @@ elif op == "question":
     value["question"] = question
     result = request("question", value)
 elif op == "answer":
-    assert scenario == "question", "Only the predeclared question fixture authorizes an answer"
+    assert scenario == "question", "Only the delayed question fixture authorizes an answer"
+    import time
+    ready = coord / "controller-ready.json"
+    for _ in range(100):
+        if ready.exists(): break
+        time.sleep(0.1)
+    assert ready.exists(), "Independent controller did not authorize this actual question"
+    authorization = json.loads(ready.read_text())
+    assert authorization["status"] == "authorized", authorization
     view = read("question.stdout.json")["result"]["decisions"][0]
     path = pathlib.Path(view["answer_request_path"])
     value = json.loads(path.read_text())
-    assert value["question"] == "When low exceeds high, should Clamp swap the bounds or panic?"
-    assert value["answer"] == ""
-    value["answer"] = "Fixture-authorized response: swap low and high first, then clamp inclusively. This is a predeclared harness response, not owner testimony."
-    path.write_text(json.dumps(value, indent=2))
-    (coord / "fixture-answer-provenance.json").write_text(json.dumps({"authority":"predeclared disposable-fixture authorization","question":value["question"],"answer":value["answer"]}))
+    assert value["answer"] and hashlib.sha256(path.read_bytes()).hexdigest() == authorization["request_sha256"]
+    for bad in ("stale-answer", "wrong-child-answer"):
+        invalid = json.loads(json.dumps(value))
+        invalid["native_binding"]["attempt_id" if bad == "stale-answer" else "child_id"] += "-invalid"
+        invalid_path = coord / (bad + "-request.json")
+        invalid_path.write_text(json.dumps(invalid))
+        before = {str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in (repo / ".aether/data").rglob("*") if p.is_file() and p.suffix != ".lock"}
+        proc = subprocess.run(["aether", "decision-answer", "--native-request", str(invalid_path)], cwd=repo, capture_output=True, text=True)
+        after = {str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in (repo / ".aether/data").rglob("*") if p.is_file() and p.suffix != ".lock"}
+        write(bad + "-refusal.json", {"exit_status":proc.returncode,"stdout":proc.stdout,"stderr":proc.stderr,"before":before,"after":after})
+        assert proc.returncode != 0 and before == after, "Invalid answer mutated durable state"
     result = runtime(["decision-answer", "--native-request", str(path)], "answer")
 elif op in ("running", "context-ack", "cancel-requested", "cancelled", "unavailable", "launch-unresolved"):
     value = read("bind-request.json") if (coord / scoped("bind-request.json")).exists() else read("reserve-request.json")
@@ -2090,12 +2121,15 @@ elif op in ("running", "context-ack", "cancel-requested", "cancelled", "unavaila
     child = value.get("child_id", "")
     found = None
     calls = {}
+    outputs = {}
     for path in sessions.rglob("*" + host_session() + ".jsonl"):
         for raw in path.read_bytes().splitlines():
             event = json.loads(raw); payload = event.get("payload", {}); item = payload.get("item", {})
             if event.get("type") == "response_item":
                 if payload.get("type") in ("function_call", "custom_tool_call"):
                     calls[payload.get("call_id")] = payload
+                if payload.get("type") == "function_call_output":
+                    outputs[payload.get("call_id")] = payload
                 if op == "cancel-requested" and payload.get("type") in ("function_call_output", "custom_tool_call_output") and calls.get(payload.get("call_id"), {}).get("name", "").endswith("interrupt_agent"):
                     output = payload.get("output", "")
                     if isinstance(output, str):
@@ -2122,8 +2156,10 @@ elif op in ("running", "context-ack", "cancel-requested", "cancelled", "unavaila
         assert sent_at >= (coord / scoped("context.stdout.json")).stat().st_mtime, "Old release/send is not this context delivery"
         message = args.get("message", "")
         plaintext = message == delivery["payload"]
-        assert plaintext or message.startswith("gAAAA"), "Visible send payload must match exact runtime envelope"
-        write("context-send-provenance.json", {"call":call, "event":event, "event_sha256":hashlib.sha256(raw).hexdigest(), "payload_plaintext_corroborated":plaintext, "limitation":"" if plaintext else "Host export encrypts message bytes; actual send/child linkage only"})
+        write("context-send-provenance.json", {"call":call, "result":outputs.get(item["id"]), "event":event, "event_sha256":hashlib.sha256(raw).hexdigest(), "payload_plaintext_corroborated":plaintext, "limitation":"" if plaintext else "Host export encrypts message bytes; actual send/child linkage only"})
+        output = outputs.get(item["id"], {})
+        assert output.get("call_id") == item["id"] and json.loads(output.get("output", "null")) == {}, "Missing successful host send result"
+        assert plaintext, "Exact send plaintext unavailable or altered; cannot self-acknowledge an inferred digest"
         value.update(context_delivery=delivery, context_send={"status":"completed","child_id":child,"message_sha256":delivery["payload_sha256"]})
     if op == "cancel-requested":
         assert item.get("kind") == "interrupt_requested", "Actual interrupt result must identify previous running status"
@@ -2361,7 +2397,7 @@ func nativePrepareLiveFixture(t *testing.T, root, runRoot string, scenarios ...s
 		goal += "; independently fix Double in double.go with its own native Builder and TestDouble"
 	}
 	if scenario == "question" {
-		goal += ". Bounds may arrive reversed: before editing, ask the parent the material question 'When low exceeds high, should Clamp swap the bounds or panic?' and wait for the scoped answer. Return this question as JSON with question_id='reversed-bounds' and question text, then wait for a follow-up. Do not infer the answer from the existing tests, which deliberately omit reversed bounds."
+		goal += ". " + nativeGapMarkers[0] + ". Bounds may arrive reversed: before editing, ask the parent the material question 'When low exceeds high, should Clamp swap the bounds or panic?' and wait for the scoped answer. Return this question as JSON with question_id='reversed-bounds' and question text, then wait for a follow-up. Do not infer the answer from the existing tests, which deliberately omit reversed bounds."
 	}
 	data := filepath.Join(root, ".aether", "data")
 	if err := os.MkdirAll(data, 0700); err != nil {
@@ -2440,6 +2476,9 @@ func nativePrepareLiveFixture(t *testing.T, root, runRoot string, scenarios ...s
 	accepted, err := acceptPlanCandidate(root, planCandidateTestAcceptanceRequest(candidate), planCandidateAcceptanceOptions{AcceptedBy: "fixture:predeclared-authorization", AcceptedAt: candidate.CreatedAt.Add(time.Minute)})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if scenario == "question" {
+		nativeGapPrepareContext(t, root)
 	}
 	liveSkillWriteJSON(t, filepath.Join(runRoot, "prepared-plan-acceptance.json"), accepted)
 	liveSkillWriteJSON(t, filepath.Join(runRoot, "prepared-plan-candidate.json"), candidate)
