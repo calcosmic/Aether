@@ -751,13 +751,13 @@ For dummies: A worker actually receives the job, does it, and returns saved work
 
 **Context and research:** [204.2-CONTEXT.md](phases/204.2-codex-native-worker-lifecycle/204.2-CONTEXT.md), [204.2-RESEARCH.md](phases/204.2-codex-native-worker-lifecycle/204.2-RESEARCH.md).
 
-**Plans:** 8 plans in 6 waves; implementation has not started.
+**Plans:** 1/8 plans executed in 6 waves; implementation has not started.
 
 Plans:
 
 **Wave 1**
 
-- [ ] 204.2-01-PLAN.md — Prove an installed native Builder edit/check and early interruption return.
+- [x] 204.2-01-PLAN.md — Prove an installed native Builder edit/check and early interruption return.
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

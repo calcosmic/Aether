@@ -5,10 +5,10 @@ milestone_name: Classic Colony Restoration
 current_phase: 204.2
 current_phase_name: Codex Native Worker Lifecycle
 status: executing
-stopped_at: Phase 204.2 Plan 01 live recovery validation active; ordinary proof qualified
-last_updated: "2026-09-17T08:17:24.022894+00:00"
+stopped_at: Phase 204.2 Wave 1 complete; Plan 02 dispatch next
+last_updated: "2026-09-17T08:30:14.295820+00:00"
 last_activity: 2026-09-17
-last_activity_desc: Phase 204.2 ordinary native proof passed; two-parent recovery evidence under validation
+last_activity_desc: Phase 204.2 Plan 01 merged with both live proofs reviewed and focused integration checks passing
 state_head: 299f02468e1a9e6d667838b0c07ca2648c70cf5e
 progress:
   total_phases: 13
@@ -35,8 +35,8 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 Phase: 204.2 (Codex Native Worker Lifecycle) — EXECUTING
 Next phase: 204.2 (Codex Native Worker Lifecycle)
 Status: Executing Phase 204.2
-Plan: 1 of 8 active; 0 of 8 complete
-Last activity: 2026-09-17 — Plan 01 ordinary proof passed; two-parent recovery completed and awaits evidence validation
+Plan: 1 of 8 complete; Plan 02 next
+Last activity: 2026-09-17 — Plan 01 complete and merged; both native proofs reviewed, 30 focused integration tests and all wave gates passed
 
 ## Performance Metrics
 
@@ -767,20 +767,20 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-17T08:17:24.022894+00:00
-Stopped at: Phase 204.2 Plan 01 recovery evidence validation active; no plan completion yet
-Resume file: /Users/callumcowie/.aether-backups/phase204-2-execution-20260917/orchestrator-state.json — inspect active executor and original wave1-worktrees.json before any redispatch. Source work is in .claude/worktrees/agent-p204-2-01-20260917, not merged. The separate Phase 205 owner checkpoint remains preserved below.
+Last session: 2026-09-17T08:30:14.295820+00:00
+Stopped at: Phase 204.2 Wave 1 complete; continue with Plan 02
+Resume file: /Users/callumcowie/.aether-backups/phase204-2-execution-20260917/orchestrator-state.json — inspect the current wave and its original worktree manifest before redispatch. Plan 01 source is merged; its worktree was removed. The separate Phase 205 owner checkpoint remains preserved below.
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
 
 ## Phase 204.2 Execution — 2026-09-17
 
-- Wave 1, Plan 01 is active, with 0/8 plans complete. The implementation, RED controls and qualified ordinary receipt are committed and retained in manifest-owned worktree `.claude/worktrees/agent-p204-2-01-20260917`. Do not launch another implementation from the root or discard this worktree.
+- Wave 1 and Plan 01 are complete, with 1/8 plans complete. Source/evidence summary `2fabf075` merged at `fcc5b6ed`; the original manifest-scoped cleanup removed only this plan worktree. Its one advisory scope addition was the required `cmd/codex_native_worker_live_test.go` harness. Post-merge build and all 30 focused tests passed; schema/codebase/UI gates did not block. Plan 02 is next.
 - Durable orchestration/evidence root: `/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/`. `wave1-worktrees.json` owns this run's worktree only. The pre-existing unrelated worktree and untracked `.gsd/` remain untouched. Use the matching GSD shim at `~/.claude/gsd-core/bin/gsd-tools.cjs` with `GSD_RUNTIME=codex`; the PATH gsd-tools is older and lacks required isolation routes.
 - Focused native command/fixture/guide checks, focused race checks and targeted existing journal/finalizer checks passed. The first actual ordinary tracer **failed**: native Builder Brick-46 performed a real failing-test → edit → passing-test sequence, plus build/vet, but `record` accepted an invalid handoff status and made its result immutable before `stage` rejected it. The corrected result then conflicted with saved terminal provenance; **no finalizer credit**. Raw evidence is preserved under `plan01-20260917T070252Z/native-ordinary-2899336655/`; its result is not a native-parity pass.
 - The five original review findings and the later historical-terminal parser finding are resolved in source; exact follow-up reviews are retained externally. `plan01-code-review-final-recheck.md` pins the final bounded source review through `c249b547`. The final focused race set passed 30 tests, including registered native commands, evidence refusal controls, platform isolation and existing journal/finalizer regressions.
 - Ordinary proof is qualified at executable source `56ba471c` with separately pinned validator `ad2411c7`; the original incomplete receipt remains unchanged. Compact checked-in receipt commit `8f92d8b0` references `plan01-repair-20260917T075942Z/native-ordinary-validated.json`. Root checked ten essential artifact hashes and the unchanged Phase 205 inventory. One actual Builder performed a failing test, its own code edit, full passing tests, and earned finalizer credit. Exact launch-message plaintext is host-encrypted; complete context qualification remains Plans 03/07.
-- Early resume uses candidate `c7c235cb`: the first actual parent saved the real child terminal and exited before staging; a distinct second parent inspected and finalized the same attempt, replayed finalization, and observed unchanged worker/source/state with no new spawn. Both parent processes exited successfully. The source-pinned raw capture is retained while bounded validator command-shape controls finish. Task 2 and Plan 01 remain pending until that receipt and review pass.
+- Early resume uses candidate `c7c235cb`: the first actual parent saved the real child terminal and exited before staging; a distinct second parent inspected and finalized the same attempt, replayed finalization, and observed unchanged worker/source/state with no new spawn. Both parent processes exited successfully. The source-pinned raw capture is retained while bounded validator command-shape controls finish. Task 2 is qualified by validator `09159870`; both compact receipts pass executable replay, and `plan01-resume-live-review.md` independently supports the chain. Plan 01 is complete within its explicit early-tracer scope.
 - The first headless executor was stopped after the failed live run (recorded SIGINT, exit 1) to transfer preserved work and review to steerable `/root/repair_and_finish_tracer` in the same isolated worktree. Read `orchestrator-state.json` and the repair progress before recovery. No duplicate worktree or second native launch for the failed reservation is authorized by elapsed time.
 - No broad suites, shared installation, publication, owner project/session, or Phase 205 artifact changes occurred. The original owner inventory hash still matches `3b2b678284a26332addeadd2bd700bd4f51c4e2b0e6907a987116c85e5c2a8dd`; `baseline-and-owner-boundary.json` records the hash-only check and 17 historical failure identities.
 
