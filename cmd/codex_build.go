@@ -1923,7 +1923,7 @@ func plannedBuildDispatchesWithJobProposals(
 			DeclaredPaths: declaredPathsForTask(task),
 		})
 	}
-	jobPlan, err := planCoherentJobs(phase, seeds, proposals)
+	jobPlan, err := planCoherentJobs(phase, seeds, proposals, state.Plan.Phases)
 	if err != nil {
 		return nil, nil, err
 	}

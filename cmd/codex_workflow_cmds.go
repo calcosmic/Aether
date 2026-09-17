@@ -118,6 +118,13 @@ var planCmd = &cobra.Command{
 			return nil
 		}
 
+		if repairArtifact {
+			for _, flag := range []string{"refresh", "force", "synthetic", "plan-only", "preset", "depth", "planning-depth", "verification-depth", "target", "max-iterations", "revision-type", "revision-reason", "revision-evidence", "research", "print-brief", "full", "worker-timeout"} {
+				if cmd.Flags().Changed(flag) {
+					return fmt.Errorf("--repair-artifact cannot be combined with --%s", flag)
+				}
+			}
+		}
 		if printBrief, _ := cmd.Flags().GetBool("print-brief"); printBrief {
 			fullFlag, _ := cmd.Flags().GetBool("full")
 			if err := printPlanningBriefs(skillWorkspaceRoot(), fullFlag); err != nil {
@@ -2499,7 +2506,7 @@ func init() {
 	planCmd.Flags().Bool("refresh", false, "Regenerate the plan even when an existing plan is already present")
 	planCmd.Flags().Bool("force", false, "Alias for --refresh")
 	planCmd.Flags().Bool("plan-only", false, "Print the planning dispatch manifest without mutating colony state or spawning workers")
-	planCmd.Flags().Bool("repair-artifact", false, "Repair and validate dependency references in .aether/data/planning/phase-plan.json without rerunning workers")
+	planCmd.Flags().Bool("repair-artifact", false, "Validate accepted-plan dependencies without changing approvals; otherwise repair the legacy .aether/data/planning/phase-plan.json artifact without workers")
 	planCmd.Flags().String("preset", "", "Planning preset: fast, balanced, deep, or exhaustive")
 	planCmd.Flags().String("depth", "", "Legacy alias for --preset: fast, balanced, deep, or exhaustive")
 	planCmd.Flags().String("planning-depth", "", "Task decomposition depth: light, standard, or deep")

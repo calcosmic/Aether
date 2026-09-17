@@ -34,16 +34,21 @@ const (
 // It checks for missing dependency references first, then performs a
 // three-color DFS to detect cycles.
 func DetectCycles(phases []Phase) error {
+	resolved, err := ResolveTaskDependencies(phases)
+	if err != nil {
+		return err
+	}
+	phases = resolved
 	// Build adjacency list and known task ID set.
 	adj := make(map[string][]string)
 	known := make(map[string]bool)
 
 	for _, phase := range phases {
 		for _, task := range phase.Tasks {
-			if task.ID == nil {
+			id := taskDependencyID(task)
+			if id == "" {
 				continue
 			}
-			id := *task.ID
 			known[id] = true
 			if len(task.DependsOn) > 0 {
 				adj[id] = append(adj[id], task.DependsOn...)
@@ -54,12 +59,13 @@ func DetectCycles(phases []Phase) error {
 	// First pass: validate all DependsOn references exist.
 	for _, phase := range phases {
 		for _, task := range phase.Tasks {
-			if task.ID == nil {
+			id := taskDependencyID(task)
+			if id == "" {
 				continue
 			}
 			for _, dep := range task.DependsOn {
 				if !known[dep] {
-					return &MissingDepError{Task: *task.ID, MissingDep: dep}
+					return &MissingDepError{Task: id, MissingDep: dep}
 				}
 			}
 		}

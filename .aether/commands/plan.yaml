@@ -12,6 +12,9 @@ codex_orchestration:
   guide: "aether command-guide plan --platform codex"
   drift_guard: "Update this YAML, Claude/OpenCode wrappers, the Codex skill, cmd/command_guide.go, and public plan contract together."
 wrapper_additions:
+  explicit_dependency_repair: |
+    If the owner supplied --repair-artifact, run AETHER_OUTPUT_MODE=json aether plan --repair-artifact before the planning steps, render its result and stop. Do not choose a preset or dispatch workers; refuse conflicting generation/revision flags.
+    Report repair_scope accurately: accepted_revision means dependency validation without changing plan or approval bindings; legacy_phase_plan_artifact means only the older .aether/data/planning/phase-plan.json staging file may be repaired. Numeric and semantic IDs resolve to the same tasks across phases. Never rewrite active plan.phases, accepted candidates or approval records as a workaround. Follow the returned next command; invalid approved work needs the existing candidate acceptance path.
   approved_specification_preflight: |
     Inspect the canonical specification through `AETHER_OUTPUT_MODE=json aether spec --inspect` before choosing a preset or issuing a worker. Planning may start only from the exact APPROVED revision returned by Go. A missing, draft, stale, drifted, or unreconciled specification stops with State: unchanged and routes to `/ant-spec` or the runtime's exact repair action. Specification approval is never plan acceptance.
   preset_selection: |

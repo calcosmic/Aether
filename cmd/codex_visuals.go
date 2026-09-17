@@ -1638,7 +1638,9 @@ func renderPlanVisual(result map[string]interface{}) string {
 	b.WriteString(renderBanner(commandEmoji("plan"), "Plan"))
 	b.WriteString(visualDividerStr())
 	if _, ok := result["repair_source"]; ok {
-		if repaired, _ := result["repaired"].(bool); repaired {
+		if stringValue(result["repair_scope"]) == "accepted_revision" {
+			b.WriteString(voiceLine("done", "The accepted plan's task dependencies are valid. Its contents and approval are unchanged.") + "\n")
+		} else if repaired, _ := result["repaired"].(bool); repaired {
 			b.WriteString(voiceLine("done", "Repaired phase-plan dependency references.") + "\n")
 		} else {
 			b.WriteString(voiceLine("done", "Phase-plan dependency references are already valid.") + "\n")
@@ -5797,6 +5799,10 @@ func taskWaves(tasks []colony.Task) [][]int {
 	if len(tasks) == 0 {
 		return nil
 	}
+	references, err := colony.NewTaskReferenceIndex([]colony.Phase{{Tasks: tasks}})
+	if err != nil {
+		return nil
+	} // Build admission reports ambiguity before scheduling.
 
 	taskIDs := make([]string, len(tasks))
 	indexByID := make(map[string]int, len(tasks))
@@ -5807,6 +5813,15 @@ func taskWaves(tasks []colony.Task) [][]int {
 		}
 		taskIDs[i] = id
 		indexByID[id] = i
+	}
+	dependencies := make([][]string, len(tasks))
+	for i, task := range tasks {
+		for _, dependency := range task.DependsOn {
+			if target, ok := references.Resolve(dependency); ok {
+				dependency = taskIDs[target.TaskIndex]
+			}
+			dependencies[i] = append(dependencies[i], dependency)
+		}
 	}
 
 	satisfied := make(map[string]bool, len(tasks))
@@ -5819,7 +5834,7 @@ func taskWaves(tasks []colony.Task) [][]int {
 	for len(remaining) > 0 {
 		var wave []int
 		for idx := range remaining {
-			if dependenciesSatisfied(tasks[idx].DependsOn, satisfied, indexByID) {
+			if dependenciesSatisfied(dependencies[idx], satisfied, indexByID) {
 				wave = append(wave, idx)
 			}
 		}

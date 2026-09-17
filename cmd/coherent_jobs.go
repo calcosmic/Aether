@@ -86,8 +86,9 @@ type coherentJobPlan struct {
 // then accepts safe Queen jobs and returns only refused members to automatic
 // planning. It is intentionally pure: it never writes state, creates an
 // attempt, constructs a manifest, or touches a worktree.
-func planCoherentJobs(phase colony.Phase, seeds []coherentJobTask, proposals []coherentJobProposal) (*coherentJobPlan, error) {
-	if err := coherentJobGraphPreflight(phase); err != nil {
+func planCoherentJobs(phase colony.Phase, seeds []coherentJobTask, proposals []coherentJobProposal, dependencyPhases ...[]colony.Phase) (*coherentJobPlan, error) {
+	phase, err := resolveCoherentJobPhase(phase, dependencyPhases...)
+	if err != nil {
 		return nil, err
 	}
 
@@ -162,8 +163,12 @@ func planCoherentJobs(phase colony.Phase, seeds []coherentJobTask, proposals []c
 	return plan, nil
 }
 
-func coherentJobGraphPreflight(phase colony.Phase) error {
-	if err := colony.DetectCycles([]colony.Phase{phase}); err != nil {
+func coherentJobGraphPreflight(phase colony.Phase, dependencyPhases ...[]colony.Phase) error {
+	phases := []colony.Phase{phase}
+	if len(dependencyPhases) > 0 {
+		phases = dependencyPhases[0]
+	}
+	if err := colony.DetectCycles(phases); err != nil {
 		var cycleErr *colony.CycleError
 		var missingErr *colony.MissingDepError
 		switch {
@@ -176,6 +181,62 @@ func coherentJobGraphPreflight(phase colony.Phase) error {
 		}
 	}
 	return nil
+}
+
+// Resolve only a private scheduling copy. Accepted plans and their bindings
+// retain the original dependency strings. Earlier completed work is a satisfied
+// prerequisite, not a missing task or a new job in this phase.
+func resolveCoherentJobPhase(phase colony.Phase, dependencyPhases ...[]colony.Phase) (colony.Phase, error) {
+	phases := []colony.Phase{phase}
+	phaseIndex := 0
+	if len(dependencyPhases) > 0 && len(dependencyPhases[0]) > 0 {
+		phases = append([]colony.Phase(nil), dependencyPhases[0]...)
+		phaseIndex = -1
+		for i := range phases {
+			if phases[i].ID == phase.ID {
+				if phaseIndex >= 0 {
+					return colony.Phase{}, fmt.Errorf("phase %d is ambiguous in dependency plan", phase.ID)
+				}
+				phaseIndex = i
+				phases[i] = phase
+			}
+		}
+		if phaseIndex < 0 {
+			return colony.Phase{}, fmt.Errorf("phase %d is absent from dependency plan", phase.ID)
+		}
+	}
+	if err := coherentJobGraphPreflight(phase, phases); err != nil {
+		return colony.Phase{}, err
+	}
+	index, err := colony.NewTaskReferenceIndex(phases)
+	if err != nil {
+		return colony.Phase{}, err
+	}
+	resolved := phase
+	resolved.Tasks = append([]colony.Task(nil), phase.Tasks...)
+	for i, task := range phase.Tasks {
+		if task.DependsOn == nil {
+			continue
+		}
+		dependencies := make([]string, 0, len(task.DependsOn))
+		for _, reference := range task.DependsOn {
+			target, ok := index.Resolve(reference)
+			if !ok {
+				return colony.Phase{}, fmt.Errorf("task %s depends on missing task %s", buildTaskID(task, i), reference)
+			}
+			targetPhase := phases[target.PhaseIndex]
+			targetTask := targetPhase.Tasks[target.TaskIndex]
+			if target.PhaseIndex != phaseIndex {
+				if targetPhase.ID >= phase.ID || targetTask.Status != colony.TaskCompleted {
+					return colony.Phase{}, fmt.Errorf("cannot plan coherent jobs for phase %d: task %s depends on unfinished task %s in phase %d; complete that prerequisite before building", phase.ID, buildTaskID(task, i), buildTaskID(targetTask, target.TaskIndex), targetPhase.ID)
+				}
+				continue
+			}
+			dependencies = append(dependencies, buildTaskID(targetTask, target.TaskIndex))
+		}
+		resolved.Tasks[i].DependsOn = uniqueSortedStrings(dependencies)
+	}
+	return resolved, nil
 }
 
 func normalizeCoherentJobSeeds(phase colony.Phase, seeds []coherentJobTask) ([]coherentJobTask, map[string]colony.Task, error) {

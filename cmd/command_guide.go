@@ -316,6 +316,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 		Literal:        false,
 		PreSteps: []string{
 			codexGuideSupportStep("plan", commandGuideSkillBuildCycle),
+			"If --repair-artifact was explicitly supplied, run `AETHER_OUTPUT_MODE=json aether plan --repair-artifact` before the remaining planning steps, render repair_scope and stop: accepted_revision validates dependencies without changing plan or approval bindings; legacy_phase_plan_artifact may repair only the older staging artifact. No preset or worker is needed; refuse conflicting generation/revision flags. Numeric and semantic IDs resolve consistently across phases. Never rewrite the active projection or accepted approval records; follow the runtime's next command.",
 			"Run `AETHER_OUTPUT_MODE=visual aether status` and use its lifecycle facts as context; do not infer planning authority by reading state files.",
 			"Run `AETHER_OUTPUT_MODE=json aether spec --inspect` before selecting a preset. Continue only when Go reports the exact current Specification revision/hash APPROVED, its projection synchronized, and affected scope reconciled. Follow the runtime's exact repair or approval action otherwise; Specification approval is not plan acceptance.",
 			"When no explicit valid policy was supplied, request `aether host plan` with no preset and render `preset_required` as four equal choices only: Fast 80/up to 4 passes, Balanced 90/up to 6, Deep 95/up to 8, and Exhaustive 99/up to 12. Do not preselect or recommend one; cancelled or invalid input dispatches no worker.",
