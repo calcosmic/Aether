@@ -26,6 +26,7 @@ type ceremonyDispatch struct {
 	Caste          string
 	Task           string
 	TaskID         string
+	CoveredTaskIDs []string
 	Stage          string
 	Status         string
 	Summary        string
@@ -1117,6 +1118,7 @@ func ceremonyDispatchFromMap(raw map[string]interface{}) ceremonyDispatch {
 		Caste:          stringValue(raw["caste"]),
 		Task:           emptyFallback(stringValue(raw["task"]), stringValue(raw["goal"])),
 		TaskID:         stringValue(raw["task_id"]),
+		CoveredTaskIDs: stringSliceValue(raw["covered_task_ids"]),
 		Stage:          stringValue(raw["stage"]),
 		Status:         status,
 		Summary:        summary,

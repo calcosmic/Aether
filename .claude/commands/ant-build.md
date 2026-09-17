@@ -316,6 +316,8 @@ AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony team-checkin --wo
 ```
 
 2. Fetch the same card as data: `AETHER_OUTPUT_MODE=json aether ceremony team-checkin --workflow build --manifest-file <manifest_file>` and read `result.required`, `result.optional`, `result.reasons`, `result.waived`, `result.waive_commands`.
+For a blocking check-in only, before asking the owner to approve the team, run `AETHER_OUTPUT_MODE=json aether ceremony team-checkin --workflow build --manifest-file <manifest_file>`. Display `result.approval_card` verbatim in a fenced text block in the visible conversation immediately before the approval choices; a collapsed tool result or a generic sentence about the team is not enough. The card names each worker, its assignment and wave, and the required reviewers that run afterward. Keep the runtime roster unchanged. If an older runtime has no `approval_card`, render the visual team-checkin ceremony and relay its roster visibly before asking. Read `result.optional`, `result.waived`, and `result.waive_commands` for the existing trim/decline flow.
+
 3. Ask the user (AskUserQuestion, single question): "The Queen picked this team. Proceed?" with options:
    - "Proceed with this team" (recommended) — spawn as planned.
    - "Trim optional workers" — follow up with ONE multi-select question listing ONLY `result.optional` entries, each labeled with its plain-English job and reason. Never list a required caste.

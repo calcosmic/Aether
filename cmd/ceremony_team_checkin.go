@@ -262,7 +262,9 @@ func renderCeremonyTeamCheckin(workflow string, manifest map[string]interface{},
 		"waived":         waived,
 		"waive_commands": waiveCommands,
 	}
-	return result, b.String()
+	card := renderTeamApprovalCard(manifest, dispatches, requiredSet, reasons, liveForcedHits, waivedForcedHits)
+	result["approval_card"] = card
+	return result, card + "\n" + b.String()
 }
 
 // forcedReviewerRecordsFromManifest reads the "forced_reviewers" field back

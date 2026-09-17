@@ -108,7 +108,8 @@ func deliberateDropsForbiddenBoxCorners() map[rune]string {
 // rather than inventing a second convention.
 func deliberateDropsBoxCornerFileAllowlist() map[string]string {
 	return map[string]string{
-		"codex_visuals.go": "aetherWordmark / renderAetherWordmark: a decorative ASCII-art splash logo spelling out block letters with box-drawing glyphs -- not a bordered frame around a section of content, and unrelated to the SEE-checkpoint-style boxed table SHOW-05 retires.",
+		"ceremony_team_roster.go": "2026-09-17 owner request: a framed, named team roster before approval. This exception applies only to the team approval card.",
+		"codex_visuals.go":        "aetherWordmark / renderAetherWordmark: a decorative ASCII-art splash logo spelling out block letters with box-drawing glyphs -- not a bordered frame around a section of content, and unrelated to the SEE-checkpoint-style boxed table SHOW-05 retires.",
 	}
 }
 
