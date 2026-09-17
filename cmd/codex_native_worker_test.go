@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -1169,6 +1170,33 @@ func TestCodexNativeWorkerFixturePreparation(t *testing.T) {
 	manifest := prepareBoundBuildManifestOnly(t, root)
 	if manifest.ExecutionBinding == nil || len(manifest.Dispatches) != 1 || manifest.PlanRevisionID == "" {
 		t.Fatalf("fixture is not an accepted one-worker plan: %+v", manifest)
+	}
+}
+
+func TestCodexNativeFixtureQuestionCommandBoundary(t *testing.T) {
+	root := t.TempDir()
+	coord := filepath.Join(root, "aether-worker-request-fixture")
+	script := filepath.Join(root, "coordinate.py")
+	raw := []byte("coord = pathlib.Path(" + strconv.Quote(coord) + ")\n")
+	if err := os.WriteFile(script, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	receipt := codexNativeLiveReceipt{FixtureRoot: root, CoordinatorPath: script, CoordinatorSHA256: lifecycleDigest(raw)}
+	for _, tc := range []struct {
+		name, command string
+		allowed       bool
+	}{
+		{"exact", "aether codex-native-worker question --request " + filepath.Join(coord, "bind-request.json"), true},
+		{"wrong-path", "aether codex-native-worker question --request " + filepath.Join(root, "other", "bind-request.json"), false},
+		{"wrong-operation", "aether codex-native-worker record --request " + filepath.Join(coord, "bind-request.json"), false},
+		{"extra-argument", "aether codex-native-worker question --request " + filepath.Join(coord, "bind-request.json") + " extra", false},
+		{"shell-write", "aether codex-native-worker question --request " + filepath.Join(coord, "bind-request.json") + "; touch clamp.go", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := nativeParentCoordinationCommand(&receipt, []string{"/bin/zsh", "-lc", tc.command}, root); got != tc.allowed {
+				t.Fatalf("allowed=%v want %v", got, tc.allowed)
+			}
+		})
 	}
 }
 

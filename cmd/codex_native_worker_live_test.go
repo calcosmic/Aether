@@ -1299,6 +1299,26 @@ func nativeParentCoordinationCommand(r *codexNativeLiveReceipt, command []string
 			return false
 		}
 		switch words[1] {
+		case "codex-native-worker":
+			if len(words) != 5 {
+				return false
+			}
+			if words[3] == "--phase" {
+				return (words[2] == "inspect" || words[2] == "stage") && words[4] == "1"
+			}
+			if words[2] != "question" || words[3] != "--request" {
+				return false
+			}
+			raw, err := os.ReadFile(r.CoordinatorPath)
+			if err != nil || lifecycleDigest(raw) != r.CoordinatorSHA256 {
+				return false
+			}
+			match := regexp.MustCompile(`(?m)^coord = pathlib.Path\((.+)\)$`).FindStringSubmatch(string(raw))
+			if len(match) != 2 {
+				return false
+			}
+			root, err := strconv.Unquote(match[1])
+			return err == nil && filepath.Clean(words[4]) == filepath.Join(root, "bind-request.json")
 		case "status", "pheromones", "command-guide", "ceremony", "spawn-log", "spawn-complete":
 			return true
 		}
