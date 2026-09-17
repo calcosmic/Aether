@@ -102,6 +102,7 @@ type codexNativeWorkerBinding struct {
 }
 
 type codexNativeWorkerRequest struct {
+	Question          *codexNativeQuestion        `json:"question,omitempty"`
 	ContextDeliveryID string                      `json:"context_delivery_id,omitempty"`
 	ContextDelivery   *codexNativeContextDelivery `json:"context_delivery,omitempty"`
 	ContextSend       *codexNativeContextSend     `json:"context_send,omitempty"`
@@ -127,6 +128,7 @@ type codexNativeWorkerRequest struct {
 }
 
 type codexNativeWorkerResponse struct {
+	Decisions        []codexNativeDecisionView   `json:"decisions,omitempty"`
 	ContextStatus    string                      `json:"context_status,omitempty"`
 	ContextDelivery  *codexNativeContextDelivery `json:"context_delivery,omitempty"`
 	Receipt          *codexNativeWorkerReceipt   `json:"receipt,omitempty"`
@@ -145,7 +147,7 @@ type codexNativeWorkerResponse struct {
 
 func init() {
 	command := &cobra.Command{Use: "codex-native-worker", Short: "Internal non-launching native worker journal bridge", Hidden: true}
-	for _, operation := range []string{"reserve", "bind", "record", "stage", "inspect", "observe", "context"} {
+	for _, operation := range []string{"reserve", "bind", "record", "stage", "inspect", "observe", "context", "question"} {
 		operation := operation
 		child := &cobra.Command{Use: operation, Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 			path, _ := cmd.Flags().GetString("request")
@@ -311,6 +313,12 @@ func runCodexNativeWorkerForPhase(operation string, phase int) (codexNativeWorke
 }
 
 func executeCodexNativeWorkerRequest(operation string, request codexNativeWorkerRequest, hooks codexNativeWorkerHooks) (codexNativeWorkerResponse, error) {
+	if operation == "question" {
+		return runCodexNativeQuestions(request, hooks)
+	}
+	if request.Question != nil {
+		return codexNativeWorkerResponse{}, fmt.Errorf("native questions require the question operation")
+	}
 	response := codexNativeWorkerResponse{SchemaVersion: 1, ExecutionBinding: request.ExecutionBinding}
 	var err error
 	attemptPath, current, ok := loadLatestBuildAttempt(request.Phase)
@@ -393,12 +401,19 @@ func executeCodexNativeWorkerRequest(operation string, request codexNativeWorker
 			hooks.AfterContextRender()
 		}
 		if response.ContextStatus == "awaiting_delivery" {
-			_, worker, err := validateCodexNativeContextTarget(current, request)
+			dispatch, worker, err := validateCodexNativeContextTarget(current, request)
 			if err != nil {
 				return codexNativeWorkerResponse{}, err
 			}
 			if err := validateCodexNativeContextLive(current, *worker); err != nil {
 				return codexNativeWorkerResponse{}, err
+			}
+			latest, err := composeCodexNativeContextDelivery(current, *dispatch, *worker, response.ContextDelivery.DecisionIDs)
+			if err != nil {
+				return codexNativeWorkerResponse{}, err
+			}
+			if latest == nil || latest.DeliveryID != response.ContextDelivery.DeliveryID {
+				return codexNativeWorkerResponse{}, fmt.Errorf("native answer changed while rendering; reread current context")
 			}
 		}
 		if err := validateCodexNativeContextScope(*current.PlanManifest); err != nil {
