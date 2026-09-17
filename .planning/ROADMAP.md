@@ -787,8 +787,8 @@ Plans:
 
 **Wave 8 — gap closure**
 
-- [ ] 204.2-10-PLAN.md — Repair native attribution and prove ordinary, early-resume and independent-review tracers.
-- [ ] 204.2-13-PLAN.md — Diagnose readiness cleanup and enforce disposable NPM/regression preparation.
+- [x] 204.2-10-PLAN.md — Repair native attribution and prove ordinary, early-resume and independent-review tracers.
+- [x] 204.2-13-PLAN.md — Diagnose readiness cleanup and enforce disposable NPM/regression preparation.
 
 **Wave 9**
 
