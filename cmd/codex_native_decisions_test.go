@@ -637,3 +637,98 @@ func TestCodexNativeDecisionGuideContract(t *testing.T) {
 		}
 	}
 }
+
+func TestCodexNativeDecisionOrdinaryIDCompatibility(t *testing.T) {
+	_, native := nativeDecisionFixture(t)
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatal(err)
+	}
+	*state.Goal = "Later independent colony"
+	session := "later-independent-session"
+	state.SessionID = &session
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatal(err)
+	}
+	file := loadPendingDecisionFile()
+	ordinary := PendingDecision{ID: "ordinary-current", Type: clarificationDecisionType, Description: native.Description, Source: "discuss", CreatedAt: native.CreatedAt}
+	stampPendingDecisionScope(&ordinary, loadCurrentPendingDecisionScope())
+	file.Decisions = append(file.Decisions, ordinary)
+	if err := store.SaveJSON(pendingDecisionsFile, file); err != nil {
+		t.Fatal(err)
+	}
+	// Ambiguous text-only answers conservatively retain the native-route refusal.
+	before := nativeDecisionStoreBytes(t)
+	if _, err := recordDecisionAnswer(native.Description, "text-only answer", 1, "worker-handoff"); err == nil {
+		t.Fatal("historical native text silently became an unbound answer")
+	}
+	if !reflect.DeepEqual(before, nativeDecisionStoreBytes(t)) {
+		t.Fatal("text refusal mutated the store")
+	}
+	// A current explicit ordinary ID retains its original primary-platform route.
+	if _, err := nativeDecisionCommandForTest(t, "discuss", "--resolve", ordinary.ID, "--answer", "ORDINARY_CURRENT_ANSWER"); err != nil {
+		t.Fatal(err)
+	}
+	file = loadPendingDecisionFile()
+	for _, d := range file.Decisions {
+		if d.ID == native.ID && !reflect.DeepEqual(d, native) {
+			t.Fatal("ordinary answer changed historical native question")
+		}
+		if d.ID == ordinary.ID && (!d.Resolved || d.Resolution != "ORDINARY_CURRENT_ANSWER") {
+			t.Fatal("current ordinary ID not answerable")
+		}
+	}
+}
+func TestCodexNativeDecisionFlagCompatibility(t *testing.T) {
+	for _, operation := range []string{"add", "resolve", "acknowledge", "age"} {
+		t.Run(operation, func(t *testing.T) {
+			_, d := nativeDecisionFixture(t)
+			if operation == "age" {
+				file := loadPendingDecisionFile()
+				file.Decisions[0].CreatedAt = "2020-01-01T00:00:00Z"
+				d = file.Decisions[0]
+				if err := store.SaveJSON(pendingDecisionsFile, file); err != nil {
+					t.Fatal(err)
+				}
+			}
+			before := nativeDecisionStoreBytes(t)
+			var err error
+			switch operation {
+			case "add":
+				_, err = nativeDecisionCommandForTest(t, "flag-add", "--title", "Ordinary flag alongside native question")
+			case "resolve":
+				_, err = nativeDecisionCommandForTest(t, "flag-resolve", "--id", d.ID, "--message", "UNBOUND_FLAG_ANSWER")
+			case "acknowledge":
+				_, err = nativeDecisionCommandForTest(t, "flag-acknowledge", "--id", d.ID)
+			case "age":
+				_, err = nativeDecisionCommandForTest(t, "flag-auto-resolve", "--max-days", "1")
+			}
+			if operation == "resolve" || operation == "acknowledge" {
+				if err == nil {
+					t.Fatal("generic flag route admitted native decision mutation")
+				}
+				if !reflect.DeepEqual(before, nativeDecisionStoreBytes(t)) {
+					t.Fatal("flag refusal mutated native decision")
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+			var file PendingDecisionFile
+			if err := store.LoadJSON(pendingDecisionsFile, &file); err != nil {
+				t.Fatal(err)
+			}
+			found := false
+			for _, row := range file.Decisions {
+				if row.ID == d.ID {
+					found = true
+					if !reflect.DeepEqual(d, row) {
+						t.Fatalf("ordinary flag operation corrupted native decision: before=%#v after=%#v", d, row)
+					}
+				}
+			}
+			if !found {
+				t.Fatal("flag operation removed native decision")
+			}
+		})
+	}
+}
