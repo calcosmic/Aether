@@ -751,7 +751,7 @@ For dummies: A worker actually receives the job, does it, and returns saved work
 
 **Context and research:** [204.2-CONTEXT.md](phases/204.2-codex-native-worker-lifecycle/204.2-CONTEXT.md), [204.2-RESEARCH.md](phases/204.2-codex-native-worker-lifecycle/204.2-RESEARCH.md).
 
-**Plans:** 2/8 plans executed in 6 waves; native admission and terminal handling are merged and reviewed.
+**Plans:** 5/8 plans executed in 6 waves; admission, context, journal finalization and recovery are merged and reviewed.
 
 Plans:
 
@@ -765,9 +765,9 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 204.2-03-PLAN.md — Deliver the full exact runtime context and scoped context updates.
-- [ ] 204.2-05-PLAN.md — Finalize only durable native results through the existing credit and schema contracts.
-- [ ] 204.2-06-PLAN.md — Show truthful partial native recovery, cancellation and inline activity.
+- [x] 204.2-03-PLAN.md — Deliver the full exact runtime context and scoped context updates.
+- [x] 204.2-05-PLAN.md — Finalize only durable native results through the existing credit and schema contracts.
+- [x] 204.2-06-PLAN.md — Show truthful partial native recovery, cancellation and inline activity.
 
 **Wave 4** *(blocked on Wave 3 completion)*
 

@@ -5,16 +5,16 @@ milestone_name: Classic Colony Restoration
 current_phase: 204.2
 current_phase_name: Codex Native Worker Lifecycle
 status: executing
-stopped_at: Phase 204.2 Wave 2 complete; Plans 03, 05 and 06 next
-last_updated: "2026-09-17T09:10:45.747202+00:00"
+stopped_at: Phase 204.2 Wave 3 complete; Plan 04 next
+last_updated: "2026-09-17T10:12:06.318229+00:00"
 last_activity: 2026-09-17
-last_activity_desc: Phase 204.2 Plan 02 merged and reviewed; 63 focused integration cases pass
+last_activity_desc: Phase 204.2 Wave 3 merged and reviewed; 232 focused cases qualify with one explicit live skip
 state_head: 299f02468e1a9e6d667838b0c07ca2648c70cf5e
 progress:
   total_phases: 13
   completed_phases: 6
   total_plans: 197
-  completed_plans: 186
+  completed_plans: 189
   percent: 46
 ---
 
@@ -35,8 +35,8 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 Phase: 204.2 (Codex Native Worker Lifecycle) — EXECUTING
 Next phase: 204.2 (Codex Native Worker Lifecycle)
 Status: Executing Phase 204.2
-Plan: 2 of 8 complete; Plans 03, 05 and 06 next in parallel
-Last activity: 2026-09-17 — Plan 02 complete and merged; 63 focused integration cases and all wave gates passed
+Plan: 5 of 8 complete; Plan 04 next
+Last activity: 2026-09-17 — Plans 03/05/06 complete and merged; combined build and focused integration qualified; all wave gates passed
 
 ## Performance Metrics
 
@@ -767,14 +767,17 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-17T09:10:45.747202+00:00
-Stopped at: Phase 204.2 Wave 2 complete; dispatch the three disjoint Wave 3 plans
-Resume file: /Users/callumcowie/.aether-backups/phase204-2-execution-20260917/orchestrator-state.json — inspect current wave and its original worktree manifest before redispatch. Plans 01/02 are merged and their worktrees removed. The separate Phase 205 owner checkpoint remains preserved below.
+Last session: 2026-09-17T10:12:06.318229+00:00
+Stopped at: Phase 204.2 Wave 3 complete; dispatch Plan 04
+Resume file: /Users/callumcowie/.aether-backups/phase204-2-execution-20260917/orchestrator-state.json — inspect current wave and its original worktree manifest before redispatch. Plans 01/02/03/05/06 are merged and their manifest-owned worktrees removed. The separate Phase 205 owner checkpoint remains preserved below.
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
 
 ## Phase 204.2 Execution — 2026-09-17
 
+- Wave 3 complete: Plans 03/05/06 source and summaries were reviewed, merged through the original three-entry manifest, and only those worktrees removed. Five of eight plans are complete; Plan 04 is next. Combined schema regenerated at `cd8c05ab`; test-only pause/finalizer integration corrected at `fbf153a3`. Build passed. The 233 executed focused cases account for 232 passes after the affected follow-up and one explicit `TestCodexNativeWorkerFreshHost` skip. Initial three stale pre-pause test failures and the first root assertion-type error remain preserved; no production weakening or broad repeat. Exact source, raw counts, hashes and all nonblocking wave gates: `wave3-reviewed-integration.json` in the evidence root.
+- Plans 03/05/06 deliver exact context and acknowledged deltas, journal-derived finalization, and current-identity recovery with pending cancellation. Plan 05 preserves the owner rule: failed real checks can retain receipt-backed BUILD credit but prevent VERIFIED advancement; see external `plan05-check-credit-resolution.md`. This explicit plan-wording resolution must carry into Plan 08. Actual final host qualification and whole-phase ANT requirements remain pending.
+- Host ENOSPC interrupted focused checks; only rebuildable Go compilation cache was cleared. All affected normal/race checks were rerun successfully and original infrastructure failures retained. No source, evidence or unrelated worktrees were deleted.
 - Wave 2 and Plan 02 are complete; 2/8 plans are complete. Source `15a71c01`, summary `c98b522f` and whitespace-only `0044a32b` merged at `8cabf151`. `plan02-final-code-review.md` resolves the pause/admission race and reports no new material findings. The original manifest removed only this worktree; its authorized scope extension was `cmd/session_flow_cmds.go`. Post-merge build and all 63 selected tests/cases passed, with raw identities in `wave2-integration.json`; schema/codebase/UI gates did not block.
 - Plan 02 shares the existing repository mutation session between native admission and pause first-read/derivation/commit. The prior-source negative control actually reproduces pause-then-launch; repaired orderings pass. Terminal results and observations retain immutable replay, honest cancellation/no-launch/unknown states and provider separation. Plan 06 must preserve the pause session and captured target baselines; Plans 03/05/06 consume the interface handoff in the committed summary. Whole-phase ANT requirements and final host qualification remain pending.
 - Wave 1 completed Plan 01, the first of eight plans. Source/evidence summary `2fabf075` merged at `fcc5b6ed`; the original manifest-scoped cleanup removed only this plan worktree. Its one advisory scope addition was the required `cmd/codex_native_worker_live_test.go` harness. Post-merge build and all 30 focused tests passed; schema/codebase/UI gates did not block.
