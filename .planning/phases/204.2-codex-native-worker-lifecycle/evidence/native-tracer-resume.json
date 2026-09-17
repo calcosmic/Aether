@@ -123,7 +123,7 @@
     "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-early-resume-898017782/source-files.json": "sha256:1a9f2f81d0edea32bdd943c3c7a50a9bc2ff3e9abb71aa358ce4e88f6f000ff6",
     "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-early-resume-898017782/source.patch": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-early-resume-898017782/terminal-attempt.json": "sha256:09cbdb557ee3128fcd2fcde1a47664bb93cbb8f7bf89390ed08f49a27aaef13d",
-    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-early-resume-validated.json": "33bf81b96a68d780b86d961946d6b57995aa2b3011f0607389e8d5a664cf9534"
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-early-resume-validated.json": "sha256:33bf81b96a68d780b86d961946d6b57995aa2b3011f0607389e8d5a664cf9534"
   },
   "observed_tools": [
     "agent_message",
