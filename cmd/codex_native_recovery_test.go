@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -301,5 +303,220 @@ func TestCodexNativeRecoveryCurrency(t *testing.T) {
 				t.Fatal("currency conflict inspection wrote")
 			}
 		})
+	}
+}
+
+func TestCodexNativeRecoveryActivity(t *testing.T) {
+	manifest, requests := nativeRecoveryFixture(t, 1)
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	t.Setenv("NO_COLOR", "1")
+	var out bytes.Buffer
+	stdout = &out
+	request := nativeReserveForTest(t, requests[0])
+	if out.Len() != 0 {
+		t.Fatal("reservation emitted a worker start")
+	}
+	if err := resumeColonyCmd.RunE(resumeColonyCmd, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "awaiting binding") || !strings.Contains(out.String(), "host session recovery-host") {
+		t.Fatalf("reservation is not legible inline: %s", out.String())
+	}
+	out.Reset()
+	bindPath := nativeRequestPath(t, request)
+	if _, err := runCodexNativeWorker("bind", bindPath); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(out.String(), "starting wave") != 1 {
+		t.Fatalf("bound worker start missing: %s", out.String())
+	}
+	before := out.String()
+	if replay, err := runCodexNativeWorker("bind", bindPath); err != nil || !replay.Replay || out.String() != before {
+		t.Fatalf("binding replay emitted another start: %v", err)
+	}
+	observation := nativeObservationPath(t, request, "running", time.Now().UTC())
+	if _, err := runCodexNativeWorker("observe", observation); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(out.String(), "running wave") != 1 {
+		t.Fatalf("host running event missing: %s", out.String())
+	}
+	before = out.String()
+	if replay, err := runCodexNativeWorker("observe", observation); err != nil || !replay.Replay || out.String() != before {
+		t.Fatalf("observation replay emitted activity: %v", err)
+	}
+	terminal := nativeTerminalRequestForTest(t, request, manifest.Dispatches[0].Caste, "completed")
+	terminalPath := nativeRequestPath(t, terminal)
+	if _, err := runCodexNativeWorker("record", terminalPath); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(out.String(), "  completed") != 1 {
+		t.Fatalf("one recorded finish expected: %s", out.String())
+	}
+	before = out.String()
+	journal := nativeJournalBytes(t)
+	if replay, err := runCodexNativeWorker("record", terminalPath); err != nil || !replay.Replay || out.String() != before {
+		t.Fatalf("terminal replay emitted a second finish: %v", err)
+	}
+	if _, err := runCodexNativeWorker("observe", nativeObservationPath(t, request, "running", time.Now().UTC().Add(time.Second))); err == nil {
+		t.Fatal("late running resurrected a terminal worker")
+	}
+	if !bytes.Equal(journal, nativeJournalBytes(t)) {
+		t.Fatal("replay/late observation changed terminal truth")
+	}
+	for i := 0; i < 2; i++ {
+		nativeRecoveryDashboard(t)
+	}
+	if out.String() != before {
+		t.Fatal("status rendering replayed transition events")
+	}
+}
+
+func TestCodexNativeRecoveryCancelPending(t *testing.T) {
+	_, request := nativeBoundForTest(t)
+	now := time.Now().UTC()
+	if _, err := runCodexNativeWorker("observe", nativeObservationPath(t, request, "cancel_requested", now)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runCodexNativeWorker("observe", nativeObservationPath(t, request, "unavailable", now.Add(time.Second))); err != nil {
+		t.Fatal(err)
+	}
+	_, recovery := nativeRecoveryDashboard(t)
+	active := nativeRecoveryItems(t, recovery, "active", 1)[0].(map[string]any)
+	if active["status"] != "cancellation_pending" || active["last_host_status"] != "unavailable" {
+		t.Fatalf("lost pending or unavailable evidence: %+v", active)
+	}
+	if !strings.Contains(fmt.Sprint(active["host_action"]), request.ChildID) || !strings.Contains(fmt.Sprint(active["host_action"]), "actual interruption/cancellation tool") {
+		t.Fatalf("missing actionable same-child host instruction: %+v", active)
+	}
+	before := nativeRecoveryStoreSnapshot(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	var out bytes.Buffer
+	stdout = &out
+	if err := pauseColonyCmd.RunE(pauseColonyCmd, nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, text := range []string{"cancellation pending", "capability unavailable", request.ChildID} {
+		if !strings.Contains(out.String(), text) {
+			t.Fatalf("pending pause omitted %q: %s", text, out.String())
+		}
+	}
+	if !reflect.DeepEqual(before, nativeRecoveryStoreSnapshot(t)) {
+		t.Fatal("pending native pause rewrote evidence or recorded a handoff")
+	}
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil || state.Paused {
+		t.Fatalf("unknown host became paused: %v", err)
+	}
+}
+
+func TestCodexNativeRecoveryCancelConfirmed(t *testing.T) {
+	manifest, request := nativeBoundForTest(t)
+	now := time.Now().UTC()
+	if _, err := runCodexNativeWorker("observe", nativeObservationPath(t, request, "cancel_requested", now)); err != nil {
+		t.Fatal(err)
+	}
+	terminal := nativeTerminalRequestForTest(t, request, manifest.Dispatches[0].Caste, "cancelled")
+	ack := nativeObservationPath(t, terminal, "cancelled", now.Add(time.Second))
+	wrong := terminal
+	wrong.ChildID = "wrong-child"
+	if _, err := runCodexNativeWorker("observe", nativeObservationPath(t, wrong, "cancelled", now.Add(time.Second))); err == nil {
+		t.Fatal("wrong child acknowledged cancellation")
+	}
+	if _, err := runCodexNativeWorker("observe", ack); err != nil {
+		t.Fatal(err)
+	}
+	_, recovery := nativeRecoveryDashboard(t)
+	finished := nativeRecoveryItems(t, recovery, "finished", 1)[0].(map[string]any)
+	if finished["status"] != "cancelled" || finished["result_sha256"] == "" {
+		t.Fatalf("host cancellation missing durable identity: %+v", finished)
+	}
+	before := nativeJournalBytes(t)
+	if _, err := pauseColonyAt(now.Add(2 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	outcome, err := resumeColonyAt(now.Add(3 * time.Second))
+	if err != nil || outcome.Receipt.ReceiptID == "" {
+		t.Fatalf("validated paused native attempt did not resume: %+v %v", outcome, err)
+	}
+	if !bytes.Equal(before, nativeJournalBytes(t)) {
+		t.Fatal("pause/resume changed accepted cancellation")
+	}
+	raw, err := os.ReadFile(filepath.Join(request.Workspace, "evidence.txt"))
+	if err != nil || string(raw) != "saved native work\n" {
+		t.Fatal("cancel discarded changed files")
+	}
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatal(err)
+	}
+	if state.Plan.Phases[0].Tasks[0].Status == colony.TaskCompleted {
+		t.Fatal("cancellation earned task credit")
+	}
+	_, recovery = nativeRecoveryDashboard(t)
+	if recovery["valid"] != true || recovery["next"] != "aether codex-native-worker stage --phase 1" {
+		t.Fatalf("authenticated resume lost saved-result recovery: %+v", recovery)
+	}
+}
+
+func TestCodexNativeRecoveryPauseRace(t *testing.T) {
+	manifest, request := nativeBoundForTest(t)
+	request = nativeTerminalRequestForTest(t, request, manifest.Dispatches[0].Caste, "completed")
+	path := nativeRequestPath(t, request)
+	ready, release := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	unblock := func() { once.Do(func() { close(release) }) }
+	t.Cleanup(unblock)
+	result := make(chan error, 1)
+	go func() {
+		_, err := runCodexNativeWorkerWithHooks("record", path, codexNativeWorkerHooks{BeforeWrite: func() { close(ready); <-release }})
+		result <- err
+	}()
+	<-ready
+	_, err := pauseColonyAt(time.Now().UTC())
+	var pending pauseBoundaryPendingError
+	if !errors.As(err, &pending) {
+		unblock()
+		<-result
+		t.Fatalf("pause claimed completion before terminal commit: %v", err)
+	}
+	unblock()
+	if err := <-result; err != nil {
+		t.Fatal(err)
+	}
+	before := nativeJournalBytes(t)
+	if _, err := pauseColonyAt(time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, nativeJournalBytes(t)) {
+		t.Fatal("pause after terminal rewrote saved work")
+	}
+	if replay, err := runCodexNativeWorker("record", path); err != nil || !replay.Replay {
+		t.Fatalf("paused terminal replay changed identity: %+v %v", replay, err)
+	}
+}
+
+func TestCodexNativeRecoveryProcessLane(t *testing.T) {
+	process := exec.Command("sleep", "30")
+	if err := process.Start(); err != nil {
+		t.Fatal(err)
+	}
+	var once sync.Once
+	stop := func() { once.Do(func() { _ = process.Process.Kill(); _ = process.Wait() }) }
+	t.Cleanup(stop)
+	fixture := commitTestBuildStart(t, testBuildStartOptions{Variant: buildStartDirect, GeneratedAt: time.Now().UTC(), ProcessID: process.Process.Pid, ExecutionOwner: "go-runtime", DispatchMode: "direct", MakeLatest: testBuildStartBool(true)})
+	if recovery := buildCodexNativeRecovery(fixture.State); recovery != nil {
+		t.Fatal("ordinary subprocess was classified as native")
+	}
+	if _, err := pauseColonyAt(time.Now().UTC()); err == nil {
+		t.Fatal("live subprocess pause no longer waits")
+	}
+	stop()
+	if _, err := pauseColonyAt(time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	outcome, err := resumeColonyAt(time.Now().UTC())
+	if err != nil || outcome.Receipt.ReceiptID == "" {
+		t.Fatalf("ordinary subprocess recovery regressed: %+v %v", outcome, err)
 	}
 }
