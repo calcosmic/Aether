@@ -67,6 +67,7 @@ type codexNativeLiveReceipt struct {
 	ChildEditObserved          bool                  `json:"child_edit_observed"`
 	CreditObserved             bool                  `json:"runtime_credit_observed"`
 	ParentSubstitution         bool                  `json:"parent_substitution"`
+	ParentUnclassified         []string              `json:"parent_unclassified_commands,omitempty"`
 	SkillRead                  bool                  `json:"installed_skill_read"`
 	SupportRead                bool                  `json:"installed_support_read"`
 	GuideRead                  bool                  `json:"runtime_guide_read"`
@@ -1091,7 +1092,7 @@ func validateCodexNativeLiveReceipt(r codexNativeLiveReceipt) error {
 		return fmt.Errorf("raw native child edit/check evidence incomplete (edit=%v checks=%v); child log %s", r.ChildEditObserved, r.ChecksPassed, r.ChildEvents)
 	}
 	if r.ParentSubstitution {
-		return fmt.Errorf("parent performed the promised child work")
+		return fmt.Errorf("parent writes or unclassified operations prevent child-only attribution: %v", r.ParentUnclassified)
 	}
 	if r.AttemptID == "" || r.LaunchID == "" || r.ResultSHA256 == "" || r.CompletionPath == "" || !r.CreditObserved {
 		return fmt.Errorf("accepted native terminal/aggregate/finalizer credit incomplete")
@@ -1126,6 +1127,7 @@ func nativeInspectParentEvents(r *codexNativeLiveReceipt, raw []byte) {
 			if i.Type == "CommandExecution" {
 				if !nativeParentCoordinationCommand(r, i.Command) {
 					r.ParentSubstitution = true
+					r.ParentUnclassified = append(r.ParentUnclassified, strings.Join(i.Command, " "))
 				}
 				var words []string
 				if len(i.Command) == 3 {
@@ -1238,6 +1240,8 @@ func nativeParentCoordinationCommand(r *codexNativeLiveReceipt, command []string
 		return true
 	case "sed":
 		return len(words) == 4 && words[1] == "-n" && regexp.MustCompile(`^[0-9]+(?:,[0-9]+)?p$`).MatchString(words[2])
+	case "head":
+		return len(words) == 4 && words[1] == "-n" && regexp.MustCompile(`^[0-9]+$`).MatchString(words[2]) && !strings.HasPrefix(words[3], "-")
 	case "jq":
 		args := words[1:]
 		if len(args) > 0 && (args[0] == "-r" || args[0] == "-c" || args[0] == "-S") {
