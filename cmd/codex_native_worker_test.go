@@ -187,6 +187,20 @@ func TestCodexNativeWorkerTracer(t *testing.T) {
 	}
 	request.SourceEventID = "unit-event"
 	request.SourceEventSHA256 = strings.Repeat("a", 64)
+	// The installed Builder uses ant_name/tdd/code_written. Exercise its wire
+	// shape through the registered request reader, not the internal Go struct.
+	wire := map[string]any{"schema_version": 1, "phase": 1, "execution_binding": request.ExecutionBinding,
+		"worker_name": request.WorkerName, "task_id": request.TaskID, "host_session_id": request.HostSessionID,
+		"launch_id": request.LaunchID, "child_id": request.ChildID, "dispatch_sha256": request.DispatchSHA256,
+		"prompt_sha256": request.PromptSHA256, "source_event_id": request.SourceEventID, "source_event_sha256": request.SourceEventSHA256,
+		"result": map[string]any{"ant_name": dispatch.Name, "caste": dispatch.Caste, "task_id": request.TaskID,
+			"status": "code_written", "summary": "Builder wire regression", "files_created": []string{"evidence.txt"},
+			"tdd": map[string]any{"cycles_completed": 1, "tests_added": 0, "coverage_percent": nil, "all_passing": true},
+			"handoff": codex.WorkerHandoff{ChangedFiles: []string{"evidence.txt"}, VerificationStatus: "pass", CommandsRun: []string{"fixture check"}}}}
+	loaded, err := loadCodexNativeWorkerRequest(writeCodexNativeRequestForTest(t, wire))
+	if err != nil || loaded.Result == nil || loaded.Result.Name != dispatch.Name || loaded.Result.Status != "completed" {
+		t.Fatalf("installed Builder wire refused: %+v %v", loaded.Result, err)
+	}
 	request.Result = &internalWorkerResult{Name: dispatch.Name, Caste: dispatch.Caste, TaskID: request.TaskID, Status: "completed", Summary: "deterministic boundary result", FilesCreated: []string{"evidence.txt"}, Handoff: codex.WorkerHandoff{ChangedFiles: []string{"evidence.txt"}, CommandsRun: []string{"deterministic fixture boundary"}, VerificationStatus: "pass", NextWorkerInstructions: []string{"inspect saved deterministic receipt"}}}
 	before = snapshot()
 	invalid := *request.Result
