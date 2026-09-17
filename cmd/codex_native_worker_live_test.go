@@ -493,13 +493,13 @@ func TestCodexNativeFixtureCoordinatorBoundary(t *testing.T) {
 	}
 	liveSkillWrite(t, path, []byte(script))
 	r := codexNativeLiveReceipt{CoordinatorPath: path, CoordinatorSHA256: lifecycleDigest([]byte(script))}
-	allowed := []string{"python3 " + path + " inspect", "python3 " + path + " bind child-123", "aether command-guide build --platform codex", "git diff --check", "cat /installed/SKILL.md"}
+	allowed := []string{"python3 " + path + " inspect", "python3 " + path + " bind child-123", "aether command-guide build --platform codex", "git diff --check", "cat /installed/SKILL.md", `jq '{workers: .workers | length}' /tmp/manifest.json`, `rg --files "$CODEX_HOME/sessions"`}
 	for _, command := range allowed {
 		if !nativeParentCoordinationCommand(&r, []string{"/bin/zsh", "-lc", command}) {
 			t.Fatalf("safe fixture coordination refused: %s", command)
 		}
 	}
-	for _, command := range []string{"python3 " + path + " inspect extra", "python3 -c 'exec(open(\"" + path + "\").read())'", "git diff --output=/fixture/clamp.go", "cat x > clamp.go", "python3 " + path + " inspect; echo ok"} {
+	for _, command := range []string{"python3 " + path + " inspect extra", "python3 -c 'exec(open(\"" + path + "\").read())'", "git diff --output=/fixture/clamp.go", "cat x > clamp.go", "python3 " + path + " inspect; echo ok", `rg --files "$(touch clamp.go)"`, `jq '.' manifest.json > clamp.go`} {
 		if nativeParentCoordinationCommand(&r, []string{"/bin/zsh", "-lc", command}) {
 			t.Fatalf("unknown parent operation accepted: %s", command)
 		}
@@ -1199,6 +1199,11 @@ func nativeInspectParentEvents(r *codexNativeLiveReceipt, raw []byte) {
 func nativeParentCoordinationCommand(r *codexNativeLiveReceipt, command []string) bool {
 	if len(command) != 3 || (command[1] != "-lc" && command[1] != "-c") {
 		return false
+	}
+	// Observed host discovery spelling: a fixed read-only lookup, with no
+	// caller-provided expression or writable target substituted into the shell.
+	if command[2] == "rg --files \"$CODEX_HOME/sessions\"" {
+		return true
 	}
 	words, ok := nativeSimpleShellWords(command[2])
 	if !ok {
