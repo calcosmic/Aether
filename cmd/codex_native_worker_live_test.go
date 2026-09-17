@@ -96,6 +96,9 @@ type codexNativeLiveReceipt struct {
 	BaselineModuleSHA256       string                `json:"baseline_module_sha256,omitempty"`
 	LaunchMessageEncoding      string                `json:"launch_message_encoding,omitempty"`
 	PromptDeliveryVerification string                `json:"prompt_delivery_verification,omitempty"`
+	ValidationRevision         string                `json:"validation_revision,omitempty"`
+	ValidationOriginalReceipt  string                `json:"validation_original_receipt,omitempty"`
+	ValidationOriginalSHA256   string                `json:"validation_original_sha256,omitempty"`
 }
 
 func TestCodexNativeWorkerFreshHost(t *testing.T) {
@@ -375,6 +378,21 @@ def host_session():
         assert any(item[1] == expected for item in candidates)
         return expected
     return max(candidates)[1]
+def latest_native_terminal(session_root, child_id):
+    paths = list(session_root.rglob("*" + child_id + ".jsonl"))
+    assert len(paths) == 1, "Expected one bound child rollout"
+    found = None
+    for raw in paths[0].read_bytes().splitlines():
+        event = json.loads(raw); payload = event.get("payload", {}); item = payload.get("item", {})
+        if event.get("type") == "event_msg" and payload.get("type") == "item_completed" and payload.get("thread_id") == child_id and item.get("type") == "AgentMessage" and item.get("phase") == "final_answer":
+            found = (raw, item)
+    assert found, "No thread-attributed child terminal event yet"
+    raw, item = found
+    content = item["content"]
+    text = content if isinstance(content, str) else "".join(part.get("text", "") for part in content)
+    text = text.strip()
+    if text.startswith(chr(96)*3 + "json"): text = text[7:].removesuffix(chr(96)*3).strip()
+    return raw, item["id"], json.loads(text)
 if op == "manifest":
     assert not (coord / "manifest.json").exists(), "Reuse saved manifest; do not redispatch"
     result = runtime(["build", "1", "--plan-only"], "manifest")
@@ -399,18 +417,7 @@ elif op in ("record", "empty-result"):
     if op == "empty-result":
         value["result"] = {}
     else:
-        found = []
-        for path in sessions.rglob("*" + value["child_id"] + ".jsonl"):
-            for raw in path.read_bytes().splitlines():
-                event = json.loads(raw); payload = event.get("payload", {}); item = payload.get("item", {})
-                if event.get("type") == "event_msg" and payload.get("type") == "item_completed" and payload.get("thread_id") == value["child_id"] and item.get("type") == "AgentMessage" and item.get("phase") == "final_answer":
-                    content = item["content"]
-                    text = content if isinstance(content, str) else "".join(part.get("text", "") for part in content)
-                    text = text.strip()
-                    if text.startswith(chr(96)*3 + "json"): text = text[7:].removesuffix(chr(96)*3).strip()
-                    found.append((raw, item["id"], json.loads(text)))
-        assert found, "No thread-attributed child terminal event yet"
-        raw, event_id, result = found[-1]
+        raw, event_id, result = latest_native_terminal(sessions, value["child_id"])
         (coord / "child-terminal.jsonl").write_bytes(raw + b"\n")
         value.update(result=result, source_event_id=event_id, source_event_sha256=hashlib.sha256(raw).hexdigest())
     result = request("record", value)
@@ -436,6 +443,43 @@ func nativeFixtureCommand(t *testing.T, repo string, env []string, log, name str
 	liveSkillWrite(t, log, raw)
 	if err != nil {
 		t.Fatalf("fixture %s: %v (raw %s)", name, err, log)
+	}
+}
+
+func TestCodexNativeCoordinatorTerminalSelection(t *testing.T) {
+	root := t.TempDir()
+	scriptPath := filepath.Join(root, "coordinator.py")
+	script := strings.NewReplacer("__FIXTURE__", strconv.Quote("/fixture"), "__COORD__", strconv.Quote("/tmp/fixture-coordination"), "__EARLY__", "True").Replace(nativeFixtureCoordinator)
+	liveSkillWrite(t, scriptPath, []byte(script))
+	// Execute only the real coordinator's pure selection function, without
+	// running a host, runtime, or provider in this deterministic parser test.
+	probe := `import ast,json,pathlib,sys
+tree=ast.parse(pathlib.Path(sys.argv[1]).read_text())
+function=next(node for node in tree.body if isinstance(node,ast.FunctionDef) and node.name=="latest_native_terminal")
+exec(compile(ast.Module(body=[function],type_ignores=[]),sys.argv[1],"exec"))
+raw,event_id,result=latest_native_terminal(pathlib.Path(sys.argv[2]),"child")
+print(json.dumps({"event_id":event_id,"result":result}))
+`
+	for _, tc := range []struct {
+		name, first, last string
+		pass              bool
+	}{
+		{"waiting_then_valid", "Waiting for bound release.", `{"status":"completed"}`, true},
+		{"valid_then_malformed", `{"status":"completed"}`, "Malformed latest result", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			events := t.TempDir()
+			first := nativeEvidenceEvent(t, "item_completed", "child", map[string]any{"type": "AgentMessage", "id": "earlier", "phase": "final_answer", "content": []any{map[string]any{"text": tc.first}}})
+			last := nativeEvidenceEvent(t, "item_completed", "child", map[string]any{"type": "AgentMessage", "id": "latest", "phase": "final_answer", "content": []any{map[string]any{"text": tc.last}}})
+			liveSkillWrite(t, filepath.Join(events, "rollout-child.jsonl"), append(first, last...))
+			out, err := exec.Command("python3", "-c", probe, scriptPath, events).CombinedOutput()
+			if tc.pass && (err != nil || !strings.Contains(string(out), `"event_id": "latest"`)) {
+				t.Fatalf("latest corrected terminal unavailable: %v %s", err, out)
+			}
+			if !tc.pass && err == nil {
+				t.Fatalf("malformed latest reused older success: %s", out)
+			}
+		})
 	}
 }
 
@@ -782,6 +826,7 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 	r.ChildEditObserved, r.ChecksPassed = false, false
 	r.TerminalCorroborated, r.SourceEventCorroborated = false, false
 	attributed := false
+	metadataSeen := false
 	source := r.BaselineSource
 	edits, patchValid := 0, source != ""
 	scanner := bufio.NewScanner(bytes.NewReader(raw))
@@ -793,8 +838,11 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 			continue
 		}
 		if e.Type == "session_meta" {
-			attributed = e.Payload.ID == r.ChildID && e.Payload.ParentThreadID == r.BoundHostSessionID &&
-				e.Payload.AgentRole == "aether-builder" && nativeSameCwd(e.Payload.Cwd, r.FixtureRoot)
+			if !metadataSeen {
+				metadataSeen = true
+				attributed = e.Payload.ID == r.ChildID && e.Payload.ParentThreadID == r.BoundHostSessionID &&
+					e.Payload.AgentRole == "aether-builder" && nativeSameCwd(e.Payload.Cwd, r.FixtureRoot)
+			}
 			continue
 		}
 		p := e.Payload
@@ -916,6 +964,25 @@ func nativeSimpleShellWords(command string) ([]string, bool) {
 	var word strings.Builder
 	quote := rune(0)
 	for _, c := range strings.TrimSpace(command) {
+		if quote == '\'' {
+			if c == '\'' {
+				quote = 0
+			} else {
+				word.WriteRune(c)
+			}
+			continue
+		}
+		if quote == '"' {
+			if c == '"' {
+				quote = 0
+				continue
+			}
+			if strings.ContainsRune("$\x60\\\n\r", c) {
+				return nil, false
+			}
+			word.WriteRune(c)
+			continue
+		}
 		if strings.ContainsRune("$\x60\\\n\r;|&<>", c) {
 			return nil, false
 		}
@@ -1166,6 +1233,12 @@ func nativeParentCoordinationCommand(r *codexNativeLiveReceipt, command []string
 		return true
 	case "sed":
 		return len(words) == 4 && words[1] == "-n" && regexp.MustCompile(`^[0-9]+(?:,[0-9]+)?p$`).MatchString(words[2])
+	case "jq":
+		args := words[1:]
+		if len(args) > 0 && (args[0] == "-r" || args[0] == "-c" || args[0] == "-S") {
+			args = args[1:]
+		}
+		return len(args) == 2 && !strings.HasPrefix(args[0], "-") && !strings.HasPrefix(args[1], "-")
 	case "git":
 		if len(words) == 2 {
 			return words[1] == "status" || words[1] == "diff"

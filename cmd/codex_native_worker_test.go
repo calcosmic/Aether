@@ -574,4 +574,17 @@ func TestCodexNativeWorkerReceiptValidation(t *testing.T) {
 			t.Fatalf("missing/invalid %s still passed live validation", field)
 		}
 	}
+	if outPath := os.Getenv("AETHER_CODEX_NATIVE_VALIDATED_RECEIPT_OUT"); outPath != "" {
+		if !filepath.IsAbs(outPath) || filepath.Clean(outPath) == filepath.Clean(path) {
+			t.Fatal("validated receipt requires a new absolute output path")
+		}
+		if _, err := os.Stat(outPath); !os.IsNotExist(err) {
+			t.Fatal("validated receipt output already exists")
+		}
+		receipt.Outcome, receipt.Reason = "passed", ""
+		receipt.ValidationRevision = strings.TrimSpace(liveSkillCommandOutput(t, antSkillSourceRoot(t), "git", "rev-parse", "HEAD"))
+		receipt.ValidationOriginalReceipt, receipt.ValidationOriginalSHA256 = path, lifecycleDigest(raw)
+		receipt.Artifacts[path] = lifecycleDigest(raw)
+		liveSkillWriteJSON(t, outPath, receipt)
+	}
 }
