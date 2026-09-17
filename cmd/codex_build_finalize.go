@@ -1010,7 +1010,6 @@ func runCodexBuildFinalizeWithHooks(root string, phaseNum int, completion codexE
 		"attempt":                  attemptDisplayPath,
 		"result_collection":        resultCollectionDisplayPath,
 		"idempotent":               false,
-		"next":                     "aether continue",
 		"suggest_analyze_ran":      suggestAnalyzeRan,
 		"pending_suggestion_count": pendingSuggestionCount,
 	}
@@ -1030,7 +1029,8 @@ func runCodexBuildFinalizeWithHooks(root string, phaseNum int, completion codexE
 	// One closing answer for the screen and the wrapper (Phase 197 plan 04).
 	// This runs LAST because everything above it can still add the more
 	// specific command this run knows about.
-	closeLifecycleRun(result, updatedState, "build")
+	answer := closeLifecycleRun(result, updatedState, "build")
+	result["next"] = answer.Command
 	return result, updatedState, updatedPhase, dispatches, nil
 }
 
