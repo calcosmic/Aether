@@ -6,9 +6,9 @@ current_phase: 204.2
 current_phase_name: Codex Native Worker Lifecycle
 status: planning
 stopped_at: Phase 204.2 all nine execution reports delivered; gaps_found; plan current native qualification gaps
-last_updated: "2026-09-17T19:30:53.603112+00:00"
+last_updated: "2026-09-17T19:44:15.676946+00:00"
 last_activity: 2026-09-17
-last_activity_desc: Final regression accounting and implementation review delivered; ANT-04 through ANT-07 remain pending
+last_activity_desc: Narrow CalVault hotfix installed and verified; native-worker phase remains unqualified
 state_head: c6deadd6eecd7d209a700f30583c5705bc3f9050
 progress:
   total_phases: 13
@@ -772,6 +772,10 @@ Stopped at: Phase 204.2 execution/accounting complete; phase remains gaps_found
 Resume file: .planning/phases/204.2-codex-native-worker-lifecycle/204.2-VERIFICATION.md — use $gsd plan-phase 204.2 --gaps. All nine plan reports and the implementation review are delivered. Current production (unchanged by the final `cf51e9ac` test-only fix) is not qualified by retained `165db28c` live captures. The original Phase 205 owner checkpoint below remains unchanged.
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
+
+## CalVault Runtime Hotfix — 2026-09-17
+
+Installed and verified the narrow local 1.0.79 hotfix from `fd137a55b80a27596fe9b33a8211af13469f02cb` on branch `hotfix/calvault-semantic-dependencies-20260917`, based on the prior installed source `3be6765150092517cb72f7e53e725380b29f2f53`. This excludes the unverified native-worker changes. Only the executable was replaced; the hub and platform homes remain unchanged. All 149 focused normal and 149 race cases passed. The installed binary now passes the actual CalVault `plan --repair-artifact` and `build 1 --plan-only` commands, preserving the byte-identical colony state, accepted revision/candidate/approval bindings and vault Git content. One job is planned, no workers launched. Installation evidence and guarded rollback: [calvault-runtime-hotfix-20260917T193454Z](/Users/callumcowie/.aether-backups/calvault-runtime-hotfix-20260917T193454Z/README.md). This local hotfix remains version 1.0.79; use the commit and binary hash in its receipt to identify it. Phase 204.2 remains gaps_found.
 
 ## Phase 204.2 Execution — 2026-09-17
 
