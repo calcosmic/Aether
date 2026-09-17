@@ -30,6 +30,31 @@ func nativeAdmissionFixture(t *testing.T) (codexBuildManifest, codexNativeWorker
 	return manifest, codexNativeWorkerRequest{SchemaVersion: 1, Phase: 1, ExecutionBinding: *manifest.ExecutionBinding, WorkerName: d.Name, TaskID: normalizedDispatchTaskID(d), HostSessionID: "admission-host", Workspace: root, HostPermission: "workspace_write"}
 }
 
+func TestCodexNativeWorkerCapabilities(t *testing.T) {
+	for _, control := range []string{"supported", "read-only", "other-workspace", "governed-nesting"} {
+		t.Run(control, func(t *testing.T) {
+			_, request := nativeAdmissionFixture(t)
+			switch control {
+			case "read-only":
+				request.HostPermission = "repository_read_only"
+			case "other-workspace":
+				request.Workspace = filepath.Dir(request.Workspace)
+			case "governed-nesting":
+				request.RequireGovernedNesting = true
+			}
+			before := nativeJournalBytes(t)
+			response, err := runCodexNativeWorker("reserve", nativeRequestPath(t, request))
+			if control == "supported" {
+				if err != nil || !response.LaunchAllowed {
+					t.Fatalf("observed shared mode refused: %+v %v", response, err)
+				}
+			} else if err == nil || response.LaunchAllowed || !bytes.Equal(before, nativeJournalBytes(t)) {
+				t.Fatalf("unsupported control changed state or admitted a launch: %+v %v", response, err)
+			}
+		})
+	}
+}
+
 func nativeRequestPath(t *testing.T, request codexNativeWorkerRequest) string {
 	t.Helper()
 	raw, err := json.Marshal(request)
