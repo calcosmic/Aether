@@ -1,0 +1,830 @@
+{
+  "schema_version": "aether-native-regression/v1",
+  "recorded_at": "2026-09-17T19:05:25.941479+00:00",
+  "status": "accounting_complete_with_required_qualification_gaps_and_new_failures",
+  "qualification_passed": false,
+  "qualification_sha256": "sha256:41c1ea7b1b4f008ef3c8e024a293be8f142a2ae6ea5ba70777366610ea009be4",
+  "production_digest": "sha256:641942bc26bc7cc9022078c8247f914521e3c6d37bbe06bc76c395bf309b0a8f",
+  "harness_sha256": "sha256:bafaed8881fa4853d20e030348bc26a56f6f65762ca92b7ace03d96572ca367c",
+  "test_corpus_digest": "sha256:fbf5ae798c526ed3d91ef22a97aa4a62af7375901ff8c3d6754c58279bf022db",
+  "regression_source": "f9e32ca000c88b9b723393e4dbf2f2b5801593a8",
+  "live_source": "165db28c767864a619a6d883c7a2d0db9593741a",
+  "source_snapshot": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-source-snapshot.json",
+    "sha256": "sha256:baed5fb12da3a5bee8fdf0eb6089cf70ca6edaaebf5c232741bfbbbeb6696e40"
+  },
+  "discovery_provenance": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-candidate/identity.json",
+    "sha256": "sha256:bafb228bc3d8103d6118c36eaae1b695156cba0964d96e85d2de9fac4fd88731"
+  },
+  "corrected_disposable_build": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/corrected-build/receipt.json",
+    "sha256": "sha256:d9da583e56cc21e910a0eb2361a4bbfed2db1fe437cd94b9753a9c86df01b763"
+  },
+  "historical_baseline_verification": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/baseline-verification.json",
+    "sha256": "sha256:4c8a39314e471b4556058d284fa95ea53b464feedd4b766360add0635bf2f7ee"
+  },
+  "full_suite_scheduling": "Two same-checkout normal runs exposed defects; their races were withheld. After the reviewed CI-only correction, root authorized one final full normal and one final full race concurrently in standalone repositories with independent gitdirs/refs/indexes and distinct TMPDIR/npm caches. All earlier logs remain unchanged.",
+  "required_new_failure": {
+    "test": "github.com/calcosmic/Aether/cmd/TestCodexNativePhaseEvidence",
+    "reason": "Original final165 actual matrix retains ten incomplete cases and one observed refusal; corrected production no longer matches that captured source. No live qualification is claimed for the repaired candidate.",
+    "historical_exception": false,
+    "phase_qualification": "gaps_found"
+  },
+  "superseded_first_normal": {
+    "invocation": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/normal-invocation.json",
+      "sha256": "sha256:4a9cef7d893fdd5f72dd6ab35143c309ca6edca52fe2490a5835ab99bfe25bd9"
+    },
+    "original_accounting": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/normal-accounting.json",
+      "sha256": "sha256:5edda1e2d2fba9904a2c4dd90d54482c7ecb9ab029eb79a74dfd184d1c3569a4"
+    },
+    "corrected_accountant_derivation": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/normal-accountant-v2-accounting.json",
+      "sha256": "sha256:442c3f424da618c225e2452878b24fd04b03c3b4966a7862b0c932b66220a030"
+    },
+    "disposition": "New regressions and two missing JSON terminal actions; no race run on that candidate; no qualification credit"
+  },
+  "runs": {
+    "focused_normal": {
+      "argv": [
+        "go",
+        "test",
+        "./cmd",
+        "-run",
+        "^(TestCodexNative|TestPauseResume199|TestPauseWrapperContract199|TestResumeWrapperContract199|Example_pauseResume199Contract$|TestResumeShows|TestResumeView|TestResumeDetail|TestDriftNote|TestColonyPrime|TestClarifiedIntent|TestDiscuss|TestDetectDecisionConflicts|TestPendingDecision|TestDecisionAnswer|TestRecordDecisionAnswer|TestGenericPendingDecisionResolver|TestFlag|TestSemanticDependencies|TestCrossPhaseDependencies|TestRepairArtifact|TestPlanRepairArtifact|TestAcceptedSemanticDependencies|TestCompletionPacketSchemaMatchesStructs$|TestAuditCatalogGolden$|TestCommandGuide|TestCodexLifecycle|TestCodexAntSkill(Inventory|InstallTracer|GuidesPreserveOtherPlatforms|GuideSupport)|TestCodexGenerated|TestSyncCodex|TestBuildManifestCarriesContext|TestBuildWorkerBrief|TestComposeBuildManifestBrief|TestStageBuildAttemptCompletion|TestBuildAttempt|TestNativePartialCredit|TestPartialBuildDoesNotShow|TestBuildStartCallers200$|TestStartupLifecycleCardsComeFromTheResolver$|TestInternalBuildAdapterStagesCompletionWhenAllWorkersAreTerminal$|TestRepair(BadManifest|DirtyWorktree)_DestructiveNeedsConfirmation$|TestBriefPathReferencedAcrossAllFourSurfaces$|TestBuildCommandYAMLCoherentJobsParity$|TestLifecycleFlatMirrorsMatchCanonical$|TestLifecycleGuidesDocumentApprovedTempCompletionContract$|TestLifecycleOrchestratorsMentionReadCacheLoopHandling$|TestNextActionNeverHardcoded$|TestNoRegisteredSubcommandIsUnreferenced$|TestPlanAndColonizeWrappersAreByteIdentical$|TestPlanWrapperCardsParity$|TestPlanWrapperStageSkeleton$|TestTerritoryWrapperAuthority199$|TestNativeReachability|TestBuildFinalizeNextAdviceMatchesResolvedAnswer$|TestExternalGroupedPartialPersistsExactTaskState$)",
+        "-count=1",
+        "-timeout",
+        "90m",
+        "-json"
+      ],
+      "exit_code": 1,
+      "discovery": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-candidate/discovery-focused.json",
+        "sha256": "sha256:1438f457e2ac23756b050cbea11a7a8540132f56692728bf1f94399f45abfb5d"
+      },
+      "raw_json": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-focused-normal.jsonl",
+        "sha256": "sha256:5434f6010619ee8feb724fa33e3c05b77a2603273a972f13101339a85055d44e"
+      },
+      "inherited_failures": {},
+      "unresolved_failures": {},
+      "invocation": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-focused-normal-invocation.json",
+        "sha256": "sha256:61e44720e1dfcb93b0ab158f57d0f1065c0d24f7e9a6adf761d9c48167525ab3"
+      },
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-focused-normal.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "accounting": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-focused-normal-accounting.json",
+        "sha256": "sha256:1b1fd863f9d07477167fa52734234f8f48ad599d4d78bc7de2f528901464422e"
+      },
+      "counts": {
+        "discovered_packages": 1,
+        "discovered_top_level": 372,
+        "executed_top_level": 372,
+        "executed_cases": 1071,
+        "outcomes": {
+          "pass": 1069,
+          "fail": 1,
+          "skip": 1
+        },
+        "diagnostic_echo_events_ignored": 0
+      },
+      "explicit_skips": [
+        "github.com/calcosmic/Aether/cmd/TestCodexNativeWorkerFreshHost"
+      ],
+      "structural_accounting_complete": true,
+      "required_native_gate": "failed_current_mandatory_proof_gap",
+      "qualification_passed": false
+    },
+    "focused_race": {
+      "argv": [
+        "go",
+        "test",
+        "./cmd",
+        "-race",
+        "-run",
+        "^(TestCodexNative|TestPauseResume199|TestPauseWrapperContract199|TestResumeWrapperContract199|Example_pauseResume199Contract$|TestResumeShows|TestResumeView|TestResumeDetail|TestDriftNote|TestColonyPrime|TestClarifiedIntent|TestDiscuss|TestDetectDecisionConflicts|TestPendingDecision|TestDecisionAnswer|TestRecordDecisionAnswer|TestGenericPendingDecisionResolver|TestFlag|TestSemanticDependencies|TestCrossPhaseDependencies|TestRepairArtifact|TestPlanRepairArtifact|TestAcceptedSemanticDependencies|TestCompletionPacketSchemaMatchesStructs$|TestAuditCatalogGolden$|TestCommandGuide|TestCodexLifecycle|TestCodexAntSkill(Inventory|InstallTracer|GuidesPreserveOtherPlatforms|GuideSupport)|TestCodexGenerated|TestSyncCodex|TestBuildManifestCarriesContext|TestBuildWorkerBrief|TestComposeBuildManifestBrief|TestStageBuildAttemptCompletion|TestBuildAttempt|TestNativePartialCredit|TestPartialBuildDoesNotShow|TestBuildStartCallers200$|TestStartupLifecycleCardsComeFromTheResolver$|TestInternalBuildAdapterStagesCompletionWhenAllWorkersAreTerminal$|TestRepair(BadManifest|DirtyWorktree)_DestructiveNeedsConfirmation$|TestBriefPathReferencedAcrossAllFourSurfaces$|TestBuildCommandYAMLCoherentJobsParity$|TestLifecycleFlatMirrorsMatchCanonical$|TestLifecycleGuidesDocumentApprovedTempCompletionContract$|TestLifecycleOrchestratorsMentionReadCacheLoopHandling$|TestNextActionNeverHardcoded$|TestNoRegisteredSubcommandIsUnreferenced$|TestPlanAndColonizeWrappersAreByteIdentical$|TestPlanWrapperCardsParity$|TestPlanWrapperStageSkeleton$|TestTerritoryWrapperAuthority199$|TestNativeReachability|TestBuildFinalizeNextAdviceMatchesResolvedAnswer$|TestExternalGroupedPartialPersistsExactTaskState$)",
+        "-count=1",
+        "-timeout",
+        "90m",
+        "-json"
+      ],
+      "exit_code": 1,
+      "discovery": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-candidate/discovery-focused.json",
+        "sha256": "sha256:1438f457e2ac23756b050cbea11a7a8540132f56692728bf1f94399f45abfb5d"
+      },
+      "raw_json": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-focused-race.jsonl",
+        "sha256": "sha256:9e827d6230e9d59f511a80ea9c2db59b3f297221c8ee7d436f1aafa05418a779"
+      },
+      "inherited_failures": {},
+      "unresolved_failures": {},
+      "invocation": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-focused-race-invocation.json",
+        "sha256": "sha256:8e2ce7d33ed9f11f9ca88e8f2559d4c925e5ba25600c8f68c110bacf57d9a3c7"
+      },
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-focused-race.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "accounting": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-focused-race-accounting.json",
+        "sha256": "sha256:de9e5f2937bc19ce5be5fa9e7d1ea0d2ee5d43e571f2d193be3a5dba287c8be3"
+      },
+      "counts": {
+        "discovered_packages": 1,
+        "discovered_top_level": 372,
+        "executed_top_level": 372,
+        "executed_cases": 1071,
+        "outcomes": {
+          "pass": 1069,
+          "fail": 1,
+          "skip": 1
+        },
+        "diagnostic_echo_events_ignored": 0
+      },
+      "explicit_skips": [
+        "github.com/calcosmic/Aether/cmd/TestCodexNativeWorkerFreshHost"
+      ],
+      "structural_accounting_complete": true,
+      "required_native_gate": "failed_current_mandatory_proof_gap",
+      "qualification_passed": false
+    },
+    "normal": {
+      "argv": [
+        "go",
+        "test",
+        "./...",
+        "-count=1",
+        "-timeout",
+        "90m",
+        "-json"
+      ],
+      "exit_code": 1,
+      "discovery": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-candidate/discovery-all.json",
+        "sha256": "sha256:57adf731d93ea01094876d8270ac3c3bfb780ad771075b951be129a2e1a653d4"
+      },
+      "raw_json": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal.jsonl",
+        "sha256": "sha256:c31106fe5d54a5d099c3333e4e2a126c653f765379d923189d4f8d6e863455c9"
+      },
+      "inherited_failures": {
+        "github.com/calcosmic/Aether/cmd/TestBuildStartLegacyHelpersRetired200": {
+          "diagnostic_sha256": "sha256:72ae1dc6c6e1220e47629a5a214c7ea96749b8c6896357efd36db9773349e7ff",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestBuildStartLegacyHelpersRetired200.txt",
+            "sha256": "sha256:44cf7ef69a2d2611fbbb01a3d0fc1898001580bbf815bb832e90624ab1ab0d16"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-historical-comparisons/000.json",
+            "sha256": "sha256:bd008b155e9b4674a72a34b3b9b58e1514f45bd0adf9b8e8cf3a0508aebb64c5"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestCodexBuildPlanOnlySpawnBudgetSeparatesCasteBudgetFromWorkerCount": {
+          "diagnostic_sha256": "sha256:5968310a6c7e996cc689bca7733ec8b3d5e263660ff1e91420f65c21136b4f14",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestCodexBuildPlanOnlySpawnBudgetSeparatesCasteBudgetFromWorkerCount.txt",
+            "sha256": "sha256:34e4f546fcaf731b845543936edc0a4695a5a1a311f3f1faaeef31c82510535b"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-historical-comparisons/001.json",
+            "sha256": "sha256:61b30a8685fe7f267977efb5cdb1ed28a429d3f0042e1c6eee84f0291fc0e67f"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestCurrentVocabulary199": {
+          "diagnostic_sha256": "sha256:c71d39ff6af17ba129c3388e3873c685b100c610d50cdc295a99173b49914725",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestCurrentVocabulary199.txt",
+            "sha256": "sha256:153c0c0a5c8513359108fa03004d7657aed58773ad898a054e9688ecc8c3cc32"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-historical-comparisons/002.json",
+            "sha256": "sha256:f1f844d200abc44584487cf95ef0a7173b33c8e8554ebc916b84027541596124"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestCurrentVocabulary199/tracked-occurrences-are-exhaustively-classified": {
+          "diagnostic_sha256": "sha256:edf65d90360b5e0d322cfc2730d9f872f5abd13f7e3eb0dd6873c859e6549818",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestCurrentVocabulary199.txt",
+            "sha256": "sha256:153c0c0a5c8513359108fa03004d7657aed58773ad898a054e9688ecc8c3cc32"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-historical-comparisons/003.json",
+            "sha256": "sha256:a4cfd6371c2eb440cb9d5b38e9bc23f3d5922fb27917f3ea8404806cff684527"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestFailedCheckSendsExactlyOneBuilderFixAttempt": {
+          "diagnostic_sha256": "sha256:b2a4a6cf4b6187704fbb0359c177f8686133acf61ba86c6f8298174da950bac7",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestFailedCheckSendsExactlyOneBuilderFixAttempt.txt",
+            "sha256": "sha256:72f80c680b11125574d7ed02d81e2cd071889429a4bfbc6424a716d1942308b3"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-historical-comparisons/004.json",
+            "sha256": "sha256:a443b4d47376aeaa51a5e1d0b1c35ba516a5de3b7a6d0e82b52f14f6cdda37e7"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestFixAttemptIsCountedSeparately": {
+          "diagnostic_sha256": "sha256:5571c38dad0fbcb089c294fa948385680acb4a34504f567712bd5e0d62eb5437",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestFixAttemptIsCountedSeparately.txt",
+            "sha256": "sha256:1c11491677a11cf6b08504b0e72cfa76d8d1cf2bf103987ff78c287c62ca1053"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-historical-comparisons/005.json",
+            "sha256": "sha256:2d2f15dc283b7df183042fa464559d6a2a9256c6212931e9800b26d7d665b758"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestFixAttemptNeverOverwritesTheFirstResult": {
+          "diagnostic_sha256": "sha256:c8f6645af85cfe48dd9892a08118e99dbb0f94993c269364b86590be4461893d",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestFixAttemptNeverOverwritesTheFirstResult.txt",
+            "sha256": "sha256:ec27e59a9322e9e3ed72ee0a1b2ee4f588e811ade06daf8b318d1de0b3bf23cc"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-historical-comparisons/006.json",
+            "sha256": "sha256:c194d9167985632fed434323938efa5f33c27341688a907bbf907d93dad42e94"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestGoSourceHintsMatchCobraContracts": {
+          "diagnostic_sha256": "sha256:0b1d4059b8d847c6095053dca3a0a10baba919a427aad4ec60b5fc2e03cd8b56",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestGoSourceHintsMatchCobraContracts.txt",
+            "sha256": "sha256:29d70d45289f7d0567dabb884428f907438e77c342efd4518edd6fd9d465a5d9"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-historical-comparisons/007.json",
+            "sha256": "sha256:4e9f202a5248b6decb1c528b20ab013c785c0588cea5974051aac52f5bf15f0e"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestGoldenBuildVisualOutput": {
+          "diagnostic_sha256": "sha256:6c81f739be2e24115504ebf00818a1c103daaebeedf032ae29c7ced50416f742",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestGoldenBuildVisualOutput.txt",
+            "sha256": "sha256:1913c7c299207c74c2b3ca7f3019b91094baa3747c75cc293a65fdb2d9256c87"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-historical-comparisons/008.json",
+            "sha256": "sha256:44aa97375614df01ad0b4198462fea2d86a17d9b35ec8b23aaf608e31284c8e8"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestGoldenContinueVisualOutput": {
+          "diagnostic_sha256": "sha256:ed818e97294611020f092526dd733ae50d8e5829f29d995cca39872e1e2b0958",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestGoldenContinueVisualOutput.txt",
+            "sha256": "sha256:29b1e046201663f944d59bc6078680d140d7a211d9f2ddb5343fda81e060c92d"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-historical-comparisons/009.json",
+            "sha256": "sha256:a3ed615d3d5a14dde5bba85e54a62058e37bf643b11870f6bafa60d1e40d7b25"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestHumanFacingOutputGoesThroughWriteVisualOutput": {
+          "diagnostic_sha256": "sha256:392464338a2f3634019d7c108e4986a96703fc69f5bab32359cdda36131d003c",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestHumanFacingOutputGoesThroughWriteVisualOutput.txt",
+            "sha256": "sha256:93da9066c351f17e2daeae437d9778b42876946f1e4dcbeca479ba72636564a5"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-historical-comparisons/010.json",
+            "sha256": "sha256:9f6000b32dd31b40a4ab650a396381119eef5f02bd289ab3af4d9dd29ade1caf"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestNoSecondAutomaticFixAttempt": {
+          "diagnostic_sha256": "sha256:a53c118143269274af7384c67afd0d34600e8d7b495b3ee68399f42458d25801",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestNoSecondAutomaticFixAttempt.txt",
+            "sha256": "sha256:04a418846bd43443392cfd0f39a717f16812cc88a976997ad5eafd89fe366fdd"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-historical-comparisons/011.json",
+            "sha256": "sha256:c835f3aa467f84c19782c1f20c5f08a5da499c8030af600b5dd7a069e18fc991"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestPhase199GateReceipt": {
+          "diagnostic_sha256": "sha256:3d83f273b7a0c88a79cbc23cdb3459ac3687890fdfb06a9154a5ba0304a7d2f5",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestPhase199GateReceipt.txt",
+            "sha256": "sha256:d595a0001dce102db9d8631c8857cf92aab58523ffae60411278be5b3cf9c299"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-historical-comparisons/012.json",
+            "sha256": "sha256:ebc2be8ff6d3e64c6fcee6eb959dec3f8345817c8607f734e264d170142cc3d9"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestPlanningAdversarial200": {
+          "diagnostic_sha256": "sha256:51c307cedfde8451905856da763e859a13f6317786dac72fc7f1653f42093166",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestPlanningAdversarial200.txt",
+            "sha256": "sha256:02b578c1ef3faa16e2729cca2c0f9dd13d5f23d62296008c78a510be68f03a42"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-historical-comparisons/013.json",
+            "sha256": "sha256:737f74bb653411a5674ba734f653f5b5433e1271a1d2fe3736b5e0e0fbfaf571"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestPlanningAdversarial200/integrated_public_reads_preserve_protected_repository_inputs": {
+          "diagnostic_sha256": "sha256:2ecdbe7045abf9e1042ead3e8797e425bd3f7088b96576ceaa6401cebf83c164",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestPlanningAdversarial200.txt",
+            "sha256": "sha256:02b578c1ef3faa16e2729cca2c0f9dd13d5f23d62296008c78a510be68f03a42"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-historical-comparisons/014.json",
+            "sha256": "sha256:3c868388365c9790c5999de83af7eb42497157ad7994a1a74f856ca846109b84"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestPlanningPublicPaths200": {
+          "diagnostic_sha256": "sha256:fd7af88b61a85f8d01c3760ec3090c963c93bdaaec259a18bfd942e6b0a0ff8e",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestPlanningPublicPaths200.txt",
+            "sha256": "sha256:ca6377db1c6ca082a6104a2aa5c4f7438e7e7ff34625a905172b20def1beb9bb"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-historical-comparisons/015.json",
+            "sha256": "sha256:47ab36afc85eed0a8ad5c96d21510a14699f8c010e3ae32ff1035546125523b3"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestPlanningPublicPaths200/Phase_199_focused_gates_remain_green": {
+          "diagnostic_sha256": "sha256:ed79d6e64603d7c0db3ace4b61ecb8f94bd86ba88c4aceacfd16d84d97aa59b5",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestPlanningPublicPaths200.txt",
+            "sha256": "sha256:ca6377db1c6ca082a6104a2aa5c4f7438e7e7ff34625a905172b20def1beb9bb"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-historical-comparisons/016.json",
+            "sha256": "sha256:84b6b0ab0d3ed68ab0f513b6c337705f9ff22af5d9cbf642b644f0295194e383"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestResolveTestCommand_GoProject": {
+          "diagnostic_sha256": "sha256:c52c55036f39d3b47ce8b013c57e53913f37b8855cc70711dea64bd434fa5c23",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestResolveTestCommand_GoProject.txt",
+            "sha256": "sha256:c52c55036f39d3b47ce8b013c57e53913f37b8855cc70711dea64bd434fa5c23"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-historical-comparisons/017.json",
+            "sha256": "sha256:d46c641b227a46776b769a3bdaac36ee3e34f1659f84fd914470ba50a28c784c"
+          }
+        }
+      },
+      "unresolved_failures": {
+        "github.com/calcosmic/Aether/cmd/TestCLIInterruptedBuildResumesThroughForceRedispatch": {
+          "diagnostic_sha256": "sha256:41d5a88f05f8df5bb5d03d2fd2d1bb9d366aeb157067a56ea203e4a911c97647",
+          "diagnostic_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-diagnostics/001.txt",
+          "with_children_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-diagnostics/001-with-children.txt"
+        },
+        "github.com/calcosmic/Aether/cmd/TestDisposedBranchesAreGoneFromTheRepository": {
+          "diagnostic_sha256": "sha256:fda5e11294c4daebe5a45be2ac664c9300b271ecaa6f6ce3a545caffb8cc3410",
+          "diagnostic_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-diagnostics/006.txt",
+          "with_children_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-diagnostics/006-with-children.txt"
+        },
+        "github.com/calcosmic/Aether/cmd/TestPackedNPMReleaseCandidateContract": {
+          "diagnostic_sha256": "sha256:178e7fc27787bd2e1b36be7b0bcccf9c5e4dc86254fae155e353b065c17c559d",
+          "diagnostic_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-diagnostics/015.txt",
+          "with_children_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-diagnostics/015-with-children.txt"
+        },
+        "github.com/calcosmic/Aether/cmd/TestPackedNPMReleaseCandidateContract/checksum_failure_preserves_the_previous_binary": {
+          "diagnostic_sha256": "sha256:f208a08eb0db81b22638c9a97d780979e5b338c54f97a9fcca798f20ff61be59",
+          "diagnostic_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-diagnostics/016.txt",
+          "with_children_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-diagnostics/016-with-children.txt"
+        },
+        "github.com/calcosmic/Aether/cmd/TestPackedNPMReleaseCandidateContract/packed_candidate_migrates_and_rolls_back_an_n-1_colony_without_local_data_loss": {
+          "diagnostic_sha256": "sha256:d678e8de66bc66696035bed907296e14d80dec39cf761e53954e091df6b5d237",
+          "diagnostic_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-diagnostics/017.txt",
+          "with_children_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-diagnostics/017-with-children.txt"
+        },
+        "github.com/calcosmic/Aether/cmd/TestPackedNPMReleaseCandidateContract/packed_npm_installs_the_matching_staged_archive": {
+          "diagnostic_sha256": "sha256:a74ecfeece90cd4b129a072d1a0d16fdad526aebaf4bf13150deb2359c36aa8d",
+          "diagnostic_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-diagnostics/018.txt",
+          "with_children_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-diagnostics/018-with-children.txt"
+        },
+        "github.com/calcosmic/Aether/cmd/TestPackedNPMReleaseCandidateContract/retry_recovers_the_state_left_by_interrupted_activation": {
+          "diagnostic_sha256": "sha256:e0b39704a0f785b129db7a4802e94b2ac0eb931840600f48e8d2ccca36648256",
+          "diagnostic_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-diagnostics/019.txt",
+          "with_children_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-diagnostics/019-with-children.txt"
+        },
+        "github.com/calcosmic/Aether/cmd/TestPackedNPMReleaseCandidateContract/wrong_version_archive_preserves_the_previous_binary": {
+          "diagnostic_sha256": "sha256:d8d51bdcbc7ff39dc3e3a3c3843cf01ffffad9618b48fc0f7b04a1413d47704b",
+          "diagnostic_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-diagnostics/020.txt",
+          "with_children_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-diagnostics/020-with-children.txt"
+        }
+      },
+      "invocation": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-invocation.json",
+        "sha256": "sha256:3d0b37f32ec1aed38e5db89095b50f9d4e6673a8a450f3bca07e5c303c60e1af"
+      },
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "accounting": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-normal-accounting.json",
+        "sha256": "sha256:53676b9d41e3d933ca357400f496fede5c507ee222496abbd392987a01a87c0b"
+      },
+      "counts": {
+        "discovered_packages": 21,
+        "discovered_top_level": 6797,
+        "executed_top_level": 6797,
+        "executed_cases": 12676,
+        "outcomes": {
+          "pass": 12632,
+          "skip": 17,
+          "fail": 27
+        },
+        "diagnostic_echo_events_ignored": 12097
+      },
+      "explicit_skips": [
+        "github.com/calcosmic/Aether/cmd/TestBothBuildLanesAttachResultEvidenceToTheExactAttempt/an_evidence_write_failure_never_fails_an_otherwise-complete_build",
+        "github.com/calcosmic/Aether/cmd/TestClassicContractPhase201IntentionallyFailingProof",
+        "github.com/calcosmic/Aether/cmd/TestCodexAntSkillFreshHost",
+        "github.com/calcosmic/Aether/cmd/TestCodexAntSkillFreshHostUpgrade",
+        "github.com/calcosmic/Aether/cmd/TestCodexNativeWorkerFreshHost",
+        "github.com/calcosmic/Aether/cmd/TestContextCapsuleBlocksDispatchWhenEmpty",
+        "github.com/calcosmic/Aether/cmd/TestDataFlowColonyPrimeWiring",
+        "github.com/calcosmic/Aether/cmd/TestDataFlowDeadEnds",
+        "github.com/calcosmic/Aether/cmd/TestDataFlowReportAccuracy",
+        "github.com/calcosmic/Aether/cmd/TestDataFlowSnapshot",
+        "github.com/calcosmic/Aether/cmd/TestDispatchedCastesDocumented",
+        "github.com/calcosmic/Aether/cmd/TestGlobalQueenWisdomHygiene",
+        "github.com/calcosmic/Aether/cmd/TestRegressionSnapshotUpdate",
+        "github.com/calcosmic/Aether/cmd/TestSeededBankUpdate",
+        "github.com/calcosmic/Aether/cmd/TestStagedGoReleaserArtifactsInstallThroughPackedNPM",
+        "github.com/calcosmic/Aether/cmd/TestVisualOutputTracesToState",
+        "github.com/calcosmic/Aether/pkg/colony/TestRealColonyStateDataIntegrity"
+      ],
+      "structural_accounting_complete": true,
+      "required_native_gate": "failed_current_mandatory_proof_gap",
+      "qualification_passed": false
+    },
+    "race": {
+      "argv": [
+        "go",
+        "test",
+        "./...",
+        "-race",
+        "-count=1",
+        "-timeout",
+        "90m",
+        "-json"
+      ],
+      "exit_code": 1,
+      "discovery": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-candidate/discovery-all.json",
+        "sha256": "sha256:57adf731d93ea01094876d8270ac3c3bfb780ad771075b951be129a2e1a653d4"
+      },
+      "raw_json": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race.jsonl",
+        "sha256": "sha256:cf7c18e08576020c635a85209afc3ef446fdc28fa83cf5b30602425653735692"
+      },
+      "inherited_failures": {
+        "github.com/calcosmic/Aether/cmd/TestBuildStartLegacyHelpersRetired200": {
+          "diagnostic_sha256": "sha256:9f763d19bbac87b15cfed32500918204c74c4301a2d7cf30abc5fac08b21991c",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestBuildStartLegacyHelpersRetired200.txt",
+            "sha256": "sha256:44cf7ef69a2d2611fbbb01a3d0fc1898001580bbf815bb832e90624ab1ab0d16"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-historical-comparisons/000.json",
+            "sha256": "sha256:261caf958b188c3208893426793389cc9a3ff0051c9d42d50200fbf4e534af87"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestCodexBuildPlanOnlySpawnBudgetSeparatesCasteBudgetFromWorkerCount": {
+          "diagnostic_sha256": "sha256:f2b2c5d1b5326a5ef6d11ddaca75e6130aa21cc131ecc388eee9f6ee02391aef",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestCodexBuildPlanOnlySpawnBudgetSeparatesCasteBudgetFromWorkerCount.txt",
+            "sha256": "sha256:34e4f546fcaf731b845543936edc0a4695a5a1a311f3f1faaeef31c82510535b"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-historical-comparisons/001.json",
+            "sha256": "sha256:2ddde20fb7233571bc92f95fa3d417c56b8300119fb975053ba18e188be4711c"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestCurrentVocabulary199": {
+          "diagnostic_sha256": "sha256:8a578fbe1bda1deb8dc7ddcd6d8bf3c324087103fdc1685d7423d36a7e202847",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestCurrentVocabulary199.txt",
+            "sha256": "sha256:153c0c0a5c8513359108fa03004d7657aed58773ad898a054e9688ecc8c3cc32"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-historical-comparisons/002.json",
+            "sha256": "sha256:4e611c31e353faec95e9fa26a5eeb74a8d1bdcca864238a7b6d4d2c98e8e0431"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestCurrentVocabulary199/tracked-occurrences-are-exhaustively-classified": {
+          "diagnostic_sha256": "sha256:1b5a53524133f1cfb65ef4dd600f46d8a8a3559fd99a7878df9d30275919ce13",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestCurrentVocabulary199.txt",
+            "sha256": "sha256:153c0c0a5c8513359108fa03004d7657aed58773ad898a054e9688ecc8c3cc32"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-historical-comparisons/003.json",
+            "sha256": "sha256:d73481d93bdcc4040769de1b8e8359dfb80a36b426cd6807f1759d8b14fc7332"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestFailedCheckSendsExactlyOneBuilderFixAttempt": {
+          "diagnostic_sha256": "sha256:ee0a8cb8af8a37360503766ab5e612160cce5056ec9e8baee2a16f1dadb215e0",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestFailedCheckSendsExactlyOneBuilderFixAttempt.txt",
+            "sha256": "sha256:72f80c680b11125574d7ed02d81e2cd071889429a4bfbc6424a716d1942308b3"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-historical-comparisons/004.json",
+            "sha256": "sha256:340557b3734ccb941b179bf4bdbe6ff37c22bf0421d1462b88bc5136e12da827"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestFixAttemptIsCountedSeparately": {
+          "diagnostic_sha256": "sha256:e940557063c525918f63af5bc000a71c745b65317414a08eca3c96dbc2062b52",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestFixAttemptIsCountedSeparately.txt",
+            "sha256": "sha256:1c11491677a11cf6b08504b0e72cfa76d8d1cf2bf103987ff78c287c62ca1053"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-historical-comparisons/005.json",
+            "sha256": "sha256:9c6ff76c15360dfaa0a57de8c6d5d10421923e3acd61e2e9912bb7baf481311b"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestFixAttemptNeverOverwritesTheFirstResult": {
+          "diagnostic_sha256": "sha256:85c609e51188faa3a3390a4df7ee4ee21a2878466f22e088fd22c654549f34c5",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestFixAttemptNeverOverwritesTheFirstResult.txt",
+            "sha256": "sha256:ec27e59a9322e9e3ed72ee0a1b2ee4f588e811ade06daf8b318d1de0b3bf23cc"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-historical-comparisons/006.json",
+            "sha256": "sha256:2a2aa6a424d641ecc6cc04e95d24f583073e16099c4b473be58fe449b13ab4ee"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestGoSourceHintsMatchCobraContracts": {
+          "diagnostic_sha256": "sha256:c1cff187ef51f19e27958c751c614b2136f8a93cf1879604ac70d47988f9001e",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestGoSourceHintsMatchCobraContracts.txt",
+            "sha256": "sha256:29d70d45289f7d0567dabb884428f907438e77c342efd4518edd6fd9d465a5d9"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-historical-comparisons/007.json",
+            "sha256": "sha256:baffb400c31d52640f2816de9e8eca7cbc40b6f388bd0450963689ff9cc001f6"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestGoldenBuildVisualOutput": {
+          "diagnostic_sha256": "sha256:6cf08307569f1cd0540d138a05eb923ab3bf18e6ee43653ad99baebea04a5255",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestGoldenBuildVisualOutput.txt",
+            "sha256": "sha256:1913c7c299207c74c2b3ca7f3019b91094baa3747c75cc293a65fdb2d9256c87"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-historical-comparisons/008.json",
+            "sha256": "sha256:2487b580333d5a246b1eb8fa5a7546fd1e1598534a1c0ebd5670dc647a12b948"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestGoldenContinueVisualOutput": {
+          "diagnostic_sha256": "sha256:b7ad0ffff10017a920bf4fbf7304c5e4d85d737da0a196ae0e7f32f3b3fdf95a",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestGoldenContinueVisualOutput.txt",
+            "sha256": "sha256:29b1e046201663f944d59bc6078680d140d7a211d9f2ddb5343fda81e060c92d"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-historical-comparisons/009.json",
+            "sha256": "sha256:a73aa7b3f1e9ed9ab9ee47fdf408ba212e1c9cf22929f9b38974c14252eb6313"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestHumanFacingOutputGoesThroughWriteVisualOutput": {
+          "diagnostic_sha256": "sha256:0cb1bfd9ac02aeca254447a9474e93a2be290a7838bd95a9d038e54bc386ca56",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestHumanFacingOutputGoesThroughWriteVisualOutput.txt",
+            "sha256": "sha256:93da9066c351f17e2daeae437d9778b42876946f1e4dcbeca479ba72636564a5"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-historical-comparisons/010.json",
+            "sha256": "sha256:21524313bfdf43c87836e20a3138097c3cf8e6f615389df619d7a4715a150edf"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestNoSecondAutomaticFixAttempt": {
+          "diagnostic_sha256": "sha256:3a4fd8d82504acd6876d60c3996d8d50a5b85a0ff086220620f1a6059a44253d",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestNoSecondAutomaticFixAttempt.txt",
+            "sha256": "sha256:04a418846bd43443392cfd0f39a717f16812cc88a976997ad5eafd89fe366fdd"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-historical-comparisons/011.json",
+            "sha256": "sha256:b9244c179bf51eea83038847ba2b69c04f0ca0b781e95b8cc188a92ce518c864"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestPhase199GateReceipt": {
+          "diagnostic_sha256": "sha256:218f4258b103eec712872037ae898160b5188236c550af82f91a882efdd52205",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestPhase199GateReceipt.txt",
+            "sha256": "sha256:d595a0001dce102db9d8631c8857cf92aab58523ffae60411278be5b3cf9c299"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-historical-comparisons/012.json",
+            "sha256": "sha256:457750cc69baf4a22d8ec577c6c6bcda720769bb1c6d9f1ac2a94711eaacb5b6"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestPlanningAdversarial200": {
+          "diagnostic_sha256": "sha256:5289d045a6fde0bcb6b296d99be318e43e21bde457c3843cd7914f5943bb7027",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestPlanningAdversarial200.txt",
+            "sha256": "sha256:02b578c1ef3faa16e2729cca2c0f9dd13d5f23d62296008c78a510be68f03a42"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-historical-comparisons/013.json",
+            "sha256": "sha256:cf7a8efecc93d43a26e5314aee23a703adbbfcbd0cc6380bdca5a2ba58cd4e27"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestPlanningAdversarial200/integrated_public_reads_preserve_protected_repository_inputs": {
+          "diagnostic_sha256": "sha256:890400b1466db47d85e81f43fd9be14d0060da93643eb24c93cc3a040075ec0b",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestPlanningAdversarial200.txt",
+            "sha256": "sha256:02b578c1ef3faa16e2729cca2c0f9dd13d5f23d62296008c78a510be68f03a42"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-historical-comparisons/014.json",
+            "sha256": "sha256:a05d908e09ac5273cbed2384e9859a6efffc2ac00c5441032318851cea40b7a5"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestPlanningPublicPaths200": {
+          "diagnostic_sha256": "sha256:e4f7aee07128743d90e333176b55b2067cd574009476001ec5c59f28712a7fb5",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestPlanningPublicPaths200.txt",
+            "sha256": "sha256:ca6377db1c6ca082a6104a2aa5c4f7438e7e7ff34625a905172b20def1beb9bb"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-historical-comparisons/015.json",
+            "sha256": "sha256:7e1f6c8eebf1e7c860e87e2b60661faea6ad26c8debbb83ec6ef4017f3b37938"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestPlanningPublicPaths200/Phase_199_focused_gates_remain_green": {
+          "diagnostic_sha256": "sha256:ed581ff2271120a63a8ef2df8ca4311f0597bb0da41b9dd089bd50e152e8ebe7",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestPlanningPublicPaths200.txt",
+            "sha256": "sha256:ca6377db1c6ca082a6104a2aa5c4f7438e7e7ff34625a905172b20def1beb9bb"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-historical-comparisons/016.json",
+            "sha256": "sha256:5910fca7a052063ce2d2d04d1085431115397e95f8a37423e9b194f407910a45"
+          }
+        },
+        "github.com/calcosmic/Aether/cmd/TestResolveTestCommand_GoProject": {
+          "diagnostic_sha256": "sha256:2beb35b5efd4ec2382dfed687e9419adc67d4b8f14f065d71907bc8cba5ca3f3",
+          "baseline": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestResolveTestCommand_GoProject.txt",
+            "sha256": "sha256:c52c55036f39d3b47ce8b013c57e53913f37b8855cc70711dea64bd434fa5c23"
+          },
+          "comparison": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-historical-comparisons/017.json",
+            "sha256": "sha256:3150feb72b1008c76285e96c4dc2bce908ba71b728b73429c064ab08e85608bf"
+          }
+        }
+      },
+      "unresolved_failures": {
+        "github.com/calcosmic/Aether/cmd/TestCLIInterruptedBuildResumesThroughForceRedispatch": {
+          "diagnostic_sha256": "sha256:743a7e06f28cb5d572cc6aa8f25b1449c41990dd9c806bcd9dc91a7a15f289f2",
+          "diagnostic_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-diagnostics/001.txt",
+          "with_children_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-diagnostics/001-with-children.txt"
+        },
+        "github.com/calcosmic/Aether/cmd/TestDisposedBranchesAreGoneFromTheRepository": {
+          "diagnostic_sha256": "sha256:fda5e11294c4daebe5a45be2ac664c9300b271ecaa6f6ce3a545caffb8cc3410",
+          "diagnostic_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-diagnostics/006.txt",
+          "with_children_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-diagnostics/006-with-children.txt"
+        },
+        "github.com/calcosmic/Aether/cmd/TestPackedNPMReleaseCandidateContract": {
+          "diagnostic_sha256": "sha256:9c604d7f8bb626f3ff418f3a0d1de2e1066b32f79b38457e0fdc1f878bb6ed72",
+          "diagnostic_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-diagnostics/015.txt",
+          "with_children_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-diagnostics/015-with-children.txt"
+        },
+        "github.com/calcosmic/Aether/cmd/TestPackedNPMReleaseCandidateContract/checksum_failure_preserves_the_previous_binary": {
+          "diagnostic_sha256": "sha256:d54acdc0841b9e48f8869e575707a0bfc8fa44a40deffc30ec52cdf308828d0f",
+          "diagnostic_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-diagnostics/016.txt",
+          "with_children_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-diagnostics/016-with-children.txt"
+        },
+        "github.com/calcosmic/Aether/cmd/TestPackedNPMReleaseCandidateContract/packed_candidate_migrates_and_rolls_back_an_n-1_colony_without_local_data_loss": {
+          "diagnostic_sha256": "sha256:bcffbb9d72ef4c12b9b05cfd9f0e59be5182b66438f77d668d40a56eb0e1fc1c",
+          "diagnostic_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-diagnostics/017.txt",
+          "with_children_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-diagnostics/017-with-children.txt"
+        },
+        "github.com/calcosmic/Aether/cmd/TestPackedNPMReleaseCandidateContract/packed_npm_installs_the_matching_staged_archive": {
+          "diagnostic_sha256": "sha256:5e3d5a48c908e283cd0abb8b66edac268e5f9601554498385fc4ee16f2e07636",
+          "diagnostic_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-diagnostics/018.txt",
+          "with_children_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-diagnostics/018-with-children.txt"
+        },
+        "github.com/calcosmic/Aether/cmd/TestPackedNPMReleaseCandidateContract/retry_recovers_the_state_left_by_interrupted_activation": {
+          "diagnostic_sha256": "sha256:ade56ee61aa469dddc62a2e754172a5863ea0048b3aec0d69e13486793bea19d",
+          "diagnostic_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-diagnostics/019.txt",
+          "with_children_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-diagnostics/019-with-children.txt"
+        },
+        "github.com/calcosmic/Aether/cmd/TestPackedNPMReleaseCandidateContract/wrong_version_archive_preserves_the_previous_binary": {
+          "diagnostic_sha256": "sha256:39398e9f5d1eb80418976d08b73d5f576c7b219dacd3e35c07a8d9112d3f067b",
+          "diagnostic_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-diagnostics/020.txt",
+          "with_children_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-diagnostics/020-with-children.txt"
+        }
+      },
+      "invocation": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-invocation.json",
+        "sha256": "sha256:69172b816057b529b60d2eff01a79412bb358389e3eea38a6c02978e52a7c1a6"
+      },
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "accounting": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-race-accounting.json",
+        "sha256": "sha256:337cfa31dd5241c7ce68ffaf28cdf6237971327ddeb23d084a8bdd045b5e5688"
+      },
+      "counts": {
+        "discovered_packages": 21,
+        "discovered_top_level": 6797,
+        "executed_top_level": 6797,
+        "executed_cases": 12676,
+        "outcomes": {
+          "pass": 12632,
+          "skip": 17,
+          "fail": 27
+        },
+        "diagnostic_echo_events_ignored": 12098
+      },
+      "explicit_skips": [
+        "github.com/calcosmic/Aether/cmd/TestBothBuildLanesAttachResultEvidenceToTheExactAttempt/an_evidence_write_failure_never_fails_an_otherwise-complete_build",
+        "github.com/calcosmic/Aether/cmd/TestClassicContractPhase201IntentionallyFailingProof",
+        "github.com/calcosmic/Aether/cmd/TestCodexAntSkillFreshHost",
+        "github.com/calcosmic/Aether/cmd/TestCodexAntSkillFreshHostUpgrade",
+        "github.com/calcosmic/Aether/cmd/TestCodexNativeWorkerFreshHost",
+        "github.com/calcosmic/Aether/cmd/TestContextCapsuleBlocksDispatchWhenEmpty",
+        "github.com/calcosmic/Aether/cmd/TestDataFlowColonyPrimeWiring",
+        "github.com/calcosmic/Aether/cmd/TestDataFlowDeadEnds",
+        "github.com/calcosmic/Aether/cmd/TestDataFlowReportAccuracy",
+        "github.com/calcosmic/Aether/cmd/TestDataFlowSnapshot",
+        "github.com/calcosmic/Aether/cmd/TestDispatchedCastesDocumented",
+        "github.com/calcosmic/Aether/cmd/TestGlobalQueenWisdomHygiene",
+        "github.com/calcosmic/Aether/cmd/TestRegressionSnapshotUpdate",
+        "github.com/calcosmic/Aether/cmd/TestSeededBankUpdate",
+        "github.com/calcosmic/Aether/cmd/TestStagedGoReleaserArtifactsInstallThroughPackedNPM",
+        "github.com/calcosmic/Aether/cmd/TestVisualOutputTracesToState",
+        "github.com/calcosmic/Aether/pkg/colony/TestRealColonyStateDataIntegrity"
+      ],
+      "structural_accounting_complete": true,
+      "required_native_gate": "failed_current_mandatory_proof_gap",
+      "qualification_passed": false
+    }
+  },
+  "superseded_200b_normal": {
+    "invocation": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/corrected-normal-invocation.json",
+      "sha256": "sha256:22a7e4158d4d6b7b910c1fedd2131d5c6fcb1e69d71f8ddcbb86bae6c6500758"
+    },
+    "accounting": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/corrected-normal-accounting.json",
+      "sha256": "sha256:5bff0002e46605ac6d26fd66345a496a3455c16882b8f793b7ae5dab6565aeee"
+    },
+    "diagnostic_review": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/corrected-normal-reviewed-diagnostics.json",
+      "sha256": "sha256:3fe90b7fac26db0f3d2884d26ce6750ef2904db935c3cd7b50d1934bcfceefe3"
+    },
+    "disposition": "Complete normal accounting exposed one new CI selector omission; no race on that candidate; no qualification credit"
+  },
+  "isolated_final_run_authority": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/root-final-ci-run-review.json",
+    "sha256": "sha256:2cacc153c2fb237b53f820d817c209d69ab3aa837724b9790f439e0c4b7212fc"
+  },
+  "isolation_manifest": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-isolation-manifest.json",
+    "sha256": "sha256:365b8ce6ad2c8f1f4af5eba343fecef285cc331f2ca21ea819f2b8231daebf5c"
+  },
+  "ci_selector_repair": {
+    "normal": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/ci-selector-repair/normal-receipt.json",
+      "sha256": "sha256:4bf85d775a42680c9c0b19bff7b7c106829def9283b09f51a40b4bd503a79874"
+    },
+    "race": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/ci-selector-repair/race-receipt.json",
+      "sha256": "sha256:2453298b39107bb6b45187a472b58cbfcee7294b3e14f2ee134067b766d8cc71"
+    }
+  },
+  "protected_inputs_after": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/final-ci-protected-inputs-after.json",
+    "sha256": "sha256:baa8fe75aa5c04dbc6eb553f098a8ec3fd58894f93378ba78f14d547c53b4e5b"
+  },
+  "new_failure_disposition": {
+    "top_level_tests": [
+      "TestCLIInterruptedBuildResumesThroughForceRedispatch",
+      "TestDisposedBranchesAreGoneFromTheRepository",
+      "TestPackedNPMReleaseCandidateContract"
+    ],
+    "failed_cases_per_full_run": 8,
+    "historical_exception": false,
+    "status": "unresolved_at_original_full_run; separate bounded diagnosis cannot rewrite these failed outcomes",
+    "observations": [
+      "Interrupted build waits ten seconds for its output sentinel; both runs time out. Race additionally reports TempDir cleanup directory-not-empty.",
+      "Independent clones omit three historical disposed-branch commit objects required by the repository audit.",
+      "Packed NPM bootstrap cannot find the consumer script. Retained npm debug output directly shows ancestor home package-root discovery and home node_modules modifications; no executor cleanup or home-file repair was attempted."
+    ]
+  }
+}
