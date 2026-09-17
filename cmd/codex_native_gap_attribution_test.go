@@ -320,3 +320,45 @@ func TestCodexNativeGapUncachedCheckSurvivesPlainRecheck(t *testing.T) {
 		})
 	}
 }
+
+func TestCodexNativeGapSelectedSkillDelivery(t *testing.T) {
+	for _, mode := range []string{"valid", "manual_user_text", "wrong_turn", "wrong_thread", "wrong_path", "changed_bytes", "duplicate"} {
+		t.Run(mode, func(t *testing.T) {
+			root := t.TempDir()
+			path := filepath.Join(root, "SKILL.md")
+			skill := []byte("# ant-build\nExact installed bytes.\n")
+			if err := os.WriteFile(path, skill, 0600); err != nil {
+				t.Fatal(err)
+			}
+			text := "<skill>\n<name>ant-build</name>\n<path>" + path + "</path>\n" + string(skill) + "\n</skill>"
+			kinds := []string{"skills.selected_skill_instructions"}
+			turn, thread := "turn", "parent"
+			switch mode {
+			case "manual_user_text":
+				kinds = nil
+			case "wrong_turn":
+				turn = "foreign"
+			case "wrong_thread":
+				thread = "foreign"
+			case "wrong_path":
+				text = strings.Replace(text, path, "/other/SKILL.md", 1)
+			case "changed_bytes":
+				text = strings.Replace(text, "Exact", "Changed", 1)
+			}
+			var raw []byte
+			add := func(v any) { b, _ := json.Marshal(v); raw = append(raw, append(b, '\n')...) }
+			add(map[string]any{"type": "session_meta", "payload": map[string]any{"id": "parent", "cwd": root}})
+			add(map[string]any{"type": "event_msg", "payload": map[string]any{"thread_id": thread, "turn_id": "turn"}})
+			message := map[string]any{"type": "response_item", "payload": map[string]any{"type": "message", "id": "skill-message", "role": "user", "content": []any{map[string]any{"type": "input_text", "text": text}}, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": turn, "content_item_kinds": kinds}}}
+			add(message)
+			if mode == "duplicate" {
+				add(message)
+			}
+			r := codexNativeLiveReceipt{SchemaVersion: "codex-native-tracer/v2", SessionID: "parent", FixtureRoot: root, SkillPath: path}
+			nativeInspectParentEvents(&r, raw)
+			if r.SkillRead != (mode == "valid") {
+				t.Fatalf("%s selected skill=%v", mode, r.SkillRead)
+			}
+		})
+	}
+}

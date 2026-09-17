@@ -3185,11 +3185,55 @@ func validateCodexNativeLiveReceipt(r codexNativeLiveReceipt) error {
 
 // Inspect actual parent calls separately. The native tool count is independent
 // of the parent CLI's display schema; no assistant text counts as a launch.
+// Codex may deliver the selected skill as a host-tagged input rather than a
+// shell read. Require that exact host shape, unique message, owned turn, path
+// and complete installed bytes; ordinary user prose never proves selection.
+func nativeSelectedSkillDelivered(r codexNativeLiveReceipt, raw []byte) bool {
+	skill, err := r.readEvidence(r.SkillPath)
+	if err != nil || len(skill) == 0 {
+		return false
+	}
+	expected := "<skill>\n<name>ant-build</name>\n<path>" + r.SkillPath + "</path>\n" + string(skill) + "\n</skill>"
+	turns := nativeOwnedHostTurns(raw, r.SessionID)
+	ids := map[string]int{}
+	var matches []string
+	for _, line := range bytes.Split(raw, []byte{'\n'}) {
+		var e struct {
+			Type    string `json:"type"`
+			Payload struct {
+				Type    string `json:"type"`
+				ID      string `json:"id"`
+				Role    string `json:"role"`
+				Content []struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				} `json:"content"`
+				Metadata struct {
+					TurnID string   `json:"turn_id"`
+					Kinds  []string `json:"content_item_kinds"`
+				} `json:"internal_chat_message_metadata_passthrough"`
+			} `json:"payload"`
+		}
+		if json.Unmarshal(line, &e) != nil || e.Type != "response_item" || e.Payload.Type != "message" {
+			continue
+		}
+		p := e.Payload
+		ids[p.ID]++
+		if p.ID != "" && p.Role == "user" && turns[p.Metadata.TurnID] && len(p.Metadata.Kinds) == 1 && p.Metadata.Kinds[0] == "skills.selected_skill_instructions" && len(p.Content) == 1 && p.Content[0].Type == "input_text" && p.Content[0].Text == expected {
+			matches = append(matches, p.ID)
+		}
+	}
+	return len(matches) == 1 && ids[matches[0]] == 1
+}
+
 func nativeInspectParentEvents(r *codexNativeLiveReceipt, raw []byte) {
 	var metadata nativeHostEvent
 	if json.Unmarshal(bytes.SplitN(raw, []byte{'\n'}, 2)[0], &metadata) != nil || metadata.Type != "session_meta" || metadata.Payload.ID != r.SessionID || metadata.Payload.ParentThreadID != "" {
 		r.ParentSubstitution = true // attribution is missing; fail closed
 		return
+	}
+	if r.SchemaVersion == "codex-native-tracer/v2" && nativeSelectedSkillDelivered(*r, raw) {
+		r.SkillRead = true
 	}
 	scanner := bufio.NewScanner(bytes.NewReader(raw))
 	scanner.Buffer(make([]byte, 65536), 16<<20)
