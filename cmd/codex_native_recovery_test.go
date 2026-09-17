@@ -92,6 +92,10 @@ func TestCodexNativeRecoveryPartialReady(t *testing.T) {
 	nativeRecoveryFinish(t, manifest, requests[0], 0)
 	before := nativeJournalBytes(t)
 	stateBefore, _ := store.ReadFile("COLONY_STATE.json")
+	var ready colony.ColonyState
+	if err := json.Unmarshal(stateBefore, &ready); err != nil || ready.State != colony.StateREADY {
+		t.Fatalf("partial recovery fixture is not READY: %s, %v", ready.State, err)
+	}
 	dashboard, recovery := nativeRecoveryDashboard(t)
 	finished := nativeRecoveryItems(t, recovery, "finished", 1)[0].(map[string]any)
 	unfinished := nativeRecoveryItems(t, recovery, "unfinished", 1)[0].(map[string]any)
@@ -273,36 +277,67 @@ func TestCodexNativeRecoveryResumeTransaction(t *testing.T) {
 }
 
 func TestCodexNativeRecoveryCurrency(t *testing.T) {
-	for _, field := range []string{"goal", "plan", "run"} {
-		t.Run(field, func(t *testing.T) {
-			manifest, requests := nativeRecoveryFixture(t, 1)
-			nativeRecoveryFinish(t, manifest, requests[0], 0)
-			var state colony.ColonyState
-			if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
-				t.Fatal(err)
-			}
-			switch field {
-			case "goal":
-				replacement := "Different same-phase colony"
-				state.Goal = &replacement
-			case "plan":
-				state.Plan.Phases[0].Tasks[0].Goal = "Changed accepted assignment"
-			case "run":
-				replacement := "different-unproven-run"
-				state.RunID = &replacement
-			}
-			if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
-				t.Fatal(err)
-			}
-			before := nativeRecoveryStoreSnapshot(t)
-			dashboard, recovery := nativeRecoveryDashboard(t)
-			if recovery["valid"] != false || dashboard["resume_override_command"] != "aether status" {
-				t.Fatalf("stale %s advertised actionable native recovery: %+v", field, recovery)
-			}
-			if !reflect.DeepEqual(before, nativeRecoveryStoreSnapshot(t)) {
-				t.Fatal("currency conflict inspection wrote")
-			}
-		})
+	for _, finished := range []bool{false, true} {
+		for _, field := range []string{"goal", "plan", "run"} {
+			t.Run(fmt.Sprintf("%s/terminal=%t", field, finished), func(t *testing.T) {
+				t.Setenv("AETHER_ACTIVE_PLATFORM", "codex")
+				manifest, requests := nativeRecoveryFixture(t, 1)
+				if finished {
+					nativeRecoveryFinish(t, manifest, requests[0], 0)
+				}
+				var state colony.ColonyState
+				if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+					t.Fatal(err)
+				}
+				switch field {
+				case "goal":
+					replacement := "Different same-phase colony"
+					state.Goal = &replacement
+				case "plan":
+					state.Plan.Phases[0].Tasks[0].Goal = "Changed accepted assignment"
+				case "run":
+					replacement := "different-unproven-run"
+					state.RunID = &replacement
+				}
+				if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+					t.Fatal(err)
+				}
+				before := nativeRecoveryStoreSnapshot(t)
+				dashboard, recovery := nativeRecoveryDashboard(t)
+				if recovery["valid"] != false || dashboard["resume_override_command"] != "aether status" {
+					t.Fatalf("stale %s advertised actionable native recovery: %+v", field, recovery)
+				}
+				if !reflect.DeepEqual(before, nativeRecoveryStoreSnapshot(t)) {
+					t.Fatal("currency conflict inspection wrote")
+				}
+			})
+		}
+	}
+}
+
+func TestCodexNativeRecoveryNeverStartedResume(t *testing.T) {
+	t.Setenv("AETHER_ACTIVE_PLATFORM", "codex")
+	nativeRecoveryFixture(t, 1)
+	now := time.Now().UTC()
+	if _, err := pauseColonyAt(now); err != nil {
+		t.Fatal(err)
+	}
+	_, paused := nativeRecoveryDashboard(t)
+	if paused["valid"] != true || paused["next"] != "aether resume" {
+		t.Fatalf("valid never-started pause lost its recovery point: %+v", paused)
+	}
+	before := nativeJournalBytes(t)
+	outcome, err := resumeColonyAt(now.Add(time.Second))
+	if err != nil || outcome.Receipt.ReceiptID == "" {
+		t.Fatalf("never-started native handoff did not resume: %+v %v", outcome, err)
+	}
+	_, recovery := nativeRecoveryDashboard(t)
+	if recovery["valid"] != true || recovery["next"] != "aether codex-native-worker inspect --phase 1" {
+		t.Fatalf("never-started authenticated resume lost saved assignment: %+v", recovery)
+	}
+	nativeRecoveryItems(t, recovery, "unfinished", 1)
+	if !bytes.Equal(before, nativeJournalBytes(t)) {
+		t.Fatal("never-started pause/resume changed accepted attempt")
 	}
 }
 
