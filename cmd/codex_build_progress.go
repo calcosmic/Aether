@@ -103,6 +103,24 @@ func emitCodexBuildWorkerStarted(dispatch codex.WorkerDispatch, wave int) {
 	emitCodexDispatchWorkerStarted(dispatch, wave)
 }
 
+// Snapshot rendering shares the existing inline activity surface, but never
+// emits started/finished events or writes the spawn tree. Those transitions
+// already come from the native bridge after its durable bind/observe/record.
+func renderCodexNativeWorkerActivity(worker codexNativeRecoveryWorker) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s %s (%s): %s", casteIdentity(worker.Caste), worker.WorkerName, worker.TaskID, strings.ReplaceAll(worker.Status, "_", " "))
+	if worker.ChildID != "" {
+		fmt.Fprintf(&b, " — child %s", worker.ChildID)
+	}
+	if worker.ObservedAt != "" {
+		fmt.Fprintf(&b, " — observed %s", worker.ObservedAt)
+	}
+	if worker.LastHostStatus == "unavailable" {
+		b.WriteString(" — host capability unavailable")
+	}
+	return b.String()
+}
+
 func emitCodexDispatchWorkerStarted(dispatch codex.WorkerDispatch, wave int) {
 	var b strings.Builder
 	b.WriteString("… ")

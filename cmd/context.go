@@ -433,10 +433,15 @@ var resumeDashboardCmd = &cobra.Command{
 }
 
 func buildResumeDashboardResult() map[string]interface{} {
+	var nativeState colony.ColonyState
+	var nativeRecovery *codexNativeRecovery
+	if store.LoadJSON("COLONY_STATE.json", &nativeState) == nil {
+		nativeRecovery = buildCodexNativeRecovery(normalizeLegacyColonyState(nativeState))
+	}
 	var session colony.SessionFile
 	sessionFound := store.LoadJSON("session.json", &session) == nil
 	restoredLegacySession := false
-	if !sessionFound {
+	if !sessionFound && nativeRecovery == nil {
 		if restored, err := ensureLegacySessionMirror(store); err == nil && restored {
 			restoredLegacySession = true
 			sessionFound = store.LoadJSON("session.json", &session) == nil
@@ -670,7 +675,9 @@ func buildResumeDashboardResult() map[string]interface{} {
 	// alone tells the resolver. Recorded as resume_override_command/_why so
 	// the one decision can absorb them as an input rather than have its
 	// answer overwritten afterward.
-	if _, attempt, ok := loadRelevantBuildAttempt(state); ok && buildAttemptStatusActive(attempt.Status) && strings.TrimSpace(attempt.CompletionPath) != "" && strings.TrimSpace(attempt.CompletionSHA256) != "" {
+	if nativeRecovery != nil {
+		applyCodexNativeRecovery(result, nativeRecovery)
+	} else if _, attempt, ok := loadRelevantBuildAttempt(state); ok && buildAttemptStatusActive(attempt.Status) && strings.TrimSpace(attempt.CompletionPath) != "" && strings.TrimSpace(attempt.CompletionSHA256) != "" {
 		next := buildFinalizeRecoveryCommand(attempt.Phase, attempt.CompletionPath)
 		summary := "External workers finished and their accepted completion packet is durable. Finalize this exact packet; do not redispatch workers."
 		recoveryBlock := result["recovery"].(map[string]interface{})

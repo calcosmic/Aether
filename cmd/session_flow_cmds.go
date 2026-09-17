@@ -36,6 +36,7 @@ var resumeNoHandoff bool
 var pauseResumeLifecycleFault lifecycleTransactionFaultHook
 
 type pauseResumeLifecycleOutcome struct {
+	NativeRecovery   *codexNativeRecovery
 	Handoff          colony.PauseHandoff
 	Receipt          colony.LifecycleReceipt
 	Provenance       colony.RecoveryProvenance
@@ -46,8 +47,9 @@ type pauseResumeLifecycleOutcome struct {
 }
 
 type pauseBoundaryPendingError struct {
-	Boundary string
-	Attempt  string
+	Boundary       string
+	Attempt        string
+	NativeRecovery *codexNativeRecovery
 }
 
 func (err pauseBoundaryPendingError) Error() string {
@@ -125,6 +127,14 @@ var pauseColonyCmd = &cobra.Command{
 					"attempt_id": pending.Attempt, "state_effect": colony.LifecycleStateEffectNone,
 					"outcome_kind": colony.OutcomeKindNoChange,
 					"message":      pending.Error(), "next": "aether pause",
+				}
+				if pending.NativeRecovery != nil {
+					applyCodexNativeRecovery(result, pending.NativeRecovery)
+					result["next"] = pending.NativeRecovery.Next
+					result["message"] = "Pause is pending host confirmation; saved native work is retained."
+					closeLifecycleCommand(result, "pause", pending.NativeRecovery.Next, pending.NativeRecovery.Why)
+					outputWorkflow(result, "Pause is pending host confirmation.\n"+renderCodexNativeRecovery(pending.NativeRecovery))
+					return nil
 				}
 				closeLifecycleCommand(result, "pause", "aether pause", "The current work has not reached a safe pause boundary yet.")
 				if closeErr := applyLifecycleCloseout(result, "pause", LifecycleCloseoutDetails{
@@ -237,6 +247,17 @@ var resumeColonyCmd = &cobra.Command{
 		outcome, err := resumeColonyAt(time.Now().UTC())
 		if err != nil {
 			renderRecoveryMenu("resume", err.Error(), []string{"aether status", "aether resume"})
+			return nil
+		}
+		if outcome.NativeRecovery != nil {
+			result := buildResumeDashboardResult()
+			applyCodexNativeRecovery(result, outcome.NativeRecovery)
+			result["resumed"] = false
+			result["state_effect"] = colony.LifecycleStateEffectNone
+			result["outcome_kind"] = colony.OutcomeKindNoChange
+			result["message"] = "Saved native work is available for recovery; no new lifecycle episode was created."
+			closeLifecycleCommand(result, "picking the project back up", outcome.NativeRecovery.Next, outcome.NativeRecovery.Why)
+			outputWorkflow(result, renderCodexNativeRecovery(outcome.NativeRecovery))
 			return nil
 		}
 		if outcome.Provenance == colony.RecoveryProvenanceConflicting || outcome.Provenance == colony.RecoveryProvenanceUnknown {
@@ -375,7 +396,7 @@ func pauseColonyInMutationSession(now time.Time, mutation *planningMutationSessi
 
 	safeBoundary, attemptID, pending := pauseSafeBoundary(state)
 	if pending {
-		return pauseResumeLifecycleOutcome{}, pauseBoundaryPendingError{Boundary: safeBoundary, Attempt: attemptID}
+		return pauseResumeLifecycleOutcome{}, pauseBoundaryPendingError{Boundary: safeBoundary, Attempt: attemptID, NativeRecovery: buildCodexNativeRecovery(state)}
 	}
 
 	handoff, err := buildPauseHandoff(facts, state, session, repository, now, handoffID, transactionID, safeBoundary, attemptID, colony.RecoveryProvenanceConfirmed)
@@ -508,6 +529,14 @@ func resumeColonyAt(now time.Time) (pauseResumeLifecycleOutcome, error) {
 			}, nil
 		}
 	}
+	// Finish authorized pause/resume transactions and validate retained handoff
+	// evidence before native advice. An unpaused state target may be only the
+	// first committed prefix of an interrupted resume transaction.
+	if state.PauseHandoff == nil {
+		if recovery := buildCodexNativeRecovery(state); recovery != nil && (!state.Paused || recovery.pendingBoundary()) {
+			return pauseResumeLifecycleOutcome{NativeRecovery: recovery, StateEffect: colony.LifecycleStateEffectNone, Provenance: colony.RecoveryProvenanceConfirmed}, nil
+		}
+	}
 
 	var handoff colony.PauseHandoff
 	provenance := colony.RecoveryProvenanceConfirmed
@@ -536,6 +565,9 @@ func resumeColonyAt(now time.Time) (pauseResumeLifecycleOutcome, error) {
 		}
 		if !reflectPauseWorktreesEqual(handoff.Worktrees, pauseWorktreeEvidence(root, state.Worktrees)) {
 			return pauseResumeConflictOutcome("Recovery evidence conflicts: worktree evidence changed after the handoff. Run `aether status`, inspect the named worktrees, and choose which work is authoritative before resuming."), nil
+		}
+		if recovery := buildCodexNativeRecovery(state); recovery != nil && recovery.pendingBoundary() {
+			return pauseResumeLifecycleOutcome{NativeRecovery: recovery, StateEffect: colony.LifecycleStateEffectNone, Provenance: colony.RecoveryProvenanceConfirmed}, nil
 		}
 		if state.State == colony.StateEXECUTING {
 			if _, attempt, ok := loadRelevantBuildAttemptReadOnly(state); ok && buildAttemptProcessAlive(attempt) {
@@ -1114,6 +1146,9 @@ func resumeProvenanceSentence(provenance colony.RecoveryProvenance) lifecycleEve
 }
 
 func pauseSafeBoundary(state colony.ColonyState) (boundary, attemptID string, pending bool) {
+	if native := buildCodexNativeRecovery(state); native != nil && native.pendingBoundary() {
+		return "worker_completion_boundary", native.AttemptID, true
+	}
 	if _, attempt, ok := loadRelevantBuildAttemptReadOnly(state); ok {
 		attemptID = strings.TrimSpace(attempt.ID)
 		for _, worker := range attempt.WorkerRuns {
