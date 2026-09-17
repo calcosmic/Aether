@@ -392,6 +392,15 @@ func executeCodexNativeWorkerRequest(operation string, request codexNativeWorker
 		if hooks.AfterContextRender != nil {
 			hooks.AfterContextRender()
 		}
+		if response.ContextStatus == "awaiting_delivery" {
+			_, worker, err := validateCodexNativeContextTarget(current, request)
+			if err != nil {
+				return codexNativeWorkerResponse{}, err
+			}
+			if err := validateCodexNativeContextLive(current, *worker); err != nil {
+				return codexNativeWorkerResponse{}, err
+			}
+		}
 		if err := validateCodexNativeContextScope(*current.PlanManifest); err != nil {
 			return codexNativeWorkerResponse{}, err
 		}
@@ -863,7 +872,10 @@ func validateCodexNativeLaunchCurrency(record buildAttemptRecord) error {
 	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
 		return err
 	}
-	return validateBuildFinalizeStateStillCurrent(state, record.Phase)
+	if err := validateBuildFinalizeStateStillCurrent(state, record.Phase); err != nil {
+		return err
+	}
+	return validateCodexNativeAttemptState(record, state)
 }
 
 func validateCodexNativeSavedWorker(record buildAttemptRecord, dispatch codexBuildDispatch, worker buildAttemptWorkerRun) error {

@@ -238,6 +238,9 @@ func readCodexNativeContext(record buildAttemptRecord, request codexNativeWorker
 	if request.ContextDeliveryID != "" {
 		for _, saved := range worker.Native.ContextDeliveries {
 			if saved.Delivery.DeliveryID == request.ContextDeliveryID {
+				if err := validateCodexNativeContextReceipt(saved, record, *worker); err != nil {
+					return response, err
+				}
 				delivery := saved.Delivery
 				response.ContextDelivery, response.ContextStatus = &delivery, "delivered"
 				return response, nil
@@ -278,16 +281,16 @@ func observeCodexNativeContext(record *buildAttemptRecord, worker *buildAttemptW
 	receipt := codexNativeTransitionReceipt("observe", *worker)
 	receipt.At, receipt.SourceEventID, receipt.SourceEventSHA256 = observation.ObservedAt, observation.SourceEventID, digest
 	receipt.ContextDeliveryID, receipt.ContextPayloadSHA256 = delivery.DeliveryID, delivery.PayloadSHA256
-	submitted := *delivery
-	submitted.DeliveryID = ""
-	expectedID, err := jsonSHA256(submitted)
-	if err != nil || expectedID != delivery.DeliveryID || delivery.PayloadSHA256 != lifecycleDigest([]byte(delivery.Payload)) {
-		return nil, fmt.Errorf("native context payload or delivery identity changed")
+	if err := validateCodexNativeContextEnvelope(*delivery, *record, *worker); err != nil {
+		return nil, err
 	}
 	native := worker.Native
 	for _, saved := range native.ContextDeliveries {
 		if saved.Delivery.DeliveryID != delivery.DeliveryID {
 			continue
+		}
+		if err := validateCodexNativeContextReceipt(saved, *record, *worker); err != nil {
+			return nil, err
 		}
 		savedDigest, _ := jsonSHA256(saved.Delivery)
 		receivedDigest, _ := jsonSHA256(delivery)
@@ -331,4 +334,55 @@ func observeCodexNativeContext(record *buildAttemptRecord, worker *buildAttemptW
 	native.Observations = append(native.Observations, observation)
 	worker.UpdatedAt, record.UpdatedAt = now, now
 	return &receipt, nil
+}
+
+func validateCodexNativeContextEnvelope(delivery codexNativeContextDelivery, record buildAttemptRecord, worker buildAttemptWorkerRun) error {
+	manifest, native := record.PlanManifest, worker.Native
+	if manifest == nil || manifest.ExecutionBinding == nil || manifest.ContextScope == nil || native == nil || delivery.SchemaVersion != 1 ||
+		delivery.ExecutionBinding != *manifest.ExecutionBinding || delivery.Scope != *manifest.ContextScope ||
+		delivery.WorkerName != worker.WorkerName || delivery.TaskID != worker.TaskID || delivery.LaunchID != worker.ProviderRunID ||
+		delivery.HostSessionID != native.HostSessionID || delivery.ChildID == "" || delivery.ChildID != native.ChildID ||
+		delivery.Workspace != native.Workspace || delivery.DispatchSHA256 != native.DispatchSHA256 || delivery.PromptSHA256 != native.PromptSHA256 {
+		return fmt.Errorf("native context envelope target does not match saved assignment")
+	}
+	id := delivery.DeliveryID
+	delivery.DeliveryID = ""
+	digest, err := jsonSHA256(delivery)
+	if err != nil || id == "" || id != digest || delivery.PayloadSHA256 != lifecycleDigest([]byte(delivery.Payload)) {
+		return fmt.Errorf("native context payload or delivery identity changed")
+	}
+	return nil
+}
+
+func validateCodexNativeContextReceipt(saved codexNativeContextReceipt, record buildAttemptRecord, worker buildAttemptWorkerRun) error {
+	if err := validateCodexNativeContextEnvelope(saved.Delivery, record, worker); err != nil {
+		return err
+	}
+	observation := saved.Observation
+	digest, err := canonicalCodexNativeEventHash(observation.SourceEventID, observation.SourceEventSHA256)
+	if err != nil {
+		return err
+	}
+	if _, err := time.Parse(time.RFC3339Nano, observation.ObservedAt); err != nil {
+		return fmt.Errorf("saved native context observation has invalid time")
+	}
+	if observation.SchemaVersion != 1 || observation.Status != "context_delivered" || observation.ContextDeliveryID != saved.Delivery.DeliveryID || observation.ChildID != saved.Delivery.ChildID || digest != observation.SourceEventSHA256 {
+		return fmt.Errorf("saved native context observation does not match delivered envelope")
+	}
+	acknowledged := 0
+	for _, id := range worker.Native.ContextDeliveryIDs {
+		if id == saved.Delivery.DeliveryID {
+			acknowledged++
+		}
+	}
+	observed := false
+	for _, event := range worker.Native.Observations {
+		if event == observation {
+			observed = true
+		}
+	}
+	if acknowledged != 1 || !observed {
+		return fmt.Errorf("saved native context delivery lacks its exact acknowledgement")
+	}
+	return nil
 }
