@@ -52,6 +52,9 @@ type codexNativeLiveReceipt struct {
 	RawEvents                  string                   `json:"raw_events"`
 	RawStderr                  string                   `json:"raw_stderr"`
 	SessionID                  string                   `json:"host_session_id,omitempty"`
+	ChildTaskPath              string                   `json:"child_task_path,omitempty"`
+	ChildSpawnCallID           string                   `json:"child_spawn_call_id,omitempty"`
+	ChildIdentityCorroborated  bool                     `json:"child_identity_corroborated"`
 	ChildID                    string                   `json:"child_id,omitempty"`
 	ChildEvents                string                   `json:"child_events,omitempty"`
 	AttemptPath                string                   `json:"attempt_path,omitempty"`
@@ -171,9 +174,22 @@ func TestCodexNativeWorkerFreshHost(t *testing.T) {
 		t.Skip("opt-in actual Codex host; no live proof claimed")
 	}
 	selection := os.Getenv("AETHER_CODEX_NATIVE_SCENARIOS")
+	selected := map[string]bool{}
+	for _, name := range strings.Split(selection, ",") {
+		selected[strings.TrimSpace(name)] = true
+	}
+	for name := range selected {
+		known := name == "qualification" || name == "all"
+		for _, scenario := range codexNativeLiveScenarios {
+			known = known || name == scenario.Name
+		}
+		if !known {
+			t.Fatalf("unknown native live scenario selection %q", name)
+		}
+	}
 	matched := false
 	for _, scenario := range codexNativeLiveScenarios {
-		if selection != "qualification" && selection != "all" && selection != scenario.Name {
+		if !selected["qualification"] && !selected["all"] && !selected[scenario.Name] {
 			continue
 		}
 		matched = true
@@ -201,7 +217,7 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 	if err != nil {
 		t.Fatal(err)
 	}
-	receipt := codexNativeLiveReceipt{SchemaVersion: "codex-native-tracer/v1", Scenario: scenario, Outcome: "incomplete", Reason: "harness did not reach all evidence gates", ExitStatus: -1, Artifacts: map[string]string{}, FixtureProvenance: "Fixture-prepared one-task accepted plan through specification, staged planning coordinator and exact acceptPlanCandidate; no live planning claim."}
+	receipt := codexNativeLiveReceipt{SchemaVersion: "codex-native-tracer/v2", Scenario: scenario, Outcome: "incomplete", Reason: "harness did not reach all evidence gates", ExitStatus: -1, Artifacts: map[string]string{}, FixtureProvenance: "Fixture-prepared one-task accepted plan through specification, staged planning coordinator and exact acceptPlanCandidate; no live planning claim."}
 	defer func() {
 		// Index complete raw captures and installed inputs, but never credential caches.
 		_ = filepath.WalkDir(runRoot, func(path string, entry fs.DirEntry, err error) error {
@@ -370,11 +386,11 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 		}
 	}()
 	prompt := "$ant-build 1\nFixture authorization: execute the already accepted one-task plan in this disposable repository, using the installed skill and its private support. The named native Builder must edit clamp.go through apply_patch and run the full existing fixture tests with go test ./... -json -count=1 itself. Parent may coordinate only, with individual simple shell commands (no shell batching, redirection, Python snippets, or source edits). No commits, extra recruitment, publish, install, authentication reads, or other projects. All routine fixture choices are preauthorized.\n"
-	prompt += fmt.Sprintf("The fixture supplies reviewed JSON request plumbing at %s; read it with cat. For each corresponding installed-skill operation call python3 %s <operation> using manifest, reserve, bind <actual-child-ID>, record, inspect, stage, or finalize. It executes one requested Go runtime operation and prints its real response; it never spawns workers, edits source, or normalizes a child result. Use the installed skill for sequencing and actual native spawn_agent/messages. Use this helper for request-file writes instead of authoring scripts. An empty-result invocation must be refused before the valid record. Preserve actual child event evidence and stop if a required host capability is missing.\n", receipt.CoordinatorPath, receipt.CoordinatorPath)
+	prompt += fmt.Sprintf("The fixture supplies reviewed JSON request plumbing at %s; read it with cat. For each corresponding installed-skill operation call python3 %s <operation> using manifest, reserve, bind <actual-host-task-path-or-child-ID>, record, inspect, stage, or finalize. It executes one requested Go runtime operation and prints its real response; it never spawns workers, edits source, or normalizes a child result. Use the installed skill for sequencing and actual native spawn_agent/messages. The bind helper correlates the actual spawn call/result/activity and child metadata; pass the returned host task path unchanged when the host does not expose a UUID. Keep using that task path for host messaging. Use this helper for request-file writes instead of authoring scripts. An empty-result invocation must be refused before the valid record. Preserve actual child event evidence and stop if a required host capability is missing.\n", receipt.CoordinatorPath, receipt.CoordinatorPath)
 	if scenario == "early-resume" {
 		prompt += "Interruption experiment: STOP this parent immediately after one accepted terminal record. Do not stage or finalize. A separate new parent session will finish accounting.\n"
 	} else {
-		prompt += "Stop after the existing build finalizer; do not run continue.\n"
+		prompt += "After the existing build finalizer, invoke finalize once more to prove idempotent replay, then stop; do not run continue.\n"
 	}
 	if scenario != "ordinary" && scenario != "early-resume" {
 		prompt = nativeQualificationPrompt(receipt, scenario)
@@ -541,7 +557,7 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 				receipt.ResumeSessionID = e.ThreadID
 			}
 		}
-		resumed := codexNativeLiveReceipt{FixtureRoot: repo, SessionID: receipt.ResumeSessionID, AttemptID: receipt.AttemptID, RunID: receipt.RunID, LaunchID: receipt.LaunchID, SupportPath: receipt.SupportPath, CoordinatorPath: receipt.CoordinatorPath, CoordinatorSHA256: receipt.CoordinatorSHA256}
+		resumed := codexNativeLiveReceipt{SchemaVersion: receipt.SchemaVersion, FixtureRoot: repo, SessionID: receipt.ResumeSessionID, AttemptID: receipt.AttemptID, RunID: receipt.RunID, LaunchID: receipt.LaunchID, SupportPath: receipt.SupportPath, CoordinatorPath: receipt.CoordinatorPath, CoordinatorSHA256: receipt.CoordinatorSHA256}
 		paths, _ := filepath.Glob(filepath.Join(fixtureHome, ".codex", "sessions", "*", "*", "*", "*"+receipt.ResumeSessionID+".jsonl"))
 		if len(paths) == 1 {
 			raw, _ := os.ReadFile(paths[0])
@@ -589,6 +605,9 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 				liveSkillWrite(t, filepath.Join(runRoot, "coordination", entry.Name()), raw)
 			}
 		}
+	}
+	if scenario == "ordinary" {
+		receipt.FinalizationReplayStable = nativeFinalizationReplayEvidence(receipt, filepath.Join(runRoot, "coordination"))
 	}
 	if err := validateCodexNativeLiveReceipt(receipt); err != nil {
 		fail(err.Error())
@@ -639,6 +658,48 @@ def host_session():
         assert any(item[1] == expected for item in candidates)
         return expected
     return max(candidates)[1]
+def resolve_native_child(events, metadata, target, parent, cwd):
+    # Pure observation: never infer a child from prose or a task-path suffix.
+    assert events and events[0].get("type") == "session_meta"
+    pm = events[0]["payload"]
+    assert pm.get("id") == parent and not pm.get("parent_thread_id") and pm.get("cwd") == cwd
+    candidates = []
+    for n, event in enumerate(events):
+        p = event.get("payload", {}); item = p.get("item", {})
+        if event.get("type") != "event_msg" or p.get("type") != "item_completed" or item.get("type") != "SubAgentActivity" or item.get("kind") != "started":
+            continue
+        if target not in (item.get("agent_path"), item.get("agent_thread_id")):
+            continue
+        call_id, child, task_path, turn = item.get("id"), item.get("agent_thread_id"), item.get("agent_path"), p.get("turn_id")
+        assert call_id and child and task_path and turn and child != task_path and p.get("thread_id") == parent
+        calls = [(i,e["payload"]) for i,e in enumerate(events) if e.get("type") == "response_item" and e.get("payload", {}).get("type") == "function_call" and e["payload"].get("call_id") == call_id]
+        outputs = [(i,e["payload"]) for i,e in enumerate(events) if e.get("type") == "response_item" and e.get("payload", {}).get("type") == "function_call_output" and e["payload"].get("call_id") == call_id]
+        activities = [e for e in events if e.get("type") == "event_msg" and e.get("payload", {}).get("type") == "item_completed" and e["payload"].get("item", {}).get("id") == call_id]
+        assert len(calls) == len(outputs) == len(activities) == 1, "Ambiguous/reused host spawn event"
+        ci, call = calls[0]; oi, output = outputs[0]
+        assert ci < n < oi and call.get("name", "").split(".")[-1] == "spawn_agent"
+        assert all(q.get("internal_chat_message_metadata_passthrough", {}).get("turn_id") == turn for q in (call, output)), "Wrong spawn turn"
+        args, result = json.loads(call["arguments"]), json.loads(output["output"])
+        assert result == {"task_name": task_path}, "Unrecognized host spawn result"
+        assert task_path == "/root/" + args["task_name"] and args.get("agent_type"), "Wrong task path/role"
+        matches = [e["payload"] for e in metadata if e.get("type") == "session_meta" and (e.get("payload", {}).get("id") == child or e.get("payload", {}).get("agent_path") == task_path)]
+        assert len(matches) == 1, "Absent/ambiguous child metadata"
+        cm = matches[0]
+        assert cm.get("id") == child and cm.get("agent_path") == task_path and cm.get("parent_thread_id") == parent and cm.get("cwd") == cwd and cm.get("agent_role") == args["agent_type"], "Child metadata mismatch"
+        candidates.append({"child_id":child,"task_path":task_path,"call_id":call_id,"turn_id":turn,"host_session_id":parent})
+    assert len(candidates) == 1, "Absent/ambiguous actual child mapping"
+    return candidates[0]
+def bound_native_child(target, parent):
+    captures = []
+    for path in sessions.rglob("*.jsonl"):
+        lines = path.read_text().splitlines()
+        if lines:
+            captures.append([json.loads(line) for line in lines])
+    parents = [es for es in captures if es[0].get("type") == "session_meta" and es[0]["payload"].get("id") == parent]
+    assert len(parents) == 1, "Expected unique bound parent rollout"
+    mapping = resolve_native_child(parents[0], [es[0] for es in captures if es[0].get("payload", {}).get("parent_thread_id")], target, parent, str(repo))
+    write("child-identity.json", mapping)
+    return mapping["child_id"]
 def latest_native_terminal(session_root, child_id):
     paths = list(session_root.rglob("*" + child_id + ".jsonl"))
     assert len(paths) == 1, "Expected one bound child rollout"
@@ -670,7 +731,7 @@ elif op == "reserve":
 elif op == "bind":
     reserved = read("reservation.json")
     worker = reserved["worker"]; native = worker["native"]
-    value = {**read("reserve-request.json"), "launch_id": worker["provider_run_id"], "child_id": sys.argv[2],
+    value = {**read("reserve-request.json"), "launch_id": worker["provider_run_id"], "child_id": bound_native_child(sys.argv[2], read("reserve-request.json")["host_session_id"]),
              "dispatch_sha256": native["dispatch_sha256"], "prompt_sha256": native["prompt_sha256"]}
     result = request("bind", value)
 elif op in ("record", "empty-result"):
@@ -1328,13 +1389,23 @@ func nativeObservedFixtureOperation(r codexNativeLiveReceipt, worker codexNative
 	if err != nil {
 		return false
 	}
+	eventIDs := map[string]int{}
+	for _, line := range bytes.Split(raw, []byte{'\n'}) {
+		var e nativeHostEvent
+		if json.Unmarshal(line, &e) == nil && e.Type == "event_msg" && e.Payload.Type == "item_completed" && e.Payload.Item.Type == "CommandExecution" {
+			eventIDs[e.Payload.Item.ID]++
+		}
+	}
 	for _, line := range bytes.Split(raw, []byte{'\n'}) {
 		var e nativeHostEvent
 		if json.Unmarshal(line, &e) != nil || e.Type != "event_msg" || e.Payload.Type != "item_completed" || e.Payload.ThreadID != worker.BoundHostSessionID {
 			continue
 		}
 		i := e.Payload.Item
-		if i.Type != "CommandExecution" || i.Status != "completed" || i.ExitCode == nil || (*i.ExitCode != 0) != nonzero || len(i.Command) != 3 || !nativeSameCwd(i.Cwd, r.FixtureRoot) {
+		if i.Type != "CommandExecution" || i.ExitCode == nil || (i.Status != "completed" && !(i.Status == "failed" && *i.ExitCode != 0)) || (*i.ExitCode != 0) != nonzero || len(i.Command) != 3 || !nativeSameCwd(i.Cwd, r.FixtureRoot) {
+			continue
+		}
+		if r.SchemaVersion == "codex-native-tracer/v2" && (i.ID == "" || eventIDs[i.ID] != 1) {
 			continue
 		}
 		words, ok := nativeSimpleShellWords(i.Command[2])
@@ -1620,6 +1691,9 @@ func validateCodexNativeQualificationScenario(r codexNativeLiveReceipt, runRoot 
 		return fmt.Errorf("required runtime finalization replay evidence missing")
 	}
 	for _, child := range r.Workers {
+		if r.SchemaVersion == "codex-native-tracer/v2" && !child.ChildIdentityCorroborated {
+			return fmt.Errorf("worker %s lacks correlated spawn identity", child.WorkerName)
+		}
 		if child.ChildID == "" || child.ChildEvents == "" || len(child.ChildUnclassified) != 0 || !child.TerminalCorroborated || !child.SourceEventCorroborated || !child.ChecksPassed {
 			return fmt.Errorf("worker %s has incomplete actual terminal/check evidence", child.WorkerName)
 		}
@@ -1945,7 +2019,7 @@ func nativeCollectHostControlEvidence(r *codexNativeLiveReceipt, runRoot, fixtur
 }
 
 func nativeQualificationPrompt(r codexNativeLiveReceipt, scenario string) string {
-	prompt := fmt.Sprintf("$ant-build 1\nThis is the %s disposable qualification scenario. The prepared plan is fixture-authorized, not live planning or owner testimony. Use the installed ant-build skill, private support and runtime guide. Actual native helpers must do all assigned edits and checks; the parent coordinates only. Do not edit source/tests, run a surrogate worker, commit, publish, install, read credentials, or access other projects.\nUse individual simple shell commands, preferably text(await tools.exec_command({cmd:<literal>,workdir:<fixture>})); do not add JavaScript logic, Python snippets, shell batching/redirection, or helper rewrites. Independent read-only calls may use an awaited literal Promise.allSettled array and an indexed untouched-result print loop. If more detail is needed, use the already-owned helper summary, prompt, release and inspect operations, or simple cat/jq reads. Read the reviewed fixture request helper %s. It supplies individual real runtime operations; it never spawns or edits the project. Commands are python3 %s <operation> [worker-index], with bind <actual-child-ID> [worker-index]. Index means the original manifest dispatch index, not a new assignment. Each worker's requests/receipts remain separate. The actual host alone launches, messages and interrupts children. Pass every runtime prompt/release/context payload verbatim. Do not regenerate or summarize those payloads. This host encrypts exported message bodies: exact plaintext delivery cannot be independently corroborated from that export. Retain that limitation; do not invent proof or run ad hoc prompt-comparison scripts. Before valid recording exercise empty-result. After a valid record use stale-result and child-mismatch; both must refuse without durable changes. Inspect and stage have public --phase routes. Stop at build finalization, then replay finalization once. Unsupported capabilities stay unknown/refused; never invent a result.\n", scenario, r.CoordinatorPath, r.CoordinatorPath)
+	prompt := fmt.Sprintf("$ant-build 1\nThis is the %s disposable qualification scenario. The prepared plan is fixture-authorized, not live planning or owner testimony. Use the installed ant-build skill, private support and runtime guide. Actual native helpers must do all assigned edits and checks; the parent coordinates only. Do not edit source/tests, run a surrogate worker, commit, publish, install, read credentials, or access other projects.\nUse individual simple shell commands, preferably text(await tools.exec_command({cmd:<literal>,workdir:<fixture>})); do not add JavaScript logic, Python snippets, shell batching/redirection, or helper rewrites. Independent read-only calls may use an awaited literal Promise.allSettled array and an indexed untouched-result print loop. If more detail is needed, use the already-owned helper summary, prompt, release and inspect operations, or simple cat/jq reads. Read the reviewed fixture request helper %s. It supplies individual real runtime operations; it never spawns or edits the project. Commands are python3 %s <operation> [worker-index], with bind <actual-host-task-path-or-child-ID> [worker-index]. Bind resolves the returned host task path through actual call/result/activity and child metadata; use that task path unchanged for host messaging. Index means the original manifest dispatch index, not a new assignment. Each worker's requests/receipts remain separate. The actual host alone launches, messages and interrupts children. Pass every runtime prompt/release/context payload verbatim. Do not regenerate or summarize those payloads. This host encrypts exported message bodies: exact plaintext delivery cannot be independently corroborated from that export. Retain that limitation; do not invent proof or run ad hoc prompt-comparison scripts. Before valid recording exercise empty-result. After a valid record use stale-result and child-mismatch; both must refuse without durable changes. Inspect and stage have public --phase routes. Stop at build finalization, then replay finalization once. Unsupported capabilities stay unknown/refused; never invent a result.\n", scenario, r.CoordinatorPath, r.CoordinatorPath)
 	switch scenario {
 	case "review":
 		prompt += "Explicit independent review is requested. The helper manifest operation requests the runtime-selected Watcher for a named reason. Respect execution waves: finish and record Builder before starting the later Watcher. Watcher must independently read the implementation, run the actual fixture suite, and return concrete useful findings in its runtime-selected contract. Its profile includes behavioral review restrictions, not per-child OS read-only enforcement. Only the Builder edits clamp.go.\n"
@@ -1965,7 +2039,7 @@ func nativeQualificationCoordinator(source, scenario string) string {
 	source = strings.Replace(source, "op = sys.argv[1]", "op = sys.argv[1]\nscenario = "+strconv.Quote(scenario)+`
 worker_index = int(sys.argv[-1]) if len(sys.argv) > 2 and sys.argv[-1].isdigit() else 0
 def scoped(name):
-    if name.startswith(("reserve", "reservation", "bind", "record", "context", "question", "observe", "child-terminal", "empty-result", "stale-result", "child-mismatch")):
+    if name.startswith(("reserve", "reservation", "bind", "record", "context", "question", "observe", "child-identity", "child-terminal", "empty-result", "stale-result", "child-mismatch")):
         return "w" + str(worker_index) + "-" + name
     return name
 `, 1)
@@ -2373,6 +2447,7 @@ func nativePrepareLiveFixture(t *testing.T, root, runRoot string, scenarios ...s
 
 func resetCodexNativeDerivedEvidence(r *codexNativeLiveReceipt) {
 	r.SessionID, r.ChildID, r.ChildEvents = "", "", ""
+	r.ChildTaskPath, r.ChildSpawnCallID, r.ChildIdentityCorroborated = "", "", false
 	r.AttemptPath, r.AttemptID, r.RunID, r.LaunchID, r.WorkerName, r.TaskID = "", "", "", "", "", ""
 	r.PromptSHA256, r.ResultSHA256, r.CompletionPath, r.BoundHostSessionID = "", "", "", ""
 	r.SavedTerminal, r.SavedSourceEventID, r.SavedSourceEventSHA256 = nil, "", ""
@@ -2466,6 +2541,12 @@ func nativeCollectLiveEvidence(t *testing.T, r *codexNativeLiveReceipt, runRoot,
 		r.PromptSHA256, r.ResultSHA256, r.CompletionPath = worker.Native.PromptSHA256, worker.ResultSHA256, attempt.CompletionPath
 		liveSkillWrite(t, filepath.Join(runRoot, "terminal-attempt.json"), raw)
 	}
+	// Resolve all journal-bound children before classifying parent bind argv.
+	// A display path is allowed only when the actual host chain proves it.
+	if r.SchemaVersion == "codex-native-tracer/v2" {
+		nativeCollectChildIdentity(r, fixtureHome)
+		nativeCollectQualificationWorkers(t, r, runRoot, fixtureHome)
+	}
 	// Each fact requires one unique raw capture; neither a missing nor a
 	// duplicated child/parent export inherits an earlier proof.
 	for _, id := range []string{r.ChildID, r.SessionID} {
@@ -2509,7 +2590,66 @@ func nativeCollectLiveEvidence(t *testing.T, r *codexNativeLiveReceipt, runRoot,
 	if raw, err := diff.Output(); err == nil {
 		liveSkillWrite(t, filepath.Join(runRoot, "child-edit.patch"), raw)
 	}
-	nativeCollectQualificationWorkers(t, r, runRoot, fixtureHome)
+	if r.SchemaVersion != "codex-native-tracer/v2" {
+		nativeCollectQualificationWorkers(t, r, runRoot, fixtureHome)
+	}
+}
+
+// Reuse the coordinator's pure resolver with inventory-checked raw bytes. This
+// observer runs no coordinator operations and never launches a native helper.
+func nativeCollectChildIdentity(r *codexNativeLiveReceipt, fixtureHome string) {
+	r.ChildTaskPath, r.ChildSpawnCallID, r.ChildIdentityCorroborated = "", "", false
+	paths, _ := filepath.Glob(filepath.Join(fixtureHome, ".codex", "sessions", "*", "*", "*", "*.jsonl"))
+	var events []json.RawMessage
+	var metadata []json.RawMessage
+	for _, path := range paths {
+		raw, err := r.readEvidence(path)
+		if err != nil {
+			continue
+		}
+		lines := bytes.Split(bytes.TrimSpace(raw), []byte{'\n'})
+		if len(lines) == 0 {
+			continue
+		}
+		var first nativeHostEvent
+		if json.Unmarshal(lines[0], &first) != nil || first.Type != "session_meta" {
+			continue
+		}
+		if first.Payload.ParentThreadID != "" {
+			metadata = append(metadata, json.RawMessage(lines[0]))
+		}
+		if first.Payload.ID == r.BoundHostSessionID && first.Payload.ParentThreadID == "" {
+			if events != nil {
+				return
+			}
+			for _, line := range lines {
+				events = append(events, json.RawMessage(line))
+			}
+		}
+	}
+	start := strings.Index(nativeFixtureCoordinator, "def resolve_native_child(")
+	end := strings.Index(nativeFixtureCoordinator, "def bound_native_child(")
+	input, err := json.Marshal(map[string]any{"events": events, "metadata": metadata, "target": r.ChildID, "parent": r.BoundHostSessionID, "cwd": r.FixtureRoot})
+	if err != nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", "-c", "import json,sys\n"+nativeFixtureCoordinator[start:end]+"\nprint(json.dumps(resolve_native_child(**json.load(sys.stdin))))")
+	cmd.Stdin = bytes.NewReader(input)
+	raw, err := cmd.Output()
+	if err != nil {
+		return
+	}
+	var result struct {
+		ChildID  string `json:"child_id"`
+		TaskPath string `json:"task_path"`
+		CallID   string `json:"call_id"`
+	}
+	if json.Unmarshal(raw, &result) != nil || result.ChildID != r.ChildID {
+		return
+	}
+	r.ChildTaskPath, r.ChildSpawnCallID, r.ChildIdentityCorroborated = result.TaskPath, result.CallID, true
 }
 
 // Only thread-attributed host items qualify. A child's rollout also contains
@@ -2557,6 +2697,9 @@ func nativeCollectQualificationWorkers(t *testing.T, r *codexNativeLiveReceipt, 
 			} else {
 				child.ChildEvents = ""
 			}
+		}
+		if r.SchemaVersion == "codex-native-tracer/v2" {
+			nativeCollectChildIdentity(&child, fixtureHome)
 		}
 		r.Workers = append(r.Workers, child)
 	}
@@ -2647,13 +2790,20 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 	metadataSeen := false
 	childTurns := nativeOwnedHostTurns(raw, r.ChildID)
 	type pendingCheck struct {
-		command []string
-		turn    string
-		epoch   int
+		command       []string
+		turn          string
+		epoch         int
+		priorProof    bool
+		observedPlain bool
 	}
 	pendingChecks := map[string]pendingCheck{}
 	callCounts, outputCounts := map[string]int{}, map[string]int{}
+	commandEventCounts := map[string]int{}
 	for _, line := range bytes.Split(raw, []byte{'\n'}) {
+		var event nativeHostEvent
+		if json.Unmarshal(line, &event) == nil && event.Type == "event_msg" && event.Payload.Type == "item_completed" && event.Payload.Item.Type == "CommandExecution" {
+			commandEventCounts[event.Payload.Item.ID]++
+		}
 		var w nativeCodeModeWire
 		if json.Unmarshal(line, &w) == nil && w.Type == "response_item" && w.Payload.CallID != "" {
 			if w.Payload.Type == "custom_tool_call" {
@@ -2715,10 +2865,11 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 							}
 							words, _ := nativeFixtureShellWords(argv)
 							if len(words) >= 2 && words[0] == "go" && words[1] == "test" {
+								priorProof := r.ChecksPassed
 								r.ChecksPassed = false
 								checkEpoch++
 								if allowed && len(commands) == 1 && p.CallID != "" && callCounts[p.CallID] == 1 && outputCounts[p.CallID] == 1 {
-									pendingChecks[p.CallID] = pendingCheck{command: argv, turn: p.Metadata.TurnID, epoch: checkEpoch}
+									pendingChecks[p.CallID] = pendingCheck{command: argv, turn: p.Metadata.TurnID, epoch: checkEpoch, priorProof: priorProof}
 								}
 							}
 						}
@@ -2729,7 +2880,7 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 					delete(pendingChecks, p.CallID)
 					if ok && pending.turn == p.Metadata.TurnID && pending.epoch == checkEpoch {
 						exit, output, complete := nativeCodeModeResult(wire)
-						r.ChecksPassed = complete && exit == 0 && nativeAssignedFixtureTest(*r, pending.command, output)
+						r.ChecksPassed = complete && exit == 0 && (nativeAssignedFixtureTest(*r, pending.command, output) || (pending.priorProof && pending.observedPlain))
 					}
 				}
 			}
@@ -2775,6 +2926,18 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 				r.ChecksPassed = false
 			}
 			if i.ExitCode != nil && nativeSameCwd(i.Cwd, r.FixtureRoot) {
+				// A later successful plain suite cannot create uncached proof, but
+				// must not erase an already proved unchanged-source uncached suite.
+				// Restore only after this unique same-turn event AND its exact output.
+				if len(words) == 3 && words[0] == "go" && words[1] == "test" && words[2] == "./..." && *i.ExitCode == 0 && i.ID != "" && commandEventCounts[i.ID] == 1 {
+					for id, pending := range pendingChecks {
+						w, _ := nativeFixtureShellWords(pending.command)
+						if pending.priorProof && pending.turn == p.TurnID && pending.epoch+1 == checkEpoch && len(w) == 3 && w[0] == "go" && w[1] == "test" && w[2] == "./..." {
+							pending.epoch, pending.observedPlain = checkEpoch, true
+							pendingChecks[id] = pending
+						}
+					}
+				}
 				if nativeAssignedFixtureCommand(*r, i.Command) {
 					r.ChecksPassed = *i.ExitCode == 0 && nativeAssignedFixtureTest(*r, i.Command, i.Output)
 				} else if *i.ExitCode != 0 && len(i.Command) == 3 {
@@ -2982,6 +3145,12 @@ func nativeApplyUnifiedDiff(source, patch string) (string, error) {
 }
 
 func validateCodexNativeLiveReceipt(r codexNativeLiveReceipt) error {
+	if r.SchemaVersion == "codex-native-tracer/v2" && !r.ChildIdentityCorroborated {
+		return fmt.Errorf("actual spawn call/result/activity and child metadata mapping incomplete")
+	}
+	if r.SchemaVersion == "codex-native-tracer/v2" && r.Scenario == "ordinary" && !r.FinalizationReplayStable {
+		return fmt.Errorf("ordinary exactly-once finalization replay incomplete")
+	}
 	if r.ExitStatus != 0 {
 		return fmt.Errorf("actual Codex parent exited %d; see %s", r.ExitStatus, r.RawStderr)
 	}
@@ -3026,11 +3195,55 @@ func validateCodexNativeLiveReceipt(r codexNativeLiveReceipt) error {
 
 // Inspect actual parent calls separately. The native tool count is independent
 // of the parent CLI's display schema; no assistant text counts as a launch.
+// Codex may deliver the selected skill as a host-tagged input rather than a
+// shell read. Require that exact host shape, unique message, owned turn, path
+// and complete installed bytes; ordinary user prose never proves selection.
+func nativeSelectedSkillDelivered(r codexNativeLiveReceipt, raw []byte) bool {
+	skill, err := r.readEvidence(r.SkillPath)
+	if err != nil || len(skill) == 0 {
+		return false
+	}
+	expected := "<skill>\n<name>ant-build</name>\n<path>" + r.SkillPath + "</path>\n" + string(skill) + "\n</skill>"
+	turns := nativeOwnedHostTurns(raw, r.SessionID)
+	ids := map[string]int{}
+	var matches []string
+	for _, line := range bytes.Split(raw, []byte{'\n'}) {
+		var e struct {
+			Type    string `json:"type"`
+			Payload struct {
+				Type    string `json:"type"`
+				ID      string `json:"id"`
+				Role    string `json:"role"`
+				Content []struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				} `json:"content"`
+				Metadata struct {
+					TurnID string   `json:"turn_id"`
+					Kinds  []string `json:"content_item_kinds"`
+				} `json:"internal_chat_message_metadata_passthrough"`
+			} `json:"payload"`
+		}
+		if json.Unmarshal(line, &e) != nil || e.Type != "response_item" || e.Payload.Type != "message" {
+			continue
+		}
+		p := e.Payload
+		ids[p.ID]++
+		if p.ID != "" && p.Role == "user" && turns[p.Metadata.TurnID] && len(p.Metadata.Kinds) == 1 && p.Metadata.Kinds[0] == "skills.selected_skill_instructions" && len(p.Content) == 1 && p.Content[0].Type == "input_text" && p.Content[0].Text == expected {
+			matches = append(matches, p.ID)
+		}
+	}
+	return len(matches) == 1 && ids[matches[0]] == 1
+}
+
 func nativeInspectParentEvents(r *codexNativeLiveReceipt, raw []byte) {
 	var metadata nativeHostEvent
 	if json.Unmarshal(bytes.SplitN(raw, []byte{'\n'}, 2)[0], &metadata) != nil || metadata.Type != "session_meta" || metadata.Payload.ID != r.SessionID || metadata.Payload.ParentThreadID != "" {
 		r.ParentSubstitution = true // attribution is missing; fail closed
 		return
+	}
+	if r.SchemaVersion == "codex-native-tracer/v2" && nativeSelectedSkillDelivered(*r, raw) {
+		r.SkillRead = true
 	}
 	scanner := bufio.NewScanner(bytes.NewReader(raw))
 	scanner.Buffer(make([]byte, 65536), 16<<20)
@@ -3110,7 +3323,9 @@ func nativeInspectParentEvents(r *codexNativeLiveReceipt, raw []byte) {
 		}
 		if p.Type == "custom_tool_call" && (p.Name == "exec" || strings.HasSuffix(p.Name, ".exec")) {
 			commands, ok := nativeCodeModeCommands(p.Input, metadata.Payload.Cwd)
-			if ok && strings.Contains(p.Input, "Promise.allSettled") {
+			// Legacy receipts retain their original literal-only interpretation.
+			// Every new capture requires actual events for single commands too.
+			if ok && (r.SchemaVersion == "codex-native-tracer/v2" || strings.Contains(p.Input, "Promise.allSettled")) {
 				ok = nativeCorroboratedBatch(raw, r.SessionID, p.CallID, commands)
 			}
 			if !ok {
@@ -3148,6 +3363,9 @@ func nativeCoordinatorPathMatches(r *codexNativeLiveReceipt, cwd, path string) b
 }
 
 func nativeParentCoordinationCommand(r *codexNativeLiveReceipt, command []string, actualCwd ...string) bool {
+	if len(actualCwd) > 0 && !nativeSameCwd(actualCwd[0], r.FixtureRoot) {
+		return false
+	}
 	if len(command) != 3 || (command[1] != "-lc" && command[1] != "-c") {
 		return false
 	}
@@ -3189,7 +3407,25 @@ func nativeParentCoordinationCommand(r *codexNativeLiveReceipt, command []string
 		case "manifest", "reserve", "record", "inspect", "stage", "finalize", "empty-result", "context":
 			return len(words) == 3
 		case "bind":
-			return len(words) == 4 && regexp.MustCompile(`^[A-Za-z0-9-]+$`).MatchString(words[3])
+			if len(words) != 4 {
+				return false
+			}
+			if r.SchemaVersion != "codex-native-tracer/v2" {
+				return regexp.MustCompile(`^[A-Za-z0-9-]+$`).MatchString(words[3])
+			}
+			matches := func(child codexNativeLiveReceipt) bool {
+				return child.ChildIdentityCorroborated && child.BoundHostSessionID == r.SessionID &&
+					(words[3] == child.ChildID || words[3] == child.ChildTaskPath)
+			}
+			if matches(*r) {
+				return true
+			}
+			for _, child := range r.Workers {
+				if matches(child) {
+					return true
+				}
+			}
+			return false
 		case "prompt", "release", "summary", "question", "answer", "running", "context-ack", "cancel-requested", "cancelled", "unavailable", "launch-unresolved", "stale-result", "child-mismatch", "resume", "pause":
 			return qualification && len(words) == 3
 		}
@@ -3453,6 +3689,9 @@ func nativeReplayQualificationReceipt(t *testing.T, r *codexNativeLiveReceipt) e
 		}
 		switch r.Scenario {
 		case "ordinary", "early-resume":
+			if r.Scenario == "ordinary" {
+				r.FinalizationReplayStable = nativeFinalizationReplayEvidence(*r, coord)
+			}
 			if err := validateCodexNativeLiveReceipt(*r); err != nil {
 				return err
 			}
@@ -3683,10 +3922,18 @@ func nativeCorroboratedBatch(raw []byte, thread, callID string, commands []nativ
 		if !active {
 			continue
 		}
-		if e.Payload.ThreadID != thread || e.Payload.TurnID != turn || i.ID == "" || i.Status != "completed" || i.ExitCode == nil || len(i.Command) != 3 || (i.Command[1] != "-lc" && i.Command[1] != "-c") {
+		if e.Payload.ThreadID != thread || e.Payload.TurnID != turn || i.ID == "" || i.ExitCode == nil || (i.Status != "completed" && !(i.Status == "failed" && *i.ExitCode != 0)) || len(i.Command) != 3 || (i.Command[1] != "-lc" && i.Command[1] != "-c") {
 			return false
 		}
-		key := i.Cwd + "\x00" + i.Command[2]
+		key := ""
+		for _, c := range commands {
+			if nativeSameCwd(i.Cwd, c.Cwd) && i.Command[2] == c.Command {
+				if key != "" {
+					return false
+				}
+				key = c.Cwd + "\x00" + c.Command
+			}
+		}
 		if !wanted[key] || seen[key] {
 			return false
 		}
