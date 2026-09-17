@@ -751,7 +751,7 @@ For dummies: A worker actually receives the job, does it, and returns saved work
 
 **Context and research:** [204.2-CONTEXT.md](phases/204.2-codex-native-worker-lifecycle/204.2-CONTEXT.md), [204.2-RESEARCH.md](phases/204.2-codex-native-worker-lifecycle/204.2-RESEARCH.md).
 
-**Plans:** 5/8 plans executed in 6 waves; admission, context, journal finalization and recovery are merged and reviewed.
+**Plans:** 6/8 plans executed in 6 waves; admission, context, bound questions, journal finalization and recovery are merged and reviewed.
 
 Plans:
 
@@ -771,7 +771,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 204.2-04-PLAN.md — Route native worker questions and owner answers through the governed decision path.
+- [x] 204.2-04-PLAN.md — Route native worker questions and owner answers through the governed decision path.
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
