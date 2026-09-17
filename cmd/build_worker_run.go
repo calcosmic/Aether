@@ -421,6 +421,12 @@ func buildCompletionFromWorkerRuns(record buildAttemptRecord) (codexExternalBuil
 			return codexExternalBuildCompletion{}, false
 		}
 		result := workerRun.Result
+		status := result.Status
+		if workerRun.Native != nil && status == buildWorkerCancelled {
+			// Host-confirmed cancellation/no-launch remains immutable in the
+			// journal. The existing completion contract calls it interrupted.
+			status = "interrupted"
+		}
 		summary := strings.TrimSpace(result.Summary)
 		if summary == "" {
 			summary = strings.TrimSpace(result.Error)
@@ -435,7 +441,7 @@ func buildCompletionFromWorkerRuns(record buildAttemptRecord) (codexExternalBuil
 			Caste:         dispatch.Caste,
 			Name:          dispatch.Name,
 			Task:          dispatch.Task,
-			Status:        result.Status,
+			Status:        status,
 			Summary:       summary,
 			TaskID:        dispatch.TaskID,
 			Duration:      result.Duration,
@@ -451,6 +457,8 @@ func buildCompletionFromWorkerRuns(record buildAttemptRecord) (codexExternalBuil
 			TaskReceipts: append([]codex.TaskReceipt(nil), result.TaskReceipts...),
 			Blockers:     append([]string(nil), result.Blockers...),
 			Handoff:      result.Handoff,
+			Artifacts:    result.Artifacts,
+			ScoutReport:  result.ScoutReport,
 		})
 	}
 	manifest := *record.PlanManifest

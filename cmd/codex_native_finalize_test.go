@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -298,4 +299,200 @@ func cloneNativeCompletion(t *testing.T, packet codexExternalBuildCompletion) co
 		t.Fatal(err)
 	}
 	return result
+}
+
+func TestCodexNativeFinalizeConcurrentSupersession(t *testing.T) {
+	for _, change := range []string{"pause", "supersede", "journal"} {
+		t.Run(change, func(t *testing.T) {
+			root, manifest, requests := nativeFinalizeFixture(t, 1)
+			nativeFinalizeRecord(t, manifest, requests[0], "completed")
+			path, packet := nativeFinalizeProjection(t)
+			var changedState []byte
+			hooks := codexNativeFinalizeHooks{BeforeCommit: func() {
+				switch change {
+				case "pause":
+					if _, err := pauseColonyAt(time.Now()); err != nil {
+						t.Fatal(err)
+					}
+				case "supersede":
+					if _, _, _, _, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{Force: true}); err != nil {
+						t.Fatal(err)
+					}
+				case "journal":
+					var saved buildAttemptRecord
+					if err := store.LoadJSON(path, &saved); err != nil {
+						t.Fatal(err)
+					}
+					saved.WorkerRuns[0].ResultSHA256 = strings.Repeat("b", 64)
+					if err := store.SaveJSON(path, saved); err != nil {
+						t.Fatal(err)
+					}
+				}
+				changedState = nativeFinalizeStateBytes(t)
+			}}
+			if _, _, _, _, err := runCodexBuildFinalizeWithHooks(root, 1, packet, true, hooks); err == nil {
+				t.Fatal("late change earned native credit")
+			}
+			if changedState == nil || !bytes.Equal(changedState, nativeFinalizeStateBytes(t)) {
+				t.Fatal("late change was overwritten by finalizer")
+			}
+		})
+	}
+	// A real pause contends after the finalizer's fresh currency read. It must
+	// observe the committed result after the repository session is released.
+	t.Run("pause-cannot-cross-final-credit", func(t *testing.T) {
+		root, manifest, requests := nativeFinalizeFixture(t, 1)
+		nativeFinalizeRecord(t, manifest, requests[0], "completed")
+		_, packet := nativeFinalizeProjection(t)
+		ready, release := make(chan struct{}), make(chan struct{})
+		finalized := make(chan error, 1)
+		go func() {
+			_, _, _, _, err := runCodexBuildFinalizeWithHooks(root, 1, packet, true, codexNativeFinalizeHooks{AfterCurrencyCheck: func() { close(ready); <-release }})
+			finalized <- err
+		}()
+		<-ready
+		started, paused := make(chan struct{}), make(chan error, 1)
+		go func() { close(started); _, err := pauseColonyAt(time.Now()); paused <- err }()
+		<-started
+		close(release)
+		if err := <-finalized; err != nil {
+			t.Fatal(err)
+		}
+		if err := <-paused; err != nil && !strings.Contains(err.Error(), "baseline changed") {
+			t.Fatal(err)
+		}
+		var state colony.ColonyState
+		if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+			t.Fatal(err)
+		}
+		if state.Plan.Phases[0].Tasks[0].Status != colony.TaskCompleted {
+			t.Fatal("pause lost accepted finalizer credit")
+		}
+	})
+}
+
+func TestCodexNativeFinalizeNoLaunch(t *testing.T) {
+	manifest, request := nativeAdmissionFixture(t)
+	request = nativeReserveForTest(t, request)
+	request.ChildID = ""
+	request.ObservationStatus, request.ObservedAt = "no_launch", time.Now().UTC().Format(time.RFC3339Nano)
+	request.SourceEventID, request.SourceEventSHA256 = "no-launch-event", strings.Repeat("a", 64)
+	if _, err := runCodexNativeWorker("observe", nativeRequestPath(t, request)); err != nil {
+		t.Fatal(err)
+	}
+	path, packet := nativeFinalizeProjection(t)
+	if packet.Dispatches[0].Status != "interrupted" || len(packet.Dispatches[0].TaskReceipts) != 0 {
+		t.Fatal("no-launch projected work or success")
+	}
+	if _, _, err := stageBuildAttemptCompletion(path, packet); err != nil {
+		t.Fatal(err)
+	}
+	state := nativeFinalizeStateBytes(t)
+	if _, _, _, _, err := runCodexBuildFinalize(manifest.Root, 1, packet, true); err == nil {
+		t.Fatal("no-launch alone claimed a successful build")
+	}
+	if !bytes.Equal(state, nativeFinalizeStateBytes(t)) {
+		t.Fatal("no-launch earned credit")
+	}
+	// Pending cancellation is NOT confirmed termination, even if a malicious
+	// aggregate fills in success prose for that still-running reservation.
+	var saved buildAttemptRecord
+	if err := store.LoadJSON(path, &saved); err != nil {
+		t.Fatal(err)
+	}
+	if saved.WorkerRuns[0].Status != buildWorkerCancelled || saved.WorkerRuns[0].Native.LaunchState != "no_launch" {
+		t.Fatal("no-launch journal was rewritten")
+	}
+}
+
+func TestCodexNativeFinalizeSavedFindings(t *testing.T) {
+	_, manifest, requests := nativeFinalizeFixture(t, 1)
+	r := nativeTerminalRequestForTest(t, requests[0], manifest.Dispatches[0].Caste, "completed")
+	r.Result.Artifacts = map[string]json.RawMessage{"review": json.RawMessage(`{"findings":[{"severity":"low","detail":"actual saved finding"}]}`)}
+	r.Result.ScoutReport = json.RawMessage(`{"finding":"actual independent observation"}`)
+	r.Result.Handoff.KnownFailures = []string{"actual retained limitation"}
+	if _, err := runCodexNativeWorker("record", nativeRequestPath(t, r)); err != nil {
+		t.Fatal(err)
+	}
+	path, packet := nativeFinalizeProjection(t)
+	packet = cloneNativeCompletion(t, packet)
+	if len(packet.Dispatches[0].Artifacts) != 1 || len(packet.Dispatches[0].ScoutReport) == 0 {
+		t.Fatal("aggregate dropped actual findings")
+	}
+	staged, _, err := stageBuildAttemptCompletion(path, packet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(manifest.Root, staged)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCodexNativeFinalizeResumedState(t *testing.T) {
+	for _, mutation := range []string{"none", "goal", "plan", "task", "receipt"} {
+		t.Run(mutation, func(t *testing.T) {
+			root, manifest, requests := nativeFinalizeFixture(t, 1)
+			nativeFinalizeRecord(t, manifest, requests[0], "completed")
+			_, packet := nativeFinalizeProjection(t)
+			if mutation == "goal" || mutation == "plan" || mutation == "task" {
+				var altered colony.ColonyState
+				if err := store.LoadJSON("COLONY_STATE.json", &altered); err != nil {
+					t.Fatal(err)
+				}
+				switch mutation {
+				case "goal":
+					goal := "Different work before a genuine pause"
+					altered.Goal = &goal
+				case "plan":
+					altered.Plan.Phases[0].Description = "Different plan before a genuine pause"
+				case "task":
+					altered.Plan.Phases[0].Tasks[0].Status = colony.TaskCompleted
+				}
+				if err := store.SaveJSON("COLONY_STATE.json", altered); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := pauseColonyAt(time.Now()); err != nil {
+				t.Fatal(err)
+			}
+			if mutation == "none" {
+				_, saved, _ := loadLatestBuildAttempt(1)
+				var pausedState colony.ColonyState
+				if err := store.LoadJSON("COLONY_STATE.json", &pausedState); err != nil {
+					t.Fatal(err)
+				}
+				if err := validateCodexNativeAttemptState(saved, pausedState); err != nil {
+					t.Fatalf("genuine paused recovery rejected: %v", err)
+				}
+			}
+			outcome, err := resumeColonyAt(time.Now().Add(time.Second))
+			if err != nil || outcome.Provenance == colony.RecoveryProvenanceConflicting || outcome.Provenance == colony.RecoveryProvenanceUnknown {
+				t.Fatalf("real resume failed: %+v %v", outcome, err)
+			}
+			var state colony.ColonyState
+			if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+				t.Fatal(err)
+			}
+			if mutation == "receipt" {
+				state.PauseHandoff.Digest = strings.Repeat("b", 64)
+				if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+					t.Fatal(err)
+				}
+			}
+			before := nativeFinalizeStateBytes(t)
+			_, got, _, _, err := runCodexBuildFinalize(root, 1, packet, true)
+			if mutation == "none" {
+				if err != nil || got.State != colony.StateBUILT {
+					t.Fatalf("valid resume lost terminal credit: %v", err)
+				}
+			} else {
+				if err == nil {
+					t.Fatal("resume provenance hid work-state drift")
+				}
+				if !bytes.Equal(before, nativeFinalizeStateBytes(t)) {
+					t.Fatal("rejected resumed packet changed state")
+				}
+			}
+		})
+	}
 }
