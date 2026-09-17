@@ -1242,6 +1242,8 @@ func nativeParentCoordinationCommand(r *codexNativeLiveReceipt, command []string
 		return len(words) == 4 && words[1] == "-n" && regexp.MustCompile(`^[0-9]+(?:,[0-9]+)?p$`).MatchString(words[2])
 	case "head":
 		return len(words) == 4 && words[1] == "-n" && regexp.MustCompile(`^[0-9]+$`).MatchString(words[2]) && !strings.HasPrefix(words[3], "-")
+	case "rg":
+		return len(words) == 3 && words[1] == "--files" && filepath.IsAbs(words[2])
 	case "jq":
 		args := words[1:]
 		if len(args) > 0 && (args[0] == "-r" || args[0] == "-c" || args[0] == "-S") {
