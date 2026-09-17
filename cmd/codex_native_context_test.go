@@ -250,3 +250,241 @@ func TestCodexNativeContextOptionalAndFallback(t *testing.T) {
 		t.Fatal("invalid UTF-8 would be normalized on the JSON boundary")
 	}
 }
+
+func nativeContextWireForTest(t *testing.T, request codexNativeWorkerRequest) map[string]any {
+	t.Helper()
+	raw, _ := json.Marshal(request)
+	var wire map[string]any
+	if err := json.Unmarshal(raw, &wire); err != nil {
+		t.Fatal(err)
+	}
+	return wire
+}
+func nativeContextResponseForTest(t *testing.T, request codexNativeWorkerRequest) map[string]any {
+	t.Helper()
+	response, err := runCodexNativeWorker("context", nativeRequestPath(t, request))
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(response)
+	var wire map[string]any
+	if err := json.Unmarshal(raw, &wire); err != nil {
+		t.Fatal(err)
+	}
+	return wire
+}
+func nativeContextAckForTest(t *testing.T, request codexNativeWorkerRequest, delivery map[string]any) map[string]any {
+	t.Helper()
+	wire := nativeContextWireForTest(t, request)
+	wire["observation_status"] = "context_delivered"
+	wire["observed_at"] = time.Now().UTC().Format(time.RFC3339Nano)
+	wire["source_event_id"] = "native-send-" + delivery["delivery_id"].(string)
+	wire["source_event_sha256"] = lifecycleDigest([]byte(wire["source_event_id"].(string)))
+	wire["context_delivery"] = delivery
+	wire["context_send"] = map[string]any{"status": "completed", "child_id": request.ChildID, "message_sha256": delivery["payload_sha256"]}
+	return wire
+}
+func nativeContextBoundFixture(t *testing.T) (codexBuildManifest, codexNativeWorkerRequest) {
+	t.Helper()
+	manifest, request, _ := nativeContextFixture(t)
+	request = nativeReserveForTest(t, request)
+	if _, err := runCodexNativeWorker("bind", nativeRequestPath(t, request)); err != nil {
+		t.Fatal(err)
+	}
+	return manifest, request
+}
+
+func TestCodexNativeContextDelta(t *testing.T) {
+	_, request := nativeContextBoundFixture(t)
+	_, beforeWorker, _ := loadLatestBuildAttempt(1)
+	originalPrompt := beforeWorker.WorkerRuns[0].Native.Prompt
+	answer, err := recordDecisionAnswer("What changed after launch?", "DELTA_NATIVE_MARKER", 1, "native-context-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := nativeJournalBytes(t)
+	first := nativeContextResponseForTest(t, request)
+	delivery, ok := first["context_delivery"].(map[string]any)
+	if !ok || first["context_status"] != "awaiting_delivery" {
+		t.Fatalf("missing pending delta: %+v", first)
+	}
+	payload := delivery["payload"].(string)
+	if strings.Count(payload, "DELTA_NATIVE_MARKER") != 1 || strings.Contains(payload, "ANSWER_NATIVE_MARKER") || !reflect.DeepEqual(delivery["decision_ids"], []any{answer.ID}) {
+		t.Fatalf("wrong delta payload: %+v", delivery)
+	}
+	if delivery["payload_sha256"] != lifecycleDigest([]byte(payload)) || delivery["child_id"] != request.ChildID {
+		t.Fatal("delta digest or target mismatch")
+	}
+	if !reflect.DeepEqual(first, nativeContextResponseForTest(t, request)) || !bytes.Equal(before, nativeJournalBytes(t)) {
+		t.Fatal("render retry changed delivery/state")
+	}
+	// A newer answer may arrive while the host sends the first envelope.
+	newer, err := recordDecisionAnswer("What changed during send?", "LATER_DELTA_MARKER", 1, "native-context-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ack := nativeContextAckForTest(t, request, delivery)
+	path := writeCodexNativeRequestForTest(t, ack)
+	accepted, err := runCodexNativeWorker("observe", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if accepted.Disposition != codexNativeAccepted {
+		t.Fatal("send was not acknowledged")
+	}
+	saved := nativeJournalBytes(t)
+	replay, err := runCodexNativeWorker("observe", path)
+	if err != nil || !replay.Replay || !reflect.DeepEqual(accepted.Receipt, replay.Receipt) || !bytes.Equal(saved, nativeJournalBytes(t)) {
+		t.Fatalf("acknowledgement replay changed facts: %+v %v", replay, err)
+	}
+	second := nativeContextResponseForTest(t, request)
+	next := second["context_delivery"].(map[string]any)
+	if !reflect.DeepEqual(next["decision_ids"], []any{newer.ID}) || strings.Contains(next["payload"].(string), "DELTA_NATIVE_MARKER") {
+		t.Fatal("acknowledged answer was delivered twice")
+	}
+	if _, err := runCodexNativeWorker("observe", writeCodexNativeRequestForTest(t, nativeContextAckForTest(t, request, next))); err != nil {
+		t.Fatal(err)
+	}
+	done := nativeContextResponseForTest(t, request)
+	if done["context_status"] != "no_updates" || done["context_delivery"] != nil {
+		t.Fatalf("acknowledged context still pending: %v", done)
+	}
+	lookup := nativeContextWireForTest(t, request)
+	lookup["context_delivery_id"] = delivery["delivery_id"]
+	receipt, err := runCodexNativeWorker("context", writeCodexNativeRequestForTest(t, lookup))
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(receipt)
+	var observed map[string]any
+	_ = json.Unmarshal(raw, &observed)
+	if observed["context_status"] != "delivered" || !reflect.DeepEqual(observed["context_delivery"], delivery) {
+		t.Fatal("delivery receipt did not retain exact sent envelope")
+	}
+	_, record, _ := loadLatestBuildAttempt(1)
+	if record.WorkerRuns[0].Native.Prompt != originalPrompt || record.WorkerRuns[0].Native.PromptSHA256 != request.PromptSHA256 || len(record.WorkerRuns[0].Native.ContextDeliveryIDs) != 2 {
+		t.Fatal("context changed launch identity or omitted delivery facts")
+	}
+}
+
+func TestCodexNativeContextDeliveryBinding(t *testing.T) {
+	for _, change := range []string{"wrong-child", "wrong-host", "wrong-attempt", "wrong-workspace", "stale-goal", "stale-session", "superseded-attempt", "no-event", "send-pending", "send-failed", "send-wrong-child", "send-wrong-bytes", "payload-substitution", "same-delivery-new-event"} {
+		t.Run(change, func(t *testing.T) {
+			_, request := nativeContextBoundFixture(t)
+			if _, err := recordDecisionAnswer("Which delta?", "BOUND_DELTA", 1, "native-context-test"); err != nil {
+				t.Fatal(err)
+			}
+			delivery := nativeContextResponseForTest(t, request)["context_delivery"].(map[string]any)
+			wire := nativeContextAckForTest(t, request, delivery)
+			if change == "same-delivery-new-event" {
+				if _, err := runCodexNativeWorker("observe", writeCodexNativeRequestForTest(t, wire)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			switch change {
+			case "wrong-child":
+				request.ChildID = "other-child"
+				wire["child_id"] = request.ChildID
+			case "wrong-host":
+				request.HostSessionID = "other-host"
+				wire["host_session_id"] = request.HostSessionID
+			case "wrong-attempt":
+				request.ExecutionBinding.AttemptID = "other-attempt"
+				wire["execution_binding"] = request.ExecutionBinding
+			case "wrong-workspace":
+				request.Workspace = t.TempDir()
+				wire["workspace"] = request.Workspace
+			case "stale-goal", "stale-session":
+				var state colony.ColonyState
+				if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+					t.Fatal(err)
+				}
+				changed := "replacement-context-scope"
+				if change == "stale-goal" {
+					state.Goal = &changed
+				} else {
+					state.SessionID = &changed
+				}
+				if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+					t.Fatal(err)
+				}
+			case "superseded-attempt":
+				var pointer latestBuildAttemptPointer
+				if err := store.LoadJSON(latestBuildAttemptPointerPath(1), &pointer); err != nil {
+					t.Fatal(err)
+				}
+				pointer.AttemptID = "new-attempt"
+				if err := store.SaveJSON(latestBuildAttemptPointerPath(1), pointer); err != nil {
+					t.Fatal(err)
+				}
+			case "no-event":
+				delete(wire, "source_event_id")
+			case "send-pending":
+				wire["context_send"].(map[string]any)["status"] = "running"
+			case "send-failed":
+				wire["context_send"].(map[string]any)["status"] = "failed"
+			case "send-wrong-child":
+				wire["context_send"].(map[string]any)["child_id"] = "other-child"
+			case "send-wrong-bytes":
+				wire["context_send"].(map[string]any)["message_sha256"] = lifecycleDigest([]byte("wrong"))
+			case "payload-substitution":
+				delivery["payload"] = "changed under same delivery ID"
+			case "same-delivery-new-event":
+				wire["source_event_id"] = "another-event"
+			}
+			var stateBefore map[string][]byte
+			stateBefore = nativeContextStateBytesForTest(t)
+			if _, err := runCodexNativeWorker("observe", writeCodexNativeRequestForTest(t, wire)); err == nil {
+				t.Fatal("mismatched or unconfirmed send was acknowledged")
+			}
+			if !reflect.DeepEqual(stateBefore, nativeContextStateBytesForTest(t)) {
+				t.Fatal("refused acknowledgement wrote state")
+			}
+			switch change {
+			case "wrong-child", "wrong-host", "wrong-attempt", "wrong-workspace", "stale-goal", "stale-session", "superseded-attempt":
+				if _, err := runCodexNativeWorker("context", nativeRequestPath(t, request)); err == nil {
+					t.Fatal("invalid target received a context delta")
+				}
+			}
+		})
+	}
+}
+
+func nativeContextStateBytesForTest(t *testing.T) map[string][]byte {
+	t.Helper()
+	files := map[string][]byte{}
+	if err := filepath.WalkDir(store.BasePath(), func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		files[path] = raw
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return files
+}
+func TestCodexNativeContextReadOnly(t *testing.T) {
+	_, request := nativeContextBoundFixture(t)
+	if _, err := recordDecisionAnswer("Current instruction?", "READONLY_DELTA", 1, "native-context-test"); err != nil {
+		t.Fatal(err)
+	}
+	before := nativeContextStateBytesForTest(t)
+	for i := 0; i < 3; i++ {
+		nativeContextResponseForTest(t, request)
+	}
+	if !reflect.DeepEqual(before, nativeContextStateBytesForTest(t)) {
+		t.Fatal("read-only context generation mutated store")
+	}
+	_, record, _ := loadLatestBuildAttempt(1)
+	if len(record.WorkerRuns[0].Native.ContextDeliveryIDs) != 0 {
+		t.Fatal("rendering acknowledged an unsent message")
+	}
+}
