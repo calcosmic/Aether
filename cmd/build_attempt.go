@@ -1014,6 +1014,20 @@ func stageBuildAttemptCompletionLocked(attemptRel string, completion codexExtern
 	if err := validateCodexNativeCompletion(existing, completion); err != nil {
 		return "", "", err
 	}
+	if buildAttemptHasNativeWorkers(existing) {
+		state, err := loadActiveColonyStateReadOnly()
+		if err != nil {
+			return "", "", err
+		}
+		if existing.Status == buildAttemptBuilt || existing.Status == buildAttemptPartial {
+			// Sealed exact-packet replay keeps its established lifecycle rules.
+			if err := validateBuildFinalizeStateStillCurrent(state, existing.Phase); err != nil {
+				return "", "", err
+			}
+		} else if err := validateCodexNativeAttemptState(existing, state); err != nil {
+			return "", "", err
+		}
+	}
 	// D-07: staging validates exactly what finalize validates, before
 	// anything is bound. A packet finalize would reject must never write the
 	// durable completion file or bind a digest/path to the attempt -- this is
@@ -1248,7 +1262,7 @@ func validateBuildAttemptManifestBinding(manifest codexBuildManifest, state colo
 		if err != nil {
 			return buildAttemptManifestBinding{}, fmt.Errorf("hash current colony state: %w", err)
 		}
-		if (latest.OriginalStateSHA == "" || latest.OriginalStateSHA != stateDigest) && !codexNativeAttemptSessionState(latest, state) {
+		if (latest.OriginalStateSHA == "" || latest.OriginalStateSHA != stateDigest) && !(buildAttemptHasNativeWorkers(latest) && codexNativeAttemptSessionState(latest, state)) {
 			return buildAttemptManifestBinding{}, fmt.Errorf("colony state changed after build attempt %s was prepared; discard the stale completion packet", attemptID)
 		}
 	}

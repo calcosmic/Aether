@@ -164,7 +164,8 @@ func validateCodexNativeFinalizeCurrency(record buildAttemptRecord, completion c
 // compare all work/colony fields against the hash-pinned pause preimage.
 // This is deliberately not a general state-hash exemption for native workers.
 func codexNativeAttemptSessionState(record buildAttemptRecord, state colony.ColonyState) bool {
-	if !buildAttemptHasNativeWorkers(record) || state.PauseHandoff == nil {
+	nativeIntent := record.HostPlatform == "codex" && record.ExecutionOwner == "host-queen" && record.PlanManifest != nil && record.PlanManifest.PlanOnly
+	if (!buildAttemptHasNativeWorkers(record) && !nativeIntent) || state.PauseHandoff == nil {
 		return false
 	}
 	handoff, err := loadValidatedPauseHandoff(*state.PauseHandoff)
@@ -206,9 +207,6 @@ var errCodexNativeFinalizeReadOnly = errors.New("native finalizer attempt read: 
 // Recovery and pre-credit admission share the same current work-state check.
 // Committed built/partial replay continues using its established receipt path.
 func validateCodexNativeAttemptState(record buildAttemptRecord, state colony.ColonyState) error {
-	if !buildAttemptHasNativeWorkers(record) {
-		return nil
-	}
 	state, err := migrateLoadedPlanningState(normalizeLegacyColonyState(state))
 	if err != nil {
 		return err
