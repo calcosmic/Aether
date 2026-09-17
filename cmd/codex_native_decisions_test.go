@@ -732,3 +732,132 @@ func TestCodexNativeDecisionFlagCompatibility(t *testing.T) {
 		})
 	}
 }
+
+func TestCodexNativeDecisionFlagUnknownFields(t *testing.T) {
+	_, d := nativeDecisionFixture(t)
+	if _, _, err := answerCodexNativeDecision(nativeAnswerForTest(d), codexNativeDecisionHooks{}); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(filepath.Join(store.BasePath(), pendingDecisionsFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var file map[string]any
+	if err = json.Unmarshal(raw, &file); err != nil {
+		t.Fatal(err)
+	}
+	file["future_envelope"] = map[string]any{"generation": "opaque-1"}
+	row := file["decisions"].([]any)[0].(map[string]any)
+	row["future_decision"] = map[string]any{"receipt": "opaque-2", "enabled": true}
+	if err = store.SaveJSON(pendingDecisionsFile, file); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = nativeDecisionCommandForTest(t, "flag-add", "--title", "Ordinary flag after owner answer"); err != nil {
+		t.Fatal(err)
+	}
+	var after map[string]any
+	if err = store.LoadJSON(pendingDecisionsFile, &after); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(file["future_envelope"], after["future_envelope"]) || !reflect.DeepEqual(row, after["decisions"].([]any)[0]) {
+		t.Fatal("flag write lost unknown metadata or changed native answer")
+	}
+	// Persistence keeps private metadata, while generic flag output retains its
+	// established projection. No new native binding or capability fields appear.
+	result, err := nativeDecisionCommandForTest(t, "flag-list", "--json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rendered, _ := json.Marshal(result)
+	if bytes.Contains(rendered, []byte("native_binding")) || bytes.Contains(rendered, []byte("future_decision")) {
+		t.Fatal("flag list widened its metadata projection")
+	}
+}
+func TestCodexNativeDecisionFlagProtectedRoutes(t *testing.T) {
+	for _, kind := range []string{"checkpoint", "waiver"} {
+		for _, operation := range []string{"resolve", "acknowledge", "age"} {
+			t.Run(kind+"/"+operation, func(t *testing.T) {
+				_, native := nativeDecisionFixture(t)
+				row := PendingDecision{ID: "protected-owner-row", Description: "Protected owner decision", CreatedAt: "2020-01-01T00:00:00Z", Source: "forced-reviewer-waiver", WaiverCapabilitySHA256: strings.Repeat("a", 64)}
+				if kind == "checkpoint" {
+					row.Source = "autopilot"
+					row.Type = "owner_confirmation"
+					row.CheckpointKey = "current-protected-key"
+					row.CheckpointCapabilitySHA256 = strings.Repeat("b", 64)
+					row.WaiverCapabilitySHA256 = ""
+				}
+				file := PendingDecisionFile{Decisions: []PendingDecision{native, row}}
+				if err := store.SaveJSON(pendingDecisionsFile, file); err != nil {
+					t.Fatal(err)
+				}
+				before := nativeDecisionStoreBytes(t)
+				var err error
+				switch operation {
+				case "resolve":
+					_, err = nativeDecisionCommandForTest(t, "flag-resolve", "--id", row.ID, "--message", "unbound authorization")
+				case "acknowledge":
+					_, err = nativeDecisionCommandForTest(t, "flag-acknowledge", "--id", row.ID)
+				case "age":
+					_, err = nativeDecisionCommandForTest(t, "flag-auto-resolve", "--max-days", "1")
+				}
+				if operation != "age" && err == nil {
+					t.Fatal("generic flag route accepted protected owner decision")
+				}
+				if operation == "age" && err != nil {
+					t.Fatal(err)
+				}
+				if !reflect.DeepEqual(before, nativeDecisionStoreBytes(t)) {
+					t.Fatal("flag route mutated protected decision or native neighbor")
+				}
+			})
+		}
+	}
+}
+
+func TestCodexNativeDecisionFlagConcurrentCommit(t *testing.T) {
+	_, native := nativeDecisionFixture(t)
+	staleRead, answerCommitted := make(chan struct{}), make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		var file colony.FlagsFile
+		if err := store.LoadJSON(pendingDecisionsFile, &file); err != nil {
+			done <- err
+			close(staleRead)
+			return
+		}
+		close(staleRead)
+		<-answerCommitted
+		// This is the production flag mutation primitive, given the same stale
+		// read that the registered commands may hold while another writer commits.
+		done <- updateFlagFile(&file, func() error {
+			file.Decisions = append(file.Decisions, colony.FlagEntry{ID: "interleaved-ordinary-flag", Type: "issue", Description: "An ordinary flag"})
+			return nil
+		})
+	}()
+	<-staleRead
+	if _, err := nativeDecisionCommandForTest(t, "decision-answer", "--native-request", nativeAnswerPathForTest(t, nativeAnswerForTest(native))); err != nil {
+		close(answerCommitted)
+		<-done
+		t.Fatal(err)
+	}
+	close(answerCommitted)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	var file PendingDecisionFile
+	if err := store.LoadJSON(pendingDecisionsFile, &file); err != nil {
+		t.Fatal(err)
+	}
+	foundAnswer, foundFlag := false, false
+	for _, row := range file.Decisions {
+		if row.ID == native.ID {
+			foundAnswer = row.Resolved && row.Resolution == nativeAnswerForTest(native).Answer && reflect.DeepEqual(row.NativeBinding, native.NativeBinding)
+		}
+		if row.ID == "interleaved-ordinary-flag" {
+			foundFlag = true
+		}
+	}
+	if !foundAnswer || !foundFlag {
+		t.Fatal("stale flag save overwrote concurrently committed native answer")
+	}
+}

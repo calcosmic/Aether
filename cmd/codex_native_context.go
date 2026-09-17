@@ -18,13 +18,14 @@ type codexNativePrompt struct {
 	DecisionIDs []string
 }
 
-// renderCodexNativeContextAnswers is the scope hook for Plan 04's protected
-// native-question renderer. Ordinary answers still use the one current-scope
+// renderCodexNativeContextAnswers combines exactly scoped native answers with
+// ordinary answers, which still use the one current-scope
 // resolver and integrity/budget renderer. Filter delivered IDs BEFORE packing
 // so older answers cannot crowd out newly applicable ones.
 func renderCodexNativeContextAnswers(manifest codexBuildManifest, dispatch codexBuildDispatch, launch, child string, excluded, onlyIDs []string) clarifiedIntentRenderResult {
 	file, _ := loadScopedPendingDecisionFile(loadCurrentPendingDecisionScope())
 	entries := resolvedClarifiedIntentEntries(file)
+	entries = append(entries, renderCodexNativeDecisionEntries(manifest, dispatch, launch, child)...)
 	seen := make(map[string]bool, len(excluded))
 	for _, id := range excluded {
 		seen[id] = true

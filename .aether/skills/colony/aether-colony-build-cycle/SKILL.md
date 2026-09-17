@@ -340,6 +340,59 @@ aether codex-native-worker record --request <absolute temporary request file>
     worker prose. Unknown outcomes remain incomplete, never reported as success.
     Keep `spawn-log`/`spawn-complete` and the visible native child panel truthful;
     render `ceremony worker-complete` after a saved terminal result.
+
+11a. **Codex native material questions and answers.** While a bound child is
+    working, relay its actual question through the runtime before asking the
+    owner. Keep the same saved assignment/child fields and add
+    `question: {question_id: <stable actual host question/event key>,
+    question: <the child's exact question>}`:
+
+```bash
+aether codex-native-worker question --request <same bound worker request file>
+```
+
+    After saving a terminal result, call this operation without `question` to
+    admit its saved handoff `open_decisions`. The runtime derives their stable
+    keys from the saved terminal event and handoff location. Show each pending
+    `decision.description` verbatim. The returned `answer_request_path` has the
+    exact `native_binding` and question with an empty answer. Copy only the
+    owner's actual answer into that file, then execute the exact returned
+    `answer_command`:
+
+```bash
+aether decision-answer --native-request <runtime-returned answer_request_path>
+```
+
+    Never invent an answer, change its binding or use the generic text answer
+    route. Native material clarification cannot authorize a checkpoint or
+    reviewer waiver. Harness/predeclared answers are test authorization, never
+    owner testimony. A repeated identical answer returns its original receipt;
+    a conflicting or stale answer refuses without creating a replacement.
+
+11b. For an answered, current live child, obtain the runtime's exact message:
+
+```bash
+aether codex-native-worker context --request <same bound worker request file>
+```
+
+    `awaiting_delivery` returns `context_delivery.payload`, `payload_sha256`,
+    `decision_ids` and the exact `child_id`. Send those bytes unchanged to that
+    child using the host native message operation. A read never acknowledges
+    delivery. Only after observing the send complete, call `observe` with the
+    exact binding, `observation_status: context_delivered`, the returned
+    `context_delivery`, `context_send: {status: completed, child_id,
+    message_sha256: <payload_sha256>}`, and the actual `observed_at`,
+    `source_event_id` and `source_event_sha256`. Failed or queued sends remain
+    unacknowledged; delivery alone does not prove consultation or useful influence.
+
+    On resume, inspect first, then run `question` for that same child.
+    `answered` means do not re-ask; `no_updates` means no message is needed,
+    and `delivered` is a historical receipt. A stale or paused refusal keeps the
+    choice pending: use the runtime recovery path, never relabel old text.
+    Terminal questions and answers remain attached to their saved handoff.
+    Do not reopen a terminal child or forward its answer to another worker;
+    surface the runtime-returned `next_command`.
+
 12. A stopped parent can read the retained attempt with
     `aether codex-native-worker inspect --request <file>` (schema version, phase,
     execution binding). This is read-only. Reuse saved terminal results without

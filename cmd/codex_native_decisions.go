@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -65,7 +66,8 @@ func codexNativeDecisionRowID(b codexNativeDecisionBinding) string {
 	return "native-question-" + digest
 }
 
-// Caller holds the existing repository mutation session, then worker mutex.
+// Mutating callers hold the existing repository mutation session, then worker
+// mutex. Read-only derivation revalidates under that session before returning.
 // Reuse the bridge's exact saved-manifest validator and the shared native state
 // validator rather than creating a second assignment or current-state authority.
 func currentCodexNativeDecisionTarget(request codexNativeWorkerRequest) (buildAttemptRecord, *buildAttemptWorkerRun, error) {
@@ -98,6 +100,16 @@ func currentCodexNativeDecisionTarget(request codexNativeWorkerRequest) (buildAt
 	}
 	if worker.Native.ChildID == "" || worker.Native.LaunchState == "reserved" || worker.Native.LaunchState == "no_launch" {
 		return record, nil, fmt.Errorf("native question requires a bound child")
+	}
+	if codexNativeWorkerIsTerminal(*worker) {
+		result, err := normalizedBuildWorkerResult(worker.Result)
+		if err != nil {
+			return record, nil, err
+		}
+		digest, err := jsonSHA256(result)
+		if err != nil || digest != worker.ResultSHA256 {
+			return record, nil, fmt.Errorf("native terminal question source no longer matches its accepted result")
+		}
 	}
 	if !codexNativeWorkerIsTerminal(*worker) {
 		if err = validateCodexNativeContextLive(record, *worker); err != nil {
@@ -327,4 +339,167 @@ func hasCodexNativeDecisionQuestion(file PendingDecisionFile, question string) b
 		}
 	}
 	return false
+}
+
+type codexNativeDecisionView struct {
+	Decision          PendingDecision `json:"decision"`
+	Status            string          `json:"status"`
+	WorkerTerminal    bool            `json:"worker_terminal"`
+	AnswerRequestPath string          `json:"answer_request_path,omitempty"`
+	AnswerCommand     string          `json:"answer_command,omitempty"`
+	NextCommand       string          `json:"next_command"`
+}
+
+// The question route branches before the bridge's mutation lock. Admission and
+// the owner-facing view each use the existing session; neither nests a session.
+func runCodexNativeQuestions(request codexNativeWorkerRequest, hooks codexNativeWorkerHooks) (codexNativeWorkerResponse, error) {
+	response := codexNativeWorkerResponse{SchemaVersion: 1, ExecutionBinding: request.ExecutionBinding}
+	q := request.Question
+	request.Question = nil
+	if request.Result != nil || request.ContextDelivery != nil || request.ContextDeliveryID != "" || request.ContextSend != nil || request.ObservationStatus != "" || request.SourceEventID != "" || request.SourceEventSHA256 != "" || request.ObservedAt != "" || request.ObservationDetail != "" {
+		return response, fmt.Errorf("native question cannot submit result or delivery observations")
+	}
+	if hooks.BeforeWrite != nil {
+		hooks.BeforeWrite()
+	}
+	if q != nil {
+		if _, err := admitCodexNativeDecision(request, *q, codexNativeDecisionHooks{}); err != nil {
+			return response, err
+		}
+	} else {
+		// Save terminal handoff questions through the same admission function. A
+		// later view revalidates them, so a concurrent scope change cannot relabel
+		// these preserved questions or produce an actionable stale answer command.
+		_, worker, err := currentCodexNativeDecisionTarget(request)
+		if err != nil {
+			return response, err
+		}
+		if codexNativeWorkerIsTerminal(*worker) {
+			questions := codexNativeHandoffQuestions(*worker)
+			for _, question := range questions {
+				if _, err = admitCodexNativeDecision(request, question, codexNativeDecisionHooks{}); err != nil {
+					return response, err
+				}
+			}
+		}
+	}
+	err := withPlanningMutationSession(buildAttemptWorkspaceRoot(), "codex-native-question-view", func(_ *planningMutationSession) error {
+		buildWorkerRunMutationMu.Lock()
+		defer buildWorkerRunMutationMu.Unlock()
+		record, worker, err := currentCodexNativeDecisionTarget(request)
+		if err != nil {
+			return err
+		}
+		var file PendingDecisionFile
+		if err = store.LoadJSON(pendingDecisionsFile, &file); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		response.Decisions = []codexNativeDecisionView{}
+		for _, d := range file.Decisions {
+			if d.NativeBinding == nil {
+				continue
+			}
+			b := d.NativeBinding
+			if b.AttemptID != record.ID || b.LaunchID != worker.ProviderRunID || b.WorkerName != worker.WorkerName || b.TaskID != worker.TaskID || b.ChildID != worker.Native.ChildID {
+				continue
+			}
+			if q != nil && b.QuestionID != q.QuestionID {
+				continue
+			}
+			expected := nativeDecisionBinding(record, *worker, codexNativeQuestion{QuestionID: b.QuestionID, Question: d.Description})
+			if err = validateCodexNativeDecisionRow(d, expected, d.Description); err != nil {
+				return err
+			}
+			if err = validateCodexNativeQuestion(codexNativeQuestion{QuestionID: b.QuestionID, Question: d.Description}, file); err != nil {
+				return err
+			}
+			view := codexNativeDecisionView{Decision: d, Status: "pending", WorkerTerminal: codexNativeWorkerIsTerminal(*worker), NextCommand: fmt.Sprintf("aether codex-native-worker inspect --phase %d", record.Phase)}
+			if d.Resolved {
+				if d.Resolution == "" || d.ResolvedAt == "" {
+					return fmt.Errorf("native answer receipt is incomplete")
+				}
+				view.Status = "answered"
+				if !view.WorkerTerminal {
+					view.NextCommand = "aether codex-native-worker context --request <same bound worker request file>"
+				}
+			} else {
+				directory, err := os.MkdirTemp("", "aether-worker-request-native-answer-")
+				if err != nil {
+					return err
+				}
+				path := filepath.Join(directory, "answer.json")
+				raw, err := json.MarshalIndent(codexNativeDecisionAnswerRequest{SchemaVersion: 1, Binding: expected, Question: d.Description}, "", "  ")
+				if err != nil {
+					return err
+				}
+				if err = os.WriteFile(path, raw, 0600); err != nil {
+					return err
+				}
+				view.AnswerRequestPath = path
+				view.AnswerCommand = "aether decision-answer --native-request " + shellQuote(path)
+				view.NextCommand = view.AnswerCommand
+			}
+			response.Decisions = append(response.Decisions, view)
+		}
+		return nil
+	})
+	return response, err
+}
+func codexNativeHandoffQuestions(worker buildAttemptWorkerRun) []codexNativeQuestion {
+	if worker.Result == nil {
+		return nil
+	}
+	questions := []codexNativeQuestion{}
+	add := func(part string, texts []string) {
+		for i, text := range texts {
+			key := lifecycleDigest([]byte(fmt.Sprintf("%s/%s/%d", worker.Native.SourceEventID, part, i)))
+			questions = append(questions, codexNativeQuestion{QuestionID: "handoff-" + key, Question: text})
+		}
+	}
+	add("worker", worker.Result.Handoff.OpenDecisions)
+	for _, receipt := range worker.Result.TaskReceipts {
+		add("task:"+receipt.TaskID, receipt.Handoff.OpenDecisions)
+	}
+	return questions
+}
+
+// Native answers are admitted only for this exact live child. The ordinary
+// renderer never sees these rows, even when the question text happens to match.
+func renderCodexNativeDecisionEntries(manifest codexBuildManifest, dispatch codexBuildDispatch, launch, child string) []clarifiedIntentEntry {
+	if child == "" || manifest.ExecutionBinding == nil || manifest.ContextScope == nil {
+		return nil
+	}
+	_, record, ok := loadLatestBuildAttempt(manifest.Phase)
+	if !ok || record.PlanManifest == nil || record.PlanManifest.ExecutionBinding == nil || *record.PlanManifest.ExecutionBinding != *manifest.ExecutionBinding {
+		return nil
+	}
+	var worker *buildAttemptWorkerRun
+	for i := range record.WorkerRuns {
+		w := &record.WorkerRuns[i]
+		if w.WorkerName == dispatch.Name && w.TaskID == normalizedDispatchTaskID(dispatch) && w.ProviderRunID == launch && w.Native != nil && w.Native.ChildID == child {
+			worker = w
+			break
+		}
+	}
+	if worker == nil || validateCodexNativeContextLive(record, *worker) != nil {
+		return nil
+	}
+	var file PendingDecisionFile
+	if store.LoadJSON(pendingDecisionsFile, &file) != nil {
+		return nil
+	}
+	entries := []clarifiedIntentEntry{}
+	for _, d := range file.Decisions {
+		if d.NativeBinding == nil || !d.Resolved || d.Resolution == "" {
+			continue
+		}
+		q := codexNativeQuestion{QuestionID: d.NativeBinding.QuestionID, Question: d.Description}
+		expected := nativeDecisionBinding(record, *worker, q)
+		if validateCodexNativeDecisionRow(d, expected, d.Description) != nil || validateCodexNativeQuestion(q, file) != nil {
+			continue
+		}
+		entries = append(entries, clarifiedIntentEntry{ID: d.ID, Question: d.Description, Resolution: d.Resolution, Source: d.Source})
+	}
+	sort.SliceStable(entries, func(i, j int) bool { return entries[i].ID < entries[j].ID })
+	return entries
 }
