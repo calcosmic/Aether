@@ -74,6 +74,11 @@ type codexNativeLiveReceipt struct {
 	BoundHostSessionID         string                `json:"bound_host_session_id,omitempty"`
 	SavedTerminal              *internalWorkerResult `json:"saved_terminal,omitempty"`
 	SavedSourceEventSHA256     string                `json:"saved_source_event_sha256,omitempty"`
+	SavedSourceEventID         string                `json:"saved_source_event_id,omitempty"`
+	BaselineSource             string                `json:"baseline_source"`
+	FinalSource                string                `json:"final_source"`
+	CoordinatorPath            string                `json:"coordinator_path,omitempty"`
+	CoordinatorSHA256          string                `json:"coordinator_sha256,omitempty"`
 	BaselineTestsSHA256        string                `json:"baseline_tests_sha256,omitempty"`
 	BaselineModuleSHA256       string                `json:"baseline_module_sha256,omitempty"`
 	LaunchMessageEncoding      string                `json:"launch_message_encoding,omitempty"`

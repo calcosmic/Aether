@@ -256,6 +256,75 @@ func TestCodexNativeWorkerTracer(t *testing.T) {
 	}
 }
 
+func nativeEvidenceEvent(t *testing.T, kind, thread string, item any) []byte {
+	t.Helper()
+	raw, err := json.Marshal(map[string]any{"type": "event_msg", "payload": map[string]any{"type": kind, "thread_id": thread, "item": item}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return append(raw, '\n')
+}
+
+func TestCodexNativeEvidenceDerivation(t *testing.T) {
+	r := codexNativeLiveReceipt{SessionID: "parent", BoundHostSessionID: "parent", ChildID: "child", FixtureRoot: "/fixture",
+		BaselineSource: "package nativefixture\n\nfunc Clamp(value, low, high int) int { return value }\n"}
+	meta := []byte("{\"type\":\"session_meta\",\"payload\":{\"id\":\"child\",\"parent_thread_id\":\"parent\",\"agent_role\":\"aether-builder\",\"cwd\":\"/fixture\"}}\n")
+	result := internalWorkerResult{Name: "Brick-46", Caste: "builder", TaskID: "1.1", Status: "completed", Summary: "fixed",
+		Handoff: codex.WorkerHandoff{VerificationStatus: "pass", ChangedFiles: []string{"clamp.go"}, CommandsRun: []string{"go test ./... -json -count=1"}}}
+	r.SavedTerminal = &result
+	r.ResultSHA256, _ = jsonSHA256(&result)
+	resultRaw, _ := json.Marshal(result)
+	terminal := nativeEvidenceEvent(t, "item_completed", "child", map[string]any{"type": "AgentMessage", "id": "terminal-1", "phase": "final_answer", "content": []any{map[string]any{"type": "Text", "text": string(resultRaw)}}})
+	response, _ := json.Marshal(map[string]any{"type": "response_item", "payload": map[string]any{"type": "message", "role": "assistant", "content": []any{map[string]any{"text": string(resultRaw)}}}})
+	r.SavedSourceEventID = "terminal-1"
+	r.SavedSourceEventSHA256 = lifecycleDigest(bytes.TrimSuffix(terminal, []byte{'\n'}))
+	all := append(append(append([]byte(nil), meta...), terminal...), response...)
+	for _, variant := range []string{"metadata_hash", "wrong_event_id", "foreign_thread"} {
+		bad := r
+		events := append([]byte(nil), all...)
+		switch variant {
+		case "metadata_hash":
+			bad.SavedSourceEventSHA256 = lifecycleDigest(bytes.TrimSuffix(meta, []byte{'\n'}))
+		case "wrong_event_id":
+			bad.SavedSourceEventID = "unrelated"
+		case "foreign_thread":
+			events = bytes.ReplaceAll(events, []byte("\"thread_id\":\"child\""), []byte("\"thread_id\":\"other\""))
+		}
+		nativeInspectChildEvents(&bad, events)
+		if bad.TerminalCorroborated && bad.SourceEventCorroborated {
+			t.Errorf("%s incorrectly corroborated terminal", variant)
+		}
+	}
+	checkOutput := "{\"Action\":\"run\",\"Package\":\"example.invalid/nativefixture\",\"Test\":\"TestClamp\"}\n{\"Action\":\"pass\",\"Package\":\"example.invalid/nativefixture\",\"Test\":\"TestClamp\"}\n{\"Action\":\"pass\",\"Package\":\"example.invalid/nativefixture\"}\n"
+	for _, variant := range []string{"zero_tests", "wrong_cwd", "mixed_failure", "inherited_parent"} {
+		command, cwd, output, thread := "go test ./... -json -count=1", "file:///fixture", checkOutput, "child"
+		switch variant {
+		case "zero_tests":
+			command, output = "go test ./... -run '^$'", "ok example.invalid/nativefixture [no tests to run]"
+		case "wrong_cwd":
+			cwd = "file:///other"
+		case "mixed_failure":
+			command, output = "go test ./...; echo ok", "FAIL TestClamp\nok"
+		case "inherited_parent":
+			thread = "parent"
+		}
+		events := append(append([]byte(nil), meta...), nativeEvidenceEvent(t, "item_completed", thread, map[string]any{"type": "CommandExecution", "status": "completed", "command": []string{"/bin/zsh", "-lc", command}, "cwd": cwd, "aggregated_output": output, "exit_code": 0})...)
+		bad := r
+		nativeInspectChildEvents(&bad, events)
+		if bad.ChecksPassed {
+			t.Errorf("%s incorrectly proved fixture tests", variant)
+		}
+	}
+	for _, command := range []string{"python3 -c 'from pathlib import Path; p=Path(\"clamp.go\"); p.write_bytes(b\"fixed\")'", "printf fixed > '/fixture/clamp.go'", "python3 /tmp/changed-coordinator.py record"} {
+		bad := r
+		events := nativeEvidenceEvent(t, "item_completed", "parent", map[string]any{"type": "CommandExecution", "status": "completed", "command": []string{"/bin/zsh", "-lc", command}, "cwd": "file:///fixture", "exit_code": 0})
+		nativeInspectParentEvents(&bad, events)
+		if !bad.ParentSubstitution {
+			t.Errorf("unclassified parent mutation accepted: %s", command)
+		}
+	}
+}
+
 func writeCodexNativeRequestForTest(t *testing.T, value any) string {
 	t.Helper()
 	dir, err := os.MkdirTemp("", "aether-worker-request-native-")
