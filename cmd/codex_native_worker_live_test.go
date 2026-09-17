@@ -2531,6 +2531,12 @@ func nativeCollectLiveEvidence(t *testing.T, r *codexNativeLiveReceipt, runRoot,
 		r.PromptSHA256, r.ResultSHA256, r.CompletionPath = worker.Native.PromptSHA256, worker.ResultSHA256, attempt.CompletionPath
 		liveSkillWrite(t, filepath.Join(runRoot, "terminal-attempt.json"), raw)
 	}
+	// Resolve all journal-bound children before classifying parent bind argv.
+	// A display path is allowed only when the actual host chain proves it.
+	if r.SchemaVersion == "codex-native-tracer/v2" {
+		nativeCollectChildIdentity(r, fixtureHome)
+		nativeCollectQualificationWorkers(t, r, runRoot, fixtureHome)
+	}
 	// Each fact requires one unique raw capture; neither a missing nor a
 	// duplicated child/parent export inherits an earlier proof.
 	for _, id := range []string{r.ChildID, r.SessionID} {
@@ -2574,10 +2580,9 @@ func nativeCollectLiveEvidence(t *testing.T, r *codexNativeLiveReceipt, runRoot,
 	if raw, err := diff.Output(); err == nil {
 		liveSkillWrite(t, filepath.Join(runRoot, "child-edit.patch"), raw)
 	}
-	if r.SchemaVersion == "codex-native-tracer/v2" {
-		nativeCollectChildIdentity(r, fixtureHome)
+	if r.SchemaVersion != "codex-native-tracer/v2" {
+		nativeCollectQualificationWorkers(t, r, runRoot, fixtureHome)
 	}
-	nativeCollectQualificationWorkers(t, r, runRoot, fixtureHome)
 }
 
 // Reuse the coordinator's pure resolver with inventory-checked raw bytes. This
@@ -2775,13 +2780,20 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 	metadataSeen := false
 	childTurns := nativeOwnedHostTurns(raw, r.ChildID)
 	type pendingCheck struct {
-		command []string
-		turn    string
-		epoch   int
+		command       []string
+		turn          string
+		epoch         int
+		priorProof    bool
+		observedPlain bool
 	}
 	pendingChecks := map[string]pendingCheck{}
 	callCounts, outputCounts := map[string]int{}, map[string]int{}
+	commandEventCounts := map[string]int{}
 	for _, line := range bytes.Split(raw, []byte{'\n'}) {
+		var event nativeHostEvent
+		if json.Unmarshal(line, &event) == nil && event.Type == "event_msg" && event.Payload.Type == "item_completed" && event.Payload.Item.Type == "CommandExecution" {
+			commandEventCounts[event.Payload.Item.ID]++
+		}
 		var w nativeCodeModeWire
 		if json.Unmarshal(line, &w) == nil && w.Type == "response_item" && w.Payload.CallID != "" {
 			if w.Payload.Type == "custom_tool_call" {
@@ -2843,10 +2855,11 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 							}
 							words, _ := nativeFixtureShellWords(argv)
 							if len(words) >= 2 && words[0] == "go" && words[1] == "test" {
+								priorProof := r.ChecksPassed
 								r.ChecksPassed = false
 								checkEpoch++
 								if allowed && len(commands) == 1 && p.CallID != "" && callCounts[p.CallID] == 1 && outputCounts[p.CallID] == 1 {
-									pendingChecks[p.CallID] = pendingCheck{command: argv, turn: p.Metadata.TurnID, epoch: checkEpoch}
+									pendingChecks[p.CallID] = pendingCheck{command: argv, turn: p.Metadata.TurnID, epoch: checkEpoch, priorProof: priorProof}
 								}
 							}
 						}
@@ -2857,7 +2870,7 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 					delete(pendingChecks, p.CallID)
 					if ok && pending.turn == p.Metadata.TurnID && pending.epoch == checkEpoch {
 						exit, output, complete := nativeCodeModeResult(wire)
-						r.ChecksPassed = complete && exit == 0 && nativeAssignedFixtureTest(*r, pending.command, output)
+						r.ChecksPassed = complete && exit == 0 && (nativeAssignedFixtureTest(*r, pending.command, output) || (pending.priorProof && pending.observedPlain))
 					}
 				}
 			}
@@ -2903,6 +2916,18 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 				r.ChecksPassed = false
 			}
 			if i.ExitCode != nil && nativeSameCwd(i.Cwd, r.FixtureRoot) {
+				// A later successful plain suite cannot create uncached proof, but
+				// must not erase an already proved unchanged-source uncached suite.
+				// Restore only after this unique same-turn event AND its exact output.
+				if len(words) == 3 && words[0] == "go" && words[1] == "test" && words[2] == "./..." && *i.ExitCode == 0 && i.ID != "" && commandEventCounts[i.ID] == 1 {
+					for id, pending := range pendingChecks {
+						w, _ := nativeFixtureShellWords(pending.command)
+						if pending.priorProof && pending.turn == p.TurnID && pending.epoch+1 == checkEpoch && len(w) == 3 && w[0] == "go" && w[1] == "test" && w[2] == "./..." {
+							pending.epoch, pending.observedPlain = checkEpoch, true
+							pendingChecks[id] = pending
+						}
+					}
+				}
 				if nativeAssignedFixtureCommand(*r, i.Command) {
 					r.ChecksPassed = *i.ExitCode == 0 && nativeAssignedFixtureTest(*r, i.Command, i.Output)
 				} else if *i.ExitCode != 0 && len(i.Command) == 3 {
@@ -3328,7 +3353,25 @@ func nativeParentCoordinationCommand(r *codexNativeLiveReceipt, command []string
 		case "manifest", "reserve", "record", "inspect", "stage", "finalize", "empty-result", "context":
 			return len(words) == 3
 		case "bind":
-			return len(words) == 4 && regexp.MustCompile(`^[A-Za-z0-9-]+$`).MatchString(words[3])
+			if len(words) != 4 {
+				return false
+			}
+			if r.SchemaVersion != "codex-native-tracer/v2" {
+				return regexp.MustCompile(`^[A-Za-z0-9-]+$`).MatchString(words[3])
+			}
+			matches := func(child codexNativeLiveReceipt) bool {
+				return child.ChildIdentityCorroborated && child.BoundHostSessionID == r.SessionID &&
+					(words[3] == child.ChildID || words[3] == child.ChildTaskPath)
+			}
+			if matches(*r) {
+				return true
+			}
+			for _, child := range r.Workers {
+				if matches(child) {
+					return true
+				}
+			}
+			return false
 		case "prompt", "release", "summary", "question", "answer", "running", "context-ack", "cancel-requested", "cancelled", "unavailable", "launch-unresolved", "stale-result", "child-mismatch", "resume", "pause":
 			return qualification && len(words) == 3
 		}
@@ -3825,7 +3868,7 @@ func nativeCorroboratedBatch(raw []byte, thread, callID string, commands []nativ
 		if !active {
 			continue
 		}
-		if e.Payload.ThreadID != thread || e.Payload.TurnID != turn || i.ID == "" || i.Status != "completed" || i.ExitCode == nil || len(i.Command) != 3 || (i.Command[1] != "-lc" && i.Command[1] != "-c") {
+		if e.Payload.ThreadID != thread || e.Payload.TurnID != turn || i.ID == "" || i.ExitCode == nil || (i.Status != "completed" && !(i.Status == "failed" && *i.ExitCode != 0)) || len(i.Command) != 3 || (i.Command[1] != "-lc" && i.Command[1] != "-c") {
 			return false
 		}
 		key := ""

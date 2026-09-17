@@ -70,6 +70,43 @@ func TestCodexNativeGapAttribution(t *testing.T) {
 			}
 		})
 	}
+	t.Run("empty_result_refuses_without_mutation", func(t *testing.T) {
+		_, request := nativeBoundForTest(t)
+		before := nativeJournalBytes(t)
+		for _, result := range []*internalWorkerResult{nil, {}} {
+			request.Result = result
+			if _, err := runCodexNativeWorker("record", nativeRequestPath(t, request)); err == nil {
+				t.Fatal("empty result accepted")
+			}
+			if !bytes.Equal(before, nativeJournalBytes(t)) {
+				t.Fatal("empty result mutated journal")
+			}
+		}
+	})
+	t.Run("equal_reservation_receipt_and_conflicting_key", func(t *testing.T) {
+		_, request := nativeAdmissionFixture(t)
+		first, err := runCodexNativeWorker("reserve", nativeRequestPath(t, request))
+		if err != nil {
+			t.Fatal(err)
+		}
+		before := nativeJournalBytes(t)
+		second, err := runCodexNativeWorker("reserve", nativeRequestPath(t, request))
+		if err != nil || !second.Replay {
+			t.Fatalf("reservation replay: %v", err)
+		}
+		a, _ := json.Marshal(first.Receipt)
+		b, _ := json.Marshal(second.Receipt)
+		if !bytes.Equal(a, b) || !bytes.Equal(before, nativeJournalBytes(t)) {
+			t.Fatal("reservation replay minted receipt or wrote journal")
+		}
+		request.HostSessionID = "different-host"
+		if _, err := runCodexNativeWorker("reserve", nativeRequestPath(t, request)); err == nil {
+			t.Fatal("conflicting equal key accepted")
+		}
+		if !bytes.Equal(before, nativeJournalBytes(t)) {
+			t.Fatal("conflicting equal key wrote journal")
+		}
+	})
 	t.Run("runtime_identity_and_empty_controls", func(t *testing.T) {
 		TestCodexNativeWorkerTerminal(t)
 	})
@@ -178,6 +215,107 @@ func TestCodexNativeGapParentCoordination(t *testing.T) {
 			nativeInspectParentEvents(&r, raw)
 			if r.ParentSubstitution != (mode != "valid" && mode != "file_uri") {
 				t.Fatalf("mode %s classification: %+v", mode, r.ParentUnclassified)
+			}
+		})
+	}
+}
+
+func TestCodexNativeGapBoundTaskPathCommand(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "coordinator.py")
+	raw := []byte(nativeFixtureCoordinator)
+	if err := os.WriteFile(path, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []string{"mapped_path", "mapped_uuid", "unmapped", "wrong_path", "wrong_parent", "review_watcher"} {
+		t.Run(mode, func(t *testing.T) {
+			r := codexNativeLiveReceipt{SchemaVersion: "codex-native-tracer/v2", FixtureRoot: root, CoordinatorPath: path, CoordinatorSHA256: lifecycleDigest(raw), SessionID: "parent", BoundHostSessionID: "parent", ChildID: "child-uuid", ChildTaskPath: "/root/brick", ChildIdentityCorroborated: true}
+			target := "/root/brick"
+			switch mode {
+			case "mapped_uuid":
+				target = "child-uuid"
+			case "unmapped":
+				r.ChildIdentityCorroborated = false
+			case "wrong_path":
+				target = "/root/other"
+			case "wrong_parent":
+				r.BoundHostSessionID = "other"
+			case "review_watcher":
+				r.Workers = []codexNativeLiveReceipt{{ChildID: "watcher-uuid", ChildTaskPath: "/root/keen", ChildIdentityCorroborated: true, BoundHostSessionID: "parent"}}
+				target = "/root/keen"
+			}
+			got := nativeParentCoordinationCommand(&r, []string{"/bin/sh", "-c", "python3 " + path + " bind " + target}, root)
+			want := mode == "mapped_path" || mode == "mapped_uuid" || mode == "review_watcher"
+			if got != want {
+				t.Fatalf("%s classified=%v want=%v", mode, got, want)
+			}
+		})
+	}
+}
+
+func TestCodexNativeGapObservedRefusal(t *testing.T) {
+	for _, mode := range []string{"actual_failure", "failed_zero", "missing_exit", "wrong_thread"} {
+		t.Run(mode, func(t *testing.T) {
+			var raw []byte
+			add := func(v any) { b, _ := json.Marshal(v); raw = append(raw, append(b, '\n')...) }
+			add(map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call", "call_id": "call", "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}})
+			item := map[string]any{"type": "CommandExecution", "id": "event", "status": "failed", "command": []string{"/bin/sh", "-c", "python3 /fixture/coordinator.py empty-result"}, "cwd": "file:///fixture", "exit_code": 1}
+			thread := "parent"
+			switch mode {
+			case "failed_zero":
+				item["exit_code"] = 0
+			case "missing_exit":
+				delete(item, "exit_code")
+			case "wrong_thread":
+				thread = "foreign"
+			}
+			add(map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": thread, "turn_id": "turn", "item": item}})
+			add(map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call_output", "call_id": "call", "output": []any{map[string]any{"type": "input_text", "text": "Script completed\n"}}, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}})
+			got := nativeCorroboratedBatch(raw, "parent", "call", []nativeRecordedShellCommand{{Command: "python3 /fixture/coordinator.py empty-result", Cwd: "/fixture"}})
+			if got != (mode == "actual_failure") {
+				t.Fatalf("%s observed=%v", mode, got)
+			}
+		})
+	}
+}
+
+func TestCodexNativeGapUncachedCheckSurvivesPlainRecheck(t *testing.T) {
+	for _, mode := range []string{"valid", "no_prior", "wrong_thread", "wrong_turn", "duplicate_event", "failure", "missing_output", "later_edit"} {
+		t.Run(mode, func(t *testing.T) {
+			r := codexNativeLiveReceipt{ChildID: "child", BoundHostSessionID: "parent", FixtureRoot: "/fixture", Caste: "builder"}
+			var raw []byte
+			add := func(v any) { b, _ := json.Marshal(v); raw = append(raw, append(b, '\n')...) }
+			add(map[string]any{"type": "session_meta", "payload": map[string]any{"id": "child", "parent_thread_id": "parent", "cwd": "/fixture", "agent_role": "aether-builder"}})
+			if mode != "no_prior" {
+				raw = append(raw, nativeEvidenceEvent(t, "item_completed", "child", map[string]any{"type": "CommandExecution", "status": "completed", "id": "uncached", "command": []string{"/bin/sh", "-c", "go test ./... -json -count=1"}, "cwd": "/fixture", "exit_code": 0, "aggregated_output": "{\"Action\":\"run\",\"Package\":\"example.invalid/nativefixture\",\"Test\":\"TestClamp\"}\n{\"Action\":\"pass\",\"Package\":\"example.invalid/nativefixture\",\"Test\":\"TestClamp\"}\n{\"Action\":\"pass\",\"Package\":\"example.invalid/nativefixture\"}\n"})...)
+			}
+			add(map[string]any{"type": "event_msg", "payload": map[string]any{"thread_id": "child", "turn_id": "turn"}})
+			add(map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call", "name": "exec", "call_id": "plain", "input": `text(await tools.exec_command({cmd:"go test ./...",workdir:"/fixture"}));`, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}})
+			thread, turn, exit, status := "child", "turn", 0, "completed"
+			switch mode {
+			case "wrong_thread":
+				thread = "foreign"
+			case "wrong_turn":
+				turn = "foreign"
+			case "failure":
+				exit = 1
+				status = "failed"
+			}
+			event := map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": thread, "turn_id": turn, "item": map[string]any{"type": "CommandExecution", "id": "plain-event", "status": status, "command": []string{"/bin/sh", "-c", "go test ./..."}, "cwd": "/fixture", "exit_code": exit, "aggregated_output": "ok example.invalid/nativefixture (cached)"}}}
+			add(event)
+			if mode == "duplicate_event" {
+				add(event)
+			}
+			if mode == "later_edit" {
+				raw = append(raw, nativeEvidenceEvent(t, "item_completed", "child", map[string]any{"type": "FileChange", "status": "completed", "changes": map[string]any{}})...)
+			}
+			if mode != "missing_output" {
+				result, _ := json.Marshal(map[string]any{"exit_code": exit, "output": "ok example.invalid/nativefixture (cached)"})
+				add(map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call_output", "call_id": "plain", "output": []any{map[string]any{"type": "input_text", "text": "Script completed\n"}, map[string]any{"type": "input_text", "text": string(result)}}, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}})
+			}
+			nativeInspectChildEvents(&r, raw)
+			if r.ChecksPassed != (mode == "valid") {
+				t.Fatalf("%s checks=%v", mode, r.ChecksPassed)
 			}
 		})
 	}
