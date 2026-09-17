@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
 )
@@ -528,6 +530,99 @@ func TestCodexNativeRecoveryPauseRace(t *testing.T) {
 	}
 	if replay, err := runCodexNativeWorker("record", path); err != nil || !replay.Replay {
 		t.Fatalf("paused terminal replay changed identity: %+v %v", replay, err)
+	}
+}
+
+func TestCodexNativeRecoveryOrdinaryHostPlan(t *testing.T) {
+	for _, terminalCount := range []int{0, 1, 2} {
+		t.Run(fmt.Sprintf("terminal=%d", terminalCount), func(t *testing.T) {
+			t.Setenv("AETHER_ACTIVE_PLATFORM", "codex")
+			manifest, _ := nativeRecoveryFixture(t, 2)
+			if manifest.HostPlatform != "codex" {
+				t.Fatalf("fixture lost the Codex host identity: %q", manifest.HostPlatform)
+			}
+			if terminalCount == 0 {
+				d := manifest.Dispatches[0]
+				request := internalWorkerDispatchRequest{WorkerName: d.Name, TaskID: normalizedDispatchTaskID(d), Caste: d.Caste}
+				if _, err := beginBuildAttemptWorkerRun(1, *manifest.ExecutionBinding, request, "ordinary-before-process", codex.PlatformCodex); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, d := range manifest.Dispatches[:terminalCount] {
+				requestPath := writeBoundBuildWorkerRequest(t, manifest, d)
+				if _, err := runInternalWorkerAdapter(context.Background(), requestPath, false, true); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var state colony.ColonyState
+			if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+				t.Fatal(err)
+			}
+			before := nativeRecoveryStoreSnapshot(t)
+			if recovery := buildCodexNativeRecovery(state); recovery != nil {
+				t.Fatalf("ordinary adapter records were classified as native: %+v", recovery)
+			}
+			dashboard := buildResumeDashboardResult()
+			if dashboard["native_recovery"] != nil {
+				t.Fatalf("ordinary resume acquired a native projection: %+v", dashboard["native_recovery"])
+			}
+			if terminalCount == len(manifest.Dispatches) {
+				_, record, ok := loadLatestBuildAttempt(1)
+				if !ok || record.CompletionPath == "" || record.CompletionSHA256 == "" {
+					t.Fatalf("ordinary terminal completion is missing: %+v", record)
+				}
+				recovery := dashboard["recovery"].(map[string]interface{})
+				if recovery["next"] != buildFinalizeRecoveryCommand(1, record.CompletionPath) {
+					t.Fatalf("ordinary completion lost its exact finalize route: %+v", recovery)
+				}
+			}
+			if !reflect.DeepEqual(before, nativeRecoveryStoreSnapshot(t)) {
+				t.Fatal("recovery inspection changed ordinary durable evidence")
+			}
+		})
+	}
+}
+
+func TestCodexNativeRecoveryMixedAndDamagedRemainBlocked(t *testing.T) {
+	for _, mode := range []string{"ordinary-first", "native-first", "damaged-native", "one-native-field-removed"} {
+		t.Run(mode, func(t *testing.T) {
+			t.Setenv("AETHER_ACTIVE_PLATFORM", "codex")
+			manifest, requests := nativeRecoveryFixture(t, 2)
+			ordinaryIndex := 0
+			if mode != "ordinary-first" {
+				ordinaryIndex = 1
+			}
+			for i, request := range requests {
+				if i == ordinaryIndex && (mode == "ordinary-first" || mode == "native-first") {
+					d := manifest.Dispatches[i]
+					ordinary := internalWorkerDispatchRequest{WorkerName: d.Name, TaskID: normalizedDispatchTaskID(d), Caste: d.Caste}
+					if _, err := beginBuildAttemptWorkerRun(1, *manifest.ExecutionBinding, ordinary, "ordinary-mixed", codex.PlatformCodex); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					nativeReserveForTest(t, request)
+				}
+			}
+			if mode == "damaged-native" || mode == "one-native-field-removed" {
+				path, record, _ := loadLatestBuildAttempt(1)
+				if mode == "damaged-native" {
+					record.WorkerRuns[0].Native.PromptSHA256 = "tampered"
+				} else {
+					record.WorkerRuns[0].Native = nil
+				}
+				if err := store.SaveJSON(path, record); err != nil {
+					t.Fatal(err)
+				}
+			}
+			before := nativeRecoveryStoreSnapshot(t)
+			dashboard, recovery := nativeRecoveryDashboard(t)
+			if recovery["valid"] != false || strings.TrimSpace(stringValue(recovery["error"])) == "" || recovery["next"] != "aether status" || dashboard["resume_override_command"] != "aether status" {
+				t.Fatalf("mixed or damaged native evidence became actionable: %+v", recovery)
+			}
+			if !reflect.DeepEqual(before, nativeRecoveryStoreSnapshot(t)) {
+				t.Fatal("blocked recovery rewrote saved evidence")
+			}
+		})
 	}
 }
 

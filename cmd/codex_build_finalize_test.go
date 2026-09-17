@@ -2171,6 +2171,69 @@ func TestExternalGroupedFullSuccessCreditsAll(t *testing.T) {
 	}
 }
 
+func TestBuildFinalizeNextAdviceMatchesResolvedAnswer(t *testing.T) {
+	for _, blocked := range []bool{false, true} {
+		t.Run(fmt.Sprintf("blocking-decision=%t", blocked), func(t *testing.T) {
+			saveGlobals(t)
+			resetRootCmd(t)
+			goal, taskID := "Finalize with one resolved next action", "1.1"
+			started := time.Now().UTC()
+			state := colony.ColonyState{
+				Version: "3.0", Goal: &goal, State: colony.StateEXECUTING, CurrentPhase: 1, BuildStartedAt: &started,
+				Plan: colony.Plan{Phases: []colony.Phase{{ID: 1, Name: "Next action", Status: colony.PhaseInProgress,
+					Tasks: []colony.Task{{ID: &taskID, Goal: goal, Status: colony.TaskInProgress}}}}},
+			}
+			if blocked {
+				state.ColonyMode = colony.ColonyModeOrchestrator
+			}
+			root := createApprovedAcceptedBuildTestColony(t, state).Root
+			withWorkingDir(t, root)
+			withTestWorkspace(t, root)
+			source := orchestratorBoundaryClarificationSource("build", 1, "build-scope", true)
+			manifest := codexBuildManifest{
+				Phase: 1, PhaseName: "Next action", Root: root, ColonyMode: string(state.ColonyMode),
+				PlanOnly: true, DispatchMode: "plan-only", ExecutionOwner: "host-queen",
+				GeneratedAt: started.Format(time.RFC3339), State: string(state.State),
+				WorkerBriefs: []string{}, SuccessCriteria: []string{},
+				Tasks:         []codexBuildTaskPlan{{ID: taskID, Goal: goal, Status: colony.TaskInProgress}},
+				Dispatches:    []codexBuildDispatch{{Stage: "wave", Wave: 1, Caste: "builder", Name: "Mason-next", Task: goal, TaskID: taskID, Status: "planned"}},
+				SelectedTasks: []string{taskID},
+			}
+			if blocked {
+				manifest.BoundaryQuestions = []discussQuestion{{ID: "pd_finalize_next", Source: source, Options: []string{}}}
+			}
+			start := commitTestBuildStartAt(t, root, 1, started, testBuildStartOptions{
+				Variant: buildStartPlanOnly, Phase: 1, GeneratedAt: started, ProcessState: testBuildProcessDead,
+				SelectedTasks: manifest.SelectedTasks, Dispatches: manifest.Dispatches,
+				ExecutionOwner: "host-queen", DispatchMode: "plan-only", Manifest: &manifest,
+			})
+			if start.Manifest == nil {
+				t.Fatal("canonical build start returned no manifest")
+			}
+			_, completion := externalBuildCompletionFromPlanOnlyResult(t, root, map[string]interface{}{"dispatch_manifest": *start.Manifest})
+			want := "aether continue"
+			if blocked {
+				want = "aether discuss"
+				if err := store.SaveJSON(pendingDecisionsFile, PendingDecisionFile{Decisions: []PendingDecision{{
+					ID: "pd_finalize_next", Type: clarificationDecisionType,
+					Description: formatClarificationDescription("Which boundary must be protected?", []string{"phase tasks", "pause"}),
+					Source:      source,
+					CreatedAt:   time.Now().UTC().Format(time.RFC3339),
+				}}}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			result, _, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result["next"] != want || result["next_command"] != want {
+				t.Fatalf("legacy and resolved next advice disagree: next=%v next_command=%v want=%s", result["next"], result["next_command"], want)
+			}
+		})
+	}
+}
+
 // TestExternalGroupedPartialPersistsExactTaskState is the external-lane
 // counterpart of TestFailedGroupedDispatchCreditsExactlyReceiptedTasks
 // (cmd/merged_dispatch_task_credit_test.go, native lane), run through the
@@ -2220,9 +2283,12 @@ func TestExternalGroupedPartialPersistsExactTaskState(t *testing.T) {
 	}}
 	completion := codexExternalBuildCompletion{DispatchManifest: &manifest, Dispatches: results}
 
-	_, updatedState, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+	result, updatedState, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
 	if err != nil {
 		t.Fatalf("build-finalize should accept a failed dispatch with genuine partial receipts, got error: %v", err)
+	}
+	if recovery := strings.TrimSpace(stringValue(result["recovery_command"])); recovery == "" || result["next"] != recovery || result["next_command"] != recovery {
+		t.Fatalf("partial finalization lost its exact recovery advice: next=%v next_command=%v recovery=%v", result["next"], result["next_command"], result["recovery_command"])
 	}
 	if updatedState.State == colony.StateBUILT {
 		t.Fatalf("colony state = %s after only 4 of 6 tasks were credited, want anything but BUILT (honest partial state)", updatedState.State)

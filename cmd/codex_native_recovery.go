@@ -49,7 +49,11 @@ func buildCodexNativeRecovery(state colony.ColonyState) *codexNativeRecovery {
 	for _, worker := range attempt.WorkerRuns {
 		hasNative = hasNative || worker.Native != nil
 	}
-	if !hasNative && attempt.PlanManifest.HostPlatform != "codex" {
+	// Host platform does not select a worker transport. Existing runs with no
+	// native binding belong to the ordinary adapter recovery path. An empty
+	// Codex attempt still needs native guidance before its first reservation;
+	// any native binding keeps mixed or damaged evidence under validation here.
+	if !hasNative && (len(attempt.WorkerRuns) > 0 || attempt.PlanManifest.HostPlatform != "codex") {
 		return nil
 	}
 	recovery := &codexNativeRecovery{AttemptID: attempt.ID, Phase: attempt.Phase,

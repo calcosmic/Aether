@@ -47,12 +47,23 @@ func TestBuildStartCallers200(t *testing.T) {
 	})
 
 	t.Run("auxiliary starts use the canonical transaction", func(t *testing.T) {
+		// The public finalizer delegates to the shared native/ordinary implementation.
+		// Keep the wrapper covered without requiring it to start a second transaction.
+		wrapperCalls := buildStartCallerCalls200(t, buildStartCallerFile200(t, "codex_build_finalize.go"), "runCodexBuildFinalize")
+		if wrapperCalls["runCodexBuildFinalizeWithHooks"] != 1 {
+			t.Fatalf("public finalizer does not delegate exactly once: %v", wrapperCalls)
+		}
+		for _, forbidden := range []string{"commitBuildStart", "beginBuildAttempt", "beginBuildAttemptRecord", "SaveJSON", "UpdateJSONAtomically", "AtomicWrite", "Remove", "RemoveAll"} {
+			if wrapperCalls[forbidden] != 0 {
+				t.Fatalf("public finalizer writes before its shared implementation through %s", forbidden)
+			}
+		}
 		tests := []struct {
 			file      string
 			function  string
 			forbidden []string
 		}{
-			{file: "codex_build_finalize.go", function: "runCodexBuildFinalize", forbidden: []string{"beginBuildAttempt", "beginBuildAttemptRecord"}},
+			{file: "codex_build_finalize.go", function: "runCodexBuildFinalizeWithHooks", forbidden: []string{"beginBuildAttempt", "beginBuildAttemptRecord"}},
 			{file: "check_fix_attempt.go", function: "applyAutomaticCheckFixAttempt", forbidden: []string{"beginBuildAttempt", "beginBuildAttemptRecord"}},
 			{file: "coherent_job_retry.go", function: "commitPartialBuildRetryPlan", forbidden: []string{"beginChildBuildAttempt", "beginBuildAttemptRecord", "attachBuildAttemptParentLink"}},
 		}
@@ -219,7 +230,7 @@ func TestBuildStartCallers200(t *testing.T) {
 			{file: "codex_build.go", function: "runCodexBuildPlanOnlyWithOptions", boundary: "commitBuildStart"},
 			{file: "codex_build.go", function: "runCodexBuildQueenLed", boundary: "runCodexBuildPlanOnlyWithOptions"},
 			{file: "codex_build.go", function: "runCodexBuildWithOptions", boundary: "commitBuildStart", dispatches: []string{"executeCodexBuildDispatches"}},
-			{file: "codex_build_finalize.go", function: "runCodexBuildFinalize", boundary: "commitBuildStart"},
+			{file: "codex_build_finalize.go", function: "runCodexBuildFinalizeWithHooks", boundary: "commitBuildStart"},
 			{file: "check_fix_attempt.go", function: "applyAutomaticCheckFixAttempt", boundary: "commitBuildStart", dispatches: []string{"dispatchBatchByWaveWithVisuals"}},
 			{file: "coherent_job_retry.go", function: "commitPartialBuildRetryPlan", boundary: "commitBuildStart"},
 		}

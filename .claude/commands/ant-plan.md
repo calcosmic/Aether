@@ -8,6 +8,14 @@ You are the **Queen Ant Colony**. 🐜👑 Orchestrate one evidence-backed plann
 
 Use the Go `aether` CLI as the source of truth. This wrapper presents structured results and dispatches only the stage Go authorizes. Go alone validates evidence, persists receipts and timelines, chooses transitions and stop reasons, creates candidates, and accepts plans.
 
+## Explicit Dependency Repair
+
+**Purpose:** Validate or repair dependency artifacts through the owner-requested Go route without starting planning workers.
+
+If the owner supplied `--repair-artifact`, run `AETHER_OUTPUT_MODE=json aether plan --repair-artifact` before the planning steps below, then render its result and stop this flow. Do not select a preset or launch workers. Conflicting generation/revision flags must be refused, not discarded.
+
+The result names its scope: an accepted revision is validated without changing its plan or approval bindings; only the legacy `.aether/data/planning/phase-plan.json` staging artifact may be repaired when there is no accepted revision. Numeric task IDs and semantic IDs identify the same tasks, including across phases. Never rewrite only `plan.phases`, the accepted candidate, or approval records as a dependency workaround. Follow the returned next command; invalid approved work needs the existing candidate review and acceptance path.
+
 ## Required Cross-Stage State
 
 Carry only runtime-returned values across stages: approved specification revision and hash, selected preset, `planning_run_id`, `iteration`, current `stage_manifest`, completed stage receipt, weakest gap, `iteration_card`, timeline digest, candidate ID/hash, and `next`. Never infer a missing value or reuse one after its bound frontier changes.

@@ -90,6 +90,37 @@ func nativeJournalBytes(t *testing.T) []byte {
 	return raw
 }
 
+// supersedeNativeAttemptPointerForTest corrupts only an existing fixture's
+// pointer. It cannot create a build start or replace the saved worker journal.
+// Keep this separate from table-test mutations of unrelated state and records.
+func supersedeNativeAttemptPointerForTest(t *testing.T, attemptID string) {
+	t.Helper()
+	path, record, ok := loadLatestBuildAttempt(1)
+	if !ok || attemptID == "" || attemptID == record.ID {
+		t.Fatal("pointer corruption requires an existing attempt and distinct replacement ID")
+	}
+	journalPath := filepath.Join(store.BasePath(), path)
+	before, err := os.ReadFile(journalPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pointer latestBuildAttemptPointer
+	if err := store.LoadJSON(latestBuildAttemptPointerPath(1), &pointer); err != nil {
+		t.Fatal(err)
+	}
+	if pointer.AttemptID != record.ID {
+		t.Fatal("fixture pointer was already stale before corruption")
+	}
+	pointer.AttemptID = attemptID
+	if err := store.SaveJSON(latestBuildAttemptPointerPath(1), pointer); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.ReadFile(journalPath)
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatalf("pointer-only corruption changed the saved worker journal: %v", err)
+	}
+}
+
 func nativeReserveForTest(t *testing.T, request codexNativeWorkerRequest) codexNativeWorkerRequest {
 	t.Helper()
 	response, err := runCodexNativeWorker("reserve", nativeRequestPath(t, request))
@@ -246,14 +277,7 @@ func TestCodexNativeWorkerAdmission(t *testing.T) {
 						t.Fatal(err)
 					}
 				case "attempt-pointer":
-					var pointer latestBuildAttemptPointer
-					if err := store.LoadJSON(latestBuildAttemptPointerPath(1), &pointer); err != nil {
-						t.Fatal(err)
-					}
-					pointer.AttemptID = "attempt-superseded"
-					if err := store.SaveJSON(latestBuildAttemptPointerPath(1), pointer); err != nil {
-						t.Fatal(err)
-					}
+					supersedeNativeAttemptPointerForTest(t, "attempt-superseded")
 				case "pause":
 					var state colony.ColonyState
 					if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
@@ -463,14 +487,7 @@ func TestCodexNativeWorkerTerminal(t *testing.T) {
 		path, _, _ := loadLatestBuildAttempt(1)
 		before := nativeJournalBytes(t)
 		_, err := runCodexNativeWorkerWithHooks("record", nativeRequestPath(t, request), codexNativeWorkerHooks{BeforeWrite: func() {
-			var pointer latestBuildAttemptPointer
-			if err := store.LoadJSON(latestBuildAttemptPointerPath(1), &pointer); err != nil {
-				t.Fatal(err)
-			}
-			pointer.AttemptID = "attempt-superseded"
-			if err := store.SaveJSON(latestBuildAttemptPointerPath(1), pointer); err != nil {
-				t.Fatal(err)
-			}
+			supersedeNativeAttemptPointerForTest(t, "attempt-superseded")
 		}})
 		if err == nil {
 			t.Fatal("superseded terminal accepted")
@@ -1282,6 +1299,21 @@ func TestCodexNativeWorkerReceiptValidation(t *testing.T) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
+	}
+	var header struct {
+		SchemaVersion string `json:"schema_version"`
+	}
+	if err := json.Unmarshal(raw, &header); err != nil {
+		t.Fatal(err)
+	}
+	switch header.SchemaVersion {
+	case "aether-native-final-qualification/v1":
+		TestCodexNativePhaseEvidence(t)
+		return
+	case "", "codex-native-tracer/v1":
+		// Legacy unversioned raw receipts retain the original full replay checks.
+	default:
+		t.Fatalf("unsupported native receipt schema %q", header.SchemaVersion)
 	}
 	var receipt codexNativeLiveReceipt
 	if err := json.Unmarshal(raw, &receipt); err != nil {

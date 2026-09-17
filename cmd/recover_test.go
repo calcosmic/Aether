@@ -1335,15 +1335,20 @@ func TestRepairDirtyWorktree_DestructiveNeedsConfirmation(t *testing.T) {
 	}
 
 	// Simulate user declining the confirmation.
-	withMockStdin(t, "n\n", func() {
-		result, err := performRecoverRepairs(issues, dataDir, false, false)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if result.Skipped < 1 {
-			t.Errorf("expected at least 1 skipped, got %d", result.Skipped)
-		}
+	prompt := captureRealStderr(t, func() {
+		withMockStdin(t, "n\n", func() {
+			result, err := performRecoverRepairs(issues, dataDir, false, false)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if result.Skipped < 1 {
+				t.Errorf("expected at least 1 skipped, got %d", result.Skipped)
+			}
+		})
 	})
+	if !strings.Contains(prompt, "Apply fix? [y/N]: ") {
+		t.Fatalf("destructive repair omitted confirmation: %q", prompt)
+	}
 
 	// Verify state was NOT modified.
 	var after colony.ColonyState
@@ -1413,15 +1418,20 @@ func TestRepairBadManifest_DestructiveNeedsConfirmation(t *testing.T) {
 	}
 
 	// Simulate user declining.
-	withMockStdin(t, "n\n", func() {
-		result, err := performRecoverRepairs(issues, dataDir, false, false)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if result.Skipped < 1 {
-			t.Errorf("expected at least 1 skipped, got %d", result.Skipped)
-		}
+	prompt := captureRealStderr(t, func() {
+		withMockStdin(t, "n\n", func() {
+			result, err := performRecoverRepairs(issues, dataDir, false, false)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if result.Skipped < 1 {
+				t.Errorf("expected at least 1 skipped, got %d", result.Skipped)
+			}
+		})
 	})
+	if !strings.Contains(prompt, "Apply fix? [y/N]: ") {
+		t.Fatalf("destructive repair omitted confirmation: %q", prompt)
+	}
 }
 
 // ---------------------------------------------------------------------------

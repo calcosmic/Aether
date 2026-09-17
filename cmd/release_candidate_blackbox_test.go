@@ -425,7 +425,9 @@ func installPackedNPMCandidate(t *testing.T, packagePath string) packedNPMConsum
 	if err := os.MkdirAll(consumer, 0755); err != nil {
 		t.Fatalf("create npm consumer: %v", err)
 	}
-	install := exec.Command("npm", "install", "--ignore-scripts", "--no-audit", "--no-fund", packagePath)
+	// The empty consumer has no package boundary yet. An explicit prefix keeps
+	// npm from discovering and changing a project above the test's temporary root.
+	install := exec.Command("npm", "install", "--prefix", consumer, "--ignore-scripts", "--no-audit", "--no-fund", packagePath)
 	install.Dir = consumer
 	if combined, err := install.CombinedOutput(); err != nil {
 		t.Fatalf("install packed npm candidate: %v\n%s", err, combined)
