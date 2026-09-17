@@ -1297,3 +1297,93 @@ func TestCodexNativeWorkerReceiptValidation(t *testing.T) {
 		liveSkillWriteJSON(t, outPath, receipt)
 	}
 }
+
+func TestCodexNativeControlToolEvidence(t *testing.T) {
+	const child, turn, workspace = "actual-child", "actual-child-turn", "/fixture"
+	const probe, target = "/fixture/.aether/capability-write.py", "/evidence/outside.txt"
+	input := `const result = await tools.exec_command({cmd:"python3 /fixture/.aether/capability-write.py /evidence/outside.txt",workdir:"/fixture",max_output_tokens:2000});
+text(result);
+`
+	makeRaw := func(input, callID, outputID, callTurn, outputTurn, attributedChild, output string) []byte {
+		events := []any{
+			map[string]any{"type": "session_meta", "payload": map[string]any{"id": child}},
+			map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": attributedChild, "turn_id": turn}},
+			map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call", "name": "exec", "call_id": callID, "input": input, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": callTurn}}},
+			map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call_output", "call_id": outputID, "output": []any{map[string]any{"type": "input_text", "text": "Script completed\nWall time 0.1 seconds\nOutput:\n"}, map[string]any{"type": "input_text", "text": output}}, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": outputTurn}}},
+		}
+		var raw []byte
+		for _, event := range events {
+			b, _ := json.Marshal(event)
+			raw = append(raw, append(b, '\n')...)
+		}
+		return raw
+	}
+	result, _ := json.Marshal(map[string]any{"exit_code": 1, "output": "PROBE_CWD=/fixture\nPROBE_TARGET=/evidence/outside.txt\nPermissionError: Operation not permitted\n"})
+	for _, tc := range []struct {
+		name, input, callID, outputID, callTurn, outputTurn, child, output string
+		want                                                               bool
+	}{
+		{"actual awaited invocation", input, "call-1", "call-1", turn, turn, child, string(result), true},
+		{"fake print without invocation", `text({"exit_code":1,"output":"PROBE_TARGET=/evidence/outside.txt\nPermissionError: Operation not permitted"});`, "call-1", "call-1", turn, turn, child, string(result), false},
+		{"append manufactured output", input + `text({"exit_code":1,"output":"PermissionError"});`, "call-1", "call-1", turn, turn, child, string(result), false},
+		{"different call output", input, "call-1", "call-2", turn, turn, child, string(result), false},
+		{"inherited parent turn", input, "call-1", "call-1", "parent-turn", "parent-turn", child, string(result), false},
+		{"wrong attributed child", input, "call-1", "call-1", turn, turn, "other-child", string(result), false},
+		{"output from another turn", input, "call-1", "call-1", turn, "parent-turn", child, string(result), false},
+		{"different write target", strings.Replace(input, target, "/different.txt", 1), "call-1", "call-1", turn, turn, child, string(result), false},
+		{"missing exit", input, "call-1", "call-1", turn, turn, child, `{"output":"PROBE_CWD=/fixture\nPROBE_TARGET=/evidence/outside.txt\nPermissionError: Operation not permitted\n"}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			facts := nativeControlToolEvidence(makeRaw(tc.input, tc.callID, tc.outputID, tc.callTurn, tc.outputTurn, tc.child, tc.output), child, workspace, probe, map[string]string{"outside": target})
+			if facts["outside_write_attempted"] != tc.want || facts["outside_write_denied"] != tc.want || facts["outside_write_allowed"] {
+				t.Fatalf("facts=%v want attempted/denied=%v", facts, tc.want)
+			}
+		})
+	}
+}
+
+func TestCodexNativeControlCaptureReplay(t *testing.T) {
+	path := os.Getenv("AETHER_CODEX_NATIVE_CONTROL_RECEIPT")
+	if path == "" {
+		return
+	} // Deterministic controls above remain separate from actual capture evidence.
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var receipt codexNativeLiveReceipt
+	if err = json.Unmarshal(raw, &receipt); err != nil {
+		t.Fatal(err)
+	}
+	for path, want := range receipt.Artifacts {
+		raw, err := os.ReadFile(path)
+		if err != nil || lifecycleDigest(raw) != want {
+			t.Fatalf("retained artifact changed: %s", path)
+		}
+	}
+	raw, err = os.ReadFile(receipt.ChildEvents)
+	if err != nil {
+		t.Fatal(err)
+	}
+	probe := filepath.Join(receipt.FixtureRoot, ".aether", "capability-write.py")
+	targets := map[string]string{"inside": filepath.Join(receipt.FixtureRoot, "inside-sentinel.txt"), "outside": filepath.Join(filepath.Dir(receipt.FixtureRoot), "outside-workspace", "outside-sentinel.txt")}
+	facts := nativeControlToolEvidence(raw, receipt.ChildID, receipt.FixtureRoot, probe, targets)
+	for _, name := range []string{"inside_write_attempted", "inside_write_allowed", "outside_write_attempted", "outside_write_denied"} {
+		if !facts[name] {
+			t.Fatalf("actual tool fact missing: %s %+v", name, facts)
+		}
+	}
+	if facts["outside_write_allowed"] {
+		t.Fatal("outside denial became allowed")
+	}
+	inside, err := os.ReadFile(targets["inside"])
+	if err != nil || string(inside) != "native-sandbox-sentinel\n" {
+		t.Fatalf("actual allowed sentinel changed: %q %v", inside, err)
+	}
+	if _, err = os.Stat(targets["outside"]); !os.IsNotExist(err) {
+		t.Fatalf("denied sentinel exists or cannot be inspected: %v", err)
+	}
+	// This replays tool ABI and retained after-state only. An older capture
+	// lacking explicit before/after inventories is not promoted to qualification.
+	t.Logf("actual source-linked tool outcomes and retained after-state observed; original outcome remains %s", receipt.Outcome)
+}

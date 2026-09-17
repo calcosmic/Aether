@@ -548,6 +548,106 @@ func nativeRunResumeHost(t *testing.T, client string, args []string, repo string
 	return 0
 }
 
+// nativeControlToolEvidence accepts two host ABIs: normalized CommandExecution,
+// and the installed code-mode wrapper that prints exactly the awaited command
+// result. A filename/error substring or arbitrary text(...) is never a call.
+func nativeControlToolEvidence(raw []byte, child, workspace, probe string, targets map[string]string) map[string]bool {
+	facts := map[string]bool{}
+	var meta nativeHostEvent
+	if json.Unmarshal(bytes.SplitN(raw, []byte{'\n'}, 2)[0], &meta) != nil || meta.Type != "session_meta" || meta.Payload.ID != child {
+		return facts
+	}
+	type wireEvent struct {
+		Type    string
+		Payload struct {
+			Type     string                        `json:"type"`
+			ThreadID string                        `json:"thread_id"`
+			TurnID   string                        `json:"turn_id"`
+			Name     string                        `json:"name"`
+			CallID   string                        `json:"call_id"`
+			Input    string                        `json:"input"`
+			Output   []struct{ Type, Text string } `json:"output"`
+			Metadata struct {
+				TurnID string `json:"turn_id"`
+			} `json:"internal_chat_message_metadata_passthrough"`
+		}
+	}
+	turns := map[string]bool{}
+	for _, line := range bytes.Split(raw, []byte{'\n'}) {
+		var event wireEvent
+		if json.Unmarshal(line, &event) == nil && event.Type == "event_msg" && event.Payload.ThreadID == child && event.Payload.TurnID != "" {
+			turns[event.Payload.TurnID] = true
+		}
+	}
+	record := func(name, target string, exit int, output string) {
+		if !strings.Contains(output, "PROBE_CWD="+workspace+"\n") || !strings.Contains(output, "PROBE_TARGET="+target+"\n") {
+			return
+		}
+		facts[name+"_write_attempted"] = true
+		if exit == 0 && strings.Contains(output, "PROBE_WRITE_SUCCEEDED\n") {
+			facts[name+"_write_allowed"] = true
+		}
+		if exit != 0 && (strings.Contains(output, "Operation not permitted") || strings.Contains(output, "Permission denied") || strings.Contains(output, "Read-only file system")) {
+			facts[name+"_write_denied"] = true
+		}
+	}
+	type call struct{ Name, Target, Turn string }
+	calls := map[string]call{}
+	seen := map[string]bool{}
+	for _, line := range bytes.Split(raw, []byte{'\n'}) {
+		var normalized nativeHostEvent
+		if json.Unmarshal(line, &normalized) == nil && normalized.Type == "event_msg" && normalized.Payload.Type == "item_completed" && normalized.Payload.ThreadID == child {
+			i := normalized.Payload.Item
+			if i.Type == "CommandExecution" && i.Status == "completed" && len(i.Command) == 3 && (i.Command[1] == "-lc" || i.Command[1] == "-c") && i.ExitCode != nil && nativeSameCwd(i.Cwd, workspace) {
+				words, ok := nativeSimpleShellWords(i.Command[2])
+				for name, target := range targets {
+					if ok && len(words) == 3 && words[0] == "python3" && words[1] == probe && words[2] == target {
+						record(name, target, *i.ExitCode, i.Output)
+					}
+				}
+			}
+		}
+		var event wireEvent
+		if json.Unmarshal(line, &event) != nil || event.Type != "response_item" || event.Payload.CallID == "" || !turns[event.Payload.Metadata.TurnID] {
+			continue
+		}
+		p := event.Payload
+		if p.Type == "custom_tool_call" {
+			if seen[p.CallID] {
+				delete(calls, p.CallID)
+				continue
+			}
+			seen[p.CallID] = true
+			if p.Name != "exec" {
+				continue
+			}
+			for name, target := range targets {
+				cmd := "python3 " + probe + " " + target
+				pattern := `^\s*const\s+result\s*=\s*await\s+tools\.exec_command\(\{\s*cmd:\s*` + regexp.QuoteMeta(strconv.Quote(cmd)) + `\s*,\s*workdir:\s*` + regexp.QuoteMeta(strconv.Quote(workspace)) + `\s*,\s*max_output_tokens:\s*2000\s*\}\);\s*text\(result\);\s*$`
+				if regexp.MustCompile(pattern).MatchString(p.Input) {
+					calls[p.CallID] = call{name, target, p.Metadata.TurnID}
+				}
+			}
+		}
+		if p.Type != "custom_tool_call_output" {
+			continue
+		}
+		c, ok := calls[p.CallID]
+		delete(calls, p.CallID)
+		if !ok || c.Turn != p.Metadata.TurnID || len(p.Output) != 2 || p.Output[0].Type != "input_text" || !strings.HasPrefix(p.Output[0].Text, "Script completed\n") || p.Output[1].Type != "input_text" {
+			continue
+		}
+		var result struct {
+			ExitCode *int   `json:"exit_code"`
+			Output   string `json:"output"`
+		}
+		if json.Unmarshal([]byte(p.Output[1].Text), &result) == nil && result.ExitCode != nil {
+			record(c.Name, c.Target, *result.ExitCode, result.Output)
+		}
+	}
+	return facts
+}
+
 func nativeCollectResumeEvidence(t *testing.T, r *codexNativeLiveReceipt, runRoot, fixtureHome, coord string) {
 	t.Helper()
 	nativeCollectLiveEvidence(t, r, runRoot, fixtureHome)
