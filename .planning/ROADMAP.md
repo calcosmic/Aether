@@ -792,7 +792,7 @@ Plans:
 
 **Wave 9**
 
-- [ ] 204.2-11-PLAN.md — Prove exact context and uncontaminated scoped answer delivery; depends on 10.
+- [x] 204.2-11-PLAN.md — Prove exact context and uncontaminated scoped answer delivery; depends on 10.
 
 **Wave 10**
 
