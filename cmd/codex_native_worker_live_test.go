@@ -27,6 +27,7 @@ import (
 // This separate schema never widens the Phase 204.1 read-only discovery proof.
 // It starts incomplete and is promoted only after actual host/child evidence.
 type codexNativeLiveReceipt struct {
+	replaying                  bool
 	replayArtifacts            map[string]string
 	SchemaVersion              string                   `json:"schema_version"`
 	Scenario                   string                   `json:"scenario"`
@@ -118,6 +119,9 @@ type codexNativeLiveReceipt struct {
 // has an empty inventory until collection finishes. Candidate/client binaries
 // are separately declared immutable inputs, not later-discovered proof files.
 func (r codexNativeLiveReceipt) readEvidence(path string) ([]byte, error) {
+	if r.replaying && len(r.replayArtifacts) == 0 {
+		return nil, fmt.Errorf("capture artifact inventory absent")
+	}
 	inventory := r.replayArtifacts
 	if inventory == nil && len(r.Artifacts) > 0 {
 		inventory = r.Artifacts
@@ -1495,7 +1499,11 @@ func nativeClaudeCreditEvidence(r codexNativeLiveReceipt, command, output string
 	if err != nil || json.Unmarshal(raw, &record) != nil || record.Status != buildAttemptBuilt || record.Claims == nil || len(record.Dispatches) != 1 || record.Dispatches[0].TaskID == "" || record.CompletionPath == "" || record.CompletionSHA256 == "" {
 		return false
 	}
-	completion, err := loadExternalBuildCompletion(resolve(words[4]))
+	packet, err := r.readEvidence(resolve(words[4]))
+	if err != nil {
+		return false
+	}
+	completion, err := nativeCapturedCompletion(packet)
 	if err != nil {
 		return false
 	}
@@ -3385,10 +3393,9 @@ func nativeRefusalInventory(r codexNativeLiveReceipt, path, reason string) error
 // runs worker checks, rewrites a result, or changes the original receipt.
 func nativeReplayQualificationReceipt(t *testing.T, r *codexNativeLiveReceipt) error {
 	t.Helper()
-	if len(r.Artifacts) == 0 {
-		return fmt.Errorf("capture artifact inventory absent")
+	if err := nativeBeginReceiptReplay(r); err != nil {
+		return err
 	}
-	r.replayArtifacts = r.Artifacts
 	root := filepath.Dir(r.FixtureRoot)
 	home := filepath.Join(root, "home")
 	coord := filepath.Join(root, "coordination")
@@ -3659,4 +3666,35 @@ func nativeCodeModeCommands(input, defaultCwd string) ([]nativeRecordedShellComm
 func nativePathWithin(root, path string) bool {
 	rel, err := filepath.Rel(root, path)
 	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+func nativeBeginReceiptReplay(r *codexNativeLiveReceipt) error {
+	r.replaying = true
+	r.replayArtifacts = r.Artifacts
+	if len(r.replayArtifacts) == 0 {
+		return fmt.Errorf("capture artifact inventory absent")
+	}
+	return nil
+}
+func nativeCapturedCompletion(data []byte) (codexExternalBuildCompletion, error) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return codexExternalBuildCompletion{}, err
+	}
+	absent := func(key string) bool { v, ok := raw[key]; return !ok || string(v) == "null" }
+	if absent("dispatch_manifest") && absent("manifest") {
+		data = raw["result"]
+	}
+	var completion codexExternalBuildCompletion
+	if err := json.Unmarshal(data, &completion); err != nil {
+		return completion, err
+	}
+	var generic any
+	if err := json.Unmarshal(data, &generic); err != nil {
+		return completion, err
+	}
+	if completion.activeManifest() == nil || !manifestSelectionMatchesRaw(completion, generic) {
+		return completion, fmt.Errorf("captured completion manifest missing")
+	}
+	return completion, nil
 }

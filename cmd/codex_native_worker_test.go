@@ -1253,7 +1253,9 @@ func TestCodexNativeWorkerReceiptValidation(t *testing.T) {
 			t.Fatalf("retained artifact changed or missing: %s", file)
 		}
 	}
-	receipt.replayArtifacts = receipt.Artifacts
+	if err := nativeBeginReceiptReplay(&receipt); err != nil {
+		t.Fatal(err)
+	}
 	receipt.SkillRead, receipt.SupportRead, receipt.GuideRead = false, false, false
 	receipt.ChildEditObserved, receipt.ChecksPassed, receipt.CreditObserved = false, false, false
 	receipt.TerminalCorroborated, receipt.SourceEventCorroborated, receipt.ParentSubstitution = false, false, false
@@ -1816,11 +1818,20 @@ func TestCodexNativeReviewedClaudeProvenance(t *testing.T) {
 		if !nativeClaudeCreditEvidence(r, command, string(output), state) {
 			t.Fatal("exact accepted packet/refinalizer predicate rejected")
 		}
-		for _, mode := range []string{"wrong_result_task", "wrong_state_task", "wrong_attempt", "no_runtime_response"} {
+
+		r.Artifacts = map[string]string{path: liveSkillFileDigest(t, path), savedPath: liveSkillFileDigest(t, savedPath), attemptPath: liveSkillFileDigest(t, attemptPath)}
+		if !nativeClaudeCreditEvidence(r, command, string(output), state) {
+			t.Fatal("fully pinned captured completion rejected")
+		}
+		r.Artifacts = nil
+		for _, mode := range []string{"wrong_result_task", "wrong_state_task", "wrong_attempt", "no_runtime_response", "unpinned_submitted_packet"} {
 			t.Run(mode, func(t *testing.T) {
 				altered := append([]byte(nil), output...)
 				state2 := append([]byte(nil), state...)
 				switch mode {
+				case "unpinned_submitted_packet":
+					r.Artifacts = map[string]string{savedPath: liveSkillFileDigest(t, savedPath), attemptPath: liveSkillFileDigest(t, attemptPath)}
+					defer func() { r.Artifacts = nil }()
 				case "wrong_result_task":
 					completion.Results[0].TaskID = "2.1"
 					liveSkillWriteJSON(t, path, completion)
@@ -2341,5 +2352,66 @@ func TestCodexNativeThirdReviewReplayInventory(t *testing.T) {
 				t.Fatalf("%s actual collector/replay-to-validator outcome=%s err=%v", mode, r.Outcome, err)
 			}
 		})
+	}
+}
+
+func TestCodexNativeFourthReviewLegacyReplayInventory(t *testing.T) {
+	for _, mode := range []string{"pinned", "omitted", "null", "empty"} {
+		t.Run(mode, func(t *testing.T) {
+			r := nativeInventoryReplayFixture(t)
+			raw, _ := json.Marshal(r)
+			var object map[string]any
+			_ = json.Unmarshal(raw, &object)
+			switch mode {
+			case "omitted":
+				delete(object, "artifacts")
+			case "null":
+				object["artifacts"] = nil
+			case "empty":
+				object["artifacts"] = map[string]string{}
+			}
+			input := filepath.Join(t.TempDir(), "original.json")
+			liveSkillWriteJSON(t, input, object)
+			command := exec.Command(os.Args[0], "-test.run", "^TestCodexNativeWorkerReceiptValidation$", "-test.v")
+			for _, entry := range os.Environ() {
+				if !strings.HasPrefix(entry, "AETHER_CODEX_NATIVE_") {
+					command.Env = append(command.Env, entry)
+				}
+			}
+			command.Env = append(command.Env, "AETHER_CODEX_NATIVE_RECEIPT_PATH="+input)
+			output, err := command.CombinedOutput()
+			if mode == "pinned" {
+				if err != nil {
+					t.Fatalf("pinned legacy replay failed: %v\n%s", err, output)
+				}
+			} else if err == nil || !strings.Contains(string(output), "inventory") {
+				t.Fatalf("%s legacy replay did not reject missing original inventory: %v\n%s", mode, err, output)
+			}
+		})
+	}
+}
+
+func TestCodexNativeFourthReviewReplayModeAndPacket(t *testing.T) {
+	r := codexNativeLiveReceipt{Artifacts: map[string]string{"pinned": "digest"}}
+	if err := nativeBeginReceiptReplay(&r); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "late")
+	liveSkillWrite(t, path, []byte("late"))
+	r.replayArtifacts = nil
+	if _, err := r.readEvidence(path); err == nil {
+		t.Fatal("replay mode fell back to live reads when inventory became nil")
+	}
+	packet := []byte("{\"manifest\":{\"phase\":1,\"attempt_id\":\"attempt\"}}")
+	for _, raw := range [][]byte{packet, append(append([]byte("{\"result\":"), packet...), '}')} {
+		c, err := nativeCapturedCompletion(raw)
+		if err != nil || c.activeManifest() == nil || c.activeManifest().AttemptID != "attempt" {
+			t.Fatalf("valid captured packet rejected: %v", err)
+		}
+	}
+	for _, raw := range []string{"{}", "{\"manifest\":\"wrong\",\"result\":{\"manifest\":{\"phase\":1}}}", "{\"manifest\":{},\"results\":\"wrong\"}"} {
+		if _, err := nativeCapturedCompletion([]byte(raw)); err == nil {
+			t.Fatalf("invalid captured packet accepted: %s", raw)
+		}
 	}
 }
