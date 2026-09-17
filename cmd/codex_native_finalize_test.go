@@ -582,3 +582,67 @@ func TestCodexNativeFinalizeChecks(t *testing.T) {
 		}
 	})
 }
+
+func TestCodexNativeFinalizeStateCurrency(t *testing.T) {
+	for _, boundary := range []string{"before-first-reservation", "stage"} {
+		for _, mutation := range []string{"none", "goal", "plan", "run", "pause"} {
+			t.Run(boundary+"/"+mutation, func(t *testing.T) {
+				var packet codexExternalBuildCompletion
+				var record buildAttemptRecord
+				var path string
+				if boundary == "stage" {
+					_, manifest, requests := nativeFinalizeFixture(t, 1)
+					nativeFinalizeRecord(t, manifest, requests[0], "completed")
+					path, packet = nativeFinalizeProjection(t)
+				} else {
+					_, _ = nativeAdmissionFixture(t)
+				}
+				_, record, _ = loadLatestBuildAttempt(1)
+				var state colony.ColonyState
+				if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+					t.Fatal(err)
+				}
+				switch mutation {
+				case "goal":
+					goal := "Different accepted work"
+					state.Goal = &goal
+				case "plan":
+					state.Plan.Phases[0].Tasks[0].Goal = "Different planned work"
+				case "run":
+					run := "replacement-run"
+					state.RunID = &run
+				case "pause":
+					state.Paused = true
+				}
+				if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+					t.Fatal(err)
+				}
+				before, stateBytes := nativeJournalBytes(t), nativeFinalizeStateBytes(t)
+				var err error
+				if boundary == "stage" {
+					_, _, err = stageBuildAttemptCompletion(path, packet)
+				} else {
+					err = validateCodexNativeAttemptState(record, state)
+				}
+				if mutation == "none" {
+					if err != nil {
+						t.Fatal(err)
+					}
+					return
+				}
+				if err == nil {
+					t.Fatal("native currency ignored changed accepted state")
+				}
+				if !bytes.Equal(before, nativeJournalBytes(t)) || !bytes.Equal(stateBytes, nativeFinalizeStateBytes(t)) {
+					t.Fatal("currency refusal wrote evidence or state")
+				}
+				if boundary == "stage" {
+					file := filepath.Join(store.BasePath(), durableBuildCompletionPath(1, record.ID))
+					if _, err := os.Stat(file); !os.IsNotExist(err) {
+						t.Fatal("stale native packet was persisted")
+					}
+				}
+			})
+		}
+	}
+}
