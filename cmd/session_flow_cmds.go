@@ -502,11 +502,6 @@ func resumeColonyAt(now time.Time) (pauseResumeLifecycleOutcome, error) {
 		}
 	}
 
-	// Recover a pending pause intent above before projecting native activity.
-	// Otherwise an interrupted pause could be hidden by an advisory read.
-	if recovery := buildCodexNativeRecovery(state); recovery != nil && (!state.Paused || recovery.pendingBoundary()) {
-		return pauseResumeLifecycleOutcome{NativeRecovery: recovery, StateEffect: colony.LifecycleStateEffectNone, Provenance: colony.RecoveryProvenanceConfirmed}, nil
-	}
 	if state.PauseHandoff != nil && !state.Paused {
 		resumeTxID := resumeTransactionID(state.PauseHandoff.ID)
 		if lifecycleTransactionHasIntentOrReceipt(resumeTxID) {
@@ -523,6 +518,14 @@ func resumeColonyAt(now time.Time) (pauseResumeLifecycleOutcome, error) {
 				StateEffect: receipt.StateEffect, Replay: true,
 				Message: "Already resumed; the existing validated recovery receipt was retained.",
 			}, nil
+		}
+	}
+	// Finish authorized pause/resume transactions and validate retained handoff
+	// evidence before native advice. An unpaused state target may be only the
+	// first committed prefix of an interrupted resume transaction.
+	if state.PauseHandoff == nil {
+		if recovery := buildCodexNativeRecovery(state); recovery != nil && (!state.Paused || recovery.pendingBoundary()) {
+			return pauseResumeLifecycleOutcome{NativeRecovery: recovery, StateEffect: colony.LifecycleStateEffectNone, Provenance: colony.RecoveryProvenanceConfirmed}, nil
 		}
 	}
 
@@ -553,6 +556,9 @@ func resumeColonyAt(now time.Time) (pauseResumeLifecycleOutcome, error) {
 		}
 		if !reflectPauseWorktreesEqual(handoff.Worktrees, pauseWorktreeEvidence(root, state.Worktrees)) {
 			return pauseResumeConflictOutcome("Recovery evidence conflicts: worktree evidence changed after the handoff. Run `aether status`, inspect the named worktrees, and choose which work is authoritative before resuming."), nil
+		}
+		if recovery := buildCodexNativeRecovery(state); recovery != nil && recovery.pendingBoundary() {
+			return pauseResumeLifecycleOutcome{NativeRecovery: recovery, StateEffect: colony.LifecycleStateEffectNone, Provenance: colony.RecoveryProvenanceConfirmed}, nil
 		}
 		if state.State == colony.StateEXECUTING {
 			if _, attempt, ok := loadRelevantBuildAttemptReadOnly(state); ok && buildAttemptProcessAlive(attempt) {
