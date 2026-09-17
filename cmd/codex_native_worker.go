@@ -457,7 +457,9 @@ func executeCodexNativeWorkerRequest(operation string, request codexNativeWorker
 			if dispatch == nil {
 				return fmt.Errorf("native assignment is not in the accepted manifest")
 			}
-			if strings.TrimSpace(dispatch.Name) == "" || strings.TrimSpace(dispatch.Caste) == "" || strings.TrimSpace(dispatch.TaskID) == "" || dispatch.ExecutionWave < 1 {
+			// Auxiliary reviewers use the same derived task identity as manifest
+			// lookup and completion accounting; their raw TaskID is intentionally empty.
+			if strings.TrimSpace(dispatch.Name) == "" || strings.TrimSpace(dispatch.Caste) == "" || normalizedDispatchTaskID(*dispatch) == "" || dispatch.ExecutionWave < 1 {
 				return fmt.Errorf("native assignment is incomplete")
 			}
 			response.Dispatch = dispatch
