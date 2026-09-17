@@ -2158,7 +2158,7 @@ elif op in ("running", "context-ack", "cancel-requested", "cancelled", "unavaila
         plaintext = message == delivery["payload"]
         write("context-send-provenance.json", {"call":call, "result":outputs.get(item["id"]), "event":event, "event_sha256":hashlib.sha256(raw).hexdigest(), "payload_plaintext_corroborated":plaintext, "limitation":"" if plaintext else "Host export encrypts message bytes; actual send/child linkage only"})
         output = outputs.get(item["id"], {})
-        assert output.get("call_id") == item["id"] and json.loads(output.get("output", "null")) == {}, "Missing successful host send result"
+        assert output.get("call_id") == item["id"] and output.get("output") in ("", "{}"), "Missing successful host send result"
         assert plaintext, "Exact send plaintext unavailable or altered; cannot self-acknowledge an inferred digest"
         value.update(context_delivery=delivery, context_send={"status":"completed","child_id":child,"message_sha256":delivery["payload_sha256"]})
     if op == "cancel-requested":

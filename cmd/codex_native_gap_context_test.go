@@ -263,7 +263,7 @@ func nativeGapPrepareContext(t *testing.T, root string) {
 	strength := 1.0
 	content, _ := json.Marshal(map[string]string{"text": nativeGapMarkers[2]})
 	liveSkillWriteJSON(t, filepath.Join(root, ".aether", "data", "pheromones.json"), colony.PheromoneFile{Signals: []colony.PheromoneSignal{{ID: "gap-steering", Type: "FOCUS", Priority: "normal", Source: "user", CreatedAt: now, Active: true, Strength: &strength, Content: content}}})
-	liveSkillWrite(t, filepath.Join(root, ".aether", "skills", "colony", "gap-context", "SKILL.md"), []byte("---\nname: gap-context\ntype: colony\nagent_roles:\n  - builder\n---\n"+nativeGapMarkers[1]+"\n"))
+	liveSkillWrite(t, filepath.Join(root, ".aether", "skills", "colony", "gap-context", "SKILL.md"), []byte("---\nname: gap-context\ntype: colony\nagent_roles:\n  - builder\nworkflow_triggers: [build]\ntask_keywords: [clamp, bounds, integer]\ndetect_files: [go.mod]\n---\n"+nativeGapMarkers[1]+"\n"))
 	record := buildWorkerHandoffRecord(codex.WorkerDispatch{WorkerName: "FixturePrior", Caste: "builder", TaskID: "0.1", Workflow: "build", Phase: 1, Root: root}, codex.DispatchResult{WorkerName: "FixturePrior", Status: "completed", WorkerResult: &codex.WorkerResult{WorkerName: "FixturePrior", Caste: "builder", TaskID: "0.1", Status: "completed", Summary: "Fixture-prepared prior handoff", Handoff: codex.WorkerHandoff{VerificationStatus: "pass", NextWorkerInstructions: []string{nativeGapMarkers[3]}, Freshness: now}}})
 	liveSkillWriteJSON(t, filepath.Join(root, ".aether", "data", workerHandoffsPath), workerHandoffFile{Entries: []workerHandoffRecord{record}})
 }
@@ -348,7 +348,12 @@ func nativeGapHostBoundary(raw []byte, parent, child, task, kind, expected strin
 			continue
 		}
 		var success map[string]any
-		if json.Unmarshal([]byte(output.Payload.Output), &success) != nil {
+		var resultFields struct{ Payload map[string]json.RawMessage }
+		_ = json.Unmarshal(ob, &resultFields)
+		if _, present := resultFields.Payload["output"]; !present {
+			continue
+		}
+		if output.Payload.Output != "" && json.Unmarshal([]byte(output.Payload.Output), &success) != nil {
 			continue
 		}
 		if kind == "spawn_agent" {
@@ -514,20 +519,11 @@ func nativeGapCaptureContext(r codexNativeLiveReceipt, runRoot string) nativeGap
 		}
 		gap(validateCodexNativeContextReceipt(saved, attempt, attempt.WorkerRuns[0]))
 	}
-	// The independent checker is explicitly insufficient: require the same child
-	// to execute a successful check whose command/output carries the fresh token.
-	childRaw, err := r.readEvidence(r.ChildEvents)
-	ownCheck := false
-	if err == nil {
-		for _, line := range bytes.Split(childRaw, []byte{'\n'}) {
-			var e nativeHostEvent
-			if json.Unmarshal(line, &e) == nil && e.Type == "event_msg" && e.Payload.Type == "item_completed" && e.Payload.ThreadID == r.ChildID && e.Payload.Item.Type == "CommandExecution" && e.Payload.Item.ExitCode != nil && *e.Payload.Item.ExitCode == 0 && (strings.Contains(strings.Join(e.Payload.Item.Command, " "), challenge.PanicText) || strings.Contains(e.Payload.Item.Output, challenge.PanicText)) {
-				ownCheck = true
-			}
-		}
-	}
-	if !ownCheck {
-		gap(fmt.Errorf("child-owned answer-dependent check not corroborated"))
+	// The harness-owned panic check cannot replace the child's required test.
+	// Reuse the existing corroborated uncached Go-test predicate, rather than
+	// calling a successful cat/echo of the challenge an answer-dependent check.
+	if !r.ChecksPassed {
+		gap(fmt.Errorf("child required uncached check not corroborated"))
 	}
 	return report
 }
@@ -589,6 +585,28 @@ func TestCodexNativeGapContext(t *testing.T) {
 	})
 	t.Run("complete-runtime-context", func(t *testing.T) {
 		root := setupExternalBuildAttemptTest(t)
+		var fixture colony.ColonyState
+		if err := store.LoadJSON("COLONY_STATE.json", &fixture); err != nil {
+			t.Fatal(err)
+		}
+		fixture.Plan.Phases[0].Tasks[0].Goal = "Fix Clamp integer bounds"
+		if err := store.SaveJSON("COLONY_STATE.json", fixture); err != nil {
+			t.Fatal(err)
+		}
+		liveSkillWrite(t, filepath.Join(root, "go.mod"), []byte("module example.invalid/contextfixture\n\ngo 1.23\n"))
+		hub := t.TempDir()
+		t.Setenv("AETHER_HUB_DIR", hub)
+		// Installed skills compete for the same top-three budget in the live
+		// fixture. Role-only fixture metadata must not silently drop its marker.
+		for _, name := range []string{"a-competing", "b-competing", "c-competing"} {
+			dir := filepath.Join(hub, "system", "skills", "colony", name)
+			if err := os.MkdirAll(dir, 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("---\nname: "+name+"\ntype: colony\nagent_roles: [builder]\nworkflow_triggers: [build]\n---\nCompeting installed skill\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
 		nativeGapPrepareContext(t, root)
 		manifest := prepareBoundBuildManifestOnly(t, root)
 		prompt, err := composeCodexNativePrompt(manifest, manifest.Dispatches[0], "fixture-launch")
@@ -622,7 +640,7 @@ func TestCodexNativeGapContext(t *testing.T) {
 	t.Run("host-boundary", func(t *testing.T) {
 		expected := "exact café 日本語 é\r\nbytes  "
 		for _, kind := range []string{"spawn_agent", "send_message"} {
-			for _, mode := range []string{"valid", "whitespace", "unicode", "wrong-child", "failed-send", "inspect-only", "missing-result", "duplicate-result", "encrypted", "inherited", "stale", "wrong-turn"} {
+			for _, mode := range []string{"valid", "empty-result", "whitespace", "unicode", "wrong-child", "failed-send", "inspect-only", "missing-result", "duplicate-result", "encrypted", "inherited", "stale", "wrong-turn"} {
 				t.Run(kind+"/"+mode, func(t *testing.T) {
 					activityKind := "interacted"
 					if kind == "spawn_agent" {
@@ -661,6 +679,9 @@ func TestCodexNativeGapContext(t *testing.T) {
 					if kind == "spawn_agent" {
 						output = `{"task_name":"/root/worker"}`
 					}
+					if mode == "empty-result" {
+						output = ""
+					}
 					if mode == "failed-send" {
 						output = `{"error":"failed"}`
 					}
@@ -682,7 +703,7 @@ func TestCodexNativeGapContext(t *testing.T) {
 						raw = append(raw, append(b, '\n')...)
 					}
 					_, err := nativeGapHostBoundary(raw, "parent", "child", "/root/worker", kind, expected)
-					valid := mode == "valid" || (mode == "inherited" && kind == "send_message")
+					valid := mode == "valid" || ((mode == "inherited" || mode == "empty-result") && kind == "send_message")
 					if (err == nil) != valid {
 						t.Fatalf("valid=%v err=%v", valid, err)
 					}
