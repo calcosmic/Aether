@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -452,8 +453,30 @@ func TestCodexNativeFinalizeResumedState(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if _, err := pauseColonyAt(time.Now()); err != nil {
-				t.Fatal(err)
+			beforePause := nativeFinalizeStateBytes(t)
+			_, pauseErr := pauseColonyAt(time.Now())
+			if mutation == "goal" || mutation == "plan" || mutation == "task" {
+				// Integrated native recovery refuses changed work before it can
+				// acquire genuine pause/resume provenance. The finalizer must
+				// independently refuse the same saved packet without granting credit.
+				var pending pauseBoundaryPendingError
+				if !errors.As(pauseErr, &pending) || pending.NativeRecovery == nil || pending.NativeRecovery.Valid || pending.Attempt != manifest.ExecutionBinding.AttemptID {
+					t.Fatalf("changed native work acquired a pause: %v", pauseErr)
+				}
+				if !bytes.Equal(beforePause, nativeFinalizeStateBytes(t)) {
+					t.Fatal("refused pause changed colony state")
+				}
+				before := nativeRecoveryStoreSnapshot(t)
+				if _, _, _, _, err := runCodexBuildFinalize(root, 1, packet, true); err == nil {
+					t.Fatal("finalizer accepted work drift after refused pause")
+				}
+				if !reflect.DeepEqual(before, nativeRecoveryStoreSnapshot(t)) {
+					t.Fatal("rejected drifted packet changed retained evidence")
+				}
+				return
+			}
+			if pauseErr != nil {
+				t.Fatal(pauseErr)
 			}
 			if mutation == "none" {
 				_, saved, _ := loadLatestBuildAttempt(1)
