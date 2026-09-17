@@ -29,93 +29,94 @@ import (
 type codexNativeLiveReceipt struct {
 	replaying                  bool
 	replayArtifacts            map[string]string
-	SchemaVersion              string                   `json:"schema_version"`
-	Scenario                   string                   `json:"scenario"`
-	Outcome                    string                   `json:"outcome"`
-	Reason                     string                   `json:"reason,omitempty"`
-	SourceRevision             string                   `json:"source_revision"`
-	SourceStatus               string                   `json:"source_status"`
-	SourceDigest               string                   `json:"source_digest"`
-	CandidatePath              string                   `json:"candidate_path"`
-	CandidateVersion           string                   `json:"candidate_version"`
-	CandidateSHA256            string                   `json:"candidate_sha256"`
-	BuildArgv                  []string                 `json:"build_argv"`
-	ClientPath                 string                   `json:"client_path"`
-	ClientVersion              string                   `json:"client_version"`
-	ClientSHA256               string                   `json:"client_sha256"`
-	Model                      string                   `json:"model"`
-	Args                       []string                 `json:"client_args"`
-	FixtureRoot                string                   `json:"fixture_root"`
-	FixtureProvenance          string                   `json:"fixture_provenance"`
-	SkillPath                  string                   `json:"skill_path"`
-	SupportPath                string                   `json:"support_path"`
-	RawEvents                  string                   `json:"raw_events"`
-	RawStderr                  string                   `json:"raw_stderr"`
-	SessionID                  string                   `json:"host_session_id,omitempty"`
-	ChildTaskPath              string                   `json:"child_task_path,omitempty"`
-	ChildSpawnCallID           string                   `json:"child_spawn_call_id,omitempty"`
-	ChildIdentityCorroborated  bool                     `json:"child_identity_corroborated"`
-	ChildID                    string                   `json:"child_id,omitempty"`
-	ChildEvents                string                   `json:"child_events,omitempty"`
-	AttemptPath                string                   `json:"attempt_path,omitempty"`
-	AttemptID                  string                   `json:"attempt_id,omitempty"`
-	RunID                      string                   `json:"run_id,omitempty"`
-	LaunchID                   string                   `json:"launch_id,omitempty"`
-	WorkerName                 string                   `json:"worker_name,omitempty"`
-	TaskID                     string                   `json:"task_id,omitempty"`
-	PromptSHA256               string                   `json:"prompt_sha256,omitempty"`
-	ResultSHA256               string                   `json:"result_sha256,omitempty"`
-	CompletionPath             string                   `json:"completion_path,omitempty"`
-	Artifacts                  map[string]string        `json:"artifacts"`
-	ObservedTools              []string                 `json:"observed_tools,omitempty"`
-	ExitStatus                 int                      `json:"exit_status"`
-	ElapsedSeconds             float64                  `json:"elapsed_seconds"`
-	AuthRemoved                bool                     `json:"temporary_auth_removed"`
-	ChecksPassed               bool                     `json:"child_checks_passed"`
-	ChildEditObserved          bool                     `json:"child_edit_observed"`
-	CreditObserved             bool                     `json:"runtime_credit_observed"`
-	ParentSubstitution         bool                     `json:"parent_substitution"`
-	ChildUnclassified          []string                 `json:"child_unclassified_operations,omitempty"`
-	ParentUnclassified         []string                 `json:"parent_unclassified_commands,omitempty"`
-	SkillRead                  bool                     `json:"installed_skill_read"`
-	SupportRead                bool                     `json:"installed_support_read"`
-	GuideRead                  bool                     `json:"runtime_guide_read"`
-	NativeSpawnCount           int                      `json:"native_spawn_count"`
-	TerminalCorroborated       bool                     `json:"child_terminal_corroborated"`
-	SourceEventCorroborated    bool                     `json:"source_event_corroborated"`
-	BoundHostSessionID         string                   `json:"bound_host_session_id,omitempty"`
-	SavedTerminal              *internalWorkerResult    `json:"saved_terminal,omitempty"`
-	SavedSourceEventSHA256     string                   `json:"saved_source_event_sha256,omitempty"`
-	SavedSourceEventID         string                   `json:"saved_source_event_id,omitempty"`
-	BaselineSource             string                   `json:"baseline_source"`
-	FinalSource                string                   `json:"final_source"`
-	CoordinatorPath            string                   `json:"coordinator_path,omitempty"`
-	CoordinatorSHA256          string                   `json:"coordinator_sha256,omitempty"`
-	ResumeSessionID            string                   `json:"resume_host_session_id,omitempty"`
-	ResumeRawEvents            string                   `json:"resume_raw_events,omitempty"`
-	ResumeRawStderr            string                   `json:"resume_raw_stderr,omitempty"`
-	ResumeExitStatus           int                      `json:"resume_exit_status"`
-	BeforeResumeJournalSHA256  string                   `json:"before_resume_journal_sha256,omitempty"`
-	BeforeResumeJournalPath    string                   `json:"before_resume_journal_path,omitempty"`
-	ResumeWorkerStable         bool                     `json:"resume_worker_stable"`
-	ResumeNoSpawn              bool                     `json:"resume_no_spawn"`
-	ResumeInspectObserved      bool                     `json:"resume_inspect_observed"`
-	FinalizationReplayStable   bool                     `json:"finalization_replay_stable"`
-	EmptyResultRefused         bool                     `json:"empty_result_refused"`
-	BaselineTestsSHA256        string                   `json:"baseline_tests_sha256,omitempty"`
-	BaselineSecondTestsSHA256  string                   `json:"baseline_second_tests_sha256,omitempty"`
-	BaselineModuleSHA256       string                   `json:"baseline_module_sha256,omitempty"`
-	LaunchMessageEncoding      string                   `json:"launch_message_encoding,omitempty"`
-	PromptDeliveryVerification string                   `json:"prompt_delivery_verification,omitempty"`
-	ValidationRevision         string                   `json:"validation_revision,omitempty"`
-	ValidationOriginalReceipt  string                   `json:"validation_original_receipt,omitempty"`
-	ValidationOriginalSHA256   string                   `json:"validation_original_sha256,omitempty"`
-	Workers                    []codexNativeLiveReceipt `json:"workers,omitempty"`
-	Assertions                 map[string]bool          `json:"assertions,omitempty"`
-	Limitations                []string                 `json:"limitations,omitempty"`
-	HarnessSHA256              string                   `json:"harness_sha256,omitempty"`
-	Caste                      string                   `json:"caste,omitempty"`
-	SourceFile                 string                   `json:"source_file,omitempty"`
+	RecoveryCheckpoint         *nativeGapRecoveryCheckpoint `json:"recovery_checkpoint,omitempty"`
+	SchemaVersion              string                       `json:"schema_version"`
+	Scenario                   string                       `json:"scenario"`
+	Outcome                    string                       `json:"outcome"`
+	Reason                     string                       `json:"reason,omitempty"`
+	SourceRevision             string                       `json:"source_revision"`
+	SourceStatus               string                       `json:"source_status"`
+	SourceDigest               string                       `json:"source_digest"`
+	CandidatePath              string                       `json:"candidate_path"`
+	CandidateVersion           string                       `json:"candidate_version"`
+	CandidateSHA256            string                       `json:"candidate_sha256"`
+	BuildArgv                  []string                     `json:"build_argv"`
+	ClientPath                 string                       `json:"client_path"`
+	ClientVersion              string                       `json:"client_version"`
+	ClientSHA256               string                       `json:"client_sha256"`
+	Model                      string                       `json:"model"`
+	Args                       []string                     `json:"client_args"`
+	FixtureRoot                string                       `json:"fixture_root"`
+	FixtureProvenance          string                       `json:"fixture_provenance"`
+	SkillPath                  string                       `json:"skill_path"`
+	SupportPath                string                       `json:"support_path"`
+	RawEvents                  string                       `json:"raw_events"`
+	RawStderr                  string                       `json:"raw_stderr"`
+	SessionID                  string                       `json:"host_session_id,omitempty"`
+	ChildTaskPath              string                       `json:"child_task_path,omitempty"`
+	ChildSpawnCallID           string                       `json:"child_spawn_call_id,omitempty"`
+	ChildIdentityCorroborated  bool                         `json:"child_identity_corroborated"`
+	ChildID                    string                       `json:"child_id,omitempty"`
+	ChildEvents                string                       `json:"child_events,omitempty"`
+	AttemptPath                string                       `json:"attempt_path,omitempty"`
+	AttemptID                  string                       `json:"attempt_id,omitempty"`
+	RunID                      string                       `json:"run_id,omitempty"`
+	LaunchID                   string                       `json:"launch_id,omitempty"`
+	WorkerName                 string                       `json:"worker_name,omitempty"`
+	TaskID                     string                       `json:"task_id,omitempty"`
+	PromptSHA256               string                       `json:"prompt_sha256,omitempty"`
+	ResultSHA256               string                       `json:"result_sha256,omitempty"`
+	CompletionPath             string                       `json:"completion_path,omitempty"`
+	Artifacts                  map[string]string            `json:"artifacts"`
+	ObservedTools              []string                     `json:"observed_tools,omitempty"`
+	ExitStatus                 int                          `json:"exit_status"`
+	ElapsedSeconds             float64                      `json:"elapsed_seconds"`
+	AuthRemoved                bool                         `json:"temporary_auth_removed"`
+	ChecksPassed               bool                         `json:"child_checks_passed"`
+	ChildEditObserved          bool                         `json:"child_edit_observed"`
+	CreditObserved             bool                         `json:"runtime_credit_observed"`
+	ParentSubstitution         bool                         `json:"parent_substitution"`
+	ChildUnclassified          []string                     `json:"child_unclassified_operations,omitempty"`
+	ParentUnclassified         []string                     `json:"parent_unclassified_commands,omitempty"`
+	SkillRead                  bool                         `json:"installed_skill_read"`
+	SupportRead                bool                         `json:"installed_support_read"`
+	GuideRead                  bool                         `json:"runtime_guide_read"`
+	NativeSpawnCount           int                          `json:"native_spawn_count"`
+	TerminalCorroborated       bool                         `json:"child_terminal_corroborated"`
+	SourceEventCorroborated    bool                         `json:"source_event_corroborated"`
+	BoundHostSessionID         string                       `json:"bound_host_session_id,omitempty"`
+	SavedTerminal              *internalWorkerResult        `json:"saved_terminal,omitempty"`
+	SavedSourceEventSHA256     string                       `json:"saved_source_event_sha256,omitempty"`
+	SavedSourceEventID         string                       `json:"saved_source_event_id,omitempty"`
+	BaselineSource             string                       `json:"baseline_source"`
+	FinalSource                string                       `json:"final_source"`
+	CoordinatorPath            string                       `json:"coordinator_path,omitempty"`
+	CoordinatorSHA256          string                       `json:"coordinator_sha256,omitempty"`
+	ResumeSessionID            string                       `json:"resume_host_session_id,omitempty"`
+	ResumeRawEvents            string                       `json:"resume_raw_events,omitempty"`
+	ResumeRawStderr            string                       `json:"resume_raw_stderr,omitempty"`
+	ResumeExitStatus           int                          `json:"resume_exit_status"`
+	BeforeResumeJournalSHA256  string                       `json:"before_resume_journal_sha256,omitempty"`
+	BeforeResumeJournalPath    string                       `json:"before_resume_journal_path,omitempty"`
+	ResumeWorkerStable         bool                         `json:"resume_worker_stable"`
+	ResumeNoSpawn              bool                         `json:"resume_no_spawn"`
+	ResumeInspectObserved      bool                         `json:"resume_inspect_observed"`
+	FinalizationReplayStable   bool                         `json:"finalization_replay_stable"`
+	EmptyResultRefused         bool                         `json:"empty_result_refused"`
+	BaselineTestsSHA256        string                       `json:"baseline_tests_sha256,omitempty"`
+	BaselineSecondTestsSHA256  string                       `json:"baseline_second_tests_sha256,omitempty"`
+	BaselineModuleSHA256       string                       `json:"baseline_module_sha256,omitempty"`
+	LaunchMessageEncoding      string                       `json:"launch_message_encoding,omitempty"`
+	PromptDeliveryVerification string                       `json:"prompt_delivery_verification,omitempty"`
+	ValidationRevision         string                       `json:"validation_revision,omitempty"`
+	ValidationOriginalReceipt  string                       `json:"validation_original_receipt,omitempty"`
+	ValidationOriginalSHA256   string                       `json:"validation_original_sha256,omitempty"`
+	Workers                    []codexNativeLiveReceipt     `json:"workers,omitempty"`
+	Assertions                 map[string]bool              `json:"assertions,omitempty"`
+	Limitations                []string                     `json:"limitations,omitempty"`
+	HarnessSHA256              string                       `json:"harness_sha256,omitempty"`
+	Caste                      string                       `json:"caste,omitempty"`
+	SourceFile                 string                       `json:"source_file,omitempty"`
 }
 
 // readEvidence keeps replay proof inside its original inventory. Live capture
@@ -388,7 +389,7 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 	prompt := "$ant-build 1\nFixture authorization: execute the already accepted one-task plan in this disposable repository, using the installed skill and its private support. The named native Builder must edit clamp.go through apply_patch and run the full existing fixture tests with go test ./... -json -count=1 itself. Parent may coordinate only, with individual simple shell commands (no shell batching, redirection, Python snippets, or source edits). No commits, extra recruitment, publish, install, authentication reads, or other projects. All routine fixture choices are preauthorized.\n"
 	prompt += fmt.Sprintf("The fixture supplies reviewed JSON request plumbing at %s; read it with cat. For each corresponding installed-skill operation call python3 %s <operation> using manifest, reserve, bind <actual-host-task-path-or-child-ID>, record, inspect, stage, or finalize. It executes one requested Go runtime operation and prints its real response; it never spawns workers, edits source, or normalizes a child result. Use the installed skill for sequencing and actual native spawn_agent/messages. The bind helper correlates the actual spawn call/result/activity and child metadata; pass the returned host task path unchanged when the host does not expose a UUID. Keep using that task path for host messaging. Use this helper for request-file writes instead of authoring scripts. An empty-result invocation must be refused before the valid record. Preserve actual child event evidence and stop if a required host capability is missing.\n", receipt.CoordinatorPath, receipt.CoordinatorPath)
 	if scenario == "early-resume" {
-		prompt += "Interruption experiment: STOP this parent immediately after one accepted terminal record. Do not stage or finalize. A separate new parent session will finish accounting.\n"
+		prompt += "Interruption experiment: after one accepted terminal record, wait idle using the host sleep/wait tool for the external controller to stop this parent. Do not finish the turn or run another coordination operation. Do not stage or finalize. A separate new parent session will finish accounting.\n"
 	} else {
 		prompt += "After the existing build finalizer, invoke finalize once more to prove idempotent replay, then stop; do not run continue.\n"
 	}
@@ -450,7 +451,11 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 	if scenario == "question" {
 		stopController = nativeGapStartController(runRoot, repo, fixtureHome, coord)
 	}
-	err = host.Run()
+	if nativeGapRecoveryScenario(scenario) {
+		err = nativeGapRunInterruptedParent(t, host, &receipt, runRoot, fixtureHome)
+	} else {
+		err = host.Run()
+	}
 	if stopController != nil {
 		stopController()
 	}
@@ -479,8 +484,21 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 		receipt.Outcome, receipt.Reason = "observed", ""
 		return
 	}
+	if nativeGapRecoveryScenario(scenario) {
+		if !nativeGapCheckpointRetained(receipt) {
+			fail("controller did not observe and interrupt the required durable/actual-event checkpoint")
+		}
+		liveSkillWriteJSON(t, filepath.Join(runRoot, "before-resume-inventory.json"), nativeGapRecoveryInventory(repo))
+		defer func() {
+			liveSkillWriteJSON(t, filepath.Join(runRoot, "after-resume-inventory.json"), nativeGapRecoveryInventory(repo))
+		}()
+	}
 	if scenario == "early-resume" {
-		if receipt.ExitStatus != 0 || !receipt.TerminalCorroborated || !receipt.ChildEditObserved || !receipt.ChecksPassed || receipt.CompletionPath != "" || receipt.CreditObserved {
+		// Recovery admission and complete helper qualification are separate.
+		// A real, durable terminal may be recovered even when unrelated exported
+		// operations remain unclassified. The final validator still requires
+		// child-only edits/checks and rejects those qualification gaps.
+		if !nativeGapEarlyResumeReady(receipt) {
 			fail("first parent did not stop at a proved terminal-before-stage boundary")
 		}
 		before, err := os.ReadFile(receipt.AttemptPath)
@@ -492,7 +510,7 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 		liveSkillWrite(t, filepath.Join(runRoot, "before-resume-source.txt"), []byte(receipt.FinalSource))
 		receipt.BeforeResumeJournalSHA256 = lifecycleDigest(before)
 		liveSkillWrite(t, filepath.Join(coord, "resume-authorized"), []byte("First actual parent exited; harness verified terminal before staging.\n"))
-		resumePrompt := fmt.Sprintf("Resume this disposable native build accounting experiment. A prior actual parent already completed and recorded its one Builder. Do not spawn, contact, rerun, or edit anything for that completed helper. Read installed support %s and the fixture request helper %s. Use individual simple shell commands, and the helper's inspect operation to read the exact retained attempt. Then perform the installed support's stage and finalize operations through the helper; replay finalize once to prove no repeated credit. Parent source edits, new helpers, arbitrary scripts, commits, installs, publish, and continue are forbidden. This is prepared-fixture bridge proof, not live planning.\n", receipt.SupportPath, receipt.CoordinatorPath)
+		resumePrompt := fmt.Sprintf("Resume this disposable native build accounting experiment. FIRST run public aether resume before any other recovery operation. A prior actual parent already completed and recorded its one Builder. Do not spawn, contact, rerun, or edit anything for that completed helper. Read installed support %s and the fixture request helper %s. Use individual simple shell commands, and the helper's inspect operation to read the exact retained attempt. Then perform the installed support's stage and finalize operations through the helper; replay finalize once to prove no repeated credit. Parent source edits, new helpers, arbitrary scripts, commits, installs, publish, and continue are forbidden. This is prepared-fixture bridge proof, not live planning.\n", receipt.SupportPath, receipt.CoordinatorPath)
 		liveSkillWrite(t, filepath.Join(runRoot, "resume-prompt.txt"), []byte(resumePrompt))
 		receipt.ResumeRawEvents, receipt.ResumeRawStderr = filepath.Join(runRoot, "resume-events.jsonl"), filepath.Join(runRoot, "resume-stderr.txt")
 		receipt.ResumeExitStatus = nativeRunResumeHost(t, client, args, repo, env, resumePrompt, receipt.ResumeRawEvents, receipt.ResumeRawStderr)
@@ -537,6 +555,7 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 		receipt.ParentSubstitution = receipt.ParentSubstitution || resumed.ParentSubstitution
 		receipt.ParentUnclassified = append(receipt.ParentUnclassified, resumed.ParentUnclassified...)
 		receipt.Assertions["resume_one_new_helper"] = len(paths) == 1 && resumed.NativeSpawnCount == 1
+		receipt.ResumeWorkerStable = receipt.ResumeWorkerStable && nativeGapFinishedWorkerStable(receipt)
 		receipt.Assertions["finished_worker_unchanged"] = receipt.ResumeWorkerStable
 		firstState, _ := os.ReadFile(filepath.Join(coord, "post-finalize-1-state.json"))
 		secondState, _ := os.ReadFile(filepath.Join(coord, "post-finalize-2-state.json"))
@@ -576,7 +595,7 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 		receipt.ResumeInspectObserved = resumed.ResumeInspectObserved
 		after, _ := os.ReadFile(receipt.AttemptPath)
 		receipt.ResumeWorkerStable = bytes.Equal(before, after)
-		receipt.Assertions["fresh_public_resume"] = nativeResumeCommandObserved(receipt, raw)
+		receipt.Assertions["fresh_public_resume"] = nativePublicResumeProof(receipt, raw)
 	}
 	if scenario == "question" {
 		receipt.Assertions["scoped_answer_behavior"] = nativeVerifyQuestionBehavior(t, receipt, runRoot, env)
@@ -615,7 +634,7 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 			}
 		}
 	}
-	if scenario == "ordinary" {
+	if scenario == "ordinary" || scenario == "early-resume" {
 		receipt.FinalizationReplayStable = nativeFinalizationReplayEvidence(receipt, filepath.Join(runRoot, "coordination"))
 	}
 	if err := validateCodexNativeLiveReceipt(receipt); err != nil {
@@ -771,6 +790,9 @@ elif op == "finalize":
     number = len(list(coord.glob("post-finalize-*-state.json"))) + 1
     result = runtime(["build-finalize", "1", "--completion-file", staged["completion_path"]], "finalize-" + str(number))
     (coord / ("post-finalize-" + str(number) + "-state.json")).write_bytes((repo / ".aether/data/COLONY_STATE.json").read_bytes())
+    attempt_path = pathlib.Path(result["attempt"])
+    if not attempt_path.is_absolute(): attempt_path = repo / attempt_path
+    (coord / ("post-finalize-" + str(number) + "-attempt.json")).write_bytes(attempt_path.read_bytes())
 else:
     sys.exit("Unknown coordinator operation")
 print(json.dumps(result, indent=2))
@@ -1038,6 +1060,9 @@ func nativeResumeCommandObserved(r codexNativeLiveReceipt, raw []byte) bool {
 }
 
 func nativeValidateInterruptedHostScenario(r codexNativeLiveReceipt, runRoot string) error {
+	if r.RecoveryCheckpoint != nil && !nativeGapCheckpointRetained(r) {
+		return fmt.Errorf("interruption checkpoint evidence changed")
+	}
 	raw, err := r.readEvidence(r.AttemptPath)
 	var attempt buildAttemptRecord
 	if err != nil || json.Unmarshal(raw, &attempt) != nil || len(attempt.WorkerRuns) != 1 || attempt.CompletionPath != "" || r.CreditObserved {
@@ -1646,23 +1671,22 @@ func nativePublicResumeProof(r codexNativeLiveReceipt, raw []byte) bool {
 		return false
 	}
 	for _, line := range bytes.Split(raw, []byte{'\n'}) {
-		var wire map[string]json.RawMessage
-		if json.Unmarshal(line, &wire) != nil || string(wire["type"]) != strconv.Quote("item.completed") {
+		var event struct {
+			Type string `json:"type"`
+			Item struct {
+				Type, Command, Status string
+				Output                string `json:"aggregated_output"`
+				Exit                  *int   `json:"exit_code"`
+			}
+		}
+		if json.Unmarshal(line, &event) != nil || event.Type != "item.completed" || event.Item.Type != "command_execution" {
 			continue
 		}
-		var item struct {
-			Type    string
-			Command string
-			Output  string `json:"aggregated_output"`
-			Status  string
-			Exit    *int `json:"exit_code"`
-		}
-		if json.Unmarshal(wire["item"], &item) != nil || item.Type != "command_execution" || item.Status != "completed" || item.Exit == nil || *item.Exit != 0 {
-			continue
-		}
+		item := event.Item
 		words, ok := nativeSimpleShellWords(unwrapCodexShellCommand(item.Command))
-		if !ok || len(words) != 2 || words[0] != "aether" || words[1] != "resume" {
-			continue
+		// No prior inspection/mutation may be hidden behind a later resume.
+		if !ok || len(words) != 2 || words[0] != "aether" || words[1] != "resume" || item.Status != "completed" || item.Exit == nil || *item.Exit != 0 {
+			return false
 		}
 		var response struct {
 			OK     bool
@@ -1671,12 +1695,20 @@ func nativePublicResumeProof(r codexNativeLiveReceipt, raw []byte) bool {
 			}
 		}
 		if json.Unmarshal([]byte(item.Output), &response) != nil || !response.OK || response.Result.NativeRecovery == nil {
-			continue
+			return false
 		}
 		recovery := response.Result.NativeRecovery
-		if recovery.Valid && recovery.AttemptID == r.AttemptID && len(recovery.Finished) == 1 && len(recovery.Unfinished) == 1 && recovery.Finished[0].ChildID == r.ChildID {
-			return true
+		if !recovery.Valid || recovery.AttemptID != r.AttemptID || len(recovery.Active) != 0 {
+			return false
 		}
+		if r.Scenario == "spawn-gap" {
+			return len(recovery.Finished) == 0 && len(recovery.Unfinished) == 0 && len(recovery.Unresolved) == 1 && recovery.Unresolved[0].LaunchID == r.LaunchID && recovery.Unresolved[0].ChildID == ""
+		}
+		unfinished := 0
+		if r.Scenario == "partial-resume" {
+			unfinished = 1
+		}
+		return len(recovery.Finished) == 1 && len(recovery.Unfinished) == unfinished && len(recovery.Unresolved) == 0 && recovery.Finished[0].ChildID == r.ChildID && recovery.Finished[0].ResultSHA256 == r.ResultSHA256
 	}
 	return false
 }
@@ -1685,7 +1717,7 @@ func validateCodexNativeQualificationScenario(r codexNativeLiveReceipt, runRoot 
 	if err := nativeValidateFixtureBaselines(r); err != nil {
 		return err
 	}
-	if r.ExitStatus != 0 || r.SessionID == "" || !r.SkillRead || !r.SupportRead || !r.GuideRead || r.ParentSubstitution {
+	if !nativeGapParentExitAccepted(r) || r.SessionID == "" || !r.SkillRead || !r.SupportRead || !r.GuideRead || r.ParentSubstitution {
 		return fmt.Errorf("qualification parent evidence incomplete: %s, %v", r.Scenario, r.ParentUnclassified)
 	}
 	if r.Scenario == "cancellation" || r.Scenario == "spawn-gap" {
@@ -2041,13 +2073,13 @@ func nativeQualificationPrompt(r codexNativeLiveReceipt, scenario string) string
 	case "review":
 		prompt += "Explicit independent review is requested. The helper manifest operation requests the runtime-selected Watcher for a named reason. Respect execution waves: finish and record Builder before starting the later Watcher. Watcher must independently read the implementation, run the actual fixture suite, and return concrete useful findings in its runtime-selected contract. Its profile includes behavioral review restrictions, not per-child OS read-only enforcement. Only the Builder edits clamp.go.\n"
 	case "partial-resume":
-		prompt += "There are exactly two independent accepted Builder jobs. Launch and complete ONLY the first manifest dispatch. It runs its own TestClamp; the other TestDouble is intentionally still failing. Immediately after the first terminal is durable, STOP THIS PARENT. Do not reserve/spawn the second job, stage or finalize. The harness will start a fresh actual parent which runs public aether resume, then installed ant-build only for the never-started saved assignment.\n"
+		prompt += "There are exactly two independent accepted Builder jobs. Launch and complete ONLY the first manifest dispatch. It runs its own TestClamp; the other TestDouble is intentionally still failing. After the first terminal is durable and stale-result/child-mismatch refusals are recorded, wait idle using the host sleep/wait tool for the external controller; do not finish the turn. Do not reserve/spawn the second job, stage or finalize. The harness will start a fresh actual parent which runs public aether resume, then installed ant-build only for the never-started saved assignment.\n"
 	case "question":
 		prompt += "Spawn the Builder with fork_turns=none: no inherited conversation. It must ask the material reversed-bounds question before editing. After its actual JSON question arrives, invoke question, then answer (the independent fixture controller selects fresh answer material only after that question; the helper also exercises stale and wrong-child answer refusals), then context for that same child. Send the returned context_delivery.payload unchanged through the actual native messaging tool. Only after the completed host message invoke context-ack. Then let the same child implement the scoped choice, check, and return its real result. Do not answer in an unbound message, read controller evidence, or guess a fallback. The same child must run its own answer-dependent check, in addition to the existing tests, and report that actual check. If exact plaintext send evidence is unavailable, context-ack must refuse; preserve the incomplete result.\n"
 	case "cancellation":
 		prompt += "After reserve/spawn/bind/release, observe the actual child active. Use the host's actual interrupt/cancellation tool while it is active, then inspect the real returned status. A close/release or missing process is NOT cancellation. Invoke cancel-requested/cancelled only if the actual event supports that exact fact. Run public pause and inspect to retain the truthful pending/terminal outcome. Do not record invented completion, stage, finalize or relaunch. If no real interruption tool/status exists, report the explicit limitation and leave the saved assignment incomplete.\n"
 	case "spawn-gap":
-		prompt += "Crash-boundary experiment: reserve and actually spawn the assigned waiting child, then STOP THIS PARENT immediately. Do NOT bind or release it, and do not cancel it. The harness will retain actual host spawn identity and start a fresh parent to inspect/reconcile the same reservation. No new child may replace an ambiguous launch.\n"
+		prompt += "Crash-boundary experiment: reserve and actually spawn the assigned waiting child, then wait idle using the host sleep/wait tool for the external controller to stop this parent; do not finish the turn. Do NOT bind or release it, and do not cancel it. The harness will retain actual host spawn identity and start a fresh parent to inspect/reconcile the same reservation. No new child may replace an ambiguous launch.\n"
 	}
 	return prompt
 }
@@ -2340,6 +2372,10 @@ func nativeCollectResumeEvidence(t *testing.T, r *codexNativeLiveReceipt, runRoo
 		nativeInspectParentEvents(&resumed, raw)
 		return nil
 	})
+	if r.Assertions == nil {
+		r.Assertions = map[string]bool{}
+	}
+	r.Assertions["fresh_public_resume"] = nativePublicResumeProof(*r, raw)
 	r.ResumeNoSpawn = found && resumed.NativeSpawnCount == 0
 	r.ParentSubstitution = r.ParentSubstitution || resumed.ParentSubstitution
 	r.ResumeInspectObserved = resumed.ResumeInspectObserved
@@ -3190,7 +3226,7 @@ func validateCodexNativeLiveReceipt(r codexNativeLiveReceipt) error {
 	if r.SchemaVersion == "codex-native-tracer/v2" && r.Scenario == "ordinary" && !r.FinalizationReplayStable {
 		return fmt.Errorf("ordinary exactly-once finalization replay incomplete")
 	}
-	if r.ExitStatus != 0 {
+	if !nativeGapParentExitAccepted(r) {
 		return fmt.Errorf("actual Codex parent exited %d; see %s", r.ExitStatus, r.RawStderr)
 	}
 	if r.SessionID == "" || r.ChildID == "" || r.ChildEvents == "" {
@@ -3226,7 +3262,7 @@ func validateCodexNativeLiveReceipt(r codexNativeLiveReceipt) error {
 	if err := nativeValidateEmptyRefusal(r, filepath.Join(filepath.Dir(r.FixtureRoot), "coordination")); err != nil {
 		return err
 	}
-	if r.Scenario == "early-resume" && (r.ResumeExitStatus != 0 || r.ResumeSessionID == "" || r.ResumeSessionID == r.SessionID || !r.ResumeWorkerStable || !r.ResumeNoSpawn || !r.ResumeInspectObserved || !r.FinalizationReplayStable) {
+	if r.Scenario == "early-resume" && (!r.Assertions["fresh_public_resume"] || r.ResumeExitStatus != 0 || r.ResumeSessionID == "" || r.ResumeSessionID == r.SessionID || !r.ResumeWorkerStable || !r.ResumeNoSpawn || !r.ResumeInspectObserved || !r.FinalizationReplayStable) {
 		return fmt.Errorf("fresh-session continuity/replay proof incomplete")
 	}
 	return nil
@@ -3496,6 +3532,8 @@ func nativeParentCoordinationCommand(r *codexNativeLiveReceipt, command []string
 		return true
 	case "cmp":
 		return len(words) == 3 && !strings.HasPrefix(words[1], "-") && !strings.HasPrefix(words[2], "-")
+	case "diff":
+		return nativeGapFinalizerComparison(*r, words)
 	case "git":
 		if len(words) == 2 {
 			return words[1] == "status" || words[1] == "diff"
@@ -3637,6 +3675,13 @@ func nativeChildCommandAllowed(r codexNativeLiveReceipt, command []string) bool 
 	return false
 }
 func nativeFinalizationReplayEvidence(r codexNativeLiveReceipt, coord string) bool {
+	if r.RecoveryCheckpoint != nil {
+		a, e1 := r.readEvidence(filepath.Join(coord, "post-finalize-1-attempt.json"))
+		b, e2 := r.readEvidence(filepath.Join(coord, "post-finalize-2-attempt.json"))
+		if e1 != nil || e2 != nil || len(a) == 0 || !bytes.Equal(a, b) {
+			return false
+		}
+	}
 	first, e1 := r.readEvidence(filepath.Join(coord, "post-finalize-1-state.json"))
 	second, e2 := r.readEvidence(filepath.Join(coord, "post-finalize-2-state.json"))
 	if e1 != nil || e2 != nil || len(first) == 0 || !bytes.Equal(first, second) {
@@ -3728,7 +3773,7 @@ func nativeReplayQualificationReceipt(t *testing.T, r *codexNativeLiveReceipt) e
 		}
 		switch r.Scenario {
 		case "ordinary", "early-resume":
-			if r.Scenario == "ordinary" {
+			if r.Scenario == "ordinary" || r.Scenario == "early-resume" {
 				r.FinalizationReplayStable = nativeFinalizationReplayEvidence(*r, coord)
 			}
 			if err := validateCodexNativeLiveReceipt(*r); err != nil {
@@ -3821,7 +3866,7 @@ func nativeReplayFreshParent(r *codexNativeLiveReceipt, home string) {
 	}
 	if r.Scenario == "spawn-gap" {
 		r.ResumeWorkerStable = bytes.Equal(before, after)
-		r.Assertions["fresh_public_resume"] = nativeResumeCommandObserved(*r, raw)
+		r.Assertions["fresh_public_resume"] = nativePublicResumeProof(*r, raw)
 		return
 	}
 	var a, b buildAttemptRecord
@@ -3833,6 +3878,7 @@ func nativeReplayFreshParent(r *codexNativeLiveReceipt, home string) {
 	r.ResumeWorkerStable = a.ID == b.ID && a.RunID == b.RunID && bytes.Equal(aw, bw) && r.Workers[0].ChildEditObserved
 	r.Assertions["fresh_public_resume"] = nativePublicResumeProof(*r, raw)
 	r.Assertions["resume_one_new_helper"] = resumed.NativeSpawnCount == 1
+	r.ResumeWorkerStable = r.ResumeWorkerStable && nativeGapFinishedWorkerStable(*r)
 	r.Assertions["finished_worker_unchanged"] = r.ResumeWorkerStable
 }
 func nativeRetainedQuestionCheck(r codexNativeLiveReceipt, root string) bool {
