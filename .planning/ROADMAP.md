@@ -751,7 +751,7 @@ For dummies: A worker actually receives the job, does it, and returns saved work
 
 **Context and research:** [204.2-CONTEXT.md](phases/204.2-codex-native-worker-lifecycle/204.2-CONTEXT.md), [204.2-RESEARCH.md](phases/204.2-codex-native-worker-lifecycle/204.2-RESEARCH.md).
 
-**Plans:** 1/8 plans executed in 6 waves; implementation has not started.
+**Plans:** 1/8 plans executed in 6 waves; the native tracer is merged and independently reviewed.
 
 Plans:
 
