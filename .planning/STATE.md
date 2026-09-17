@@ -5,16 +5,16 @@ milestone_name: Classic Colony Restoration
 current_phase: 204.2
 current_phase_name: Codex Native Worker Lifecycle
 status: executing
-stopped_at: Phase 204.2 Plan 07 complete; Plan 09 capability and final qualification next
-last_updated: "2026-09-17T13:39:13.139740+00:00"
+stopped_at: Phase 204.2 Plan 09 execution complete with qualification gaps; Plan 08 final regression and verification next
+last_updated: "2026-09-17T15:46:17.128427+00:00"
 last_activity: 2026-09-17
-last_activity_desc: Plan 07 reviewed and merged; 157 focused integration cases passed; final qualification and broad regression remain
+last_activity_desc: Plan 09 reviewed and merged; final matrix retains ten incomplete cases and one observed refusal; Plan 08 remains
 state_head: 299f02468e1a9e6d667838b0c07ca2648c70cf5e
 progress:
   total_phases: 13
   completed_phases: 6
   total_plans: 198
-  completed_plans: 191
+  completed_plans: 192
   percent: 46
 ---
 
@@ -35,8 +35,8 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 Phase: 204.2 (Codex Native Worker Lifecycle) — EXECUTING
 Next phase: 204.2 (Codex Native Worker Lifecycle)
 Status: Executing Phase 204.2
-Plan: 7 of 9 complete; Plan 09 capability and final qualification next; Plan 08 broad verification follows
-Last activity: 2026-09-17 — Plan 07 reviewed and merged at 66072657; build and all 157 focused cases passed with no skips; all wave gates passed. Original live outcomes remain ten incomplete and one observed refusal.
+Plan: 8 of 9 execution reports complete; Plan 08 broad regression and explicit verification next; qualification remains incomplete
+Last activity: 2026-09-17 — Plan 09 reviewed and merged at 294ee619; build and 23 focused integration cases passed with no skips; all wave gates passed. Complete final live matrix retains ten incomplete cases and one observed refusal. ANT-04 through ANT-07 remain pending.
 
 ## Performance Metrics
 
@@ -814,7 +814,7 @@ Historical receipts below describe the prepared 1.0.79 candidate. The owner subs
 
 ## Operator Next Steps
 
-- **Next GSD action: `gsd execute-phase 204.2`.** Phase 204.2 has nine plans in seven waves after its documented scope amendment, covering ANT-04 through ANT-07. Seven plans are complete; Plan 09 capability and final candidate qualification and Plan 08 broad regression/verification remain pending. Earlier incomplete real-host captures are preserved. Phase 204.1 is complete: all seven plans and the bootstrap repair are merged, required proof passes, and the user-delegated scope reviews passed 3/3. GSD's combined UAT/verification completion predicate passed before phase.complete advanced to 204.2. Its final broad suite retains exactly 17 historical failures. Phases 204.3–204.5 still need detailed planning. No shared installation, release or Phase 205 owner acceptance is claimed.
+- **Next GSD action: `gsd execute-phase 204.2`.** Phase 204.2 has nine plans in seven waves after its documented scope amendment, covering ANT-04 through ANT-07. Eight plan execution reports are complete; Plan 08 broad regression/verification remains. Both original and final complete live matrices retain ten incomplete cases and one observed refusal. Mandatory native qualification remains incomplete; no phase completion is authorized. Phase 204.1 is complete: all seven plans and the bootstrap repair are merged, required proof passes, and the user-delegated scope reviews passed 3/3. GSD's combined UAT/verification completion predicate passed before phase.complete advanced to 204.2. Its final broad suite retains exactly 17 historical failures. Phases 204.3–204.5 still need detailed planning. No shared installation, release or Phase 205 owner acceptance is claimed.
 - Follow the inserted dependency order: names/updates, native worker lifecycle, full workflow coverage, shared recruitment/recovery, then real parity proof and candidate handoff. GSD plan checking remains enabled. Use disposable projects for engineering work.
 - **Preserved owner checkpoint:** .planning/phases/205-owner-acceptance-and-restoration-seal/205-14-CHECKPOINT.md. Plans 205-01..13 and task 205-14.1 remain complete; task 2 is still blocking-human and task 3 is pending. The Claude limit reset alone no longer determines the next engineering action.
 - Before the remaining owner walkthrough, Phase 204.5 must produce 205-CODEX-PARITY-HANDOFF.md for the exact new candidate and any controlled local preparation. Preserve the original release receipts, snapshots, and before-inventory; any new pre-session inventory is separately named and linked with preparation changes distinguished from owner evidence. If a session has already begun, preserve it and its original baseline.

@@ -751,7 +751,7 @@ For dummies: A worker actually receives the job, does it, and returns saved work
 
 **Context and research:** [204.2-CONTEXT.md](phases/204.2-codex-native-worker-lifecycle/204.2-CONTEXT.md), [204.2-RESEARCH.md](phases/204.2-codex-native-worker-lifecycle/204.2-RESEARCH.md).
 
-**Plans:** 7/9 plans executed in 7 waves; admission, context, bound questions, journal finalization and recovery are merged and reviewed.
+**Plans:** 8/9 plans executed in 7 waves; admission, context, bound questions, journal finalization and recovery are merged and reviewed.
 
 Plans:
 
@@ -779,7 +779,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 204.2-09-PLAN.md — Enforce observed capabilities and rerun the complete final-candidate qualification.
+- [x] 204.2-09-PLAN.md — Enforce observed capabilities and rerun the complete final-candidate qualification.
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
