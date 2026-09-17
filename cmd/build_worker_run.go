@@ -18,19 +18,20 @@ const (
 )
 
 type buildAttemptWorkerRun struct {
-	ProviderRunID string                `json:"provider_run_id"`
-	WorkerName    string                `json:"worker_name"`
-	TaskID        string                `json:"task_id"`
-	Caste         string                `json:"caste"`
-	Platform      codex.Platform        `json:"platform"`
-	Status        string                `json:"status"`
-	ProcessID     int                   `json:"process_id,omitempty"`
-	StartedAt     string                `json:"started_at"`
-	UpdatedAt     string                `json:"updated_at"`
-	CompletedAt   string                `json:"completed_at,omitempty"`
-	ResultSHA256  string                `json:"result_sha256,omitempty"`
-	Result        *internalWorkerResult `json:"result,omitempty"`
-	Error         string                `json:"error,omitempty"`
+	Native        *codexNativeWorkerBinding `json:"native,omitempty"`
+	ProviderRunID string                    `json:"provider_run_id"`
+	WorkerName    string                    `json:"worker_name"`
+	TaskID        string                    `json:"task_id"`
+	Caste         string                    `json:"caste"`
+	Platform      codex.Platform            `json:"platform"`
+	Status        string                    `json:"status"`
+	ProcessID     int                       `json:"process_id,omitempty"`
+	StartedAt     string                    `json:"started_at"`
+	UpdatedAt     string                    `json:"updated_at"`
+	CompletedAt   string                    `json:"completed_at,omitempty"`
+	ResultSHA256  string                    `json:"result_sha256,omitempty"`
+	Result        *internalWorkerResult     `json:"result,omitempty"`
+	Error         string                    `json:"error,omitempty"`
 }
 
 func beginBuildAttemptWorkerRun(phase int, binding codex.ExecutionBinding, request internalWorkerDispatchRequest, providerRunID string, platform codex.Platform) (*buildAttemptWorkerRun, error) {
@@ -62,6 +63,9 @@ func beginBuildAttemptWorkerRun(phase int, binding codex.ExecutionBinding, reque
 			existing := &updated.WorkerRuns[i]
 			if existing.WorkerName != strings.TrimSpace(request.WorkerName) || existing.TaskID != effectiveInternalWorkerTaskID(request) {
 				continue
+			}
+			if existing.Native != nil {
+				return fmt.Errorf("native assignment already reserved; inspect it without provider redispatch")
 			}
 			if existing.Status == buildWorkerCompleted && existing.Result != nil && existing.ResultSHA256 != "" {
 				copyRun := *existing
@@ -139,10 +143,6 @@ func recordBuildAttemptWorkerTerminal(phase int, binding codex.ExecutionBinding,
 	if result == nil {
 		return fmt.Errorf("terminal worker result is required")
 	}
-	digest, err := jsonSHA256(result)
-	if err != nil {
-		return fmt.Errorf("hash terminal worker result: %w", err)
-	}
 	status := strings.ToLower(strings.TrimSpace(result.Status))
 	switch status {
 	case buildWorkerCompleted, buildWorkerFailed, buildWorkerBlocked, buildWorkerTimeout:
@@ -168,24 +168,41 @@ func recordBuildAttemptWorkerTerminal(phase int, binding codex.ExecutionBinding,
 			if workerRun.ProviderRunID != strings.TrimSpace(providerRunID) {
 				continue
 			}
-			if workerRun.ResultSHA256 != "" && workerRun.ResultSHA256 != digest {
-				return fmt.Errorf("provider run %s already has a different terminal result", providerRunID)
+			if workerRun.Native != nil {
+				return fmt.Errorf("native terminal results require codex-native-worker record")
 			}
-			copyResult := *result
-			workerRun.Result = &copyResult
-			workerRun.ResultSHA256 = digest
-			workerRun.Status = result.Status
-			workerRun.UpdatedAt = now
-			workerRun.CompletedAt = now
-			workerRun.ProcessID = 0
-			workerRun.Error = strings.TrimSpace(result.Error)
-			record.UpdatedAt = now
-			return nil
+			return applyBuildWorkerTerminal(&record, workerRun, result, now)
 		}
 		return fmt.Errorf("provider run %s is not registered", providerRunID)
 	}); err != nil {
 		return fmt.Errorf("record terminal build worker result: %w", err)
 	}
+	return nil
+}
+
+// applyBuildWorkerTerminal runs under the existing attempt lock in both lanes.
+func applyBuildWorkerTerminal(record *buildAttemptRecord, workerRun *buildAttemptWorkerRun, result *internalWorkerResult, now string) error {
+	switch result.Status {
+	case buildWorkerCompleted, buildWorkerFailed, buildWorkerBlocked, buildWorkerTimeout:
+	default:
+		return fmt.Errorf("terminal worker status %q is invalid", result.Status)
+	}
+	digest, err := jsonSHA256(result)
+	if err != nil {
+		return err
+	}
+	if workerRun.ResultSHA256 != "" {
+		if workerRun.ResultSHA256 != digest {
+			return fmt.Errorf("provider run %s already has a different terminal result", workerRun.ProviderRunID)
+		}
+		if workerRun.Native != nil {
+			return errCodexNativeReplay
+		}
+	}
+	copyResult := *result
+	workerRun.Result, workerRun.ResultSHA256, workerRun.Status = &copyResult, digest, result.Status
+	workerRun.UpdatedAt, workerRun.CompletedAt, workerRun.ProcessID = now, now, 0
+	workerRun.Error, record.UpdatedAt = strings.TrimSpace(result.Error), now
 	return nil
 }
 
@@ -207,6 +224,9 @@ func effectiveInternalWorkerTaskID(request internalWorkerDispatchRequest) string
 }
 
 func buildWorkerRunStillActive(run buildAttemptWorkerRun, now time.Time) bool {
+	if run.Native != nil {
+		return run.Native.LaunchState != "terminal"
+	}
 	if run.ProcessID > 0 {
 		return processAlive(run.ProcessID)
 	}

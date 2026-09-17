@@ -287,43 +287,76 @@ aether build --job-proposal '{"name":"templates","task_ids":["2","3","4"],"owner
 AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest file>
 ```
 
-8. Follow the installed build-wave playbook. Use runtime-provided agent names,
-   castes, task IDs, briefs, and skill sections.
-9. Before each manifest wave, render `aether ceremony wave-start` for the build
-   workflow and execution wave.
-10. Spawn parallel waves as visible live Task/subagent panels with caste-labelled
-   descriptions. Do not use background-only dispatch as the ceremony, and do not
-   replace the live stack with a markdown worker table.
-11. Enforce read cache discipline for every worker: pass runtime briefs verbatim.
-   `dispatch.brief_path` (a repo-display path to the file holding the composed
-   brief, byte for byte) is now the routine channel every dispatch carries --
-   the runtime writes the composed brief to disk and reports the path, so
-   inline JSON briefs of 6-22KB never hit Read-tool long-line truncation.
-   Inline `dispatch.brief` appears only in the rare case where the runtime
-   could not write the file for that dispatch; honor it verbatim when it is
-   the only one present. Whichever one a dispatch carries, use it verbatim,
-   never merge, summarize, or reconstruct. Treat "File unchanged since last
-   read" as an instruction to use earlier content, and mark workers `blocked`
-   if they keep re-reading the same unchanged file.
-12. Call `aether spawn-log` before each worker and `aether spawn-complete` after
-   each terminal result.
-13. After each terminal result, render `aether ceremony worker-complete`.
-13a. Task receipts: a dispatch's `covered_task_ids` is that worker's
-   assignment scope, not credit for it. A worker that finishes only part of
-   its job submits a `task_receipts` array -- one entry per proved task with
-   `task_id`, `status`, `summary`, `files_created`, `files_modified`,
-   `tests_written`, and its own `handoff`. A task with no receipt is
-   unfinished; never infer completion because a related file changed.
-   An accepted task receipt is admission, not completion credit: only the runtime's root-backed finalization can grant `completed_task_ids`.
-   Never author `covered_task_ids` or `completed_task_ids` by hand in a manifest or in colony state; the runtime owns both.
-14. Stage the accepted completion packet in the Go-owned attempt journal:
+8. For Codex build, use the non-launching native bridge. The host's native
+   `spawn_agent` is the sole launcher; never invoke a provider subprocess or
+   `internal-worker-adapter` for the same assignment. Keep the runtime-selected
+   team and execution waves; a small job can use one Builder plus checks.
+9. Write requests as strict JSON in an absolute regular file under a new
+   `aether-worker-request-*` directory in the system temporary directory. All
+   operations require `schema_version: 1`, `phase`, and the exact manifest
+   `execution_binding`. Reserve also requires `worker_name`, `task_id`, actual
+   `host_session_id`, canonical `workspace`, and `host_permission: workspace_write`.
 
 ```bash
-AETHER_OUTPUT_MODE=json aether build-completion-stage <phase> --completion-file <worker completion JSON>
+aether codex-native-worker reserve --request <absolute temporary request file>
 ```
 
-Parse `result.completion_path`. If the wrapper stops after this point, `aether resume`
-must offer this exact packet rather than redispatching workers.
+   Unsupported workspace/permission requests refuse before launch. Only a fresh
+   `launch_allowed: true` permits one native `spawn_agent`. Use the returned
+   dispatch's role and name; pass `worker.native.prompt` verbatim, including its
+   wait instruction. It contains the capsule, exact brief-file bytes (inline
+   fallback only when no path exists), matched skills and current new answers.
+   The child must wait without checks or edits. Never launch on replay.
+10. Save the actual child ID returned by the host. Bind with the same identity
+    fields plus `launch_id` from `worker.provider_run_id`, `child_id`,
+    `dispatch_sha256` and `prompt_sha256` from `worker.native`:
+
+```bash
+aether codex-native-worker bind --request <absolute temporary request file>
+```
+
+    Only after successful binding, send `worker.native.release` verbatim to that
+    same child through the host native messaging tool. A stopped or uncertain
+    launch stays unresolved; elapsed time never permits a duplicate child.
+11. Retain raw child tool events and the child's terminal response. Immediately
+    record that response before waiting on another child or staging:
+
+```bash
+aether codex-native-worker record --request <absolute temporary request file>
+```
+
+    Include all bound fields, `result` (the actual child's JSON terminal result),
+    `source_event_id` (the terminal AgentMessage item's actual host ID), and
+    `source_event_sha256` (SHA-256 of that exact raw JSONL line, excluding its
+    trailing newline). Preserve the source line without reserializing it.
+    The runtime accepts the installed Builder's `ant_name`, `tdd`, and
+    `code_written` result, normalizing name/status in Go while preserving raw
+    child JSON. If both `name` and `ant_name` appear they must agree. Every handoff's
+    `verification_status` must be `pass`, `fail`, `partial`, `not_run`, or
+    `unknown`. If the runtime rejects malformed output, ask the same child to
+    correct its response before recording; never rewrite or replace an accepted
+    terminal result.
+    Missing/empty or mismatched results refuse. Never supply provider usage from
+    worker prose. Unknown outcomes remain incomplete, never reported as success.
+    Keep `spawn-log`/`spawn-complete` and the visible native child panel truthful;
+    render `ceremony worker-complete` after a saved terminal result.
+12. A stopped parent can read the retained attempt with
+    `aether codex-native-worker inspect --request <file>` (schema version, phase,
+    execution binding). This is read-only. Reuse saved terminal results without
+    repeating the helper's edits. If real host evidence is inaccessible, report
+    the missing capability; never invent it or respawn the finished helper.
+13. Task receipts cover actual proved work. Assigned `covered_task_ids` are scope,
+    not credit. Only the Go finalizer can grant `completed_task_ids`; never edit
+    runtime state, assignment fields, or completion credit by hand.
+14. Once required terminal records exist, stage from the existing journal with
+    schema version, phase, and execution binding only:
+
+```bash
+AETHER_OUTPUT_MODE=json aether codex-native-worker stage --request <absolute temporary request file>
+```
+
+    Parse `result.completion_path`. The saved worker results already survive a
+    stopped chat before this aggregate exists. Staging never launches or credits.
 
 15. Finalize through the durable packet only:
 

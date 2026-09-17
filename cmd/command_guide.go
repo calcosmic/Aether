@@ -120,6 +120,9 @@ func buildCommandGuide(command, platform string) (commandGuideResult, error) {
 }
 
 func adaptCommandGuideDefinitionForPlatform(command, platform string, def commandGuideDefinition) commandGuideDefinition {
+	if command == "build" && platform == "codex" {
+		return codexNativeBuildCommandGuide(def)
+	}
 	if platform == "codex" || def.Literal {
 		return def
 	}
@@ -139,6 +142,31 @@ func adaptCommandGuideDefinitionForPlatform(command, platform string, def comman
 		*steps = rendered
 	}
 	return adapted
+}
+
+// Keep native transport instructions out of the shared primary-platform catalog.
+func codexNativeBuildCommandGuide(def commandGuideDefinition) commandGuideDefinition {
+	def.PreSteps = append([]string(nil), def.PreSteps...)
+	def.PostSteps = append([]string(nil), def.PostSteps...)
+	def.DriftGuards = append([]string(nil), def.DriftGuards...)
+	def.Intent = "Use the accepted Go manifest with a native Codex child; persist its bound terminal result before aggregate staging and runtime finalization."
+	var steps []string
+	for _, step := range def.PreSteps {
+		if strings.Contains(step, "build-wave playbook") || strings.Contains(step, "Spawn parallel waves") || strings.Contains(step, "Pass worker briefs verbatim") || strings.Contains(step, "After all terminal results") {
+			continue
+		}
+		steps = append(steps, step)
+	}
+	def.PreSteps = append(steps,
+		"The host native spawn_agent operation is the sole launcher. Do not execute internal-worker-adapter, a provider subprocess, or a second aether build dispatch for native work.",
+		"Write strict JSON requests into an absolute regular file in a new aether-worker-request-* directory under the system temporary directory. Every request requires schema_version:1, phase and the exact manifest execution_binding. For each accepted dispatch run `aether codex-native-worker reserve --request <file>` with worker_name, task_id, actual host_session_id, canonical workspace and host_permission:workspace_write. Unsupported workspace or permissions refuse before spawning.",
+		"Only a fresh launch_allowed:true response permits one spawn_agent call. Use the response dispatch agent_name/caste and worker name, and pass worker.native.prompt bytes verbatim. The child must wait without editing or running checks until released. Save the actual returned child ID. Replayed or unresolved reservations never authorize another spawn.",
+		"Run `aether codex-native-worker bind --request <file>` with the same execution_binding, worker_name, task_id, host_session_id, worker.provider_run_id as launch_id, actual child_id, dispatch_sha256 and prompt_sha256 from worker.native. Only after bind succeeds send worker.native.release verbatim to that child using the native messaging tool. Wait for the actual child's terminal response.",
+		"Immediately run `aether codex-native-worker record --request <file>` with all bound identity fields, result (the child's actual nonempty JSON result), source_event_id and source_event_sha256 of the retained raw terminal event. Retain raw parent/child tool events. Unknown outcomes remain unresolved. Never substitute parent edits or manufactured results for the child.",
+		"Run `aether codex-native-worker stage --request <file>` with schema_version, phase and execution_binding only after required terminal results are saved; use result.completion_path. On a fresh session first run `aether codex-native-worker inspect --request <file>` for the exact saved binding; retain finished helpers without respawning them. inspect is read-only. No helper is mandatory beyond the runtime-selected team.")
+	def.RunCommand = "AETHER_OUTPUT_MODE=json aether build-finalize <phase> --completion-file <Go-owned completion_path returned by codex-native-worker stage>"
+	def.DriftGuards = append(def.DriftGuards, "Native records do not grant completion credit; only the existing Go finalizer does. Missing host capability or child evidence is incomplete, never simulated success.")
+	return def
 }
 
 func commandGuideCatalog() map[string]commandGuideDefinition {

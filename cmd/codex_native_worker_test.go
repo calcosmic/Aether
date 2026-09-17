@@ -1,0 +1,590 @@
+package cmd
+
+import (
+	"bytes"
+	"encoding/json"
+	"github.com/calcosmic/Aether/pkg/codex"
+	"github.com/calcosmic/Aether/pkg/colony"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+)
+
+func TestCodexNativeBuildGuidePlatformIsolation(t *testing.T) {
+	baseline := map[string]commandGuideResult{}
+	for _, platform := range []string{"codex", "claude", "opencode", "opencode", "codex", "claude", "codex"} {
+		guide, err := buildCommandGuide("build", platform)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if before, ok := baseline[platform]; ok && !reflect.DeepEqual(before, guide) {
+			t.Fatalf("%s guide changed after another platform read", platform)
+		}
+		baseline[platform] = guide
+		// Include every instruction-bearing field, including raw bypass text.
+		all := strings.Join(append(append(append([]string{guide.Intent, guide.RunCommand, guide.RawBypass}, guide.PreSteps...), guide.PostSteps...), guide.DriftGuards...), "\n")
+		if platform == "codex" {
+			for _, required := range []string{"codex-native-worker reserve", "codex-native-worker bind", "codex-native-worker record", "codex-native-worker stage", "spawn_agent", "sole launcher"} {
+				if !strings.Contains(all, required) {
+					t.Errorf("Codex guide missing %q", required)
+				}
+			}
+			if strings.Contains(all, "build-wave playbook") {
+				t.Error("Codex guide still delegates authority to retired playbook")
+			}
+		} else {
+			for _, forbidden := range []string{"codex-native-worker", "spawn_agent"} {
+				if strings.Contains(all, forbidden) {
+					t.Errorf("%s includes %s", platform, forbidden)
+				}
+			}
+			if guide.SkillReference != "" || !strings.Contains(guide.PreSteps[0], "generated "+platform+" slash-command wrapper") {
+				t.Errorf("%s lost wrapper entrypoint", platform)
+			}
+			for _, required := range []string{"visible live Task/subagent", "spawn-log", "spawn-complete", "build-completion-stage"} {
+				if !strings.Contains(all, required) {
+					t.Errorf("%s lost %q", platform, required)
+				}
+			}
+			if guide.RunCommand != "AETHER_OUTPUT_MODE=json aether build-finalize <phase> --completion-file <Go-owned completion_path returned by build-completion-stage>" {
+				t.Errorf("%s finalizer changed: %s", platform, guide.RunCommand)
+			}
+		}
+	}
+	// The adapter must not mutate caller-owned instruction slices either.
+	def := commandGuideCatalog()["build"]
+	before, _ := json.Marshal(def)
+	_ = adaptCommandGuideDefinitionForPlatform("build", "codex", def)
+	after, _ := json.Marshal(def)
+	if string(before) != string(after) {
+		t.Fatal("Codex adapter mutated shared definition")
+	}
+}
+
+// A deterministic host-boundary double proves journal/credit behavior only;
+// the separately opted-in fresh-host test is the native execution proof.
+func TestCodexNativeWorkerTracer(t *testing.T) {
+	source := filepath.Join(antSkillSourceRoot(t), "cmd", "codex_native_worker.go")
+	syntax, err := parser.ParseFile(token.NewFileSet(), source, nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, imported := range syntax.Imports {
+		if imported.Path.Value == "\"os/exec\"" {
+			t.Fatal("native bridge imports a process launcher")
+		}
+	}
+	forbidden := map[string]bool{"invokeInternalWorker": true, "runInternalWorkerAdapter": true, "runInternalWorkerAdapterForPhase": true, "executeCodexBuildDispatches": true}
+	ast.Inspect(syntax, func(node ast.Node) bool {
+		if call, ok := node.(*ast.CallExpr); ok {
+			if name, ok := call.Fun.(*ast.Ident); ok && forbidden[name.Name] {
+				t.Errorf("native bridge invokes second launcher %s", name.Name)
+			}
+		}
+		return true
+	})
+	root := setupExternalBuildAttemptTest(t)
+	manifest := prepareBoundBuildManifestOnly(t, root)
+	if len(manifest.Dispatches) != 1 {
+		t.Fatalf("ordinary fixture selected %d workers", len(manifest.Dispatches))
+	}
+	dispatch := manifest.Dispatches[0]
+	root, _ = filepath.EvalSymlinks(root)
+	request := codexNativeWorkerRequest{SchemaVersion: 1, Phase: 1, ExecutionBinding: *manifest.ExecutionBinding, WorkerName: dispatch.Name, TaskID: normalizedDispatchTaskID(dispatch), HostSessionID: "unit-host", Workspace: root, HostPermission: "workspace_write"}
+	call := func(operation string, request codexNativeWorkerRequest, wantOK bool) codexNativeWorkerResponse {
+		t.Helper()
+		raw, _ := json.Marshal(request)
+		var value map[string]interface{}
+		if err := json.Unmarshal(raw, &value); err != nil {
+			t.Fatal(err)
+		}
+		if len(request.RawResult) > 0 {
+			value["result"] = json.RawMessage(request.RawResult)
+		}
+		path := writeCodexNativeRequestForTest(t, value)
+		var output bytes.Buffer
+		stdout, stderr = &output, &output
+		resetFlags(rootCmd)
+		rootCmd.SetArgs([]string{"codex-native-worker", operation, "--request", path})
+		rootCmd.SetOut(&output)
+		rootCmd.SetErr(&output)
+		err := rootCmd.Execute()
+		if wantOK && err != nil {
+			t.Fatalf("%s: %v %s", operation, err, output.String())
+		}
+		var envelope struct {
+			OK     bool                      `json:"ok"`
+			Result codexNativeWorkerResponse `json:"result"`
+		}
+		if err := json.Unmarshal(output.Bytes(), &envelope); err != nil {
+			t.Fatalf("%s decode: %v %s", operation, err, output.String())
+		}
+		if envelope.OK != wantOK {
+			t.Fatalf("%s success=%v want=%v: %s", operation, envelope.OK, wantOK, output.String())
+		}
+		renderedCommandExitCode.Store(0)
+		return envelope.Result
+	}
+	call("reserve", codexNativeWorkerRequest{SchemaVersion: 1, Phase: 1}, false)
+	for _, field := range []string{"workspace", "permission", "membership"} {
+		refused := request
+		switch field {
+		case "workspace":
+			refused.Workspace = filepath.Dir(root)
+		case "permission":
+			refused.HostPermission = "repository_read_only"
+		case "membership":
+			refused.TaskID = "not-assigned"
+		}
+		call("reserve", refused, false)
+	}
+	first := call("reserve", request, true)
+	if !first.LaunchAllowed || first.Worker.Native == nil || first.Worker.ProviderRunID == "" || first.Worker.ProcessID != 0 {
+		t.Fatalf("bad reservation: %+v", first)
+	}
+	if lifecycleDigest([]byte(first.Worker.Native.Prompt)) != first.Worker.Native.PromptSHA256 {
+		t.Fatal("prompt digest differs from actual launch bytes")
+	}
+	attemptPath, _, _ := loadLatestBuildAttempt(1)
+	snapshot := func() []byte {
+		raw, err := os.ReadFile(filepath.Join(store.BasePath(), attemptPath))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return raw
+	}
+	before := snapshot()
+	replay := call("reserve", request, true)
+	if replay.LaunchAllowed || !replay.Replay || replay.Worker.ProviderRunID != first.Worker.ProviderRunID || !bytes.Equal(before, snapshot()) {
+		t.Fatal("reservation replay changed bytes or licensed a duplicate launch")
+	}
+	// A legacy subprocess may not replace this reserved native worker.
+	if _, err := beginBuildAttemptWorkerRun(1, request.ExecutionBinding, internalWorkerDispatchRequest{WorkerName: dispatch.Name, TaskID: request.TaskID, Caste: dispatch.Caste}, "forbidden-provider", codex.PlatformCodex); err == nil {
+		t.Fatal("provider route reclaimed a native reservation")
+	}
+	request.LaunchID, request.ChildID = first.Worker.ProviderRunID, "unit-child"
+	request.DispatchSHA256, request.PromptSHA256 = first.Worker.Native.DispatchSHA256, first.Worker.Native.PromptSHA256
+	request.Result = &internalWorkerResult{Name: dispatch.Name, Caste: dispatch.Caste, TaskID: request.TaskID, Status: "completed", Summary: "deterministic boundary result", FilesCreated: []string{"evidence.txt"}, Handoff: codex.WorkerHandoff{ChangedFiles: []string{"evidence.txt"}, CommandsRun: []string{"deterministic fixture boundary"}, VerificationStatus: "pass", NextWorkerInstructions: []string{"inspect saved deterministic receipt"}}}
+	call("record", request, false) // no binding, no source event
+	request.Result = nil
+	bound := call("bind", request, true)
+	if bound.Worker.Native.Release == "" {
+		t.Fatal("bind returned no release")
+	}
+	before = snapshot()
+	call("bind", request, true)
+	if !bytes.Equal(before, snapshot()) {
+		t.Fatal("bind replay wrote")
+	}
+	wrong := request
+	wrong.ChildID = "other-child"
+	call("bind", wrong, false)
+	call("record", request, false) // deliberately empty
+	if err := os.WriteFile(filepath.Join(root, "evidence.txt"), []byte("deterministic worker-boundary fixture\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	request.SourceEventID = "unit-event"
+	request.SourceEventSHA256 = strings.Repeat("a", 64)
+	// The installed Builder uses ant_name/tdd/code_written. Exercise its wire
+	// shape through the registered request reader, not the internal Go struct.
+	wire := map[string]any{"schema_version": 1, "phase": 1, "execution_binding": request.ExecutionBinding,
+		"worker_name": request.WorkerName, "task_id": request.TaskID, "host_session_id": request.HostSessionID,
+		"launch_id": request.LaunchID, "child_id": request.ChildID, "dispatch_sha256": request.DispatchSHA256,
+		"prompt_sha256": request.PromptSHA256, "source_event_id": request.SourceEventID, "source_event_sha256": request.SourceEventSHA256,
+		"result": map[string]any{"ant_name": dispatch.Name, "caste": dispatch.Caste, "task_id": request.TaskID,
+			"status": "code_written", "summary": "Builder wire regression", "files_created": []string{"evidence.txt"},
+			"tdd":     map[string]any{"cycles_completed": 1, "tests_added": 0, "coverage_percent": nil, "all_passing": true},
+			"handoff": codex.WorkerHandoff{ChangedFiles: []string{"evidence.txt"}, VerificationStatus: "pass", CommandsRun: []string{"fixture check"}}}}
+	loaded, err := loadCodexNativeWorkerRequest(writeCodexNativeRequestForTest(t, wire))
+	if err != nil || loaded.Result == nil || loaded.Result.Name != dispatch.Name || loaded.Result.Status != "completed" {
+		t.Fatalf("installed Builder wire refused: %+v %v", loaded.Result, err)
+	}
+	request.Result = &internalWorkerResult{Name: dispatch.Name, Caste: dispatch.Caste, TaskID: request.TaskID, Status: "completed", Summary: "deterministic boundary result", FilesCreated: []string{"evidence.txt"}, Handoff: codex.WorkerHandoff{ChangedFiles: []string{"evidence.txt"}, CommandsRun: []string{"deterministic fixture boundary"}, VerificationStatus: "pass", NextWorkerInstructions: []string{"inspect saved deterministic receipt"}}}
+	before = snapshot()
+	invalid := *request.Result
+	invalid.Handoff.VerificationStatus = "Tests passed after the edit"
+	wrong = request
+	wrong.Result = &invalid
+	call("record", wrong, false)
+	invalid.Handoff = codex.WorkerHandoff{}
+	call("record", wrong, false)
+	if !bytes.Equal(before, snapshot()) {
+		t.Fatal("invalid handoff poisoned the immutable terminal journal")
+	}
+	// Bind only fixture identities. Preserve the captured Builder's actual
+	// result shape, including aliases/TDD and the invalid prose handoff.
+	var captured map[string]any
+	if err := json.Unmarshal([]byte(nativeCapturedBuilderTerminal), &captured); err != nil {
+		t.Fatal(err)
+	}
+	captured["name"], captured["ant_name"], captured["task_id"] = dispatch.Name, dispatch.Name, request.TaskID
+	for _, v := range captured["task_receipts"].([]any) {
+		v.(map[string]any)["task_id"] = request.TaskID
+	}
+	if err := os.WriteFile(filepath.Join(root, "clamp.go"), []byte("package fixture\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	request.RawResult, _ = json.Marshal(captured)
+	request.SourceEventID = "captured-invalid-first"
+	request.SourceEventSHA256 = strings.Repeat("b", 64)
+	call("record", request, false)
+	if !bytes.Equal(before, snapshot()) {
+		t.Fatal("captured malformed first result changed journal")
+	}
+	// The same child corrects its enum values in a NEW event; this is its first
+	// accepted terminal, not replacement of an immutable accepted response.
+	captured["handoff"].(map[string]any)["verification_status"] = "pass"
+	for _, v := range captured["task_receipts"].([]any) {
+		v.(map[string]any)["handoff"].(map[string]any)["verification_status"] = "pass"
+	}
+	for _, variant := range []string{"conflicting_alias", "unknown_field", "unknown_status"} {
+		bad := map[string]any{}
+		for k, v := range captured {
+			bad[k] = v
+		}
+		switch variant {
+		case "conflicting_alias":
+			bad["ant_name"] = "another-worker"
+		case "unknown_field":
+			bad["fabricated"] = true
+		case "unknown_status":
+			bad["status"] = "magic"
+		}
+		wrong = request
+		wrong.RawResult, _ = json.Marshal(bad)
+		call("record", wrong, false)
+		if !bytes.Equal(before, snapshot()) {
+			t.Fatalf("%s changed bound journal", variant)
+		}
+	}
+	request.RawResult, _ = json.Marshal(captured)
+	request.SourceEventID = "captured-corrected-event"
+	request.SourceEventSHA256 = strings.Repeat("c", 64)
+	terminal := call("record", request, true)
+	if terminal.Worker.ResultSHA256 == "" || terminal.Worker.Native.LaunchState != "terminal" {
+		t.Fatal("terminal was not durable")
+	}
+	var persisted, submitted any
+	_ = json.Unmarshal(terminal.Worker.Native.RawResult, &persisted)
+	_ = json.Unmarshal(request.RawResult, &submitted)
+	if !reflect.DeepEqual(persisted, submitted) || terminal.Worker.Result.Status != "completed" {
+		t.Fatal("raw Builder evidence lost during normalization")
+	}
+	before = snapshot()
+	call("record", request, true)
+	if !bytes.Equal(before, snapshot()) {
+		t.Fatal("terminal replay wrote")
+	}
+	changed := *request.Result
+	changed.Summary = "conflicting result"
+	wrong = request
+	wrong.RawResult = nil
+	wrong.Result = &changed
+	call("record", wrong, false)
+	minimal := codexNativeWorkerRequest{SchemaVersion: 1, Phase: 1, ExecutionBinding: request.ExecutionBinding}
+	inspected := call("inspect", minimal, true)
+	if inspected.Complete || len(inspected.Workers) != 1 || inspected.Workers[0].ResultSHA256 != terminal.Worker.ResultSHA256 || !bytes.Equal(before, snapshot()) {
+		t.Fatal("inspect changed journal or lost terminal-before-aggregate state")
+	}
+	staged := call("stage", minimal, true)
+	completion, err := loadExternalBuildCompletion(filepath.Join(root, filepath.FromSlash(staged.CompletionPath)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstFinal, state, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if firstFinal["idempotent"] != false || state.Plan.Phases[0].Tasks[0].Status != colony.TaskCompleted {
+		t.Fatalf("no finalizer credit: %+v", firstFinal)
+	}
+	_, saved, _ := loadLatestBuildAttempt(1)
+	eventCount, historyCount := len(state.Events), len(saved.History)
+	again, state, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, saved, _ = loadLatestBuildAttempt(1)
+	if again["idempotent"] != true || len(saved.WorkerRuns) != 1 || len(saved.History) != historyCount || len(state.Events) != eventCount {
+		t.Fatal("finalizer replay repeated worker/credit")
+	}
+}
+
+// Exact first Brick-46 terminal from the immutable 2026-09-17 ordinary capture.
+// Its prose verification statuses are intentionally invalid regression inputs.
+const nativeCapturedBuilderTerminal = `{
+  "name": "Brick-46",
+  "ant_name": "Brick-46",
+  "caste": "builder",
+  "task_id": "1.1",
+  "status": "code_written",
+  "summary": "Fixed Clamp to return low below the lower boundary, high above the upper boundary, and the original value within bounds. Existing tests reproduced both failures before the edit and passed afterward. Build and vet also passed.",
+  "files_created": [],
+  "files_modified": ["clamp.go"],
+  "tests_written": [],
+  "tdd": {
+    "cycles_completed": 1,
+    "tests_added": 0,
+    "coverage_percent": null,
+    "all_passing": true
+  },
+  "blockers": [],
+  "spawns": [],
+  "task_receipts": [
+    {
+      "task_id": "1.1",
+      "status": "code_written",
+      "summary": "Implemented integer Clamp boundaries and verified all existing boundary cases.",
+      "files_created": [],
+      "files_modified": ["clamp.go"],
+      "tests_written": [],
+      "handoff": {
+        "changed_files": ["clamp.go"],
+        "commands_run": [
+          "go test ./...",
+          "GOCACHE=/private/tmp/aether-brick46-go-cache-run-c671353f97f806a6edf2ddba216822f0 go test ./...",
+          "GOCACHE=/private/tmp/aether-brick46-go-cache-run-c671353f97f806a6edf2ddba216822f0 go build ./...",
+          "GOCACHE=/private/tmp/aether-brick46-go-cache-run-c671353f97f806a6edf2ddba216822f0 go vet ./...",
+          "git diff --check",
+          "git diff -- clamp.go clamp_test.go go.mod"
+        ],
+        "verification_status": "Passed after edit: tests, build, vet, and diff checks. The initial test command could not access the inherited home/Library/Caches/go-build cache: operation not permitted. A permitted /private/tmp GOCACHE resolved that setup failure. Using that cache, pre-edit tests reproduced both incorrect results (-3 instead of 0 and 15 instead of 10); post-edit tests passed.",
+        "known_failures": [],
+        "open_decisions": [],
+        "assumptions": [
+          "The assigned behavior uses ordered lower and upper bounds.",
+          "Existing tests provide the required regression evidence; clamp_test.go and go.mod remain unchanged."
+        ],
+        "next_worker_instructions": [
+          "Submit the native worker evidence to the existing build finalizer."
+        ],
+        "do_not_repeat": [
+          "Do not use the inaccessible inherited Go build cache.",
+          "Do not modify clamp_test.go or go.mod."
+        ],
+        "freshness": "2026-09-17T07:27:55Z"
+      }
+    }
+  ],
+  "handoff": {
+    "changed_files": ["clamp.go"],
+    "commands_run": [
+      "cat AGENTS.md clamp.go clamp_test.go go.mod",
+      "git status --short",
+      "go test ./...",
+      "GOCACHE=/private/tmp/aether-brick46-go-cache-run-c671353f97f806a6edf2ddba216822f0 go test ./...",
+      "GOCACHE=/private/tmp/aether-brick46-go-cache-run-c671353f97f806a6edf2ddba216822f0 go build ./...",
+      "GOCACHE=/private/tmp/aether-brick46-go-cache-run-c671353f97f806a6edf2ddba216822f0 go vet ./...",
+      "git diff --check",
+      "git diff -- clamp.go clamp_test.go go.mod"
+    ],
+    "verification_status": "Native Builder ran all required checks. Tests failed on both out-of-range cases before the edit and passed afterward; build, vet, and diff checks passed. Initial default-cache setup failure (operation not permitted) was resolved by using GOCACHE under permitted /private/tmp. Coverage was not measured.",
+    "known_failures": [],
+    "open_decisions": [],
+    "assumptions": [
+      "The assigned behavior uses ordered lower and upper bounds.",
+      "The pre-existing .aether-transactions/ directory belongs to runtime activity and was left untouched."
+    ],
+    "next_worker_instructions": [
+      "Preserve this terminal result with native child identity 01a0ae3f-a385-7b02-aa1a-53ff8518b633 for run-c671353f97f806a6edf2ddba216822f0.",
+      "Perform the authorized existing build completion workflow and stop after its finalizer."
+    ],
+    "do_not_repeat": [
+      "Do not use the inaccessible inherited Go build cache.",
+      "Do not edit clamp_test.go or go.mod.",
+      "Do not commit, recruit, publish, install, or run continue."
+    ],
+    "freshness": "2026-09-17T07:27:55Z"
+  }
+}`
+
+func nativeEvidenceEvent(t *testing.T, kind, thread string, item any) []byte {
+	t.Helper()
+	raw, err := json.Marshal(map[string]any{"type": "event_msg", "payload": map[string]any{"type": kind, "thread_id": thread, "item": item}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return append(raw, '\n')
+}
+
+func TestCodexNativeEvidenceDerivation(t *testing.T) {
+	r := codexNativeLiveReceipt{SessionID: "parent", BoundHostSessionID: "parent", ChildID: "child", FixtureRoot: "/fixture",
+		BaselineSource: "package nativefixture\n\nfunc Clamp(value, low, high int) int { return value }\n"}
+	meta := []byte("{\"type\":\"session_meta\",\"payload\":{\"id\":\"child\",\"parent_thread_id\":\"parent\",\"agent_role\":\"aether-builder\",\"cwd\":\"/fixture\"}}\n")
+	result := internalWorkerResult{Name: "Brick-46", Caste: "builder", TaskID: "1.1", Status: "completed", Summary: "fixed",
+		Handoff: codex.WorkerHandoff{VerificationStatus: "pass", ChangedFiles: []string{"clamp.go"}, CommandsRun: []string{"go test ./... -json -count=1"}}}
+	r.SavedTerminal = &result
+	r.ResultSHA256, _ = jsonSHA256(&result)
+	resultRaw, _ := json.Marshal(result)
+	terminal := nativeEvidenceEvent(t, "item_completed", "child", map[string]any{"type": "AgentMessage", "id": "terminal-1", "phase": "final_answer", "content": []any{map[string]any{"type": "Text", "text": string(resultRaw)}}})
+	response, _ := json.Marshal(map[string]any{"type": "response_item", "payload": map[string]any{"type": "message", "role": "assistant", "content": []any{map[string]any{"text": string(resultRaw)}}}})
+	r.SavedSourceEventID = "terminal-1"
+	r.SavedSourceEventSHA256 = lifecycleDigest(bytes.TrimSuffix(terminal, []byte{'\n'}))
+	all := append(append(append([]byte(nil), meta...), terminal...), response...)
+	for _, variant := range []string{"metadata_hash", "wrong_event_id", "foreign_thread"} {
+		bad := r
+		events := append([]byte(nil), all...)
+		switch variant {
+		case "metadata_hash":
+			bad.SavedSourceEventSHA256 = lifecycleDigest(bytes.TrimSuffix(meta, []byte{'\n'}))
+		case "wrong_event_id":
+			bad.SavedSourceEventID = "unrelated"
+		case "foreign_thread":
+			events = bytes.ReplaceAll(events, []byte("\"thread_id\":\"child\""), []byte("\"thread_id\":\"other\""))
+		}
+		nativeInspectChildEvents(&bad, events)
+		if bad.TerminalCorroborated && bad.SourceEventCorroborated {
+			t.Errorf("%s incorrectly corroborated terminal", variant)
+		}
+	}
+	checkOutput := "{\"Action\":\"run\",\"Package\":\"example.invalid/nativefixture\",\"Test\":\"TestClamp\"}\n{\"Action\":\"pass\",\"Package\":\"example.invalid/nativefixture\",\"Test\":\"TestClamp\"}\n{\"Action\":\"pass\",\"Package\":\"example.invalid/nativefixture\"}\n"
+	positive := r
+	positive.FinalSource = "package nativefixture\n\nfunc Clamp(value, low, high int) int {\n\tif value < low { return low }; if value > high { return high }; return value\n}\n"
+	patch := "@@ -2,2 +2,4 @@\n \n-func Clamp(value, low, high int) int { return value }\n+func Clamp(value, low, high int) int {\n+\tif value < low { return low }; if value > high { return high }; return value\n+}\n"
+	edit := nativeEvidenceEvent(t, "item_completed", "child", map[string]any{"type": "FileChange", "status": "completed", "changes": map[string]any{"/fixture/clamp.go": map[string]any{"type": "update", "unified_diff": patch}}})
+	check := nativeEvidenceEvent(t, "item_completed", "child", map[string]any{"type": "CommandExecution", "status": "completed", "command": []string{"/bin/zsh", "-lc", "GOCACHE=/tmp/fixture-cache go test ./... -json -count=1"}, "cwd": "file:///fixture", "exit_code": 0, "aggregated_output": checkOutput})
+	// Actual Codex child rollouts begin with child metadata, followed by a
+	// copied parent session_meta and inherited context before child events.
+	inherited := []byte("{\"type\":\"session_meta\",\"payload\":{\"id\":\"parent\",\"cwd\":\"/fixture\"}}\n")
+	positiveEvents := bytes.Join([][]byte{meta, inherited, edit, check, terminal}, nil)
+	nativeInspectChildEvents(&positive, positiveEvents)
+	if !positive.TerminalCorroborated || !positive.SourceEventCorroborated || !positive.ChildEditObserved || !positive.ChecksPassed {
+		t.Fatalf("actual-shaped child evidence refused: %+v", positive)
+	}
+	badSource := positive
+	badSource.FinalSource += "// parent addition\n"
+	nativeInspectChildEvents(&badSource, positiveEvents)
+	if badSource.ChildEditObserved {
+		t.Fatal("final source not reconstructible from child edits accepted")
+	}
+	for _, variant := range []string{"zero_tests", "wrong_cwd", "mixed_failure", "inherited_parent"} {
+		command, cwd, output, thread := "go test ./... -json -count=1", "file:///fixture", checkOutput, "child"
+		switch variant {
+		case "zero_tests":
+			command, output = "go test ./... -run '^$'", "ok example.invalid/nativefixture [no tests to run]"
+		case "wrong_cwd":
+			cwd = "file:///other"
+		case "mixed_failure":
+			command, output = "go test ./...; echo ok", "FAIL TestClamp\nok"
+		case "inherited_parent":
+			thread = "parent"
+		}
+		events := append(append([]byte(nil), meta...), nativeEvidenceEvent(t, "item_completed", thread, map[string]any{"type": "CommandExecution", "status": "completed", "command": []string{"/bin/zsh", "-lc", command}, "cwd": cwd, "aggregated_output": output, "exit_code": 0})...)
+		bad := r
+		nativeInspectChildEvents(&bad, events)
+		if bad.ChecksPassed {
+			t.Errorf("%s incorrectly proved fixture tests", variant)
+		}
+	}
+	for _, command := range []string{"python3 -c 'from pathlib import Path; p=Path(\"clamp.go\"); p.write_bytes(b\"fixed\")'", "printf fixed > '/fixture/clamp.go'", "python3 /tmp/changed-coordinator.py record"} {
+		bad := r
+		events := nativeEvidenceEvent(t, "item_completed", "parent", map[string]any{"type": "CommandExecution", "status": "completed", "command": []string{"/bin/zsh", "-lc", command}, "cwd": "file:///fixture", "exit_code": 0})
+		events = append([]byte("{\"type\":\"session_meta\",\"payload\":{\"id\":\"parent\"}}\n"), events...)
+		nativeInspectParentEvents(&bad, events)
+		if !bad.ParentSubstitution {
+			t.Errorf("unclassified parent mutation accepted: %s", command)
+		}
+	}
+}
+
+func writeCodexNativeRequestForTest(t *testing.T, value any) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "aether-worker-request-native-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	path := filepath.Join(dir, "request.json")
+	raw, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestCodexNativeWorkerFixturePreparation(t *testing.T) {
+	root := setupExternalBuildAttemptTest(t)
+	nativePrepareLiveFixture(t, root, t.TempDir())
+	manifest := prepareBoundBuildManifestOnly(t, root)
+	if manifest.ExecutionBinding == nil || len(manifest.Dispatches) != 1 || manifest.PlanRevisionID == "" {
+		t.Fatalf("fixture is not an accepted one-worker plan: %+v", manifest)
+	}
+}
+
+func TestCodexNativeWorkerReceiptValidation(t *testing.T) {
+	if err := validateCodexNativeLiveReceipt(codexNativeLiveReceipt{ExitStatus: 0}); err == nil {
+		t.Fatal("empty live evidence passed")
+	}
+	path := os.Getenv("AETHER_CODEX_NATIVE_RECEIPT_PATH")
+	if path == "" {
+		return
+	} // Only the negative assertion ran; this is no live proof.
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var receipt codexNativeLiveReceipt
+	if err := json.Unmarshal(raw, &receipt); err != nil {
+		t.Fatal(err)
+	}
+	for file, want := range receipt.Artifacts {
+		bytes, err := os.ReadFile(file)
+		if err != nil || lifecycleDigest(bytes) != want {
+			t.Fatalf("retained artifact changed or missing: %s", file)
+		}
+	}
+	receipt.SkillRead, receipt.SupportRead, receipt.GuideRead = false, false, false
+	receipt.ChildEditObserved, receipt.ChecksPassed, receipt.CreditObserved = false, false, false
+	receipt.TerminalCorroborated, receipt.SourceEventCorroborated, receipt.ParentSubstitution = false, false, false
+	receipt.NativeSpawnCount = 0
+	nativeCollectLiveEvidence(t, &receipt, t.TempDir(), filepath.Join(filepath.Dir(receipt.FixtureRoot), "home"))
+	if receipt.Scenario == "early-resume" {
+		nativeCollectResumeEvidence(t, &receipt, t.TempDir(), filepath.Join(filepath.Dir(receipt.FixtureRoot), "home"), filepath.Join(filepath.Dir(receipt.FixtureRoot), "coordination"))
+	}
+	if err := validateCodexNativeLiveReceipt(receipt); err != nil {
+		t.Fatalf("raw receipt replay: %v", err)
+	}
+	t.Logf("raw native receipt replay passed for attempt %s child %s", receipt.AttemptID, receipt.ChildID)
+	// Evidence-derived facts are mandatory; a terminal claim alone cannot pass.
+	for _, field := range []string{"child_edit", "child_check", "terminal", "source_event", "credit", "parent_substitution"} {
+		bad := receipt
+		switch field {
+		case "child_edit":
+			bad.ChildEditObserved = false
+		case "child_check":
+			bad.ChecksPassed = false
+		case "terminal":
+			bad.TerminalCorroborated = false
+		case "source_event":
+			bad.SourceEventCorroborated = false
+		case "credit":
+			bad.CreditObserved = false
+		case "parent_substitution":
+			bad.ParentSubstitution = true
+		}
+		if err := validateCodexNativeLiveReceipt(bad); err == nil {
+			t.Fatalf("missing/invalid %s still passed live validation", field)
+		}
+	}
+	if outPath := os.Getenv("AETHER_CODEX_NATIVE_VALIDATED_RECEIPT_OUT"); outPath != "" {
+		if !filepath.IsAbs(outPath) || filepath.Clean(outPath) == filepath.Clean(path) {
+			t.Fatal("validated receipt requires a new absolute output path")
+		}
+		if _, err := os.Stat(outPath); !os.IsNotExist(err) {
+			t.Fatal("validated receipt output already exists")
+		}
+		receipt.Outcome, receipt.Reason = "passed", ""
+		receipt.ValidationRevision = strings.TrimSpace(liveSkillCommandOutput(t, antSkillSourceRoot(t), "git", "rev-parse", "HEAD"))
+		receipt.ValidationOriginalReceipt, receipt.ValidationOriginalSHA256 = path, lifecycleDigest(raw)
+		receipt.Artifacts[path] = lifecycleDigest(raw)
+		liveSkillWriteJSON(t, outPath, receipt)
+	}
+}
