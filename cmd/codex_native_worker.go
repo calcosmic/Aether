@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/codex"
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/spf13/cobra"
 )
 
@@ -20,22 +21,35 @@ const codexNativeWorkerSchemaVersion = 1
 
 var errCodexNativeReplay = errors.New("native worker replay: no write")
 
+type codexNativeDisposition string
+
+const (
+	codexNativeAccepted codexNativeDisposition = "accepted"
+	codexNativeReplayed codexNativeDisposition = "replay"
+)
+
+// Hooks are instance-local: tests can stop after prevalidation without a global
+// callback racing other requests. Production always uses the empty value.
+type codexNativeWorkerHooks struct{ BeforeWrite func() }
+
 // Native provenance extends the existing worker journal, never its credit authority.
 // Prompt is retained verbatim so replay never silently recomposes an assignment.
 type codexNativeWorkerBinding struct {
-	SchemaVersion     int                     `json:"schema_version"`
-	LaunchState       string                  `json:"launch_state"`
-	HostSessionID     string                  `json:"host_session_id"`
-	ChildID           string                  `json:"child_id,omitempty"`
-	DispatchSHA256    string                  `json:"dispatch_sha256"`
-	PromptSHA256      string                  `json:"prompt_sha256"`
-	PermissionProfile codex.PermissionProfile `json:"permission_profile"`
-	Workspace         string                  `json:"workspace"`
-	Prompt            string                  `json:"prompt"`
-	Release           string                  `json:"release,omitempty"`
-	SourceEventID     string                  `json:"source_event_id,omitempty"`
-	SourceEventSHA256 string                  `json:"source_event_sha256,omitempty"`
-	RawResult         json.RawMessage         `json:"raw_result,omitempty"`
+	SchemaVersion      int                     `json:"schema_version"`
+	LaunchState        string                  `json:"launch_state"`
+	HostSessionID      string                  `json:"host_session_id"`
+	ChildID            string                  `json:"child_id,omitempty"`
+	DispatchSHA256     string                  `json:"dispatch_sha256"`
+	PromptSHA256       string                  `json:"prompt_sha256"`
+	PermissionProfile  codex.PermissionProfile `json:"permission_profile"`
+	Workspace          string                  `json:"workspace"`
+	WorkspaceRoot      string                  `json:"workspace_root,omitempty"`
+	ContextDeliveryIDs []string                `json:"context_delivery_ids,omitempty"`
+	Prompt             string                  `json:"prompt"`
+	Release            string                  `json:"release,omitempty"`
+	SourceEventID      string                  `json:"source_event_id,omitempty"`
+	SourceEventSHA256  string                  `json:"source_event_sha256,omitempty"`
+	RawResult          json.RawMessage         `json:"raw_result,omitempty"`
 }
 
 type codexNativeWorkerRequest struct {
@@ -58,6 +72,7 @@ type codexNativeWorkerRequest struct {
 }
 
 type codexNativeWorkerResponse struct {
+	Disposition      codexNativeDisposition  `json:"disposition,omitempty"`
 	SchemaVersion    int                     `json:"schema_version"`
 	ExecutionBinding codex.ExecutionBinding  `json:"execution_binding"`
 	LaunchAllowed    bool                    `json:"launch_allowed"`
@@ -197,6 +212,10 @@ func normalizeCodexNativeResult(raw []byte) (internalWorkerResult, error) {
 // This bridge cannot launch processes or providers. Only the host's spawn_agent
 // consumes a new reservation, then bind releases that exact child to work.
 func runCodexNativeWorker(operation, path string) (codexNativeWorkerResponse, error) {
+	return runCodexNativeWorkerWithHooks(operation, path, codexNativeWorkerHooks{})
+}
+
+func runCodexNativeWorkerWithHooks(operation, path string, hooks codexNativeWorkerHooks) (codexNativeWorkerResponse, error) {
 	request, err := loadCodexNativeWorkerRequest(path)
 	if err != nil {
 		return codexNativeWorkerResponse{}, err
@@ -212,6 +231,29 @@ func runCodexNativeWorker(operation, path string) (codexNativeWorkerResponse, er
 		}
 		if record.PlanManifest == nil || !record.PlanManifest.PlanOnly || record.ExecutionOwner != "host-queen" {
 			return fmt.Errorf("native worker requires a host-queen plan-only attempt")
+		}
+		manifest := record.PlanManifest
+		if len(manifest.Dispatches) == 0 || manifest.ExecutionBinding == nil || *manifest.ExecutionBinding != request.ExecutionBinding || manifest.Phase != request.Phase {
+			return fmt.Errorf("native worker requires a nonempty exactly bound manifest")
+		}
+		digest, err := buildManifestSHA256(*manifest)
+		if err != nil || digest != record.ManifestSHA256 {
+			return fmt.Errorf("saved native manifest content no longer matches its accepted digest")
+		}
+		root, err := filepath.EvalSymlinks(manifest.Root)
+		if err != nil {
+			return err
+		}
+		activeRoot, err := filepath.EvalSymlinks(buildAttemptWorkspaceRoot())
+		if err != nil || root != activeRoot {
+			return fmt.Errorf("native manifest workspace is not the accepted workspace")
+		}
+		var pointer latestBuildAttemptPointer
+		if err := store.LoadJSON(latestBuildAttemptPointerPath(request.Phase), &pointer); err != nil {
+			return err
+		}
+		if pointer.AttemptID != record.ID {
+			return fmt.Errorf("native attempt has been superseded")
 		}
 		return nil
 	}
@@ -243,6 +285,11 @@ func runCodexNativeWorker(operation, path string) (codexNativeWorkerResponse, er
 		return response, fmt.Errorf("native worker requires worker_name, task_id and host_session_id")
 	}
 	var updated buildAttemptRecord
+	if hooks.BeforeWrite != nil {
+		hooks.BeforeWrite()
+	}
+	buildWorkerRunMutationMu.Lock()
+	defer buildWorkerRunMutationMu.Unlock()
 	err = store.UpdateJSONAtomically(attemptPath, &updated, func() error {
 		if err := validate(updated); err != nil {
 			return err
@@ -258,6 +305,9 @@ func runCodexNativeWorker(operation, path string) (codexNativeWorkerResponse, er
 		if dispatch == nil {
 			return fmt.Errorf("native assignment is not in the accepted manifest")
 		}
+		if strings.TrimSpace(dispatch.Name) == "" || strings.TrimSpace(dispatch.Caste) == "" || strings.TrimSpace(dispatch.TaskID) == "" || dispatch.ExecutionWave < 1 {
+			return fmt.Errorf("native assignment is incomplete")
+		}
 		response.Dispatch = dispatch
 		var worker *buildAttemptWorkerRun
 		for i := range updated.WorkerRuns {
@@ -269,7 +319,7 @@ func runCodexNativeWorker(operation, path string) (codexNativeWorkerResponse, er
 		}
 		now := time.Now().UTC().Format(time.RFC3339Nano)
 		if operation == "reserve" {
-			if request.LaunchID != "" || request.ChildID != "" || request.Result != nil {
+			if request.LaunchID != "" || request.ChildID != "" || request.Result != nil || request.DispatchSHA256 != "" || request.PromptSHA256 != "" || request.SourceEventID != "" || request.SourceEventSHA256 != "" {
 				return fmt.Errorf("reserve cannot supply a launch, child or result")
 			}
 			workspace, err := filepath.EvalSymlinks(updated.PlanManifest.Root)
@@ -287,6 +337,9 @@ func runCodexNativeWorker(operation, path string) (codexNativeWorkerResponse, er
 				return fmt.Errorf("native host cannot enforce this requested permission profile")
 			}
 			if worker != nil {
+				if err := validateCodexNativeSavedWorker(updated, *dispatch, *worker); err != nil {
+					return err
+				}
 				if worker.Native == nil || worker.Native.HostSessionID != request.HostSessionID || worker.Native.Workspace != workspace {
 					return fmt.Errorf("assignment already reserved by a different execution; inspect retained evidence, do not respawn")
 				}
@@ -295,6 +348,9 @@ func runCodexNativeWorker(operation, path string) (codexNativeWorkerResponse, er
 			}
 			if updated.Status != buildAttemptAwaiting && updated.Status != buildAttemptDispatching {
 				return fmt.Errorf("attempt %s cannot reserve workers while %s", updated.ID, updated.Status)
+			}
+			if err := validateCodexNativeLaunchCurrency(updated); err != nil {
+				return err
 			}
 			for _, predecessor := range updated.PlanManifest.Dispatches {
 				if predecessor.ExecutionWave < dispatch.ExecutionWave {
@@ -315,7 +371,7 @@ func runCodexNativeWorker(operation, path string) (codexNativeWorkerResponse, er
 			if err != nil {
 				return err
 			}
-			native := &codexNativeWorkerBinding{SchemaVersion: 1, LaunchState: "reserved", HostSessionID: request.HostSessionID, DispatchSHA256: digest, PromptSHA256: lifecycleDigest([]byte(prompt)), PermissionProfile: permission, Workspace: workspace, Prompt: prompt}
+			native := &codexNativeWorkerBinding{SchemaVersion: 1, LaunchState: "reserved", HostSessionID: request.HostSessionID, DispatchSHA256: digest, PromptSHA256: lifecycleDigest([]byte(prompt)), PermissionProfile: permission, Workspace: workspace, WorkspaceRoot: workspace, Prompt: prompt}
 			updated.WorkerRuns = append(updated.WorkerRuns, buildAttemptWorkerRun{ProviderRunID: launch, WorkerName: dispatch.Name, TaskID: request.TaskID, Caste: dispatch.Caste, Platform: codex.PlatformCodex, Status: buildWorkerDispatching, StartedAt: now, UpdatedAt: now, Native: native})
 			response.Worker = &updated.WorkerRuns[len(updated.WorkerRuns)-1]
 			response.LaunchAllowed = true
@@ -326,13 +382,19 @@ func runCodexNativeWorker(operation, path string) (codexNativeWorkerResponse, er
 			return fmt.Errorf("native worker has no reservation")
 		}
 		native := worker.Native
+		if err := validateCodexNativeSavedWorker(updated, *dispatch, *worker); err != nil {
+			return err
+		}
+		if (request.Workspace != "" && request.Workspace != native.Workspace) || (request.HostPermission != "" && request.HostPermission != string(native.PermissionProfile.Name)) {
+			return fmt.Errorf("native workspace or permission does not match reservation")
+		}
 		if request.LaunchID != worker.ProviderRunID || request.HostSessionID != native.HostSessionID || request.DispatchSHA256 != native.DispatchSHA256 || request.PromptSHA256 != native.PromptSHA256 || request.ChildID == "" {
 			return fmt.Errorf("native launch/session/dispatch/prompt identity does not match reservation")
 		}
 		response.Worker = worker
 		switch operation {
 		case "bind":
-			if request.Result != nil {
+			if request.Result != nil || request.SourceEventID != "" || request.SourceEventSHA256 != "" {
 				return fmt.Errorf("bind cannot submit a result")
 			}
 			if native.ChildID != "" {
@@ -344,6 +406,9 @@ func runCodexNativeWorker(operation, path string) (codexNativeWorkerResponse, er
 			}
 			if native.LaunchState != "reserved" {
 				return fmt.Errorf("native launch is not reserved")
+			}
+			if err := validateCodexNativeLaunchCurrency(updated); err != nil {
+				return err
 			}
 			release, err := codex.NewExecutionRunID()
 			if err != nil {
@@ -426,9 +491,48 @@ func runCodexNativeWorker(operation, path string) (codexNativeWorkerResponse, er
 		return nil
 	})
 	if errors.Is(err, errCodexNativeReplay) {
+		response.Disposition = codexNativeReplayed
 		err = nil
+	} else if err == nil {
+		response.Disposition = codexNativeAccepted
 	}
 	return response, err
+}
+
+func validateCodexNativeLaunchCurrency(record buildAttemptRecord) error {
+	if record.Status != buildAttemptAwaiting && record.Status != buildAttemptDispatching {
+		return fmt.Errorf("native attempt %s cannot launch while %s", record.ID, record.Status)
+	}
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		return err
+	}
+	return validateBuildFinalizeStateStillCurrent(state, record.Phase)
+}
+
+func validateCodexNativeSavedWorker(record buildAttemptRecord, dispatch codexBuildDispatch, worker buildAttemptWorkerRun) error {
+	native := worker.Native
+	if native == nil {
+		return fmt.Errorf("assignment belongs to an ordinary provider execution")
+	}
+	digest, err := jsonSHA256(dispatch)
+	if err != nil {
+		return err
+	}
+	permission, err := codex.ResolvePermissionProfile(dispatch.Caste, dispatch.PermissionProfile)
+	if err != nil {
+		return err
+	}
+	root, err := filepath.EvalSymlinks(record.PlanManifest.Root)
+	if err != nil {
+		return err
+	}
+	permissionDigest, _ := jsonSHA256(permission)
+	savedPermissionDigest, _ := jsonSHA256(native.PermissionProfile)
+	if native.SchemaVersion != 1 || native.HostSessionID == "" || worker.ProviderRunID == "" || worker.Caste != dispatch.Caste || worker.WorkerName != dispatch.Name || worker.TaskID != normalizedDispatchTaskID(dispatch) || native.DispatchSHA256 != digest || native.PromptSHA256 != lifecycleDigest([]byte(native.Prompt)) || strings.TrimSpace(native.Prompt) == "" || native.Workspace != root || (native.WorkspaceRoot != "" && native.WorkspaceRoot != root) || savedPermissionDigest != permissionDigest {
+		return fmt.Errorf("native saved assignment/prompt/permission/workspace identity changed")
+	}
+	return nil
 }
 
 func codexNativeLaunchPrompt(manifest codexBuildManifest, dispatch codexBuildDispatch, launch string) (string, error) {

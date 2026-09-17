@@ -3,10 +3,15 @@ package cmd
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/codex"
 )
+
+// FileLocker is reentrant within one Store. Serialize in-process worker
+// mutations too; the existing file lock still arbitrates separate hosts.
+var buildWorkerRunMutationMu sync.Mutex
 
 const (
 	buildWorkerDispatching = "dispatching"
@@ -35,6 +40,8 @@ type buildAttemptWorkerRun struct {
 }
 
 func beginBuildAttemptWorkerRun(phase int, binding codex.ExecutionBinding, request internalWorkerDispatchRequest, providerRunID string, platform codex.Platform) (*buildAttemptWorkerRun, error) {
+	buildWorkerRunMutationMu.Lock()
+	defer buildWorkerRunMutationMu.Unlock()
 	attemptRel, record, ok := loadLatestBuildAttempt(phase)
 	if !ok {
 		return nil, fmt.Errorf("build worker execution binding has no durable attempt")
@@ -109,6 +116,8 @@ func beginBuildAttemptWorkerRun(phase int, binding codex.ExecutionBinding, reque
 }
 
 func recordBuildAttemptWorkerProcess(phase int, binding codex.ExecutionBinding, providerRunID string, pid int) error {
+	buildWorkerRunMutationMu.Lock()
+	defer buildWorkerRunMutationMu.Unlock()
 	if pid <= 0 {
 		return nil
 	}
@@ -122,11 +131,14 @@ func recordBuildAttemptWorkerProcess(phase int, binding codex.ExecutionBinding, 
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	var record buildAttemptRecord
 	if err := store.UpdateJSONAtomically(attemptRel, &record, func() error {
-		if record.ID != binding.AttemptID || record.RunID != binding.RunID {
-			return fmt.Errorf("execution binding does not match the current build attempt")
+		if err := validateBuildExecutionBinding(record, binding, record.ManifestSHA256, false); err != nil {
+			return err
 		}
 		for i := range record.WorkerRuns {
 			if record.WorkerRuns[i].ProviderRunID == strings.TrimSpace(providerRunID) {
+				if record.WorkerRuns[i].Native != nil {
+					return fmt.Errorf("native workers have no provider process")
+				}
 				record.WorkerRuns[i].ProcessID = pid
 				record.WorkerRuns[i].UpdatedAt = now
 				return nil
@@ -140,6 +152,8 @@ func recordBuildAttemptWorkerProcess(phase int, binding codex.ExecutionBinding, 
 }
 
 func recordBuildAttemptWorkerTerminal(phase int, binding codex.ExecutionBinding, providerRunID string, result *internalWorkerResult) error {
+	buildWorkerRunMutationMu.Lock()
+	defer buildWorkerRunMutationMu.Unlock()
 	if result == nil {
 		return fmt.Errorf("terminal worker result is required")
 	}
@@ -243,6 +257,8 @@ func cachedInternalWorkerResult(run *buildAttemptWorkerRun) *internalWorkerResul
 }
 
 func cancelBuildAttemptWorkerRuns(attemptRel, reason string) error {
+	buildWorkerRunMutationMu.Lock()
+	defer buildWorkerRunMutationMu.Unlock()
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	var record buildAttemptRecord
 	if err := store.UpdateJSONAtomically(attemptRel, &record, func() error {

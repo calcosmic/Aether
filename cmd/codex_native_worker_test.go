@@ -63,6 +63,123 @@ func nativeReserveForTest(t *testing.T, request codexNativeWorkerRequest) codexN
 }
 
 func TestCodexNativeWorkerAdmission(t *testing.T) {
+	t.Run("simultaneous-reservations", func(t *testing.T) {
+		_, request := nativeAdmissionFixture(t)
+		path := nativeRequestPath(t, request)
+		ready, release := make(chan struct{}, 2), make(chan struct{})
+		type outcome struct {
+			response codexNativeWorkerResponse
+			err      error
+		}
+		results := make(chan outcome, 2)
+		for i := 0; i < 2; i++ {
+			go func() {
+				response, err := runCodexNativeWorkerWithHooks("reserve", path, codexNativeWorkerHooks{BeforeWrite: func() { ready <- struct{}{}; <-release }})
+				results <- outcome{response, err}
+			}()
+		}
+		<-ready
+		<-ready
+		close(release)
+		launches, replays := 0, 0
+		var launch string
+		for i := 0; i < 2; i++ {
+			got := <-results
+			if got.err != nil {
+				t.Fatal(got.err)
+			}
+			if got.response.LaunchAllowed {
+				launches++
+			}
+			if got.response.Replay {
+				replays++
+			}
+			if launch != "" && launch != got.response.Worker.ProviderRunID {
+				t.Fatal("two launch identities")
+			}
+			launch = got.response.Worker.ProviderRunID
+		}
+		if launches != 1 || replays != 1 {
+			t.Fatalf("launches=%d replays=%d", launches, replays)
+		}
+	})
+	for _, change := range []string{"manifest", "attempt-pointer", "pause"} {
+		t.Run("under-lock-"+change, func(t *testing.T) {
+			_, request := nativeAdmissionFixture(t)
+			path, record, _ := loadLatestBuildAttempt(1)
+			var before []byte
+			_, err := runCodexNativeWorkerWithHooks("reserve", nativeRequestPath(t, request), codexNativeWorkerHooks{BeforeWrite: func() {
+				switch change {
+				case "manifest":
+					record.PlanManifest.Dispatches[0].Caste = "watcher"
+					if err := store.SaveJSON(path, record); err != nil {
+						t.Fatal(err)
+					}
+				case "attempt-pointer":
+					var pointer latestBuildAttemptPointer
+					if err := store.LoadJSON(latestBuildAttemptPointerPath(1), &pointer); err != nil {
+						t.Fatal(err)
+					}
+					pointer.AttemptID = "attempt-superseded"
+					if err := store.SaveJSON(latestBuildAttemptPointerPath(1), pointer); err != nil {
+						t.Fatal(err)
+					}
+				case "pause":
+					var state colony.ColonyState
+					if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+						t.Fatal(err)
+					}
+					state.Paused = true
+					if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+						t.Fatal(err)
+					}
+				}
+				before, _ = os.ReadFile(filepath.Join(store.BasePath(), path))
+			}})
+			if err == nil {
+				t.Fatal("prevalidated stale request was accepted")
+			}
+			after, _ := os.ReadFile(filepath.Join(store.BasePath(), path))
+			if !bytes.Equal(before, after) {
+				t.Fatal("stale request changed attempt")
+			}
+		})
+	}
+	for _, field := range []string{"binding", "run", "attempt", "manifest", "owner", "workspace", "worker", "task", "host", "prompt"} {
+		t.Run("identity-"+field, func(t *testing.T) {
+			_, request := nativeAdmissionFixture(t)
+			request = nativeReserveForTest(t, request)
+			switch field {
+			case "binding":
+				request.ExecutionBinding = codex.ExecutionBinding{}
+			case "run":
+				request.ExecutionBinding.RunID = "run-wrong"
+			case "attempt":
+				request.ExecutionBinding.AttemptID = "attempt-wrong"
+			case "manifest":
+				request.ExecutionBinding.ManifestSHA256 = strings.Repeat("a", 64)
+			case "owner":
+				request.ExecutionBinding.ExecutionOwner = "other-owner"
+			case "workspace":
+				request.ExecutionBinding.WorkspaceFingerprint = strings.Repeat("a", 64)
+			case "worker":
+				request.WorkerName = "unassigned"
+			case "task":
+				request.TaskID = "unassigned"
+			case "host":
+				request.HostSessionID = "other-host"
+			case "prompt":
+				request.PromptSHA256 = strings.Repeat("a", 64)
+			}
+			before := nativeJournalBytes(t)
+			if _, err := runCodexNativeWorker("bind", nativeRequestPath(t, request)); err == nil {
+				t.Fatal("identity substitution accepted")
+			}
+			if !bytes.Equal(before, nativeJournalBytes(t)) {
+				t.Fatal("identity refusal wrote")
+			}
+		})
+	}
 	for _, field := range []string{"bind-workspace", "bind-permission", "reserve-prompt", "manifest-caste", "manifest-wave", "manifest-coverage", "manifest-empty", "paused-bind"} {
 		t.Run(field, func(t *testing.T) {
 			_, request := nativeAdmissionFixture(t)
