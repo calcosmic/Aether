@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -209,5 +210,96 @@ func TestCodexNativeRecoveryReadOnly(t *testing.T) {
 	}
 	if !reflect.DeepEqual(before, nativeRecoveryStoreSnapshot(t)) {
 		t.Fatal("native recovery inspection mutated durable bytes")
+	}
+}
+
+func TestCodexNativeRecoveryResumeTransaction(t *testing.T) {
+	for _, corrupt := range []bool{false, true} {
+		t.Run(fmt.Sprint(corrupt), func(t *testing.T) {
+			manifest, requests := nativeRecoveryFixture(t, 1)
+			nativeRecoveryFinish(t, manifest, requests[0], 0)
+			now := time.Now().UTC()
+			if _, err := pauseColonyAt(now); err != nil {
+				t.Fatal(err)
+			}
+			pauseResumeLifecycleFault = func(point string) error {
+				if point == "after_target_commit:target-0001" {
+					return errors.New("native resume prefix interrupted")
+				}
+				return nil
+			}
+			t.Cleanup(func() { pauseResumeLifecycleFault = nil })
+			if _, err := resumeColonyAt(now.Add(time.Second)); err == nil {
+				t.Fatal("missing interrupted resume control")
+			}
+			pauseResumeLifecycleFault = nil
+			var state colony.ColonyState
+			if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil || state.Paused {
+				t.Fatalf("resume prefix did not unpause state: %v", err)
+			}
+			if corrupt {
+				if err := store.AtomicWrite(pauseHandoffDataPath, []byte("{}")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			before := nativeJournalBytes(t)
+			outcome, err := resumeColonyAt(now.Add(2 * time.Second))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if outcome.NativeRecovery != nil {
+				t.Fatal("native projection bypassed authorized resume transaction replay")
+			}
+			if corrupt {
+				if outcome.Provenance != colony.RecoveryProvenanceConflicting {
+					t.Fatalf("corrupt handoff was not refused: %+v", outcome)
+				}
+			} else {
+				if !outcome.Replay || outcome.Receipt.ReceiptID == "" {
+					t.Fatalf("resume did not finish retained transaction: %+v", outcome)
+				}
+				var session colony.SessionFile
+				if err := store.LoadJSON("session.json", &session); err != nil || session.ResumedAt == nil {
+					t.Fatalf("resume left session target incomplete: %+v, %v", session, err)
+				}
+			}
+			if !bytes.Equal(before, nativeJournalBytes(t)) {
+				t.Fatal("resume transaction changed saved native result")
+			}
+		})
+	}
+}
+
+func TestCodexNativeRecoveryCurrency(t *testing.T) {
+	for _, field := range []string{"goal", "plan", "run"} {
+		t.Run(field, func(t *testing.T) {
+			manifest, requests := nativeRecoveryFixture(t, 1)
+			nativeRecoveryFinish(t, manifest, requests[0], 0)
+			var state colony.ColonyState
+			if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+				t.Fatal(err)
+			}
+			switch field {
+			case "goal":
+				replacement := "Different same-phase colony"
+				state.Goal = &replacement
+			case "plan":
+				state.Plan.Phases[0].Tasks[0].Goal = "Changed accepted assignment"
+			case "run":
+				replacement := "different-unproven-run"
+				state.RunID = &replacement
+			}
+			if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+				t.Fatal(err)
+			}
+			before := nativeRecoveryStoreSnapshot(t)
+			dashboard, recovery := nativeRecoveryDashboard(t)
+			if recovery["valid"] != false || dashboard["resume_override_command"] != "aether status" {
+				t.Fatalf("stale %s advertised actionable native recovery: %+v", field, recovery)
+			}
+			if !reflect.DeepEqual(before, nativeRecoveryStoreSnapshot(t)) {
+				t.Fatal("currency conflict inspection wrote")
+			}
+		})
 	}
 }
