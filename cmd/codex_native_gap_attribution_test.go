@@ -362,3 +362,42 @@ func TestCodexNativeGapSelectedSkillDelivery(t *testing.T) {
 		})
 	}
 }
+
+func TestCodexNativeGapRecordedFailedRefusal(t *testing.T) {
+	for _, mode := range []string{"failed", "wrong_thread", "wrong_cwd", "duplicate", "zero_exit", "wrong_operation"} {
+		t.Run(mode, func(t *testing.T) {
+			root := t.TempDir()
+			fixture := filepath.Join(root, "repository")
+			log := filepath.Join(root, "home/.codex/sessions/2026/09/17/rollout-parent.jsonl")
+			if err := os.MkdirAll(filepath.Dir(log), 0700); err != nil {
+				t.Fatal(err)
+			}
+			coordinator := filepath.Join(fixture, "coordinator.py")
+			thread, cwd, operation, exit := "parent", fixture, "empty-result", 1
+			switch mode {
+			case "wrong_thread":
+				thread = "foreign"
+			case "wrong_cwd":
+				cwd = "/other"
+			case "zero_exit":
+				exit = 0
+			case "wrong_operation":
+				operation = "record"
+			}
+			event := map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": thread, "turn_id": "turn", "item": map[string]any{"type": "CommandExecution", "id": "refusal", "status": "failed", "cwd": cwd, "command": []string{"/bin/sh", "-c", "python3 " + coordinator + " " + operation + " 0"}, "exit_code": exit, "aggregated_output": "nonempty terminal result"}}}
+			raw, _ := json.Marshal(event)
+			raw = append(raw, '\n')
+			if mode == "duplicate" {
+				raw = append(raw, raw...)
+			}
+			if err := os.WriteFile(log, raw, 0600); err != nil {
+				t.Fatal(err)
+			}
+			r := codexNativeLiveReceipt{SchemaVersion: "codex-native-tracer/v2", FixtureRoot: fixture, CoordinatorPath: coordinator}
+			got := nativeObservedFixtureOperation(r, codexNativeLiveReceipt{BoundHostSessionID: "parent"}, 0, "empty-result", true)
+			if got != (mode == "failed") {
+				t.Fatalf("%s observed=%v", mode, got)
+			}
+		})
+	}
+}

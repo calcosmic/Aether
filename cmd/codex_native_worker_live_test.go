@@ -1389,13 +1389,23 @@ func nativeObservedFixtureOperation(r codexNativeLiveReceipt, worker codexNative
 	if err != nil {
 		return false
 	}
+	eventIDs := map[string]int{}
+	for _, line := range bytes.Split(raw, []byte{'\n'}) {
+		var e nativeHostEvent
+		if json.Unmarshal(line, &e) == nil && e.Type == "event_msg" && e.Payload.Type == "item_completed" && e.Payload.Item.Type == "CommandExecution" {
+			eventIDs[e.Payload.Item.ID]++
+		}
+	}
 	for _, line := range bytes.Split(raw, []byte{'\n'}) {
 		var e nativeHostEvent
 		if json.Unmarshal(line, &e) != nil || e.Type != "event_msg" || e.Payload.Type != "item_completed" || e.Payload.ThreadID != worker.BoundHostSessionID {
 			continue
 		}
 		i := e.Payload.Item
-		if i.Type != "CommandExecution" || i.Status != "completed" || i.ExitCode == nil || (*i.ExitCode != 0) != nonzero || len(i.Command) != 3 || !nativeSameCwd(i.Cwd, r.FixtureRoot) {
+		if i.Type != "CommandExecution" || i.ExitCode == nil || (i.Status != "completed" && !(i.Status == "failed" && *i.ExitCode != 0)) || (*i.ExitCode != 0) != nonzero || len(i.Command) != 3 || !nativeSameCwd(i.Cwd, r.FixtureRoot) {
+			continue
+		}
+		if r.SchemaVersion == "codex-native-tracer/v2" && (i.ID == "" || eventIDs[i.ID] != 1) {
 			continue
 		}
 		words, ok := nativeSimpleShellWords(i.Command[2])
