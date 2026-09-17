@@ -1086,6 +1086,9 @@ func TestCodexGeneratedCommandShimsCoverIntelligentCommands(t *testing.T) {
 		t.Fatalf("public shim count = %d, want exactly nine", len(shims))
 	}
 	for _, expected := range codexAntGuideExpectations {
+		if expected.command == "build" {
+			expected.runtime = "AETHER_OUTPUT_MODE=json aether build-finalize <phase> --completion-file <Go-owned completion_path returned by codex-native-worker stage>"
+		}
 		t.Run(expected.command, func(t *testing.T) {
 			name := "ant-" + expected.command
 			shim, ok := shims[name]
@@ -1151,6 +1154,9 @@ func TestCodexAntSkillGuideSupport(t *testing.T) {
 		t.Fatalf("installed public menu = %v", names)
 	}
 	for _, expected := range codexAntGuideExpectations {
+		if expected.command == "build" {
+			expected.runtime = "AETHER_OUTPUT_MODE=json aether build-finalize <phase> --completion-file <Go-owned completion_path returned by codex-native-worker stage>"
+		}
 		t.Run(expected.command, func(t *testing.T) {
 			var output bytes.Buffer
 			stdout, stderr = &output, &output

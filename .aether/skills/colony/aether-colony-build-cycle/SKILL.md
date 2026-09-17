@@ -411,7 +411,7 @@ aether codex-native-worker context --request <same bound worker request file>
     `source_event_id` and `source_event_sha256`. Failed or queued sends remain
     unacknowledged; delivery alone does not prove consultation or useful influence.
 
-    On resume, inspect first, then run `question` for that same child.
+    After public resume and inspection, run `question` for that same child.
     `answered` means do not re-ask; `no_updates` means no message is needed,
     and `delivered` is a historical receipt. A stale or paused refusal keeps the
     choice pending: use the runtime recovery path, never relabel old text.
@@ -421,7 +421,7 @@ aether codex-native-worker context --request <same bound worker request file>
 
 12. A fresh parent first runs public `aether resume`, then
     `aether codex-native-worker inspect --phase <phase>`; the exact saved-binding
-    `inspect --request <file>` route remains available. This is read-only.
+    `inspect --request <file>` route remains available. Inspection is read-only.
     Reuse saved terminal results without
     repeating the helper's edits. If real host evidence is inaccessible, report
     the missing capability; never invent it or respawn the finished helper.

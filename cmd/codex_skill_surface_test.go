@@ -101,7 +101,7 @@ func TestCodexAntSkillInstallTracer(t *testing.T) {
 			t.Fatalf("invalid YAML name in %s", name)
 		}
 		command := strings.TrimPrefix(name, "ant-")
-		def := commandGuideCatalog()[command]
+		def := adaptCommandGuideDefinitionForPlatform(command, "codex", commandGuideCatalog()[command])
 		for _, required := range []string{"aether command-guide " + command + " --platform codex", def.RunCommand, "../support/" + def.SkillReference + ".md", "automatically", "raw/exact"} {
 			if required == "" || !strings.Contains(string(raw), required) {
 				t.Errorf("%s missing %q", name, required)
