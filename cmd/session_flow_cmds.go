@@ -309,6 +309,33 @@ var resumeColonyCmd = &cobra.Command{
 // transaction on retry. A crash therefore resumes the existing journal rather
 // than rebuilding partial state or emitting another handoff.
 func pauseColonyAt(now time.Time) (pauseResumeLifecycleOutcome, error) {
+	var outcome pauseResumeLifecycleOutcome
+	err := withPlanningMutationSession(resolveAetherRootPath(), "pause", func(session *planningMutationSession) error {
+		var err error
+		outcome, err = pauseColonyInMutationSession(now, session)
+		return err
+	})
+	return outcome, err
+}
+
+// Hold the same repository authority as build-start/native admission from the
+// first facts read through the final transaction. A previously idle decision
+// must never cross a newly reserved or released child.
+func pauseColonyInMutationSession(now time.Time, mutation *planningMutationSession) (pauseResumeLifecycleOutcome, error) {
+	for _, target := range []struct {
+		root lifecycleTransactionRootKind
+		path string
+	}{
+		{lifecycleTransactionRootData, "COLONY_STATE.json"},
+		{lifecycleTransactionRootData, "session.json"},
+		{lifecycleTransactionRootData, pauseHandoffDataPath},
+		{lifecycleTransactionRootRepository, filepath.Join(".aether", "CONTEXT.md")},
+		{lifecycleTransactionRootRepository, filepath.Join(".aether", "HANDOFF.md")},
+	} {
+		if _, _, err := mutation.ReadFile(target.root, target.path); err != nil {
+			return pauseResumeLifecycleOutcome{}, err
+		}
+	}
 	root := resolveAetherRootPath()
 	facts, err := loadLifecycleFacts(root, store, now.UTC())
 	if err != nil {
@@ -334,6 +361,7 @@ func pauseColonyAt(now time.Time) (pauseResumeLifecycleOutcome, error) {
 	handoffID := pauseEpisodeHandoffID(state, session, repository)
 	transactionID := "pause-" + handoffID
 	config := pauseResumeTransactionConfig(transactionID, "pause")
+	config.Session = mutation
 	if lifecycleTransactionHasIntentOrReceipt(transactionID) {
 		receipt, resumeErr := resumeLifecycleTransaction(config)
 		if resumeErr != nil {
@@ -1088,6 +1116,11 @@ func resumeProvenanceSentence(provenance colony.RecoveryProvenance) lifecycleEve
 func pauseSafeBoundary(state colony.ColonyState) (boundary, attemptID string, pending bool) {
 	if _, attempt, ok := loadRelevantBuildAttemptReadOnly(state); ok {
 		attemptID = strings.TrimSpace(attempt.ID)
+		for _, worker := range attempt.WorkerRuns {
+			if worker.Native != nil && !codexNativeWorkerIsTerminal(worker) {
+				return "worker_completion_boundary", attemptID, true
+			}
+		}
 		if state.State == colony.StateEXECUTING && buildAttemptProcessAlive(attempt) {
 			return "worker_completion_boundary", attemptID, true
 		}

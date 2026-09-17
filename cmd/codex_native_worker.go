@@ -30,29 +30,74 @@ const (
 
 // Hooks are instance-local: tests can stop after prevalidation without a global
 // callback racing other requests. Production always uses the empty value.
-type codexNativeWorkerHooks struct{ BeforeWrite func() }
+type codexNativeWorkerHooks struct {
+	BeforeWrite        func()
+	AfterCurrencyCheck func()
+	AfterTransition    func(codexNativeWorkerReceipt)
+}
+
+// Receipt identifies one accepted transition independently of later worker
+// observations. Replays return these original values, never a new timestamp.
+type codexNativeWorkerReceipt struct {
+	Operation         string `json:"operation"`
+	LaunchID          string `json:"launch_id"`
+	ChildID           string `json:"child_id,omitempty"`
+	At                string `json:"at"`
+	DispatchSHA256    string `json:"dispatch_sha256"`
+	PromptSHA256      string `json:"prompt_sha256"`
+	SourceEventID     string `json:"source_event_id,omitempty"`
+	SourceEventSHA256 string `json:"source_event_sha256,omitempty"`
+	ResultSHA256      string `json:"result_sha256,omitempty"`
+}
+
+type codexNativeHostObservation struct {
+	SchemaVersion     int    `json:"schema_version"`
+	Status            string `json:"status"`
+	ChildID           string `json:"child_id,omitempty"`
+	ObservedAt        string `json:"observed_at"`
+	Detail            string `json:"detail,omitempty"`
+	SourceEventID     string `json:"source_event_id"`
+	SourceEventSHA256 string `json:"source_event_sha256"`
+}
+
+type codexNativeWorkerState struct {
+	WorkerName      string `json:"worker_name"`
+	TaskID          string `json:"task_id"`
+	LaunchID        string `json:"launch_id"`
+	ChildID         string `json:"child_id,omitempty"`
+	LaunchState     string `json:"launch_state"`
+	HostStatus      string `json:"host_status"`
+	Terminal        bool   `json:"terminal"`
+	CancelRequested bool   `json:"cancel_requested,omitempty"`
+	ResultSHA256    string `json:"result_sha256,omitempty"`
+}
 
 // Native provenance extends the existing worker journal, never its credit authority.
 // Prompt is retained verbatim so replay never silently recomposes an assignment.
 type codexNativeWorkerBinding struct {
-	SchemaVersion      int                     `json:"schema_version"`
-	LaunchState        string                  `json:"launch_state"`
-	HostSessionID      string                  `json:"host_session_id"`
-	ChildID            string                  `json:"child_id,omitempty"`
-	DispatchSHA256     string                  `json:"dispatch_sha256"`
-	PromptSHA256       string                  `json:"prompt_sha256"`
-	PermissionProfile  codex.PermissionProfile `json:"permission_profile"`
-	Workspace          string                  `json:"workspace"`
-	WorkspaceRoot      string                  `json:"workspace_root,omitempty"`
-	ContextDeliveryIDs []string                `json:"context_delivery_ids,omitempty"`
-	Prompt             string                  `json:"prompt"`
-	Release            string                  `json:"release,omitempty"`
-	SourceEventID      string                  `json:"source_event_id,omitempty"`
-	SourceEventSHA256  string                  `json:"source_event_sha256,omitempty"`
-	RawResult          json.RawMessage         `json:"raw_result,omitempty"`
+	SchemaVersion      int                          `json:"schema_version"`
+	LaunchState        string                       `json:"launch_state"`
+	BoundAt            string                       `json:"bound_at,omitempty"`
+	Observations       []codexNativeHostObservation `json:"observations,omitempty"`
+	HostSessionID      string                       `json:"host_session_id"`
+	ChildID            string                       `json:"child_id,omitempty"`
+	DispatchSHA256     string                       `json:"dispatch_sha256"`
+	PromptSHA256       string                       `json:"prompt_sha256"`
+	PermissionProfile  codex.PermissionProfile      `json:"permission_profile"`
+	Workspace          string                       `json:"workspace"`
+	WorkspaceRoot      string                       `json:"workspace_root,omitempty"`
+	ContextDeliveryIDs []string                     `json:"context_delivery_ids,omitempty"`
+	Prompt             string                       `json:"prompt"`
+	Release            string                       `json:"release,omitempty"`
+	SourceEventID      string                       `json:"source_event_id,omitempty"`
+	SourceEventSHA256  string                       `json:"source_event_sha256,omitempty"`
+	RawResult          json.RawMessage              `json:"raw_result,omitempty"`
 }
 
 type codexNativeWorkerRequest struct {
+	ObservationStatus string                 `json:"observation_status,omitempty"`
+	ObservedAt        string                 `json:"observed_at,omitempty"`
+	ObservationDetail string                 `json:"observation_detail,omitempty"`
 	SchemaVersion     int                    `json:"schema_version"`
 	Phase             int                    `json:"phase"`
 	ExecutionBinding  codex.ExecutionBinding `json:"execution_binding"`
@@ -72,21 +117,23 @@ type codexNativeWorkerRequest struct {
 }
 
 type codexNativeWorkerResponse struct {
-	Disposition      codexNativeDisposition  `json:"disposition,omitempty"`
-	SchemaVersion    int                     `json:"schema_version"`
-	ExecutionBinding codex.ExecutionBinding  `json:"execution_binding"`
-	LaunchAllowed    bool                    `json:"launch_allowed"`
-	Replay           bool                    `json:"replay,omitempty"`
-	Dispatch         *codexBuildDispatch     `json:"dispatch,omitempty"`
-	Worker           *buildAttemptWorkerRun  `json:"worker,omitempty"`
-	Workers          []buildAttemptWorkerRun `json:"workers,omitempty"`
-	CompletionPath   string                  `json:"completion_path,omitempty"`
-	Complete         bool                    `json:"complete,omitempty"`
+	Receipt          *codexNativeWorkerReceipt `json:"receipt,omitempty"`
+	WorkerStates     []codexNativeWorkerState  `json:"worker_states,omitempty"`
+	Disposition      codexNativeDisposition    `json:"disposition,omitempty"`
+	SchemaVersion    int                       `json:"schema_version"`
+	ExecutionBinding codex.ExecutionBinding    `json:"execution_binding"`
+	LaunchAllowed    bool                      `json:"launch_allowed"`
+	Replay           bool                      `json:"replay,omitempty"`
+	Dispatch         *codexBuildDispatch       `json:"dispatch,omitempty"`
+	Worker           *buildAttemptWorkerRun    `json:"worker,omitempty"`
+	Workers          []buildAttemptWorkerRun   `json:"workers,omitempty"`
+	CompletionPath   string                    `json:"completion_path,omitempty"`
+	Complete         bool                      `json:"complete,omitempty"`
 }
 
 func init() {
 	command := &cobra.Command{Use: "codex-native-worker", Short: "Internal non-launching native worker journal bridge", Hidden: true}
-	for _, operation := range []string{"reserve", "bind", "record", "stage", "inspect"} {
+	for _, operation := range []string{"reserve", "bind", "record", "stage", "inspect", "observe"} {
 		operation := operation
 		child := &cobra.Command{Use: operation, Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 			path, _ := cmd.Flags().GetString("request")
@@ -262,6 +309,11 @@ func runCodexNativeWorkerWithHooks(operation, path string, hooks codexNativeWork
 	}
 	if operation == "inspect" {
 		response.Workers = current.WorkerRuns
+		for _, worker := range current.WorkerRuns {
+			if worker.Native != nil {
+				response.WorkerStates = append(response.WorkerStates, projectCodexNativeWorkerState(worker))
+			}
+		}
 		response.CompletionPath = current.CompletionPath
 		response.Complete = current.CompletionPath != ""
 		return response, nil
@@ -284,219 +336,435 @@ func runCodexNativeWorkerWithHooks(operation, path string, hooks codexNativeWork
 	if request.WorkerName == "" || request.TaskID == "" || request.HostSessionID == "" {
 		return response, fmt.Errorf("native worker requires worker_name, task_id and host_session_id")
 	}
+	if operation != "observe" && (request.ObservationStatus != "" || request.ObservedAt != "" || request.ObservationDetail != "") {
+		return response, fmt.Errorf("host observations require the observe operation")
+	}
 	var updated buildAttemptRecord
 	if hooks.BeforeWrite != nil {
 		hooks.BeforeWrite()
 	}
-	buildWorkerRunMutationMu.Lock()
-	defer buildWorkerRunMutationMu.Unlock()
-	err = store.UpdateJSONAtomically(attemptPath, &updated, func() error {
-		if err := validate(updated); err != nil {
-			return err
-		}
-		var dispatch *codexBuildDispatch
-		for i := range updated.PlanManifest.Dispatches {
-			d := &updated.PlanManifest.Dispatches[i]
-			if d.Name == request.WorkerName && normalizedDispatchTaskID(*d) == request.TaskID {
-				dispatch = d
-				break
-			}
-		}
-		if dispatch == nil {
-			return fmt.Errorf("native assignment is not in the accepted manifest")
-		}
-		if strings.TrimSpace(dispatch.Name) == "" || strings.TrimSpace(dispatch.Caste) == "" || strings.TrimSpace(dispatch.TaskID) == "" || dispatch.ExecutionWave < 1 {
-			return fmt.Errorf("native assignment is incomplete")
-		}
-		response.Dispatch = dispatch
-		var worker *buildAttemptWorkerRun
-		for i := range updated.WorkerRuns {
-			run := &updated.WorkerRuns[i]
-			if run.WorkerName == request.WorkerName && run.TaskID == request.TaskID {
-				worker = run
-				break
-			}
-		}
-		now := time.Now().UTC().Format(time.RFC3339Nano)
-		if operation == "reserve" {
-			if request.LaunchID != "" || request.ChildID != "" || request.Result != nil || request.DispatchSHA256 != "" || request.PromptSHA256 != "" || request.SourceEventID != "" || request.SourceEventSHA256 != "" {
-				return fmt.Errorf("reserve cannot supply a launch, child or result")
-			}
-			workspace, err := filepath.EvalSymlinks(updated.PlanManifest.Root)
-			if err != nil {
+	err = withPlanningMutationSession(buildAttemptWorkspaceRoot(), "codex-native-worker", func(_ *planningMutationSession) error {
+		buildWorkerRunMutationMu.Lock()
+		defer buildWorkerRunMutationMu.Unlock()
+		return store.UpdateJSONAtomically(attemptPath, &updated, func() error {
+			if err := validate(updated); err != nil {
 				return err
 			}
-			if request.Workspace != workspace || request.HostPermission != string(codex.PermissionWorkspaceWrite) || updated.PlanManifest.ParallelMode == "worktree" {
-				return fmt.Errorf("native host must use the accepted shared workspace and inherited workspace_write permission; requested workspace or permission is unsupported")
+			var dispatch *codexBuildDispatch
+			for i := range updated.PlanManifest.Dispatches {
+				d := &updated.PlanManifest.Dispatches[i]
+				if d.Name == request.WorkerName && normalizedDispatchTaskID(*d) == request.TaskID {
+					dispatch = d
+					break
+				}
 			}
-			permission, err := codex.ResolvePermissionProfile(dispatch.Caste, dispatch.PermissionProfile)
-			if err != nil {
-				return err
+			if dispatch == nil {
+				return fmt.Errorf("native assignment is not in the accepted manifest")
 			}
-			if permission.Name != codex.PermissionWorkspaceWrite || permission.Filesystem != codex.FilesystemWorkspaceWrite || len(permission.WriteScopes) != 0 {
-				return fmt.Errorf("native host cannot enforce this requested permission profile")
+			if strings.TrimSpace(dispatch.Name) == "" || strings.TrimSpace(dispatch.Caste) == "" || strings.TrimSpace(dispatch.TaskID) == "" || dispatch.ExecutionWave < 1 {
+				return fmt.Errorf("native assignment is incomplete")
 			}
-			if worker != nil {
-				if err := validateCodexNativeSavedWorker(updated, *dispatch, *worker); err != nil {
+			response.Dispatch = dispatch
+			var worker *buildAttemptWorkerRun
+			for i := range updated.WorkerRuns {
+				run := &updated.WorkerRuns[i]
+				if run.WorkerName == request.WorkerName && run.TaskID == request.TaskID {
+					worker = run
+					break
+				}
+			}
+			now := time.Now().UTC().Format(time.RFC3339Nano)
+			if operation == "reserve" {
+				if request.LaunchID != "" || request.ChildID != "" || request.Result != nil || request.DispatchSHA256 != "" || request.PromptSHA256 != "" || request.SourceEventID != "" || request.SourceEventSHA256 != "" {
+					return fmt.Errorf("reserve cannot supply a launch, child or result")
+				}
+				workspace, err := filepath.EvalSymlinks(updated.PlanManifest.Root)
+				if err != nil {
 					return err
 				}
-				if worker.Native == nil || worker.Native.HostSessionID != request.HostSessionID || worker.Native.Workspace != workspace {
-					return fmt.Errorf("assignment already reserved by a different execution; inspect retained evidence, do not respawn")
+				if request.Workspace != workspace || request.HostPermission != string(codex.PermissionWorkspaceWrite) || updated.PlanManifest.ParallelMode == "worktree" {
+					return fmt.Errorf("native host must use the accepted shared workspace and inherited workspace_write permission; requested workspace or permission is unsupported")
 				}
-				response.Worker, response.Replay = worker, true
-				return errCodexNativeReplay
-			}
-			if updated.Status != buildAttemptAwaiting && updated.Status != buildAttemptDispatching {
-				return fmt.Errorf("attempt %s cannot reserve workers while %s", updated.ID, updated.Status)
-			}
-			if err := validateCodexNativeLaunchCurrency(updated); err != nil {
-				return err
-			}
-			for _, predecessor := range updated.PlanManifest.Dispatches {
-				if predecessor.ExecutionWave < dispatch.ExecutionWave {
-					if _, ok := latestTerminalBuildWorkerRun(updated.WorkerRuns, predecessor.Name, normalizedDispatchTaskID(predecessor)); !ok {
-						return fmt.Errorf("earlier execution wave is unfinished")
+				permission, err := codex.ResolvePermissionProfile(dispatch.Caste, dispatch.PermissionProfile)
+				if err != nil {
+					return err
+				}
+				if permission.Name != codex.PermissionWorkspaceWrite || permission.Filesystem != codex.FilesystemWorkspaceWrite || len(permission.WriteScopes) != 0 {
+					return fmt.Errorf("native host cannot enforce this requested permission profile")
+				}
+				if worker != nil {
+					if err := validateCodexNativeSavedWorker(updated, *dispatch, *worker); err != nil {
+						return err
+					}
+					if worker.Native == nil || worker.Native.HostSessionID != request.HostSessionID || worker.Native.Workspace != workspace {
+						return fmt.Errorf("assignment already reserved by a different execution; inspect retained evidence, do not respawn")
+					}
+					response.Worker, response.Replay = worker, true
+					return errCodexNativeReplay
+				}
+				if updated.Status != buildAttemptAwaiting && updated.Status != buildAttemptDispatching {
+					return fmt.Errorf("attempt %s cannot reserve workers while %s", updated.ID, updated.Status)
+				}
+				if err := validateCodexNativeLaunchCurrency(updated); err != nil {
+					return err
+				}
+				if hooks.AfterCurrencyCheck != nil {
+					hooks.AfterCurrencyCheck()
+				}
+				for _, predecessor := range updated.PlanManifest.Dispatches {
+					if predecessor.ExecutionWave < dispatch.ExecutionWave {
+						if _, ok := latestTerminalBuildWorkerRun(updated.WorkerRuns, predecessor.Name, normalizedDispatchTaskID(predecessor)); !ok {
+							return fmt.Errorf("earlier execution wave is unfinished")
+						}
 					}
 				}
-			}
-			launch, err := codex.NewExecutionRunID()
-			if err != nil {
-				return err
-			}
-			prompt, err := codexNativeLaunchPrompt(*updated.PlanManifest, *dispatch, launch)
-			if err != nil {
-				return err
-			}
-			digest, err := jsonSHA256(dispatch)
-			if err != nil {
-				return err
-			}
-			native := &codexNativeWorkerBinding{SchemaVersion: 1, LaunchState: "reserved", HostSessionID: request.HostSessionID, DispatchSHA256: digest, PromptSHA256: lifecycleDigest([]byte(prompt)), PermissionProfile: permission, Workspace: workspace, WorkspaceRoot: workspace, Prompt: prompt}
-			updated.WorkerRuns = append(updated.WorkerRuns, buildAttemptWorkerRun{ProviderRunID: launch, WorkerName: dispatch.Name, TaskID: request.TaskID, Caste: dispatch.Caste, Platform: codex.PlatformCodex, Status: buildWorkerDispatching, StartedAt: now, UpdatedAt: now, Native: native})
-			response.Worker = &updated.WorkerRuns[len(updated.WorkerRuns)-1]
-			response.LaunchAllowed = true
-			updated.Status, updated.UpdatedAt = buildAttemptDispatching, now
-			return nil
-		}
-		if worker == nil || worker.Native == nil {
-			return fmt.Errorf("native worker has no reservation")
-		}
-		native := worker.Native
-		if err := validateCodexNativeSavedWorker(updated, *dispatch, *worker); err != nil {
-			return err
-		}
-		if (request.Workspace != "" && request.Workspace != native.Workspace) || (request.HostPermission != "" && request.HostPermission != string(native.PermissionProfile.Name)) {
-			return fmt.Errorf("native workspace or permission does not match reservation")
-		}
-		if request.LaunchID != worker.ProviderRunID || request.HostSessionID != native.HostSessionID || request.DispatchSHA256 != native.DispatchSHA256 || request.PromptSHA256 != native.PromptSHA256 || request.ChildID == "" {
-			return fmt.Errorf("native launch/session/dispatch/prompt identity does not match reservation")
-		}
-		response.Worker = worker
-		switch operation {
-		case "bind":
-			if request.Result != nil || request.SourceEventID != "" || request.SourceEventSHA256 != "" {
-				return fmt.Errorf("bind cannot submit a result")
-			}
-			if native.ChildID != "" {
-				if native.ChildID != request.ChildID {
-					return fmt.Errorf("native reservation is bound to a different child")
+				launch, err := codex.NewExecutionRunID()
+				if err != nil {
+					return err
 				}
-				response.Replay = true
-				return errCodexNativeReplay
-			}
-			if native.LaunchState != "reserved" {
-				return fmt.Errorf("native launch is not reserved")
-			}
-			if err := validateCodexNativeLaunchCurrency(updated); err != nil {
-				return err
-			}
-			release, err := codex.NewExecutionRunID()
-			if err != nil {
-				return err
-			}
-			native.ChildID, native.LaunchState = request.ChildID, "bound"
-			native.Release = fmt.Sprintf("AETHER_NATIVE_RELEASE %s %s %s", worker.ProviderRunID, request.ChildID, release)
-		case "record":
-			if native.ChildID != request.ChildID || (native.LaunchState != "bound" && native.LaunchState != "terminal") {
-				return fmt.Errorf("terminal result requires the exact bound child")
-			}
-			if request.Result == nil || strings.TrimSpace(request.Result.Summary) == "" {
-				return fmt.Errorf("nonempty terminal result and summary are required")
-			}
-			eventHash, hashErr := hex.DecodeString(strings.TrimPrefix(request.SourceEventSHA256, "sha256:"))
-			if request.SourceEventID == "" || hashErr != nil || len(eventHash) != 32 {
-				return fmt.Errorf("terminal result requires source event identity and SHA-256")
-			}
-			result := *request.Result
-			result.Status = strings.ToLower(strings.TrimSpace(result.Status))
-			if result.Name != worker.WorkerName || result.Caste != worker.Caste || result.TaskID != worker.TaskID {
-				return fmt.Errorf("native result worker/caste/task identity does not match reservation")
-			}
-			if result.Status == buildWorkerCompleted && result.Error != "" {
-				return fmt.Errorf("completed native result cannot carry an error")
-			}
-			// Reject malformed relay data before making the terminal immutable.
-			// The existing finalizer still decides whether its evidence earns credit.
-			if err := codex.ValidateWorkerHandoff(result.Handoff); err != nil {
-				return fmt.Errorf("native handoff: %w", err)
-			}
-			if result.Status == buildWorkerCompleted && codex.IsEmptyWorkerHandoff(result.Handoff) {
-				return fmt.Errorf("completed native result requires a nonempty handoff")
-			}
-			for _, receipt := range result.TaskReceipts {
-				if err := codex.ValidateWorkerHandoff(receipt.Handoff); err != nil {
-					return fmt.Errorf("native task %s handoff: %w", receipt.TaskID, err)
+				prompt, err := codexNativeLaunchPrompt(*updated.PlanManifest, *dispatch, launch)
+				if err != nil {
+					return err
 				}
+				digest, err := jsonSHA256(dispatch)
+				if err != nil {
+					return err
+				}
+				native := &codexNativeWorkerBinding{SchemaVersion: 1, LaunchState: "reserved", HostSessionID: request.HostSessionID, DispatchSHA256: digest, PromptSHA256: lifecycleDigest([]byte(prompt)), PermissionProfile: permission, Workspace: workspace, WorkspaceRoot: workspace, Prompt: prompt}
+				updated.WorkerRuns = append(updated.WorkerRuns, buildAttemptWorkerRun{ProviderRunID: launch, WorkerName: dispatch.Name, TaskID: request.TaskID, Caste: dispatch.Caste, Platform: codex.PlatformCodex, Status: buildWorkerDispatching, StartedAt: now, UpdatedAt: now, Native: native})
+				response.Worker = &updated.WorkerRuns[len(updated.WorkerRuns)-1]
+				response.LaunchAllowed = true
+				updated.Status, updated.UpdatedAt = buildAttemptDispatching, now
+				return nil
 			}
-			// Worker prose cannot supply provider measurements.
-			if result.Usage != (codex.WorkerUsage{}) {
-				return fmt.Errorf("native provider usage is unavailable through a submitted result")
+			if worker == nil || worker.Native == nil {
+				return fmt.Errorf("native worker has no reservation")
 			}
-			if native.SourceEventID != "" && (native.SourceEventID != request.SourceEventID || native.SourceEventSHA256 != request.SourceEventSHA256) {
-				return fmt.Errorf("native terminal source event conflicts with saved evidence")
-			}
-			// Exercise the same applicable completion semantics before freezing the
-			// first result. Limit the projection to this dispatch; other workers
-			// need not have finished yet. No journal bytes are mutated on refusal.
-			preview := updated
-			previewWorker := *worker
-			previewWorker.ResultSHA256 = ""
-			preview.WorkerRuns = []buildAttemptWorkerRun{previewWorker}
-			previewManifest := *updated.PlanManifest
-			previewManifest.Dispatches = []codexBuildDispatch{*dispatch}
-			preview.PlanManifest = &previewManifest
-			if err := applyBuildWorkerTerminal(&preview, &preview.WorkerRuns[0], &result, now); err != nil {
+			native := worker.Native
+			if err := validateCodexNativeSavedWorker(updated, *dispatch, *worker); err != nil {
 				return err
 			}
-			completion, ok := buildCompletionFromWorkerRuns(preview)
-			if !ok {
-				return fmt.Errorf("native result cannot form a terminal completion")
+			if (request.Workspace != "" && request.Workspace != native.Workspace) || (request.HostPermission != "" && request.HostPermission != string(native.PermissionProfile.Name)) {
+				return fmt.Errorf("native workspace or permission does not match reservation")
 			}
-			if violations := validateCompletionPacketSemantics(updated.PlanManifest.Root, completion); len(violations) != 0 {
-				return fmt.Errorf("native terminal completion semantics: %v", violations)
+			if request.LaunchID != worker.ProviderRunID || request.HostSessionID != native.HostSessionID || request.DispatchSHA256 != native.DispatchSHA256 || request.PromptSHA256 != native.PromptSHA256 || (request.ChildID == "" && operation != "observe") {
+				return fmt.Errorf("native launch/session/dispatch/prompt identity does not match reservation")
 			}
-			if err := applyBuildWorkerTerminal(&updated, worker, &result, now); err != nil {
-				if errors.Is(err, errCodexNativeReplay) {
+			response.Worker = worker
+			switch operation {
+			case "bind":
+				if request.Result != nil || request.SourceEventID != "" || request.SourceEventSHA256 != "" {
+					return fmt.Errorf("bind cannot submit a result")
+				}
+				if native.ChildID != "" {
+					if native.ChildID != request.ChildID {
+						return fmt.Errorf("native reservation is bound to a different child")
+					}
 					response.Replay = true
+					return errCodexNativeReplay
 				}
+				if native.LaunchState != "reserved" && native.LaunchState != "launch_unresolved" {
+					return fmt.Errorf("native launch is not reserved")
+				}
+				if err := validateCodexNativeLaunchCurrency(updated); err != nil {
+					return err
+				}
+				if hooks.AfterCurrencyCheck != nil {
+					hooks.AfterCurrencyCheck()
+				}
+				release, err := codex.NewExecutionRunID()
+				if err != nil {
+					return err
+				}
+				native.ChildID, native.LaunchState = request.ChildID, "bound"
+				native.BoundAt = now
+				native.Release = fmt.Sprintf("AETHER_NATIVE_RELEASE %s %s %s", worker.ProviderRunID, request.ChildID, release)
+			case "record":
+				if native.ChildID != request.ChildID || (native.LaunchState != "bound" && native.LaunchState != "terminal") {
+					return fmt.Errorf("terminal result requires the exact bound child")
+				}
+				return recordCodexNativeTerminal(&updated, worker, *dispatch, request, now)
+			case "observe":
+				receipt, err := observeCodexNativeWorker(&updated, worker, *dispatch, request, now)
+				response.Receipt = receipt
 				return err
+			default:
+				return fmt.Errorf("unsupported native worker operation %q", operation)
 			}
-			native.SourceEventID, native.SourceEventSHA256, native.LaunchState = request.SourceEventID, request.SourceEventSHA256, "terminal"
-			native.RawResult = append(json.RawMessage(nil), request.RawResult...)
+			worker.UpdatedAt, updated.UpdatedAt = now, now
 			return nil
-		default:
-			return fmt.Errorf("unsupported native worker operation %q", operation)
-		}
-		worker.UpdatedAt, updated.UpdatedAt = now, now
-		return nil
+		})
 	})
 	if errors.Is(err, errCodexNativeReplay) {
+		response.Replay = true
 		response.Disposition = codexNativeReplayed
 		err = nil
 	} else if err == nil {
 		response.Disposition = codexNativeAccepted
 	}
+	if err == nil && response.Worker != nil {
+		if response.Receipt == nil {
+			receipt := codexNativeTransitionReceipt(operation, *response.Worker)
+			response.Receipt = &receipt
+		}
+		if !response.Replay {
+			emitCodexNativeTransition(operation, *response.Dispatch, *response.Worker)
+			if hooks.AfterTransition != nil {
+				hooks.AfterTransition(*response.Receipt)
+			}
+		}
+	}
 	return response, err
+}
+
+func canonicalCodexNativeEventHash(eventID, digest string) (string, error) {
+	decoded, err := hex.DecodeString(strings.TrimPrefix(digest, "sha256:"))
+	if strings.TrimSpace(eventID) == "" || err != nil || len(decoded) != 32 {
+		return "", fmt.Errorf("native host evidence requires source event identity and SHA-256")
+	}
+	return hex.EncodeToString(decoded), nil
+}
+
+func codexNativeWorkerIsTerminal(worker buildAttemptWorkerRun) bool {
+	return worker.Native != nil && (worker.Native.LaunchState == "terminal" || worker.Native.LaunchState == "no_launch") && worker.Result != nil && worker.ResultSHA256 != ""
+}
+
+func projectCodexNativeWorkerState(worker buildAttemptWorkerRun) codexNativeWorkerState {
+	native := worker.Native
+	state := codexNativeWorkerState{WorkerName: worker.WorkerName, TaskID: worker.TaskID, LaunchID: worker.ProviderRunID, ChildID: native.ChildID, LaunchState: native.LaunchState, Terminal: codexNativeWorkerIsTerminal(worker), ResultSHA256: worker.ResultSHA256, HostStatus: "launch_unresolved"}
+	if native.ChildID != "" {
+		state.HostStatus = "unavailable"
+	}
+	if len(native.Observations) > 0 {
+		state.HostStatus = native.Observations[len(native.Observations)-1].Status
+	}
+	for _, observation := range native.Observations {
+		if observation.Status == "cancel_requested" {
+			state.CancelRequested = true
+		}
+	}
+	if state.CancelRequested {
+		state.HostStatus = "cancel_requested"
+	}
+	if state.Terminal {
+		state.CancelRequested = false
+		state.HostStatus = worker.Status
+	}
+	return state
+}
+
+func codexNativeTransitionReceipt(operation string, worker buildAttemptWorkerRun) codexNativeWorkerReceipt {
+	native := worker.Native
+	receipt := codexNativeWorkerReceipt{Operation: operation, LaunchID: worker.ProviderRunID, DispatchSHA256: native.DispatchSHA256, PromptSHA256: native.PromptSHA256, At: worker.StartedAt}
+	if operation != "reserve" {
+		receipt.ChildID = native.ChildID
+		receipt.At = native.BoundAt
+	}
+	if operation == "record" {
+		receipt.At, receipt.SourceEventID, receipt.SourceEventSHA256, receipt.ResultSHA256 = worker.CompletedAt, native.SourceEventID, native.SourceEventSHA256, worker.ResultSHA256
+	}
+	return receipt
+}
+
+func emitCodexNativeTransition(operation string, assignment codexBuildDispatch, worker buildAttemptWorkerRun) {
+	dispatch := codex.WorkerDispatch{WorkerName: worker.WorkerName, TaskID: worker.TaskID, Caste: worker.Caste, TaskBrief: assignment.Task, ProviderRunID: worker.ProviderRunID}
+	switch {
+	case operation == "bind":
+		emitCodexDispatchWorkerStarted(dispatch, assignment.ExecutionWave)
+	case codexNativeWorkerIsTerminal(worker):
+		emitCodexDispatchWorkerFinished(dispatch, codex.DispatchResult{Status: worker.Status})
+	case operation == "observe" && len(worker.Native.Observations) > 0 && worker.Native.Observations[len(worker.Native.Observations)-1].Status == "running":
+		emitCodexDispatchWorkerRunning(dispatch, assignment.ExecutionWave, "host confirmed activity")
+	}
+}
+
+func observeCodexNativeWorker(record *buildAttemptRecord, worker *buildAttemptWorkerRun, dispatch codexBuildDispatch, request codexNativeWorkerRequest, now string) (*codexNativeWorkerReceipt, error) {
+	native := worker.Native
+	digest, err := canonicalCodexNativeEventHash(request.SourceEventID, request.SourceEventSHA256)
+	if err != nil {
+		return nil, err
+	}
+	at, err := time.Parse(time.RFC3339Nano, request.ObservedAt)
+	if err != nil {
+		return nil, fmt.Errorf("native observation requires an actual observed_at timestamp")
+	}
+	observation := codexNativeHostObservation{SchemaVersion: 1, Status: request.ObservationStatus, ChildID: request.ChildID, ObservedAt: at.UTC().Format(time.RFC3339Nano), Detail: request.ObservationDetail, SourceEventID: request.SourceEventID, SourceEventSHA256: digest}
+	receipt := codexNativeTransitionReceipt("observe", *worker)
+	receipt.ChildID = observation.ChildID
+	receipt.At, receipt.SourceEventID, receipt.SourceEventSHA256 = observation.ObservedAt, observation.SourceEventID, digest
+	for _, saved := range native.Observations {
+		if saved.Status == "cancel_requested" && observation.Status == "running" {
+			return nil, fmt.Errorf("native cancellation remains pending")
+		}
+		if saved.SourceEventID != observation.SourceEventID {
+			continue
+		}
+		if saved != observation {
+			return nil, fmt.Errorf("native host event conflicts with saved observation")
+		}
+		if saved.Status == "cancelled" || saved.Status == "no_launch" {
+			receipt.ResultSHA256 = worker.ResultSHA256
+		}
+		if request.Result != nil {
+			normalized, err := normalizedBuildWorkerResult(request.Result)
+			if err != nil {
+				return nil, err
+			}
+			resultDigest, err := jsonSHA256(normalized)
+			if err != nil || resultDigest != worker.ResultSHA256 {
+				return nil, fmt.Errorf("native observation result conflicts with terminal")
+			}
+		}
+		return &receipt, errCodexNativeReplay
+	}
+	if codexNativeWorkerIsTerminal(*worker) {
+		return nil, fmt.Errorf("native terminal cannot accept a later observation")
+	}
+	if native.ChildID != request.ChildID {
+		return nil, fmt.Errorf("native observation must name the exact bound child")
+	}
+	if len(native.Observations) > 0 {
+		last := native.Observations[len(native.Observations)-1]
+		previous, _ := time.Parse(time.RFC3339Nano, last.ObservedAt)
+		if !at.After(previous) {
+			return nil, fmt.Errorf("native observation arrived out of order")
+		}
+		if last.Status == "cancel_requested" && observation.Status == "running" {
+			return nil, fmt.Errorf("native cancellation remains pending")
+		}
+	}
+	terminal := false
+	switch observation.Status {
+	case "running", "cancel_requested", "cancelled":
+		if native.ChildID == "" {
+			return nil, fmt.Errorf("native observation requires a bound child")
+		}
+		terminal = observation.Status == "cancelled"
+	case "launch_unresolved":
+		if native.ChildID != "" {
+			return nil, fmt.Errorf("a known child cannot become an unresolved launch")
+		}
+	case "unavailable":
+	case "no_launch":
+		if native.ChildID != "" || request.Result != nil {
+			return nil, fmt.Errorf("no-launch evidence requires an unbound reservation without work")
+		}
+		terminal = true
+	default:
+		return nil, fmt.Errorf("unsupported native observation %q", observation.Status)
+	}
+	if !terminal && request.Result != nil {
+		return nil, fmt.Errorf("nonterminal host observation cannot submit a result")
+	}
+	if terminal {
+		if request.Result == nil {
+			request.Result = &internalWorkerResult{Name: worker.WorkerName, Caste: worker.Caste, TaskID: worker.TaskID, Status: buildWorkerCancelled, Summary: "Host confirmed " + observation.Status, Error: observation.Detail}
+		}
+		if strings.ToLower(strings.TrimSpace(request.Result.Status)) != buildWorkerCancelled {
+			return nil, fmt.Errorf("cancellation observation requires a cancelled result")
+		}
+		if err := recordCodexNativeTerminal(record, worker, dispatch, request, now); err != nil {
+			return nil, err
+		}
+		if observation.Status == "no_launch" {
+			native.LaunchState = "no_launch"
+		}
+		receipt.ResultSHA256 = worker.ResultSHA256
+	} else if native.ChildID == "" {
+		native.LaunchState = "launch_unresolved"
+	}
+	native.Observations = append(native.Observations, observation)
+	worker.UpdatedAt, record.UpdatedAt = now, now
+	return &receipt, nil
+}
+
+// recordCodexNativeTerminal receives an exact assignment and runs only inside
+// the attempt mutation. It preserves all failure evidence before aggregation.
+func recordCodexNativeTerminal(record *buildAttemptRecord, worker *buildAttemptWorkerRun, dispatch codexBuildDispatch, request codexNativeWorkerRequest, now string) error {
+	native := worker.Native
+	if request.Result == nil || strings.TrimSpace(request.Result.Summary) == "" {
+		return fmt.Errorf("nonempty terminal result and summary are required")
+	}
+	eventHash, err := canonicalCodexNativeEventHash(request.SourceEventID, request.SourceEventSHA256)
+	if err != nil {
+		return err
+	}
+	request.SourceEventSHA256 = eventHash
+	result, err := normalizedBuildWorkerResult(request.Result)
+	if err != nil {
+		return err
+	}
+	if result.Name != worker.WorkerName || result.Caste != worker.Caste || result.TaskID != worker.TaskID {
+		return fmt.Errorf("native result worker/caste/task identity does not match reservation")
+	}
+	if result.Status == buildWorkerCompleted && result.Error != "" {
+		return fmt.Errorf("completed native result cannot carry an error")
+	}
+	// Reject malformed relay data before making the terminal immutable.
+	// The existing finalizer still decides whether its evidence earns credit.
+	if err := codex.ValidateWorkerHandoff(result.Handoff); err != nil {
+		return fmt.Errorf("native handoff: %w", err)
+	}
+	if result.Status == buildWorkerCompleted && codex.IsEmptyWorkerHandoff(result.Handoff) {
+		return fmt.Errorf("completed native result requires a nonempty handoff")
+	}
+	covered := make(map[string]bool)
+	for _, taskID := range dispatchCoveredTaskIDs(dispatch) {
+		covered[taskID] = true
+	}
+	seenReceipts := make(map[string]bool)
+	for _, receipt := range result.TaskReceipts {
+		if !covered[receipt.TaskID] || seenReceipts[receipt.TaskID] {
+			return fmt.Errorf("native task receipt is unassigned or duplicated: %s", receipt.TaskID)
+		}
+		seenReceipts[receipt.TaskID] = true
+		if err := codex.ValidateWorkerHandoff(receipt.Handoff); err != nil {
+			return fmt.Errorf("native task %s handoff: %w", receipt.TaskID, err)
+		}
+	}
+	// Worker prose cannot supply provider measurements.
+	if result.Usage != (codex.WorkerUsage{}) {
+		return fmt.Errorf("native provider usage is unavailable through a submitted result")
+	}
+	if native.SourceEventID != "" && (native.SourceEventID != request.SourceEventID || native.SourceEventSHA256 != request.SourceEventSHA256) {
+		return fmt.Errorf("native terminal source event conflicts with saved evidence")
+	}
+	// An immutable terminal replay must not depend on today's filesystem.
+	if worker.ResultSHA256 != "" {
+		return applyBuildWorkerTerminal(record, worker, result, now)
+	}
+	// Exercise the same applicable completion semantics before freezing the
+	// first result. Limit the projection to this dispatch; other workers
+	// need not have finished yet. No journal bytes are mutated on refusal.
+	preview := *record
+	previewWorker := *worker
+	previewWorker.ResultSHA256 = ""
+	preview.WorkerRuns = []buildAttemptWorkerRun{previewWorker}
+	previewManifest := *record.PlanManifest
+	previewManifest.Dispatches = []codexBuildDispatch{dispatch}
+	preview.PlanManifest = &previewManifest
+	if err := applyBuildWorkerTerminal(&preview, &preview.WorkerRuns[0], result, now); err != nil {
+		return err
+	}
+	completion, ok := buildCompletionFromWorkerRuns(preview)
+	if !ok {
+		return fmt.Errorf("native result cannot form a terminal completion")
+	}
+	// Cancellation stays cancelled in the journal. Use the established
+	// interrupted vocabulary only for this validation projection; Plan 05
+	// owns its final aggregate mapping.
+	if result.Status == buildWorkerCancelled {
+		completion.Dispatches[0].Status = "interrupted"
+	}
+	if violations := validateCompletionPacketSemantics(record.PlanManifest.Root, completion); len(violations) != 0 {
+		return fmt.Errorf("native terminal completion semantics: %v", violations)
+	}
+	if err := applyBuildWorkerTerminal(record, worker, result, now); err != nil {
+		return err
+	}
+	native.SourceEventID, native.SourceEventSHA256, native.LaunchState = request.SourceEventID, request.SourceEventSHA256, "terminal"
+	native.RawResult = append(json.RawMessage(nil), request.RawResult...)
+	return nil
 }
 
 func validateCodexNativeLaunchCurrency(record buildAttemptRecord) error {

@@ -3,6 +3,8 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
@@ -64,6 +66,97 @@ func nativeReserveForTest(t *testing.T, request codexNativeWorkerRequest) codexN
 }
 
 func TestCodexNativeWorkerAdmission(t *testing.T) {
+	t.Run("idle-pause-derivation-precedes-admission", func(t *testing.T) {
+		_, request := nativeAdmissionFixture(t)
+		path := nativeRequestPath(t, request)
+		ready, release := make(chan struct{}), make(chan struct{})
+		pauseResumeLifecycleFault = func(point string) error {
+			if point == "after_validation" {
+				close(ready)
+				<-release
+			}
+			return nil
+		}
+		t.Cleanup(func() { pauseResumeLifecycleFault = nil })
+		pauseResult := make(chan error, 1)
+		go func() { _, err := pauseColonyAt(time.Now()); pauseResult <- err }()
+		<-ready
+		started, result := make(chan struct{}), make(chan error, 1)
+		go func() {
+			_, err := runCodexNativeWorkerWithHooks("reserve", path, codexNativeWorkerHooks{BeforeWrite: func() { close(started) }})
+			result <- err
+		}()
+		<-started
+		close(release)
+		if err := <-pauseResult; err != nil {
+			t.Fatal(err)
+		}
+		if err := <-result; err == nil {
+			t.Fatal("native launch crossed an already-derived idle pause")
+		}
+		_, record, _ := loadLatestBuildAttempt(1)
+		if len(record.WorkerRuns) != 0 {
+			t.Fatal("paused admission wrote a reservation")
+		}
+	})
+	t.Run("pause-cannot-cross-currency-read", func(t *testing.T) {
+		_, request := nativeAdmissionFixture(t)
+		ready, release := make(chan struct{}), make(chan struct{})
+		path := nativeRequestPath(t, request)
+		finished := make(chan error, 1)
+		go func() {
+			_, err := runCodexNativeWorkerWithHooks("reserve", path, codexNativeWorkerHooks{AfterCurrencyCheck: func() { close(ready); <-release }})
+			finished <- err
+		}()
+		<-ready
+		pauseStarted, paused := make(chan struct{}), make(chan error, 1)
+		go func() { close(pauseStarted); _, err := pauseColonyAt(time.Now()); paused <- err }()
+		<-pauseStarted
+		close(release)
+		if err := <-finished; err != nil {
+			t.Fatal(err)
+		}
+		var pending pauseBoundaryPendingError
+		if err := <-paused; !errors.As(err, &pending) {
+			t.Fatalf("pause crossed native admission: %v", err)
+		}
+		var state colony.ColonyState
+		if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+			t.Fatal(err)
+		}
+		if state.Paused {
+			t.Fatal("idle pause committed over a new reservation")
+		}
+	})
+	t.Run("pause-before-reserve-or-release", func(t *testing.T) {
+		for _, operation := range []string{"reserve", "bind"} {
+			t.Run(operation, func(t *testing.T) {
+				_, request := nativeAdmissionFixture(t)
+				if operation == "bind" {
+					request = nativeReserveForTest(t, request)
+				}
+				before := nativeJournalBytes(t)
+				_, err := runCodexNativeWorkerWithHooks(operation, nativeRequestPath(t, request), codexNativeWorkerHooks{BeforeWrite: func() {
+					// The already accepted pause state wins before this request takes
+					// its repository session. Bind must refuse even with a valid child.
+					var state colony.ColonyState
+					if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+						t.Fatal(err)
+					}
+					state.Paused = true
+					if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+						t.Fatal(err)
+					}
+				}})
+				if err == nil {
+					t.Fatal("paused request admitted")
+				}
+				if !bytes.Equal(before, nativeJournalBytes(t)) {
+					t.Fatal("paused request wrote")
+				}
+			})
+		}
+	})
 	t.Run("simultaneous-reservations", func(t *testing.T) {
 		_, request := nativeAdmissionFixture(t)
 		path := nativeRequestPath(t, request)
@@ -266,6 +359,91 @@ func nativeTerminalRequestForTest(t *testing.T, request codexNativeWorkerRequest
 }
 
 func TestCodexNativeWorkerTerminal(t *testing.T) {
+	t.Run("unassigned-task-receipt", func(t *testing.T) {
+		manifest, request := nativeBoundForTest(t)
+		request = nativeTerminalRequestForTest(t, request, manifest.Dispatches[0].Caste, "failed")
+		request.Result.TaskReceipts[0].TaskID = "unassigned"
+		before := nativeJournalBytes(t)
+		if _, err := runCodexNativeWorker("record", nativeRequestPath(t, request)); err == nil {
+			t.Fatal("unassigned receipt became durable")
+		}
+		if !bytes.Equal(before, nativeJournalBytes(t)) {
+			t.Fatal("unassigned receipt wrote")
+		}
+	})
+	t.Run("concurrent-replay-and-late-pause", func(t *testing.T) {
+		manifest, request := nativeBoundForTest(t)
+		request = nativeTerminalRequestForTest(t, request, manifest.Dispatches[0].Caste, "failed")
+		path := nativeRequestPath(t, request)
+		ready, release := make(chan struct{}, 2), make(chan struct{})
+		type outcome struct {
+			response codexNativeWorkerResponse
+			err      error
+		}
+		results := make(chan outcome, 2)
+		for i := 0; i < 2; i++ {
+			go func() {
+				response, err := runCodexNativeWorkerWithHooks("record", path, codexNativeWorkerHooks{BeforeWrite: func() { ready <- struct{}{}; <-release }})
+				results <- outcome{response, err}
+			}()
+		}
+		<-ready
+		<-ready
+		// Pause does not erase an already returned child's evidence. The
+		// current assignment remains eligible for terminal persistence only.
+		var state colony.ColonyState
+		if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+			t.Fatal(err)
+		}
+		state.Paused = true
+		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+			t.Fatal(err)
+		}
+		close(release)
+		accepted, replays := 0, 0
+		var receipt *codexNativeWorkerReceipt
+		for i := 0; i < 2; i++ {
+			got := <-results
+			if got.err != nil {
+				t.Fatal(got.err)
+			}
+			if got.response.Replay {
+				replays++
+			} else {
+				accepted++
+			}
+			if receipt != nil && !reflect.DeepEqual(receipt, got.response.Receipt) {
+				t.Fatal("concurrent terminal minted new receipt")
+			}
+			receipt = got.response.Receipt
+		}
+		if accepted != 1 || replays != 1 {
+			t.Fatalf("accepted=%d replays=%d", accepted, replays)
+		}
+	})
+	t.Run("superseded-under-write-lock", func(t *testing.T) {
+		manifest, request := nativeBoundForTest(t)
+		request = nativeTerminalRequestForTest(t, request, manifest.Dispatches[0].Caste, "failed")
+		path, _, _ := loadLatestBuildAttempt(1)
+		before := nativeJournalBytes(t)
+		_, err := runCodexNativeWorkerWithHooks("record", nativeRequestPath(t, request), codexNativeWorkerHooks{BeforeWrite: func() {
+			var pointer latestBuildAttemptPointer
+			if err := store.LoadJSON(latestBuildAttemptPointerPath(1), &pointer); err != nil {
+				t.Fatal(err)
+			}
+			pointer.AttemptID = "attempt-superseded"
+			if err := store.SaveJSON(latestBuildAttemptPointerPath(1), pointer); err != nil {
+				t.Fatal(err)
+			}
+		}})
+		if err == nil {
+			t.Fatal("superseded terminal accepted")
+		}
+		after, _ := os.ReadFile(filepath.Join(store.BasePath(), path))
+		if !bytes.Equal(before, after) {
+			t.Fatal("superseded terminal wrote")
+		}
+	})
 	for _, status := range []string{"completed", "failed", "blocked", "timeout", "cancelled"} {
 		t.Run(status, func(t *testing.T) {
 			manifest, request := nativeBoundForTest(t)
@@ -275,6 +453,9 @@ func TestCodexNativeWorkerTerminal(t *testing.T) {
 				t.Fatal(err)
 			}
 			before := nativeJournalBytes(t)
+			if err := os.Remove(filepath.Join(request.Workspace, "evidence.txt")); err != nil {
+				t.Fatal(err)
+			}
 			reopened, err := storage.NewStore(store.BasePath())
 			if err != nil {
 				t.Fatal(err)
@@ -329,9 +510,84 @@ func TestCodexNativeWorkerAmbiguousLaunch(t *testing.T) {
 	if !bytes.Equal(before, nativeJournalBytes(t)) {
 		t.Fatal("bulk cancel fabricated native termination")
 	}
+	reopened, err := storage.NewStore(store.BasePath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	store = reopened
+	if _, err := runCodexNativeWorker("observe", nativeObservationPath(t, request, "unavailable", time.Now().Add(time.Minute))); err != nil {
+		t.Fatal(err)
+	}
+	before = nativeJournalBytes(t)
+	minimal := codexNativeWorkerRequest{SchemaVersion: 1, Phase: 1, ExecutionBinding: request.ExecutionBinding}
+	inspected, err := runCodexNativeWorker("inspect", nativeRequestPath(t, minimal))
+	if err != nil || len(inspected.WorkerStates) != 1 || inspected.WorkerStates[0].Terminal || inspected.WorkerStates[0].LaunchState != "launch_unresolved" || !bytes.Equal(before, nativeJournalBytes(t)) {
+		t.Fatalf("inspection lost unresolved state: %+v %v", inspected.WorkerStates, err)
+	}
+	if _, err := runCodexNativeWorker("observe", nativeObservationPath(t, request, "no_launch", time.Now().Add(2*time.Minute))); err != nil {
+		t.Fatal(err)
+	}
+	_, record, _ = loadLatestBuildAttempt(1)
+	if !codexNativeWorkerIsTerminal(record.WorkerRuns[0]) || record.WorkerRuns[0].Native.LaunchState != "no_launch" || record.WorkerRuns[0].Status != "cancelled" {
+		t.Fatal("confirmed no launch remained open")
+	}
+	request.ChildID = "late-new-child"
+	if _, err := runCodexNativeWorker("bind", nativeRequestPath(t, request)); err == nil {
+		t.Fatal("closed no-launch reservation reused")
+	}
 }
 
 func TestCodexNativeWorkerCancellation(t *testing.T) {
+	t.Run("transition-receipts-and-running-order", func(t *testing.T) {
+		manifest, request := nativeAdmissionFixture(t)
+		originalReserve := request
+		var transitions []string
+		hooks := codexNativeWorkerHooks{AfterTransition: func(receipt codexNativeWorkerReceipt) { transitions = append(transitions, receipt.Operation) }}
+		reserved, err := runCodexNativeWorkerWithHooks("reserve", nativeRequestPath(t, request), hooks)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.LaunchID, request.ChildID = reserved.Worker.ProviderRunID, "receipt-child"
+		request.DispatchSHA256, request.PromptSHA256 = reserved.Worker.Native.DispatchSHA256, reserved.Worker.Native.PromptSHA256
+		bound, err := runCodexNativeWorkerWithHooks("bind", nativeRequestPath(t, request), hooks)
+		if err != nil {
+			t.Fatal(err)
+		}
+		at := time.Now().UTC()
+		observation := nativeObservationPath(t, request, "running", at)
+		if _, err := runCodexNativeWorkerWithHooks("observe", observation, hooks); err != nil {
+			t.Fatal(err)
+		}
+		before := nativeJournalBytes(t)
+		if _, err := runCodexNativeWorker("observe", nativeObservationPath(t, request, "running", at.Add(-time.Second))); err == nil {
+			t.Fatal("out-of-order running accepted")
+		}
+		if !bytes.Equal(before, nativeJournalBytes(t)) {
+			t.Fatal("old running observation wrote")
+		}
+		terminalRequest := nativeTerminalRequestForTest(t, request, manifest.Dispatches[0].Caste, "completed")
+		if _, err := runCodexNativeWorkerWithHooks("record", nativeRequestPath(t, terminalRequest), hooks); err != nil {
+			t.Fatal(err)
+		}
+		for operation, req := range map[string]codexNativeWorkerRequest{"reserve": originalReserve, "bind": request, "record": terminalRequest} {
+			response, err := runCodexNativeWorkerWithHooks(operation, nativeRequestPath(t, req), hooks)
+			if err != nil || !response.Replay {
+				t.Fatalf("%s replay: %v", operation, err)
+			}
+			if operation == "reserve" && !reflect.DeepEqual(reserved.Receipt, response.Receipt) {
+				t.Fatal("reservation receipt changed after terminal")
+			}
+			if operation == "bind" && !reflect.DeepEqual(bound.Receipt, response.Receipt) {
+				t.Fatal("binding receipt changed after terminal")
+			}
+		}
+		if !reflect.DeepEqual(transitions, []string{"reserve", "bind", "observe", "record"}) {
+			t.Fatalf("transition hooks replayed: %v", transitions)
+		}
+		if _, err := runCodexNativeWorker("observe", nativeObservationPath(t, request, "running", at.Add(time.Minute))); err == nil {
+			t.Fatal("terminal regressed to running")
+		}
+	})
 	_, request := nativeBoundForTest(t)
 	path, _, _ := loadLatestBuildAttempt(1)
 	before := nativeJournalBytes(t)
@@ -348,6 +604,67 @@ func TestCodexNativeWorkerCancellation(t *testing.T) {
 	}
 	if response.Worker.Result != nil || response.Worker.CompletedAt != "" {
 		t.Fatal("request was treated as completed cancellation")
+	}
+	before = nativeJournalBytes(t)
+	if again, err := runCodexNativeWorker("observe", observation); err != nil || !again.Replay || !reflect.DeepEqual(response.Receipt, again.Receipt) || !bytes.Equal(before, nativeJournalBytes(t)) {
+		t.Fatalf("observation replay changed receipt: %v", err)
+	}
+	if _, err := runCodexNativeWorker("observe", nativeObservationPath(t, request, "running", time.Now().Add(time.Minute))); err == nil {
+		t.Fatal("cancel request regressed to running")
+	}
+	if _, err := runCodexNativeWorker("observe", nativeObservationPath(t, request, "cancelled", time.Now().Add(2*time.Minute))); err != nil {
+		t.Fatal(err)
+	}
+	_, saved, _ := loadLatestBuildAttempt(1)
+	if !codexNativeWorkerIsTerminal(saved.WorkerRuns[0]) || saved.WorkerRuns[0].Status != "cancelled" {
+		t.Fatal("confirmed cancellation was not saved")
+	}
+}
+
+func TestCodexNativeWorkerArrivalOrder(t *testing.T) {
+	for _, order := range [][]int{{0, 1}, {1, 0}} {
+		t.Run(fmt.Sprint(order), func(t *testing.T) {
+			root := setupExternalBuildAttemptTest(t)
+			var state colony.ColonyState
+			if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+				t.Fatal(err)
+			}
+			id := "1.2"
+			state.Plan.Phases[0].Tasks = append(state.Plan.Phases[0].Tasks, colony.Task{ID: &id, Goal: "Write independent second evidence", Status: colony.TaskPending})
+			if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+				t.Fatal(err)
+			}
+			manifest := prepareBoundBuildManifestOnly(t, root)
+			if len(manifest.Dispatches) != 2 {
+				t.Fatalf("want two runtime assignments: %+v", manifest.Dispatches)
+			}
+			root, _ = filepath.EvalSymlinks(root)
+			requests := make([]codexNativeWorkerRequest, 2)
+			for i, dispatch := range manifest.Dispatches {
+				request := codexNativeWorkerRequest{SchemaVersion: 1, Phase: 1, ExecutionBinding: *manifest.ExecutionBinding, WorkerName: dispatch.Name, TaskID: dispatch.TaskID, HostSessionID: "arrival-host", Workspace: root, HostPermission: "workspace_write"}
+				requests[i] = nativeReserveForTest(t, request)
+				requests[i].ChildID = fmt.Sprintf("child-%d", i)
+				if _, err := runCodexNativeWorker("bind", nativeRequestPath(t, requests[i])); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, i := range order {
+				request := nativeTerminalRequestForTest(t, requests[i], manifest.Dispatches[i].Caste, "completed")
+				if _, err := runCodexNativeWorker("record", nativeRequestPath(t, request)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			_, saved, _ := loadLatestBuildAttempt(1)
+			completion, ok := buildCompletionFromWorkerRuns(saved)
+			if !ok || len(completion.Dispatches) != 2 {
+				t.Fatal("lost terminal worker")
+			}
+			for i, dispatch := range completion.Dispatches {
+				if dispatch.Name != manifest.Dispatches[i].Name || dispatch.TaskID != manifest.Dispatches[i].TaskID {
+					t.Fatal("arrival order changed task identity")
+				}
+			}
+		})
 	}
 }
 
