@@ -550,6 +550,7 @@ func nativeRunResumeHost(t *testing.T, client string, args []string, repo string
 
 func nativeCollectResumeEvidence(t *testing.T, r *codexNativeLiveReceipt, runRoot, fixtureHome, coord string) {
 	t.Helper()
+	nativeCollectLiveEvidence(t, r, runRoot, fixtureHome)
 	r.ResumeWorkerStable, r.ResumeNoSpawn, r.ResumeInspectObserved, r.FinalizationReplayStable = false, false, false, false
 	raw, err := os.ReadFile(r.ResumeRawEvents)
 	if err != nil {
@@ -605,7 +606,6 @@ func nativeCollectResumeEvidence(t *testing.T, r *codexNativeLiveReceipt, runRoo
 	if err != nil {
 		return
 	}
-	nativeCollectLiveEvidence(t, r, runRoot, fixtureHome)
 	afterRaw, err := os.ReadFile(r.AttemptPath)
 	if err != nil {
 		return
