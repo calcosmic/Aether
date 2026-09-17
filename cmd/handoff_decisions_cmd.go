@@ -46,7 +46,7 @@ func answeredDecisionTexts(scope pendingDecisionScope) map[string]bool {
 		if !decision.Resolved || strings.TrimSpace(decision.Resolution) == "" {
 			continue
 		}
-		if isAutopilotCheckpointType(decision.Type) || decision.Source == "forced-reviewer-waiver" {
+		if isCodexNativeDecision(decision) || isAutopilotCheckpointType(decision.Type) || decision.Source == "forced-reviewer-waiver" {
 			continue
 		}
 		if !pendingDecisionMatchesScope(decision, scope) {
@@ -118,6 +118,9 @@ func recordDecisionAnswer(question, answer string, phase int, source string) (Pe
 	var file PendingDecisionFile
 	var decision PendingDecision
 	if err := store.UpdateJSONAtomically(pendingDecisionsFile, &file, func() error {
+		if hasCodexNativeDecisionQuestion(file, question) {
+			return fmt.Errorf("native questions require decision-answer --native-request; unbound text cannot create a replacement")
+		}
 		if file.Decisions == nil {
 			file.Decisions = []PendingDecision{}
 		}
@@ -215,6 +218,24 @@ var decisionAnswerCmd = &cobra.Command{
 			outputErrorMessage("no store initialized")
 			return nil
 		}
+		if cmd.Flags().Changed("native-request") {
+			for _, flag := range []string{"question", "answer", "phase", "source", "waiver-capability"} {
+				if cmd.Flags().Changed(flag) {
+					return fmt.Errorf("--native-request cannot be combined with --%s", flag)
+				}
+			}
+			path, _ := cmd.Flags().GetString("native-request")
+			request, err := loadCodexNativeDecisionAnswerRequest(path)
+			if err != nil {
+				return err
+			}
+			decision, replay, err := answerCodexNativeDecision(request, codexNativeDecisionHooks{})
+			if err != nil {
+				return err
+			}
+			outputOK(map[string]any{"id": decision.ID, "recorded": true, "replay": replay, "native_binding": decision.NativeBinding})
+			return nil
+		}
 		question := mustGetString(cmd, "question")
 		if question == "" {
 			return nil
@@ -308,6 +329,7 @@ var decisionAnswerCmd = &cobra.Command{
 func init() {
 	handoffDecisionsCmd.Flags().Int("phase", 0, "Only list decisions recorded during this phase (0 = all)")
 
+	decisionAnswerCmd.Flags().String("native-request", "", "Exact bound native question and owner answer in an approved temporary JSON file")
 	decisionAnswerCmd.Flags().String("question", "", "The worker's open decision being answered (required)")
 	decisionAnswerCmd.Flags().String("answer", "", "The owner's answer (required)")
 	decisionAnswerCmd.Flags().Int("phase", 0, "Phase the decision belongs to")

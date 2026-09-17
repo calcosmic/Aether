@@ -17,7 +17,8 @@ import (
 // All answers in this file are harness/predeclared authorization, never owner testimony.
 func nativeDecisionFixture(t *testing.T) (codexNativeWorkerRequest, PendingDecision) {
 	t.Helper()
-	_, request := nativeBoundForTest(t)
+	_, requests := nativeDecisionWorkersFixture(t, 1)
+	request := requests[0]
 	d, err := admitCodexNativeDecision(request, codexNativeQuestion{QuestionID: "harness-event-question-1", Question: "Which fixture boundary should this worker keep?"}, codexNativeDecisionHooks{})
 	if err != nil {
 		t.Fatal(err)
@@ -147,7 +148,7 @@ func TestCodexNativeDecisionReplay(t *testing.T) {
 	}
 }
 func TestCodexNativeDecisionIsolation(t *testing.T) {
-	_, manifest, requests := nativeFinalizeFixture(t, 2)
+	manifest, requests := nativeDecisionWorkersFixture(t, 2)
 	question := codexNativeQuestion{QuestionID: "same-event-id", Question: "Should this fixture retain the archive?"}
 	first, err := admitCodexNativeDecision(requests[0], question, codexNativeDecisionHooks{})
 	if err != nil {
@@ -202,7 +203,7 @@ func TestCodexNativeDecisionProtectedPaths(t *testing.T) {
 	if !reflect.DeepEqual(before, nativeDecisionStoreBytes(t)) {
 		t.Fatal("generic route changed protected native row")
 	}
-	waiver := forcedReviewerWaiverQuestionText(1, "credentials/auth", "credentials")
+	waiver := forcedReviewerWaiverQuestionText(1, queenRiskSignalTable[0].Name, queenRiskSignalTable[0].PlainEnglish)
 	if _, err := admitCodexNativeDecision(request, codexNativeQuestion{QuestionID: "protected", Question: waiver}, codexNativeDecisionHooks{}); err == nil {
 		t.Fatal("native material question impersonated reviewer authorization")
 	}
@@ -280,10 +281,105 @@ func TestCodexNativeDecisionAnswerRoute(t *testing.T) {
 
 func nativeDecisionOutputForTest(t *testing.T, call func()) string {
 	t.Helper()
-	old := stdout
+	old, oldErr := stdout, stderr
 	var out bytes.Buffer
-	stdout = &out
-	defer func() { stdout = old }()
+	stdout, stderr = &out, &out
+	defer func() { stdout, stderr = old, oldErr }()
 	call()
 	return out.String()
+}
+
+func nativeDecisionWorkersFixture(t *testing.T, count int) (codexBuildManifest, []codexNativeWorkerRequest) {
+	t.Helper()
+	root := setupExternalBuildAttemptTest(t)
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatal(err)
+	}
+	session := "native-decision-fixture-session"
+	state.SessionID = &session
+	if count == 2 {
+		id := "1.2"
+		state.Plan.Phases[0].Tasks = append(state.Plan.Phases[0].Tasks, colony.Task{ID: &id, Goal: "Write independent second evidence", Status: colony.TaskPending})
+	}
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatal(err)
+	}
+	manifest := prepareBoundBuildManifestOnly(t, root)
+	if len(manifest.Dispatches) != count {
+		t.Fatalf("got %d dispatches", len(manifest.Dispatches))
+	}
+	return manifest, nativeFinalizeReserve(t, manifest)
+}
+func TestCodexNativeDecisionQuestionAdmission(t *testing.T) {
+	for _, field := range []string{"worker", "child", "task", "launch", "phase", "paused"} {
+		t.Run(field, func(t *testing.T) {
+			_, requests := nativeDecisionWorkersFixture(t, 1)
+			request := requests[0]
+			switch field {
+			case "worker":
+				request.WorkerName += "wrong"
+			case "child":
+				request.ChildID += "wrong"
+			case "task":
+				request.TaskID += "wrong"
+			case "launch":
+				request.LaunchID += "wrong"
+			case "phase":
+				request.Phase++
+			case "paused":
+				var state colony.ColonyState
+				_ = store.LoadJSON("COLONY_STATE.json", &state)
+				state.Paused = true
+				_ = store.SaveJSON("COLONY_STATE.json", state)
+			}
+			before := nativeDecisionStoreBytes(t)
+			if _, err := admitCodexNativeDecision(request, codexNativeQuestion{QuestionID: "admission", Question: "Which path?"}, codexNativeDecisionHooks{}); err == nil {
+				t.Fatal("wrong native question admitted")
+			}
+			if !reflect.DeepEqual(before, nativeDecisionStoreBytes(t)) {
+				t.Fatal("refused question changed state")
+			}
+		})
+	}
+}
+func TestCodexNativeDecisionFactsOnce(t *testing.T) {
+	_, d := nativeDecisionFixture(t)
+	request := nativeAnswerForTest(d)
+	if _, _, err := answerCodexNativeDecision(request, codexNativeDecisionHooks{}); err != nil {
+		t.Fatal(err)
+	}
+	var signals colony.PheromoneFile
+	if err := store.LoadJSON("pheromones.json", &signals); err != nil {
+		t.Fatal(err)
+	}
+	found := 0
+	for _, signal := range signals.Signals {
+		if bytes.Contains(signal.Content, []byte(d.ID)) {
+			found++
+		}
+	}
+	if found != 1 {
+		t.Fatalf("first answer emitted %d receipt facts", found)
+	}
+	var ledger episodeLedgerFile
+	if err := store.LoadJSON(episodeLedgerPath, &ledger); err != nil {
+		t.Fatal(err)
+	}
+	interventions := 0
+	for _, entry := range ledger.Entries {
+		if entry.RecordKind == episodeLedgerRecordKindIntervention {
+			interventions++
+		}
+	}
+	if interventions != 1 {
+		t.Fatalf("first answer emitted %d interventions", interventions)
+	}
+	before := nativeDecisionStoreBytes(t)
+	if _, _, err := answerCodexNativeDecision(request, codexNativeDecisionHooks{}); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(before, nativeDecisionStoreBytes(t)) {
+		t.Fatal("replay emitted another fact")
+	}
 }

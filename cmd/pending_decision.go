@@ -9,17 +9,18 @@ import (
 
 // PendingDecision represents a pending decision that needs resolution.
 type PendingDecision struct {
-	ID          string `json:"id"`
-	Type        string `json:"type,omitempty"`
-	Description string `json:"description"`
-	Phase       *int   `json:"phase,omitempty"`
-	Source      string `json:"source,omitempty"`
-	SessionID   string `json:"session_id,omitempty"`
-	GoalHash    string `json:"goal_hash,omitempty"`
-	Resolution  string `json:"resolution,omitempty"`
-	Resolved    bool   `json:"resolved"`
-	CreatedAt   string `json:"created_at"`
-	ResolvedAt  string `json:"resolved_at,omitempty"`
+	NativeBinding *codexNativeDecisionBinding `json:"native_binding,omitempty"`
+	ID            string                      `json:"id"`
+	Type          string                      `json:"type,omitempty"`
+	Description   string                      `json:"description"`
+	Phase         *int                        `json:"phase,omitempty"`
+	Source        string                      `json:"source,omitempty"`
+	SessionID     string                      `json:"session_id,omitempty"`
+	GoalHash      string                      `json:"goal_hash,omitempty"`
+	Resolution    string                      `json:"resolution,omitempty"`
+	Resolved      bool                        `json:"resolved"`
+	CreatedAt     string                      `json:"created_at"`
+	ResolvedAt    string                      `json:"resolved_at,omitempty"`
 	// Acknowledged, AcknowledgedAt, and RecoveryCommand belong to the
 	// blocker-flag entries (colony.FlagEntry) that share this file. Modeled
 	// so the strict lifecycle decoder accepts flag entries and rewrites
@@ -258,6 +259,10 @@ var pendingDecisionResolveCmd = &cobra.Command{
 				// protected row would preserve that row's authentic metadata and
 				// manufacture a valid waiver. The capability-aware
 				// decision-answer path is the only resolver for this source.
+				if isCodexNativeDecision(file.Decisions[i]) {
+					outputError(1, "native questions require decision-answer --native-request with the exact saved binding", nil)
+					return nil
+				}
 				if file.Decisions[i].Source == "forced-reviewer-waiver" {
 					outputError(1, "forced reviewer decisions must be answered with decision-answer and the displayed capability", nil)
 					return nil

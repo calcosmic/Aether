@@ -696,7 +696,7 @@ func buildSettledDiscussDraftRequest(
 	resolved := append([]PendingDecision(nil), pending.Decisions...)
 	sort.SliceStable(resolved, func(left, right int) bool { return resolved[left].ID < resolved[right].ID })
 	for _, decision := range resolved {
-		if decision.Type != clarificationDecisionType || !decision.Resolved || strings.TrimSpace(decision.Resolution) == "" {
+		if isCodexNativeDecision(decision) || decision.Type != clarificationDecisionType || !decision.Resolved || strings.TrimSpace(decision.Resolution) == "" {
 			continue
 		}
 		question, _ := parseClarificationDescription(decision.Description)
@@ -905,6 +905,9 @@ func resolveDiscussQuestion(id, answer string) (map[string]interface{}, error) {
 	}
 	if found == -1 {
 		return nil, fmt.Errorf("clarification %q not found", id)
+	}
+	if isCodexNativeDecision(file.Decisions[found]) {
+		return nil, fmt.Errorf("native questions require decision-answer --native-request")
 	}
 	if file.Decisions[found].Type != clarificationDecisionType {
 		return nil, fmt.Errorf("decision %q is not a clarification", id)
@@ -1116,7 +1119,7 @@ func buildDiscussEvidenceFrontier(state colony.ColonyState, survey codexSurveyCo
 	}
 
 	for _, decision := range pending.Decisions {
-		if decision.Type != clarificationDecisionType || !decision.Resolved || strings.TrimSpace(decision.Resolution) == "" {
+		if isCodexNativeDecision(decision) || decision.Type != clarificationDecisionType || !decision.Resolved || strings.TrimSpace(decision.Resolution) == "" {
 			continue
 		}
 		content, err := json.Marshal(struct {
@@ -1723,6 +1726,9 @@ func filterPendingDecisionFileForScope(file PendingDecisionFile, scope pendingDe
 }
 
 func pendingDecisionMatchesScope(decision PendingDecision, scope pendingDecisionScope) bool {
+	if isCodexNativeDecision(decision) {
+		return decision.NativeBinding != nil && decision.GoalHash == scope.GoalHash && decision.SessionID == scope.SessionID && decision.NativeBinding.GoalHash == scope.GoalHash && decision.NativeBinding.SessionID == scope.SessionID
+	}
 	// Prefer session ID over goal hash: two colonies with the same goal but
 	// different sessions should not share pending decisions. Session ID is the
 	// stronger scope boundary.
@@ -1771,7 +1777,7 @@ func pendingDecisionStaleNotice(count int) string {
 func clarificationDecisionIndex(file PendingDecisionFile) map[string]PendingDecision {
 	index := map[string]PendingDecision{}
 	for _, decision := range file.Decisions {
-		if decision.Type != clarificationDecisionType {
+		if isCodexNativeDecision(decision) || decision.Type != clarificationDecisionType {
 			continue
 		}
 		if strings.TrimSpace(decision.Source) == "" {
@@ -1800,7 +1806,7 @@ func clarificationSortKey(decision PendingDecision) time.Time {
 func resolvedClarifiedIntentEntries(file PendingDecisionFile) []clarifiedIntentEntry {
 	entries := []clarifiedIntentEntry{}
 	for _, decision := range file.Decisions {
-		if decision.Type != clarificationDecisionType || !decision.Resolved || strings.TrimSpace(decision.Resolution) == "" {
+		if isCodexNativeDecision(decision) || decision.Type != clarificationDecisionType || !decision.Resolved || strings.TrimSpace(decision.Resolution) == "" {
 			continue
 		}
 		question, _ := parseClarificationDescription(decision.Description)
@@ -1820,7 +1826,7 @@ func resolvedClarifiedIntentEntries(file PendingDecisionFile) []clarifiedIntentE
 func countPendingClarifications(file PendingDecisionFile) int {
 	total := 0
 	for _, decision := range file.Decisions {
-		if decision.Type == clarificationDecisionType && !decision.Resolved {
+		if !isCodexNativeDecision(decision) && decision.Type == clarificationDecisionType && !decision.Resolved {
 			total++
 		}
 	}
@@ -2116,7 +2122,7 @@ func detectDecisionConflicts(decisions []PendingDecision) []string {
 
 	var resolutions []string
 	for _, d := range decisions {
-		if !d.Resolved || strings.TrimSpace(d.Resolution) == "" {
+		if isCodexNativeDecision(d) || !d.Resolved || strings.TrimSpace(d.Resolution) == "" {
 			continue
 		}
 		resolutions = append(resolutions, strings.ToLower(d.Resolution))
