@@ -47,8 +47,9 @@ type pauseResumeLifecycleOutcome struct {
 }
 
 type pauseBoundaryPendingError struct {
-	Boundary string
-	Attempt  string
+	Boundary       string
+	Attempt        string
+	NativeRecovery *codexNativeRecovery
 }
 
 func (err pauseBoundaryPendingError) Error() string {
@@ -126,6 +127,14 @@ var pauseColonyCmd = &cobra.Command{
 					"attempt_id": pending.Attempt, "state_effect": colony.LifecycleStateEffectNone,
 					"outcome_kind": colony.OutcomeKindNoChange,
 					"message":      pending.Error(), "next": "aether pause",
+				}
+				if pending.NativeRecovery != nil {
+					applyCodexNativeRecovery(result, pending.NativeRecovery)
+					result["next"] = pending.NativeRecovery.Next
+					result["message"] = "Pause is pending host confirmation; saved native work is retained."
+					closeLifecycleCommand(result, "pause", pending.NativeRecovery.Next, pending.NativeRecovery.Why)
+					outputWorkflow(result, "Pause is pending host confirmation.\n"+renderCodexNativeRecovery(pending.NativeRecovery))
+					return nil
 				}
 				closeLifecycleCommand(result, "pause", "aether pause", "The current work has not reached a safe pause boundary yet.")
 				if closeErr := applyLifecycleCloseout(result, "pause", LifecycleCloseoutDetails{
@@ -387,7 +396,7 @@ func pauseColonyInMutationSession(now time.Time, mutation *planningMutationSessi
 
 	safeBoundary, attemptID, pending := pauseSafeBoundary(state)
 	if pending {
-		return pauseResumeLifecycleOutcome{}, pauseBoundaryPendingError{Boundary: safeBoundary, Attempt: attemptID}
+		return pauseResumeLifecycleOutcome{}, pauseBoundaryPendingError{Boundary: safeBoundary, Attempt: attemptID, NativeRecovery: buildCodexNativeRecovery(state)}
 	}
 
 	handoff, err := buildPauseHandoff(facts, state, session, repository, now, handoffID, transactionID, safeBoundary, attemptID, colony.RecoveryProvenanceConfirmed)
@@ -1137,6 +1146,9 @@ func resumeProvenanceSentence(provenance colony.RecoveryProvenance) lifecycleEve
 }
 
 func pauseSafeBoundary(state colony.ColonyState) (boundary, attemptID string, pending bool) {
+	if native := buildCodexNativeRecovery(state); native != nil && native.pendingBoundary() {
+		return "worker_completion_boundary", native.AttemptID, true
+	}
 	if _, attempt, ok := loadRelevantBuildAttemptReadOnly(state); ok {
 		attemptID = strings.TrimSpace(attempt.ID)
 		for _, worker := range attempt.WorkerRuns {

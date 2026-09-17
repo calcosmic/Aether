@@ -26,12 +26,15 @@ type codexNativeRecovery struct {
 
 type codexNativeRecoveryWorker struct {
 	WorkerName      string `json:"worker_name"`
+	Caste           string `json:"caste"`
 	TaskID          string `json:"task_id"`
 	LaunchID        string `json:"launch_id,omitempty"`
 	HostSessionID   string `json:"host_session_id,omitempty"`
 	ChildID         string `json:"child_id,omitempty"`
 	Status          string `json:"status"`
 	HostStatus      string `json:"host_status,omitempty"`
+	LastHostStatus  string `json:"last_host_status,omitempty"`
+	HostAction      string `json:"host_action,omitempty"`
 	ObservedAt      string `json:"observed_at,omitempty"`
 	ResultSHA256    string `json:"result_sha256,omitempty"`
 	CancelRequested bool   `json:"cancel_requested,omitempty"`
@@ -88,7 +91,7 @@ func buildCodexNativeRecovery(state colony.ColonyState) *codexNativeRecovery {
 	}
 	matched := 0
 	for _, dispatch := range manifest.Dispatches {
-		item := codexNativeRecoveryWorker{WorkerName: dispatch.Name, TaskID: normalizedDispatchTaskID(dispatch), Status: "never_started"}
+		item := codexNativeRecoveryWorker{WorkerName: dispatch.Name, Caste: dispatch.Caste, TaskID: normalizedDispatchTaskID(dispatch), Status: "never_started"}
 		var saved *buildAttemptWorkerRun
 		for i := range attempt.WorkerRuns {
 			worker := &attempt.WorkerRuns[i]
@@ -113,6 +116,14 @@ func buildCodexNativeRecovery(state colony.ColonyState) *codexNativeRecovery {
 		item.HostStatus, item.CancelRequested = projected.HostStatus, projected.CancelRequested
 		if n := len(saved.Native.Observations); n > 0 {
 			item.ObservedAt = saved.Native.Observations[n-1].ObservedAt
+			item.LastHostStatus = saved.Native.Observations[n-1].Status
+		}
+		if !projected.Terminal {
+			if item.ChildID == "" {
+				item.HostAction = fmt.Sprintf("Reconcile launch %s with host session %s. Bind only its actual child; if the host cannot locate the launch, preserve it as unresolved. A missing process ID does not permit another launch.", item.LaunchID, item.HostSessionID)
+			} else {
+				item.HostAction = fmt.Sprintf("Ask host session %s to observe the same child %s. To stop it, use the host's actual interruption/cancellation tool against that child and record its matching terminal acknowledgement. Without that capability or acknowledgement, cancellation stays pending.", item.HostSessionID, item.ChildID)
+			}
 		}
 		if projected.Terminal {
 			digest, err := jsonSHA256(saved.Result)
@@ -176,14 +187,10 @@ func renderCodexNativeRecovery(recovery *codexNativeRecovery) string {
 	b.WriteString(recovery.Summary + "\n")
 	for _, group := range [][]codexNativeRecoveryWorker{recovery.Finished, recovery.Unfinished, recovery.Unresolved, recovery.Active} {
 		for _, worker := range group {
-			fmt.Fprintf(&b, "  %s (%s): %s", worker.WorkerName, worker.TaskID, strings.ReplaceAll(worker.Status, "_", " "))
-			if worker.ChildID != "" {
-				fmt.Fprintf(&b, " — child %s", worker.ChildID)
+			b.WriteString("  " + renderCodexNativeWorkerActivity(worker) + "\n")
+			if worker.HostAction != "" {
+				b.WriteString("    " + worker.HostAction + "\n")
 			}
-			if worker.ObservedAt != "" {
-				fmt.Fprintf(&b, " — observed %s", worker.ObservedAt)
-			}
-			b.WriteString("\n")
 		}
 	}
 	if recovery.Error != "" {
