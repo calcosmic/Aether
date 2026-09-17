@@ -496,3 +496,89 @@ func TestCodexNativeFinalizeResumedState(t *testing.T) {
 		})
 	}
 }
+
+func TestCodexNativeFinalizeChecks(t *testing.T) {
+	t.Run("real-check-failure", func(t *testing.T) {
+		root, manifest, requests := nativeFinalizeFixture(t, 1)
+		const checkCommand = "sh native-check.sh"
+		// This script leaves an execution witness and a distinctive real exit.
+		// The test asserts extracted command/exit/output, never a fabricated report.
+		script := "printf 'NATIVE_CHECK_EXECUTED\\n'\nprintf 'run\\n' >> native-check-count\nexit 7\n"
+		if err := os.WriteFile(filepath.Join(root, "native-check.sh"), []byte(script), 0600); err != nil {
+			t.Fatal(err)
+		}
+		writePhaseVerifiedOnceVerificationCommands(t, root, "true", "true", "true", checkCommand)
+		nativeFinalizeRecord(t, manifest, requests[0], "completed")
+		path, packet := nativeFinalizeProjection(t)
+		if _, _, err := stageBuildAttemptCompletion(path, packet); err != nil {
+			t.Fatal(err)
+		}
+		_, state, phase, _, err := runCodexBuildFinalize(root, 1, packet, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, attempt, ok := loadLatestBuildAttempt(1)
+		if !ok || attempt.FreeChecks == nil || attempt.FreeChecks.Passed || !containsString(attempt.FreeChecks.Failed, "tests") {
+			t.Fatalf("worker success replaced failing actual check: %+v", attempt.FreeChecks)
+		}
+		witness, err := os.ReadFile(filepath.Join(root, "native-check-count"))
+		if err != nil || string(witness) != "run\n" {
+			t.Fatalf("build check did not execute exactly once: %q %v", witness, err)
+		}
+		currentManifest := loadCodexContinueManifest(1)
+		now := time.Now().UTC()
+		verification := runCodexContinueVerificationSnapshot(root, phase, currentManifest, now, 5*time.Second, true)
+		found := false
+		for _, step := range verification.Steps {
+			if step.Name != "tests" {
+				continue
+			}
+			found = true
+			t.Logf("actual fixture check: command=%q exit=%d skipped=%t passed=%t output=%q", step.Command, step.ExitCode, step.Skipped, step.Passed, step.Output)
+			if step.Command != checkCommand || step.ExitCode != 7 || step.Skipped || step.Passed || !strings.Contains(step.Output, "NATIVE_CHECK_EXECUTED") {
+				t.Fatalf("wrong or unexecuted check cannot prove rejection: %+v", step)
+			}
+		}
+		if !found || verification.ChecksPassed || verification.Passed {
+			t.Fatal("zero checks or successful prose manufactured a pass")
+		}
+		assessment := assessCodexContinue(phase, currentManifest, verification, codexContinueOptions{}, now)
+		gates := runCodexContinueGates(phase, currentManifest, verification, assessment, now, nil)
+		decision := runContinueAcceptVerifyAdvance(phase, assessment, gates, &codexContinueReviewReport{Passed: true}, state)
+		if decision.Advances() || decision.PassSource != "" || state.Plan.Phases[0].Status == colony.PhaseCompleted {
+			t.Fatalf("failed fixture earned phase advancement: %+v", decision)
+		}
+	})
+	t.Run("host-provenance-on-replay", func(t *testing.T) {
+		root, manifest, requests := nativeFinalizeFixture(t, 1)
+		nativeFinalizeRecord(t, manifest, requests[0], "completed")
+		_, packet := nativeFinalizeProjection(t)
+		if _, _, _, _, err := runCodexBuildFinalize(root, 1, packet, true); err != nil {
+			t.Fatal(err)
+		}
+		raw, err := completionPacketAsRaw(packet)
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw.(map[string]any)["dispatches"].([]any)[0].(map[string]any)["child_id"] = "forged-host-child"
+		payload, err := json.Marshal(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		file := filepath.Join(t.TempDir(), "completion.json")
+		if err := os.WriteFile(file, payload, 0600); err != nil {
+			t.Fatal(err)
+		}
+		submitted, err := loadExternalBuildCompletion(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		before, state := nativeJournalBytes(t), nativeFinalizeStateBytes(t)
+		if _, _, _, _, err := runCodexBuildFinalize(root, 1, submitted, true); err == nil {
+			t.Fatal("replay bypassed native completion wire boundary")
+		}
+		if !bytes.Equal(before, nativeJournalBytes(t)) || !bytes.Equal(state, nativeFinalizeStateBytes(t)) {
+			t.Fatal("invalid replay changed saved evidence")
+		}
+	})
+}

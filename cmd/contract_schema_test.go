@@ -41,6 +41,43 @@ func TestCompletionPacketSchemaMatchesStructs(t *testing.T) {
 	}
 }
 
+func TestCompletionPacketSchemaNativeJournalIsolation(t *testing.T) {
+	for _, field := range []string{"native", "host_session_id", "child_id", "launch_id", "prompt_sha256", "result_sha256", "source_event_id", "usage", "completed_task_ids"} {
+		t.Run(field, func(t *testing.T) {
+			packet := completionPacketWithTaskReceipt()
+			worker := packet["dispatches"].([]any)[0].(map[string]any)
+			worker[field] = "caller cannot mint host authority"
+			if violations := validateCompletionPacketStructure(packet); !hasContractViolationAt(violations, "/dispatches/0", "additionalProperties") {
+				t.Fatalf("host-only %s entered completion wire: %+v", field, violations)
+			}
+		})
+	}
+	packet := completionPacketWithTaskReceipt()
+	worker := packet["dispatches"].([]any)[0].(map[string]any)
+	worker["artifacts"] = map[string]any{"review": map[string]any{"findings": []any{"actual worker finding"}}}
+	worker["scout_report"] = map[string]any{"finding": "actual worker observation"}
+	if violations := validateCompletionPacketStructure(packet); len(violations) != 0 {
+		t.Fatalf("worker findings/receipts rejected: %+v", violations)
+	}
+	raw, err := json.Marshal(packet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var completion codexExternalBuildCompletion
+	if err := json.Unmarshal(raw, &completion); err != nil {
+		t.Fatal(err)
+	}
+	projected, err := json.Marshal(completion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, text := range []string{"actual worker finding", "actual worker observation", "task_receipts"} {
+		if !bytes.Contains(projected, []byte(text)) {
+			t.Fatalf("wire projection lost %s", text)
+		}
+	}
+}
+
 func TestCompletionPacketSchemaStructProjectsTaskReceipts(t *testing.T) {
 	raw := []byte(`{
 		"name":"Mason-67",
