@@ -1,12 +1,19 @@
 package cmd
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/codex"
 )
+
+// FileLocker is reentrant within one Store. Serialize in-process worker
+// mutations too; the existing file lock still arbitrates separate hosts.
+var buildWorkerRunMutationMu sync.Mutex
 
 const (
 	buildWorkerDispatching = "dispatching"
@@ -35,6 +42,8 @@ type buildAttemptWorkerRun struct {
 }
 
 func beginBuildAttemptWorkerRun(phase int, binding codex.ExecutionBinding, request internalWorkerDispatchRequest, providerRunID string, platform codex.Platform) (*buildAttemptWorkerRun, error) {
+	buildWorkerRunMutationMu.Lock()
+	defer buildWorkerRunMutationMu.Unlock()
 	attemptRel, record, ok := loadLatestBuildAttempt(phase)
 	if !ok {
 		return nil, fmt.Errorf("build worker execution binding has no durable attempt")
@@ -109,6 +118,8 @@ func beginBuildAttemptWorkerRun(phase int, binding codex.ExecutionBinding, reque
 }
 
 func recordBuildAttemptWorkerProcess(phase int, binding codex.ExecutionBinding, providerRunID string, pid int) error {
+	buildWorkerRunMutationMu.Lock()
+	defer buildWorkerRunMutationMu.Unlock()
 	if pid <= 0 {
 		return nil
 	}
@@ -122,11 +133,14 @@ func recordBuildAttemptWorkerProcess(phase int, binding codex.ExecutionBinding, 
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	var record buildAttemptRecord
 	if err := store.UpdateJSONAtomically(attemptRel, &record, func() error {
-		if record.ID != binding.AttemptID || record.RunID != binding.RunID {
-			return fmt.Errorf("execution binding does not match the current build attempt")
+		if err := validateBuildExecutionBinding(record, binding, record.ManifestSHA256, false); err != nil {
+			return err
 		}
 		for i := range record.WorkerRuns {
 			if record.WorkerRuns[i].ProviderRunID == strings.TrimSpace(providerRunID) {
+				if record.WorkerRuns[i].Native != nil {
+					return fmt.Errorf("native workers have no provider process")
+				}
 				record.WorkerRuns[i].ProcessID = pid
 				record.WorkerRuns[i].UpdatedAt = now
 				return nil
@@ -140,6 +154,8 @@ func recordBuildAttemptWorkerProcess(phase int, binding codex.ExecutionBinding, 
 }
 
 func recordBuildAttemptWorkerTerminal(phase int, binding codex.ExecutionBinding, providerRunID string, result *internalWorkerResult) error {
+	buildWorkerRunMutationMu.Lock()
+	defer buildWorkerRunMutationMu.Unlock()
 	if result == nil {
 		return fmt.Errorf("terminal worker result is required")
 	}
@@ -149,7 +165,6 @@ func recordBuildAttemptWorkerTerminal(phase int, binding codex.ExecutionBinding,
 	default:
 		return fmt.Errorf("terminal worker status %q is invalid", result.Status)
 	}
-	result.Status = status
 	attemptRel, current, ok := loadLatestBuildAttempt(phase)
 	if !ok {
 		return fmt.Errorf("build worker execution binding has no durable attempt")
@@ -160,8 +175,8 @@ func recordBuildAttemptWorkerTerminal(phase int, binding codex.ExecutionBinding,
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	var record buildAttemptRecord
 	if err := store.UpdateJSONAtomically(attemptRel, &record, func() error {
-		if record.ID != binding.AttemptID || record.RunID != binding.RunID {
-			return fmt.Errorf("execution binding does not match the current build attempt")
+		if err := validateBuildExecutionBinding(record, binding, record.ManifestSHA256, false); err != nil {
+			return err
 		}
 		for i := range record.WorkerRuns {
 			workerRun := &record.WorkerRuns[i]
@@ -182,8 +197,16 @@ func recordBuildAttemptWorkerTerminal(phase int, binding codex.ExecutionBinding,
 
 // applyBuildWorkerTerminal runs under the existing attempt lock in both lanes.
 func applyBuildWorkerTerminal(record *buildAttemptRecord, workerRun *buildAttemptWorkerRun, result *internalWorkerResult, now string) error {
+	result, err := normalizedBuildWorkerResult(result)
+	if err != nil {
+		return err
+	}
 	switch result.Status {
 	case buildWorkerCompleted, buildWorkerFailed, buildWorkerBlocked, buildWorkerTimeout:
+	case buildWorkerCancelled:
+		if workerRun.Native == nil {
+			return fmt.Errorf("only confirmed native cancellation is terminal here")
+		}
 	default:
 		return fmt.Errorf("terminal worker status %q is invalid", result.Status)
 	}
@@ -206,6 +229,22 @@ func applyBuildWorkerTerminal(record *buildAttemptRecord, workerRun *buildAttemp
 	return nil
 }
 
+func normalizedBuildWorkerResult(result *internalWorkerResult) (*internalWorkerResult, error) {
+	if result == nil {
+		return nil, fmt.Errorf("terminal worker result is required")
+	}
+	raw, err := json.Marshal(result)
+	if err != nil {
+		return nil, err
+	}
+	var normalized internalWorkerResult
+	if err := json.Unmarshal(raw, &normalized); err != nil {
+		return nil, err
+	}
+	normalized.Status = strings.ToLower(strings.TrimSpace(normalized.Status))
+	return &normalized, nil
+}
+
 func buildAttemptHasDispatch(record buildAttemptRecord, request internalWorkerDispatchRequest) bool {
 	requestTaskID := effectiveInternalWorkerTaskID(request)
 	for _, dispatch := range record.Dispatches {
@@ -225,7 +264,7 @@ func effectiveInternalWorkerTaskID(request internalWorkerDispatchRequest) string
 
 func buildWorkerRunStillActive(run buildAttemptWorkerRun, now time.Time) bool {
 	if run.Native != nil {
-		return run.Native.LaunchState != "terminal"
+		return !codexNativeWorkerIsTerminal(run)
 	}
 	if run.ProcessID > 0 {
 		return processAlive(run.ProcessID)
@@ -243,23 +282,33 @@ func cachedInternalWorkerResult(run *buildAttemptWorkerRun) *internalWorkerResul
 }
 
 func cancelBuildAttemptWorkerRuns(attemptRel, reason string) error {
+	buildWorkerRunMutationMu.Lock()
+	defer buildWorkerRunMutationMu.Unlock()
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	var record buildAttemptRecord
 	if err := store.UpdateJSONAtomically(attemptRel, &record, func() error {
+		changed := false
 		for i := range record.WorkerRuns {
 			workerRun := &record.WorkerRuns[i]
-			if workerRun.Status != buildWorkerDispatching {
+			if workerRun.Native != nil || workerRun.Status != buildWorkerDispatching {
 				continue
 			}
+			changed = true
 			workerRun.Status = buildWorkerCancelled
 			workerRun.ProcessID = 0
 			workerRun.Error = strings.TrimSpace(reason)
 			workerRun.UpdatedAt = now
 			workerRun.CompletedAt = now
 		}
+		if !changed {
+			return errCodexNativeReplay
+		}
 		record.UpdatedAt = now
 		return nil
 	}); err != nil {
+		if errors.Is(err, errCodexNativeReplay) {
+			return nil
+		}
 		return fmt.Errorf("record cancelled build workers: %w", err)
 	}
 	return nil
@@ -417,6 +466,10 @@ func latestTerminalBuildWorkerRun(runs []buildAttemptWorkerRun, workerName, task
 		switch run.Status {
 		case buildWorkerCompleted, buildWorkerFailed, buildWorkerBlocked, buildWorkerTimeout:
 			return run, true
+		case buildWorkerCancelled:
+			if run.Native != nil {
+				return run, true
+			}
 		}
 	}
 	return buildAttemptWorkerRun{}, false
