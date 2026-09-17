@@ -26,6 +26,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -232,8 +233,8 @@ func startupLifecycleSurfaces() []lifecycleSurfaceCase {
 			keep: []string{"Choose Planning Preset", "Planning did not start. State: unchanged."},
 		},
 		{
-			// The repaired-plan variant.
-			name:    "repairing a plan that points at a phase it does not contain",
+			// Artifact validation is an inspection/repair route, not a new planning run.
+			name:    "validating an existing legacy planning artifact",
 			args:    []string{"plan", "--repair-artifact"},
 			command: "plan",
 			prepare: func(t *testing.T, dataDir string) {
@@ -259,7 +260,7 @@ func startupLifecycleSurfaces() []lifecycleSurfaceCase {
 					t.Fatalf("write the planning artifact the repair path reads: %v", err)
 				}
 			},
-			keep: []string{"Choose Planning Preset", "Planning did not start. State: unchanged."},
+			keep: []string{"Phase-plan dependency references are already valid.", "Artifact: .aether/data/planning/phase-plan.json"},
 		},
 		{
 			// The blocked variant: planning stopped on a problem that needs the
@@ -315,11 +316,15 @@ func TestStartupLifecycleCardsComeFromTheResolver(t *testing.T) {
 		t.Run(surface.name, func(t *testing.T) {
 			run := runLifecycleSurface(t, surface, false)
 
-			if surface.command == "discuss" || surface.command == "plan" {
+			artifactRepair := surface.command == "plan" && slices.Contains(surface.args, "--repair-artifact")
+			if surface.command == "discuss" || (surface.command == "plan" && !artifactRepair) {
 				assertPhase200StartupBoundary(t, surface, run.visual)
 			} else if !strings.Contains(run.visual, run.card) {
 				t.Errorf("%s does not end with the shared card.\n--- the card the resolver produced ---\n%s\n--- what the command printed ---\n%s",
 					surface.name, run.card, run.visual)
+			}
+			if artifactRepair && strings.Contains(run.visual, "Choose Planning Preset") {
+				t.Error("artifact repair was routed into a new planning preset decision")
 			}
 			for _, keep := range surface.keep {
 				if !strings.Contains(run.visual, keep) {
