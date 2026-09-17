@@ -36,6 +36,7 @@ var resumeNoHandoff bool
 var pauseResumeLifecycleFault lifecycleTransactionFaultHook
 
 type pauseResumeLifecycleOutcome struct {
+	NativeRecovery   *codexNativeRecovery
 	Handoff          colony.PauseHandoff
 	Receipt          colony.LifecycleReceipt
 	Provenance       colony.RecoveryProvenance
@@ -237,6 +238,17 @@ var resumeColonyCmd = &cobra.Command{
 		outcome, err := resumeColonyAt(time.Now().UTC())
 		if err != nil {
 			renderRecoveryMenu("resume", err.Error(), []string{"aether status", "aether resume"})
+			return nil
+		}
+		if outcome.NativeRecovery != nil {
+			result := buildResumeDashboardResult()
+			applyCodexNativeRecovery(result, outcome.NativeRecovery)
+			result["resumed"] = false
+			result["state_effect"] = colony.LifecycleStateEffectNone
+			result["outcome_kind"] = colony.OutcomeKindNoChange
+			result["message"] = "Saved native work is available for recovery; no new lifecycle episode was created."
+			closeLifecycleCommand(result, "picking the project back up", outcome.NativeRecovery.Next, outcome.NativeRecovery.Why)
+			outputWorkflow(result, renderCodexNativeRecovery(outcome.NativeRecovery))
 			return nil
 		}
 		if outcome.Provenance == colony.RecoveryProvenanceConflicting || outcome.Provenance == colony.RecoveryProvenanceUnknown {
@@ -490,6 +502,11 @@ func resumeColonyAt(now time.Time) (pauseResumeLifecycleOutcome, error) {
 		}
 	}
 
+	// Recover a pending pause intent above before projecting native activity.
+	// Otherwise an interrupted pause could be hidden by an advisory read.
+	if recovery := buildCodexNativeRecovery(state); recovery != nil && (!state.Paused || recovery.pendingBoundary()) {
+		return pauseResumeLifecycleOutcome{NativeRecovery: recovery, StateEffect: colony.LifecycleStateEffectNone, Provenance: colony.RecoveryProvenanceConfirmed}, nil
+	}
 	if state.PauseHandoff != nil && !state.Paused {
 		resumeTxID := resumeTransactionID(state.PauseHandoff.ID)
 		if lifecycleTransactionHasIntentOrReceipt(resumeTxID) {

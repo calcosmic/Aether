@@ -86,7 +86,7 @@ func nativeRecoveryItems(t *testing.T, recovery map[string]any, key string, coun
 
 func TestCodexNativeRecoveryPartialReady(t *testing.T) {
 	manifest, requests := nativeRecoveryFixture(t, 2)
-	requests[0] = nativeRecoveryFinish(t, manifest, requests[0], 0)
+	nativeRecoveryFinish(t, manifest, requests[0], 0)
 	before := nativeJournalBytes(t)
 	stateBefore, _ := store.ReadFile("COLONY_STATE.json")
 	dashboard, recovery := nativeRecoveryDashboard(t)
