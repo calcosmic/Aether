@@ -616,7 +616,7 @@ func TestCodexNativeRecoveryMixedAndDamagedRemainBlocked(t *testing.T) {
 			}
 			before := nativeRecoveryStoreSnapshot(t)
 			dashboard, recovery := nativeRecoveryDashboard(t)
-			if recovery["valid"] != false || recovery["error"] == "" || recovery["next"] != "aether status" || dashboard["resume_override_command"] != "aether status" {
+			if recovery["valid"] != false || strings.TrimSpace(stringValue(recovery["error"])) == "" || recovery["next"] != "aether status" || dashboard["resume_override_command"] != "aether status" {
 				t.Fatalf("mixed or damaged native evidence became actionable: %+v", recovery)
 			}
 			if !reflect.DeepEqual(before, nativeRecoveryStoreSnapshot(t)) {
