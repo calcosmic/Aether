@@ -493,11 +493,23 @@ func TestCodexNativeFixtureCoordinatorBoundary(t *testing.T) {
 		t.Fatalf("fixture coordinator syntax: %v %s", err, out)
 	}
 	liveSkillWrite(t, path, []byte(script))
-	r := codexNativeLiveReceipt{CoordinatorPath: path, CoordinatorSHA256: lifecycleDigest([]byte(script))}
+	r := codexNativeLiveReceipt{FixtureRoot: filepath.Dir(path), CoordinatorPath: path, CoordinatorSHA256: lifecycleDigest([]byte(script))}
 	allowed := []string{"python3 " + path + " inspect", "python3 " + path + " bind child-123", "aether command-guide build --platform codex", "git diff --check", "cat /installed/SKILL.md", `jq '{workers: .workers | length}' /tmp/manifest.json`, `rg --files "$CODEX_HOME/sessions"`}
 	for _, command := range allowed {
 		if !nativeParentCoordinationCommand(&r, []string{"/bin/zsh", "-lc", command}) {
 			t.Fatalf("safe fixture coordination refused: %s", command)
+		}
+	}
+	relative := []string{"/bin/zsh", "-lc", "python3 coordinator.py inspect"}
+	if !nativeParentCoordinationCommand(&r, relative, "file://"+r.FixtureRoot) {
+		t.Fatal("relative pinned coordinator in exact fixture cwd refused")
+	}
+	if nativeParentCoordinationCommand(&r, relative, "file:///another-fixture") {
+		t.Fatal("relative coordinator from different cwd accepted")
+	}
+	for _, command := range []string{`cmp /tmp/first.json /tmp/second.json`, `jq '.result | {idempotent}' /tmp/first.json /tmp/second.json`, `head -n 1 /tmp/child.jsonl`, `rg --files /tmp/sessions`} {
+		if !nativeParentCoordinationCommand(&r, []string{"/bin/zsh", "-lc", command}) {
+			t.Fatalf("read-only evidence operation refused: %s", command)
 		}
 	}
 	for _, command := range []string{"python3 " + path + " inspect extra", "python3 -c 'exec(open(\"" + path + "\").read())'", "git diff --output=/fixture/clamp.go", "cat x > clamp.go", "python3 " + path + " inspect; echo ok", `rg --files "$(touch clamp.go)"`, `jq '.' manifest.json > clamp.go`} {
@@ -1125,7 +1137,7 @@ func nativeInspectParentEvents(r *codexNativeLiveReceipt, raw []byte) {
 				r.ParentSubstitution = true
 			}
 			if i.Type == "CommandExecution" {
-				if !nativeParentCoordinationCommand(r, i.Command) {
+				if !nativeParentCoordinationCommand(r, i.Command, i.Cwd) {
 					r.ParentSubstitution = true
 					r.ParentUnclassified = append(r.ParentUnclassified, strings.Join(i.Command, " "))
 				}
@@ -1133,10 +1145,10 @@ func nativeInspectParentEvents(r *codexNativeLiveReceipt, raw []byte) {
 				if len(i.Command) == 3 {
 					words, _ = nativeSimpleShellWords(i.Command[2])
 				}
-				if len(words) == 3 && words[1] == r.CoordinatorPath && words[2] == "empty-result" && i.ExitCode != nil && *i.ExitCode != 0 && strings.Contains(i.Output, "nonempty terminal result") {
+				if len(words) == 3 && nativeCoordinatorPathMatches(r, i.Cwd, words[1]) && words[2] == "empty-result" && i.ExitCode != nil && *i.ExitCode != 0 && strings.Contains(i.Output, "nonempty terminal result") {
 					r.EmptyResultRefused = true
 				}
-				if len(words) == 3 && words[1] == r.CoordinatorPath && words[2] == "inspect" && i.ExitCode != nil && *i.ExitCode == 0 && strings.Contains(i.Output, r.ResultSHA256) && r.ResultSHA256 != "" {
+				if len(words) == 3 && nativeCoordinatorPathMatches(r, i.Cwd, words[1]) && words[2] == "inspect" && i.ExitCode != nil && *i.ExitCode == 0 && strings.Contains(i.Output, r.ResultSHA256) && r.ResultSHA256 != "" {
 					r.ResumeInspectObserved = true
 				}
 				if i.Status == "completed" && i.ExitCode != nil && *i.ExitCode == 0 && len(i.Command) == 3 {
@@ -1198,7 +1210,17 @@ func nativeInspectParentEvents(r *codexNativeLiveReceipt, raw []byte) {
 	}
 }
 
-func nativeParentCoordinationCommand(r *codexNativeLiveReceipt, command []string) bool {
+func nativeCoordinatorPathMatches(r *codexNativeLiveReceipt, cwd, path string) bool {
+	if !filepath.IsAbs(path) {
+		if !nativeSameCwd(cwd, r.FixtureRoot) {
+			return false
+		}
+		path = filepath.Join(r.FixtureRoot, path)
+	}
+	return filepath.Clean(path) == filepath.Clean(r.CoordinatorPath)
+}
+
+func nativeParentCoordinationCommand(r *codexNativeLiveReceipt, command []string, actualCwd ...string) bool {
 	if len(command) != 3 || (command[1] != "-lc" && command[1] != "-c") {
 		return false
 	}
@@ -1219,7 +1241,11 @@ func nativeParentCoordinationCommand(r *codexNativeLiveReceipt, command []string
 	}
 	switch words[0] {
 	case "python3":
-		if len(words) < 3 || len(words) > 4 || words[1] != r.CoordinatorPath {
+		cwd := r.FixtureRoot
+		if len(actualCwd) > 0 {
+			cwd = actualCwd[0]
+		}
+		if len(words) < 3 || len(words) > 4 || !nativeCoordinatorPathMatches(r, cwd, words[1]) {
 			return false
 		}
 		raw, err := os.ReadFile(r.CoordinatorPath)
@@ -1249,7 +1275,17 @@ func nativeParentCoordinationCommand(r *codexNativeLiveReceipt, command []string
 		if len(args) > 0 && (args[0] == "-r" || args[0] == "-c" || args[0] == "-S") {
 			args = args[1:]
 		}
-		return len(args) == 2 && !strings.HasPrefix(args[0], "-") && !strings.HasPrefix(args[1], "-")
+		if len(args) < 2 {
+			return false
+		}
+		for _, arg := range args {
+			if strings.HasPrefix(arg, "-") {
+				return false
+			}
+		}
+		return true
+	case "cmp":
+		return len(words) == 3 && !strings.HasPrefix(words[1], "-") && !strings.HasPrefix(words[2], "-")
 	case "git":
 		if len(words) == 2 {
 			return words[1] == "status" || words[1] == "diff"
