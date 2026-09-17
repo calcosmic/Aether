@@ -57,7 +57,7 @@ func codexNativeWorkerContract() *NativeWorkerContract {
 		PerChildIsolation:  CapabilitySupport{Level: CapabilityUnavailable, Mechanism: "no qualified per-child permission selector; only the same inherited workspace-write envelope is admitted", Limitations: []string{"inherited parent sandbox observations do not prove per-child read-only, narrow write scope, shell or network restrictions"}},
 		WorktreeAllocation: CapabilitySupport{Level: CapabilityUnavailable, Mechanism: "native admission requires the accepted shared workspace; separate native worktree allocation is unsupported"},
 		GovernedNesting:    CapabilitySupport{Level: CapabilityUnavailable, Mechanism: "a real nested host helper was observed, but Aether-governed native recruitment is unqualified"},
-		Cancellation:       CapabilitySupport{Level: CapabilityUnavailable, Mechanism: "no confirmed cancelled terminal observed", Limitations: []string{"interrupt, close, release, idle and process loss are not confirmed terminal cancellation"}},
+		Cancellation:       CapabilitySupport{Level: CapabilityUnavailable, Mechanism: "the cited baseline captures did not establish a cancelled terminal", Limitations: []string{"interrupt, close, release, idle and process loss are not confirmed terminal cancellation"}},
 		Usage:              CapabilitySupport{Level: CapabilityLimited, Mechanism: "raw child-attributed token_usage_record events expose thread, parent session, turn and response identities", Limitations: []string{"native worker usage is uncollected by Aether; empty saved Usage remains unreported", "no provider cost is collected; absent measurement is not zero cost", "worker prose, parent totals and submitted result usage are not trusted provider measurements"}},
 	}
 }

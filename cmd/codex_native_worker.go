@@ -543,7 +543,10 @@ func executeCodexNativeWorkerRequest(operation string, request codexNativeWorker
 			if err := validateCodexNativeSavedWorker(updated, *dispatch, *worker); err != nil {
 				return err
 			}
-			if request.RequireGovernedNesting || (request.Workspace != "" && request.Workspace != native.Workspace) || (request.HostPermission != "" && request.HostPermission != string(native.PermissionProfile.Name)) {
+			if request.RequireGovernedNesting {
+				return fmt.Errorf("native host cannot provide requested Aether-governed nesting; no release authorized")
+			}
+			if (request.Workspace != "" && request.Workspace != native.Workspace) || (request.HostPermission != "" && request.HostPermission != string(native.PermissionProfile.Name)) {
 				return fmt.Errorf("native workspace or permission does not match reservation")
 			}
 			if request.LaunchID != worker.ProviderRunID || request.HostSessionID != native.HostSessionID || request.DispatchSHA256 != native.DispatchSHA256 || request.PromptSHA256 != native.PromptSHA256 || (request.ChildID == "" && operation != "observe") {

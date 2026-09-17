@@ -36,7 +36,7 @@ func TestCodexNativeWorkerCapabilities(t *testing.T) {
 		request = nativeReserveForTest(t, request)
 		request.RequireGovernedNesting = true
 		before := nativeJournalBytes(t)
-		if _, err := runCodexNativeWorker("bind", nativeRequestPath(t, request)); err == nil || !bytes.Equal(before, nativeJournalBytes(t)) {
+		if _, err := runCodexNativeWorker("bind", nativeRequestPath(t, request)); err == nil || !strings.Contains(err.Error(), "cannot provide requested Aether-governed nesting") || !bytes.Equal(before, nativeJournalBytes(t)) {
 			t.Fatal("bind silently discarded a stricter nesting request")
 		}
 	})
@@ -725,6 +725,12 @@ func TestCodexNativeBuildGuidePlatformIsolation(t *testing.T) {
 			}
 			if strings.Contains(all, "build-wave playbook") {
 				t.Error("Codex guide still delegates authority to retired playbook")
+			}
+			if strings.Contains(all, "Write per-worker JSON and the final completion JSON") {
+				t.Error("native guide inherited subprocess result-file instructions")
+			}
+			if strings.Contains(all, "In worktree mode one job") {
+				t.Error("native guide inherited subprocess worktree instructions")
 			}
 		} else {
 			for _, forbidden := range []string{"codex-native-worker", "spawn_agent", "worker.native.release", "context_delivered", "context_delivery.payload", "decision-answer --native-request", "launch_unresolved", "cancel_requested", "require_governed_nesting", "Reconnect only to the same actual child"} {
@@ -2174,6 +2180,140 @@ text(await tools.exec_command({cmd:"printenv CODEX_HOME CODEX_THREAD_ID",max_out
 			nativeInspectParentEvents(&r, raw)
 			if r.ParentSubstitution != tc.bad {
 				t.Fatalf("substitution=%v want%v: %v", r.ParentSubstitution, tc.bad, r.ParentUnclassified)
+			}
+		})
+	}
+}
+
+func TestCodexNativeReadOnlyBatchBoundary(t *testing.T) {
+	batch := `const results = await Promise.allSettled([tools.exec_command({cmd:"cat clamp.go",workdir:"/fixture"}),tools.exec_command({cmd:"aether status",workdir:"/fixture"})]); for (let i=0;i<results.length;i++) text({index:i,...results[i]});`
+	for _, tc := range []struct {
+		name, input string
+		want        bool
+	}{
+		{"literal-awaited", batch, true},
+		{"short-print", strings.Replace(batch, "index:i", "i", 1), true},
+		{"unawaited", strings.Replace(batch, "await Promise", "Promise", 1), false},
+		{"trailing-code", batch + `text("fake");`, false},
+		{"wrong-variable", strings.Replace(batch, "...results[i]", "...other[i]", 1), false},
+		{"wrong-index", strings.Replace(batch, "...results[i]", "...results[j]", 1), false},
+		{"mutation", strings.Replace(batch, "aether status", "aether pause", 1), false},
+		{"mutating-helper", strings.Replace(batch, "cat clamp.go", "python3 /fixture/helper.py reserve", 1), false},
+		{"unrelated-tool", strings.Replace(batch, "tools.exec_command", "tools.apply_patch", 1), false},
+		{"computed-command", strings.Replace(batch, `"cat clamp.go"`, `"cat "+file`, 1), false},
+		{"shell-compound", strings.Replace(batch, "cat clamp.go", "cat clamp.go; touch clamp_test.go", 1), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, ok := nativeCodeModeCommands(tc.input, "/fixture")
+			if ok != tc.want {
+				t.Fatalf("accepted=%v want=%v", ok, tc.want)
+			}
+		})
+	}
+}
+
+func TestCodexNativeCandidateBuildIdentity(t *testing.T) {
+	args := nativeCandidateBuildArgv(antSkillSourceRoot(t), filepath.Join(t.TempDir(), "aether"))
+	if strings.Join(args[:3], " ") != "go build -buildvcs=false" {
+		t.Fatalf("nested worktree must not inherit outer VCS metadata: %v", args)
+	}
+}
+
+func TestCodexNativeLiteralPatchBoundary(t *testing.T) {
+	patch := "*** Begin Patch\n*** Update File: /fixture/clamp.go\n@@\n-old\n+new\n*** End Patch"
+	for _, mode := range []string{"valid", "computed", "trailing", "missing-change", "wrong-child", "wrong-turn", "wrong-output", "duplicate-change", "duplicate-call", "protected-file", "failed-change"} {
+		t.Run(mode, func(t *testing.T) {
+			r := codexNativeLiveReceipt{ChildID: "child", BoundHostSessionID: "parent", FixtureRoot: "/fixture", BaselineSource: "old\n", FinalSource: "new\n"}
+			input := "text(await tools.apply_patch(" + strconv.Quote(patch) + "));"
+			if mode == "computed" {
+				input = "text(await tools.apply_patch(" + strconv.Quote(patch) + "+suffix));"
+			}
+			if mode == "trailing" {
+				input += `text("fake");`
+			}
+			var raw []byte
+			add := func(v any) { b, _ := json.Marshal(v); raw = append(raw, append(b, '\n')...) }
+			add(map[string]any{"type": "session_meta", "payload": map[string]any{"id": "child", "parent_thread_id": "parent", "agent_role": "aether-builder", "cwd": "/fixture"}})
+			call := map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call", "name": "exec", "call_id": "call", "input": input, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}}
+			add(call)
+			if mode == "duplicate-call" {
+				add(call)
+			}
+			thread, turn, path, status := "child", "turn", "/fixture/clamp.go", "completed"
+			if mode == "wrong-child" {
+				thread = "sibling"
+			}
+			if mode == "wrong-turn" {
+				turn = "other"
+			}
+			if mode == "protected-file" {
+				path = "/fixture/clamp_test.go"
+			}
+			if mode == "failed-change" {
+				status = "failed"
+			}
+			change := map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": thread, "turn_id": turn, "item": map[string]any{"type": "FileChange", "id": "edit", "status": status, "changes": map[string]any{path: map[string]any{"type": "update", "unified_diff": "@@ -1,1 +1,1 @@\n-old\n+new\n"}}}}}
+			if mode != "missing-change" {
+				add(change)
+			}
+			if mode == "duplicate-change" {
+				add(change)
+			}
+			id := "call"
+			if mode == "wrong-output" {
+				id = "other-call"
+			}
+			add(map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call_output", "call_id": id, "output": []any{map[string]any{"type": "input_text", "text": "Script completed\n"}, map[string]any{"type": "input_text", "text": "{}"}}, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}})
+			if got := nativeCorroboratedLiteralPatch(r, raw, "call"); got != (mode == "valid") {
+				t.Fatalf("corroboration=%v", got)
+			}
+			if mode == "valid" {
+				nativeInspectChildEvents(&r, raw)
+				if !r.ChildEditObserved || len(r.ChildUnclassified) != 0 {
+					t.Fatalf("literal patch not classified through child collector: %+v", r.ChildUnclassified)
+				}
+			}
+		})
+	}
+}
+
+func TestCodexNativeReadOnlyBatchEventLinkage(t *testing.T) {
+	commands := []nativeRecordedShellCommand{{"cat clamp.go", "/fixture"}, {"aether status", "/fixture"}}
+	for _, mode := range []string{"valid", "wrong-child", "wrong-turn", "wrong-output", "duplicate-event", "duplicate-call", "missing-event", "wrong-command"} {
+		t.Run(mode, func(t *testing.T) {
+			var raw []byte
+			add := func(v any) { b, _ := json.Marshal(v); raw = append(raw, append(b, '\n')...) }
+			call := map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call", "call_id": "batch", "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}}
+			add(call)
+			if mode == "duplicate-call" {
+				add(call)
+			}
+			for index, c := range commands {
+				if mode == "missing-event" && index == 1 {
+					continue
+				}
+				thread, turn, id, command := "parent", "turn", fmt.Sprint(index), c.Command
+				if mode == "wrong-child" {
+					thread = "sibling"
+				}
+				if mode == "wrong-turn" {
+					turn = "other"
+				}
+				if mode == "duplicate-event" {
+					id = "same"
+				}
+				if mode == "wrong-command" {
+					command = "aether pause"
+				}
+				add(map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": thread, "turn_id": turn, "item": map[string]any{"type": "CommandExecution", "id": id, "status": "completed", "cwd": c.Cwd, "command": []string{"/bin/sh", "-c", command}, "exit_code": 0}}})
+			}
+			id := "batch"
+			if mode == "wrong-output" {
+				id = "other-call"
+			}
+			add(map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call_output", "call_id": id, "output": []any{map[string]any{"type": "input_text", "text": "Script completed\n"}}, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}})
+			if got := nativeCorroboratedBatch(raw, "parent", "batch", commands); got != (mode == "valid") {
+				t.Fatalf("corroboration=%v", got)
 			}
 		})
 	}

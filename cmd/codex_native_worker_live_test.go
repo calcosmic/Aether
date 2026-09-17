@@ -184,6 +184,10 @@ func TestCodexNativeWorkerFreshHost(t *testing.T) {
 	}
 }
 
+func nativeCandidateBuildArgv(source, binary string) []string {
+	return []string{"go", "build", "-buildvcs=false", "-ldflags", "-X github.com/calcosmic/Aether/cmd.Version=" + readRepoVersion(source), "-o", binary, "./cmd/aether"}
+}
+
 func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenario) {
 	evidenceRoot := os.Getenv("AETHER_CODEX_NATIVE_EVIDENCE_DIR")
 	if !filepath.IsAbs(evidenceRoot) {
@@ -240,7 +244,7 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 	if err := os.MkdirAll(filepath.Dir(receipt.CandidatePath), 0700); err != nil {
 		fail(err.Error())
 	}
-	receipt.BuildArgv = []string{"go", "build", "-ldflags", "-X github.com/calcosmic/Aether/cmd.Version=" + readRepoVersion(source), "-o", receipt.CandidatePath, "./cmd/aether"}
+	receipt.BuildArgv = nativeCandidateBuildArgv(source, receipt.CandidatePath)
 	build := exec.Command(receipt.BuildArgv[0], receipt.BuildArgv[1:]...)
 	build.Dir = source
 	raw, err := build.CombinedOutput()
@@ -250,7 +254,12 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 	}
 	receipt.CandidateSHA256 = liveSkillFileDigest(t, receipt.CandidatePath)
 	receipt.CandidateVersion = strings.TrimSpace(liveSkillCommandOutput(t, source, receipt.CandidatePath, "version"))
-	liveSkillWrite(t, filepath.Join(runRoot, "candidate-build-info.txt"), []byte(liveSkillCommandOutput(t, source, "go", "version", "-m", receipt.CandidatePath)))
+	buildInfo := liveSkillCommandOutput(t, source, "go", "version", "-m", receipt.CandidatePath)
+	liveSkillWrite(t, filepath.Join(runRoot, "candidate-build-info.txt"), []byte(buildInfo))
+	if strings.Contains(buildInfo, "vcs.revision=") || strings.Contains(buildInfo, "vcs.modified=") || receipt.SourceStatus != "" {
+		fail("qualification requires clean pinned source and deliberately absent embedded VCS metadata")
+	}
+	liveSkillWriteJSON(t, filepath.Join(runRoot, "candidate-provenance.json"), map[string]any{"source_revision": receipt.SourceRevision, "source_digest": receipt.SourceDigest, "source_status": receipt.SourceStatus, "build_argv": receipt.BuildArgv, "embedded_vcs": "deliberately disabled: Go VCS discovery traverses nested worktree .git files; exact worktree source inventory is authoritative", "binary_sha256": receipt.CandidateSHA256})
 	fixtureHome, repo := filepath.Join(runRoot, "home"), filepath.Join(runRoot, "repository")
 	for _, dir := range []string{fixtureHome, repo} {
 		if err := os.MkdirAll(dir, 0700); err != nil {
@@ -711,8 +720,15 @@ func nativeRunClaudeComparison(t *testing.T, r *codexNativeLiveReceipt, runRoot,
 	}
 	r.ClientPath, r.ClientSHA256 = client, liveSkillFileDigest(t, client)
 	r.ClientVersion = strings.TrimSpace(liveSkillCommandOutput(t, r.FixtureRoot, client, "--version"))
-	r.SkillPath = filepath.Join(fixtureHome, ".claude", "commands", "ant", "build.md")
+	r.SkillPath = filepath.Join(fixtureHome, ".claude", "commands", "ant-build.md")
 	r.SupportPath = filepath.Join(fixtureHome, ".aether", "system", "docs", "command-playbooks", "build-wave.md")
+	builderPath := filepath.Join(fixtureHome, ".claude", "agents", "ant", "aether-builder.md")
+	for installed, sourcePath := range map[string]string{r.SkillPath: filepath.Join(antSkillSourceRoot(t), ".claude", "commands", "ant", "build.md"), builderPath: filepath.Join(antSkillSourceRoot(t), ".claude", "agents", "ant", "aether-builder.md")} {
+		if liveSkillFileDigest(t, installed) != liveSkillFileDigest(t, sourcePath) {
+			t.Fatalf("Claude installed input differs from candidate: %s", installed)
+		}
+	}
+	liveSkillWriteJSON(t, filepath.Join(runRoot, "claude-installed-preflight.json"), map[string]string{"wrapper": r.SkillPath, "wrapper_sha256": liveSkillFileDigest(t, r.SkillPath), "builder": builderPath, "builder_sha256": liveSkillFileDigest(t, builderPath), "setting_sources": "user", "command": "/ant-build"})
 	for i, value := range env {
 		if strings.HasPrefix(value, "AETHER_PLATFORM=") {
 			env[i] = "AETHER_PLATFORM=claude"
@@ -724,8 +740,8 @@ func nativeRunClaudeComparison(t *testing.T, r *codexNativeLiveReceipt, runRoot,
 			env = append(env, key+"="+value)
 		}
 	}
-	r.Args = []string{"--print", "--verbose", "--output-format", "stream-json", "--forward-subagent-text", "--permission-mode", "acceptEdits", "--permission-prompts", "none", "--setting-sources", "", "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "--no-chrome"}
-	prompt := "/ant:build 1\nEquivalent minimal prepared-fixture comparison. Use the production-installed Claude build wrapper and shared Go acceptance/finalizer routes for the one accepted Clamp task. Spawn one real named Builder; it alone edits clamp.go and runs go test ./... -json -count=1 (no test filters). Parent coordinates only. Do not modify tests/go.mod, commit, install, publish, contact others, access other projects or launch replacement work. No live planning or owner testimony is claimed. Read the installed wrapper; if actual auth or required native Agent tool is unavailable, report that limitation and stop. Stop after real build finalization, do not continue."
+	r.Args = []string{"--print", "--verbose", "--output-format", "stream-json", "--forward-subagent-text", "--permission-mode", "acceptEdits", "--permission-prompts", "none", "--setting-sources", "user", "--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`, "--no-chrome"}
+	prompt := "/ant-build 1\nEquivalent minimal prepared-fixture comparison. Use the production-installed Claude build wrapper and shared Go acceptance/finalizer routes for the one accepted Clamp task. Spawn one real named Builder; it alone edits clamp.go and runs go test ./... -json -count=1 (no test filters). Parent coordinates only. Do not modify tests/go.mod, commit, install, publish, contact others, access other projects or launch replacement work. No live planning or owner testimony is claimed. Read the installed wrapper; if actual auth or required native Agent tool is unavailable, report that limitation and stop. Stop after real build finalization, do not continue."
 	liveSkillWrite(t, filepath.Join(runRoot, "prompt.txt"), []byte(prompt))
 	r.RawEvents, r.RawStderr = filepath.Join(runRoot, "claude-events.jsonl"), filepath.Join(runRoot, "claude-stderr.txt")
 	out, err := os.Create(r.RawEvents)
@@ -1929,7 +1945,7 @@ func nativeCollectHostControlEvidence(r *codexNativeLiveReceipt, runRoot, fixtur
 }
 
 func nativeQualificationPrompt(r codexNativeLiveReceipt, scenario string) string {
-	prompt := fmt.Sprintf("$ant-build 1\nThis is the %s disposable qualification scenario. The prepared plan is fixture-authorized, not live planning or owner testimony. Use the installed ant-build skill, private support and runtime guide. Actual native helpers must do all assigned edits and checks; the parent coordinates only. Do not edit source/tests, run a surrogate worker, commit, publish, install, read credentials, or access other projects.\nUse only individual simple shell commands: no Python snippets, shell batching/redirection, or helper rewrites. If more detail is needed, use the already-owned helper summary, prompt, release and inspect operations, or simple cat/jq reads. Read the reviewed fixture request helper %s. It supplies individual real runtime operations; it never spawns or edits the project. Commands are python3 %s <operation> [worker-index], with bind <actual-child-ID> [worker-index]. Index means the original manifest dispatch index, not a new assignment. Each worker's requests/receipts remain separate. The actual host alone launches, messages and interrupts children. Pass every runtime prompt/release/context payload verbatim. Do not regenerate or summarize those payloads. This host encrypts exported message bodies: exact plaintext delivery cannot be independently corroborated from that export. Retain that limitation; do not invent proof or run ad hoc prompt-comparison scripts. Before valid recording exercise empty-result. After a valid record use stale-result and child-mismatch; both must refuse without durable changes. Inspect and stage have public --phase routes. Stop at build finalization, then replay finalization once. Unsupported capabilities stay unknown/refused; never invent a result.\n", scenario, r.CoordinatorPath, r.CoordinatorPath)
+	prompt := fmt.Sprintf("$ant-build 1\nThis is the %s disposable qualification scenario. The prepared plan is fixture-authorized, not live planning or owner testimony. Use the installed ant-build skill, private support and runtime guide. Actual native helpers must do all assigned edits and checks; the parent coordinates only. Do not edit source/tests, run a surrogate worker, commit, publish, install, read credentials, or access other projects.\nUse individual simple shell commands, preferably text(await tools.exec_command({cmd:<literal>,workdir:<fixture>})); do not add JavaScript logic, Python snippets, shell batching/redirection, or helper rewrites. Independent read-only calls may use an awaited literal Promise.allSettled array and an indexed untouched-result print loop. If more detail is needed, use the already-owned helper summary, prompt, release and inspect operations, or simple cat/jq reads. Read the reviewed fixture request helper %s. It supplies individual real runtime operations; it never spawns or edits the project. Commands are python3 %s <operation> [worker-index], with bind <actual-child-ID> [worker-index]. Index means the original manifest dispatch index, not a new assignment. Each worker's requests/receipts remain separate. The actual host alone launches, messages and interrupts children. Pass every runtime prompt/release/context payload verbatim. Do not regenerate or summarize those payloads. This host encrypts exported message bodies: exact plaintext delivery cannot be independently corroborated from that export. Retain that limitation; do not invent proof or run ad hoc prompt-comparison scripts. Before valid recording exercise empty-result. After a valid record use stale-result and child-mismatch; both must refuse without durable changes. Inspect and stage have public --phase routes. Stop at build finalization, then replay finalization once. Unsupported capabilities stay unknown/refused; never invent a result.\n", scenario, r.CoordinatorPath, r.CoordinatorPath)
 	switch scenario {
 	case "review":
 		prompt += "Explicit independent review is requested. The helper manifest operation requests the runtime-selected Watcher for a named reason. Respect execution waves: finish and record Builder before starting the later Watcher. Watcher must independently read the implementation, run the actual fixture suite, and return concrete useful findings in its runtime-selected contract. Its profile includes behavioral review restrictions, not per-child OS read-only enforcement. Only the Builder edits clamp.go.\n"
@@ -2576,6 +2592,7 @@ type nativeHostEvent struct {
 		AgentRole      string `json:"agent_role"`
 		Cwd            string `json:"cwd"`
 		ThreadID       string `json:"thread_id"`
+		TurnID         string `json:"turn_id"`
 		Item           struct {
 			Type     string          `json:"type"`
 			ID       string          `json:"id"`
@@ -2679,6 +2696,9 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 			if json.Unmarshal(line, &wire) == nil && childTurns[wire.Payload.Metadata.TurnID] {
 				p := wire.Payload
 				if p.Type == "custom_tool_call" && (p.Name == "exec" || strings.HasSuffix(p.Name, ".exec")) {
+					if nativeCorroboratedLiteralPatch(*r, raw, p.CallID) {
+						continue
+					}
 					commands, ok := nativeCodeModeCommands(p.Input, r.FixtureRoot)
 					if !ok {
 						r.ChildUnclassified = append(r.ChildUnclassified, "unclassified child code-mode: "+p.Input)
@@ -3061,6 +3081,7 @@ func nativeInspectParentEvents(r *codexNativeLiveReceipt, raw []byte) {
 				Name      string `json:"name"`
 				Arguments string `json:"arguments"`
 				Input     string `json:"input"`
+				CallID    string `json:"call_id"`
 			} `json:"payload"`
 		}
 		if json.Unmarshal(scanner.Bytes(), &e) != nil || e.Type != "response_item" {
@@ -3089,6 +3110,9 @@ func nativeInspectParentEvents(r *codexNativeLiveReceipt, raw []byte) {
 		}
 		if p.Type == "custom_tool_call" && (p.Name == "exec" || strings.HasSuffix(p.Name, ".exec")) {
 			commands, ok := nativeCodeModeCommands(p.Input, metadata.Payload.Cwd)
+			if ok && strings.Contains(p.Input, "Promise.allSettled") {
+				ok = nativeCorroboratedBatch(raw, r.SessionID, p.CallID, commands)
+			}
 			if !ok {
 				r.ParentSubstitution = true
 				r.ParentUnclassified = append(r.ParentUnclassified, "unclassified code-mode: "+p.Input)
@@ -3613,7 +3637,152 @@ func nativeFixtureShellWords(command []string) ([]string, bool) {
 
 type nativeRecordedShellCommand struct{ Command, Cwd string }
 
+func nativeCorroboratedBatch(raw []byte, thread, callID string, commands []nativeRecordedShellCommand) bool {
+	if callID == "" || len(commands) == 0 {
+		return false
+	}
+	wanted := map[string]bool{}
+	for _, c := range commands {
+		key := c.Cwd + "\x00" + c.Command
+		if wanted[key] {
+			return false
+		}
+		wanted[key] = true
+	}
+	seen := map[string]bool{}
+	eventIDs := map[string]int{}
+	selectedIDs := []string{}
+	turn := ""
+	active, complete := false, false
+	calls, outputs := 0, 0
+	for _, line := range bytes.Split(raw, []byte{'\n'}) {
+		var w nativeCodeModeWire
+		_ = json.Unmarshal(line, &w)
+		p := w.Payload
+		if w.Type == "response_item" && p.Type == "custom_tool_call" && p.CallID == callID {
+			calls++
+			turn = p.Metadata.TurnID
+			if turn == "" {
+				return false
+			}
+			active = true
+		} else if active && w.Type == "response_item" && (p.Type == "custom_tool_call" || p.Type == "function_call") {
+			return false
+		}
+		if w.Type == "response_item" && p.Type == "custom_tool_call_output" && p.CallID == callID {
+			outputs++
+			complete = active && p.Metadata.TurnID == turn && len(seen) == len(wanted) && len(p.Output) > 0 && strings.HasPrefix(p.Output[0].Text, "Script completed\n")
+			active = false
+		}
+		var e nativeHostEvent
+		if json.Unmarshal(line, &e) != nil || e.Type != "event_msg" || e.Payload.Type != "item_completed" || e.Payload.Item.Type != "CommandExecution" {
+			continue
+		}
+		i := e.Payload.Item
+		eventIDs[i.ID]++
+		if !active {
+			continue
+		}
+		if e.Payload.ThreadID != thread || e.Payload.TurnID != turn || i.ID == "" || i.Status != "completed" || i.ExitCode == nil || len(i.Command) != 3 || (i.Command[1] != "-lc" && i.Command[1] != "-c") {
+			return false
+		}
+		key := i.Cwd + "\x00" + i.Command[2]
+		if !wanted[key] || seen[key] {
+			return false
+		}
+		seen[key] = true
+		selectedIDs = append(selectedIDs, i.ID)
+	}
+	for _, id := range selectedIDs {
+		if eventIDs[id] != 1 {
+			return false
+		}
+	}
+	return calls == 1 && outputs == 1 && complete
+}
+
+// An exact literal patch wrapper is classifiable only when its one successful
+// FileChange lies between that unique call and output in the same child turn.
+// Ownership, diff reconstruction and fresh checks are still enforced separately.
+func nativeCorroboratedLiteralPatch(r codexNativeLiveReceipt, raw []byte, callID string) bool {
+	if callID == "" {
+		return false
+	}
+	pattern := regexp.MustCompile(`^\s*text\(await\s+tools\.apply_patch\(("(?:[^"\\]|\\.)*")\)\);\s*$`)
+	turn, target := "", ""
+	active, validOutput := false, false
+	calls, outputs, changes := 0, 0, 0
+	changeIDs := map[string]int{}
+	selectedChange := ""
+	for _, line := range bytes.Split(raw, []byte{'\n'}) {
+		var w nativeCodeModeWire
+		_ = json.Unmarshal(line, &w)
+		p := w.Payload
+		if w.Type == "response_item" && p.Type == "custom_tool_call" && p.CallID == callID {
+			calls++
+			match := pattern.FindStringSubmatch(p.Input)
+			if len(match) != 2 || (p.Name != "exec" && !strings.HasSuffix(p.Name, ".exec")) {
+				return false
+			}
+			var patch string
+			if json.Unmarshal([]byte(match[1]), &patch) != nil || !strings.HasPrefix(patch, "*** Begin Patch\n*** Update File: ") || !strings.HasSuffix(patch, "\n*** End Patch") {
+				return false
+			}
+			lines := strings.Split(patch, "\n")
+			target = strings.TrimPrefix(lines[1], "*** Update File: ")
+			if !filepath.IsAbs(target) {
+				target = filepath.Join(r.FixtureRoot, target)
+			}
+			file := r.SourceFile
+			if file == "" {
+				file = "clamp.go"
+			}
+			if filepath.Clean(target) != filepath.Join(r.FixtureRoot, file) {
+				return false
+			}
+			for _, line := range lines[2 : len(lines)-1] {
+				if strings.HasPrefix(line, "*** ") {
+					return false
+				}
+			}
+			turn = p.Metadata.TurnID
+			if turn == "" {
+				return false
+			}
+			active = true
+		} else if active && w.Type == "response_item" && (p.Type == "custom_tool_call" || p.Type == "function_call") {
+			return false
+		}
+		if w.Type == "response_item" && p.Type == "custom_tool_call_output" && p.CallID == callID {
+			outputs++
+			validOutput = active && changes == 1 && p.Metadata.TurnID == turn && len(p.Output) == 2 && strings.HasPrefix(p.Output[0].Text, "Script completed\n") && p.Output[1].Text == "{}"
+			active = false
+		}
+		var e nativeHostEvent
+		if json.Unmarshal(line, &e) != nil || e.Type != "event_msg" || e.Payload.Type != "item_completed" || e.Payload.Item.Type != "FileChange" {
+			continue
+		}
+		i := e.Payload.Item
+		changeIDs[i.ID]++
+		if active {
+			if e.Payload.ThreadID != r.ChildID || e.Payload.TurnID != turn || i.Status != "completed" || i.ID == "" || len(i.Changes) != 1 {
+				return false
+			}
+			change, ok := i.Changes[target]
+			if !ok || change.Type != "update" || change.MovePath != nil {
+				return false
+			}
+			changes++
+			selectedChange = i.ID
+		}
+	}
+	return calls == 1 && outputs == 1 && changes == 1 && validOutput && changeIDs[selectedChange] == 1
+}
+
 func nativeCodeModeCommands(input, defaultCwd string) ([]nativeRecordedShellCommand, bool) {
+	if strings.Contains(input, "Promise.allSettled") {
+		return nativeReadOnlyBatchCommands(input, defaultCwd)
+	}
 	// Only literal command objects and direct printing of their untouched result.
 	// Multiple calls are allowed only as a full sequence of this same grammar.
 	var result []nativeRecordedShellCommand
@@ -3661,6 +3830,64 @@ func nativeCodeModeCommands(input, defaultCwd string) ([]nativeRecordedShellComm
 		input = input[end:]
 	}
 	return result, len(result) > 0
+}
+
+// Recognize the observed literal-call array and untouched indexed result loop.
+// This is syntax recognition, never JavaScript evaluation. Every operation is
+// additionally subject to the caller's path/source and actual event checks.
+func nativeReadOnlyBatchCommands(input, cwd string) ([]nativeRecordedShellCommand, bool) {
+	pattern := regexp.MustCompile(`^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+Promise\.allSettled\(\[([\s\S]*)\]\);\s*for\s*\(let\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*0;\s*([A-Za-z_][A-Za-z0-9_]*)\s*<\s*([A-Za-z_][A-Za-z0-9_]*)\.length;\s*([A-Za-z_][A-Za-z0-9_]*)\+\+\)\s*text\(\{\s*(?:index\s*:\s*)?([A-Za-z_][A-Za-z0-9_]*),\s*\.\.\.([A-Za-z_][A-Za-z0-9_]*)\[([A-Za-z_][A-Za-z0-9_]*)\]\s*\}\);\s*$`)
+	m := pattern.FindStringSubmatch(input)
+	if len(m) != 10 || m[1] != m[5] || m[1] != m[8] || m[3] != m[4] || m[3] != m[6] || m[3] != m[7] || m[3] != m[9] {
+		return nil, false
+	}
+	remaining := strings.TrimSpace(m[2])
+	call := regexp.MustCompile(`^tools\.exec_command\((\{[\s\S]*?\})\)\s*(,|$)\s*`)
+	var commands []nativeRecordedShellCommand
+	for remaining != "" {
+		part := call.FindStringSubmatchIndex(remaining)
+		if part == nil {
+			return nil, false
+		}
+		parsed, ok := nativeCodeModeCommands("text(await tools.exec_command("+remaining[part[2]:part[3]]+"));", cwd)
+		if !ok || len(parsed) != 1 || !nativeReadOnlyBatchCommand(parsed[0].Command) {
+			return nil, false
+		}
+		commands = append(commands, parsed[0])
+		if len(commands) > 64 {
+			return nil, false
+		}
+		remaining = strings.TrimSpace(remaining[part[1]:])
+	}
+	return commands, len(commands) > 0
+}
+
+func nativeReadOnlyBatchCommand(command string) bool {
+	words, ok := nativeSimpleShellWords(command)
+	if !ok || len(words) == 0 {
+		return false
+	}
+	for len(words) > 0 && (words[0] == "AETHER_OUTPUT_MODE=json" || words[0] == "AETHER_OUTPUT_MODE=visual" || words[0] == "AETHER_FORCE_COLOR=1" || words[0] == "AETHER_FORCE_COLOR=0") {
+		words = words[1:]
+	}
+	if len(words) == 0 {
+		return false
+	}
+	switch words[0] {
+	case "cat", "head", "sed", "jq", "rg", "pwd", "ls", "cmp", "git":
+		return nativeParentCoordinationCommand(&codexNativeLiveReceipt{}, []string{"/bin/sh", "-c", strings.Join(words, " ")})
+	case "aether":
+		return (len(words) == 2 && words[1] == "status") || (len(words) == 5 && words[1] == "command-guide" && words[3] == "--platform" && words[4] == "codex")
+	case "python3":
+		if len(words) != 3 && len(words) != 4 {
+			return false
+		}
+		if len(words) == 4 && !regexp.MustCompile(`^[0-9]+$`).MatchString(words[3]) {
+			return false
+		}
+		return words[2] == "summary" || words[2] == "prompt" || words[2] == "release" || words[2] == "inspect"
+	}
+	return false
 }
 
 func nativePathWithin(root, path string) bool {
