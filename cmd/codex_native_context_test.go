@@ -658,3 +658,125 @@ func TestCodexNativeRecoveryPhaseRoute(t *testing.T) {
 		t.Fatal("phase route refusal wrote state")
 	}
 }
+
+func TestCodexNativeContextFinalCurrency(t *testing.T) {
+	for _, change := range []string{"paused", "phase", "run", "plan"} {
+		t.Run(change, func(t *testing.T) {
+			_, request := nativeContextBoundFixture(t)
+			if _, err := recordDecisionAnswer("Final currency?", "CURRENCY_DELTA", 1, "native-context-test"); err != nil {
+				t.Fatal(err)
+			}
+			var changed map[string][]byte
+			_, err := runCodexNativeWorkerWithHooks("context", nativeRequestPath(t, request), codexNativeWorkerHooks{AfterContextRender: func() {
+				nativeContextChangeCurrencyForTest(t, change)
+				changed = nativeContextStateBytesForTest(t)
+			}})
+			if err == nil {
+				t.Fatal("actionable context escaped after current runtime state changed")
+			}
+			if !reflect.DeepEqual(changed, nativeContextStateBytesForTest(t)) {
+				t.Fatal("final context refusal changed state")
+			}
+		})
+	}
+}
+
+func nativeContextChangeCurrencyForTest(t *testing.T, change string) {
+	t.Helper()
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatal(err)
+	}
+	switch change {
+	case "paused":
+		state.Paused = true
+	case "phase":
+		state.CurrentPhase = 2
+	case "run":
+		run := "superseding-same-phase-run"
+		state.RunID = &run
+	case "plan":
+		state.Plan.Phases[0].Tasks[0].Goal += " with changed work"
+	}
+	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCodexNativeContextAdmissionCurrency(t *testing.T) {
+	for _, operation := range []string{"reserve", "bind", "context", "observe"} {
+		for _, change := range []string{"run", "plan"} {
+			t.Run(operation+"/"+change, func(t *testing.T) {
+				_, request := nativeAdmissionFixture(t)
+				if operation != "reserve" {
+					request = nativeReserveForTest(t, request)
+				}
+				if operation == "context" || operation == "observe" {
+					if _, err := runCodexNativeWorker("bind", nativeRequestPath(t, request)); err != nil {
+						t.Fatal(err)
+					}
+					if _, err := recordDecisionAnswer("Current run?", "CURRENT_RUN_DELTA", 1, "native-context-test"); err != nil {
+						t.Fatal(err)
+					}
+				}
+				path := nativeRequestPath(t, request)
+				if operation == "observe" {
+					delivery := nativeContextResponseForTest(t, request)["context_delivery"].(map[string]any)
+					path = writeCodexNativeRequestForTest(t, nativeContextAckForTest(t, request, delivery))
+				}
+				nativeContextChangeCurrencyForTest(t, change)
+				before := nativeContextStateBytesForTest(t)
+				if _, err := runCodexNativeWorker(operation, path); err == nil {
+					t.Fatal("same-phase run/plan drift accepted by native authority")
+				}
+				if !reflect.DeepEqual(before, nativeContextStateBytesForTest(t)) {
+					t.Fatal("stale native authority wrote state")
+				}
+			})
+		}
+	}
+}
+
+func TestCodexNativeContextHistoricalIntegrity(t *testing.T) {
+	for _, change := range []string{"payload", "digest", "target", "observation"} {
+		t.Run(change, func(t *testing.T) {
+			_, request := nativeContextBoundFixture(t)
+			if _, err := recordDecisionAnswer("Historical answer?", "HISTORICAL_DELTA", 1, "native-context-test"); err != nil {
+				t.Fatal(err)
+			}
+			delivery := nativeContextResponseForTest(t, request)["context_delivery"].(map[string]any)
+			if _, err := runCodexNativeWorker("observe", writeCodexNativeRequestForTest(t, nativeContextAckForTest(t, request, delivery))); err != nil {
+				t.Fatal(err)
+			}
+			path, record, _ := loadLatestBuildAttempt(1)
+			native := record.WorkerRuns[0].Native
+			saved := &native.ContextDeliveries[0]
+			switch change {
+			case "payload":
+				saved.Delivery.Payload = "changed saved payload"
+			case "digest":
+				saved.Delivery.PayloadSHA256 = lifecycleDigest([]byte("other bytes"))
+			case "target":
+				saved.Delivery.ChildID = "another-child"
+				saved.Delivery.DeliveryID = ""
+				saved.Delivery.DeliveryID, _ = jsonSHA256(saved.Delivery)
+				native.ContextDeliveryIDs[0] = saved.Delivery.DeliveryID
+				saved.Observation.ContextDeliveryID = saved.Delivery.DeliveryID
+				native.Observations[len(native.Observations)-1].ContextDeliveryID = saved.Delivery.DeliveryID
+			case "observation":
+				saved.Observation.SourceEventSHA256 = "not-an-event-digest"
+			}
+			request.ContextDeliveryID = saved.Delivery.DeliveryID
+			if err := store.SaveJSON(path, record); err != nil {
+				t.Fatal(err)
+			}
+			before := nativeContextStateBytesForTest(t)
+			if _, err := runCodexNativeWorker("context", nativeRequestPath(t, request)); err == nil {
+				t.Fatal("corrupted stored delivery was reported as confirmed")
+			}
+			if !reflect.DeepEqual(before, nativeContextStateBytesForTest(t)) {
+				t.Fatal("corrupted historical read wrote state")
+			}
+		})
+	}
+}
