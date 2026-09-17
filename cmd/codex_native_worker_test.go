@@ -13,7 +13,115 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
+
+func nativeAdmissionFixture(t *testing.T) (codexBuildManifest, codexNativeWorkerRequest) {
+	t.Helper()
+	root := setupExternalBuildAttemptTest(t)
+	manifest := prepareBoundBuildManifestOnly(t, root)
+	root, _ = filepath.EvalSymlinks(root)
+	d := manifest.Dispatches[0]
+	return manifest, codexNativeWorkerRequest{SchemaVersion: 1, Phase: 1, ExecutionBinding: *manifest.ExecutionBinding, WorkerName: d.Name, TaskID: normalizedDispatchTaskID(d), HostSessionID: "admission-host", Workspace: root, HostPermission: "workspace_write"}
+}
+
+func nativeRequestPath(t *testing.T, request codexNativeWorkerRequest) string {
+	t.Helper()
+	raw, err := json.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value map[string]any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		t.Fatal(err)
+	}
+	return writeCodexNativeRequestForTest(t, value)
+}
+
+func nativeJournalBytes(t *testing.T) []byte {
+	t.Helper()
+	path, _, ok := loadLatestBuildAttempt(1)
+	if !ok {
+		t.Fatal("missing attempt")
+	}
+	raw, err := os.ReadFile(filepath.Join(store.BasePath(), path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+func nativeReserveForTest(t *testing.T, request codexNativeWorkerRequest) codexNativeWorkerRequest {
+	t.Helper()
+	response, err := runCodexNativeWorker("reserve", nativeRequestPath(t, request))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.LaunchID, request.ChildID = response.Worker.ProviderRunID, "admission-child"
+	request.DispatchSHA256, request.PromptSHA256 = response.Worker.Native.DispatchSHA256, response.Worker.Native.PromptSHA256
+	return request
+}
+
+func TestCodexNativeWorkerAdmission(t *testing.T) {
+	for _, field := range []string{"bind-workspace", "bind-permission", "reserve-prompt", "manifest-caste", "manifest-wave", "manifest-coverage", "manifest-empty", "paused-bind"} {
+		t.Run(field, func(t *testing.T) {
+			_, request := nativeAdmissionFixture(t)
+			operation := "bind"
+			if field == "reserve-prompt" {
+				operation, request.PromptSHA256 = "reserve", strings.Repeat("a", 64)
+			} else {
+				request = nativeReserveForTest(t, request)
+			}
+			switch field {
+			case "bind-workspace":
+				request.Workspace = filepath.Dir(request.Workspace)
+			case "bind-permission":
+				request.HostPermission = "repository_read_only"
+			case "manifest-caste", "manifest-wave", "manifest-coverage", "manifest-empty", "paused-bind":
+				path, record, _ := loadLatestBuildAttempt(1)
+				switch field {
+				case "manifest-caste":
+					record.PlanManifest.Dispatches[0].Caste = "watcher"
+				case "manifest-wave":
+					record.PlanManifest.Dispatches[0].ExecutionWave++
+				case "manifest-coverage":
+					record.PlanManifest.Dispatches[0].CoveredTaskIDs = []string{"unassigned"}
+				case "manifest-empty":
+					record.PlanManifest.Dispatches = nil
+				case "paused-bind":
+					record.Status = buildAttemptInterrupted
+				}
+				if err := store.SaveJSON(path, record); err != nil {
+					t.Fatal(err)
+				}
+			}
+			before := nativeJournalBytes(t)
+			if _, err := runCodexNativeWorker(operation, nativeRequestPath(t, request)); err == nil {
+				t.Errorf("accepted %s", field)
+			}
+			if !bytes.Equal(before, nativeJournalBytes(t)) {
+				t.Errorf("%s mutated attempt", field)
+			}
+		})
+	}
+}
+
+func TestCodexNativeWorkerLaneSeparation(t *testing.T) {
+	manifest, request := nativeAdmissionFixture(t)
+	request = nativeReserveForTest(t, request)
+	path, record, _ := loadLatestBuildAttempt(1)
+	record.WorkerRuns[0].StartedAt = time.Now().Add(-time.Hour).UTC().Format(time.RFC3339Nano)
+	if err := store.SaveJSON(path, record); err != nil {
+		t.Fatal(err)
+	}
+	before := nativeJournalBytes(t)
+	if _, err := beginBuildAttemptWorkerRun(1, request.ExecutionBinding, internalWorkerDispatchRequest{WorkerName: request.WorkerName, TaskID: request.TaskID, Caste: manifest.Dispatches[0].Caste}, "other-provider", codex.PlatformFake); err == nil {
+		t.Fatal("native reservation granted provider launch")
+	}
+	if !bytes.Equal(before, nativeJournalBytes(t)) {
+		t.Fatal("provider refusal changed native reservation")
+	}
+}
 
 func TestCodexNativeBuildGuidePlatformIsolation(t *testing.T) {
 	baseline := map[string]commandGuideResult{}
