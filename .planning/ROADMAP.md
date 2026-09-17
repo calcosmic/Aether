@@ -751,7 +751,7 @@ For dummies: A worker actually receives the job, does it, and returns saved work
 
 **Context and research:** [204.2-CONTEXT.md](phases/204.2-codex-native-worker-lifecycle/204.2-CONTEXT.md), [204.2-RESEARCH.md](phases/204.2-codex-native-worker-lifecycle/204.2-RESEARCH.md).
 
-**Plans:** 8/9 plans executed in 7 waves; admission, context, bound questions, journal finalization and recovery are merged and reviewed.
+**Plans:** 9/9 execution reports delivered in 7 waves; verification is `gaps_found`. Required current-candidate native proof remains incomplete, and ANT-04 through ANT-07 remain pending.
 
 Plans:
 
@@ -759,31 +759,31 @@ Plans:
 
 - [x] 204.2-01-PLAN.md — Prove an installed native Builder edit/check and early interruption return.
 
-**Wave 2** *(blocked on Wave 1 completion)*
+**Wave 2**
 
 - [x] 204.2-02-PLAN.md — Bind native launches and terminal results atomically with replay-safe recovery.
 
-**Wave 3** *(blocked on Wave 2 completion)*
+**Wave 3**
 
 - [x] 204.2-03-PLAN.md — Deliver the full exact runtime context and scoped context updates.
 - [x] 204.2-05-PLAN.md — Finalize only durable native results through the existing credit and schema contracts.
 - [x] 204.2-06-PLAN.md — Show truthful partial native recovery, cancellation and inline activity.
 
-**Wave 4** *(blocked on Wave 3 completion)*
+**Wave 4**
 
 - [x] 204.2-04-PLAN.md — Route native worker questions and owner answers through the governed decision path.
 
-**Wave 5** *(blocked on Wave 4 completion)*
+**Wave 5**
 
 - [x] 204.2-07-PLAN.md — Complete the shared actual-host scenario matrix and measured capability/comparison receipts.
 
-**Wave 6** *(blocked on Wave 5 completion)*
+**Wave 6**
 
 - [x] 204.2-09-PLAN.md — Enforce observed capabilities and rerun the complete final-candidate qualification.
 
-**Wave 7** *(blocked on Wave 6 completion)*
+**Wave 7**
 
-- [ ] 204.2-08-PLAN.md — Account for final candidate regressions and produce standard phase verification.
+- [x] 204.2-08-PLAN.md — Account for final candidate regressions and produce standard phase verification.
 
 ### Phase 204.3: Codex Workflow Parity (INSERTED)
 

@@ -4,17 +4,17 @@ milestone: v1.28
 milestone_name: Classic Colony Restoration
 current_phase: 204.2
 current_phase_name: Codex Native Worker Lifecycle
-status: executing
-stopped_at: Phase 204.2 Plan 09 execution complete with qualification gaps; Plan 08 final regression and verification next
-last_updated: "2026-09-17T15:46:17.128427+00:00"
+status: planning
+stopped_at: Phase 204.2 all nine execution reports delivered; gaps_found; plan current native qualification gaps
+last_updated: "2026-09-17T19:30:53.603112+00:00"
 last_activity: 2026-09-17
-last_activity_desc: Plan 09 reviewed and merged; final matrix retains ten incomplete cases and one observed refusal; Plan 08 remains
-state_head: 299f02468e1a9e6d667838b0c07ca2648c70cf5e
+last_activity_desc: Final regression accounting and implementation review delivered; ANT-04 through ANT-07 remain pending
+state_head: c6deadd6eecd7d209a700f30583c5705bc3f9050
 progress:
   total_phases: 13
   completed_phases: 6
   total_plans: 198
-  completed_plans: 192
+  completed_plans: 193
   percent: 46
 ---
 
@@ -32,11 +32,11 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 
 ## Current Position
 
-Phase: 204.2 (Codex Native Worker Lifecycle) — EXECUTING
-Next phase: 204.2 (Codex Native Worker Lifecycle)
-Status: Executing Phase 204.2
-Plan: 8 of 9 execution reports complete; Plan 08 broad regression and explicit verification next; qualification remains incomplete
-Last activity: 2026-09-17 — Plan 09 reviewed and merged at 294ee619; build and 23 focused integration cases passed with no skips; all wave gates passed. Complete final live matrix retains ten incomplete cases and one observed refusal. ANT-04 through ANT-07 remain pending.
+Phase: 204.2 (Codex Native Worker Lifecycle) — GAPS FOUND
+Next phase: 204.2 gap closure
+Status: Ready to plan — current native qualification gaps
+Plan: 9 of 9 execution reports delivered; phase verification remains gaps_found
+Last activity: 2026-09-17 — Final normal/race accounting and implementation review delivered. Required current-source native evidence fails; ANT-04 through ANT-07 remain pending. See 204.2-VERIFICATION.md and 204.2-REVIEW.md.
 
 ## Performance Metrics
 
@@ -767,13 +767,17 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-17T10:12:06.318229+00:00
-Stopped at: Phase 204.2 Wave 3 complete; dispatch Plan 04
-Resume file: /Users/callumcowie/.aether-backups/phase204-2-execution-20260917/orchestrator-state.json — inspect current wave and its original worktree manifest before redispatch. Plans 01/02/03/05/06 are merged and their manifest-owned worktrees removed. The separate Phase 205 owner checkpoint remains preserved below.
+Last session: 2026-09-17T19:30:53.603112+00:00
+Stopped at: Phase 204.2 execution/accounting complete; phase remains gaps_found
+Resume file: .planning/phases/204.2-codex-native-worker-lifecycle/204.2-VERIFICATION.md — use $gsd plan-phase 204.2 --gaps. All nine plan reports and the implementation review are delivered. Current production (unchanged by the final `cf51e9ac` test-only fix) is not qualified by retained `165db28c` live captures. The original Phase 205 owner checkpoint below remains unchanged.
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
 
 ## Phase 204.2 Execution — 2026-09-17
+
+- Final execution disposition: all nine reports are delivered after the reviewed Plan08 merge and required execute:post code review. Frozen source `f9e32ca0` has complete focused and full normal/race accounting, with 27 failed cases in each full run. The final `cf51e9ac` npm fixture safety fix has 6/6 focused normal and 6/6 race passes; the full suites were not repeated against that changed test corpus. The mandatory native-evidence failure, 18 historical failed cases and 8 additional failed cases remain separately recorded; subsequent bounded checks do not replace original outcomes. Standard verification is `gaps_found`, with 0/5 fully qualified current-candidate success criteria and ANT-04 through ANT-07 pending. Source review does not certify actual-host qualification. Next: `$gsd plan-phase 204.2 --gaps`.
+- Semantic dependency repair is committed and validated against a disposable copy of the actual accepted CalVault plan, with approval hashes preserved and no workers launched. The shared installed runtime/hub was not updated. MASTER-AlanFraser duplicate-role cleanup and disabling its missing global node_repl MCP entry produced a fresh Codex startup with zero issues; an already-open session needs restarting.
+- Verification incident: the under-home npm fixture changed the home npm project. The test now pins its consumer prefix. Proven accidental Aether entries were backed up and removed; broader prior dependency versions could not be reconstructed from available evidence, so recovery is partial. See the npm-isolation incident report linked from phase verification.
 
 - Wave 3 complete: Plans 03/05/06 source and summaries were reviewed, merged through the original three-entry manifest, and only those worktrees removed. Five of eight plans are complete; Plan 04 is next. Combined schema regenerated at `cd8c05ab`; test-only pause/finalizer integration corrected at `fbf153a3`. Build passed. The 233 executed focused cases account for 232 passes after the affected follow-up and one explicit `TestCodexNativeWorkerFreshHost` skip. Initial three stale pre-pause test failures and the first root assertion-type error remain preserved; no production weakening or broad repeat. Exact source, raw counts, hashes and all nonblocking wave gates: `wave3-reviewed-integration.json` in the evidence root.
 - Plans 03/05/06 deliver exact context and acknowledged deltas, journal-derived finalization, and current-identity recovery with pending cancellation. Plan 05 preserves the owner rule: failed real checks can retain receipt-backed BUILD credit but prevent VERIFIED advancement; see external `plan05-check-credit-resolution.md`. This explicit plan-wording resolution must carry into Plan 08. Actual final host qualification and whole-phase ANT requirements remain pending.
