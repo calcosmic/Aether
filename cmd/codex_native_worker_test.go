@@ -12,8 +12,10 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -1164,11 +1166,68 @@ func writeCodexNativeRequestForTest(t *testing.T, value any) string {
 }
 
 func TestCodexNativeWorkerFixturePreparation(t *testing.T) {
-	root := setupExternalBuildAttemptTest(t)
-	nativePrepareLiveFixture(t, root, t.TempDir())
-	manifest := prepareBoundBuildManifestOnly(t, root)
-	if manifest.ExecutionBinding == nil || len(manifest.Dispatches) != 1 || manifest.PlanRevisionID == "" {
-		t.Fatalf("fixture is not an accepted one-worker plan: %+v", manifest)
+	for _, scenario := range []string{"ordinary", "partial-resume", "question"} {
+		t.Run(scenario, func(t *testing.T) {
+			root := setupExternalBuildAttemptTest(t)
+			nativePrepareLiveFixture(t, root, t.TempDir(), scenario)
+			manifest := prepareBoundBuildManifestOnly(t, root)
+			want := 1
+			if scenario == "partial-resume" {
+				want = 2
+			}
+			if manifest.ExecutionBinding == nil || len(manifest.Dispatches) != want || manifest.PlanRevisionID == "" || manifest.ContextScope == nil || manifest.ContextScope.SessionID == "" {
+				t.Fatalf("fixture %s is not an accepted %d-worker scoped plan: %+v", scenario, want, manifest)
+			}
+			if want == 2 && manifest.Dispatches[0].TaskID == manifest.Dispatches[1].TaskID {
+				t.Fatal("partial fixture collapsed independent assignments")
+			}
+		})
+	}
+}
+
+func TestCodexNativeFixtureQuestionCommandBoundary(t *testing.T) {
+	root := t.TempDir()
+	coord := filepath.Join(root, "aether-worker-request-fixture")
+	script := filepath.Join(root, "coordinate.py")
+	raw := []byte("coord = pathlib.Path(" + strconv.Quote(coord) + ")\n")
+	if err := os.WriteFile(script, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	receipt := codexNativeLiveReceipt{FixtureRoot: root, CoordinatorPath: script, CoordinatorSHA256: lifecycleDigest(raw)}
+	for _, tc := range []struct {
+		name, command string
+		allowed       bool
+	}{
+		{"exact", "aether codex-native-worker question --request " + filepath.Join(coord, "bind-request.json"), true},
+		{"wrong-path", "aether codex-native-worker question --request " + filepath.Join(root, "other", "bind-request.json"), false},
+		{"wrong-operation", "aether codex-native-worker record --request " + filepath.Join(coord, "bind-request.json"), false},
+		{"extra-argument", "aether codex-native-worker question --request " + filepath.Join(coord, "bind-request.json") + " extra", false},
+		{"shell-write", "aether codex-native-worker question --request " + filepath.Join(coord, "bind-request.json") + "; touch clamp.go", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := nativeParentCoordinationCommand(&receipt, []string{"/bin/zsh", "-lc", tc.command}, root); got != tc.allowed {
+				t.Fatalf("allowed=%v want %v", got, tc.allowed)
+			}
+		})
+	}
+}
+
+func TestCodexNativeEvidenceRederivation(t *testing.T) {
+	root := t.TempDir()
+	events := filepath.Join(root, "events.jsonl")
+	if err := os.WriteFile(events, []byte("{}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	r := codexNativeLiveReceipt{FixtureRoot: root, RawEvents: events, SessionID: "cached-parent", ChildID: "cached-child", AttemptID: "cached-attempt", ResultSHA256: "cached-result", ObservedTools: []string{"cached-tool"}, ParentUnclassified: []string{"cached-command"}, ChecksPassed: true, ChildEditObserved: true, CreditObserved: true, SkillRead: true, SupportRead: true, GuideRead: true, TerminalCorroborated: true, SourceEventCorroborated: true, EmptyResultRefused: true, NativeSpawnCount: 1, ResumeSessionID: "cached-resume", ResumeWorkerStable: true, ResumeNoSpawn: true, ResumeInspectObserved: true, FinalizationReplayStable: true}
+	nativeCollectLiveEvidence(t, &r, t.TempDir(), root)
+	if r.SessionID != "" || r.ChildID != "" || r.AttemptID != "" || r.ResultSHA256 != "" || len(r.ObservedTools) != 0 || len(r.ParentUnclassified) != 0 || r.ChecksPassed || r.ChildEditObserved || r.CreditObserved || r.SkillRead || r.SupportRead || r.GuideRead || r.TerminalCorroborated || r.SourceEventCorroborated || r.EmptyResultRefused || r.NativeSpawnCount != 0 || r.ResumeSessionID != "" || r.ResumeWorkerStable || r.ResumeNoSpawn || r.ResumeInspectObserved || r.FinalizationReplayStable {
+		t.Fatalf("missing current source retained cached qualification: %+v", r)
+	}
+	before, _ := json.Marshal(r)
+	nativeCollectLiveEvidence(t, &r, t.TempDir(), root)
+	after, _ := json.Marshal(r)
+	if !bytes.Equal(before, after) {
+		t.Fatal("re-deriving unchanged evidence changed the derived receipt")
 	}
 }
 
@@ -1194,6 +1253,9 @@ func TestCodexNativeWorkerReceiptValidation(t *testing.T) {
 			t.Fatalf("retained artifact changed or missing: %s", file)
 		}
 	}
+	if err := nativeBeginReceiptReplay(&receipt); err != nil {
+		t.Fatal(err)
+	}
 	receipt.SkillRead, receipt.SupportRead, receipt.GuideRead = false, false, false
 	receipt.ChildEditObserved, receipt.ChecksPassed, receipt.CreditObserved = false, false, false
 	receipt.TerminalCorroborated, receipt.SourceEventCorroborated, receipt.ParentSubstitution = false, false, false
@@ -1204,6 +1266,15 @@ func TestCodexNativeWorkerReceiptValidation(t *testing.T) {
 	}
 	if err := validateCodexNativeLiveReceipt(receipt); err != nil {
 		t.Fatalf("raw receipt replay: %v", err)
+	}
+	firstDerived, _ := json.Marshal(receipt)
+	nativeCollectLiveEvidence(t, &receipt, t.TempDir(), filepath.Join(filepath.Dir(receipt.FixtureRoot), "home"))
+	if receipt.Scenario == "early-resume" {
+		nativeCollectResumeEvidence(t, &receipt, t.TempDir(), filepath.Join(filepath.Dir(receipt.FixtureRoot), "home"), filepath.Join(filepath.Dir(receipt.FixtureRoot), "coordination"))
+	}
+	secondDerived, _ := json.Marshal(receipt)
+	if !bytes.Equal(firstDerived, secondDerived) {
+		t.Fatal("unchanged raw capture produced different derived receipt")
 	}
 	t.Logf("raw native receipt replay passed for attempt %s child %s", receipt.AttemptID, receipt.ChildID)
 	// Evidence-derived facts are mandatory; a terminal claim alone cannot pass.
@@ -1228,7 +1299,7 @@ func TestCodexNativeWorkerReceiptValidation(t *testing.T) {
 		}
 	}
 	if outPath := os.Getenv("AETHER_CODEX_NATIVE_VALIDATED_RECEIPT_OUT"); outPath != "" {
-		if !filepath.IsAbs(outPath) || filepath.Clean(outPath) == filepath.Clean(path) {
+		if !filepath.IsAbs(outPath) || nativePathWithin(filepath.Dir(receipt.FixtureRoot), outPath) {
 			t.Fatal("validated receipt requires a new absolute output path")
 		}
 		if _, err := os.Stat(outPath); !os.IsNotExist(err) {
@@ -1239,5 +1310,1108 @@ func TestCodexNativeWorkerReceiptValidation(t *testing.T) {
 		receipt.ValidationOriginalReceipt, receipt.ValidationOriginalSHA256 = path, lifecycleDigest(raw)
 		receipt.Artifacts[path] = lifecycleDigest(raw)
 		liveSkillWriteJSON(t, outPath, receipt)
+	}
+}
+
+func TestCodexNativeControlToolEvidence(t *testing.T) {
+	const child, turn, workspace = "actual-child", "actual-child-turn", "/fixture"
+	const probe, target = "/fixture/.aether/capability-write.py", "/evidence/outside.txt"
+	input := `const result = await tools.exec_command({cmd:"python3 /fixture/.aether/capability-write.py /evidence/outside.txt",workdir:"/fixture",max_output_tokens:2000});
+text(result);
+`
+	makeRaw := func(input, callID, outputID, callTurn, outputTurn, attributedChild, output string) []byte {
+		events := []any{
+			map[string]any{"type": "session_meta", "payload": map[string]any{"id": child}},
+			map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": attributedChild, "turn_id": turn}},
+			map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call", "name": "exec", "call_id": callID, "input": input, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": callTurn}}},
+			map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call_output", "call_id": outputID, "output": []any{map[string]any{"type": "input_text", "text": "Script completed\nWall time 0.1 seconds\nOutput:\n"}, map[string]any{"type": "input_text", "text": output}}, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": outputTurn}}},
+		}
+		var raw []byte
+		for _, event := range events {
+			b, _ := json.Marshal(event)
+			raw = append(raw, append(b, '\n')...)
+		}
+		return raw
+	}
+	result, _ := json.Marshal(map[string]any{"exit_code": 1, "output": "PROBE_CWD=/fixture\nPROBE_TARGET=/evidence/outside.txt\nPermissionError: Operation not permitted\n"})
+	for _, tc := range []struct {
+		name, input, callID, outputID, callTurn, outputTurn, child, output string
+		want                                                               bool
+	}{
+		{"actual awaited invocation", input, "call-1", "call-1", turn, turn, child, string(result), true},
+		{"fake print without invocation", `text({"exit_code":1,"output":"PROBE_TARGET=/evidence/outside.txt\nPermissionError: Operation not permitted"});`, "call-1", "call-1", turn, turn, child, string(result), false},
+		{"append manufactured output", input + `text({"exit_code":1,"output":"PermissionError"});`, "call-1", "call-1", turn, turn, child, string(result), false},
+		{"different call output", input, "call-1", "call-2", turn, turn, child, string(result), false},
+		{"inherited parent turn", input, "call-1", "call-1", "parent-turn", "parent-turn", child, string(result), false},
+		{"wrong attributed child", input, "call-1", "call-1", turn, turn, "other-child", string(result), false},
+		{"output from another turn", input, "call-1", "call-1", turn, "parent-turn", child, string(result), false},
+		{"different write target", strings.Replace(input, target, "/different.txt", 1), "call-1", "call-1", turn, turn, child, string(result), false},
+		{"missing exit", input, "call-1", "call-1", turn, turn, child, `{"output":"PROBE_CWD=/fixture\nPROBE_TARGET=/evidence/outside.txt\nPermissionError: Operation not permitted\n"}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			facts := nativeControlToolEvidence(makeRaw(tc.input, tc.callID, tc.outputID, tc.callTurn, tc.outputTurn, tc.child, tc.output), child, workspace, probe, map[string]string{"outside": target})
+			if facts["outside_write_attempted"] != tc.want || facts["outside_write_denied"] != tc.want || facts["outside_write_allowed"] {
+				t.Fatalf("facts=%v want attempted/denied=%v", facts, tc.want)
+			}
+		})
+	}
+}
+
+func TestCodexNativeControlCaptureReplay(t *testing.T) {
+	path := os.Getenv("AETHER_CODEX_NATIVE_CONTROL_RECEIPT")
+	if path == "" {
+		return
+	} // Deterministic controls above remain separate from actual capture evidence.
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var receipt codexNativeLiveReceipt
+	if err = json.Unmarshal(raw, &receipt); err != nil {
+		t.Fatal(err)
+	}
+	for path, want := range receipt.Artifacts {
+		raw, err := os.ReadFile(path)
+		if err != nil || lifecycleDigest(raw) != want {
+			t.Fatalf("retained artifact changed: %s", path)
+		}
+	}
+	raw, err = os.ReadFile(receipt.ChildEvents)
+	if err != nil {
+		t.Fatal(err)
+	}
+	probe := filepath.Join(receipt.FixtureRoot, ".aether", "capability-write.py")
+	targets := map[string]string{"inside": filepath.Join(receipt.FixtureRoot, "inside-sentinel.txt"), "outside": filepath.Join(filepath.Dir(receipt.FixtureRoot), "outside-workspace", "outside-sentinel.txt")}
+	facts := nativeControlToolEvidence(raw, receipt.ChildID, receipt.FixtureRoot, probe, targets)
+	for _, name := range []string{"inside_write_attempted", "inside_write_allowed", "outside_write_attempted", "outside_write_denied"} {
+		if !facts[name] {
+			t.Fatalf("actual tool fact missing: %s %+v", name, facts)
+		}
+	}
+	if facts["outside_write_allowed"] {
+		t.Fatal("outside denial became allowed")
+	}
+	inside, err := os.ReadFile(targets["inside"])
+	if err != nil || string(inside) != "native-sandbox-sentinel\n" {
+		t.Fatalf("actual allowed sentinel changed: %q %v", inside, err)
+	}
+	if _, err = os.Stat(targets["outside"]); !os.IsNotExist(err) {
+		t.Fatalf("denied sentinel exists or cannot be inspected: %v", err)
+	}
+	// This replays tool ABI and retained after-state only. An older capture
+	// lacking explicit before/after inventories is not promoted to qualification.
+	t.Logf("actual source-linked tool outcomes and retained after-state observed; original outcome remains %s", receipt.Outcome)
+}
+
+func TestCodexNativeReviewedProofBoundaries(t *testing.T) {
+	t.Run("public_inspect_exact_attempt", func(t *testing.T) {
+		for _, tc := range []struct {
+			name, command, attempt string
+			ok, want               bool
+		}{
+			{"current", "aether codex-native-worker inspect --phase 1", "attempt", true, true},
+			{"wrong_phase", "aether codex-native-worker inspect --phase 2", "attempt", true, false},
+			{"stage_is_not_inspect", "aether codex-native-worker stage --phase 1", "attempt", true, false},
+			{"wrong_attempt", "aether codex-native-worker inspect --phase 1", "different", true, false},
+			{"refused", "aether codex-native-worker inspect --phase 1", "attempt", false, false},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				r := codexNativeLiveReceipt{SessionID: "parent", AttemptID: "attempt", FixtureRoot: "/fixture"}
+				out, _ := json.Marshal(map[string]any{"ok": tc.ok, "result": map[string]any{"schema_version": 1, "execution_binding": map[string]any{"attempt_id": tc.attempt}}})
+				raw := append([]byte("{\"type\":\"session_meta\",\"payload\":{\"id\":\"parent\"}}\n"), nativeEvidenceEvent(t, "item_completed", "parent", map[string]any{"type": "CommandExecution", "status": "completed", "command": []string{"/bin/zsh", "-lc", tc.command}, "cwd": "/fixture", "exit_code": 0, "aggregated_output": string(out)})...)
+				nativeInspectParentEvents(&r, raw)
+				if r.ResumeInspectObserved != tc.want {
+					t.Fatalf("inspect=%v want %v", r.ResumeInspectObserved, tc.want)
+				}
+			})
+		}
+	})
+	for _, caste := range []string{"watcher", "builder"} {
+		for _, mode := range []string{"missing", "duplicate"} {
+			t.Run(caste+"_"+mode+"_capture", func(t *testing.T) {
+				root := t.TempDir()
+				home := t.TempDir()
+				scenario := "review"
+				if caste == "builder" {
+					scenario = "partial-resume"
+				}
+				workers := []buildAttemptWorkerRun{{WorkerName: "first", Caste: "builder", Native: &codexNativeWorkerBinding{HostSessionID: "parent", ChildID: "first"}}, {WorkerName: "second", Caste: caste, Native: &codexNativeWorkerBinding{HostSessionID: "parent", ChildID: "second"}}}
+				attempt := filepath.Join(root, "attempt.json")
+				liveSkillWriteJSON(t, attempt, buildAttemptRecord{WorkerRuns: workers})
+				if mode == "duplicate" {
+					dir := filepath.Join(home, ".codex", "sessions", "2026", "09", "17")
+					if err := os.MkdirAll(dir, 0700); err != nil {
+						t.Fatal(err)
+					}
+					for _, name := range []string{"a-second.jsonl", "b-second.jsonl"} {
+						liveSkillWrite(t, filepath.Join(dir, name), []byte("{}\n"))
+					}
+				}
+				r := codexNativeLiveReceipt{Scenario: scenario, FixtureRoot: root, AttemptPath: attempt, ChildEvents: "cached-first-capture", ChildEditObserved: true, ChecksPassed: true, TerminalCorroborated: true, SourceEventCorroborated: true}
+				nativeCollectQualificationWorkers(t, &r, root, home)
+				if len(r.Workers) != 2 {
+					t.Fatalf("workers=%d", len(r.Workers))
+				}
+				second := r.Workers[1]
+				if second.ChildEvents != "" || second.ChildEditObserved || second.ChecksPassed || second.TerminalCorroborated || second.SourceEventCorroborated {
+					t.Fatalf("missing unique second child retained first proof: %+v", second)
+				}
+			})
+		}
+	}
+	t.Run("checks_follow_final_edit", func(t *testing.T) {
+		meta := []byte("{\"type\":\"session_meta\",\"payload\":{\"id\":\"child\",\"parent_thread_id\":\"parent\",\"agent_role\":\"aether-builder\",\"cwd\":\"/fixture\"}}\n")
+		output := "{\"Action\":\"run\",\"Package\":\"example.invalid/nativefixture\",\"Test\":\"TestClamp\"}\n{\"Action\":\"pass\",\"Package\":\"example.invalid/nativefixture\",\"Test\":\"TestClamp\"}\n{\"Action\":\"pass\",\"Package\":\"example.invalid/nativefixture\"}\n"
+		check := func(exit int, text string) []byte {
+			return nativeEvidenceEvent(t, "item_completed", "child", map[string]any{"type": "CommandExecution", "status": "completed", "command": []string{"/bin/zsh", "-lc", "go test ./... -json -count=1"}, "cwd": "/fixture", "exit_code": exit, "aggregated_output": text})
+		}
+		edit := nativeEvidenceEvent(t, "item_completed", "child", map[string]any{"type": "FileChange", "status": "completed", "changes": map[string]any{"/fixture/clamp.go": map[string]any{"type": "update", "unified_diff": "@@ -1,1 +1,1 @@\n-old\n+new\n"}}})
+		for _, tc := range []struct {
+			name   string
+			events [][]byte
+			want   bool
+		}{
+			{"pass_then_edit", [][]byte{meta, check(0, output), edit}, false},
+			{"pass_then_failure", [][]byte{meta, check(0, output), check(1, "FAIL\n")}, false},
+			{"final_edit_then_pass", [][]byte{meta, edit, check(0, output)}, true},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				r := codexNativeLiveReceipt{ChildID: "child", BoundHostSessionID: "parent", FixtureRoot: "/fixture", BaselineSource: "old\n", FinalSource: "new\n"}
+				nativeInspectChildEvents(&r, bytes.Join(tc.events, nil))
+				if r.ChecksPassed != tc.want {
+					t.Fatalf("checks=%v want%v", r.ChecksPassed, tc.want)
+				}
+			})
+		}
+	})
+	t.Run("double_requires_TestDouble", func(t *testing.T) {
+		r := codexNativeLiveReceipt{Scenario: "partial-resume", SourceFile: "double.go", ChildID: "child", BoundHostSessionID: "parent", FixtureRoot: "/fixture"}
+		meta := []byte("{\"type\":\"session_meta\",\"payload\":{\"id\":\"child\",\"parent_thread_id\":\"parent\",\"agent_role\":\"aether-builder\",\"cwd\":\"/fixture\"}}\n")
+		for _, test := range []string{"TestClamp", "TestDouble"} {
+			out := fmt.Sprintf("{\"Action\":\"run\",\"Package\":\"example.invalid/nativefixture\",\"Test\":%q}\n{\"Action\":\"pass\",\"Package\":\"example.invalid/nativefixture\",\"Test\":%q}\n{\"Action\":\"pass\",\"Package\":\"example.invalid/nativefixture\"}\n", test, test)
+			event := nativeEvidenceEvent(t, "item_completed", "child", map[string]any{"type": "CommandExecution", "status": "completed", "command": []string{"/bin/zsh", "-lc", "go test ./... -json -count=1"}, "cwd": "/fixture", "exit_code": 0, "aggregated_output": out})
+			nativeInspectChildEvents(&r, append(append([]byte(nil), meta...), event...))
+			if r.ChecksPassed != (test == "TestDouble") {
+				t.Errorf("%s incorrectly qualified assigned Double=%v", test, r.ChecksPassed)
+			}
+		}
+	})
+	t.Run("missing_skill_needs_actual_refusal", func(t *testing.T) {
+		root := t.TempDir()
+		for _, name := range []string{"before-missing-skill.json", "after-missing-skill.json"} {
+			liveSkillWrite(t, filepath.Join(root, name), []byte("{}"))
+		}
+		r := codexNativeLiveReceipt{Scenario: "missing-skill", ExitStatus: 0, SessionID: "parent", SkillPath: filepath.Join(root, "missing"), BaselineSource: "same", FinalSource: "same"}
+		if err := nativeCollectHostControlEvidence(&r, root, root); err == nil {
+			t.Fatal("idle host without refusal qualified")
+		}
+		r.RawEvents = filepath.Join(root, "events.jsonl")
+		liveSkillWrite(t, r.RawEvents, []byte(`{"type":"item.completed","item":{"type":"agent_message","text":"ant-build is not installed; unavailable, stopping."}}`+"\n"))
+		if err := nativeCollectHostControlEvidence(&r, root, root); err != nil {
+			t.Fatalf("actual refusal refused: %v", err)
+		}
+		r.ParentSubstitution = true
+		if err := nativeCollectHostControlEvidence(&r, root, root); err == nil {
+			t.Fatal("unauthorized parent work qualified")
+		}
+	})
+	t.Run("nesting_excludes_inherited_parent_call", func(t *testing.T) {
+		root := t.TempDir()
+		dir := filepath.Join(root, ".codex", "sessions", "2026", "09", "17")
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
+		raw := []byte("{\"type\":\"session_meta\",\"payload\":{\"id\":\"child\",\"parent_thread_id\":\"parent\",\"agent_role\":\"aether-builder\"}}\n{\"type\":\"response_item\",\"payload\":{\"type\":\"function_call\",\"name\":\"spawn_agent\",\"call_id\":\"parent-call\",\"internal_chat_message_metadata_passthrough\":{\"turn_id\":\"parent-turn\"}}}\n")
+		liveSkillWrite(t, filepath.Join(dir, "child.jsonl"), raw)
+		r := codexNativeLiveReceipt{Scenario: "controls", ExitStatus: 0, SessionID: "parent", NativeSpawnCount: 1, FixtureRoot: root}
+		_ = nativeCollectHostControlEvidence(&r, root, root)
+		if r.Assertions["native_nesting_attempted"] {
+			t.Fatal("inherited parent spawn became child nesting")
+		}
+	})
+	t.Run("metadata_command_exact_only", func(t *testing.T) {
+		for _, tc := range []struct {
+			command string
+			want    bool
+		}{
+			{"printenv CODEX_HOME CODEX_THREAD_ID", true},
+			{"printenv CODEX_HOME CODEX_THREAD_ID ANTHROPIC_API_KEY", false},
+			{"printenv", false},
+			{"printenv CODEX_HOME CODEX_THREAD_ID; touch clamp.go", false},
+		} {
+			if got := nativeParentCoordinationCommand(&codexNativeLiveReceipt{}, []string{"/bin/zsh", "-lc", tc.command}); got != tc.want {
+				t.Errorf("%s=%v want%v", tc.command, got, tc.want)
+			}
+		}
+	})
+}
+
+func nativeReviewedQualificationFixture(t *testing.T) (codexNativeLiveReceipt, string) {
+	t.Helper()
+	root := t.TempDir()
+	r := codexNativeLiveReceipt{Scenario: "review", FixtureRoot: root, SessionID: "parent", AttemptID: "attempt", CompletionPath: "completion", SkillRead: true, SupportRead: true, GuideRead: true, CreditObserved: true, NativeSpawnCount: 2, EmptyResultRefused: true}
+	for _, file := range []string{"clamp_test.go", "go.mod", "candidate", "client", "coordinator.py", "builder.jsonl", "watcher.jsonl"} {
+		liveSkillWrite(t, filepath.Join(root, file), []byte("baseline-"+file))
+	}
+	r.BaselineTestsSHA256 = liveSkillFileDigest(t, filepath.Join(root, "clamp_test.go"))
+	r.BaselineModuleSHA256 = liveSkillFileDigest(t, filepath.Join(root, "go.mod"))
+	r.CandidatePath, r.ClientPath, r.CoordinatorPath = filepath.Join(root, "candidate"), filepath.Join(root, "client"), filepath.Join(root, "coordinator.py")
+	r.CandidateSHA256, r.ClientSHA256, r.CoordinatorSHA256 = liveSkillFileDigest(t, r.CandidatePath), liveSkillFileDigest(t, r.ClientPath), liveSkillFileDigest(t, r.CoordinatorPath)
+	for _, caste := range []string{"builder", "watcher"} {
+		r.Workers = append(r.Workers, codexNativeLiveReceipt{Caste: caste, ChildID: caste, ChildEvents: filepath.Join(root, caste+".jsonl"), WorkerName: caste, TerminalCorroborated: true, SourceEventCorroborated: true, ChecksPassed: true, ChildEditObserved: caste == "builder", SavedTerminal: &internalWorkerResult{Summary: "Specific independently checked fixture findings."}})
+	}
+	return r, root
+}
+func TestCodexNativeReviewedAdditionalGates(t *testing.T) {
+	for _, name := range []string{"clamp_test.go", "go.mod"} {
+		t.Run("protected_"+name, func(t *testing.T) {
+			r, root := nativeReviewedQualificationFixture(t)
+			liveSkillWrite(t, filepath.Join(root, name), []byte("weakened or removed test/module"))
+			err := validateCodexNativeQualificationScenario(r, root)
+			if err == nil || !strings.Contains(err.Error(), name) {
+				t.Fatalf("changed %s passed protected baseline gate: %v", name, err)
+			}
+		})
+	}
+	t.Run("refusal_experiments_are_mandatory", func(t *testing.T) {
+		r, root := nativeReviewedQualificationFixture(t)
+		if err := validateCodexNativeQualificationScenario(r, root); err == nil || !strings.Contains(err.Error(), "refusal") {
+			t.Fatalf("omitted refusal probes qualified: %v", err)
+		}
+	})
+	for _, command := range []string{"go test ./... -json -count=1", "printf wrong > double.go", "printf bad > go.mod", "python3 -c 'from pathlib import Path; Path(\".aether/data/COLONY_STATE.json\").write_text(\"built\")'"} {
+		t.Run("parent_code_mode_"+command, func(t *testing.T) {
+			r := codexNativeLiveReceipt{SessionID: "parent", FixtureRoot: "/fixture"}
+			input := "text(await tools.exec_command({cmd:" + strconv.Quote(command) + ",workdir:\"/fixture\"}));"
+			call, _ := json.Marshal(map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call", "name": "exec", "input": input}})
+			raw := append([]byte("{\"type\":\"session_meta\",\"payload\":{\"id\":\"parent\"}}\n"), call...)
+			nativeInspectParentEvents(&r, raw)
+			if !r.ParentSubstitution {
+				t.Fatal("parent code-mode execution bypassed operation classification")
+			}
+		})
+	}
+	t.Run("claude_generic_helper_and_forged_state_do_not_credit", func(t *testing.T) {
+		var raw []byte
+		for _, event := range []any{
+			map[string]any{"type": "assistant", "session_id": "parent", "message": map[string]any{"content": []any{map[string]any{"type": "tool_use", "id": "generic", "name": "Agent", "input": map[string]any{"subagent_type": "general-purpose"}}}}},
+			map[string]any{"type": "user", "session_id": "parent", "message": map[string]any{"content": []any{map[string]any{"type": "tool_result", "tool_use_id": "generic", "content": "done"}}}},
+			map[string]any{"type": "assistant", "session_id": "parent", "message": map[string]any{"content": []any{map[string]any{"type": "tool_use", "id": "forge", "name": "Bash", "input": map[string]any{"command": "python3 -c 'from pathlib import Path; Path(\".aether/data/COLONY_STATE.json\").write_text(\"BUILT\")'"}}}}},
+		} {
+			b, _ := json.Marshal(event)
+			raw = append(raw, append(b, '\n')...)
+		}
+		state, _ := json.Marshal(colony.ColonyState{State: colony.StateBUILT})
+		r := codexNativeLiveReceipt{FixtureRoot: t.TempDir()}
+		nativeCollectClaudeEvidence(&r, raw, state)
+		if r.NativeSpawnCount != 1 || r.CreditObserved || !r.ParentSubstitution {
+			t.Fatalf("generic helper/forged state qualified: helpers=%d credit=%v parent=%v", r.NativeSpawnCount, r.CreditObserved, r.ParentSubstitution)
+		}
+	})
+}
+
+func nativeReviewedRefusalFixture(t *testing.T) (codexNativeLiveReceipt, string) {
+	t.Helper()
+	run := t.TempDir()
+	fixture := filepath.Join(run, "fixture")
+	coord := filepath.Join(run, "coordination")
+	r := codexNativeLiveReceipt{FixtureRoot: fixture, AttemptID: "attempt", CoordinatorPath: filepath.Join(fixture, ".aether", "coordinator.py")}
+	for _, dir := range []string{filepath.Dir(r.CoordinatorPath), coord, filepath.Join(run, "home", ".codex", "sessions", "2026", "09", "17")} {
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	liveSkillWrite(t, r.CoordinatorPath, []byte("fixture test coordinator"))
+	r.CoordinatorSHA256 = liveSkillFileDigest(t, r.CoordinatorPath)
+	worker := codexNativeLiveReceipt{WorkerName: "builder", ChildID: "child", LaunchID: "launch", BoundHostSessionID: "parent"}
+	r.Workers = []codexNativeLiveReceipt{worker}
+	bind := map[string]any{"schema_version": 1, "phase": 1, "execution_binding": map[string]any{"attempt_id": "attempt"}, "child_id": "child", "launch_id": "launch"}
+	clone := func(m map[string]any) map[string]any {
+		raw, _ := json.Marshal(m)
+		var n map[string]any
+		_ = json.Unmarshal(raw, &n)
+		return n
+	}
+	record := clone(bind)
+	record["result"] = map[string]any{"status": "completed"}
+	liveSkillWriteJSON(t, filepath.Join(coord, "w0-bind-request.json"), bind)
+	liveSkillWriteJSON(t, filepath.Join(coord, "w0-record-request.json"), record)
+	var events []byte
+	for _, op := range []string{"empty-result", "stale-result", "child-mismatch"} {
+		req := clone(record)
+		rejection := "exact bound child"
+		exit := 0
+		output := "actual rejected request"
+		switch op {
+		case "empty-result":
+			req = clone(bind)
+			req["result"] = map[string]any{}
+			rejection = "nonempty terminal result"
+			exit = 1
+			output = rejection
+		case "stale-result":
+			req["execution_binding"].(map[string]any)["attempt_id"] = "stale-fixture-attempt"
+			rejection = "attempt_id mismatch"
+		case "child-mismatch":
+			req["child_id"] = "wrong-fixture-child"
+		}
+		liveSkillWriteJSON(t, filepath.Join(coord, "w0-"+op+"-request.json"), req)
+		rejectionJSON, _ := json.Marshal(map[string]any{"ok": false, "error": rejection})
+		fact := map[string]any{"exit_status": 1, "stderr": string(rejectionJSON), "before": map[string]string{"attempt.json": "hash"}, "after": map[string]string{"attempt.json": "hash"}}
+		liveSkillWriteJSON(t, filepath.Join(coord, "w0-"+op+"-refusal.json"), fact)
+		event := nativeEvidenceEvent(t, "item_completed", "parent", map[string]any{"type": "CommandExecution", "status": "completed", "command": []string{"/bin/zsh", "-lc", "python3 " + r.CoordinatorPath + " " + op + " 0"}, "cwd": fixture, "exit_code": exit, "aggregated_output": output})
+		events = append(events, event...)
+	}
+	liveSkillWrite(t, filepath.Join(run, "home", ".codex", "sessions", "2026", "09", "17", "parent.jsonl"), events)
+	return r, run
+}
+func TestCodexNativeReviewedProvenanceGates(t *testing.T) {
+	t.Run("required_refusals_actual_positive_and_negatives", func(t *testing.T) {
+		for _, mode := range []string{"valid", "missing", "unexpected_success", "changed_inventory", "wrong_child", "wrong_event_path", "wrong_event_operation", "empty_no_inventory"} {
+			t.Run(mode, func(t *testing.T) {
+				r, root := nativeReviewedRefusalFixture(t)
+				coord := filepath.Join(root, "coordination")
+				target := filepath.Join(coord, "w0-stale-result-refusal.json")
+				var fact map[string]any
+				raw, _ := os.ReadFile(target)
+				_ = json.Unmarshal(raw, &fact)
+				switch mode {
+				case "missing":
+					_ = os.Remove(target)
+				case "unexpected_success":
+					fact["exit_status"] = 0
+					liveSkillWriteJSON(t, target, fact)
+				case "changed_inventory":
+					fact["after"] = map[string]string{"attempt.json": "different"}
+					liveSkillWriteJSON(t, target, fact)
+				case "wrong_child":
+					path := filepath.Join(coord, "w0-child-mismatch-request.json")
+					raw, _ := os.ReadFile(path)
+					var v map[string]any
+					_ = json.Unmarshal(raw, &v)
+					v["launch_id"] = "different"
+					liveSkillWriteJSON(t, path, v)
+				case "wrong_event_path", "wrong_event_operation":
+					path := filepath.Join(root, "home", ".codex", "sessions", "2026", "09", "17", "parent.jsonl")
+					raw, _ := os.ReadFile(path)
+					if mode == "wrong_event_path" {
+						raw = bytes.ReplaceAll(raw, []byte(r.CoordinatorPath), []byte("/another/coordinator.py"))
+					} else {
+						raw = bytes.ReplaceAll(raw, []byte("stale-result"), []byte("inspect"))
+					}
+					liveSkillWrite(t, path, raw)
+				case "empty_no_inventory":
+					_ = os.Remove(filepath.Join(coord, "w0-empty-result-refusal.json"))
+				}
+				err := nativeValidateRequiredRefusals(r, root)
+				if (err == nil) != (mode == "valid") {
+					t.Fatalf("%s: %v", mode, err)
+				}
+			})
+		}
+	})
+	t.Run("double_baseline_is_committed_fixture_not_retained_after_state", func(t *testing.T) {
+		source, err := exec.Command("git", "show", "c37006bab857e8b596029bded4656f5a98ef1a85:cmd/codex_native_worker_live_test.go").Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := codexNativeLiveReceipt{Scenario: "partial-resume", SourceRevision: "c37006bab857e8b596029bded4656f5a98ef1a85", HarnessSHA256: lifecycleDigest(source)}
+		expected := "package nativefixture\nimport \"testing\"\nfunc TestDouble(t *testing.T) { for _, n := range []int{-3,0,4} { if got := Double(n); got != 2*n { t.Errorf(\"Double(%d)=%d want %d\", n,got,2*n) } } }\n"
+		got, err := nativeDoubleTestBaseline(r)
+		if err != nil || got != lifecycleDigest([]byte(expected)) {
+			t.Fatalf("historical baseline %s %v", got, err)
+		}
+		r.HarnessSHA256 = "changed"
+		if _, err := nativeDoubleTestBaseline(r); err == nil {
+			t.Fatal("unmatched source accepted")
+		}
+		for _, name := range []string{"double_test.go", "clamp_test.go", "go.mod"} {
+			t.Run(name, func(t *testing.T) {
+				fixture, root := nativeReviewedQualificationFixture(t)
+				fixture.Scenario = "partial-resume"
+				liveSkillWrite(t, filepath.Join(root, "double_test.go"), []byte(expected))
+				fixture.BaselineSecondTestsSHA256 = lifecycleDigest([]byte(expected))
+				liveSkillWrite(t, filepath.Join(root, name), []byte("disabled"))
+				if err := nativeValidateFixtureBaselines(fixture); err == nil {
+					t.Fatal("changed required input passed")
+				}
+			})
+		}
+	})
+	t.Run("unsupported_child_mutations_and_code_mode", func(t *testing.T) {
+		r := codexNativeLiveReceipt{FixtureRoot: "/fixture"}
+		for _, command := range []string{"rm double_test.go", "printf nope > go.mod", "python3 -c 'pass'", "go test ./... -run TestOther"} {
+			if nativeChildCommandAllowed(r, []string{"/bin/sh", "-c", command}) {
+				t.Fatalf("accepted unowned command %s", command)
+			}
+		}
+		for _, input := range []string{`text(await tools.exec_command({cmd:"cat clamp.go",workdir:"/fixture"})); text("fake");`, `text("cat clamp.go");`, `const x=await tools.exec_command({cmd:"cat clamp.go",workdir:"/fixture"}); text(y);`} {
+			if _, _, ok := nativeCodeModeCommand(input); ok {
+				t.Fatal("unsupported/fake code mode accepted")
+			}
+		}
+		if command, cwd, ok := nativeCodeModeCommand(`const result = await tools.exec_command({cmd:"cat clamp.go",workdir:"/fixture",max_output_tokens:2000}); text(result);`); !ok || command != "cat clamp.go" || cwd != "/fixture" {
+			t.Fatal("exact returned command rejected")
+		}
+	})
+	t.Run("finalization_replay_needs_exact_attempt_and_two_real_outcomes", func(t *testing.T) {
+		for _, mode := range []string{"valid", "one_call", "not_replay", "wrong_attempt", "changed_state"} {
+			t.Run(mode, func(t *testing.T) {
+				root := t.TempDir()
+				r := codexNativeLiveReceipt{FixtureRoot: root, AttemptPath: filepath.Join(root, "attempt.json")}
+				liveSkillWrite(t, filepath.Join(root, "post-finalize-1-state.json"), []byte("same"))
+				second := "same"
+				if mode == "changed_state" {
+					second = "changed"
+				}
+				liveSkillWrite(t, filepath.Join(root, "post-finalize-2-state.json"), []byte(second))
+				for i := 1; i <= 2; i++ {
+					if mode == "one_call" && i == 2 {
+						continue
+					}
+					attempt := "attempt.json"
+					if mode == "wrong_attempt" {
+						attempt = "other.json"
+					}
+					idempotent := i == 2 && mode != "not_replay"
+					liveSkillWriteJSON(t, filepath.Join(root, fmt.Sprintf("finalize-%d.stdout.json", i)), map[string]any{"ok": true, "result": map[string]any{"attempt": attempt, "idempotent": idempotent}})
+				}
+				if got := nativeFinalizationReplayEvidence(r, root); got != (mode == "valid") {
+					t.Fatalf("%s=%v", mode, got)
+				}
+			})
+		}
+	})
+}
+
+func TestCodexNativeReviewedClaudeProvenance(t *testing.T) {
+	t.Run("exact_runtime_packet_and_finalizer_response", func(t *testing.T) {
+		root := t.TempDir()
+		taskID := "1.1"
+		manifest := codexBuildManifest{Phase: 1, AttemptID: "attempt", ExecutionBinding: &codex.ExecutionBinding{AttemptID: "attempt", RunID: "run"}}
+		completion := codexExternalBuildCompletion{Manifest: &manifest, Results: []codexExternalBuildWorkerResult{{Name: "Builder", Caste: "builder", TaskID: taskID, Status: "completed"}}}
+		path := filepath.Join(root, "request.completion.json")
+		savedPath := filepath.Join(root, ".aether", "data", "build", "phase-1", "attempts", "attempt.completion.json")
+		if err := os.MkdirAll(filepath.Dir(savedPath), 0700); err != nil {
+			t.Fatal(err)
+		}
+		liveSkillWriteJSON(t, savedPath, completion)
+		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			t.Fatal(err)
+		}
+		liveSkillWriteJSON(t, path, completion)
+		loaded, err := loadExternalBuildCompletion(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		digest, err := jsonSHA256(loaded)
+		if err != nil {
+			t.Fatal(err)
+		}
+		attemptPath := filepath.Join(root, ".aether", "data", "build", "phase-1", "attempts", "attempt.json")
+		record := buildAttemptRecord{ID: "attempt", RunID: "run", Status: buildAttemptBuilt, Phase: 1, Claims: &codexBuildClaims{}, CompletionPath: savedPath, CompletionSHA256: digest, Dispatches: []codexBuildDispatch{{Name: "Builder", Caste: "builder", TaskID: taskID}}}
+		liveSkillWriteJSON(t, attemptPath, record)
+		state, _ := json.Marshal(map[string]any{"state": "BUILT", "current_phase": 1, "plan": map[string]any{"phases": []any{map[string]any{"tasks": []any{map[string]any{"id": taskID, "status": "completed"}}}}}})
+		output, _ := json.Marshal(map[string]any{"ok": true, "result": map[string]any{"phase": 1, "state": "BUILT", "attempt": attemptPath, "selected_tasks": []string{}}})
+		r := codexNativeLiveReceipt{FixtureRoot: root}
+		command := "aether build-finalize 1 --completion-file " + path
+		if !nativeClaudeCreditEvidence(r, command, string(output), state) {
+			t.Fatal("exact accepted packet/refinalizer predicate rejected")
+		}
+
+		r.Artifacts = map[string]string{path: liveSkillFileDigest(t, path), savedPath: liveSkillFileDigest(t, savedPath), attemptPath: liveSkillFileDigest(t, attemptPath)}
+		if !nativeClaudeCreditEvidence(r, command, string(output), state) {
+			t.Fatal("fully pinned captured completion rejected")
+		}
+		r.Artifacts = nil
+		for _, mode := range []string{"wrong_result_task", "wrong_state_task", "wrong_attempt", "no_runtime_response", "unpinned_submitted_packet"} {
+			t.Run(mode, func(t *testing.T) {
+				altered := append([]byte(nil), output...)
+				state2 := append([]byte(nil), state...)
+				switch mode {
+				case "unpinned_submitted_packet":
+					r.Artifacts = map[string]string{savedPath: liveSkillFileDigest(t, savedPath), attemptPath: liveSkillFileDigest(t, attemptPath)}
+					defer func() { r.Artifacts = nil }()
+				case "wrong_result_task":
+					completion.Results[0].TaskID = "2.1"
+					liveSkillWriteJSON(t, path, completion)
+					defer func() { completion.Results[0].TaskID = taskID; liveSkillWriteJSON(t, path, completion) }()
+				case "wrong_state_task":
+					state2 = bytes.ReplaceAll(state2, []byte("1.1"), []byte("2.1"))
+				case "wrong_attempt":
+					altered = bytes.ReplaceAll(altered, []byte("attempt.json"), []byte("other.json"))
+				case "no_runtime_response":
+					altered = []byte("{}")
+				}
+				if nativeClaudeCreditEvidence(r, command, string(altered), state2) {
+					t.Fatalf("%s credited", mode)
+				}
+			})
+		}
+	})
+	t.Run("installed_profile_wrapper_and_child_check_order", func(t *testing.T) {
+		run := t.TempDir()
+		root := filepath.Join(run, "fixture")
+		r := codexNativeLiveReceipt{FixtureRoot: root, SourceRevision: "c37006bab857e8b596029bded4656f5a98ef1a85", BaselineSource: "old\n", FinalSource: "new\n", SkillPath: filepath.Join(run, "home", ".claude", "commands", "ant", "build.md")}
+		profile, err := exec.Command("git", "show", r.SourceRevision+":.claude/agents/ant/aether-builder.md").Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, dir := range []string{filepath.Join(run, "home", ".claude", "agents", "ant"), filepath.Dir(r.SkillPath)} {
+			if err := os.MkdirAll(dir, 0700); err != nil {
+				t.Fatal(err)
+			}
+		}
+		liveSkillWrite(t, filepath.Join(run, "home", ".claude", "agents", "ant", "aether-builder.md"), profile)
+		wrapper, err := exec.Command("git", "show", r.SourceRevision+":.claude/commands/ant/build.md").Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		liveSkillWrite(t, r.SkillPath, wrapper)
+		requiredOutput := "{\"Action\":\"run\",\"Package\":\"example.invalid/nativefixture\",\"Test\":\"TestClamp\"}\n{\"Action\":\"pass\",\"Package\":\"example.invalid/nativefixture\",\"Test\":\"TestClamp\"}\n{\"Action\":\"pass\",\"Package\":\"example.invalid/nativefixture\"}\n"
+		for _, mode := range []string{"valid", "pass_then_edit", "pass_then_failure", "missing_wrapper", "generic_profile"} {
+			t.Run(mode, func(t *testing.T) {
+				var raw []byte
+				event := func(parent string, content map[string]any) {
+					b, _ := json.Marshal(map[string]any{"type": "assistant", "session_id": "parent", "parent_tool_use_id": parent, "message": map[string]any{"content": []any{content}}})
+					raw = append(raw, append(b, '\n')...)
+				}
+				call := func(parent, id, name string, input map[string]any, out string, failed bool) {
+					event(parent, map[string]any{"type": "tool_use", "id": id, "name": name, "input": input})
+					event(parent, map[string]any{"type": "tool_result", "tool_use_id": id, "content": out, "is_error": failed})
+				}
+				if mode != "missing_wrapper" {
+					call("", "read", "Read", map[string]any{"file_path": r.SkillPath}, string(wrapper), false)
+				}
+				check := func(id string, fail bool) {
+					out := requiredOutput
+					if fail {
+						out = "FAIL"
+					}
+					call("helper", id, "Bash", map[string]any{"command": "go test ./... -json -count=1"}, out, fail)
+				}
+				edit := func() {
+					call("helper", "edit", "Edit", map[string]any{"file_path": filepath.Join(root, "clamp.go"), "old_string": "old\n", "new_string": "new\n"}, "done", false)
+				}
+				if mode == "pass_then_edit" {
+					check("test1", false)
+					edit()
+				} else {
+					edit()
+					check("test1", false)
+				}
+				if mode == "pass_then_failure" {
+					check("test2", true)
+				}
+				profileName := "aether-builder"
+				if mode == "generic_profile" {
+					profileName = "general-purpose"
+				}
+				call("", "helper", "Agent", map[string]any{"subagent_type": profileName}, "done", false)
+				derived := r
+				nativeCollectClaudeEvidence(&derived, raw, []byte("{}"))
+				if mode == "valid" && (!derived.SkillRead || derived.NativeSpawnCount != 1 || !derived.ChildEditObserved || !derived.ChecksPassed) {
+					t.Fatalf("installed exact child proof missing: %+v", derived)
+				}
+				if (mode == "pass_then_edit" || mode == "pass_then_failure") && derived.ChecksPassed {
+					t.Fatal("stale Claude tests qualified")
+				}
+				if mode == "missing_wrapper" && derived.SkillRead {
+					t.Fatal("wrapper read fabricated")
+				}
+				if mode == "generic_profile" && (derived.NativeSpawnCount != 1 || !derived.ParentSubstitution) {
+					t.Fatal("generic helper counted")
+				}
+			})
+		}
+	})
+}
+
+func TestCodexNativeQualificationReceiptReplay(t *testing.T) {
+	path := os.Getenv("AETHER_CODEX_NATIVE_MATRIX_RECEIPT")
+	if path == "" {
+		return
+	} // No live proof is claimed by the deterministic suite.
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var receipt codexNativeLiveReceipt
+	if err = json.Unmarshal(raw, &receipt); err != nil {
+		t.Fatal(err)
+	}
+	if len(receipt.Artifacts) == 0 {
+		t.Fatal("capture artifact inventory absent")
+	}
+	for file, want := range receipt.Artifacts {
+		data, err := os.ReadFile(file)
+		if err != nil || lifecycleDigest(data) != want {
+			t.Fatalf("capture artifact changed: %s", file)
+		}
+	}
+	derivedErr := nativeReplayQualificationReceipt(t, &receipt)
+	if derivedErr != nil {
+		receipt.Outcome, receipt.Reason = "incomplete", derivedErr.Error()
+	}
+	first, _ := json.Marshal(receipt)
+	secondErr := nativeReplayQualificationReceipt(t, &receipt)
+	if secondErr != nil {
+		receipt.Outcome, receipt.Reason = "incomplete", secondErr.Error()
+	}
+	second, _ := json.Marshal(receipt)
+	if !bytes.Equal(first, second) {
+		t.Fatal("identical raw capture produced non-idempotent matrix derivation")
+	}
+	if out := os.Getenv("AETHER_CODEX_NATIVE_MATRIX_REPLAY_OUT"); out != "" {
+		identity := os.Getenv("AETHER_CODEX_NATIVE_MATRIX_VALIDATOR_ID")
+		if identity == "" || !filepath.IsAbs(out) || nativePathWithin(filepath.Dir(receipt.FixtureRoot), out) {
+			t.Fatal("new absolute output and explicit source-pinned validator identity required")
+		}
+		if _, err := os.Stat(out); !os.IsNotExist(err) {
+			t.Fatal("original or earlier replay must not be overwritten")
+		}
+		receipt.ValidationRevision = identity
+		receipt.ValidationOriginalReceipt = path
+		receipt.ValidationOriginalSHA256 = lifecycleDigest(raw)
+		receipt.Artifacts[path] = lifecycleDigest(raw)
+		liveSkillWriteJSON(t, out, receipt)
+	}
+	t.Logf("actual %s capture freshly derived as %s: %s", receipt.Scenario, receipt.Outcome, receipt.Reason)
+	if derivedErr != nil && os.Getenv("AETHER_CODEX_NATIVE_REPLAY_EXPECT_INCOMPLETE") != "1" {
+		t.Fatal(derivedErr)
+	}
+}
+
+func TestCodexNativeSecondReviewControls(t *testing.T) {
+	meta := func(caste string) []byte {
+		return []byte("{\"type\":\"session_meta\",\"payload\":{\"id\":\"child\",\"parent_thread_id\":\"parent\",\"agent_role\":\"aether-" + caste + "\",\"cwd\":\"/fixture\"}}\n")
+	}
+	output := "{\"Action\":\"run\",\"Package\":\"example.invalid/nativefixture\",\"Test\":\"TestClamp\"}\n{\"Action\":\"pass\",\"Package\":\"example.invalid/nativefixture\",\"Test\":\"TestClamp\"}\n{\"Action\":\"pass\",\"Package\":\"example.invalid/nativefixture\"}\n"
+	check := func(command string, exit int) []byte {
+		return nativeEvidenceEvent(t, "item_completed", "child", map[string]any{"type": "CommandExecution", "status": "completed", "command": []string{"/bin/sh", "-c", command}, "cwd": "/fixture", "exit_code": exit, "aggregated_output": output})
+	}
+	edit := func(old, next string) []byte {
+		return nativeEvidenceEvent(t, "item_completed", "child", map[string]any{"type": "FileChange", "status": "completed", "changes": map[string]any{"/fixture/clamp.go": map[string]any{"type": "update", "unified_diff": "@@ -1,1 +1,1 @@\n-" + old + "\n+" + next + "\n"}}})
+	}
+	t.Run("watcher_edit_restore_and_check", func(t *testing.T) {
+		r := codexNativeLiveReceipt{ChildID: "child", BoundHostSessionID: "parent", Caste: "watcher", FixtureRoot: "/fixture", BaselineSource: "old\n", FinalSource: "old\n"}
+		raw := bytes.Join([][]byte{meta("watcher"), edit("old", "bad"), edit("bad", "old"), check("go test ./... -json -count=1", 0)}, nil)
+		nativeInspectChildEvents(&r, raw)
+		if len(r.ChildUnclassified) == 0 {
+			t.Fatal("Watcher edit/restore was accepted as non-editing review")
+		}
+	})
+	t.Run("child_code_mode_mutation_restore", func(t *testing.T) {
+		r := codexNativeLiveReceipt{ChildID: "child", BoundHostSessionID: "parent", Caste: "builder", FixtureRoot: "/fixture"}
+		raw := append([]byte{}, meta("builder")...)
+		owned, _ := json.Marshal(map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": "child", "turn_id": "child-turn"}})
+		raw = append(raw, append(owned, '\n')...)
+		for _, command := range []string{"printf weak > clamp_test.go", "cp /tmp/original clamp_test.go"} {
+			call, _ := json.Marshal(map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call", "name": "exec", "input": "text(await tools.exec_command({cmd:" + strconv.Quote(command) + ",workdir:\"/fixture\"}));", "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "child-turn"}}})
+			raw = append(raw, append(call, '\n')...)
+			raw = append(raw, check("go test ./... -json -count=1", 0)...)
+		}
+		nativeInspectChildEvents(&r, raw)
+		if len(r.ChildUnclassified) == 0 {
+			t.Fatal("child code-mode protected-file mutations were invisible")
+		}
+	})
+	t.Run("prefixed_later_failure_and_positive", func(t *testing.T) {
+		for _, tc := range []struct {
+			command string
+			exit    int
+			want    bool
+		}{
+			{"GOCACHE=/tmp/cache go test ./...", 1, false},
+			{"GOCACHE=/tmp/cache go test ./... -json -count=1", 1, false},
+			{"GOCACHE=/tmp/cache go test ./... -json -count=1", 0, true},
+		} {
+			r := codexNativeLiveReceipt{ChildID: "child", BoundHostSessionID: "parent", Caste: "builder", FixtureRoot: "/fixture"}
+			nativeInspectChildEvents(&r, bytes.Join([][]byte{meta("builder"), check("go test ./... -json -count=1", 0), check(tc.command, tc.exit)}, nil))
+			if r.ChecksPassed != tc.want {
+				t.Fatalf("%s exit%d checks=%v", tc.command, tc.exit, r.ChecksPassed)
+			}
+		}
+	})
+	t.Run("ordinary_and_early_need_empty_inventory", func(t *testing.T) {
+		root := t.TempDir()
+		for _, file := range []string{"candidate", "client", "coordinator", "clamp_test.go", "go.mod"} {
+			liveSkillWrite(t, filepath.Join(root, file), []byte(file))
+		}
+		for _, scenario := range []string{"ordinary", "early-resume"} {
+			r := codexNativeLiveReceipt{Scenario: scenario, FixtureRoot: root, SessionID: "parent", ChildID: "child", ChildEvents: "raw-child", BoundHostSessionID: "parent", AttemptID: "attempt", LaunchID: "launch", ResultSHA256: "result", CompletionPath: "completion", SkillRead: true, SupportRead: true, GuideRead: true, ChildEditObserved: true, ChecksPassed: true, CreditObserved: true, TerminalCorroborated: true, SourceEventCorroborated: true, NativeSpawnCount: 1, EmptyResultRefused: true, ResumeSessionID: "fresh-parent", ResumeWorkerStable: true, ResumeNoSpawn: true, ResumeInspectObserved: true, FinalizationReplayStable: true}
+			r.CandidatePath = filepath.Join(root, "candidate")
+			r.CandidateSHA256 = liveSkillFileDigest(t, r.CandidatePath)
+			r.ClientPath = filepath.Join(root, "client")
+			r.ClientSHA256 = liveSkillFileDigest(t, r.ClientPath)
+			r.CoordinatorPath = filepath.Join(root, "coordinator")
+			r.CoordinatorSHA256 = liveSkillFileDigest(t, r.CoordinatorPath)
+			r.BaselineTestsSHA256 = liveSkillFileDigest(t, filepath.Join(root, "clamp_test.go"))
+			r.BaselineModuleSHA256 = liveSkillFileDigest(t, filepath.Join(root, "go.mod"))
+			if err := validateCodexNativeLiveReceipt(r); err == nil {
+				t.Fatalf("%s historical missing refusal inventory was qualified", scenario)
+			}
+		}
+	})
+	t.Run("claude_mixed_helpers_and_prefixed_failure", func(t *testing.T) {
+		run := t.TempDir()
+		root := filepath.Join(run, "fixture")
+		r := codexNativeLiveReceipt{FixtureRoot: root, SourceRevision: "c37006bab857e8b596029bded4656f5a98ef1a85", BaselineSource: "old\n", FinalSource: "new\n"}
+		profile, err := exec.Command("git", "show", r.SourceRevision+":.claude/agents/ant/aether-builder.md").Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(run, "home", ".claude", "agents", "ant", "aether-builder.md")
+		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			t.Fatal(err)
+		}
+		liveSkillWrite(t, path, profile)
+		for _, mode := range []string{"mixed", "prefixed_failure", "valid_prefixed"} {
+			t.Run(mode, func(t *testing.T) {
+				var raw []byte
+				call := func(parent, id, name string, input map[string]any, out string, failed bool) {
+					for _, content := range []map[string]any{{"type": "tool_use", "id": id, "name": name, "input": input}, {"type": "tool_result", "tool_use_id": id, "content": out, "is_error": failed}} {
+						line, _ := json.Marshal(map[string]any{"type": "assistant", "session_id": "parent", "parent_tool_use_id": parent, "message": map[string]any{"content": []any{content}}})
+						raw = append(raw, append(line, '\n')...)
+					}
+				}
+				if mode == "mixed" {
+					call("generic", "e1", "Edit", map[string]any{"file_path": filepath.Join(root, "clamp.go"), "old_string": "old\n", "new_string": "half\n"}, "done", false)
+					call("builder", "e2", "Edit", map[string]any{"file_path": filepath.Join(root, "clamp.go"), "old_string": "half\n", "new_string": "new\n"}, "done", false)
+					call("", "generic", "Agent", map[string]any{"subagent_type": "general-purpose"}, "done", false)
+				} else {
+					call("builder", "e2", "Edit", map[string]any{"file_path": filepath.Join(root, "clamp.go"), "old_string": "old\n", "new_string": "new\n"}, "done", false)
+				}
+				call("builder", "pass", "Bash", map[string]any{"command": "GOCACHE=/tmp/cache go test ./... -json -count=1"}, output, false)
+				if mode == "prefixed_failure" {
+					call("builder", "fail", "Bash", map[string]any{"command": "GOCACHE=/tmp/cache go test ./... -json -count=1"}, "FAIL", true)
+				}
+				call("", "builder", "Agent", map[string]any{"subagent_type": "aether-builder"}, "done", false)
+				derived := r
+				nativeCollectClaudeEvidence(&derived, raw, []byte("{}"))
+				if mode == "mixed" && derived.NativeSpawnCount == 1 && derived.ChildEditObserved && len(derived.ChildUnclassified) == 0 && !derived.ParentSubstitution {
+					t.Fatal("generic contributor hidden behind single installed Builder")
+				}
+				if mode == "prefixed_failure" && derived.ChecksPassed {
+					t.Fatal("Claude prefixed failure retained old passing check")
+				}
+				if mode == "valid_prefixed" && (!derived.ChecksPassed || !derived.ChildEditObserved) {
+					t.Fatal("valid prefixed installed Builder proof rejected")
+				}
+			})
+		}
+	})
+}
+
+func TestCodexNativeCodeModeSequenceBoundary(t *testing.T) {
+	good := `text(await tools.exec_command({cmd:"aether command-guide build --platform codex",max_output_tokens:2000}));
+text(await tools.exec_command({cmd:"printenv CODEX_HOME CODEX_THREAD_ID",max_output_tokens:1000}));`
+	for _, tc := range []struct {
+		name, input, cwd string
+		want             bool
+	}{
+		{"metadata_cwd_two_exact_calls", good, "/fixture", true},
+		{"no_cwd_evidence", good, "", false},
+		{"extra_JS", good + `text("fake");`, "/fixture", false},
+		{"unknown_tool", good + `text(await tools.delete_all({}));`, "/fixture", false},
+		{"expression_argument", `text(await tools.exec_command({cmd:"cat "+secret,workdir:"/fixture"}));`, "/fixture", false},
+		{"wrong_print_variable", `const x=await tools.exec_command({cmd:"cat clamp.go",workdir:"/fixture"}); text(y);`, "/fixture", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, ok := nativeCodeModeCommands(tc.input, tc.cwd)
+			if ok != tc.want {
+				t.Fatalf("parse=%v want%v", ok, tc.want)
+			}
+		})
+	}
+	for _, tc := range []struct {
+		name, input string
+		bad         bool
+	}{
+		{"same_allowlist", good, false},
+		{"extra_secret_variable", `text(await tools.exec_command({cmd:"printenv CODEX_HOME CODEX_THREAD_ID ANTHROPIC_API_KEY"}));`, true},
+		{"second_mutation", good + `text(await tools.exec_command({cmd:"printf wrong > clamp_test.go"}));`, true},
+		{"compound_shell", `text(await tools.exec_command({cmd:"printenv CODEX_HOME CODEX_THREAD_ID; touch clamp.go"}));`, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			call, _ := json.Marshal(map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call", "name": "exec", "input": tc.input}})
+			raw := append([]byte("{\"type\":\"session_meta\",\"payload\":{\"id\":\"parent\",\"cwd\":\"/fixture\"}}\n"), call...)
+			r := codexNativeLiveReceipt{SessionID: "parent", FixtureRoot: "/fixture"}
+			nativeInspectParentEvents(&r, raw)
+			if r.ParentSubstitution != tc.bad {
+				t.Fatalf("substitution=%v want%v: %v", r.ParentSubstitution, tc.bad, r.ParentUnclassified)
+			}
+		})
+	}
+}
+
+func TestCodexNativeThirdReviewCodeModeOutcome(t *testing.T) {
+	output := "{\"Action\":\"run\",\"Package\":\"example.invalid/nativefixture\",\"Test\":\"TestClamp\"}\n{\"Action\":\"pass\",\"Package\":\"example.invalid/nativefixture\",\"Test\":\"TestClamp\"}\n{\"Action\":\"pass\",\"Package\":\"example.invalid/nativefixture\"}\n"
+	for _, mode := range []string{"pass", "failure", "missing", "wrong_call", "wrong_turn", "duplicate_output", "duplicate_call", "incomplete", "edit_before_output"} {
+		t.Run(mode, func(t *testing.T) {
+			r := codexNativeLiveReceipt{ChildID: "child", BoundHostSessionID: "parent", Caste: "builder", FixtureRoot: "/fixture"}
+			raw := []byte("{\"type\":\"session_meta\",\"payload\":{\"id\":\"child\",\"parent_thread_id\":\"parent\",\"agent_role\":\"aether-builder\",\"cwd\":\"/fixture\"}}\n")
+			appendJSON := func(v any) { b, _ := json.Marshal(v); raw = append(raw, append(b, '\n')...) }
+			appendJSON(map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": "child", "turn_id": "owned"}})
+			raw = append(raw, nativeEvidenceEvent(t, "item_completed", "child", map[string]any{"type": "CommandExecution", "status": "completed", "command": []string{"/bin/sh", "-c", "go test ./... -json -count=1"}, "cwd": "/fixture", "exit_code": 0, "aggregated_output": output})...)
+			call := map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call", "name": "exec", "call_id": "actual-call", "input": "text(await tools.exec_command({cmd:\"go test ./... -json -count=1\",workdir:\"/fixture\"}));", "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "owned"}}}
+			appendJSON(call)
+			if mode == "duplicate_call" {
+				appendJSON(call)
+			}
+			if mode == "edit_before_output" {
+				raw = append(raw, nativeEvidenceEvent(t, "item_completed", "child", map[string]any{"type": "FileChange", "status": "completed", "changes": map[string]any{}})...)
+			}
+			if mode != "missing" {
+				id, turn, exit := "actual-call", "owned", 0
+				if mode == "wrong_call" {
+					id = "other"
+				}
+				if mode == "wrong_turn" {
+					turn = "foreign"
+				}
+				if mode == "failure" {
+					exit = 1
+				}
+				result := map[string]any{"exit_code": exit, "output": output}
+				if mode == "incomplete" {
+					delete(result, "exit_code")
+					result["session_id"] = 123
+				}
+				encoded, _ := json.Marshal(result)
+				response := map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call_output", "call_id": id, "output": []any{map[string]any{"type": "input_text", "text": "Script completed\n"}, map[string]any{"type": "input_text", "text": string(encoded)}}, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": turn}}}
+				appendJSON(response)
+				if mode == "duplicate_output" {
+					appendJSON(response)
+				}
+			}
+			nativeInspectChildEvents(&r, raw)
+			if r.ChecksPassed != (mode == "pass") {
+				t.Fatalf("later code-mode %s checks=%v", mode, r.ChecksPassed)
+			}
+		})
+	}
+}
+
+func TestCodexNativeThirdReviewOriginalInventory(t *testing.T) {
+	for _, mode := range []string{"pinned", "late_inventory", "late_request", "late_session", "missing"} {
+		t.Run(mode, func(t *testing.T) {
+			r, root := nativeReviewedRefusalFixture(t)
+			r.Scenario = "review"
+			// The actual collector supplies the worker checks; the refusal validator
+			// consumes recorded operation events, request bytes and before/after maps.
+			raw := []byte("{\"type\":\"session_meta\",\"payload\":{\"id\":\"child\",\"parent_thread_id\":\"parent\",\"agent_role\":\"aether-builder\",\"cwd\":" + strconv.Quote(r.FixtureRoot) + "}}\n")
+			output := "{\"Action\":\"run\",\"Package\":\"example.invalid/nativefixture\",\"Test\":\"TestClamp\"}\n{\"Action\":\"pass\",\"Package\":\"example.invalid/nativefixture\",\"Test\":\"TestClamp\"}\n{\"Action\":\"pass\",\"Package\":\"example.invalid/nativefixture\"}\n"
+			raw = append(raw, nativeEvidenceEvent(t, "item_completed", "child", map[string]any{"type": "CommandExecution", "status": "completed", "command": []string{"/bin/sh", "-c", "go test ./... -json -count=1"}, "cwd": r.FixtureRoot, "exit_code": 0, "aggregated_output": output})...)
+			r.Workers[0].FixtureRoot = r.FixtureRoot
+			nativeInspectChildEvents(&r.Workers[0], raw)
+			if !r.Workers[0].ChecksPassed {
+				t.Fatal("actual check collector fixture failed")
+			}
+			r.Artifacts = map[string]string{}
+			paths, err := filepath.Glob(filepath.Join(root, "coordination", "*"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			session := filepath.Join(root, "home", ".codex", "sessions", "2026", "09", "17", "parent.jsonl")
+			paths = append(paths, session, r.CoordinatorPath)
+			omitted := filepath.Join(root, "coordination", "w0-empty-result-refusal.json")
+			if mode == "late_request" {
+				omitted = filepath.Join(root, "coordination", "w0-empty-result-request.json")
+			}
+			if mode == "late_session" {
+				omitted = session
+			}
+			for _, p := range paths {
+				if strings.HasPrefix(mode, "late_") && p == omitted {
+					continue
+				}
+				r.Artifacts[p] = liveSkillFileDigest(t, p)
+			}
+			if mode == "missing" {
+				_ = os.Remove(omitted)
+			}
+			// Every originally inventoried file still matches for each late-added case.
+			if strings.HasPrefix(mode, "late_") {
+				for p, want := range r.Artifacts {
+					if liveSkillFileDigest(t, p) != want {
+						t.Fatal("original changed")
+					}
+				}
+			}
+			err = nativeValidateRequiredRefusals(r, root)
+			if (err == nil) != (mode == "pinned") {
+				t.Fatalf("%s refusal proof: %v", mode, err)
+			}
+		})
+	}
+}
+
+func nativeInventoryReplayFixture(t *testing.T) codexNativeLiveReceipt {
+	t.Helper()
+	root := t.TempDir()
+	fixture := filepath.Join(root, "fixture")
+	coord := filepath.Join(root, "coordination")
+	r := codexNativeLiveReceipt{Scenario: "ordinary", FixtureRoot: fixture, BaselineSource: "old\n", ExitStatus: 0, RawEvents: filepath.Join(root, "events.jsonl"), SkillPath: filepath.Join(root, "skill.md"), SupportPath: filepath.Join(root, "support.md"), CoordinatorPath: filepath.Join(fixture, ".aether", "coordinator.py"), CandidatePath: filepath.Join(root, "candidate"), ClientPath: filepath.Join(root, "client")}
+	write := func(path string, raw []byte) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			t.Fatal(err)
+		}
+		liveSkillWrite(t, path, raw)
+	}
+	for _, p := range []string{r.CandidatePath, r.ClientPath, r.SkillPath, r.SupportPath, r.CoordinatorPath, filepath.Join(fixture, "clamp_test.go"), filepath.Join(fixture, "go.mod")} {
+		write(p, []byte(filepath.Base(p)))
+	}
+	write(filepath.Join(fixture, "clamp.go"), []byte("new\n"))
+	write(r.RawEvents, []byte("{\"type\":\"thread.started\",\"thread_id\":\"parent\"}\n"))
+	r.CandidateSHA256 = liveSkillFileDigest(t, r.CandidatePath)
+	r.ClientSHA256 = liveSkillFileDigest(t, r.ClientPath)
+	r.CoordinatorSHA256 = liveSkillFileDigest(t, r.CoordinatorPath)
+	r.BaselineTestsSHA256 = liveSkillFileDigest(t, filepath.Join(fixture, "clamp_test.go"))
+	r.BaselineModuleSHA256 = liveSkillFileDigest(t, filepath.Join(fixture, "go.mod"))
+	result := internalWorkerResult{Name: "builder", Caste: "builder", TaskID: "1.1", Status: "completed", Summary: "fixed", Handoff: codex.WorkerHandoff{VerificationStatus: "pass", ChangedFiles: []string{"clamp.go"}, CommandsRun: []string{"go test ./... -json -count=1"}}}
+	resultHash, _ := jsonSHA256(&result)
+	resultRaw, _ := json.Marshal(result)
+	terminal := nativeEvidenceEvent(t, "item_completed", "child", map[string]any{"type": "AgentMessage", "id": "terminal", "phase": "final_answer", "content": []any{map[string]any{"type": "Text", "text": string(resultRaw)}}})
+	meta, _ := json.Marshal(map[string]any{"type": "session_meta", "payload": map[string]any{"id": "child", "parent_thread_id": "parent", "agent_role": "aether-builder", "cwd": fixture}})
+	child := append(meta, '\n')
+	child = append(child, nativeEvidenceEvent(t, "item_completed", "child", map[string]any{"type": "FileChange", "status": "completed", "changes": map[string]any{filepath.Join(fixture, "clamp.go"): map[string]any{"type": "update", "unified_diff": "@@ -1,1 +1,1 @@\n-old\n+new\n"}}})...)
+	output := "{\"Action\":\"run\",\"Package\":\"example.invalid/nativefixture\",\"Test\":\"TestClamp\"}\n{\"Action\":\"pass\",\"Package\":\"example.invalid/nativefixture\",\"Test\":\"TestClamp\"}\n{\"Action\":\"pass\",\"Package\":\"example.invalid/nativefixture\"}\n"
+	child = append(child, nativeEvidenceEvent(t, "item_completed", "child", map[string]any{"type": "CommandExecution", "status": "completed", "command": []string{"/bin/sh", "-c", "go test ./... -json -count=1"}, "cwd": fixture, "exit_code": 0, "aggregated_output": output})...)
+	child = append(child, terminal...)
+	sessionRoot := filepath.Join(root, "home", ".codex", "sessions", "2026", "09", "17")
+	write(filepath.Join(sessionRoot, "child.jsonl"), child)
+	meta, _ = json.Marshal(map[string]any{"type": "session_meta", "payload": map[string]any{"id": "parent", "cwd": fixture}})
+	parent := append(meta, '\n')
+	parent = append(parent, []byte("{\"type\":\"response_item\",\"payload\":{\"type\":\"function_call\",\"name\":\"spawn_agent\",\"arguments\":\"{}\"}}\n")...)
+	for _, p := range []string{r.SkillPath, r.SupportPath} {
+		parent = append(parent, nativeEvidenceEvent(t, "item_completed", "parent", map[string]any{"type": "CommandExecution", "status": "completed", "command": []string{"/bin/sh", "-c", "cat " + p}, "cwd": fixture, "exit_code": 0, "aggregated_output": filepath.Base(p)})...)
+	}
+	parent = append(parent, nativeEvidenceEvent(t, "item_completed", "parent", map[string]any{"type": "CommandExecution", "status": "completed", "command": []string{"/bin/sh", "-c", "aether command-guide build --platform codex"}, "cwd": fixture, "exit_code": 0, "aggregated_output": "codex-native-worker reserve"})...)
+	parent = append(parent, nativeEvidenceEvent(t, "item_completed", "parent", map[string]any{"type": "CommandExecution", "status": "completed", "command": []string{"/bin/sh", "-c", "python3 " + r.CoordinatorPath + " empty-result"}, "cwd": fixture, "exit_code": 1, "aggregated_output": "nonempty terminal result"})...)
+	write(filepath.Join(sessionRoot, "parent.jsonl"), parent)
+	journal := buildAttemptRecord{ID: "attempt", RunID: "run", CompletionPath: "completion", WorkerRuns: []buildAttemptWorkerRun{{ProviderRunID: "launch", WorkerName: "builder", TaskID: "1.1", Caste: "builder", Result: &result, ResultSHA256: resultHash, Native: &codexNativeWorkerBinding{HostSessionID: "parent", ChildID: "child", SourceEventID: "terminal", SourceEventSHA256: lifecycleDigest(bytes.TrimSuffix(terminal, []byte{'\n'}))}}}}
+	journalRaw, _ := json.Marshal(journal)
+	write(filepath.Join(fixture, ".aether", "data", "build", "phase-1", "attempts", "attempt.json"), journalRaw)
+	state, _ := json.Marshal(map[string]any{"plan": map[string]any{"phases": []any{map[string]any{"tasks": []any{map[string]any{"status": colony.TaskCompleted}}}}}})
+	write(filepath.Join(fixture, ".aether", "data", "COLONY_STATE.json"), state)
+	bind := map[string]any{"schema_version": 1, "phase": 1, "execution_binding": map[string]any{"attempt_id": "attempt"}, "child_id": "child", "launch_id": "launch"}
+	b, _ := json.Marshal(bind)
+	write(filepath.Join(coord, "bind-request.json"), b)
+	bind["result"] = map[string]any{}
+	b, _ = json.Marshal(bind)
+	write(filepath.Join(coord, "empty-result-request.json"), b)
+	fact := map[string]any{"exit_status": 1, "stderr": "{\"ok\":false,\"error\":\"nonempty terminal result\"}", "before": map[string]string{"attempt": "same"}, "after": map[string]string{"attempt": "same"}}
+	b, _ = json.Marshal(fact)
+	write(filepath.Join(coord, "empty-result-refusal.json"), b)
+	r.Artifacts = map[string]string{}
+	if err := filepath.Walk(root, func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			r.Artifacts[p] = liveSkillFileDigest(t, p)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
+func TestCodexNativeThirdReviewReplayInventory(t *testing.T) {
+	for _, mode := range []string{"pinned", "late_inventory", "late_request", "late_attempt", "late_session", "missing"} {
+		t.Run(mode, func(t *testing.T) {
+			r := nativeInventoryReplayFixture(t)
+			root := filepath.Dir(r.FixtureRoot)
+			path := filepath.Join(root, "coordination", "empty-result-refusal.json")
+			switch mode {
+			case "late_request":
+				path = filepath.Join(root, "coordination", "empty-result-request.json")
+			case "late_attempt":
+				path = filepath.Join(r.FixtureRoot, ".aether", "data", "build", "phase-1", "attempts", "attempt.json")
+			case "late_session":
+				path = filepath.Join(root, "home", ".codex", "sessions", "2026", "09", "17", "parent.jsonl")
+			}
+			if strings.HasPrefix(mode, "late_") {
+				delete(r.Artifacts, path)
+			}
+			if mode == "missing" {
+				_ = os.Remove(path)
+			}
+			if mode != "missing" {
+				for path, want := range r.Artifacts {
+					if liveSkillFileDigest(t, path) != want {
+						t.Fatal("original digest changed")
+					}
+				}
+			}
+			err := nativeReplayQualificationReceipt(t, &r)
+			if (err == nil) != (mode == "pinned") {
+				t.Fatalf("%s actual collector/replay-to-validator outcome=%s err=%v", mode, r.Outcome, err)
+			}
+		})
+	}
+}
+
+func TestCodexNativeFourthReviewLegacyReplayInventory(t *testing.T) {
+	for _, mode := range []string{"pinned", "omitted", "null", "empty"} {
+		t.Run(mode, func(t *testing.T) {
+			r := nativeInventoryReplayFixture(t)
+			raw, _ := json.Marshal(r)
+			var object map[string]any
+			_ = json.Unmarshal(raw, &object)
+			switch mode {
+			case "omitted":
+				delete(object, "artifacts")
+			case "null":
+				object["artifacts"] = nil
+			case "empty":
+				object["artifacts"] = map[string]string{}
+			}
+			input := filepath.Join(t.TempDir(), "original.json")
+			liveSkillWriteJSON(t, input, object)
+			command := exec.Command(os.Args[0], "-test.run", "^TestCodexNativeWorkerReceiptValidation$", "-test.v")
+			for _, entry := range os.Environ() {
+				if !strings.HasPrefix(entry, "AETHER_CODEX_NATIVE_") {
+					command.Env = append(command.Env, entry)
+				}
+			}
+			command.Env = append(command.Env, "AETHER_CODEX_NATIVE_RECEIPT_PATH="+input)
+			output, err := command.CombinedOutput()
+			if mode == "pinned" {
+				if err != nil {
+					t.Fatalf("pinned legacy replay failed: %v\n%s", err, output)
+				}
+			} else if err == nil || !strings.Contains(string(output), "inventory") {
+				t.Fatalf("%s legacy replay did not reject missing original inventory: %v\n%s", mode, err, output)
+			}
+		})
+	}
+}
+
+func TestCodexNativeFourthReviewReplayModeAndPacket(t *testing.T) {
+	r := codexNativeLiveReceipt{Artifacts: map[string]string{"pinned": "digest"}}
+	if err := nativeBeginReceiptReplay(&r); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "late")
+	liveSkillWrite(t, path, []byte("late"))
+	r.replayArtifacts = nil
+	if _, err := r.readEvidence(path); err == nil {
+		t.Fatal("replay mode fell back to live reads when inventory became nil")
+	}
+	packet := []byte("{\"manifest\":{\"phase\":1,\"attempt_id\":\"attempt\"}}")
+	for _, raw := range [][]byte{packet, append(append([]byte("{\"result\":"), packet...), '}')} {
+		c, err := nativeCapturedCompletion(raw)
+		if err != nil || c.activeManifest() == nil || c.activeManifest().AttemptID != "attempt" {
+			t.Fatalf("valid captured packet rejected: %v", err)
+		}
+	}
+	for _, raw := range []string{"{}", "{\"manifest\":\"wrong\",\"result\":{\"manifest\":{\"phase\":1}}}", "{\"manifest\":{},\"results\":\"wrong\"}"} {
+		if _, err := nativeCapturedCompletion([]byte(raw)); err == nil {
+			t.Fatalf("invalid captured packet accepted: %s", raw)
+		}
 	}
 }
