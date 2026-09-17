@@ -448,7 +448,10 @@ func TestCodexNativeEvidenceDerivation(t *testing.T) {
 	patch := "@@ -2,2 +2,4 @@\n \n-func Clamp(value, low, high int) int { return value }\n+func Clamp(value, low, high int) int {\n+\tif value < low { return low }; if value > high { return high }; return value\n+}\n"
 	edit := nativeEvidenceEvent(t, "item_completed", "child", map[string]any{"type": "FileChange", "status": "completed", "changes": map[string]any{"/fixture/clamp.go": map[string]any{"type": "update", "unified_diff": patch}}})
 	check := nativeEvidenceEvent(t, "item_completed", "child", map[string]any{"type": "CommandExecution", "status": "completed", "command": []string{"/bin/zsh", "-lc", "GOCACHE=/tmp/fixture-cache go test ./... -json -count=1"}, "cwd": "file:///fixture", "exit_code": 0, "aggregated_output": checkOutput})
-	positiveEvents := bytes.Join([][]byte{meta, edit, check, terminal}, nil)
+	// Actual Codex child rollouts begin with child metadata, followed by a
+	// copied parent session_meta and inherited context before child events.
+	inherited := []byte("{\"type\":\"session_meta\",\"payload\":{\"id\":\"parent\",\"cwd\":\"/fixture\"}}\n")
+	positiveEvents := bytes.Join([][]byte{meta, inherited, edit, check, terminal}, nil)
 	nativeInspectChildEvents(&positive, positiveEvents)
 	if !positive.TerminalCorroborated || !positive.SourceEventCorroborated || !positive.ChildEditObserved || !positive.ChecksPassed {
 		t.Fatalf("actual-shaped child evidence refused: %+v", positive)
