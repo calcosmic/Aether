@@ -1,5 +1,7 @@
 package codex
 
+import "fmt"
+
 // CapabilityLevel states how strongly Aether can promise a platform capability.
 type CapabilityLevel string
 
@@ -21,16 +23,68 @@ type CapabilitySupport struct {
 // PlatformContract is the versioned, machine-readable support contract for one
 // worker host. State transitions remain Go-owned on every supported platform.
 type PlatformContract struct {
-	SchemaVersion        int               `json:"schema_version"`
-	Platform             Platform          `json:"platform"`
-	SupportTier          string            `json:"support_tier"`
-	StateLifecycle       CapabilitySupport `json:"state_lifecycle"`
-	WorkerDispatch       CapabilitySupport `json:"worker_dispatch"`
-	NamedCasteRouting    CapabilitySupport `json:"named_caste_routing"`
-	StructuredCompletion CapabilitySupport `json:"structured_completion"`
-	ProgressEvents       CapabilitySupport `json:"progress_events"`
-	PermissionIsolation  CapabilitySupport `json:"permission_isolation"`
-	NativeCommandSurface CapabilitySupport `json:"native_command_surface"`
+	SchemaVersion        int                   `json:"schema_version"`
+	Platform             Platform              `json:"platform"`
+	SupportTier          string                `json:"support_tier"`
+	StateLifecycle       CapabilitySupport     `json:"state_lifecycle"`
+	WorkerDispatch       CapabilitySupport     `json:"worker_dispatch"`
+	NamedCasteRouting    CapabilitySupport     `json:"named_caste_routing"`
+	StructuredCompletion CapabilitySupport     `json:"structured_completion"`
+	ProgressEvents       CapabilitySupport     `json:"progress_events"`
+	PermissionIsolation  CapabilitySupport     `json:"permission_isolation"`
+	NativeCommandSurface CapabilitySupport     `json:"native_command_surface"`
+	NativeWorkers        *NativeWorkerContract `json:"native_workers,omitempty"`
+}
+
+// NativeWorkerContract describes the observed host-native route separately
+// from the Go-owned subprocess adapter. Limited observations are not parity.
+type NativeWorkerContract struct {
+	Client             string            `json:"client"`
+	Evidence           string            `json:"evidence"`
+	Dispatch           CapabilitySupport `json:"dispatch"`
+	PerChildIsolation  CapabilitySupport `json:"per_child_isolation"`
+	WorktreeAllocation CapabilitySupport `json:"worktree_allocation"`
+	GovernedNesting    CapabilitySupport `json:"governed_nesting"`
+	Cancellation       CapabilitySupport `json:"cancellation"`
+	Usage              CapabilitySupport `json:"usage"`
+}
+
+func codexNativeWorkerContract() *NativeWorkerContract {
+	return &NativeWorkerContract{
+		Client:             "codex-cli 0.154.0",
+		Evidence:           ".planning/phases/204.2-codex-native-worker-lifecycle/evidence/native-capabilities.json",
+		Dispatch:           CapabilitySupport{Level: CapabilityLimited, Mechanism: "actual host spawn_agent and child-attributed work observed in disposable accepted fixtures with inherited workspace-write; the Go bridge does not launch", Limitations: []string{"original eleven-scenario qualification is incomplete; no complete native lifecycle parity claim", "host-encrypted message exports establish call/child linkage, not exact plaintext delivery", "model and effort are inherited parent invocation preferences, not independently attested per-child controls"}},
+		PerChildIsolation:  CapabilitySupport{Level: CapabilityUnavailable, Mechanism: "no qualified per-child permission selector; only the same inherited workspace-write envelope is admitted", Limitations: []string{"inherited parent sandbox observations do not prove per-child read-only, narrow write scope, shell or network restrictions"}},
+		WorktreeAllocation: CapabilitySupport{Level: CapabilityUnavailable, Mechanism: "native admission requires the accepted shared workspace; separate native worktree allocation is unsupported"},
+		GovernedNesting:    CapabilitySupport{Level: CapabilityUnavailable, Mechanism: "a real nested host helper was observed, but Aether-governed native recruitment is unqualified"},
+		Cancellation:       CapabilitySupport{Level: CapabilityUnavailable, Mechanism: "no confirmed cancelled terminal observed", Limitations: []string{"interrupt, close, release, idle and process loss are not confirmed terminal cancellation"}},
+		Usage:              CapabilitySupport{Level: CapabilityLimited, Mechanism: "raw child-attributed token_usage_record events expose thread, parent session, turn and response identities", Limitations: []string{"native worker usage is uncollected by Aether; empty saved Usage remains unreported", "no provider cost is collected; absent measurement is not zero cost", "worker prose, parent totals and submitted result usage are not trusted provider measurements"}},
+	}
+}
+
+// NativeWorkerRequirements holds actual requested controls, not a caller's
+// assertion that the host enforces them. Refusal never switches execution lanes.
+type NativeWorkerRequirements struct {
+	Profile                PermissionProfile
+	HostPermission         string
+	Workspace              string
+	AcceptedWorkspace      string
+	ParallelMode           string
+	RequireGovernedNesting bool
+}
+
+func ValidateNativeWorkerRequirements(request NativeWorkerRequirements) error {
+	contract := codexNativeWorkerContract()
+	if request.RequireGovernedNesting && contract.GovernedNesting.Level == CapabilityUnavailable {
+		return fmt.Errorf("native host cannot provide requested Aether-governed nesting; no launch authorized")
+	}
+	if request.Workspace == "" || request.Workspace != request.AcceptedWorkspace || request.HostPermission != string(PermissionWorkspaceWrite) || (request.ParallelMode != "" && request.ParallelMode != "in-repo") {
+		return fmt.Errorf("native host must use the accepted shared workspace and inherited workspace_write permission; requested workspace or permission is unsupported; no automatic route change")
+	}
+	if !permissionEnforcementEqual(request.Profile, PermissionProfileForCaste("builder")) {
+		return fmt.Errorf("native host cannot enforce this requested permission profile; no launch authorized")
+	}
+	return nil
 }
 
 // PlatformContractFor returns the explicit support promise for a worker host.
@@ -93,6 +147,7 @@ func PlatformContractFor(platform Platform) (PlatformContract, bool) {
 		}, true
 	case PlatformCodex:
 		return PlatformContract{
+			NativeWorkers:        codexNativeWorkerContract(),
 			SchemaVersion:        1,
 			Platform:             platform,
 			SupportTier:          "secondary",

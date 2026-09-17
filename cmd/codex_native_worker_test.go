@@ -31,6 +31,15 @@ func nativeAdmissionFixture(t *testing.T) (codexBuildManifest, codexNativeWorker
 }
 
 func TestCodexNativeWorkerCapabilities(t *testing.T) {
+	t.Run("stricter-bind", func(t *testing.T) {
+		_, request := nativeAdmissionFixture(t)
+		request = nativeReserveForTest(t, request)
+		request.RequireGovernedNesting = true
+		before := nativeJournalBytes(t)
+		if _, err := runCodexNativeWorker("bind", nativeRequestPath(t, request)); err == nil || !bytes.Equal(before, nativeJournalBytes(t)) {
+			t.Fatal("bind silently discarded a stricter nesting request")
+		}
+	})
 	for _, control := range []string{"supported", "read-only", "other-workspace", "governed-nesting"} {
 		t.Run(control, func(t *testing.T) {
 			_, request := nativeAdmissionFixture(t)
@@ -709,7 +718,7 @@ func TestCodexNativeBuildGuidePlatformIsolation(t *testing.T) {
 		// Include every instruction-bearing field, including raw bypass text.
 		all := strings.Join(append(append(append([]string{guide.Intent, guide.RunCommand, guide.RawBypass}, guide.PreSteps...), guide.PostSteps...), guide.DriftGuards...), "\n")
 		if platform == "codex" {
-			for _, required := range []string{"codex-native-worker reserve", "codex-native-worker bind", "codex-native-worker record", "codex-native-worker stage", "spawn_agent", "sole launcher"} {
+			for _, required := range []string{"codex-native-worker reserve", "codex-native-worker bind", "codex-native-worker record", "codex-native-worker stage", "codex-native-worker observe", "codex-native-worker context", "codex-native-worker question", "decision-answer --native-request", "spawn_agent", "sole launcher", "aether resume", "inspect --phase", "worker.native.release", "normalizedDispatchTaskID", "cancel_requested", "cancellation acknowledgement", "uncollected", "never silently switch lanes"} {
 				if !strings.Contains(all, required) {
 					t.Errorf("Codex guide missing %q", required)
 				}
@@ -718,7 +727,7 @@ func TestCodexNativeBuildGuidePlatformIsolation(t *testing.T) {
 				t.Error("Codex guide still delegates authority to retired playbook")
 			}
 		} else {
-			for _, forbidden := range []string{"codex-native-worker", "spawn_agent"} {
+			for _, forbidden := range []string{"codex-native-worker", "spawn_agent", "worker.native.release", "context_delivered", "context_delivery.payload", "decision-answer --native-request", "launch_unresolved", "cancel_requested", "require_governed_nesting", "Reconnect only to the same actual child"} {
 				if strings.Contains(all, forbidden) {
 					t.Errorf("%s includes %s", platform, forbidden)
 				}

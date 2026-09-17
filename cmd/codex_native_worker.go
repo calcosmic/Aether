@@ -102,29 +102,30 @@ type codexNativeWorkerBinding struct {
 }
 
 type codexNativeWorkerRequest struct {
-	Question          *codexNativeQuestion        `json:"question,omitempty"`
-	ContextDeliveryID string                      `json:"context_delivery_id,omitempty"`
-	ContextDelivery   *codexNativeContextDelivery `json:"context_delivery,omitempty"`
-	ContextSend       *codexNativeContextSend     `json:"context_send,omitempty"`
-	ObservationStatus string                      `json:"observation_status,omitempty"`
-	ObservedAt        string                      `json:"observed_at,omitempty"`
-	ObservationDetail string                      `json:"observation_detail,omitempty"`
-	SchemaVersion     int                         `json:"schema_version"`
-	Phase             int                         `json:"phase"`
-	ExecutionBinding  codex.ExecutionBinding      `json:"execution_binding"`
-	WorkerName        string                      `json:"worker_name,omitempty"`
-	TaskID            string                      `json:"task_id,omitempty"`
-	LaunchID          string                      `json:"launch_id,omitempty"`
-	HostSessionID     string                      `json:"host_session_id,omitempty"`
-	ChildID           string                      `json:"child_id,omitempty"`
-	DispatchSHA256    string                      `json:"dispatch_sha256,omitempty"`
-	PromptSHA256      string                      `json:"prompt_sha256,omitempty"`
-	Workspace         string                      `json:"workspace,omitempty"`
-	HostPermission    string                      `json:"host_permission,omitempty"`
-	SourceEventID     string                      `json:"source_event_id,omitempty"`
-	SourceEventSHA256 string                      `json:"source_event_sha256,omitempty"`
-	Result            *internalWorkerResult       `json:"result,omitempty"`
-	RawResult         json.RawMessage             `json:"-"`
+	RequireGovernedNesting bool                        `json:"require_governed_nesting,omitempty"`
+	Question               *codexNativeQuestion        `json:"question,omitempty"`
+	ContextDeliveryID      string                      `json:"context_delivery_id,omitempty"`
+	ContextDelivery        *codexNativeContextDelivery `json:"context_delivery,omitempty"`
+	ContextSend            *codexNativeContextSend     `json:"context_send,omitempty"`
+	ObservationStatus      string                      `json:"observation_status,omitempty"`
+	ObservedAt             string                      `json:"observed_at,omitempty"`
+	ObservationDetail      string                      `json:"observation_detail,omitempty"`
+	SchemaVersion          int                         `json:"schema_version"`
+	Phase                  int                         `json:"phase"`
+	ExecutionBinding       codex.ExecutionBinding      `json:"execution_binding"`
+	WorkerName             string                      `json:"worker_name,omitempty"`
+	TaskID                 string                      `json:"task_id,omitempty"`
+	LaunchID               string                      `json:"launch_id,omitempty"`
+	HostSessionID          string                      `json:"host_session_id,omitempty"`
+	ChildID                string                      `json:"child_id,omitempty"`
+	DispatchSHA256         string                      `json:"dispatch_sha256,omitempty"`
+	PromptSHA256           string                      `json:"prompt_sha256,omitempty"`
+	Workspace              string                      `json:"workspace,omitempty"`
+	HostPermission         string                      `json:"host_permission,omitempty"`
+	SourceEventID          string                      `json:"source_event_id,omitempty"`
+	SourceEventSHA256      string                      `json:"source_event_sha256,omitempty"`
+	Result                 *internalWorkerResult       `json:"result,omitempty"`
+	RawResult              json.RawMessage             `json:"-"`
 }
 
 type codexNativeWorkerResponse struct {
@@ -480,15 +481,12 @@ func executeCodexNativeWorkerRequest(operation string, request codexNativeWorker
 				if err != nil {
 					return err
 				}
-				if request.Workspace != workspace || request.HostPermission != string(codex.PermissionWorkspaceWrite) || updated.PlanManifest.ParallelMode == "worktree" {
-					return fmt.Errorf("native host must use the accepted shared workspace and inherited workspace_write permission; requested workspace or permission is unsupported")
-				}
 				permission, err := codex.ResolvePermissionProfile(dispatch.Caste, dispatch.PermissionProfile)
 				if err != nil {
 					return err
 				}
-				if permission.Name != codex.PermissionWorkspaceWrite || permission.Filesystem != codex.FilesystemWorkspaceWrite || len(permission.WriteScopes) != 0 {
-					return fmt.Errorf("native host cannot enforce this requested permission profile")
+				if err := codex.ValidateNativeWorkerRequirements(codex.NativeWorkerRequirements{Profile: permission, HostPermission: request.HostPermission, Workspace: request.Workspace, AcceptedWorkspace: workspace, ParallelMode: updated.PlanManifest.ParallelMode, RequireGovernedNesting: request.RequireGovernedNesting}); err != nil {
+					return err
 				}
 				if worker != nil {
 					if err := validateCodexNativeSavedWorker(updated, *dispatch, *worker); err != nil {
@@ -545,7 +543,7 @@ func executeCodexNativeWorkerRequest(operation string, request codexNativeWorker
 			if err := validateCodexNativeSavedWorker(updated, *dispatch, *worker); err != nil {
 				return err
 			}
-			if (request.Workspace != "" && request.Workspace != native.Workspace) || (request.HostPermission != "" && request.HostPermission != string(native.PermissionProfile.Name)) {
+			if request.RequireGovernedNesting || (request.Workspace != "" && request.Workspace != native.Workspace) || (request.HostPermission != "" && request.HostPermission != string(native.PermissionProfile.Name)) {
 				return fmt.Errorf("native workspace or permission does not match reservation")
 			}
 			if request.LaunchID != worker.ProviderRunID || request.HostSessionID != native.HostSessionID || request.DispatchSHA256 != native.DispatchSHA256 || request.PromptSHA256 != native.PromptSHA256 || (request.ChildID == "" && operation != "observe") {
@@ -838,7 +836,7 @@ func recordCodexNativeTerminal(record *buildAttemptRecord, worker *buildAttemptW
 	}
 	// Worker prose cannot supply provider measurements.
 	if result.Usage != (codex.WorkerUsage{}) {
-		return fmt.Errorf("native provider usage is unavailable through a submitted result")
+		return fmt.Errorf("native provider usage is uncollected; submitted result usage is not a trusted provider measurement")
 	}
 	if native.SourceEventID != "" && (native.SourceEventID != request.SourceEventID || native.SourceEventSHA256 != request.SourceEventSHA256) {
 		return fmt.Errorf("native terminal source event conflicts with saved evidence")
