@@ -5,15 +5,15 @@ milestone_name: Classic Colony Restoration
 current_phase: 204.2
 current_phase_name: Codex Native Worker Lifecycle
 status: executing
-stopped_at: Phase 204.2 Wave 4 complete; Plan 07 next
-last_updated: "2026-09-17T10:59:30.523053+00:00"
+stopped_at: Phase 204.2 Plan 07 executing; scope split retains all work in Plans 07/09/08
+last_updated: "2026-09-17T11:46:10.037977+00:00"
 last_activity: 2026-09-17
-last_activity_desc: Phase 204.2 questions and dependency repair merged; all 138 combined focused cases passed
+last_activity_desc: Measured Plan 07 scope split into Plans 07 and 09; all scenarios and final verification retained
 state_head: 299f02468e1a9e6d667838b0c07ca2648c70cf5e
 progress:
   total_phases: 13
   completed_phases: 6
-  total_plans: 197
+  total_plans: 198
   completed_plans: 190
   percent: 46
 ---
@@ -35,7 +35,7 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 Phase: 204.2 (Codex Native Worker Lifecycle) — EXECUTING
 Next phase: 204.2 (Codex Native Worker Lifecycle)
 Status: Executing Phase 204.2
-Plan: 6 of 8 complete; Plan 07 next
+Plan: 6 of 9 complete; Plan 07 executing; capability/final qualification split into Plan 09
 Last activity: 2026-09-17 — Plan 04 and semantic dependency repair reviewed and merged; build and all 138 combined focused cases passed; all wave gates passed
 
 ## Performance Metrics
