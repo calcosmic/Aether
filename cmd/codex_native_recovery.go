@@ -89,6 +89,9 @@ func buildCodexNativeRecovery(state colony.ColonyState) *codexNativeRecovery {
 	if err := validateBuildFinalizeStateStillCurrent(currency, attempt.Phase); err != nil {
 		return invalid(err)
 	}
+	if err := validateCodexNativeAttemptState(attempt, state); err != nil {
+		return invalid(err)
+	}
 	matched := 0
 	for _, dispatch := range manifest.Dispatches {
 		item := codexNativeRecoveryWorker{WorkerName: dispatch.Name, Caste: dispatch.Caste, TaskID: normalizedDispatchTaskID(dispatch), Status: "never_started"}
@@ -192,9 +195,6 @@ func renderCodexNativeRecovery(recovery *codexNativeRecovery) string {
 				b.WriteString("    " + worker.HostAction + "\n")
 			}
 		}
-	}
-	if recovery.Error != "" {
-		b.WriteString(recovery.Error + "\n")
 	}
 	b.WriteString(recovery.Why + "\nNext: " + recovery.Next)
 	return b.String()
