@@ -1165,11 +1165,22 @@ func writeCodexNativeRequestForTest(t *testing.T, value any) string {
 }
 
 func TestCodexNativeWorkerFixturePreparation(t *testing.T) {
-	root := setupExternalBuildAttemptTest(t)
-	nativePrepareLiveFixture(t, root, t.TempDir())
-	manifest := prepareBoundBuildManifestOnly(t, root)
-	if manifest.ExecutionBinding == nil || len(manifest.Dispatches) != 1 || manifest.PlanRevisionID == "" {
-		t.Fatalf("fixture is not an accepted one-worker plan: %+v", manifest)
+	for _, scenario := range []string{"ordinary", "partial-resume", "question"} {
+		t.Run(scenario, func(t *testing.T) {
+			root := setupExternalBuildAttemptTest(t)
+			nativePrepareLiveFixture(t, root, t.TempDir(), scenario)
+			manifest := prepareBoundBuildManifestOnly(t, root)
+			want := 1
+			if scenario == "partial-resume" {
+				want = 2
+			}
+			if manifest.ExecutionBinding == nil || len(manifest.Dispatches) != want || manifest.PlanRevisionID == "" || manifest.ContextScope == nil || manifest.ContextScope.SessionID == "" {
+				t.Fatalf("fixture %s is not an accepted %d-worker scoped plan: %+v", scenario, want, manifest)
+			}
+			if want == 2 && manifest.Dispatches[0].TaskID == manifest.Dispatches[1].TaskID {
+				t.Fatal("partial fixture collapsed independent assignments")
+			}
+		})
 	}
 }
 
