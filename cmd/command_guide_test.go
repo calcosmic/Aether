@@ -177,7 +177,9 @@ func TestCodexLifecycleGuidesRequireVisibleWorkerActivity(t *testing.T) {
 		"build": {
 			"aether build <phase> --plan-only",
 			"Parse `result.dispatch_manifest`",
-			"visible live Task/subagent panels",
+			"spawn_agent",
+			"codex-native-worker observe",
+			"records actual running, unavailable or launch_unresolved evidence",
 			"aether spawn-log",
 			"aether spawn-complete",
 			"ceremony worker-complete --workflow build",
@@ -424,8 +426,25 @@ func TestCodexLifecycleYamlAndGuidesAgreeOnWorkerActivity(t *testing.T) {
 		}
 		yamlText := string(content)
 		for _, anchor := range anchors {
-			if !strings.Contains(guideText, anchor) {
-				t.Errorf("%s command-guide missing shared worker activity anchor %q", command, anchor)
+			guideAnchors := []string{anchor}
+			if command == "build" && anchor == "visible live Task/subagent" {
+				// Native Codex activity uses observed host children; the YAML and
+				// primary platform guides retain their Task/subagent contract.
+				guideAnchors = []string{"spawn_agent", "codex-native-worker observe", "records actual running, unavailable or launch_unresolved evidence"}
+				for _, platform := range []string{"claude", "opencode"} {
+					primary, err := buildCommandGuide(command, platform)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if !strings.Contains(strings.Join(primary.PreSteps, "\n"), anchor) {
+						t.Errorf("%s build guide lost worker activity anchor %q", platform, anchor)
+					}
+				}
+			}
+			for _, want := range guideAnchors {
+				if !strings.Contains(guideText, want) {
+					t.Errorf("%s command-guide missing worker activity anchor %q", command, want)
+				}
 			}
 			if !strings.Contains(yamlText, anchor) {
 				t.Errorf("%s YAML missing shared worker activity anchor %q", command, anchor)
