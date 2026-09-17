@@ -113,6 +113,9 @@ type codexExternalBuildWorkerResult struct {
 	FilesModified []string            `json:"files_modified,omitempty"`
 	TestsWritten  []string            `json:"tests_written,omitempty"`
 	Handoff       codex.WorkerHandoff `json:"handoff,omitempty"`
+	// Actual worker findings survive aggregation without becoming host authority.
+	Artifacts   map[string]json.RawMessage `json:"artifacts,omitempty"`
+	ScoutReport json.RawMessage            `json:"scout_report,omitempty"`
 }
 
 // effectiveName returns the worker name, falling back to AntName when Name is empty.
@@ -426,6 +429,10 @@ func (c codexExternalBuildCompletion) workerResults() []codexExternalBuildWorker
 }
 
 func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBuildCompletion, skipVerify bool, partialRetryStartOptions ...buildStartOptions) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
+	return runCodexBuildFinalizeWithHooks(root, phaseNum, completion, skipVerify, codexNativeFinalizeHooks{}, partialRetryStartOptions...)
+}
+
+func runCodexBuildFinalizeWithHooks(root string, phaseNum int, completion codexExternalBuildCompletion, skipVerify bool, hooks codexNativeFinalizeHooks, partialRetryStartOptions ...buildStartOptions) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
 	if store == nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("no store initialized")
 	}
@@ -457,6 +464,17 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	}
 	if len(state.Plan.Phases) == 0 {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("No project plan. Run `aether plan` first.")
+	}
+	// Consult saved lane evidence before classifying the submitted binding.
+	// Dropping all tracking fields must not bypass native journal admission.
+	if _, current, ok := loadLatestBuildAttempt(phaseNum); ok {
+		if err := validateCodexNativeCompletion(current, completion); err != nil {
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+		}
+	}
+	initialStateDigest, err := jsonSHA256(state)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
 	if phaseNum < 1 || phaseNum > len(state.Plan.Phases) {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("phase %d not found (plan has %d phases)", phaseNum, len(state.Plan.Phases))
@@ -851,6 +869,10 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 
 	// Atomically commit the colony state mutation (CR-02, 188-REVIEW.md).
 	committedState, err := commitBuildFinalizeState(buildFinalizeCommitParams{
+		Completion:         &completion,
+		AttemptPath:        attemptRel,
+		NativeHooks:        hooks,
+		InitialStateDigest: initialStateDigest,
 		PhaseNum:           phaseNum,
 		StartedAt:          startedAt,
 		SelectedTaskIDs:    selectedTaskIDs,
@@ -1015,6 +1037,10 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 // buildFinalizeCommitParams carries what commitBuildFinalizeState needs to
 // transition COLONY_STATE.json to StateBUILT for one phase.
 type buildFinalizeCommitParams struct {
+	Completion         *codexExternalBuildCompletion
+	AttemptPath        string
+	NativeHooks        codexNativeFinalizeHooks
+	InitialStateDigest string
 	PhaseNum           int
 	StartedAt          time.Time
 	SelectedTaskIDs    []string
@@ -1059,10 +1085,51 @@ type buildFinalizeCommitParams struct {
 // cannot require state.State == EXECUTING the way the direct path's second
 // commit does; see validateBuildFinalizeStateStillCurrent's own doc comment.
 func commitBuildFinalizeState(params buildFinalizeCommitParams) (colony.ColonyState, error) {
+	if params.Completion == nil {
+		return commitBuildFinalizeStateLocked(params, nil)
+	}
+	if params.NativeHooks.BeforeCommit != nil {
+		params.NativeHooks.BeforeCommit()
+	}
+	var committedState colony.ColonyState
+	err := withPlanningMutationSession(buildAttemptWorkspaceRoot(), "build-finalize", func(_ *planningMutationSession) error {
+		buildWorkerRunMutationMu.Lock()
+		defer buildWorkerRunMutationMu.Unlock()
+		var record buildAttemptRecord
+		// Keep the attempt lock until the existing state primitive has committed.
+		err := store.UpdateJSONAtomically(params.AttemptPath, &record, func() error {
+			var err error
+			committedState, err = commitBuildFinalizeStateLocked(params, &record)
+			if err != nil {
+				return err
+			}
+			return errCodexNativeFinalizeReadOnly
+		})
+		if errors.Is(err, errCodexNativeFinalizeReadOnly) {
+			return nil
+		}
+		return err
+	})
+	return committedState, err
+}
+
+func commitBuildFinalizeStateLocked(params buildFinalizeCommitParams, attempt *buildAttemptRecord) (colony.ColonyState, error) {
 	var committedState colony.ColonyState
 	err := store.UpdateJSONAtomically("COLONY_STATE.json", &committedState, func() error {
 		if err := validateBuildFinalizeStateStillCurrent(committedState, params.PhaseNum); err != nil {
 			return err
+		}
+		if attempt != nil {
+			if err := validateCodexNativeFinalizeCurrency(*attempt, *params.Completion, committedState, params.InitialStateDigest); err != nil {
+				return err
+			}
+			// A previously generic packet cannot race a newly reserved native job.
+			if _, current, ok := loadLatestBuildAttempt(params.PhaseNum); ok && current.ID != attempt.ID && buildAttemptHasNativeWorkers(current) {
+				return fmt.Errorf("native completion attempt has been superseded")
+			}
+		}
+		if params.NativeHooks.AfterCurrencyCheck != nil {
+			params.NativeHooks.AfterCurrencyCheck()
 		}
 		applyCodexBuildState(&committedState, params.PhaseNum, params.StartedAt, params.SelectedTaskIDs, params.ReviewDepth)
 		if params.BuildFullyCredited {

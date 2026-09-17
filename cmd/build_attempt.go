@@ -969,6 +969,25 @@ func bindBuildAttemptCompletion(attemptRel string, completion codexExternalBuild
 }
 
 func stageBuildAttemptCompletion(attemptRel string, completion codexExternalBuildCompletion) (string, string, error) {
+	return stageBuildAttemptCompletionWithHooks(attemptRel, completion, codexNativeFinalizeHooks{})
+}
+
+func stageBuildAttemptCompletionWithHooks(attemptRel string, completion codexExternalBuildCompletion, hooks codexNativeFinalizeHooks) (string, string, error) {
+	if hooks.BeforeStage != nil {
+		hooks.BeforeStage()
+	}
+	var path, digest string
+	err := withPlanningMutationSession(buildAttemptWorkspaceRoot(), "build-completion-stage", func(_ *planningMutationSession) error {
+		buildWorkerRunMutationMu.Lock()
+		defer buildWorkerRunMutationMu.Unlock()
+		var err error
+		path, digest, err = stageBuildAttemptCompletionLocked(attemptRel, completion)
+		return err
+	})
+	return path, digest, err
+}
+
+func stageBuildAttemptCompletionLocked(attemptRel string, completion codexExternalBuildCompletion) (string, string, error) {
 	manifest := completion.activeManifest()
 	if manifest == nil {
 		return "", "", fmt.Errorf("completion file must include dispatch_manifest")
@@ -991,6 +1010,23 @@ func stageBuildAttemptCompletion(attemptRel string, completion codexExternalBuil
 	}
 	if existing.ID != strings.TrimSpace(manifest.AttemptID) || existing.Phase != manifest.Phase {
 		return "", "", fmt.Errorf("build completion attempt identity does not match journal record")
+	}
+	if err := validateCodexNativeCompletion(existing, completion); err != nil {
+		return "", "", err
+	}
+	if buildAttemptHasNativeWorkers(existing) {
+		state, err := loadActiveColonyStateReadOnly()
+		if err != nil {
+			return "", "", err
+		}
+		if existing.Status == buildAttemptBuilt || existing.Status == buildAttemptPartial {
+			// Sealed exact-packet replay keeps its established lifecycle rules.
+			if err := validateBuildFinalizeStateStillCurrent(state, existing.Phase); err != nil {
+				return "", "", err
+			}
+		} else if err := validateCodexNativeAttemptState(existing, state); err != nil {
+			return "", "", err
+		}
 	}
 	// D-07: staging validates exactly what finalize validates, before
 	// anything is bound. A packet finalize would reject must never write the
@@ -1019,6 +1055,13 @@ func stageBuildAttemptCompletion(attemptRel string, completion codexExternalBuil
 		return "", "", fmt.Errorf("encode durable build completion: %w", err)
 	}
 	payload = append(payload, '\n')
+	// Equal native replay must preserve the original journal and packet bytes.
+	// Check the file too: a digest on its own is not proof of durable staging.
+	if buildAttemptHasNativeWorkers(existing) && existing.CompletionSHA256 == digest && existing.CompletionPath == displayPath {
+		if saved, err := os.ReadFile(durableAbsolute); err == nil && bytes.Equal(saved, payload) {
+			return displayPath, digest, nil
+		}
+	}
 	if err := store.AtomicWrite(completionRel, payload); err != nil {
 		return "", "", fmt.Errorf("persist durable build completion: %w", err)
 	}
@@ -1029,6 +1072,9 @@ func stageBuildAttemptCompletion(attemptRel string, completion codexExternalBuil
 	if err := store.UpdateJSONAtomically(attemptRel, &record, func() error {
 		if record.ID != strings.TrimSpace(manifest.AttemptID) || record.Phase != manifest.Phase {
 			return fmt.Errorf("build completion attempt identity does not match journal record")
+		}
+		if err := validateCodexNativeCompletion(record, completion); err != nil {
+			return err
 		}
 		if buildAttemptCompletionSealed(record) && record.CompletionSHA256 != "" && record.CompletionSHA256 != digest {
 			return fmt.Errorf("completion packet does not match the result already bound to attempt %s", record.ID)
@@ -1216,7 +1262,7 @@ func validateBuildAttemptManifestBinding(manifest codexBuildManifest, state colo
 		if err != nil {
 			return buildAttemptManifestBinding{}, fmt.Errorf("hash current colony state: %w", err)
 		}
-		if latest.OriginalStateSHA == "" || latest.OriginalStateSHA != stateDigest {
+		if (latest.OriginalStateSHA == "" || latest.OriginalStateSHA != stateDigest) && !(buildAttemptHasNativeWorkers(latest) && codexNativeAttemptSessionState(latest, state)) {
 			return buildAttemptManifestBinding{}, fmt.Errorf("colony state changed after build attempt %s was prepared; discard the stale completion packet", attemptID)
 		}
 	}
