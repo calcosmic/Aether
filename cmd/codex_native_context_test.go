@@ -225,3 +225,28 @@ func TestCodexNativeContextExactBytes(t *testing.T) {
 		t.Fatal("wrong prompt digest")
 	}
 }
+
+func TestCodexNativeContextOptionalAndFallback(t *testing.T) {
+	root := t.TempDir()
+	brief := "\n exact \"quoted\" café 日本語 é\r\ntrailing spaces  \n"
+	d := codexBuildDispatch{Name: "Fixture", Caste: "builder", TaskID: "1.1", Brief: brief}
+	manifest := codexBuildManifest{Root: root}
+	// No colony store: optional context and decisions really are absent.
+	saveGlobals(t)
+	store = nil
+	prompt, err := composeCodexNativePrompt(manifest, d, "fixture-launch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(prompt.Prompt, brief) || prompt.SHA256 != lifecycleDigest([]byte(prompt.Prompt)) {
+		t.Fatal("inline fallback bytes changed")
+	}
+	d.Brief = ""
+	if _, err := composeCodexNativePrompt(manifest, d, "fixture-launch"); err == nil {
+		t.Fatal("missing required brief admitted")
+	}
+	d.Brief = string([]byte{0xff})
+	if _, err := composeCodexNativePrompt(manifest, d, "fixture-launch"); err == nil {
+		t.Fatal("invalid UTF-8 would be normalized on the JSON boundary")
+	}
+}

@@ -86,6 +86,7 @@ type codexNativeWorkerBinding struct {
 	PermissionProfile  codex.PermissionProfile      `json:"permission_profile"`
 	Workspace          string                       `json:"workspace"`
 	WorkspaceRoot      string                       `json:"workspace_root,omitempty"`
+	ContextDecisionIDs []string                     `json:"context_decision_ids,omitempty"`
 	ContextDeliveryIDs []string                     `json:"context_delivery_ids,omitempty"`
 	Prompt             string                       `json:"prompt"`
 	Release            string                       `json:"release,omitempty"`
@@ -323,7 +324,7 @@ func runCodexNativeWorkerWithHooks(operation, path string, hooks codexNativeWork
 			return response, fmt.Errorf("native stage requires saved terminal workers")
 		}
 		for _, worker := range current.WorkerRuns {
-			if worker.Native == nil || worker.Native.LaunchState != "terminal" || worker.Result == nil {
+			if !codexNativeWorkerIsTerminal(worker) {
 				return response, fmt.Errorf("native stage requires bound terminal results for every worker")
 			}
 		}
@@ -422,7 +423,7 @@ func runCodexNativeWorkerWithHooks(operation, path string, hooks codexNativeWork
 				if err != nil {
 					return err
 				}
-				prompt, err := codexNativeLaunchPrompt(*updated.PlanManifest, *dispatch, launch)
+				prompt, err := composeCodexNativePrompt(*updated.PlanManifest, *dispatch, launch)
 				if err != nil {
 					return err
 				}
@@ -430,7 +431,7 @@ func runCodexNativeWorkerWithHooks(operation, path string, hooks codexNativeWork
 				if err != nil {
 					return err
 				}
-				native := &codexNativeWorkerBinding{SchemaVersion: 1, LaunchState: "reserved", HostSessionID: request.HostSessionID, DispatchSHA256: digest, PromptSHA256: lifecycleDigest([]byte(prompt)), PermissionProfile: permission, Workspace: workspace, WorkspaceRoot: workspace, Prompt: prompt}
+				native := &codexNativeWorkerBinding{SchemaVersion: 1, LaunchState: "reserved", HostSessionID: request.HostSessionID, DispatchSHA256: digest, PromptSHA256: prompt.SHA256, PermissionProfile: permission, Workspace: workspace, WorkspaceRoot: workspace, Prompt: prompt.Prompt, ContextDecisionIDs: prompt.DecisionIDs}
 				updated.WorkerRuns = append(updated.WorkerRuns, buildAttemptWorkerRun{ProviderRunID: launch, WorkerName: dispatch.Name, TaskID: request.TaskID, Caste: dispatch.Caste, Platform: codex.PlatformCodex, Status: buildWorkerDispatching, StartedAt: now, UpdatedAt: now, Native: native})
 				response.Worker = &updated.WorkerRuns[len(updated.WorkerRuns)-1]
 				response.LaunchAllowed = true
@@ -801,40 +802,4 @@ func validateCodexNativeSavedWorker(record buildAttemptRecord, dispatch codexBui
 		return fmt.Errorf("native saved assignment/prompt/permission/workspace identity changed")
 	}
 	return nil
-}
-
-func codexNativeLaunchPrompt(manifest codexBuildManifest, dispatch codexBuildDispatch, launch string) (string, error) {
-	brief := dispatch.Brief
-	if dispatch.BriefPath != "" {
-		path := filepath.Join(manifest.Root, filepath.FromSlash(dispatch.BriefPath))
-		resolved, err := filepath.EvalSymlinks(path)
-		if err != nil {
-			return "", fmt.Errorf("read native brief: %w", err)
-		}
-		root, err := filepath.EvalSymlinks(manifest.Root)
-		if err != nil {
-			return "", err
-		}
-		rel, err := filepath.Rel(root, resolved)
-		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			return "", fmt.Errorf("native brief is outside accepted workspace")
-		}
-		raw, err := os.ReadFile(resolved)
-		if err != nil {
-			return "", err
-		}
-		brief = string(raw)
-	}
-	if strings.TrimSpace(brief) == "" {
-		return "", fmt.Errorf("native assignment has no required brief")
-	}
-	prompt := fmt.Sprintf("You are %s (%s), assigned workspace %s. You are not alone; preserve others' edits.\nWAIT: do not read files, run checks or edit until the parent sends AETHER_NATIVE_RELEASE %s with your actual child ID and the runtime release token after binding. If no release arrives, remain waiting; do not do the job.\n", dispatch.Name, dispatch.Caste, manifest.Root, launch)
-	prompt += manifest.ContextCapsule + "\n\n" + brief + "\n\n" + dispatch.SkillSection
-	for _, line := range clarifiedIntentPromptRenderResult().Lines {
-		if !strings.Contains(manifest.ContextCapsule, line) {
-			prompt += "\n" + line
-		}
-	}
-	prompt += fmt.Sprintf("\nReturn one JSON terminal result: name or ant_name=%q (if both are supplied they must agree), caste=%q, task_id=%q, status (code_written/completed/failed/blocked/timeout), summary, files_created, files_modified, tests_written, task_receipts, blockers, spawns, handoff; optional installed Builder tdd fields cycles_completed/tests_added/coverage_percent/all_passing are preserved without becoming provider telemetry. Each task receipt has task_id, status, summary, files_created, files_modified, tests_written, handoff. Every handoff uses %s. verification_status MUST be one enum value: pass, fail, partial, not_run, or unknown; put explanations in summary/known_failures, never in verification_status. Report only actual checks; omit usage. Do not stage, finalize, commit, recruit or launch helpers. Parent saves your terminal response.\n", dispatch.Name, dispatch.Caste, normalizedDispatchTaskID(dispatch), codex.HandoffFieldsSummary)
-	return prompt, nil
 }
