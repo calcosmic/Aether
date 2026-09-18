@@ -105,18 +105,23 @@ def admit_inputs(source, paths):
     # Exact GSD instruction/dispatch metadata, outside current Go inputs. The
     # embed scan below still refuses these if a source begins consuming them.
     metadata = {'.gsd/.agents/skills/to-prd/SKILL.md', '.gsd/dispatch-isolation-sentinel.json'}
+    metadata.update({'.gsd/scratch/blocker1.txt', '.gsd/scratch/decision1.txt', '.gsd/scratch/decision2.txt'})
+    metadata.update('.gsd/worktrees/phase-198-3/wave-' + str(n) + '-manifest.json' for n in range(1, 8))
     untracked = subprocess.check_output(
         ['git', 'ls-files', '--others', '--exclude-standard', '-z'], cwd=source).decode().split('\0')
     for name in untracked:
         if name and name not in metadata:
             raise RuntimeError('unadmitted untracked input: ' + name)
     tracked = set(paths)
+    metadata_links = {'.claude/skills/to-prd', '.crush/skills/to-prd', 'skills/to-prd'}
     for name in paths:
         if not name:
             continue
         path = source / name
         if path.is_symlink():
-            raise RuntimeError('symlink input requires explicit admission: ' + name)
+            if name not in metadata_links:
+                raise RuntimeError('symlink input requires explicit admission: ' + name)
+            continue
         if not name.endswith('.go') or not path.exists():
             continue
         for line in path.read_text().splitlines():
@@ -163,7 +168,7 @@ def inventory(source):
             continue
         path = source / name
         # An unstaged tracked deletion is part of the patch and must alter identity.
-        data = path.read_bytes() if path.exists() else b'absent:tracked-deletion'
+        data = ('symlink:' + os.readlink(path)).encode() if path.is_symlink() else path.read_bytes() if path.exists() else b'absent:tracked-deletion'
         (corpus if name.endswith('_test.go') else production)[name] = digest(data)
     def aggregate(files):
         return digest(''.join(f'{key}\0{files[key]}\n' for key in sorted(files)).encode())
@@ -251,11 +256,23 @@ def storage_estimate(source, cache_source):
         raise RuntimeError('storage baseline identity mismatch')
     old = json.loads(historical.read_text())
     normal = Path(old['lanes']['normal']['root'])
-    sizes = {'module_copy': tree_bytes(cache_source, True),
-             'standalone_clone': tree_bytes(normal / 'repo'),
-             'normal_cache': tree_bytes(normal / 'go-cache'),
-             'candidate_binary': (normal / 'candidate-aether').stat().st_size,
-             'prior_exhausted_free_bytes': old['disk_free_before_copy']}
+    sizes = {'prior_exhausted_free_bytes': old['disk_free_before_copy']}
+    missing = []
+    for key, path in [('module_copy', cache_source), ('standalone_clone', normal / 'repo'), ('normal_cache', normal / 'go-cache')]:
+        try:
+            sizes[key] = tree_bytes(path, key == 'module_copy')
+        except OSError as exc:
+            missing.append(str(exc))
+        except RuntimeError as exc:
+            missing.append(str(exc))
+    try:
+        sizes['candidate_binary'] = (normal / 'candidate-aether').stat().st_size
+    except OSError as exc:
+        missing.append(str(exc))
+    if missing:
+        return {'required_bytes': None, 'required_lower_bound_bytes': sizes['prior_exhausted_free_bytes'],
+                'measured_bytes': sizes, 'historical_manifest': ref, 'uncertainties': missing,
+                'method': 'Incomplete measurements prohibit admission; prior exhausted free bytes are only a lower bound.'}
     # Retain both lanes and reserve a further measured normal compiler working
     # set for race expansion. Prior exhausted capacity is a floor, never a pass.
     measured = sizes['module_copy'] + 2*sizes['standalone_clone'] + 3*sizes['normal_cache'] + 2*sizes['candidate_binary']
@@ -268,7 +285,9 @@ def storage_admit(manifest, root, stage):
     item = {'stage': stage, 'free_bytes': shutil.disk_usage(root).free,
             'required_bytes': manifest['storage_estimate']['required_bytes']}
     manifest.setdefault('storage_admissions', []).append(item)
-    item['passed'] = item['free_bytes'] >= item['required_bytes']
+    item['passed'] = item['required_bytes'] is not None and item['free_bytes'] >= item['required_bytes']
+    if item['required_bytes'] is None:
+        raise RuntimeError('uncertain storage estimate before ' + stage + ': ' + str(manifest['storage_estimate']))
     if not item['passed']:
         raise RuntimeError('insufficient storage before ' + stage + ': ' + str(item))
 

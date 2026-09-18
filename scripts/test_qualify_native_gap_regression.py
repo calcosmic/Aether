@@ -122,6 +122,13 @@ class AdmissionTests(unittest.TestCase):
             copy.assert_not_called()
             launch.assert_not_called()
 
+    def test_uncertain_capacity_cannot_pass(self):
+        manifest = {'storage_estimate': {'required_bytes': None, 'uncertainties': ['missing measured cache']}}
+        with patch.object(q.shutil, 'disk_usage', return_value=types.SimpleNamespace(free=10**15)):
+            with self.assertRaisesRegex(RuntimeError, 'uncertain storage'):
+                q.storage_admit(manifest, self.repo, 'module-copy')
+        self.assertFalse(manifest['storage_admissions'][0]['passed'])
+
     def test_enospc_survives_later_inventory_failure(self):
         root = self.repo / 'evidence'
         def answer(argv, *args):
