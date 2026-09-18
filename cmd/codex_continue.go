@@ -2525,7 +2525,7 @@ func renderCodexContinueWatcherBrief(root string, phase colony.Phase, manifest c
 	}
 	b.WriteString("\nFull verification output: see .aether/data/build/phase-")
 	b.WriteString(fmt.Sprintf("%d/verification.json\n", phase.ID))
-	b.WriteString("This snapshot contains current command results; watcher status is pending until your review completes. Prior continue.json and review.json outcomes are historical: reassess their findings against current evidence.\n")
+	b.WriteString("This snapshot contains current command results; watcher status is pending until your review completes. Prior continue.json and review.json outcomes are historical: reassess their findings against current evidence. A result-collection.json report describes only its recorded attempt; compare its recorded_at with the current manifest and later attempt journal before treating unfinished tasks as current.\n")
 	if len(phase.Tasks) > 0 {
 		b.WriteString("\nPhase tasks:\n")
 		if phase.Mode == colony.PhaseModeDiscovery && len(phase.Tasks) > 5 {
