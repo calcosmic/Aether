@@ -1,0 +1,56 @@
+{
+  "schema_version": "aether-gap2-task-outcome/v1",
+  "plan": "204.2-20",
+  "recorded_at": "2026-09-18T08:09:16.391328+00:00",
+  "source": {
+    "revision": "d10960a10243891bd11951695ab276dbacec7bb9",
+    "files": [
+      {
+        "path": "/Users/callumcowie/repos/Aether/cmd/codex_native_gap_attribution_test.go",
+        "sha256": "sha256:d298064fb8fd71aad1b1ae499335019e2c0ce6a81fbe66782731f2793bb40640"
+      },
+      {
+        "path": "/Users/callumcowie/repos/Aether/cmd/codex_native_worker_live_test.go",
+        "sha256": "sha256:f732db86d7efc8357034e1841db05921bc7a041e88b8bda5b47abb94b944e96b"
+      },
+      {
+        "path": "/Users/callumcowie/repos/Aether/cmd/codex_native_gap_context_test.go",
+        "sha256": "sha256:f44cd078148ba7b6eb996cfeb309b6b44fc5bf90226b9625709b062d67e52a1f"
+      }
+    ]
+  },
+  "checks": {
+    "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan20/result-manifest.json",
+    "sha256": "sha256:5be100b1d64bb27f9b194f0178c0355ba79c69c7937c7680fea5a692cade34fe"
+  },
+  "outcome": "incomplete",
+  "requirements_completed": [],
+  "new_live_run": false,
+  "shared_installation_changed": false,
+  "provenance_blocker": {
+    "summary": {
+      "path": "/Users/callumcowie/repos/Aether/.planning/phases/204.2-codex-native-worker-lifecycle/204.2-18-SUMMARY.md",
+      "sha256": "sha256:88a95542f89294c8ea3d3eea875e8386dff72756c9c5f94940afc5d3c0b4f129"
+    },
+    "configuration": {
+      "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/live-clean/capture/native-ordinary-777367638/host-configuration-capture.json",
+      "sha256": "sha256:a57d85469b1b726c78c1119074784f61f540a7f45eece75d297c489b349a5573"
+    },
+    "tool_definitions": {
+      "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/live-clean/capture/native-ordinary-777367638/host-tool-definitions-capture.json",
+      "sha256": "sha256:f9a81f5735a7bdc5afbdbad0ad1e8b163776a7a9e2cf7c1390d8cbef032111e1"
+    },
+    "reason": "No supported same-invocation complete effective configuration and model-facing tool-definition acquisition path established in measured host surfaces. Existing complete:false unavailable records remain rejected."
+  },
+  "task": 2,
+  "scenario": "question",
+  "execution": "acceptance stopped at unavailable acquisition path; existing controls verified",
+  "capture_changed": false,
+  "reason": "Plan20 explicitly stops this branch when actual plaintext acquisition is inaccessible. Plan18 supplied no supported acquisition adapter. No new launch/send plaintext, child-bound successful send/ACK, answer-dependent edit/check/result, or credit is claimed.",
+  "remaining": [
+    "Supported exact launch/send plaintext capture",
+    "Causally linked successful send and Go context acknowledgement",
+    "Unleaked answer-dependent child implementation and uncached required check",
+    "Fresh final-candidate qualification"
+  ]
+}
