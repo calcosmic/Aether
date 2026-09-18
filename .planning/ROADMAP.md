@@ -811,7 +811,7 @@ Plans:
 - [x] 204.2-16-PLAN.md — Account exact final normal/race regressions and refresh canonical verification after archiving its original bytes; depends on 15.
 
 
-**Second gap-closure pass — Plans17–19 reported; qualification incomplete; Plan20 executing**
+**Second gap-closure pass — Plans17–20 reported; dependent qualification blocked on actual host evidence**
 
 **Wave 14 — completed**
 
@@ -825,11 +825,11 @@ Plans:
 
 - [x] 204.2-19-PLAN.md — Malformed cancellation and invalid recovery records reject; normal/race controls pass; actual cancellation remains unqualified.
 
-**Wave 17 — executing independent attribution repair; context acquisition remains blocked**
+**Wave 17 — source controls complete; actual review/context acquisition blocked**
 
-- [ ] 204.2-20-PLAN.md — Prove actual independent review and exact context/scoped answer delivery.
+- [x] 204.2-20-PLAN.md — Observed command parser repaired and normal/race controls pass; actual independent review/context acceptance remains blocked.
 
-**Wave 18 — blocked on Plan 20 completion**
+**Wave 18 — blocked on supported actual host acquisition and Plan20 acceptance**
 
 - [ ] 204.2-21-PLAN.md — Capture attributable fresh-parent recovery and acknowledged cancellation.
 

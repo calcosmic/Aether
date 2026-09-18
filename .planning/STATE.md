@@ -4,17 +4,17 @@ milestone: v1.28
 milestone_name: Classic Colony Restoration
 current_phase: 204.2
 current_phase_name: Codex Native Worker Lifecycle
-status: executing
-stopped_at: Plans17–19 execution reported; Plan20 executing; same-host routing fixed and tested
-last_updated: "2026-09-18T08:00:39.948518+00:00"
+status: blocked
+stopped_at: Plans17–20 reported; actual host evidence unavailable; routing fixed; no publication
+last_updated: "2026-09-18T08:10:33.645657+00:00"
 last_activity: 2026-09-18
-last_activity_desc: Plan19 controls passed; actual host provenance remains unavailable; Plan20 attribution repair active; same-host routing fixed and tested
+last_activity_desc: Same-host routing and evidence parser repaired; dependent qualification blocked on unavailable actual host provenance
 state_head: 6f3db30bc6641a71015bdd2e4abaee590f483981
 progress:
   total_phases: 13
   completed_phases: 6
   total_plans: 214
-  completed_plans: 195
+  completed_plans: 196
   percent: 46
 ---
 
@@ -32,11 +32,11 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 
 ## Current Position
 
-Phase: 204.2 (Codex Native Worker Lifecycle) — EXECUTING
+Phase: 204.2 (Codex Native Worker Lifecycle) — BLOCKED
 Next phase: 204.2 gap closure
-Status: Plans17–19 execution reported; Plan20 executing; qualification remains gaps_found
-Plan: 19 of 23 execution reports complete; Plan20 executing; Plans21–23 pending
-Last activity: 2026-09-18 — Plan18 semantic controls passed; actual tool-schema provenance remains unavailable and its live trial incomplete. Plan19 controls passed normal/race and review; Plan20 attribution repair active; same-host provider routing fixed, committed and tested. No publication.
+Status: Plans17–20 execution reported; dependent qualification blocked; canonical verdict remains gaps_found
+Plan: 20 of 23 execution reports complete; Plans21–23 pending on supported actual host evidence
+Last activity: 2026-09-18 — Same-host provider routing fixed and tested. Plans19–20 source controls passed normal/race and review. Actual host/tool export and cancellation observation provenance remain unavailable, so dependent qualification stopped. No publication.
 
 ## Performance Metrics
 
