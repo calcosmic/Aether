@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -115,7 +116,12 @@ func nativeGapCancellationSnapshot(t *testing.T, root, directory string) map[str
 			return err
 		}
 		rel, _ := filepath.Rel(data, path)
-		result[path] = nativeGapCancellationWrite(t, filepath.Join(directory, rel), raw)
+		// Source transaction receipts include .bin, .sha256, extensionless and
+		// receipt.json names excluded by the outer capture policy. Preserve their
+		// exact bytes under one flat retained namespace, with original authority
+		// paths kept as inventory keys. Path hashes avoid filename/dir collisions.
+		name := strings.TrimPrefix(lifecycleDigest([]byte(rel)), "sha256:") + ".txt"
+		result[path] = nativeGapCancellationWrite(t, filepath.Join(directory, "authority", name), raw)
 		return nil
 	})
 	if err != nil {
@@ -287,7 +293,8 @@ func nativeGapCancellationGuardCheck(r codexNativeLiveReceipt, guard nativeGapCa
 	if err != nil || json.Unmarshal(raw, &presence) != nil || presence.Present == nil || (!*presence.Present && presence.Content != "") {
 		return fmt.Errorf("unobserved recovery context boundary")
 	}
-	for path, before := range guard.Before {
+	for _, path := range nativeGapCancellationInventoryPaths(guard.Before) {
+		before := guard.Before[path]
 		rel, err := filepath.Rel(filepath.Join(r.FixtureRoot, ".aether", "data"), path)
 		if path != handoff && path != contextPath && (err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || strings.HasSuffix(path, ".lock")) {
 			return fmt.Errorf("inventory escaped durable authority")
@@ -406,6 +413,19 @@ func nativeGapCancellationGuardCheck(r codexNativeLiveReceipt, guard nativeGapCa
 		return fmt.Errorf("unrecognized cancellation guard")
 	}
 	return nil
+}
+
+func nativeGapCancellationInventoryPaths(files map[string]nativeEvidenceFile) []string {
+	paths := make([]string, 0, len(files))
+	for path := range files {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	return paths
+}
+
+func nativeGapCancellationSnapshotShapeNames() []string {
+	return []string{"target-0001.bin", "nested/receipt.json", "other/receipt.json", "receipt.sha256", "extensionless", strings.Repeat("long", 40) + "/" + strings.Repeat("name", 40) + ".bin"}
 }
 
 // Capture uses actual parent/child rollout paths supplied by the existing
@@ -634,7 +654,8 @@ func nativeGapCancellationRefusalFacts(r codexNativeLiveReceipt, capture nativeG
 			if len(previous) != len(guard.Before) {
 				return fail(fmt.Errorf("authority inventory changed between guard calls"))
 			}
-			for path, file := range previous {
+			for _, path := range nativeGapCancellationInventoryPaths(previous) {
+				file := previous[path]
 				if file.SHA256 != guard.Before[path].SHA256 {
 					return fail(fmt.Errorf("authority changed between guard calls"))
 				}
@@ -692,6 +713,11 @@ func nativeGapCancellationRefusalFixture(t *testing.T) (codexNativeLiveReceipt, 
 	}
 	if _, err := runCodexNativeWorker("observe", nativeObservationPath(t, request, "cancel_requested", time.Now().UTC())); err != nil {
 		t.Fatal(err)
+	}
+	// These source shapes occur in actual lifecycle transaction inventories.
+	// Their exact copied bytes must survive the real outer capture filter.
+	for _, name := range nativeGapCancellationSnapshotShapeNames() {
+		nativeGapCancellationWrite(t, filepath.Join(store.BasePath(), "snapshot-shapes", name), []byte("synthetic authority bytes\x00\xff\n"))
 	}
 	attemptPath, attempt, ok := loadLatestBuildAttempt(1)
 	if !ok {

@@ -247,11 +247,7 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 			if err != nil || entry.IsDir() {
 				return nil
 			}
-			base := entry.Name()
-			if base == "auth.json" || base == "receipt.json" || strings.Contains(path, string(filepath.Separator)+".git"+string(filepath.Separator)) {
-				return nil
-			}
-			if strings.HasSuffix(path, ".go") || base == "go.mod" || base == "go.sum" || strings.HasSuffix(path, ".json") || strings.HasSuffix(path, ".jsonl") || strings.HasSuffix(path, ".txt") || strings.HasSuffix(path, ".md") || strings.HasSuffix(path, ".toml") || strings.HasSuffix(path, ".patch") || strings.HasSuffix(path, ".py") {
+			if nativeRetainedArtifactPath(path) {
 				raw, err := os.ReadFile(path)
 				if err == nil {
 					receipt.Artifacts[path] = lifecycleDigest(raw)
@@ -4618,6 +4614,17 @@ func nativeReadOnlyBatchCommand(command string) bool {
 func nativePathWithin(root, path string) bool {
 	rel, err := filepath.Rel(root, path)
 	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// Shared by live collection and immutable replay controls. This is the
+// original capture selection policy; changing a snapshot's storage name must
+// never authorize indexing credentials or the enclosing receipt itself.
+func nativeRetainedArtifactPath(path string) bool {
+	base := filepath.Base(path)
+	if base == "auth.json" || base == "receipt.json" || strings.Contains(path, string(filepath.Separator)+".git"+string(filepath.Separator)) {
+		return false
+	}
+	return strings.HasSuffix(path, ".go") || base == "go.mod" || base == "go.sum" || strings.HasSuffix(path, ".json") || strings.HasSuffix(path, ".jsonl") || strings.HasSuffix(path, ".txt") || strings.HasSuffix(path, ".md") || strings.HasSuffix(path, ".toml") || strings.HasSuffix(path, ".patch") || strings.HasSuffix(path, ".py")
 }
 
 func nativeBeginReceiptReplay(r *codexNativeLiveReceipt) error {
