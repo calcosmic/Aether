@@ -23,6 +23,14 @@ import (
 )
 
 const nativeEvidenceDirectory = ".planning/phases/204.2-codex-native-worker-lifecycle/evidence"
+const nativeGapEvidenceDirectory = nativeEvidenceDirectory + "/gap-closure"
+
+func nativeEvidencePaths(root, explicit string) (string, string) {
+	if explicit == "" {
+		explicit = filepath.Join(root, nativeGapEvidenceDirectory, "native-qualification.json")
+	}
+	return explicit, filepath.Join(root, nativeGapEvidenceDirectory, "native-regression.json")
+}
 
 type nativeEvidenceFile struct {
 	Path   string `json:"path"`
@@ -47,6 +55,7 @@ type nativeEvidenceCase struct {
 }
 
 type nativeEvidenceQualification struct {
+	FrozenProvenance          nativeEvidenceFile            `json:"frozen_provenance"`
 	SchemaVersion             string                        `json:"schema_version"`
 	TestedSource              string                        `json:"tested_source"`
 	SourceFrozenDuringCapture bool                          `json:"source_frozen_during_capture"`
@@ -77,10 +86,7 @@ type nativeEvidenceQualification struct {
 
 func TestCodexNativePhaseEvidence(t *testing.T) {
 	root := antSkillSourceRoot(t)
-	path := os.Getenv("AETHER_CODEX_NATIVE_RECEIPT_PATH")
-	if path == "" {
-		path = filepath.Join(root, nativeEvidenceDirectory, "native-qualification.json")
-	}
+	path, regressionPath := nativeEvidencePaths(root, os.Getenv("AETHER_CODEX_NATIVE_RECEIPT_PATH"))
 	// No opt-in skip, fixture fallback, EXPECT_INCOMPLETE escape, or ambient
 	// environment rewriting. Missing default evidence is also a failure.
 	raw, err := os.ReadFile(path)
@@ -102,7 +108,6 @@ func TestCodexNativePhaseEvidence(t *testing.T) {
 		t.Errorf("required actual native qualification failed: %v", err)
 	}
 	if os.Getenv("AETHER_CODEX_NATIVE_REQUIRE_REGRESSION") == "1" {
-		regressionPath := filepath.Join(root, nativeEvidenceDirectory, "native-regression.json")
 		if err := nativeEvidenceRegressionCheck(t, root, regressionPath, lifecycleDigest(raw), production, harness); err != nil {
 			t.Errorf("required completed normal/race regression accounting failed: %v", err)
 		}
@@ -123,6 +128,12 @@ func nativeEvidenceQualificationCheck(t *testing.T, sourceRoot string, q nativeE
 		return fmt.Errorf("complete required scenario inventory differs from reviewed host matrix")
 	}
 	var failures []error
+	if err := nativeGapQualificationOutcomes(q); err != nil {
+		failures = append(failures, err)
+	}
+	if err := nativeGapFrozenProvenanceCheck(sourceRoot, q, production, harness); err != nil {
+		failures = append(failures, err)
+	}
 	if !q.QualificationComplete {
 		failures = append(failures, fmt.Errorf("qualification_complete is false; mandatory incomplete cases are current gaps, never historical waivers"))
 	}
@@ -178,7 +189,7 @@ func nativeEvidenceCaseCheck(t *testing.T, name string, c nativeEvidenceCase, so
 	if err := json.Unmarshal(derivedRaw, &retained); err != nil {
 		return err
 	}
-	if original.SchemaVersion != "codex-native-tracer/v1" || original.Scenario != name || retained.Scenario != name {
+	if !nativeGapReceiptSchemas(original.SchemaVersion, retained.SchemaVersion) || original.Scenario != name || retained.Scenario != name {
 		return fmt.Errorf("wrong raw receipt schema/scenario")
 	}
 	if err := nativeEvidenceReceiptIdentity(original, source, production, harness); err != nil {
@@ -327,14 +338,15 @@ func nativeEvidenceCandidateProvenance(r codexNativeLiveReceipt, root string) er
 		return err
 	}
 	var p struct {
-		SourceRevision string `json:"source_revision"`
-		SourceDigest   string `json:"source_digest"`
-		BinarySHA256   string `json:"binary_sha256"`
+		SourceRevision string   `json:"source_revision"`
+		SourceDigest   string   `json:"source_digest"`
+		BinarySHA256   string   `json:"binary_sha256"`
+		BuildArgv      []string `json:"build_argv"`
 	}
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return err
 	}
-	if p.SourceRevision != r.SourceRevision || p.SourceDigest != r.SourceDigest || p.BinarySHA256 != r.CandidateSHA256 {
+	if p.SourceRevision != r.SourceRevision || p.SourceDigest != r.SourceDigest || p.BinarySHA256 != r.CandidateSHA256 || !reflect.DeepEqual(p.BuildArgv, r.BuildArgv) {
 		return fmt.Errorf("candidate provenance disconnected from exact capture")
 	}
 	for path, hash := range map[string]string{r.CandidatePath: r.CandidateSHA256, r.ClientPath: r.ClientSHA256} {
@@ -348,6 +360,9 @@ func nativeEvidenceCandidateProvenance(r codexNativeLiveReceipt, root string) er
 	info, err := buildinfo.ReadFile(r.CandidatePath)
 	if err != nil {
 		return err
+	}
+	if !strings.HasPrefix(info.GoVersion, "go") || r.ClientVersion == "" || len(r.Args) == 0 {
+		return fmt.Errorf("actual Go/host version or invocation absent")
 	}
 	for _, setting := range info.Settings {
 		if strings.HasPrefix(setting.Key, "vcs.") {
