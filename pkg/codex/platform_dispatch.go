@@ -1175,22 +1175,23 @@ waitLoop:
 // match, and TestHostedWorkerResultCarriesAllClaimsContent pins it.
 func hostedWorkerResultFromClaims(config WorkerConfig, claims workerClaims, duration time.Duration, safeRawOutput string) WorkerResult {
 	return WorkerResult{
-		WorkerName:    config.WorkerName,
-		Caste:         config.Caste,
-		TaskID:        config.TaskID,
-		Status:        claims.Status,
-		Summary:       claims.Summary,
-		FilesCreated:  claims.FilesCreated,
-		FilesModified: claims.FilesModified,
-		TestsWritten:  claims.TestsWritten,
-		Artifacts:     claims.Artifacts,
-		ScoutReport:   claims.ScoutReport,
-		ToolCount:     claims.ToolCount,
-		Blockers:      claims.Blockers,
-		Spawns:        claims.Spawns,
-		Handoff:       claims.Handoff,
-		Duration:      duration,
-		RawOutput:     safeRawOutput,
+		WorkerName:        config.WorkerName,
+		Caste:             config.Caste,
+		TaskID:            config.TaskID,
+		Status:            claims.Status,
+		Summary:           claims.Summary,
+		FilesCreated:      claims.FilesCreated,
+		FilesModified:     claims.FilesModified,
+		TestsWritten:      claims.TestsWritten,
+		Artifacts:         claims.Artifacts,
+		ScoutReport:       claims.ScoutReport,
+		ToolCount:         claims.ToolCount,
+		ToolCountReported: claims.ToolCountReported,
+		Blockers:          claims.Blockers,
+		Spawns:            claims.Spawns,
+		Handoff:           claims.Handoff,
+		Duration:          duration,
+		RawOutput:         safeRawOutput,
 	}
 }
 
@@ -1366,6 +1367,8 @@ type hostedWorkerDebugDetails struct {
 	// "provider_error_envelope", "parse_failure" — lets a reader tell the
 	// four failure paths apart without inferring from the error text.
 	FailureMode string
+	// RetainOutput preserves sanitized complete output for interrupted work.
+	RetainOutput bool
 }
 
 func writeHostedWorkerOutputDebug(root, label string, config WorkerConfig, args []string, stdoutText, stderrText string, cause error, details hostedWorkerDebugDetails) string {
@@ -1397,6 +1400,10 @@ func writeHostedWorkerOutputDebug(root, label string, config WorkerConfig, args 
 		"exit_code":       details.ExitCode,
 		"provider_run_id": strings.TrimSpace(config.ProviderRunID),
 		"failure_mode":    strings.TrimSpace(details.FailureMode),
+	}
+	if details.RetainOutput {
+		payload["stdout"] = sanitizeWorkerDiagnosticOutput(stdoutText)
+		payload["stderr"] = sanitizeWorkerDiagnosticOutput(stderrText)
 	}
 	data, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {

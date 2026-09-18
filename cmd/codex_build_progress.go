@@ -191,7 +191,7 @@ func emitCodexDispatchWorkerFinished(dispatch codex.WorkerDispatch, result codex
 	var durationSeconds float64
 	var toolCount int
 	durationReported := result.WorkerResult != nil && result.WorkerResult.Duration > 0
-	toolCountReported := result.WorkerResult != nil
+	toolCountReported := result.WorkerResult != nil && result.WorkerResult.ToolCountReported
 	if result.WorkerResult != nil {
 		durationSeconds = result.WorkerResult.Duration.Seconds()
 		toolCount = result.WorkerResult.ToolCount

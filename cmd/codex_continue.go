@@ -1816,7 +1816,7 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 				// same way Duration above is -- from the trusted in-process
 				// WorkerResult, not from anything an outside caller submitted.
 				step.ToolCount = result.WorkerResult.ToolCount
-				step.ToolCountReported = true
+				step.ToolCountReported = result.WorkerResult.ToolCountReported
 				// What this reviewer's own tool reported it cost, carried from
 				// the dispatch boundary so the direct check can file it.
 				step.Usage = result.WorkerResult.Usage
@@ -1958,7 +1958,7 @@ func renderCodexContinueReviewBrief(root string, phase colony.Phase, manifest co
 		// These two castes have no Bash tool by design — never instruct them
 		// to run a CLI command. They return findings in result JSON and the
 		// runtime persists to the ledger (persistReviewFindingsToLedgers).
-		b.WriteString("This is a review task. Return structured evidence in `artifacts.review` as a JSON object with a findings array; each finding severity must be CRITICAL, HIGH, MEDIUM, LOW, or INFO. Auditors must also return integer `overall_score` from 0 through 100. The artifact is authoritative over prose and legacy top-level findings. The runtime records findings in the domain review ledger for you. Do not modify repo source files. Return status `blocked` if advancement is unsafe.\n\n")
+		b.WriteString("This is a review task. Return structured evidence in `artifacts.review` as a JSON object with a findings array; each finding severity must be CRITICAL, HIGH, MEDIUM, LOW, or INFO. Completed Auditors must also return integer `overall_score` from 0 through 100. A blocked or failed reviewer without review evidence must report null rather than invent findings or a score. The artifact is authoritative over prose and legacy top-level findings. The runtime records findings in the domain review ledger for you. Do not modify repo source files. Return status `blocked` if advancement is unsafe.\n\n")
 	} else {
 		b.WriteString("This is a read-only review. Do not modify repo files. Return status `blocked` if advancement is unsafe.\n\n")
 	}

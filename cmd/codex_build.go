@@ -1333,8 +1333,8 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		// operator moment, never a silent error return.
 		emitVisualProgress(renderDecisionBlock("⚠", "Wave Failure — Build Halted",
 			fmt.Sprintf("Phase %d dispatch failed: %v", phaseNum, err),
-			"The phase's state was rolled back; nothing half-done was kept.",
-			"Fix the cause, then rerun the build for this phase."))
+			"The phase state rollback does not undo working-tree edits.",
+			"Inspect and reconcile surviving drafts before rerunning the build for this phase."))
 		return nil, err
 	}
 	if err := store.SaveJSON(claimsRel, terminalClaims); err != nil {
@@ -2682,8 +2682,24 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 	// yet). The ledger carries that already-resolved credit back here, where
 	// the codexBuildDispatch list lives.
 	receiptLedger := newWorktreeReceiptLedger()
+	dependencyCredit := buildDependencyCredit(phase)
+	requireWaveFileEvidence := codex.PlatformFromInvoker(invoker) == codex.PlatformCodex || codex.PlatformFromInvoker(invoker) == codex.PlatformClaude || codex.PlatformFromInvoker(invoker) == codex.PlatformOpenCode
 	waveDispatchFn := func(ctx context.Context, waveDispatches []codex.WorkerDispatch, waveNum int) ([]codex.DispatchResult, error) {
-		return dispatchCodexBuildWorkersWithReconciliation(ctx, root, phase, waveDispatches, invoker, startedAt, parallelMode, cb, receiptLedger)
+		ready, blocked := partitionReadyBuildDispatches(phase, waveDispatches, dependencyCredit)
+		for _, result := range blocked {
+			// These entries were reserved before dispatch. Retire that reservation
+			// as blocked without a start/finish observer or invented invocation.
+			if err := updateCodexBuildDispatchRuntimeStatus(result.WorkerName, "blocked", result.Error.Error()); err != nil {
+				return blocked, fmt.Errorf("record prerequisite-blocked job %s: %w", result.WorkerName, err)
+			}
+		}
+		var results []codex.DispatchResult
+		var err error
+		if len(ready) > 0 {
+			results, err = dispatchCodexBuildWorkersWithReconciliation(ctx, root, phase, ready, invoker, startedAt, parallelMode, cb, receiptLedger)
+		}
+		acceptBuildWaveCredit(root, phase, dispatches, results, receiptLedger, dependencyCredit, requireWaveFileEvidence)
+		return append(results, blocked...), err
 	}
 	summary, results, err := queenWaveLifecycle(ctx, workerDispatches, waveDispatchFn, phase, cb, phase.ID)
 	// Persist wave summary JSON for Phase 99 consumption (D-07)
@@ -3796,6 +3812,7 @@ func rollbackCodexBuildFailure(previous colony.ColonyState, phaseNum int, starte
 	}); err != nil {
 		return
 	}
+	visualFprintf(stderr, "Phase state restored; working-tree edits were not rolled back. %s\n", retainedBuildDraftReport(resolveAetherRoot()))
 	_, _ = syncColonyArtifacts(rollback, colonyArtifactOptions{
 		CommandName:   "build",
 		SuggestedNext: nextCommandFromState(rollback),

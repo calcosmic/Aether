@@ -24,6 +24,7 @@ type WaveLifecycleSummary struct {
 	TotalDispatched int          `json:"total_dispatched"`
 	TotalSucceeded  int          `json:"total_succeeded"`
 	TotalFailed     int          `json:"total_failed"`
+	TotalBlocked    int          `json:"total_blocked"`
 	TotalRecovered  int          `json:"total_recovered"`
 	TotalEscalated  int          `json:"total_escalated"`
 	Waves           []WaveResult `json:"waves"`
@@ -36,6 +37,7 @@ type WaveResult struct {
 	Dispatched int             `json:"dispatched"`
 	Succeeded  int             `json:"succeeded"`
 	Failed     int             `json:"failed"`
+	Blocked    int             `json:"blocked"`
 	Recovered  []RecoveryEntry `json:"recovered,omitempty"`
 	Escalated  int             `json:"escalated"`
 	BudgetUsed int             `json:"budget_used,omitempty"`
@@ -51,7 +53,8 @@ type RecoveryEntry struct {
 // queenWaveLifecycle runs the full build wave loop.
 // Per D-09: single-invocation, not goroutine/daemon.
 // Per D-10: queen owns wave grouping via codex.GroupByWave.
-// Per D-01/D-02: always advance -- never stop between waves regardless of failures.
+// Advance through waves so independent work can continue; the dispatch callback
+// admits dependent jobs only after prerequisite completion evidence is accepted.
 // Per D-11: dispatch goes through the injected WaveDispatchFunc (not direct platform calls).
 // Per D-03: unrecovered failures logged to existing recovery-log files.
 // Per D-04/D-05: ceremony event emitted between waves.
@@ -101,7 +104,12 @@ func queenWaveLifecycle(
 		// Count successes and failures
 		succeeded := 0
 		failed := 0
+		notDispatched := 0
 		for _, result := range waveResults {
+			if result.Status == "dependency_blocked" {
+				notDispatched++
+				continue
+			}
 			// completed_no_change counts as a success (ruling D6); counting
 			// it as failed sent an honest worker into wave recovery.
 			if isSuccessfulExternalBuildStatus(result.Status) {
@@ -115,7 +123,7 @@ func queenWaveLifecycle(
 		var waveRecovered []RecoveryEntry
 		waveEscalated := 0
 		for _, result := range waveResults {
-			if result.Status == "completed" {
+			if isSuccessfulExternalBuildStatus(result.Status) || result.Status == "dependency_blocked" {
 				continue
 			}
 
@@ -175,9 +183,10 @@ func queenWaveLifecycle(
 		// Build wave result
 		waveResult := WaveResult{
 			Wave:       waveNum,
-			Dispatched: len(waveDispatches),
+			Dispatched: len(waveDispatches) - notDispatched,
 			Succeeded:  succeeded,
 			Failed:     failed,
+			Blocked:    notDispatched,
 			Recovered:  waveRecovered,
 			Escalated:  waveEscalated,
 			BudgetUsed: budget.totalUsed(),
@@ -218,6 +227,7 @@ func queenWaveLifecycle(
 		summary.TotalDispatched += w.Dispatched
 		summary.TotalSucceeded += w.Succeeded
 		summary.TotalFailed += w.Failed
+		summary.TotalBlocked += w.Blocked
 		summary.TotalRecovered += len(w.Recovered)
 		summary.TotalEscalated += w.Escalated
 	}
@@ -258,11 +268,11 @@ func renderWaveSummaryTable(summary WaveLifecycleSummary) {
 	// retry out. A real build reported "1 recovered" for a worker that was
 	// still failed when the build halted seconds later. Naming it for what it
 	// counts stops the summary claiming a repair that never happened.
-	t.AppendHeader(table.Row{"Wave", "Dispatched", "Succeeded", "Failed", "Recovery Planned", "Escalated"})
+	t.AppendHeader(table.Row{"Wave", "Dispatched", "Succeeded", "Failed", "Blocked", "Recovery Planned", "Escalated"})
 	for _, w := range summary.Waves {
-		t.AppendRow(table.Row{w.Wave, w.Dispatched, w.Succeeded, w.Failed, len(w.Recovered), w.Escalated})
+		t.AppendRow(table.Row{w.Wave, w.Dispatched, w.Succeeded, w.Failed, w.Blocked, len(w.Recovered), w.Escalated})
 	}
 	t.AppendSeparator()
-	t.AppendRow(table.Row{"Total", summary.TotalDispatched, summary.TotalSucceeded, summary.TotalFailed, summary.TotalRecovered, summary.TotalEscalated})
+	t.AppendRow(table.Row{"Total", summary.TotalDispatched, summary.TotalSucceeded, summary.TotalFailed, summary.TotalBlocked, summary.TotalRecovered, summary.TotalEscalated})
 	writeVisualOutput(stdout, t.Render()+"\n")
 }

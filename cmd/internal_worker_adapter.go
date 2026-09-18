@@ -60,10 +60,13 @@ type internalWorkerResult struct {
 	// crashed, and that proof must survive to
 	// admitCoherentJobTaskReceipts/finalizeCoherentJobTaskReceiptEvidence
 	// (cmd/coherent_job_receipts.go) instead of being dropped here.
-	TaskReceipts []codex.TaskReceipt        `json:"task_receipts,omitempty"`
-	Artifacts    map[string]json.RawMessage `json:"artifacts,omitempty"`
-	ScoutReport  json.RawMessage            `json:"scout_report,omitempty"`
-	ToolCount    int                        `json:"tool_count,omitempty"`
+	TaskReceipts      []codex.TaskReceipt        `json:"task_receipts,omitempty"`
+	Artifacts         map[string]json.RawMessage `json:"artifacts,omitempty"`
+	ScoutReport       json.RawMessage            `json:"scout_report,omitempty"`
+	ToolCount         int                        `json:"tool_count,omitempty"`
+	ToolCountReported bool                       `json:"tool_count_reported,omitempty"`
+	ObservedToolCalls int                        `json:"observed_tool_calls,omitempty"`
+	DiagnosticPath    string                     `json:"diagnostic_path,omitempty"`
 	// Usage is populated only by codex.AttachWorkerUsage on the real
 	// dispatch boundary (pkg/codex/platform_dispatch.go). It was silently
 	// dropped by mapInternalWorkerResult before Phase 174 (SPEND-01) --
@@ -492,24 +495,27 @@ func mapInternalWorkerResult(result codex.WorkerResult, invokeErr error) *intern
 		errorText = sanitizeInternalWorkerAdapterError(invokeErr.Error())
 	}
 	return &internalWorkerResult{
-		Name:          result.WorkerName,
-		Caste:         result.Caste,
-		TaskID:        result.TaskID,
-		Status:        result.Status,
-		Summary:       strings.TrimSpace(result.Summary),
-		FilesCreated:  append([]string(nil), result.FilesCreated...),
-		FilesModified: append([]string(nil), result.FilesModified...),
-		TestsWritten:  append([]string(nil), result.TestsWritten...),
-		TaskReceipts:  append([]codex.TaskReceipt(nil), result.TaskReceipts...),
-		Artifacts:     result.Artifacts,
-		ScoutReport:   result.ScoutReport,
-		ToolCount:     result.ToolCount,
-		Usage:         result.Usage,
-		Blockers:      append([]string(nil), result.Blockers...),
-		Spawns:        append([]string(nil), result.Spawns...),
-		Duration:      result.Duration.Seconds(),
-		Error:         errorText,
-		Handoff:       result.Handoff,
+		Name:              result.WorkerName,
+		Caste:             result.Caste,
+		TaskID:            result.TaskID,
+		Status:            result.Status,
+		Summary:           strings.TrimSpace(result.Summary),
+		FilesCreated:      append([]string(nil), result.FilesCreated...),
+		FilesModified:     append([]string(nil), result.FilesModified...),
+		TestsWritten:      append([]string(nil), result.TestsWritten...),
+		TaskReceipts:      append([]codex.TaskReceipt(nil), result.TaskReceipts...),
+		Artifacts:         result.Artifacts,
+		ScoutReport:       result.ScoutReport,
+		ToolCount:         result.ToolCount,
+		ToolCountReported: result.ToolCountReported,
+		ObservedToolCalls: result.ObservedToolCalls,
+		DiagnosticPath:    result.DiagnosticPath,
+		Usage:             result.Usage,
+		Blockers:          append([]string(nil), result.Blockers...),
+		Spawns:            append([]string(nil), result.Spawns...),
+		Duration:          result.Duration.Seconds(),
+		Error:             errorText,
+		Handoff:           result.Handoff,
 	}
 }
 

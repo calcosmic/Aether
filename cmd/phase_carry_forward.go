@@ -1,8 +1,13 @@
 package cmd
 
 import (
+	"crypto/sha256"
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
@@ -64,6 +69,10 @@ func resolvePreviousPhaseCarryForward(currentPhaseID int) string {
 	prevID, ok := precedingPhaseID(state, currentPhaseID)
 	if !ok {
 		return ""
+	}
+
+	if closure := previousPhaseOutOfBandClosure(state, prevID); closure != "" {
+		return closure
 	}
 
 	var verification codexContinueVerificationReport
@@ -194,4 +203,108 @@ func precedingPhaseID(state colony.ColonyState, currentPhaseID int) (int, bool) 
 		return phases[i-1].ID, true
 	}
 	return 0, false
+}
+
+// outOfBandCarryForward binds the accepted closure to its exact attempt and
+// the reports it superseded. Historical reports remain byte-for-byte intact.
+type outOfBandCarryForward struct {
+	Phase      int                         `json:"phase"`
+	AttemptID  string                      `json:"attempt_id"`
+	Provenance outOfBandVerificationRecord `json:"provenance"`
+	Superseded map[string]string           `json:"superseded"`
+}
+
+func carryForwardReportDigests(phaseID int) map[string]string {
+	result := make(map[string]string)
+	for _, name := range []string{"verification.json", "review.json", "outcome.md"} {
+		if data, err := store.ReadFile(continuePlanArtifactsPath(phaseID, name)); err == nil {
+			result[name] = fmt.Sprintf("%x", sha256.Sum256(data))
+		}
+	}
+	return result
+}
+
+func previousPhaseOutOfBandClosure(state colony.ColonyState, phaseID int) string {
+	completed := false
+	for _, phase := range state.Plan.Phases {
+		if phase.ID == phaseID {
+			completed = phase.Status == colony.PhaseCompleted
+		}
+	}
+	if !completed {
+		return ""
+	}
+	_, attempt, hasAttempt := loadLatestBuildAttempt(phaseID)
+	if !hasAttempt {
+		// An unreadable or mismatched pointer is not evidence that no attempt
+		// exists; never let it revive an older no-attempt closure.
+		if _, err := store.ReadFile(latestBuildAttemptPointerPath(phaseID)); !errors.Is(err, os.ErrNotExist) {
+			return ""
+		}
+	}
+	var closure outOfBandCarryForward
+	err := store.LoadJSON(continuePlanArtifactsPath(phaseID, "out-of-band-closure.json"), &closure)
+	if err == nil {
+		if closure.Phase != phaseID || closure.Provenance.Phase != phaseID {
+			return ""
+		}
+		if hasAttempt != (closure.AttemptID != "") || (hasAttempt && (attempt.ID != closure.AttemptID || attempt.Status != buildAttemptBuilt)) {
+			return ""
+		}
+		current := carryForwardReportDigests(phaseID)
+		if len(current) != len(closure.Superseded) {
+			return ""
+		}
+		for name, digest := range current {
+			if closure.Superseded[name] != digest {
+				return ""
+			}
+		}
+	} else {
+		if !errors.Is(err, os.ErrNotExist) {
+			return ""
+		}
+		// Compatibility for closures accepted before this context record existed.
+		// Only the current, successfully closed attempt can supply this provenance.
+		if !hasAttempt || attempt.Phase != phaseID || attempt.Status != buildAttemptBuilt || attempt.OutOfBandVerification == nil {
+			return ""
+		}
+		closure.Provenance = *attempt.OutOfBandVerification
+		if closure.Provenance.Phase != phaseID {
+			return ""
+		}
+		verifiedAt, parseErr := time.Parse(time.RFC3339Nano, closure.Provenance.VerifiedAt)
+		if parseErr != nil {
+			return ""
+		}
+		// Legacy JSON timestamps have only second precision, and outcome.md
+		// has none. File freshness must also pass for every historical report.
+		for _, name := range []string{"verification.json", "review.json", "outcome.md"} {
+			reportPath := filepath.Join(store.BasePath(), continuePlanArtifactsPath(phaseID, name))
+			if info, statErr := os.Stat(reportPath); statErr == nil {
+				if info.ModTime().After(verifiedAt) {
+					return ""
+				}
+			} else if !errors.Is(statErr, os.ErrNotExist) {
+				return ""
+			}
+		}
+		for _, name := range []string{"verification.json", "review.json"} {
+			var report struct {
+				GeneratedAt string `json:"generated_at"`
+			}
+			if err := store.LoadJSON(continuePlanArtifactsPath(phaseID, name), &report); err == nil {
+				generatedAt, parseErr := time.Parse(time.RFC3339Nano, report.GeneratedAt)
+				if parseErr != nil || generatedAt.After(verifiedAt) {
+					return ""
+				}
+			} else if !errors.Is(err, os.ErrNotExist) {
+				return ""
+			}
+		}
+	}
+	if _, err := time.Parse(time.RFC3339Nano, closure.Provenance.VerifiedAt); err != nil {
+		return ""
+	}
+	return fmt.Sprintf("## What Happened Last Phase (Phase %d)\n\nPhase %d closed through accepted verify-out-of-band verification at %s. Fresh checks: %d; criteria checked: %d; artifacts hashed: %d. This closure does not claim a completed worker review.\n\nEarlier verification.json, review.json, and outcome.md are superseded historical reports retained in build/phase-%d; their blocked closeout is not the current phase outcome.", phaseID, phaseID, closure.Provenance.VerifiedAt, len(closure.Provenance.ChecksRun), len(closure.Provenance.CriteriaChecked), len(closure.Provenance.ArtifactsHashed), phaseID)
 }

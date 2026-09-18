@@ -75,6 +75,7 @@ type DispatchResult struct {
 
 // DispatchLifecycleEvent reports a runtime transition for a worker dispatch.
 type DispatchLifecycleEvent struct {
+	Source       string // Origin of progress; empty for lifecycle transitions
 	Dispatch     WorkerDispatch
 	Status       string
 	Message      string
@@ -220,7 +221,7 @@ func invokeDispatch(ctx context.Context, invoker WorkerInvoker, d WorkerDispatch
 			if status == "" {
 				return
 			}
-			emitDispatchLifecycle(observer, d, status, progress.Message, nil, nil)
+			emitDispatchLifecycle(observer, d, status, progress.Message, nil, nil, progress.Source)
 		})
 		dr := DispatchResult{
 			WorkerName: d.WorkerName,
@@ -336,11 +337,16 @@ func (r DispatchResult) String() string {
 	return fmt.Sprintf("[%s] %s", status, r.WorkerName)
 }
 
-func emitDispatchLifecycle(observer DispatchObserver, dispatch WorkerDispatch, status string, message string, workerResult *WorkerResult, err error) {
+func emitDispatchLifecycle(observer DispatchObserver, dispatch WorkerDispatch, status string, message string, workerResult *WorkerResult, err error, sources ...string) {
 	if observer == nil {
 		return
 	}
+	source := ""
+	if len(sources) > 0 {
+		source = sources[0]
+	}
 	observer(DispatchLifecycleEvent{
+		Source:       source,
 		Dispatch:     dispatch,
 		Status:       status,
 		Message:      strings.TrimSpace(message),

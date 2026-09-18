@@ -68,12 +68,12 @@ func TestWorkerFlowStepCarriesToolCount(t *testing.T) {
 	t.Run("a worker result carrying a tool-call count populates the step", func(t *testing.T) {
 		// Mirrors the population site in runCodexContinueReview (cmd/codex_continue.go)
 		// so this test would fail if that wiring regressed.
-		result := &codex.WorkerResult{Duration: 0, ToolCount: 14}
+		result := &codex.WorkerResult{Duration: 0, ToolCount: 14, ToolCountReported: true}
 		var step codexContinueWorkerFlowStep
 		step.Duration = result.Duration.Seconds()
 		step.DurationReported = true
 		step.ToolCount = result.ToolCount
-		step.ToolCountReported = true
+		step.ToolCountReported = result.ToolCountReported
 
 		if step.ToolCount != 14 {
 			t.Errorf("ToolCount = %d, want 14", step.ToolCount)
@@ -189,7 +189,7 @@ func TestLiveAndSummaryWorkerFiguresShareOneSource(t *testing.T) {
 	dispatch := codex.WorkerDispatch{WorkerName: "Keen-12", Caste: "watcher"}
 	result := codex.DispatchResult{
 		WorkerName: "Keen-12", Status: "completed",
-		WorkerResult: &codex.WorkerResult{Duration: 190 * 1e9 /* ns */, ToolCount: 14},
+		WorkerResult: &codex.WorkerResult{Duration: 190 * 1e9 /* ns */, ToolCount: 14, ToolCountReported: true},
 	}
 
 	var liveBuf strings.Builder
