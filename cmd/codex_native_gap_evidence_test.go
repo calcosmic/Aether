@@ -12,8 +12,36 @@ import (
 )
 
 // A separate manifest pins the whole frozen validator corpus and measured
-// toolchain/host inputs. An unavailable schema export remains missing proof;
-// observed tool names or successful process exits cannot fill that field.
+// toolchain/host inputs. Unavailable exports remain unavailable metadata under
+// the owner-approved prospective contract, never a positive host export claim.
+
+const nativeCapabilityProofContract = "aether-native-capability-proof/v1"
+const nativeCapabilityProofAmendment = ".planning/phases/204.2-codex-native-worker-lifecycle/204.2-PROOF-AMENDMENT.md"
+const nativeCapabilityProofAmendmentSHA256 = "sha256:9db637757528466e0e19bcf5789ccd6c125944e4e6f910d624c9211bbc46ccbd"
+
+func nativeGapProofIdentity(contract, amendment string) (bool, error) {
+	if contract == "" && amendment == "" {
+		return false, nil // Legacy receipts retain their original strict contract.
+	}
+	if contract != nativeCapabilityProofContract || amendment != nativeCapabilityProofAmendmentSHA256 {
+		return false, fmt.Errorf("unknown or mismatched prospective proof contract")
+	}
+	return true, nil
+}
+
+func nativeGapProofBinding(contract, amendment, originalContract, originalAmendment string) error {
+	if _, err := nativeGapProofIdentity(contract, amendment); err != nil {
+		return err
+	}
+	if _, err := nativeGapProofIdentity(originalContract, originalAmendment); err != nil {
+		return err
+	}
+	if contract != originalContract || amendment != originalAmendment {
+		return fmt.Errorf("proof contract differs from original evidence")
+	}
+	return nil
+}
+
 type nativeGapFrozenProvenance struct {
 	Source           string                             `json:"source"`
 	Production       string                             `json:"production_digest"`
@@ -54,6 +82,15 @@ func nativeGapFrozenIdentity(p nativeGapFrozenProvenance, source, production, ha
 }
 
 func nativeGapFrozenProvenanceCheck(root string, q nativeEvidenceQualification, production, harness string) error {
+	prospective, err := nativeGapProofIdentity(q.ProofContract, q.ProofAmendmentSHA256)
+	if err != nil {
+		return err
+	}
+	if prospective {
+		if _, err := nativeEvidenceBytes(nativeEvidenceFile{filepath.Join(root, nativeCapabilityProofAmendment), q.ProofAmendmentSHA256}); err != nil {
+			return fmt.Errorf("proof amendment source: %w", err)
+		}
+	}
 	raw, err := nativeEvidenceBytes(q.FrozenProvenance)
 	if err != nil {
 		return fmt.Errorf("frozen provenance: %w", err)
@@ -92,6 +129,9 @@ func nativeGapFrozenProvenanceCheck(root string, q nativeEvidenceQualification, 
 		if err = json.Unmarshal(raw, &r); err != nil {
 			return err
 		}
+		if err := nativeGapProofBinding(q.ProofContract, q.ProofAmendmentSHA256, r.ProofContract, r.ProofAmendmentSHA256); err != nil {
+			return fmt.Errorf("%s original receipt proof contract differs from qualification: %w", name, err)
+		}
 		info, err := buildinfo.ReadFile(r.CandidatePath)
 		if err != nil {
 			return err
@@ -122,13 +162,16 @@ func nativeGapHostIdentity(p nativeGapHostProvenance, r codexNativeLiveReceipt) 
 			return fmt.Errorf("host schema/configuration absent from original capture")
 		}
 	}
-	if err := nativeGapValidateCapture(p.Configuration, "configuration", r); err != nil {
+	if err := nativeGapValidateHostMetadata(p.Configuration, "configuration", r); err != nil {
 		return err
 	}
-	return nativeGapValidateCapture(p.ToolSchema, "tool-definitions", r)
+	return nativeGapValidateHostMetadata(p.ToolSchema, "tool-definitions", r)
 }
 
 func nativeGapQualificationOutcomes(q nativeEvidenceQualification) error {
+	if _, err := nativeGapProofIdentity(q.ProofContract, q.ProofAmendmentSHA256); err != nil {
+		return err
+	}
 	if q.SchemaVersion != "aether-native-final-qualification/v1" || len(q.TestedSource) != 40 || !q.SourceFrozenDuringCapture || !q.SourceFrozenDuringReplay {
 		return fmt.Errorf("qualification schema/source freeze identity missing")
 	}
@@ -171,7 +214,7 @@ func TestCodexNativeGapEvidencePaths(t *testing.T) {
 		}
 	})
 	t.Run("qualification", func(t *testing.T) {
-		for _, mutation := range []string{"missing-schema", "unknown-schema", "incomplete", "missing-case", "unknown-case", "claude-auth", "refusal-not-observed"} {
+		for _, mutation := range []string{"missing-schema", "unknown-schema", "unknown-contract", "stale-amendment", "incomplete", "missing-case", "unknown-case", "claude-auth", "refusal-not-observed", "ordinary-unsupported", "review-unsupported", "question-unsupported", "early-resume-unsupported", "partial-resume-unsupported"} {
 			t.Run(mutation, func(t *testing.T) {
 				q := nativeEvidenceQualification{SchemaVersion: "aether-native-final-qualification/v1", TestedSource: strings.Repeat("a", 40), SourceFrozenDuringCapture: true, SourceFrozenDuringReplay: true, QualificationComplete: true, Cases: map[string]nativeEvidenceCase{}}
 				for _, s := range codexNativeLiveScenarios {
@@ -186,11 +229,19 @@ func TestCodexNativeGapEvidencePaths(t *testing.T) {
 				if err := nativeGapQualificationOutcomes(q); err != nil {
 					t.Fatalf("valid eleven-case control: %v", err)
 				}
+				q.ProofContract, q.ProofAmendmentSHA256 = nativeCapabilityProofContract, nativeCapabilityProofAmendmentSHA256
+				if err := nativeGapQualificationOutcomes(q); err != nil {
+					t.Fatalf("valid prospective eleven-case control: %v", err)
+				}
 				switch mutation {
 				case "missing-schema":
 					q.SchemaVersion = ""
 				case "unknown-schema":
 					q.SchemaVersion = "unknown/v1"
+				case "unknown-contract":
+					q.ProofContract = "unknown/v1"
+				case "stale-amendment":
+					q.ProofAmendmentSHA256 = "sha256:stale"
 				case "incomplete":
 					q.QualificationComplete = false
 				case "missing-case":
@@ -201,6 +252,8 @@ func TestCodexNativeGapEvidencePaths(t *testing.T) {
 					q.Cases["claude"] = nativeEvidenceCase{Outcome: "incomplete"}
 				case "refusal-not-observed":
 					q.Cases["missing-skill"] = nativeEvidenceCase{Outcome: "passed"}
+				default:
+					q.Cases[strings.TrimSuffix(mutation, "-unsupported")] = nativeEvidenceCase{Outcome: "unsupported"}
 				}
 				if err := nativeGapQualificationOutcomes(q); err == nil {
 					t.Fatal("invalid matrix qualified")

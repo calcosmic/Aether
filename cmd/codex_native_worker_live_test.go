@@ -34,6 +34,8 @@ type codexNativeLiveReceipt struct {
 	Cancellation               *nativeGapCancellationEvidence `json:"cancellation_evidence,omitempty"`
 	RecoveryCheckpoint         *nativeGapRecoveryCheckpoint   `json:"recovery_checkpoint,omitempty"`
 	SchemaVersion              string                         `json:"schema_version"`
+	ProofContract              string                         `json:"proof_contract,omitempty"`
+	ProofAmendmentSHA256       string                         `json:"proof_amendment_sha256,omitempty"`
 	Scenario                   string                         `json:"scenario"`
 	Outcome                    string                         `json:"outcome"`
 	Reason                     string                         `json:"reason,omitempty"`
@@ -224,9 +226,11 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 		t.Fatal(err)
 	}
 	receipt := codexNativeLiveReceipt{SchemaVersion: "codex-native-tracer/v2", Scenario: scenario, Outcome: "incomplete", Reason: "harness did not reach all evidence gates", ExitStatus: -1, Artifacts: map[string]string{}, FixtureProvenance: "Fixture-prepared one-task accepted plan through specification, staged planning coordinator and exact acceptPlanCandidate; no live planning claim."}
+	receipt.ProofContract = nativeCapabilityProofContract
+	receipt.ProofAmendmentSHA256 = nativeCapabilityProofAmendmentSHA256
 	defer func() {
 		// Collect before closing the original inventory. An unavailable export
-		// stays explicitly unqualified even when ordinary worker behavior passes.
+		// stays unavailable even when independently proved worker behavior passes.
 		nativeGapCollectHostCapture(t, &receipt, runRoot)
 		// Index complete raw captures and installed inputs, but never credential caches.
 		_ = filepath.WalkDir(runRoot, func(path string, entry fs.DirEntry, err error) error {
@@ -909,6 +913,11 @@ func nativeRunClaudeComparison(t *testing.T, r *codexNativeLiveReceipt, runRoot,
 	r.FinalSource = string(final)
 	raw, _ := r.readEvidence(r.RawEvents)
 	nativeCollectClaudeEvidence(r, raw, after)
+	if err := nativeValidateClaudeInvocationIdentity(*r, raw); err != nil {
+		r.Reason = err.Error()
+		t.Error(r.Reason)
+		return
+	}
 	r.Limitations = []string{"Equivalent prepared fixture only: no live planning, owner walkthrough, full wrapper parity or native control equivalence is claimed.", "Claude child evidence is derived only from forwarded child tool calls/results; parent text and parent checks provide no helper proof."}
 	if baselineErr := nativeValidateFixtureBaselines(*r); baselineErr != nil {
 		r.Reason = baselineErr.Error()
@@ -923,10 +932,64 @@ func nativeRunClaudeComparison(t *testing.T, r *codexNativeLiveReceipt, runRoot,
 	r.Outcome, r.Reason = "passed", ""
 }
 
+// Only the single root system/init event reports the parent invocation model.
+// Forwarded child events and arbitrary model fields do not supply that fact.
+func nativeClaudeInvocationIdentity(raw []byte) (string, string, error) {
+	type event struct {
+		Type, Subtype, Model string
+		SessionID            string `json:"session_id"`
+		Parent               string `json:"parent_tool_use_id"`
+	}
+	var startup event
+	initializations := 0
+	parentSessions := map[string]bool{}
+	for _, line := range bytes.Split(raw, []byte{'\n'}) {
+		if len(bytes.TrimSpace(line)) == 0 {
+			continue
+		}
+		var e event
+		if err := json.Unmarshal(line, &e); err != nil {
+			return "", "", fmt.Errorf("Claude invocation contains malformed raw event: %w", err)
+		}
+		if e.Type == "" {
+			return "", "", fmt.Errorf("Claude invocation contains an untyped raw event")
+		}
+		if e.Parent != "" {
+			continue
+		}
+		if e.SessionID != "" {
+			parentSessions[e.SessionID] = true
+		}
+		if e.Type == "system" && e.Subtype == "init" {
+			startup = e
+			initializations++
+		}
+	}
+	if initializations != 1 || strings.TrimSpace(startup.SessionID) == "" || strings.TrimSpace(startup.Model) == "" {
+		return "", "", fmt.Errorf("Claude parent startup session/model is missing or ambiguous")
+	}
+	if len(parentSessions) != 1 || !parentSessions[startup.SessionID] {
+		return "", "", fmt.Errorf("Claude startup session differs from parent raw events")
+	}
+	return startup.SessionID, startup.Model, nil
+}
+
+func nativeValidateClaudeInvocationIdentity(r codexNativeLiveReceipt, raw []byte) error {
+	session, model, err := nativeClaudeInvocationIdentity(raw)
+	if err != nil {
+		return err
+	}
+	if r.SessionID != session || r.Model != model {
+		return fmt.Errorf("Claude receipt session/model differs from actual parent startup")
+	}
+	return nil
+}
+
 func nativeCollectClaudeEvidence(r *codexNativeLiveReceipt, raw, stateRaw []byte) {
 	r.NativeSpawnCount = 0
 	r.ChildUnclassified, r.ParentUnclassified = nil, nil
-	r.ChildID, r.SessionID = "", ""
+	r.ChildID = ""
+	r.SessionID, r.Model, _ = nativeClaudeInvocationIdentity(raw)
 	r.ChildEditObserved, r.ChecksPassed, r.CreditObserved, r.SkillRead, r.ParentSubstitution = false, false, false, false, false
 	type content struct {
 		Type, ID, Name string
@@ -954,9 +1017,6 @@ func nativeCollectClaudeEvidence(r *codexNativeLiveReceipt, raw, stateRaw []byte
 		var e event
 		if json.Unmarshal(line, &e) != nil {
 			continue
-		}
-		if e.SessionID != "" {
-			r.SessionID = e.SessionID
 		}
 		for _, c := range e.Message.Content {
 			if c.Type == "tool_use" {
@@ -3816,6 +3876,10 @@ func nativeRefusalInventory(r codexNativeLiveReceipt, path, reason string) error
 // runs worker checks, rewrites a result, or changes the original receipt.
 func nativeReplayQualificationReceipt(t *testing.T, r *codexNativeLiveReceipt) error {
 	t.Helper()
+	prospective, err := nativeGapProofIdentity(r.ProofContract, r.ProofAmendmentSHA256)
+	if err != nil {
+		return err
+	}
 	if err := nativeBeginReceiptReplay(r); err != nil {
 		return err
 	}
@@ -3825,11 +3889,16 @@ func nativeReplayQualificationReceipt(t *testing.T, r *codexNativeLiveReceipt) e
 	r.Outcome, r.Reason = "incomplete", ""
 	r.Limitations = nil
 	if r.Scenario == "claude" {
-		resetCodexNativeDerivedEvidence(r)
 		raw, err := r.readEvidence(r.RawEvents)
 		if err != nil {
 			return err
 		}
+		if prospective {
+			if err := nativeValidateClaudeInvocationIdentity(*r, raw); err != nil {
+				return err
+			}
+		}
+		resetCodexNativeDerivedEvidence(r)
 		source, _ := r.readEvidence(filepath.Join(r.FixtureRoot, "clamp.go"))
 		r.FinalSource = string(source)
 		state, err := r.readEvidence(filepath.Join(root, "claude-after-state.json"))

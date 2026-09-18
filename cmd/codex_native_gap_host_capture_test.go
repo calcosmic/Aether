@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -79,15 +80,22 @@ func nativeGapDecodeCapture(raw []byte) (nativeGapHostCapture, error) {
 	return c, nil
 }
 
-func nativeGapCaptureSemantics(c nativeGapHostCapture, kind string, r codexNativeLiveReceipt) error {
+func nativeGapCaptureIdentity(c nativeGapHostCapture, kind string, r codexNativeLiveReceipt) error {
 	if c.SchemaVersion != "aether-host-capture/v1" || c.Kind != kind || (kind != "configuration" && kind != "tool-definitions") {
 		return fmt.Errorf("unknown host capture schema/kind")
 	}
-	if !c.Complete || c.Unavailable != "" || c.Method == "" || c.Provenance == "" {
-		return fmt.Errorf("host export unavailable or incomplete")
-	}
 	if c.SessionID == "" || c.SessionID != r.SessionID || c.Model != r.Model || c.Model == "" || c.Version != r.ClientVersion || c.Executable.Path != r.ClientPath || c.Executable.SHA256 != r.ClientSHA256 || !reflect.DeepEqual(c.Args, r.Args) || !reflect.DeepEqual(c.Effort, r.HostEffort) {
 		return fmt.Errorf("capture invocation identity differs")
+	}
+	return nil
+}
+
+func nativeGapCaptureSemantics(c nativeGapHostCapture, kind string, r codexNativeLiveReceipt) error {
+	if err := nativeGapCaptureIdentity(c, kind, r); err != nil {
+		return err
+	}
+	if !c.Complete || c.Unavailable != "" || c.Method == "" || c.Provenance == "" {
+		return fmt.Errorf("host export unavailable or incomplete")
 	}
 	if kind == "configuration" {
 		var model string
@@ -190,8 +198,134 @@ func nativeGapValidateCapture(ref nativeEvidenceFile, kind string, r codexNative
 	return fmt.Errorf("unsupported actual host export acquisition: %s", c.Method)
 }
 
+// The prospective contract admits an honest absence record, never an export.
+// Actual worker/context/recovery proof is checked separately. Historical
+// receipts retain the strict export requirement and cannot inherit this branch.
+func nativeGapValidateHostMetadata(ref nativeEvidenceFile, kind string, r codexNativeLiveReceipt) error {
+	prospective, err := nativeGapProofIdentity(r.ProofContract, r.ProofAmendmentSHA256)
+	if err != nil {
+		return err
+	}
+	if !prospective {
+		return nativeGapValidateCapture(ref, kind, r)
+	}
+	raw, err := nativeEvidenceBytes(ref)
+	if err != nil {
+		return err
+	}
+	c, err := nativeGapDecodeCapture(raw)
+	if err != nil {
+		return err
+	}
+	if c.Method != "unavailable" {
+		return nativeGapValidateCapture(ref, kind, r)
+	}
+	if err := nativeGapCaptureIdentity(c, kind, r); err != nil {
+		return err
+	}
+	if c.Complete || strings.TrimSpace(c.Unavailable) == "" || strings.TrimSpace(c.Provenance) == "" || len(c.Settings) != 0 || len(c.Tools) != 0 {
+		return fmt.Errorf("unavailable metadata contains a positive or unexplained export claim")
+	}
+	inventory := r.Artifacts
+	if r.replaying {
+		inventory = r.replayArtifacts
+	}
+	if c.Raw.Path == "" || c.Raw.Path != r.RawEvents || c.Raw.Path == ref.Path || c.Raw.SHA256 == "" || inventory[ref.Path] != ref.SHA256 || inventory[c.Raw.Path] != c.Raw.SHA256 {
+		return fmt.Errorf("unavailable metadata absent from original invocation inventory")
+	}
+	_, err = nativeEvidenceBytes(c.Raw)
+	return err
+}
+
 // These are deterministic adversarial bytes, never actual host exports.
 func TestCodexNativeGapHostCapture(t *testing.T) {
+	t.Run("prospective-unavailable-metadata", func(t *testing.T) {
+		for _, kind := range []string{"configuration", "tool-definitions"} {
+			for _, mutation := range []string{"none", "legacy", "unknown-contract", "stale-amendment", "complete", "empty-reason", "empty-provenance", "settings", "tools", "wrong-session", "wrong-model", "wrong-argv", "wrong-effort", "wrong-kind", "positive-export", "substituted-raw", "changed-raw", "post-hoc-envelope", "post-hoc-raw"} {
+				t.Run(kind+"/"+mutation, func(t *testing.T) {
+					dir := t.TempDir()
+					path := filepath.Join(dir, "events.jsonl")
+					liveSkillWrite(t, path, []byte("deterministic invocation events, not actual host evidence\n"))
+					r := codexNativeLiveReceipt{ProofContract: nativeCapabilityProofContract, ProofAmendmentSHA256: nativeCapabilityProofAmendmentSHA256, SessionID: "deterministic-session", ClientVersion: "deterministic-version", ClientPath: "/deterministic/client", ClientSHA256: "deterministic-hash", Args: []string{"exec"}, Model: "model", RawEvents: path, Artifacts: map[string]string{path: liveSkillFileDigest(t, path)}}
+					nativeGapCollectHostCapture(t, &r, dir)
+					ref := r.HostProvenance.Configuration
+					if kind == "tool-definitions" {
+						ref = r.HostProvenance.ToolSchema
+					}
+					raw, err := nativeEvidenceBytes(ref)
+					if err != nil {
+						t.Fatal(err)
+					}
+					c, err := nativeGapDecodeCapture(raw)
+					if err != nil {
+						t.Fatal(err)
+					}
+					switch mutation {
+					case "legacy":
+						r.ProofContract, r.ProofAmendmentSHA256 = "", ""
+					case "unknown-contract":
+						r.ProofContract = "unknown/v1"
+					case "stale-amendment":
+						r.ProofAmendmentSHA256 = "sha256:stale"
+					case "complete":
+						c.Complete = true
+					case "empty-reason":
+						c.Unavailable = "  "
+					case "empty-provenance":
+						c.Provenance = "  "
+					case "settings":
+						c.Settings = map[string]json.RawMessage{"model": json.RawMessage(`"model"`)}
+					case "tools":
+						c.Tools = []nativeGapToolDefinition{{Name: "pretend-export"}}
+					case "wrong-session":
+						c.SessionID = "other"
+					case "wrong-model":
+						c.Model = "other"
+					case "wrong-argv":
+						c.Args = []string{"other"}
+					case "wrong-effort":
+						c.Effort = new(string)
+					case "wrong-kind":
+						c.Kind = "other"
+					case "positive-export":
+						c.Complete, c.Unavailable, c.Method = true, "", "pretend-export"
+					case "substituted-raw":
+						other := filepath.Join(dir, "other-invocation.jsonl")
+						liveSkillWrite(t, other, []byte("other invocation"))
+						c.Raw = nativeEvidenceFile{other, liveSkillFileDigest(t, other)}
+						r.Artifacts[other] = c.Raw.SHA256
+					case "changed-raw":
+						liveSkillWrite(t, path, []byte("changed events"))
+					}
+					liveSkillWriteJSON(t, ref.Path, c)
+					ref.SHA256 = liveSkillFileDigest(t, ref.Path)
+					r.Artifacts[ref.Path] = ref.SHA256
+					r.replaying = true
+					r.replayArtifacts = make(map[string]string, len(r.Artifacts))
+					for path, digest := range r.Artifacts {
+						r.replayArtifacts[path] = digest
+					}
+					if mutation == "post-hoc-envelope" {
+						delete(r.replayArtifacts, ref.Path)
+					}
+					if mutation == "post-hoc-raw" {
+						delete(r.replayArtifacts, c.Raw.Path)
+					}
+					err = nativeGapValidateHostMetadata(ref, kind, r)
+					if mutation == "none" {
+						if err != nil {
+							t.Fatal(err)
+						}
+						if err := nativeGapValidateCapture(ref, kind, r); err == nil {
+							t.Fatal("unavailable metadata became a successful export")
+						}
+					} else if err == nil {
+						t.Fatal("invalid unavailable metadata accepted")
+					}
+				})
+			}
+		}
+	})
 	t.Run("collector-unavailable", func(t *testing.T) {
 		dir := t.TempDir()
 		r := codexNativeLiveReceipt{SessionID: "deterministic-session", ClientVersion: "deterministic-version", ClientPath: "/deterministic/client", ClientSHA256: "deterministic-hash", Args: []string{"exec"}, Model: "model", Artifacts: map[string]string{}}

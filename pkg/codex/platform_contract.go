@@ -71,10 +71,16 @@ type NativeWorkerRequirements struct {
 	AcceptedWorkspace      string
 	ParallelMode           string
 	RequireGovernedNesting bool
+	RequireCancellation    bool
 }
 
 func ValidateNativeWorkerRequirements(request NativeWorkerRequirements) error {
 	contract := codexNativeWorkerContract()
+	if request.RequireCancellation {
+		if err := ValidateNativeCancellationCapability(contract.Cancellation); err != nil {
+			return err
+		}
+	}
 	if request.RequireGovernedNesting && contract.GovernedNesting.Level == CapabilityUnavailable {
 		return fmt.Errorf("native host cannot provide requested Aether-governed nesting; no launch authorized")
 	}
@@ -83,6 +89,16 @@ func ValidateNativeWorkerRequirements(request NativeWorkerRequirements) error {
 	}
 	if !permissionEnforcementEqual(request.Profile, PermissionProfileForCaste("builder")) {
 		return fmt.Errorf("native host cannot enforce this requested permission profile; no launch authorized")
+	}
+	return nil
+}
+
+// ValidateNativeCancellationCapability requires explicit proof for a requested
+// cancellation guarantee. Missing, limited and test-only observations cannot
+// authorize a launch or a later state transition that depends on cancellation.
+func ValidateNativeCancellationCapability(support CapabilitySupport) error {
+	if support.Level != CapabilityProven {
+		return fmt.Errorf("native host cannot provide requested cancellation guarantee; no launch or state transition authorized")
 	}
 	return nil
 }

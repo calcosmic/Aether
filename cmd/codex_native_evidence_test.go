@@ -55,6 +55,8 @@ type nativeEvidenceCase struct {
 }
 
 type nativeEvidenceQualification struct {
+	ProofContract             string                        `json:"proof_contract,omitempty"`
+	ProofAmendmentSHA256      string                        `json:"proof_amendment_sha256,omitempty"`
 	FrozenProvenance          nativeEvidenceFile            `json:"frozen_provenance"`
 	SchemaVersion             string                        `json:"schema_version"`
 	TestedSource              string                        `json:"tested_source"`
@@ -192,6 +194,9 @@ func nativeEvidenceCaseCheck(t *testing.T, name string, c nativeEvidenceCase, so
 	if !nativeGapReceiptSchemas(original.SchemaVersion, retained.SchemaVersion) || original.Scenario != name || retained.Scenario != name {
 		return fmt.Errorf("wrong raw receipt schema/scenario")
 	}
+	if err := nativeGapProofBinding(retained.ProofContract, retained.ProofAmendmentSHA256, original.ProofContract, original.ProofAmendmentSHA256); err != nil {
+		return fmt.Errorf("derived receipt changed the original proof contract: %w", err)
+	}
 	if err := nativeEvidenceReceiptIdentity(original, source, production, harness); err != nil {
 		return err
 	}
@@ -271,6 +276,9 @@ func nativeEvidenceCaseCheck(t *testing.T, name string, c nativeEvidenceCase, so
 }
 
 func nativeEvidenceReceiptIdentity(r codexNativeLiveReceipt, source, production, harness string) error {
+	if _, err := nativeGapProofIdentity(r.ProofContract, r.ProofAmendmentSHA256); err != nil {
+		return err
+	}
 	if r.SourceRevision != source || r.SourceStatus != "" {
 		return fmt.Errorf("capture source binding changed")
 	}

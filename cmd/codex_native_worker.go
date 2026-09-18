@@ -103,6 +103,7 @@ type codexNativeWorkerBinding struct {
 
 type codexNativeWorkerRequest struct {
 	RequireGovernedNesting bool                        `json:"require_governed_nesting,omitempty"`
+	RequireCancellation    bool                        `json:"require_cancellation,omitempty"`
 	Question               *codexNativeQuestion        `json:"question,omitempty"`
 	ContextDeliveryID      string                      `json:"context_delivery_id,omitempty"`
 	ContextDelivery        *codexNativeContextDelivery `json:"context_delivery,omitempty"`
@@ -314,13 +315,26 @@ func runCodexNativeWorkerForPhase(operation string, phase int) (codexNativeWorke
 }
 
 func executeCodexNativeWorkerRequest(operation string, request codexNativeWorkerRequest, hooks codexNativeWorkerHooks) (codexNativeWorkerResponse, error) {
+	response := codexNativeWorkerResponse{SchemaVersion: 1, ExecutionBinding: request.ExecutionBinding}
+	// A cancellation guarantee is an admission requirement, never evidence of
+	// cancellation. Check every operation before any question or journal write,
+	// including stricter requests made after an ordinary reservation.
+	if request.RequireCancellation {
+		contract, ok := codex.PlatformContractFor(codex.PlatformCodex)
+		var cancellation codex.CapabilitySupport
+		if ok && contract.NativeWorkers != nil {
+			cancellation = contract.NativeWorkers.Cancellation
+		}
+		if err := codex.ValidateNativeCancellationCapability(cancellation); err != nil {
+			return response, err
+		}
+	}
 	if operation == "question" {
 		return runCodexNativeQuestions(request, hooks)
 	}
 	if request.Question != nil {
 		return codexNativeWorkerResponse{}, fmt.Errorf("native questions require the question operation")
 	}
-	response := codexNativeWorkerResponse{SchemaVersion: 1, ExecutionBinding: request.ExecutionBinding}
 	var err error
 	attemptPath, current, ok := loadLatestBuildAttempt(request.Phase)
 	if !ok {
@@ -485,7 +499,7 @@ func executeCodexNativeWorkerRequest(operation string, request codexNativeWorker
 				if err != nil {
 					return err
 				}
-				if err := codex.ValidateNativeWorkerRequirements(codex.NativeWorkerRequirements{Profile: permission, HostPermission: request.HostPermission, Workspace: request.Workspace, AcceptedWorkspace: workspace, ParallelMode: updated.PlanManifest.ParallelMode, RequireGovernedNesting: request.RequireGovernedNesting}); err != nil {
+				if err := codex.ValidateNativeWorkerRequirements(codex.NativeWorkerRequirements{Profile: permission, HostPermission: request.HostPermission, Workspace: request.Workspace, AcceptedWorkspace: workspace, ParallelMode: updated.PlanManifest.ParallelMode, RequireGovernedNesting: request.RequireGovernedNesting, RequireCancellation: request.RequireCancellation}); err != nil {
 					return err
 				}
 				if worker != nil {
