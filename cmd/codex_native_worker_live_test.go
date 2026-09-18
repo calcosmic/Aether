@@ -19,6 +19,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf16"
+	"unicode/utf8"
 
 	"github.com/BurntSushi/toml"
 	"github.com/calcosmic/Aether/pkg/colony"
@@ -4209,36 +4211,191 @@ func nativeCodeModeCommands(input, defaultCwd string) ([]nativeRecordedShellComm
 		} else {
 			return nil, false
 		}
-		object = regexp.MustCompile(`([,{]\s*)(cmd|workdir|max_output_tokens|yield_time_ms)\s*:`).ReplaceAllString(object, `$1"$2":`)
-		var values map[string]json.RawMessage
-		if json.Unmarshal([]byte(object), &values) != nil {
+		command, ok := nativeLiteralCommandObject(object, defaultCwd)
+		if !ok {
 			return nil, false
 		}
-		for key := range values {
-			if key != "cmd" && key != "workdir" && key != "max_output_tokens" && key != "yield_time_ms" {
-				return nil, false
-			}
-		}
-		var command string
-		if json.Unmarshal(values["cmd"], &command) != nil {
-			return nil, false
-		}
-		cwd := defaultCwd
-		if value, ok := values["workdir"]; ok {
-			if json.Unmarshal(value, &cwd) != nil {
-				return nil, false
-			}
-		}
-		if !filepath.IsAbs(cwd) {
-			return nil, false
-		}
-		result = append(result, nativeRecordedShellCommand{command, cwd})
+		result = append(result, command)
 		if len(result) > 64 {
 			return nil, false
 		}
 		input = input[end:]
 	}
 	return result, len(result) > 0
+}
+
+// Decode only the small literal object accepted by this evidence contract.
+// This never evaluates JavaScript or rewrites quote/key text globally: quoted
+// shell arguments retain their exact bytes, and duplicate keys are ambiguous.
+func nativeLiteralCommandObject(object, defaultCwd string) (nativeRecordedShellCommand, bool) {
+	p := nativeCommandLiteral{input: object}
+	result := nativeRecordedShellCommand{Cwd: defaultCwd}
+	if !p.take('{') {
+		return result, false
+	}
+	seen := map[string]bool{}
+	for {
+		p.space()
+		if p.pos >= len(p.input) {
+			return result, false
+		}
+		key, ok := "", false
+		if p.input[p.pos] == '\'' || p.input[p.pos] == '"' {
+			key, ok = p.quoted()
+		} else {
+			start := p.pos
+			for p.pos < len(p.input) && ((p.input[p.pos] >= 'a' && p.input[p.pos] <= 'z') || p.input[p.pos] == '_') {
+				p.pos++
+			}
+			key = p.input[start:p.pos]
+			ok = key != ""
+		}
+		if !ok || seen[key] || !p.take(':') {
+			return result, false
+		}
+		seen[key] = true
+		switch key {
+		case "cmd", "workdir":
+			value, ok := p.quoted()
+			if !ok {
+				return result, false
+			}
+			if key == "cmd" {
+				result.Command = value
+			} else {
+				result.Cwd = value
+			}
+		case "max_output_tokens", "yield_time_ms":
+			p.space()
+			start := p.pos
+			for p.pos < len(p.input) && p.input[p.pos] >= '0' && p.input[p.pos] <= '9' {
+				p.pos++
+			}
+			value := p.input[start:p.pos]
+			if value == "" || (len(value) > 1 && value[0] == '0') {
+				return result, false
+			}
+			if _, err := strconv.ParseUint(value, 10, 64); err != nil {
+				return result, false
+			}
+		default:
+			return result, false
+		}
+		if p.take('}') {
+			break
+		}
+		if !p.take(',') {
+			return result, false
+		}
+	}
+	p.space()
+	return result, p.pos == len(p.input) && seen["cmd"] && strings.TrimSpace(result.Command) != "" && filepath.IsAbs(result.Cwd)
+}
+
+type nativeCommandLiteral struct {
+	input string
+	pos   int
+}
+
+func (p *nativeCommandLiteral) space() {
+	for p.pos < len(p.input) && strings.ContainsRune(" \t\r\n", rune(p.input[p.pos])) {
+		p.pos++
+	}
+}
+
+func (p *nativeCommandLiteral) take(want byte) bool {
+	p.space()
+	if p.pos >= len(p.input) || p.input[p.pos] != want {
+		return false
+	}
+	p.pos++
+	return true
+}
+
+func (p *nativeCommandLiteral) quoted() (string, bool) {
+	p.space()
+	if p.pos >= len(p.input) || (p.input[p.pos] != '\'' && p.input[p.pos] != '"') {
+		return "", false
+	}
+	quote := p.input[p.pos]
+	p.pos++
+	var out strings.Builder
+	for p.pos < len(p.input) {
+		c := p.input[p.pos]
+		p.pos++
+		if c == quote {
+			return out.String(), true
+		}
+		if c < 0x20 {
+			return "", false
+		}
+		if c != '\\' {
+			if c < utf8.RuneSelf {
+				out.WriteByte(c)
+				continue
+			}
+			r, size := utf8.DecodeRuneInString(p.input[p.pos-1:])
+			if r == utf8.RuneError && size == 1 {
+				return "", false
+			}
+			// JavaScript line separators are outside the admitted literal subset.
+			if r == '\u2028' || r == '\u2029' {
+				return "", false
+			}
+			out.WriteRune(r)
+			p.pos += size - 1
+			continue
+		}
+		if p.pos >= len(p.input) {
+			return "", false
+		}
+		escape := p.input[p.pos]
+		p.pos++
+		switch escape {
+		case '\\', '\'', '"', '/':
+			out.WriteByte(escape)
+		case 'n':
+			out.WriteByte('\n')
+		case 'r':
+			out.WriteByte('\r')
+		case 't':
+			out.WriteByte('\t')
+		case 'b':
+			out.WriteByte('\b')
+		case 'f':
+			out.WriteByte('\f')
+		case 'u':
+			readHex := func() (rune, bool) {
+				if p.pos+4 > len(p.input) {
+					return 0, false
+				}
+				n, err := strconv.ParseUint(p.input[p.pos:p.pos+4], 16, 16)
+				p.pos += 4
+				return rune(n), err == nil
+			}
+			r, ok := readHex()
+			if !ok {
+				return "", false
+			}
+			if r >= 0xD800 && r <= 0xDBFF {
+				if !strings.HasPrefix(p.input[p.pos:], `\u`) {
+					return "", false
+				}
+				p.pos += 2
+				low, ok := readHex()
+				if !ok || low < 0xDC00 || low > 0xDFFF {
+					return "", false
+				}
+				r = utf16.DecodeRune(r, low)
+			} else if utf16.IsSurrogate(r) {
+				return "", false
+			}
+			out.WriteRune(r)
+		default:
+			return "", false
+		}
+	}
+	return "", false
 }
 
 // Recognize the observed literal-call array and untouched indexed result loop.

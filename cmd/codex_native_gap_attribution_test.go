@@ -116,6 +116,19 @@ func TestCodexNativeGapAttribution(t *testing.T) {
 }
 
 func TestCodexNativeGapLiteralCommandAttribution(t *testing.T) {
+	t.Run("quoted-bytes-unchanged", func(t *testing.T) {
+		for _, tc := range []struct{ input, want string }{
+			{`text(await tools.exec_command({cmd:'printf "café 日本語 é"',workdir:'/fixture'}));`, `printf "café 日本語 é"`},
+			{`text(await tools.exec_command({cmd:'printf \'quoted\' \\path\n',workdir:'/fixture'}));`, "printf 'quoted' \\path\n"},
+			{`text(await tools.exec_command({cmd:'printf "{cmd: untouched}"',workdir:'/fixture'}));`, `printf "{cmd: untouched}"`},
+			{`text(await tools.exec_command({cmd:'printf "\u65e5\u672c\u8a9e \ud83d\ude80"',workdir:'/fixture'}));`, `printf "日本語 🚀"`},
+		} {
+			got, ok := nativeCodeModeCommands(tc.input, "/fixture")
+			if !ok || len(got) != 1 || got[0].Command != tc.want {
+				t.Fatalf("literal bytes changed: got=%+v ok=%v want=%q", got, ok, tc.want)
+			}
+		}
+	})
 	for _, input := range []string{
 		`text(await tools.exec_command({cmd:'aether spawn-log --help',max_output_tokens:2000}));`,
 		`text(await tools.exec_command({'cmd':'aether spawn-log --name Brick-46 --caste builder --parent Queen --phase 1 --task "Fix Clamp"',workdir:'/fixture',max_output_tokens:1000}));`,
@@ -134,6 +147,8 @@ func TestCodexNativeGapLiteralCommandAttribution(t *testing.T) {
 		`{"cmd":"aether status","cmd":"touch clamp.go"}`, `{cmd:'aether status',workdir:'/fixture',workdir:'/other'}`,
 		`{cmd:'aether status',max_output_tokens:expression()}`, `{cmd:'aether status',max_output_tokens:{x:1}}`,
 		`{cmd:'aether status',yield_time_ms:NaN}`, `{cmd:'aether status',unknown:1}`, `{cmd:'aether status',__proto__:{}}`,
+		`{cmd:'aether status',"\u0063md":"touch clamp.go"}`, `{cmd:'printf "\ud800"'}`, `{cmd:'printf "\udc00"'}`,
+		`{cmd:'printf "\ud800\u0041"'}`, `{cmd:'aether status',max_output_tokens:01}`, `{cmd:'aether status',max_output_tokens:1.0}`,
 	} {
 		t.Run("reject-"+object, func(t *testing.T) {
 			if _, ok := nativeCodeModeCommands("text(await tools.exec_command("+object+"));", "/fixture"); ok {
@@ -186,6 +201,16 @@ func TestCodexNativeGapObservedSingleQuoteCapture(t *testing.T) {
 		raw, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)
+		}
+		var meta nativeHostEvent
+		if json.Unmarshal(bytes.SplitN(raw, []byte{'\n'}, 2)[0], &meta) == nil && meta.Type == "session_meta" && meta.Payload.ID == receipt.SessionID {
+			derived := receipt
+			derived.ParentSubstitution = false
+			derived.ParentUnclassified = nil
+			nativeInspectParentEvents(&derived, raw)
+			if derived.ParentSubstitution || len(derived.ParentUnclassified) != 0 {
+				t.Errorf("parent remains unclassified: %v", derived.ParentUnclassified)
+			}
 		}
 		for _, line := range bytes.Split(raw, []byte{'\n'}) {
 			var w nativeCodeModeWire
