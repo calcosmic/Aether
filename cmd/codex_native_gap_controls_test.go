@@ -17,21 +17,23 @@ import (
 // In particular an interrupt result reporting previous_status=running is only
 // a request. Neither it nor a disappearing process proves terminal cancelled.
 type nativeGapCancellationEvidence struct {
-	Parent                       string            `json:"parent"`
-	Child                        string            `json:"child"`
-	RequestEvents                map[string]string `json:"request_events"`
-	AcknowledgementID            string            `json:"acknowledgement_id,omitempty"`
-	AcknowledgementSHA256        string            `json:"acknowledgement_sha256,omitempty"`
-	AcknowledgedAt               string            `json:"acknowledged_at,omitempty"`
-	ObservationEndID             string            `json:"observation_end_id,omitempty"`
-	ObservationEndSHA256         string            `json:"observation_end_sha256,omitempty"`
-	RuntimeRequested             bool              `json:"runtime_requested"`
-	RuntimeCancelled             bool              `json:"runtime_cancelled"`
-	PostAckActivity              bool              `json:"post_ack_activity"`
-	IntervalStructurallyComplete bool              `json:"interval_structurally_complete"`
-	NoPostAckWrites              bool              `json:"no_post_ack_writes"`
-	Qualified                    bool              `json:"qualified"`
-	Gaps                         []string          `json:"gaps"`
+	Disposition                  nativeGapCancellationDisposition     `json:"disposition,omitempty"`
+	Refusal                      *nativeGapCancellationRefusalCapture `json:"refusal,omitempty"`
+	Parent                       string                               `json:"parent"`
+	Child                        string                               `json:"child"`
+	RequestEvents                map[string]string                    `json:"request_events"`
+	AcknowledgementID            string                               `json:"acknowledgement_id,omitempty"`
+	AcknowledgementSHA256        string                               `json:"acknowledgement_sha256,omitempty"`
+	AcknowledgedAt               string                               `json:"acknowledged_at,omitempty"`
+	ObservationEndID             string                               `json:"observation_end_id,omitempty"`
+	ObservationEndSHA256         string                               `json:"observation_end_sha256,omitempty"`
+	RuntimeRequested             bool                                 `json:"runtime_requested"`
+	RuntimeCancelled             bool                                 `json:"runtime_cancelled"`
+	PostAckActivity              bool                                 `json:"post_ack_activity"`
+	IntervalStructurallyComplete bool                                 `json:"interval_structurally_complete"`
+	NoPostAckWrites              bool                                 `json:"no_post_ack_writes"`
+	Qualified                    bool                                 `json:"qualified"`
+	Gaps                         []string                             `json:"gaps"`
 }
 
 func nativeGapCancellationFacts(parentRaw, childRaw []byte, parent, child string, observations []codexNativeHostObservation) nativeGapCancellationEvidence {

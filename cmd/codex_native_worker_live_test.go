@@ -232,6 +232,16 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 		// Collect before closing the original inventory. An unavailable export
 		// stays unavailable even when independently proved worker behavior passes.
 		nativeGapCollectHostCapture(t, &receipt, runRoot)
+		if receipt.Cancellation != nil && receipt.Cancellation.Refusal != nil {
+			for _, guard := range receipt.Cancellation.Refusal.Guards {
+				ref := guard.OriginalRequest
+				if ref.Path != "" {
+					if raw, err := os.ReadFile(ref.Path); err == nil && lifecycleDigest(raw) == ref.SHA256 {
+						receipt.Artifacts[ref.Path] = ref.SHA256
+					}
+				}
+			}
+		}
 		// Index complete raw captures and installed inputs, but never credential caches.
 		_ = filepath.WalkDir(runRoot, func(path string, entry fs.DirEntry, err error) error {
 			if err != nil || entry.IsDir() {
@@ -461,6 +471,13 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 	host.Dir, host.Env, host.Stdin, host.Stdout, host.Stderr = repo, env, strings.NewReader(prompt), out, errOut
 	if strings.HasPrefix(scenario, "controls") || scenario == "cancellation" || scenario == "missing-skill" {
 		configureVerificationCommandProcessGroup(host)
+		// The parent can exit normally while its owned descendants remain.
+		// Cleanup is resource ownership only, never cancellation evidence.
+		defer func() {
+			if host.Process != nil {
+				terminateVerificationCommandProcessGroup(host.Process.Pid)
+			}
+		}()
 		host.WaitDelay = 2 * time.Second
 		host.Cancel = func() error {
 			if host.Process == nil {
@@ -509,6 +526,13 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 	nativeCollectLiveEvidence(t, &receipt, runRoot, fixtureHome)
 	if scenario == "cancellation" {
 		evidence := nativeGapCollectCancellation(receipt, runRoot, fixtureHome)
+		if !evidence.Qualified && receipt.ChildIdentityCorroborated && receipt.NativeSpawnCount == 1 && !receipt.ParentSubstitution {
+			parents, _ := filepath.Glob(filepath.Join(fixtureHome, ".codex", "sessions", "*", "*", "*", "*"+receipt.SessionID+".jsonl"))
+			if len(parents) == 1 && receipt.ChildEvents != "" {
+				nativeGapCaptureCancellationRefusal(t, receipt, filepath.Join(runRoot, "cancellation-refusal"), parents[0], receipt.ChildEvents, env)
+			}
+		}
+		evidence = nativeRetainedCancellationEvidence(receipt, runRoot, fixtureHome)
 		receipt.Cancellation = &evidence
 		liveSkillWriteJSON(t, filepath.Join(runRoot, "cancellation-evidence.json"), evidence)
 	}
@@ -660,6 +684,8 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 			receipt.Limitations = []string{"Saved work remains incomplete and uncredited; no replacement launch is authorized."}
 			if scenario == "spawn-gap" {
 				receipt.Limitations = append(receipt.Limitations, "Spawn-before-bind recovery preserves unresolved identity.")
+			} else if receipt.Cancellation != nil && receipt.Cancellation.Disposition == nativeGapCancellationRefused {
+				receipt.Limitations = append(receipt.Limitations, "Actual runtime guards refused unsafe completion and redispatch. Worker termination and absence of later writes remain unproved.")
 			} else {
 				receipt.Limitations = append(receipt.Limitations, "Cancellation requires independently corroborated terminal and no-post-ack-write evidence; interruption alone is request-only.")
 			}
@@ -1177,11 +1203,42 @@ func nativeValidateInterruptedHostScenario(r codexNativeLiveReceipt, runRoot str
 	if worker.Native.ChildID == "" {
 		return fmt.Errorf("active cancellation lacks durable child binding")
 	}
-	evidence := nativeGapCollectCancellation(r, runRoot, filepath.Join(runRoot, "home"))
+	evidence := nativeRetainedCancellationEvidence(r, runRoot, filepath.Join(runRoot, "home"))
+	if evidence.Qualified && evidence.Disposition == nativeGapCancellationRefused {
+		return nil
+	}
 	if !evidence.Qualified || !codexNativeWorkerIsTerminal(worker) || worker.Status != "cancelled" {
 		return fmt.Errorf("terminal cancellation incomplete: %v", evidence.Gaps)
 	}
 	return nil
+}
+
+// A prospective refusal is re-derived from the original raw guard captures.
+// Cached Qualified/Disposition fields never supply acceptance, and historical
+// receipts retain their original supported-cancellation requirement.
+func nativeRetainedCancellationEvidence(r codexNativeLiveReceipt, runRoot, home string) nativeGapCancellationEvidence {
+	evidence := nativeGapCollectCancellation(r, runRoot, home)
+	prospective, err := nativeGapProofIdentity(r.ProofContract, r.ProofAmendmentSHA256)
+	if err != nil {
+		evidence.Qualified = false
+		evidence.Gaps = append(evidence.Gaps, err.Error())
+		return evidence
+	}
+	if !prospective {
+		return evidence
+	}
+	evidence.Disposition = nativeGapCancellationIncomplete
+	if evidence.Qualified {
+		evidence.Disposition = nativeGapCancellationSupported
+		return evidence
+	}
+	raw, err := r.readEvidence(filepath.Join(runRoot, "cancellation-refusal", "cancellation-refusal.json"))
+	var capture nativeGapCancellationRefusalCapture
+	if err != nil || json.Unmarshal(raw, &capture) != nil {
+		evidence.Gaps = append(evidence.Gaps, "original runtime refusal capture unavailable or malformed")
+		return evidence
+	}
+	return nativeGapCancellationRefusalFacts(r, capture)
 }
 
 // Interruption is only a request when the actual tool says the target was
@@ -2659,6 +2716,7 @@ func nativePrepareLiveFixture(t *testing.T, root, runRoot string, scenarios ...s
 }
 
 func resetCodexNativeDerivedEvidence(r *codexNativeLiveReceipt) {
+	r.Cancellation = nil
 	r.SessionID, r.ChildID, r.ChildEvents = "", "", ""
 	r.ChildTaskPath, r.ChildSpawnCallID, r.ChildIdentityCorroborated = "", "", false
 	r.AttemptPath, r.AttemptID, r.RunID, r.LaunchID, r.WorkerName, r.TaskID = "", "", "", "", "", ""
@@ -3919,6 +3977,10 @@ func nativeReplayQualificationReceipt(t *testing.T, r *codexNativeLiveReceipt) e
 		} else {
 			nativeCollectLiveEvidence(t, r, t.TempDir(), home)
 		}
+		if r.Scenario == "cancellation" {
+			evidence := nativeRetainedCancellationEvidence(*r, root, home)
+			r.Cancellation = &evidence
+		}
 		switch r.Scenario {
 		case "ordinary", "early-resume":
 			if r.Scenario == "ordinary" || r.Scenario == "early-resume" {
@@ -3947,6 +4009,9 @@ func nativeReplayQualificationReceipt(t *testing.T, r *codexNativeLiveReceipt) e
 			if r.Scenario == "cancellation" || r.Scenario == "spawn-gap" {
 				r.Outcome = "observed"
 				r.Limitations = []string{"Saved work is incomplete and uncredited. Actual interruption is only pending; no cancelled terminal or replacement authority is inferred."}
+				if r.Cancellation != nil && r.Cancellation.Disposition == nativeGapCancellationRefused {
+					r.Limitations = []string{"Actual runtime guards refused unsafe completion and redispatch; work remains incomplete and uncredited. Worker termination and absence of later writes remain unproved."}
+				}
 			}
 		default:
 			return fmt.Errorf("unknown matrix scenario %q", r.Scenario)
