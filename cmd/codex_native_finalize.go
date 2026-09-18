@@ -32,6 +32,16 @@ func buildAttemptHasNativeWorkers(record buildAttemptRecord) bool {
 // can select the generic compatibility path for an existing native attempt.
 // This is admission, not credit: receipts still go through the shared finalizer.
 func validateCodexNativeCompletion(record buildAttemptRecord, completion codexExternalBuildCompletion) error {
+	// A saved protocol selects its lane before the first worker is reserved.
+	// Packet-only results or ordinary provider rows cannot downgrade that lane.
+	if record.PlanManifest != nil && record.PlanManifest.ContextProtocol != "" {
+		if record.PlanManifest.ContextProtocol != codexNativeContextProtocolChildFetch {
+			return fmt.Errorf("saved native context protocol %q is unsupported", record.PlanManifest.ContextProtocol)
+		}
+		if !buildAttemptHasNativeWorkers(record) {
+			return fmt.Errorf("saved child-fetch context protocol requires the native worker journal")
+		}
+	}
 	if !buildAttemptHasNativeWorkers(record) {
 		return nil
 	}
@@ -53,6 +63,9 @@ func validateCodexNativeCompletion(record buildAttemptRecord, completion codexEx
 	}
 	if err := validateBuildExecutionBinding(record, *manifest.ExecutionBinding, record.ManifestSHA256, false); err != nil {
 		return err
+	}
+	if manifest.ContextProtocol != record.PlanManifest.ContextProtocol {
+		return fmt.Errorf("native completion context protocol changed")
 	}
 	if *manifest.ExecutionBinding != *record.PlanManifest.ExecutionBinding {
 		return fmt.Errorf("native completion execution binding changed")

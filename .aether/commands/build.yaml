@@ -14,6 +14,7 @@ codex_orchestration:
   category: "full-orchestration"
   skill: "aether-colony-build-cycle"
   guide: "aether command-guide build --platform codex"
+  native_context: "New child-fetch/v1 attempts require the actual bound child to read full Go context, separately ACK fetched IDs/hash, and retain source-bound context_fetched observations before successful terminal acceptance. Saved legacy attempts keep their original delivery protocol. See installed build support and the Codex runtime guide."
   drift_guard: "Update this YAML, Claude/OpenCode wrappers, the Codex skill, and cmd/command_guide.go together."
 wrapper_additions:
   pre_build: |

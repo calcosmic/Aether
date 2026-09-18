@@ -61,7 +61,7 @@ func setupWrapperBundledManifestTest(t *testing.T, taskIDs []string) (string, co
 	if err != nil {
 		t.Fatalf("plan-only build: %v", err)
 	}
-	manifest := result["dispatch_manifest"].(codexBuildManifest)
+	manifest := nativeManifestProtocolForTest(t, result["dispatch_manifest"].(codexBuildManifest), "")
 
 	byTaskID := make(map[string]codexBuildDispatch, len(taskIDs))
 	for _, d := range manifest.Dispatches {
@@ -552,7 +552,7 @@ func setupCoherentJobWrapperTest(t *testing.T, goal string) (string, colony.Phas
 	if err != nil {
 		t.Fatalf("plan-only build: %v", err)
 	}
-	manifest := result["dispatch_manifest"].(codexBuildManifest)
+	manifest := nativeManifestProtocolForTest(t, result["dispatch_manifest"].(codexBuildManifest), "")
 
 	var chain codexBuildDispatch
 	for _, dispatch := range manifest.Dispatches {

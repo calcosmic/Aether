@@ -423,7 +423,7 @@ func runBuildToCompletionPacketForSpendTest(t *testing.T, root string) string {
 	if err != nil {
 		t.Fatalf("runCodexBuildPlanOnly: %v", err)
 	}
-	manifest := result["dispatch_manifest"].(codexBuildManifest)
+	manifest := nativeManifestProtocolForTest(t, result["dispatch_manifest"].(codexBuildManifest), "")
 	if err := os.WriteFile(filepath.Join(root, "wrapper-evidence.txt"), []byte("external work\n"), 0o644); err != nil {
 		t.Fatalf("write claimed file: %v", err)
 	}

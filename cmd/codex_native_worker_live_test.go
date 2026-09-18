@@ -34,6 +34,8 @@ type codexNativeLiveReceipt struct {
 	Cancellation               *nativeGapCancellationEvidence `json:"cancellation_evidence,omitempty"`
 	RecoveryCheckpoint         *nativeGapRecoveryCheckpoint   `json:"recovery_checkpoint,omitempty"`
 	SchemaVersion              string                         `json:"schema_version"`
+	CoordinationPath           string                         `json:"coordination_path,omitempty"`
+	ContextProtocol            string                         `json:"context_protocol,omitempty"`
 	ProofContract              string                         `json:"proof_contract,omitempty"`
 	ProofAmendmentSHA256       string                         `json:"proof_amendment_sha256,omitempty"`
 	Scenario                   string                         `json:"scenario"`
@@ -228,6 +230,9 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 	receipt := codexNativeLiveReceipt{SchemaVersion: "codex-native-tracer/v2", Scenario: scenario, Outcome: "incomplete", Reason: "harness did not reach all evidence gates", ExitStatus: -1, Artifacts: map[string]string{}, FixtureProvenance: "Fixture-prepared one-task accepted plan through specification, staged planning coordinator and exact acceptPlanCandidate; no live planning claim."}
 	receipt.ProofContract = nativeCapabilityProofContract
 	receipt.ProofAmendmentSHA256 = nativeCapabilityProofAmendmentSHA256
+	if scenario != "claude" && scenario != "missing-skill" && !strings.HasPrefix(scenario, "controls") {
+		receipt.ContextProtocol = codexNativeContextProtocolChildFetch
+	}
 	defer func() {
 		// Collect before closing the original inventory. An unavailable export
 		// stays unavailable even when independently proved worker behavior passes.
@@ -328,6 +333,7 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 	if err := os.MkdirAll(filepath.Join(runRoot, "coordination"), 0700); err != nil {
 		fail(err.Error())
 	}
+	receipt.CoordinationPath = coord
 	defer func() {
 		_ = filepath.WalkDir(coord, func(path string, entry fs.DirEntry, err error) error {
 			if err != nil || entry.IsDir() {
@@ -346,6 +352,7 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 	if scenario != "ordinary" && scenario != "early-resume" {
 		coordinator = nativeQualificationCoordinator(coordinator, scenario)
 	}
+	coordinator = nativeContextFetchCoordinator(coordinator)
 	liveSkillWrite(t, receipt.CoordinatorPath, []byte(coordinator))
 	receipt.CoordinatorSHA256 = lifecycleDigest([]byte(coordinator))
 	receipt.BaselineTestsSHA256 = liveSkillFileDigest(t, filepath.Join(repo, "clamp_test.go"))
@@ -435,6 +442,9 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 			fail(err.Error())
 		}
 		prompt = "$ant-build 1\nThis is a missing-installed-entrypoint control. If ant-build is absent from your actual discovered catalog, report unavailable and stop. Do not reconstruct it from support, search another installation, create files, run lifecycle mutations, or launch helpers."
+	}
+	if receipt.ContextProtocol == codexNativeContextProtocolChildFetch && scenario != "spawn-gap" {
+		prompt += "For child-fetch/v1 use fork_turns=none for each actual native spawn. After binding, invoke context-initial for that worker and give its exact metadata pointer/read command to the same child with the unchanged runtime release. The child must read its complete Go context and then separately run context-ack with the fetched delivery ID, payload hash and every decision ID before useful work or material questions. Use two separate literal exec tool calls with adequate output capacity (max_output_tokens:20000), printing each untouched result. Do not run either child operation in the parent. Invoke context-observe after the child ACK and before recording its terminal; it reads only actual bound host records. These helper operations create address metadata or retain actual observations, never spawn, supply an ACK, edit source or replace runtime authority. Use context-answers for later scoped answers and repeat the actual child read/ACK/parent-observe sequence. Keep empty-result refusal and original terminal/check requirements. \n"
 	}
 	liveSkillWrite(t, filepath.Join(runRoot, "prompt.txt"), []byte(prompt))
 	args := []string{"exec", "--ignore-user-config", "--ignore-rules", "-s", "workspace-write", "--json", "--color", "never", "-C", repo, "-c", `cli_auth_credentials_store="file"`, "-c", `approval_policy="never"`, "--enable", "multi_agent", "-c", "shell_environment_policy.set.PATH=" + fmt.Sprintf("%q", filepath.Dir(receipt.CandidatePath)+":/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"), "-c", `shell_environment_policy.set.AETHER_OUTPUT_MODE="json"`}
@@ -1851,6 +1861,14 @@ func nativePublicResumeProof(r codexNativeLiveReceipt, raw []byte) bool {
 }
 
 func validateCodexNativeQualificationScenario(r codexNativeLiveReceipt, runRoot string) error {
+	if _, err := nativeValidateLiveContextProtocol(r); err != nil {
+		return err
+	}
+	if r.Scenario != "cancellation" && r.Scenario != "spawn-gap" {
+		if err := nativeValidateLiveContextReceipts(r); err != nil {
+			return err
+		}
+	}
 	if err := nativeValidateFixtureBaselines(r); err != nil {
 		return err
 	}
@@ -1899,13 +1917,24 @@ func validateCodexNativeQualificationScenario(r codexNativeLiveReceipt, runRoot 
 		}
 		raw, err := r.readEvidence(r.AttemptPath)
 		var attempt buildAttemptRecord
-		if err != nil || json.Unmarshal(raw, &attempt) != nil || len(attempt.WorkerRuns) != 1 || attempt.WorkerRuns[0].Native == nil || len(attempt.WorkerRuns[0].Native.ContextDeliveries) != 1 {
+		if err != nil || json.Unmarshal(raw, &attempt) != nil || len(attempt.WorkerRuns) != 1 || attempt.WorkerRuns[0].Native == nil {
 			return fmt.Errorf("scoped actual question delivery acknowledgement missing")
+		}
+		wantDeliveries := 1
+		if r.ContextProtocol == codexNativeContextProtocolChildFetch {
+			wantDeliveries = 2
+		}
+		if len(attempt.WorkerRuns[0].Native.ContextDeliveries) != wantDeliveries {
+			return fmt.Errorf("scoped question delivery set differs from its pinned protocol")
 		}
 		if !r.Assertions["scoped_answer_behavior"] {
 			return fmt.Errorf("child-authored scoped answer behavior not verified")
 		}
-		for _, name := range []string{"fixture-answer-provenance.json", "w0-question-source.jsonl", "w0-context-send-provenance.json"} {
+		provenanceNames := []string{"fixture-answer-provenance.json", "w0-question-source.jsonl"}
+		if r.ContextProtocol == "" {
+			provenanceNames = append(provenanceNames, "w0-context-send-provenance.json")
+		}
+		for _, name := range provenanceNames {
 			if _, err := r.readEvidence(filepath.Join(runRoot, "coordination", name)); err != nil {
 				return fmt.Errorf("actual question/fixture authority evidence missing: %s", name)
 			}
@@ -2253,14 +2282,14 @@ func nativeCollectHostControlEvidence(r *codexNativeLiveReceipt, runRoot, fixtur
 }
 
 func nativeQualificationPrompt(r codexNativeLiveReceipt, scenario string) string {
-	prompt := fmt.Sprintf("$ant-build 1\nThis is the %s disposable qualification scenario. The prepared plan is fixture-authorized, not live planning or owner testimony. Use the installed ant-build skill, private support and runtime guide. Actual native helpers must do all assigned edits and checks; the parent coordinates only. Do not edit source/tests, run a surrogate worker, commit, publish, install, read credentials, or access other projects.\nUse individual simple shell commands, preferably text(await tools.exec_command({cmd:<literal>,workdir:<fixture>})); do not add JavaScript logic, Python snippets, shell batching/redirection, or helper rewrites. Independent read-only calls may use an awaited literal Promise.allSettled array and an indexed untouched-result print loop. If more detail is needed, use the already-owned helper summary, prompt, release and inspect operations, or simple cat/jq reads. Read the reviewed fixture request helper %s. It supplies individual real runtime operations; it never spawns or edits the project. Commands are python3 %s <operation> [worker-index], with bind <actual-host-task-path-or-child-ID> [worker-index]. Bind resolves the returned host task path through actual call/result/activity and child metadata; use that task path unchanged for host messaging. Index means the original manifest dispatch index, not a new assignment. Each worker's requests/receipts remain separate. The actual host alone launches, messages and interrupts children. Pass every runtime prompt/release/context payload verbatim. Do not regenerate or summarize those payloads. This host encrypts exported message bodies: exact plaintext delivery cannot be independently corroborated from that export. Retain that limitation; do not invent proof or run ad hoc prompt-comparison scripts. Before valid recording exercise empty-result. After a valid record use stale-result and child-mismatch; both must refuse without durable changes. Inspect and stage have public --phase routes. Stop at build finalization, then replay finalization once. Unsupported capabilities stay unknown/refused; never invent a result.\n", scenario, r.CoordinatorPath, r.CoordinatorPath)
+	prompt := fmt.Sprintf("$ant-build 1\nThis is the %s disposable qualification scenario. The prepared plan is fixture-authorized, not live planning or owner testimony. Use the installed ant-build skill, private support and runtime guide. Actual native helpers must do all assigned edits and checks; the parent coordinates only. Do not edit source/tests, run a surrogate worker, commit, publish, install, read credentials, or access other projects.\nUse individual simple shell commands, preferably text(await tools.exec_command({cmd:<literal>,workdir:<fixture>})); do not add JavaScript logic, Python snippets, shell batching/redirection, or helper rewrites. Independent read-only calls may use an awaited literal Promise.allSettled array and an indexed untouched-result print loop. If more detail is needed, use the already-owned helper summary, prompt, release and inspect operations, or simple cat/jq reads. Read the reviewed fixture request helper %s. It supplies individual real runtime operations; it never spawns or edits the project. Commands are python3 %s <operation> [worker-index], with bind <actual-host-task-path-or-child-ID> [worker-index]. Bind resolves the returned host task path through actual call/result/activity and child metadata; use that task path unchanged for host messaging. Index means the original manifest dispatch index, not a new assignment. Each worker's requests/receipts remain separate. The actual host alone launches, messages and interrupts children. Pass each runtime release and bound context pointer verbatim. The child must fetch full context and acknowledge it through separate runtime calls. Retain the actual call/output events. Encrypted native message bodies remain unavailable and do not prove payload receipt. Do not regenerate context, invent proof, or run ad hoc prompt-comparison scripts. Before valid recording exercise empty-result. After a valid record use stale-result and child-mismatch; both must refuse without durable changes. Inspect and stage have public --phase routes. Stop at build finalization, then replay finalization once. Unsupported capabilities stay unknown/refused; never invent a result.\n", scenario, r.CoordinatorPath, r.CoordinatorPath)
 	switch scenario {
 	case "review":
 		prompt += "Explicit independent review is requested. The helper manifest operation requests the runtime-selected Watcher for a named reason. Respect execution waves: finish and record Builder before starting the later Watcher. Watcher must independently read the implementation, run the actual fixture suite, and return concrete useful findings in its runtime-selected contract. Its profile includes behavioral review restrictions, not per-child OS read-only enforcement. Only the Builder edits clamp.go.\n"
 	case "partial-resume":
 		prompt += "There are exactly two independent accepted Builder jobs. Launch and complete ONLY the first manifest dispatch. It runs its own TestClamp; the other TestDouble is intentionally still failing. After the first terminal is durable and stale-result/child-mismatch refusals are recorded, wait idle using the host sleep/wait tool for the external controller; do not finish the turn. Do not reserve/spawn the second job, stage or finalize. The harness will start a fresh actual parent which runs public aether resume, then installed ant-build only for the never-started saved assignment.\n"
 	case "question":
-		prompt += "Spawn the Builder with fork_turns=none: no inherited conversation. It must ask the material reversed-bounds question before editing. After its actual JSON question arrives, invoke question, then answer (the independent fixture controller selects fresh answer material only after that question; the helper also exercises stale and wrong-child answer refusals), then context for that same child. Send the returned context_delivery.payload unchanged through the actual native messaging tool. Only after the completed host message invoke context-ack. Then let the same child implement the scoped choice, check, and return its real result. Do not answer in an unbound message, read controller evidence, or guess a fallback. The same child must run its own answer-dependent check, in addition to the existing tests, and report that actual check. If exact plaintext send evidence is unavailable, context-ack must refuse; preserve the incomplete result.\n"
+		prompt += "Spawn the Builder with fork_turns=none: no inherited conversation. It must ask the material reversed-bounds question before editing. After its actual JSON question arrives, invoke question, then answer (the independent fixture controller selects fresh answer material only after that question; the helper also exercises stale and wrong-child answer refusals), then context-answers for that same child. Send only the returned metadata request pointer and exact read command. The child executes context, receives the complete JSON, then separately executes context-ack with the values it fetched before implementing the scoped choice. Invoke context-observe to persist the actual child read/ACK evidence before recording its real terminal result. Do not answer in an unbound message, read controller evidence, or guess a fallback. The same child must run its own answer-dependent check, in addition to the existing tests, and report that actual check. If exact child plaintext read/ACK evidence is unavailable, context-observe must refuse; preserve the incomplete result.\n"
 	case "cancellation":
 		prompt += "After reserve/spawn/bind/release, observe the actual child active. Use the host's actual interrupt/cancellation tool while it is active, then inspect the real returned status. A close/release or missing process is NOT cancellation. Invoke cancel-requested/cancelled only if the actual event supports that exact fact. Run public pause and inspect to retain the truthful pending/terminal outcome. Do not record invented completion, stage, finalize or relaunch. If no real interruption tool/status exists, report the explicit limitation and leave the saved assignment incomplete.\n"
 	case "spawn-gap":
@@ -2735,6 +2764,9 @@ func resetCodexNativeDerivedEvidence(r *codexNativeLiveReceipt) {
 
 func nativeCollectLiveEvidence(t *testing.T, r *codexNativeLiveReceipt, runRoot, fixtureHome string) {
 	t.Helper()
+	if !r.replaying && r.ContextProtocol == codexNativeContextProtocolChildFetch {
+		nativeRetainContextCoordination(t, *r)
+	}
 	resetCodexNativeDerivedEvidence(r)
 	if source, err := r.readEvidence(filepath.Join(r.FixtureRoot, "clamp.go")); err == nil {
 		r.FinalSource = string(source)
@@ -3416,6 +3448,9 @@ func nativeApplyUnifiedDiff(source, patch string) (string, error) {
 }
 
 func validateCodexNativeLiveReceipt(r codexNativeLiveReceipt) error {
+	if err := nativeValidateLiveContextReceipts(r); err != nil {
+		return err
+	}
 	if r.SchemaVersion == "codex-native-tracer/v2" && !r.ChildIdentityCorroborated {
 		return fmt.Errorf("actual spawn call/result/activity and child metadata mapping incomplete")
 	}
@@ -3675,7 +3710,7 @@ func nativeParentCoordinationCommand(r *codexNativeLiveReceipt, command []string
 			words = words[:len(words)-1]
 		}
 		switch words[2] {
-		case "manifest", "reserve", "record", "inspect", "stage", "finalize", "empty-result", "context":
+		case "manifest", "reserve", "record", "inspect", "stage", "finalize", "empty-result", "context", "context-initial", "context-answers", "context-observe":
 			return len(words) == 3
 		case "bind":
 			if len(words) != 4 {
@@ -3836,6 +3871,9 @@ func nativeChildCommandAllowed(r codexNativeLiveReceipt, command []string) bool 
 	}
 	if len(words) == 0 {
 		return false
+	}
+	if nativeChildFetchCommandAllowed(r, words) {
+		return true
 	}
 	if nativeAssignedFixtureCommand(r, command) {
 		return true
@@ -4006,6 +4044,9 @@ func nativeReplayQualificationReceipt(t *testing.T, r *codexNativeLiveReceipt) e
 			if r.Scenario == "question" {
 				r.Assertions["scoped_answer_behavior"] = nativeRetainedQuestionCheck(*r, root)
 				r.Limitations = []string{"Actual host send/child linkage can be observed; encrypted message exports do not independently corroborate the full envelope plaintext."}
+				if r.ContextProtocol == codexNativeContextProtocolChildFetch {
+					r.Limitations = []string{"Full context is proved through actual child read and separate ACK; encrypted native message bodies remain unavailable."}
+				}
 			}
 			r.FinalizationReplayStable = nativeFinalizationReplayEvidence(*r, coord)
 			if err := validateCodexNativeQualificationScenario(*r, root); err != nil {
@@ -4628,6 +4669,9 @@ func nativeRetainedArtifactPath(path string) bool {
 }
 
 func nativeBeginReceiptReplay(r *codexNativeLiveReceipt) error {
+	if r.ContextProtocol != "" && r.ContextProtocol != codexNativeContextProtocolChildFetch {
+		return fmt.Errorf("unknown native context proof protocol")
+	}
 	r.replaying = true
 	r.replayArtifacts = r.Artifacts
 	if len(r.replayArtifacts) == 0 {

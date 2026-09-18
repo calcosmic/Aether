@@ -270,7 +270,10 @@ func validateInternalWorkerExecutionBinding(root string, request internalWorkerD
 	workflow := strings.ToLower(strings.TrimSpace(request.Workflow))
 	if workflow != "build" {
 		if request.ExecutionBinding != nil {
-			return codex.ValidateExecutionWorkspace(root, *request.ExecutionBinding)
+			if err := codex.ValidateExecutionWorkspace(root, *request.ExecutionBinding); err != nil {
+				return err
+			}
+			return validateInternalNonBuildWorkerLane(*request.ExecutionBinding)
 		}
 		return nil
 	}
@@ -287,8 +290,43 @@ func validateInternalWorkerExecutionBinding(root string, request internalWorkerD
 	if err := validateBuildExecutionBinding(record, *request.ExecutionBinding, record.ManifestSHA256, false); err != nil {
 		return err
 	}
+	if err := validateBuildWorkerProviderLane(record); err != nil {
+		return err
+	}
 	if record.Status != buildAttemptAwaiting && record.Status != buildAttemptDispatching {
 		return fmt.Errorf("build attempt %s is %s and cannot dispatch workers", record.ID, record.Status)
+	}
+	return nil
+}
+
+// A request cannot change only its workflow label to launch the exact saved
+// native assignment through an ordinary provider. Unrelated non-build bindings
+// retain their existing workspace-only admission; phase is not caller authority.
+func validateInternalNonBuildWorkerLane(binding codex.ExecutionBinding) error {
+	if store == nil || !validBuildAttemptID(binding.AttemptID) {
+		return nil
+	}
+	directories, err := filepath.Glob(filepath.Join(store.BasePath(), "build", "phase-*", "attempts"))
+	if err != nil {
+		return err
+	}
+	for _, directory := range directories {
+		path, err := filepath.Rel(store.BasePath(), filepath.Join(directory, binding.AttemptID+".json"))
+		if err != nil {
+			return err
+		}
+		var record buildAttemptRecord
+		if err := store.LoadJSON(filepath.ToSlash(path), &record); err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return fmt.Errorf("read bound build attempt before provider dispatch: %w", err)
+		}
+		if record.ID == binding.AttemptID && record.PlanManifest != nil && record.PlanManifest.ExecutionBinding != nil && *record.PlanManifest.ExecutionBinding == binding {
+			if err := validateBuildWorkerProviderLane(record); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

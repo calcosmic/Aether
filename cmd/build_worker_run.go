@@ -41,6 +41,15 @@ type buildAttemptWorkerRun struct {
 	Error         string                    `json:"error,omitempty"`
 }
 
+// The accepted manifest chooses the worker lane before any provider mutation.
+// Historical empty protocols retain the generic provider compatibility route.
+func validateBuildWorkerProviderLane(record buildAttemptRecord) error {
+	if record.PlanManifest != nil && record.PlanManifest.ContextProtocol != "" {
+		return fmt.Errorf("saved context protocol %q requires native workers; generic provider dispatch is unavailable", record.PlanManifest.ContextProtocol)
+	}
+	return nil
+}
+
 func beginBuildAttemptWorkerRun(phase int, binding codex.ExecutionBinding, request internalWorkerDispatchRequest, providerRunID string, platform codex.Platform) (*buildAttemptWorkerRun, error) {
 	buildWorkerRunMutationMu.Lock()
 	defer buildWorkerRunMutationMu.Unlock()
@@ -49,6 +58,9 @@ func beginBuildAttemptWorkerRun(phase int, binding codex.ExecutionBinding, reque
 		return nil, fmt.Errorf("build worker execution binding has no durable attempt")
 	}
 	if err := validateBuildExecutionBinding(record, binding, record.ManifestSHA256, false); err != nil {
+		return nil, err
+	}
+	if err := validateBuildWorkerProviderLane(record); err != nil {
 		return nil, err
 	}
 	if !buildAttemptHasDispatch(record, request) {
@@ -64,6 +76,9 @@ func beginBuildAttemptWorkerRun(phase int, binding codex.ExecutionBinding, reque
 		}
 		if updated.Status != buildAttemptAwaiting && updated.Status != buildAttemptDispatching {
 			return fmt.Errorf("build attempt %s is %s and cannot dispatch workers", updated.ID, updated.Status)
+		}
+		if err := validateBuildWorkerProviderLane(updated); err != nil {
+			return err
 		}
 		if !buildAttemptHasDispatch(updated, request) {
 			return fmt.Errorf("worker %s task %s is not authorized by build attempt %s", request.WorkerName, request.TaskID, updated.ID)

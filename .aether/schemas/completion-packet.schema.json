@@ -520,6 +520,9 @@
     },
     "codexBuildManifest": {
       "properties": {
+        "context_protocol": {
+          "type": "string"
+        },
         "phase": {
           "type": "integer"
         },

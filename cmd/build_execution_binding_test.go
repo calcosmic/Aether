@@ -178,7 +178,10 @@ func prepareBoundBuildManifestOnly(t *testing.T, root string) codexBuildManifest
 	if err != nil {
 		t.Fatal(err)
 	}
-	return result["dispatch_manifest"].(codexBuildManifest)
+	// This shared fixture deliberately represents a historical saved attempt.
+	// New protocol tests exercise the production factory without this conversion.
+	manifest := result["dispatch_manifest"].(codexBuildManifest)
+	return nativeManifestProtocolForTest(t, manifest, "")
 }
 
 func writeBoundBuildWorkerRequest(t *testing.T, manifest codexBuildManifest, dispatch codexBuildDispatch) string {

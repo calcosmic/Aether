@@ -421,6 +421,9 @@ func runCodexNativeQuestions(request codexNativeWorkerRequest, hooks codexNative
 				view.Status = "answered"
 				if !view.WorkerTerminal {
 					view.NextCommand = "aether codex-native-worker context --request <same bound worker request file>"
+					if worker.Native.ContextProtocol == codexNativeContextProtocolChildFetch {
+						view.NextCommand = "Have the bound child run aether codex-native-worker context --request <fresh bound worker request file with context_purpose=answers>; then the same child must run aether codex-native-worker context-ack --request <same answers request file> --delivery-id <fetched delivery_id> --payload-sha256 <fetched payload_sha256> --decision-id <each fetched decision_id>"
+					}
 				}
 			} else {
 				directory, err := os.MkdirTemp("", "aether-worker-request-native-answer-")

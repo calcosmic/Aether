@@ -38,6 +38,7 @@ type nativeEvidenceFile struct {
 }
 
 type nativeEvidenceCase struct {
+	ContextProtocol           string            `json:"context_protocol,omitempty"`
 	Outcome                   string            `json:"outcome"`
 	SourceRevision            string            `json:"source_revision"`
 	SourceStatus              string            `json:"source_status"`
@@ -194,6 +195,9 @@ func nativeEvidenceCaseCheck(t *testing.T, name string, c nativeEvidenceCase, so
 	if !nativeGapReceiptSchemas(original.SchemaVersion, retained.SchemaVersion) || original.Scenario != name || retained.Scenario != name {
 		return fmt.Errorf("wrong raw receipt schema/scenario")
 	}
+	if err := nativeEvidenceContextProtocolBinding(c.ContextProtocol, original.ContextProtocol, retained.ContextProtocol); err != nil {
+		return err
+	}
 	if err := nativeGapProofBinding(retained.ProofContract, retained.ProofAmendmentSHA256, original.ProofContract, original.ProofAmendmentSHA256); err != nil {
 		return fmt.Errorf("derived receipt changed the original proof contract: %w", err)
 	}
@@ -275,7 +279,25 @@ func nativeEvidenceCaseCheck(t *testing.T, name string, c nativeEvidenceCase, so
 	return nil
 }
 
+// Context transport belongs to each case: Claude and historical native cases
+// may be empty while newly captured native cases pin child-fetch/v1. Neither
+// the aggregate nor a derived replay may change the original case's protocol.
+func nativeEvidenceContextProtocolBinding(aggregate, original, derived string) error {
+	for _, protocol := range []string{aggregate, original, derived} {
+		if protocol != "" && protocol != codexNativeContextProtocolChildFetch {
+			return fmt.Errorf("unknown context protocol in aggregate/original/derived evidence")
+		}
+	}
+	if aggregate != original || derived != original {
+		return fmt.Errorf("aggregate or derived context protocol differs from original evidence")
+	}
+	return nil
+}
+
 func nativeEvidenceReceiptIdentity(r codexNativeLiveReceipt, source, production, harness string) error {
+	if r.ContextProtocol != "" && r.ContextProtocol != codexNativeContextProtocolChildFetch {
+		return fmt.Errorf("unknown native context proof protocol")
+	}
 	if _, err := nativeGapProofIdentity(r.ProofContract, r.ProofAmendmentSHA256); err != nil {
 		return err
 	}

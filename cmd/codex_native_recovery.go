@@ -123,7 +123,7 @@ func buildCodexNativeRecovery(state colony.ColonyState) *codexNativeRecovery {
 		item.HostStatus, item.CancelRequested = projected.HostStatus, projected.CancelRequested
 		for i := len(saved.Native.Observations) - 1; i >= 0; i-- {
 			observation := saved.Native.Observations[i]
-			if observation.Status == "context_delivered" {
+			if observation.Status == "context_delivered" || observation.Status == "context_fetched" {
 				continue
 			}
 			item.ObservedAt, item.LastHostStatus = observation.ObservedAt, observation.Status

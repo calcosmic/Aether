@@ -661,7 +661,9 @@ func prepareExternalBuildCompletionWithProposal(t *testing.T, root string, caste
 
 func externalBuildCompletionFromPlanOnlyResult(t *testing.T, root string, result map[string]interface{}) (codexBuildManifest, codexExternalBuildCompletion) {
 	t.Helper()
-	manifest := result["dispatch_manifest"].(codexBuildManifest)
+	// Packet-only fixtures exercise the explicitly retained historical lane.
+	// New protocol tests use the production factory and native journal directly.
+	manifest := nativeManifestProtocolForTest(t, result["dispatch_manifest"].(codexBuildManifest), "")
 	if err := os.WriteFile(filepath.Join(root, "external-evidence.txt"), []byte("durable external work\n"), 0o644); err != nil {
 		t.Fatalf("write external evidence: %v", err)
 	}

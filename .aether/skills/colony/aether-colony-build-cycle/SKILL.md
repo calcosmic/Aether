@@ -321,7 +321,8 @@ aether codex-native-worker reserve --request <absolute temporary request file>
 
    Unsupported workspace/permission requests refuse before launch. Only a fresh
    `launch_allowed: true` permits one native `spawn_agent`. Use the returned
-   dispatch's role and name; pass `worker.native.prompt` verbatim, including its
+   dispatch's role and name; for `child-fetch/v1` use `fork_turns: none`.
+   Pass `worker.native.prompt` verbatim, including its
    wait instruction. Go assembles it from the capsule, verified
    `dispatch.brief_path` bytes (using inline `dispatch.brief` only when no path
    exists), matched skills and current new answers. Do not reconstruct the prompt.
@@ -341,6 +342,61 @@ aether codex-native-worker bind --request <absolute temporary request file>
     Only after successful binding, send `worker.native.release` verbatim to that
     same child through the host native messaging tool. A stopped or uncertain
     launch stays unresolved; elapsed time never permits a duplicate child.
+
+10a. New manifests pin `context_protocol: child-fetch/v1`. Keep that protocol
+    unchanged for the whole attempt. Before useful work, give the bound child
+    a metadata-only request file containing its exact bound fields and
+    `context_purpose: initial`. Create a separate copy; keep the original bound
+    request for parent question/observe/record operations. Purpose-specific
+    copies are used only for child context/context-ack calls and must remain
+    under the same permitted temporary request directory. Tell the child the absolute runtime executable
+    and request path; the pointer contains no instructions or answers.
+
+    The actual child runs these as two separate host tool calls, using the
+    canonical workspace and enough output capacity for the complete JSON:
+
+```bash
+<absolute aether executable> codex-native-worker context --request <bound request>
+<absolute aether executable> codex-native-worker context-ack --request <bound request> --delivery-id <fetched delivery_id> --payload-sha256 <fetched payload_sha256>
+```
+
+    Append one `--decision-id <id>` for each fetched decision ID, in order.
+    Use the values from the completed read; never prepare the child's ACK in
+    advance. Print each command result unchanged. A truncated, failed or missing
+    read cannot be acknowledged. The initial payload is the full saved prompt,
+    including capsule, skills, steering and handoff. After its successful ACK,
+    the child may work without waiting for a new parent handshake.
+
+10b. Before recording a successful terminal result, observe the actual read and
+    ACK. Retain the uniquely bound child's raw host rollout from the selected
+    `CODEX_HOME/sessions` or the exact raw path supplied by the host. Check its
+    child UUID, parent UUID, task path, role and workspace against the actual
+    spawn and binding. Inspect only that owned child. If those records are
+    unavailable, leave delivery unproved and report the missing source.
+
+    For each read and ACK, retain the literal exec call, successful matching
+    `CommandExecution` and complete tool result actually returned to the child.
+    Match the call ID, turn, command, workspace and unchanged output. Hash each
+    original JSONL line without its trailing newline. `context_fetch` has
+    `schema_version: 1`, `read` and `ack`; each source has `child_id`, `turn_id`,
+    `call_id`, `started_at`, `completed_at`, and `call`, `command`, `result`
+    references with actual `id` and bare 64-character hexadecimal `sha256`.
+    Call/result IDs are their raw
+    payload IDs; command ID is the actual command item ID. Never invent IDs.
+
+    Submit `observe` with the bound fields, `observation_status: context_fetched`,
+    the exact fetched `context_delivery`, `context_fetch`, and the ACK result's
+    actual timestamp, ID and raw hash as `observed_at`, `source_event_id` and
+    `source_event_sha256`. Read completion must precede the separate ACK call;
+    ACK completion must precede the relevant work/checks. Retain receipts in
+    source chronology. Parent observation may follow work, but must precede
+    acceptance of successful terminal results. Fetching, ACK and observation
+    award no completion credit.
+
+    An absent protocol on a saved historical attempt retains the legacy native
+    message workflow. Never switch an in-flight attempt or silently use that
+    legacy path for a `child-fetch/v1` manifest. A runtime that lacks the required
+    operation cannot complete the new protocol.
 11. Retain raw child tool events and the child's terminal response. Immediately
     record that response before waiting on another child or staging:
 
@@ -397,7 +453,16 @@ aether decision-answer --native-request <runtime-returned answer_request_path>
     owner testimony. A repeated identical answer returns its original receipt;
     a conflicting or stale answer refuses without creating a replacement.
 
-11b. For an answered, current live child, obtain the runtime's exact message:
+11b. For an answered current `child-fetch/v1` child, create a fresh metadata-only
+    bound request with `context_purpose: answers`. Notify that same child of the
+    pointer, without including answer text. The child reads and separately ACKs
+    it as in 10a, including all fetched decision IDs, before answer-dependent
+    work. Observe those actual child sources as in 10b. A new unrelated answer
+    does not replace the exact acknowledged decision set; changed or stale
+    decisions refuse. This read does not confer approval or checkpoint authority.
+
+    For historical attempts with no delivery protocol, retain their existing
+    host-send procedure and obtain the runtime's exact message:
 
 ```bash
 aether codex-native-worker context --request <same bound worker request file>

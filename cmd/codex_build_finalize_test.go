@@ -2117,7 +2117,9 @@ func setupCoherentJobExternalFinalizeTest(t *testing.T, goal string) (string, co
 	if err != nil {
 		t.Fatalf("plan-only build: %v", err)
 	}
-	manifest := result["dispatch_manifest"].(codexBuildManifest)
+	// This fixture tests historical packet/native partial receipts, without the
+	// child-fetch protocol. Select that lane before any worker or packet exists.
+	manifest := nativeManifestProtocolForTest(t, result["dispatch_manifest"].(codexBuildManifest), "")
 
 	var chain codexBuildDispatch
 	for _, dispatch := range manifest.Dispatches {

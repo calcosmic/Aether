@@ -397,12 +397,20 @@ func nativeGapHostBoundary(raw []byte, parent, child, task, kind, expected strin
 }
 
 type nativeGapContextReport struct {
-	Launch nativeGapBoundary `json:"launch"`
-	Send   nativeGapBoundary `json:"send"`
-	Gaps   []string          `json:"gaps"`
+	Launch       nativeGapBoundary                `json:"launch"`
+	Send         nativeGapBoundary                `json:"send"`
+	InitialFetch *nativeChildContextFetchEvidence `json:"initial_fetch,omitempty"`
+	AnswerFetch  *nativeChildContextFetchEvidence `json:"answer_fetch,omitempty"`
+	Gaps         []string                         `json:"gaps"`
 }
 
 func nativeGapCaptureContext(r codexNativeLiveReceipt, runRoot string) nativeGapContextReport {
+	if r.ContextProtocol == codexNativeContextProtocolChildFetch {
+		return nativeGapCaptureFetchedContext(r, runRoot)
+	}
+	if r.ContextProtocol != "" {
+		return nativeGapContextReport{Gaps: []string{"unknown context proof protocol"}}
+	}
 	report := nativeGapContextReport{}
 	gap := func(err error) {
 		if err != nil {
@@ -539,6 +547,188 @@ func nativeGapCaptureContext(r codexNativeLiveReceipt, runRoot string) nativeGap
 	// calling a successful cat/echo of the challenge an answer-dependent check.
 	if !r.ChecksPassed {
 		gap(fmt.Errorf("child required uncached check not corroborated"))
+	}
+	return report
+}
+
+// Legacy captures continue through the host-send proof above. New captures
+// require both actual child fetches; a parent-created envelope is not delivery.
+func nativeGapCaptureFetchedContext(r codexNativeLiveReceipt, runRoot string) nativeGapContextReport {
+	report := nativeGapContextReport{}
+	gap := func(err error) {
+		if err != nil {
+			report.Gaps = append(report.Gaps, err.Error())
+		}
+	}
+	var challenge nativeGapChallenge
+	raw, err := r.readEvidence(filepath.Join(runRoot, "controller", "challenge.json"))
+	if err != nil || json.Unmarshal(raw, &challenge) != nil || challenge.Authority != "independent delayed fixture controller" || challenge.ChildID != r.ChildID || challenge.Answer == "" || challenge.PanicText == "" {
+		gap(fmt.Errorf("missing child-bound delayed fixture authorization"))
+		return report
+	}
+	raw, err = r.readEvidence(filepath.Join(runRoot, "controller", "pre-question.json"))
+	var snapshot map[string][]byte
+	if err != nil || json.Unmarshal(raw, &snapshot) != nil || lifecycleDigest(raw) != challenge.SnapshotSHA256 {
+		gap(fmt.Errorf("missing immutable pre-question snapshot"))
+	} else {
+		gap(nativeGapNoLeak(snapshot, challenge.Answer, challenge.PanicText))
+	}
+	question, err := r.readEvidence(filepath.Join(runRoot, "coordination", "w0-question-source.jsonl"))
+	if err != nil || lifecycleDigest(bytes.TrimSpace(question)) != challenge.QuestionSHA256 {
+		gap(fmt.Errorf("question provenance missing or changed"))
+	}
+	var qe struct {
+		Timestamp string
+		Payload   struct {
+			ThreadID string `json:"thread_id"`
+			Item     struct{ Type, Phase string }
+		}
+	}
+	_ = json.Unmarshal(question, &qe)
+	qt, qerr := time.Parse(time.RFC3339Nano, qe.Timestamp)
+	at, aerr := time.Parse(time.RFC3339Nano, challenge.SelectedAt)
+	if qerr != nil || aerr != nil || !at.After(qt) || qe.Payload.ThreadID != r.ChildID || qe.Payload.Item.Type != "AgentMessage" || qe.Payload.Item.Phase != "final_answer" {
+		gap(fmt.Errorf("answer not selected after the actual child's genuine question"))
+	}
+	child, err := r.readEvidence(r.ChildEvents)
+	gap(err)
+	questionMatches := 0
+	for _, line := range bytes.Split(child, []byte{'\n'}) {
+		if bytes.Equal(bytes.TrimSpace(line), bytes.TrimSpace(question)) {
+			questionMatches++
+		}
+	}
+	if questionMatches != 1 {
+		gap(fmt.Errorf("question is not a unique record in the actual child capture"))
+	}
+	var reservation struct {
+		Worker struct {
+			Native struct {
+				Prompt       string
+				PromptSHA256 string `json:"prompt_sha256"`
+			}
+		}
+	}
+	raw, err = r.readEvidence(filepath.Join(runRoot, "coordination", "w0-reservation.json"))
+	if err != nil || json.Unmarshal(raw, &reservation) != nil {
+		gap(fmt.Errorf("runtime launch provenance missing"))
+	}
+	prompt := reservation.Worker.Native.Prompt
+	if prompt == "" || lifecycleDigest([]byte(prompt)) != reservation.Worker.Native.PromptSHA256 || reservation.Worker.Native.PromptSHA256 != r.PromptSHA256 {
+		gap(fmt.Errorf("runtime launch digest mismatch"))
+	}
+	for _, marker := range nativeGapMarkers {
+		if !strings.Contains(prompt, marker) {
+			gap(fmt.Errorf("required context missing: %s", marker))
+		}
+	}
+	raw, err = r.readEvidence(r.AttemptPath)
+	var attempt buildAttemptRecord
+	if err != nil || json.Unmarshal(raw, &attempt) != nil || len(attempt.WorkerRuns) != 1 || attempt.WorkerRuns[0].Native == nil {
+		gap(fmt.Errorf("saved context worker missing"))
+		return report
+	}
+	worker := attempt.WorkerRuns[0]
+	fetches, err := nativeChildContextReceiptEvidence(r, worker)
+	if err != nil {
+		gap(err)
+		return report
+	}
+	if len(fetches) != 2 || fetches[0].Delivery.Purpose != "initial" || fetches[1].Delivery.Purpose != "answers" {
+		gap(fmt.Errorf("question requires one initial fetch and one separate answer fetch"))
+		return report
+	}
+	report.InitialFetch, report.AnswerFetch = &fetches[0], &fetches[1]
+	if fetches[0].Delivery.Payload != prompt {
+		gap(fmt.Errorf("child did not read the full reserved prompt"))
+	}
+	initialAck, err := time.Parse(time.RFC3339Nano, fetches[0].Fetch.Ack.CompletedAt)
+	if err != nil || !qt.After(initialAck) {
+		gap(fmt.Errorf("actual question preceded initial full-context ACK"))
+	}
+	answer := fetches[1]
+	if !strings.Contains(answer.Delivery.Payload, challenge.Answer) || !strings.Contains(answer.Delivery.Payload, challenge.PanicText) || len(answer.Delivery.DecisionIDs) == 0 {
+		gap(fmt.Errorf("actual answer fetch omitted the authorized full answer or decision identity"))
+	}
+	readAt, err := time.Parse(time.RFC3339Nano, answer.Fetch.Read.StartedAt)
+	if err != nil || !readAt.After(at) {
+		gap(fmt.Errorf("child answer read preceded delayed authorization"))
+	}
+	// Exact initial bytes and the pre-question snapshot must also be uncontaminated.
+	gap(nativeGapNoLeak(map[string][]byte{"initial child payload": []byte(fetches[0].Delivery.Payload)}, challenge.Answer, challenge.PanicText))
+	parent, parentPath, err := nativeChildContextParent(r)
+	gap(err)
+	if err == nil {
+		report.Launch, err = nativeChildContextBootstrapBoundary(parent, r)
+		gap(err)
+		for path, full := range map[string][]byte{r.ChildEvents: child, parentPath: parent} {
+			before, ok := snapshot[path]
+			if !ok || len(before) == 0 || !bytes.HasPrefix(full, before) {
+				gap(fmt.Errorf("pre-question snapshot omitted or changed actual host history: %s", path))
+			}
+		}
+		if !bytes.Contains(snapshot[r.ChildEvents], bytes.TrimSpace(question)) || !bytes.Contains(snapshot[parentPath], report.Launch.Call) || !bytes.Contains(snapshot[parentPath], report.Launch.Result) {
+			gap(fmt.Errorf("pre-question snapshot lacks actual bootstrap and child question"))
+		}
+		for _, line := range bytes.Split(parent, []byte{'\n'}) {
+			var call struct {
+				Type    string
+				Payload struct{ Type, Arguments string }
+			}
+			if json.Unmarshal(line, &call) != nil || call.Type != "response_item" || call.Payload.Type != "function_call" {
+				continue
+			}
+			var args struct{ Message string }
+			if json.Unmarshal([]byte(call.Payload.Arguments), &args) == nil && (strings.Contains(args.Message, challenge.PanicText) || strings.Contains(args.Message, challenge.Answer)) {
+				gap(fmt.Errorf("answer disclosed through an alternate parent message"))
+			}
+		}
+	}
+	// Bind immutable bootstrap, initial pointer, request and public instructions
+	// to the original pre-question snapshot, including removed temporary paths.
+	originalRequest := fetches[0].RequestPath
+	name := filepath.Base(originalRequest)
+	prefix := strings.TrimSuffix(name, "context-initial-request.json")
+	for _, entry := range [][2]string{
+		{r.CoordinatorPath, r.CoordinatorPath},
+		{filepath.Join(runRoot, "prompt.txt"), filepath.Join(runRoot, "prompt.txt")},
+		{r.SkillPath, r.SkillPath}, {r.SupportPath, r.SupportPath},
+		{originalRequest, filepath.Join(runRoot, "coordination", name)},
+		{filepath.Join(filepath.Dir(originalRequest), prefix+"context-initial-pointer.json"), filepath.Join(runRoot, "coordination", prefix+"context-initial-pointer.json")},
+		{filepath.Join(filepath.Dir(originalRequest), prefix+"bind-request.json"), filepath.Join(runRoot, "coordination", prefix+"bind-request.json")},
+	} {
+		current, err := r.readEvidence(entry[1])
+		before, ok := snapshot[entry[0]]
+		if err != nil || !ok || !bytes.Equal(before, current) {
+			gap(fmt.Errorf("pre-question snapshot omitted or changed bootstrap input: %s", entry[0]))
+		}
+	}
+	for _, name := range []string{"stale-answer", "wrong-child-answer"} {
+		raw, err := r.readEvidence(filepath.Join(runRoot, "coordination", name+"-refusal.json"))
+		var refusal struct {
+			Exit          int `json:"exit_status"`
+			Before, After map[string]string
+		}
+		if err != nil || json.Unmarshal(raw, &refusal) != nil || refusal.Exit == 0 || len(refusal.Before) == 0 || !reflect.DeepEqual(refusal.Before, refusal.After) {
+			gap(fmt.Errorf("%s unchanged-journal refusal missing", name))
+		}
+	}
+	ackAt, _ := time.Parse(time.RFC3339Nano, answer.Fetch.Ack.CompletedAt)
+	checkedAfterAck := false
+	for _, line := range bytes.Split(child, []byte{'\n'}) {
+		var event nativeHostEvent
+		var stamp struct{ Timestamp string }
+		if json.Unmarshal(line, &event) != nil || json.Unmarshal(line, &stamp) != nil {
+			continue
+		}
+		tm, err := time.Parse(time.RFC3339Nano, stamp.Timestamp)
+		i := event.Payload.Item
+		if err == nil && tm.After(ackAt) && event.Type == "event_msg" && event.Payload.Type == "item_completed" && event.Payload.ThreadID == r.ChildID && i.Type == "CommandExecution" && i.Status == "completed" && i.ExitCode != nil && *i.ExitCode == 0 && nativeContextExactCwd(i.Cwd, r.FixtureRoot) && nativeAssignedFixtureTest(r, i.Command, i.Output) {
+			checkedAfterAck = true
+		}
+	}
+	if !r.ChecksPassed || !checkedAfterAck {
+		gap(fmt.Errorf("child required uncached check after answer ACK not corroborated"))
 	}
 	return report
 }

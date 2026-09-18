@@ -155,6 +155,7 @@ type codexBuildTaskPlan struct {
 }
 
 type codexBuildManifest struct {
+	ContextProtocol     string                    `json:"context_protocol,omitempty"`
 	Phase               int                       `json:"phase"`
 	PhaseName           string                    `json:"phase_name"`
 	PhaseMode           colony.PhaseMode          `json:"phase_mode,omitempty"`
@@ -2962,6 +2963,10 @@ func buildCodexBuildManifest(root string, state colony.ColonyState, phase colony
 	contextCapsule := ""
 	var contextDecisionIDs []string
 	var contextScope *codexNativeContextScope
+	contextProtocol := ""
+	if planOnly && buildHostPlatform() == "codex" && buildExecutionOwner(dispatchMode, planOnly) == "host-queen" {
+		contextProtocol = codexNativeContextProtocolChildFetch
+	}
 	if planOnly {
 		contextCapsule, _, contextDecisionIDs = resolveCodexWorkerContextSnapshot()
 		contextScope = codexNativeContextScopeFromState(state)
@@ -2994,6 +2999,7 @@ func buildCodexBuildManifest(root string, state colony.ColonyState, phase colony
 		ContextCapsule:          contextCapsule,
 		ContextDecisionIDs:      contextDecisionIDs,
 		ContextScope:            contextScope,
+		ContextProtocol:         contextProtocol,
 		Dispatches:              append([]codexBuildDispatch{}, dispatches...),
 		SelectedTasks:           append([]string{}, selectedTaskIDs...),
 		Tasks:                   codexBuildTaskPlans(phase),

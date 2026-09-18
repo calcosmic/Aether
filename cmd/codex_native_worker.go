@@ -80,28 +80,34 @@ type codexNativeWorkerState struct {
 // Native provenance extends the existing worker journal, never its credit authority.
 // Prompt is retained verbatim so replay never silently recomposes an assignment.
 type codexNativeWorkerBinding struct {
-	ContextDeliveries  []codexNativeContextReceipt  `json:"context_deliveries,omitempty"`
-	SchemaVersion      int                          `json:"schema_version"`
-	LaunchState        string                       `json:"launch_state"`
-	BoundAt            string                       `json:"bound_at,omitempty"`
-	Observations       []codexNativeHostObservation `json:"observations,omitempty"`
-	HostSessionID      string                       `json:"host_session_id"`
-	ChildID            string                       `json:"child_id,omitempty"`
-	DispatchSHA256     string                       `json:"dispatch_sha256"`
-	PromptSHA256       string                       `json:"prompt_sha256"`
-	PermissionProfile  codex.PermissionProfile      `json:"permission_profile"`
-	Workspace          string                       `json:"workspace"`
-	WorkspaceRoot      string                       `json:"workspace_root,omitempty"`
-	ContextDecisionIDs []string                     `json:"context_decision_ids,omitempty"`
-	ContextDeliveryIDs []string                     `json:"context_delivery_ids,omitempty"`
-	Prompt             string                       `json:"prompt"`
-	Release            string                       `json:"release,omitempty"`
-	SourceEventID      string                       `json:"source_event_id,omitempty"`
-	SourceEventSHA256  string                       `json:"source_event_sha256,omitempty"`
-	RawResult          json.RawMessage              `json:"raw_result,omitempty"`
+	ContextProtocol      string                       `json:"context_protocol,omitempty"`
+	ContextReceiptSHA256 string                       `json:"context_receipt_sha256,omitempty"`
+	ContextDeliveries    []codexNativeContextReceipt  `json:"context_deliveries,omitempty"`
+	SchemaVersion        int                          `json:"schema_version"`
+	LaunchState          string                       `json:"launch_state"`
+	BoundAt              string                       `json:"bound_at,omitempty"`
+	Observations         []codexNativeHostObservation `json:"observations,omitempty"`
+	HostSessionID        string                       `json:"host_session_id"`
+	ChildID              string                       `json:"child_id,omitempty"`
+	DispatchSHA256       string                       `json:"dispatch_sha256"`
+	PromptSHA256         string                       `json:"prompt_sha256"`
+	PermissionProfile    codex.PermissionProfile      `json:"permission_profile"`
+	Workspace            string                       `json:"workspace"`
+	WorkspaceRoot        string                       `json:"workspace_root,omitempty"`
+	ContextDecisionIDs   []string                     `json:"context_decision_ids,omitempty"`
+	ContextDeliveryIDs   []string                     `json:"context_delivery_ids,omitempty"`
+	Prompt               string                       `json:"prompt"`
+	Release              string                       `json:"release,omitempty"`
+	SourceEventID        string                       `json:"source_event_id,omitempty"`
+	SourceEventSHA256    string                       `json:"source_event_sha256,omitempty"`
+	RawResult            json.RawMessage              `json:"raw_result,omitempty"`
 }
 
 type codexNativeWorkerRequest struct {
+	ContextPurpose         string                      `json:"context_purpose,omitempty"`
+	ContextPayloadSHA256   string                      `json:"context_payload_sha256,omitempty"`
+	ContextDecisionIDs     []string                    `json:"context_decision_ids,omitempty"`
+	ContextFetch           *codexNativeContextFetch    `json:"context_fetch,omitempty"`
 	RequireGovernedNesting bool                        `json:"require_governed_nesting,omitempty"`
 	RequireCancellation    bool                        `json:"require_cancellation,omitempty"`
 	Question               *codexNativeQuestion        `json:"question,omitempty"`
@@ -130,6 +136,7 @@ type codexNativeWorkerRequest struct {
 }
 
 type codexNativeWorkerResponse struct {
+	ContextAck       *codexNativeContextAck      `json:"context_ack,omitempty"`
 	Decisions        []codexNativeDecisionView   `json:"decisions,omitempty"`
 	ContextStatus    string                      `json:"context_status,omitempty"`
 	ContextDelivery  *codexNativeContextDelivery `json:"context_delivery,omitempty"`
@@ -149,7 +156,7 @@ type codexNativeWorkerResponse struct {
 
 func init() {
 	command := &cobra.Command{Use: "codex-native-worker", Short: "Internal non-launching native worker journal bridge", Hidden: true}
-	for _, operation := range []string{"reserve", "bind", "record", "stage", "inspect", "observe", "context", "question"} {
+	for _, operation := range []string{"reserve", "bind", "record", "stage", "inspect", "observe", "context", "context-ack", "question"} {
 		operation := operation
 		child := &cobra.Command{Use: operation, Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 			path, _ := cmd.Flags().GetString("request")
@@ -162,6 +169,15 @@ func init() {
 					phase, _ := cmd.Flags().GetInt("phase")
 					response, err = runCodexNativeWorkerForPhase(operation, phase)
 				}
+			} else if operation == "context" || operation == "context-ack" {
+				id, digest := "", ""
+				var ids []string
+				if operation == "context-ack" {
+					id, _ = cmd.Flags().GetString("delivery-id")
+					digest, _ = cmd.Flags().GetString("payload-sha256")
+					ids, _ = cmd.Flags().GetStringArray("decision-id")
+				}
+				response, err = runCodexNativeContextCommand(operation, path, id, digest, ids)
 			} else {
 				response, err = runCodexNativeWorker(operation, path)
 			}
@@ -173,6 +189,11 @@ func init() {
 			return nil
 		}}
 		child.Flags().String("request", "", "Absolute regular JSON file under an aether-worker-request-* temporary directory")
+		if operation == "context-ack" {
+			child.Flags().String("delivery-id", "", "Exact delivery ID returned by the prior child read")
+			child.Flags().String("payload-sha256", "", "Exact payload SHA-256 returned by the prior child read")
+			child.Flags().StringArray("decision-id", nil, "One exact fetched decision ID; repeat in returned order")
+		}
 		if operation == "inspect" || operation == "stage" {
 			child.Flags().Int("phase", 0, "Use the exact current saved execution binding for this phase")
 		}
@@ -329,6 +350,9 @@ func executeCodexNativeWorkerRequest(operation string, request codexNativeWorker
 			return response, err
 		}
 	}
+	if operation != "context" && operation != "context-ack" && operation != "observe" && (request.ContextPurpose != "" || request.ContextPayloadSHA256 != "" || request.ContextDecisionIDs != nil || request.ContextFetch != nil) {
+		return response, fmt.Errorf("child-fetch fields require context, context-ack or observe")
+	}
 	if operation == "question" {
 		return runCodexNativeQuestions(request, hooks)
 	}
@@ -348,6 +372,9 @@ func executeCodexNativeWorkerRequest(operation string, request codexNativeWorker
 			return fmt.Errorf("native worker requires a host-queen plan-only attempt")
 		}
 		manifest := record.PlanManifest
+		if manifest.ContextProtocol != "" && manifest.ContextProtocol != codexNativeContextProtocolChildFetch {
+			return fmt.Errorf("unsupported native context protocol")
+		}
 		if len(manifest.Dispatches) == 0 || manifest.ExecutionBinding == nil || *manifest.ExecutionBinding != request.ExecutionBinding || manifest.Phase != request.Phase {
 			return fmt.Errorf("native worker requires a nonempty exactly bound manifest")
 		}
@@ -407,35 +434,46 @@ func executeCodexNativeWorkerRequest(operation string, request codexNativeWorker
 	if operation != "observe" && (request.ObservationStatus != "" || request.ObservedAt != "" || request.ObservationDetail != "") {
 		return response, fmt.Errorf("host observations require the observe operation")
 	}
-	if operation == "context" {
-		response, err = readCodexNativeContext(current, request)
+	if operation == "context" || operation == "context-ack" {
+		read := readCodexNativeContext
+		if operation == "context-ack" {
+			read = readCodexNativeContextAck
+		}
+		response, err = read(current, request)
 		if err != nil {
 			return response, err
 		}
 		if hooks.AfterContextRender != nil {
 			hooks.AfterContextRender()
 		}
-		if response.ContextStatus == "awaiting_delivery" {
-			dispatch, worker, err := validateCodexNativeContextTarget(current, request)
-			if err != nil {
-				return codexNativeWorkerResponse{}, err
+		// Re-render only the fetched IDs so a newer unrelated answer does not
+		// invalidate an already read, still-current subset.
+		if response.ContextStatus == "awaiting_delivery" || response.ContextStatus == "awaiting_ack" {
+			dispatch, worker, targetErr := validateCodexNativeContextTarget(current, request)
+			if targetErr != nil {
+				return codexNativeWorkerResponse{}, targetErr
 			}
-			if err := validateCodexNativeContextLive(current, *worker); err != nil {
-				return codexNativeWorkerResponse{}, err
-			}
-			latest, err := composeCodexNativeContextDelivery(current, *dispatch, *worker, response.ContextDelivery.DecisionIDs)
-			if err != nil {
-				return codexNativeWorkerResponse{}, err
+			latest, renderErr := composeCodexNativeContextForPurpose(current, *dispatch, *worker, request.ContextPurpose, response.ContextDelivery.DecisionIDs)
+			if renderErr != nil {
+				return codexNativeWorkerResponse{}, renderErr
 			}
 			if latest == nil || latest.DeliveryID != response.ContextDelivery.DeliveryID {
 				return codexNativeWorkerResponse{}, fmt.Errorf("native answer changed while rendering; reread current context")
+			}
+		} else if operation == "context-ack" {
+			latest, readErr := readCodexNativeContextAck(current, request)
+			if readErr != nil {
+				return codexNativeWorkerResponse{}, readErr
+			}
+			firstHash, _ := jsonSHA256(response)
+			latestHash, _ := jsonSHA256(latest)
+			if firstHash != latestHash {
+				return codexNativeWorkerResponse{}, fmt.Errorf("native context changed while acknowledging")
 			}
 		}
 		if err := validateCodexNativeContextScope(*current.PlanManifest); err != nil {
 			return codexNativeWorkerResponse{}, err
 		}
-		// Recheck currency and journal identity after rendering; reads never
-		// take a mutation session or create delivery acknowledgements.
 		if err := validate(current); err != nil {
 			return codexNativeWorkerResponse{}, err
 		}
@@ -543,7 +581,7 @@ func executeCodexNativeWorkerRequest(operation string, request codexNativeWorker
 				if err != nil {
 					return err
 				}
-				native := &codexNativeWorkerBinding{SchemaVersion: 1, LaunchState: "reserved", HostSessionID: request.HostSessionID, DispatchSHA256: digest, PromptSHA256: prompt.SHA256, PermissionProfile: permission, Workspace: workspace, WorkspaceRoot: workspace, Prompt: prompt.Prompt, ContextDecisionIDs: prompt.DecisionIDs}
+				native := &codexNativeWorkerBinding{ContextProtocol: updated.PlanManifest.ContextProtocol, SchemaVersion: 1, LaunchState: "reserved", HostSessionID: request.HostSessionID, DispatchSHA256: digest, PromptSHA256: prompt.SHA256, PermissionProfile: permission, Workspace: workspace, WorkspaceRoot: workspace, Prompt: prompt.Prompt, ContextDecisionIDs: prompt.DecisionIDs}
 				updated.WorkerRuns = append(updated.WorkerRuns, buildAttemptWorkerRun{ProviderRunID: launch, WorkerName: dispatch.Name, TaskID: request.TaskID, Caste: dispatch.Caste, Platform: codex.PlatformCodex, Status: buildWorkerDispatching, StartedAt: now, UpdatedAt: now, Native: native})
 				response.Worker = &updated.WorkerRuns[len(updated.WorkerRuns)-1]
 				response.LaunchAllowed = true
@@ -657,7 +695,7 @@ func projectCodexNativeWorkerState(worker buildAttemptWorkerRun) codexNativeWork
 	}
 	state.ContextDeliveryIDs = append([]string(nil), native.ContextDeliveryIDs...)
 	for _, observation := range native.Observations {
-		if observation.Status != "context_delivered" {
+		if observation.Status != "context_delivered" && observation.Status != "context_fetched" {
 			state.HostStatus = observation.Status
 		}
 	}
@@ -702,10 +740,13 @@ func emitCodexNativeTransition(operation string, assignment codexBuildDispatch, 
 }
 
 func observeCodexNativeWorker(record *buildAttemptRecord, worker *buildAttemptWorkerRun, dispatch codexBuildDispatch, request codexNativeWorkerRequest, now string) (*codexNativeWorkerReceipt, error) {
+	if request.ObservationStatus == "context_fetched" {
+		return observeCodexNativeContextFetch(record, worker, dispatch, request, now)
+	}
 	if request.ObservationStatus == "context_delivered" {
 		return observeCodexNativeContext(record, worker, dispatch, request, now)
 	}
-	if request.ContextDeliveryID != "" || request.ContextDelivery != nil || request.ContextSend != nil {
+	if request.ContextDeliveryID != "" || request.ContextDelivery != nil || request.ContextSend != nil || request.ContextFetch != nil || request.ContextPurpose != "" || request.ContextPayloadSHA256 != "" || request.ContextDecisionIDs != nil {
 		return nil, fmt.Errorf("native context evidence requires context_delivered observation")
 	}
 	native := worker.Native
@@ -755,6 +796,12 @@ func observeCodexNativeWorker(record *buildAttemptRecord, worker *buildAttemptWo
 	if len(native.Observations) > 0 {
 		last := native.Observations[len(native.Observations)-1]
 		previous, _ := time.Parse(time.RFC3339Nano, last.ObservedAt)
+		for _, prior := range native.Observations {
+			timestamp, _ := time.Parse(time.RFC3339Nano, prior.ObservedAt)
+			if timestamp.After(previous) {
+				previous = timestamp
+			}
+		}
 		if !at.After(previous) {
 			return nil, fmt.Errorf("native observation arrived out of order")
 		}
@@ -862,6 +909,22 @@ func recordCodexNativeTerminal(record *buildAttemptRecord, worker *buildAttemptW
 	if worker.ResultSHA256 != "" {
 		return applyBuildWorkerTerminal(record, worker, result, now)
 	}
+	if native.ContextProtocol == codexNativeContextProtocolChildFetch {
+		for _, saved := range native.ContextDeliveries {
+			for _, source := range []codexNativeContextSource{saved.Fetch.Read, saved.Fetch.Ack} {
+				for _, ref := range []codexNativeContextEventRef{source.Call, source.Command, source.Result} {
+					if ref.ID == request.SourceEventID {
+						return fmt.Errorf("native terminal source cannot reuse context read/ACK evidence")
+					}
+				}
+			}
+		}
+		if codexNativeContextResultRequiresReceipts(result) {
+			if err := validateCodexNativeContextClosure(*record, *worker, true); err != nil {
+				return err
+			}
+		}
+	}
 	// Exercise the same applicable completion semantics before freezing the
 	// first result. Limit the projection to this dispatch; other workers
 	// need not have finished yet. No journal bytes are mutated on refusal.
@@ -890,6 +953,12 @@ func recordCodexNativeTerminal(record *buildAttemptRecord, worker *buildAttemptW
 	}
 	if err := applyBuildWorkerTerminal(record, worker, result, now); err != nil {
 		return err
+	}
+	if native.ContextProtocol == codexNativeContextProtocolChildFetch && codexNativeContextResultRequiresReceipts(result) {
+		native.ContextReceiptSHA256, err = jsonSHA256(native.ContextDeliveries)
+		if err != nil {
+			return err
+		}
 	}
 	native.SourceEventID, native.SourceEventSHA256, native.LaunchState = request.SourceEventID, request.SourceEventSHA256, "terminal"
 	native.RawResult = append(json.RawMessage(nil), request.RawResult...)
@@ -932,5 +1001,24 @@ func validateCodexNativeSavedWorker(record buildAttemptRecord, dispatch codexBui
 	if native.SchemaVersion != 1 || native.HostSessionID == "" || worker.ProviderRunID == "" || worker.Caste != dispatch.Caste || worker.WorkerName != dispatch.Name || worker.TaskID != normalizedDispatchTaskID(dispatch) || native.DispatchSHA256 != digest || native.PromptSHA256 != lifecycleDigest([]byte(native.Prompt)) || strings.TrimSpace(native.Prompt) == "" || native.Workspace != root || (native.WorkspaceRoot != "" && native.WorkspaceRoot != root) || savedPermissionDigest != permissionDigest {
 		return fmt.Errorf("native saved assignment/prompt/permission/workspace identity changed")
 	}
-	return nil
+	return validateCodexNativeSavedContext(record, worker)
+}
+
+// The child reuses an immutable bound request. ACK values must be passed by
+// its separate command, never prefilled by the parent in that request file.
+func runCodexNativeContextCommand(operation, path, deliveryID, payloadSHA256 string, decisionIDs []string) (codexNativeWorkerResponse, error) {
+	request, err := loadCodexNativeWorkerRequest(path)
+	if err != nil {
+		return codexNativeWorkerResponse{}, err
+	}
+	if operation == "context-ack" {
+		if request.ContextDeliveryID != "" || request.ContextPayloadSHA256 != "" || request.ContextDecisionIDs != nil || request.ContextDelivery != nil || request.ContextSend != nil || request.ContextFetch != nil {
+			return codexNativeWorkerResponse{}, fmt.Errorf("context ACK values must come from separate child command flags, not a parent-filled request")
+		}
+		request.ContextDeliveryID, request.ContextPayloadSHA256 = deliveryID, payloadSHA256
+		request.ContextDecisionIDs = append([]string(nil), decisionIDs...)
+	} else if operation != "context" {
+		return codexNativeWorkerResponse{}, fmt.Errorf("unsupported native context command")
+	}
+	return executeCodexNativeWorkerRequest(operation, request, codexNativeWorkerHooks{})
 }

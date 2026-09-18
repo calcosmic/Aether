@@ -470,6 +470,9 @@ func finalizeGoldenBuildFromRuntimePlan(t *testing.T, root string, phase int) {
 		t.Fatalf("golden runtime build omitted typed dispatch manifest: %#v", result["dispatch_manifest"])
 	}
 
+	// This packet-only golden fixture retains the historical completion lane.
+	manifest = nativeManifestProtocolForTest(t, manifest, "")
+
 	evidencePath := "golden-runtime-evidence.txt"
 	if err := os.WriteFile(filepath.Join(root, evidencePath), []byte("canonical golden build completion\n"), 0o644); err != nil {
 		t.Fatalf("write golden runtime evidence: %v", err)
