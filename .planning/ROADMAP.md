@@ -751,7 +751,7 @@ For dummies: A worker actually receives the job, does it, and returns saved work
 
 **Context and research:** [204.2-CONTEXT.md](phases/204.2-codex-native-worker-lifecycle/204.2-CONTEXT.md), [204.2-RESEARCH.md](phases/204.2-codex-native-worker-lifecycle/204.2-RESEARCH.md).
 
-**Plans:** 23 plans across 20 waves: 16 execution reports delivered, including gap Plans 10–16, and 7 new gap plans (17–23) pending execution. Verification remains `gaps_found` (0/5 fully qualified criteria); ANT-04 through ANT-07 remain pending. Plan 16 could not run the final focused/full normal/race pair after race preflight exhausted disk space. Advisory review adds three evidence-reliability blockers and one warning.
+**Plans:** 26 plans across 23 waves; 20 execution reports delivered (several retain incomplete qualification), 6 plans pending. New acquisition prerequisites 24–26 execute before 21–23. Verification remains `gaps_found`; ANT-04 through ANT-07 remain pending. Only Plan 24 is ready to attempt; dependent execution requires supported actual source evidence.
 
 Plans:
 
@@ -829,17 +829,33 @@ Plans:
 
 - [x] 204.2-20-PLAN.md — Observed command parser repaired and normal/race controls pass; actual independent review/context acceptance remains blocked.
 
-**Wave 18 — blocked on supported actual host acquisition and Plan20 acceptance**
+**Third gap pass — supported acquisition before dependent qualification**
+
+**Wave 18 — bounded acquisition feasibility**
+
+- [ ] 204.2-24-PLAN.md — Trace supported sources and obtain an actual acquisition probe; unavailable evidence stops the chain.
+
+**Wave 19 — blocked on Plan 24 supported evidence**
+
+- [ ] 204.2-25-PLAN.md — Implement strict host/context acquisition and complete actual ordinary/review/question tracers.
+
+**Wave 20 — blocked on Plan 25 completion**
+
+- [ ] 204.2-26-PLAN.md — Implement authentic cancellation coverage acquisition and prove one actual tracer.
+
+**Wave 21 — blocked on Plan 26 and successful acquisition receipts**
 
 - [ ] 204.2-21-PLAN.md — Capture attributable fresh-parent recovery and acknowledged cancellation.
 
-**Wave 19 — blocked on Plan 21 completion**
+**Wave 22 — blocked on Plan 21 completion**
 
 - [ ] 204.2-22-PLAN.md — Freeze the candidate and rerun all eleven native/Claude qualification cases.
 
-**Wave 20 — blocked on Plan 22 completion**
+**Wave 23 — blocked on Plan 22 completion**
 
 - [ ] 204.2-23-PLAN.md — Account all four focused/full normal/race runs and archive/refresh canonical verification.
+
+See [acquisition prerequisite planning](phases/204.2-codex-native-worker-lifecycle/204.2-GAP3-PLANNING.md). Supported sources must be demonstrated, not assumed; no proof requirement is waived.
 
 **Cross-cutting constraints:** Preserve prior evidence and Phase 205 owner authority; admit and freeze actual build inputs; obtain real host provenance; stop affected qualification when required proof or storage is unavailable; repeat affected qualification after source/capture/corpus changes. See [second gap planning audit](phases/204.2-codex-native-worker-lifecycle/204.2-GAP2-PLANNING.md). Planning does not resolve the existing verification gaps.
 

@@ -4,16 +4,16 @@ milestone: v1.28
 milestone_name: Classic Colony Restoration
 current_phase: 204.2
 current_phase_name: Codex Native Worker Lifecycle
-status: blocked
-stopped_at: Plan 21 preflight blocked on host acquisition; sequential execution authorized and configured
-last_updated: "2026-09-18T10:25:20.202642+00:00"
+status: ready_to_execute
+stopped_at: Acquisition gap planning complete; execute Plan 24 first; qualification remains gaps_found
+last_updated: "2026-09-18T10:39:25.956101+00:00"
 last_activity: 2026-09-18
-last_activity_desc: Stable bookkeeping repair validated with live CalVault reviewer; full lifecycle qualification remains blocked
+last_activity_desc: Added acquisition prerequisites 24–26 before pending 21–23; no execution or qualification claimed
 state_head: 4f11bebfb8b698e1be986422bcb75b4a3ab0759b
 progress:
   total_phases: 13
   completed_phases: 6
-  total_plans: 214
+  total_plans: 217
   completed_plans: 196
   percent: 46
 ---
@@ -29,16 +29,16 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 **Previous milestone:** v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02 (48/48 requirements; audit `tech_debt`, no blockers)
 **Product version:** local stable v1.0.81 — installed-baseline routing plus bookkeeping fixes. This does not qualify inserted Phase204.2 work or establish Phase205 acceptance.
 **Bookkeeping repair:** current verification is persisted before reviewer launch; prior task evidence survives targeted rebuilding; latest terminal outcomes replace contradictory old outcomes. Normal/race regression checks and CalVault snapshot replay passed. Installed binary/hub versions and all five integrity checks passed. The real CalVault reviewer passed; phase 1 remains BUILT solely because its accepted criterion still requires appearance-preview.png despite recorded owner scope clarification. No false advancement or accepted-plan rewrite. See `.planning/bookkeeping-hotfix-2026-09-18.md` and its JSON receipt.
-**Qualification:** Codex 0.155.0 exposed help was rechecked. No supported invocation-bound complete tool/settings or cancellation-end evidence exporter was established; the verdict remains gaps_found. Plans21–23 and Phase205 owner acceptance remain pending.
+**Qualification:** Codex 0.155.0 exposed help was rechecked. No supported invocation-bound complete tool/settings or cancellation-end evidence exporter was established; the verdict remains gaps_found. Plan 24 is ready for bounded acquisition discovery; Plans 25–26 and 21–23 remain dependent on actual evidence. Phase205 owner acceptance remains pending.
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
 
 ## Current Position
 
-Phase: 204.2 (Codex Native Worker Lifecycle) — BLOCKED
-Next phase: 204.2 gap closure
-Status: Plans17–20 execution reported; dependent qualification blocked; canonical verdict remains gaps_found
-Plan: 20 of 23 execution reports complete; Plans21–23 pending on supported actual host evidence
-Last activity: 2026-09-18 — Bookkeeping fixes validated and locally published from the isolated stable source as 1.0.81. Live CalVault review passed; its remaining screenshot criterion is a scope mismatch. Full qualification remains blocked on actual host/tool export and cancellation observation provenance; no public release or Phase205 acceptance.
+Phase: 204.2 (Codex Native Worker Lifecycle) — acquisition prerequisite ready; qualification BLOCKED
+Next phase: 204.2 acquisition gap closure
+Status: Ready to execute Plan 24; downstream qualification remains gaps_found
+Plan: 20 of 26 execution reports delivered; order 24 → 25 → 26 → 21 → 22 → 23
+Last activity: 2026-09-18 — Added and checked three acquisition prerequisite plans. Real supported-source probes must succeed before capture adapters and dependent qualification run. No implementation, live proof, requirement completion or Phase 205 acceptance is claimed.
 
 ## Performance Metrics
 
@@ -769,9 +769,9 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-18T10:25:20.202642+00:00
-Stopped at: Plan 21 prerequisite check blocked; current Codex 0.155.0 help and source still do not establish required acquisition. Plans 21–23 remain pending. Owner-approved workflow.use_worktrees=false is applied.
-Resume file: .planning/phases/204.2-codex-native-worker-lifecycle/204.2-21-PREFLIGHT.md — establish supported actual host-export and cancellation observation acquisition before restarting dependent live runs. Preserve installed stable 1.0.81, gaps_found verdict and Phase 205 owner boundary.
+Last session: 2026-09-18T10:39:25.956101+00:00
+Stopped at: Gap planning complete; next action is gsd execute-phase 204.2 --gaps-only, starting Plan 24 (wave 18).
+Resume file: .planning/phases/204.2-codex-native-worker-lifecycle/204.2-GAP3-PLANNING.md — sequence 24 → 25 → 26 → 21 → 22 → 23; only Plan 24 is ready to attempt. A blocked acquisition must not create a successful SUMMARY. Preserve actual-source gates, stable 1.0.81 and Phase 205 owner boundary.
 
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
