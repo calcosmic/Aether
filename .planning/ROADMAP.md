@@ -811,7 +811,7 @@ Plans:
 - [x] 204.2-16-PLAN.md — Account exact final normal/race regressions and refresh canonical verification after archiving its original bytes; depends on 15.
 
 
-**Second gap-closure pass — Plans17–18 reported; qualification incomplete; Plan19 finishing**
+**Second gap-closure pass — Plans17–19 reported; qualification incomplete; Plan20 executing**
 
 **Wave 14 — completed**
 
@@ -821,11 +821,11 @@ Plans:
 
 - [x] 204.2-18-PLAN.md — Semantic provenance controls passed; actual full host/tool export unavailable and live trial incomplete.
 
-**Wave 16 — finishing independent validator repairs; qualification still incomplete**
+**Wave 16 — source controls complete; actual provenance remains unavailable**
 
-- [ ] 204.2-19-PLAN.md — Reject malformed cancellation intervals and validate retained recovery cut-point semantics.
+- [x] 204.2-19-PLAN.md — Malformed cancellation and invalid recovery records reject; normal/race controls pass; actual cancellation remains unqualified.
 
-**Wave 17 — blocked on Plan 19 completion**
+**Wave 17 — executing independent attribution repair; context acquisition remains blocked**
 
 - [ ] 204.2-20-PLAN.md — Prove actual independent review and exact context/scoped answer delivery.
 

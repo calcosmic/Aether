@@ -5,16 +5,16 @@ milestone_name: Classic Colony Restoration
 current_phase: 204.2
 current_phase_name: Codex Native Worker Lifecycle
 status: executing
-stopped_at: Plans17–18 execution reported; Plan19 finishing; same-host routing fix in verification
+stopped_at: Plans17–19 execution reported; Plan20 executing; same-host routing fix in verification
 last_updated: "2026-09-18T08:00:39.948518+00:00"
 last_activity: 2026-09-18
-last_activity_desc: Plan18 semantic provenance checks passed; actual host export unavailable; Plan19 and same-host routing verification active
+last_activity_desc: Plan19 controls passed; actual host provenance remains unavailable; Plan20 and same-host routing verification active
 state_head: 6f3db30bc6641a71015bdd2e4abaee590f483981
 progress:
   total_phases: 13
   completed_phases: 6
   total_plans: 214
-  completed_plans: 194
+  completed_plans: 195
   percent: 46
 ---
 
@@ -34,9 +34,9 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 
 Phase: 204.2 (Codex Native Worker Lifecycle) — EXECUTING
 Next phase: 204.2 gap closure
-Status: Plans17–18 execution reported; Plan19 finishing; qualification remains gaps_found
-Plan: 18 of 23 execution reports complete; Plan19 finishing; Plans20–23 pending
-Last activity: 2026-09-18 — Plan18 semantic controls passed; actual tool-schema provenance remains unavailable and its live trial incomplete. Plan19 controls and same-host provider routing fix in verification. No publication.
+Status: Plans17–19 execution reported; Plan20 executing; qualification remains gaps_found
+Plan: 19 of 23 execution reports complete; Plan20 executing; Plans21–23 pending
+Last activity: 2026-09-18 — Plan18 semantic controls passed; actual tool-schema provenance remains unavailable and its live trial incomplete. Plan19 controls passed normal/race and review; Plan20 attribution repair and same-host provider routing verification active. No publication.
 
 ## Performance Metrics
 
