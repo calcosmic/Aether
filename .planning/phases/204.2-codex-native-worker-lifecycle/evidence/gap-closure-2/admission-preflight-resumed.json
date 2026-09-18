@@ -1,0 +1,28 @@
+{
+  "schema_version": "aether-gap2-resumed-admission/v1",
+  "passed": true,
+  "source_revision": "b5742d34e92ee462adb93ec6b929b7d523f19148",
+  "manifest": {
+    "path": "/private/tmp/aether-gap2-resume-x7pso2qh/admission-preflight-final/manifest.json",
+    "sha256": "sha256:5cd6076e06d234251de9e7de79b333c0f96c38ef43d9d3d8e86bff6833b9accc"
+  },
+  "guard_tests": 18,
+  "asset_tests": 2,
+  "root_asset_log": {
+    "path": "/private/tmp/aether-gap2-resume-x7pso2qh/asset-test-pinned.log",
+    "sha256": "sha256:9698b750de196a4d3a3d628f35c8802f5b7619b6badf75224b01a0e592f1f5ba"
+  },
+  "cleanup": {
+    "path": "/private/tmp/aether-gap2-resume-x7pso2qh/compiler-cache-cleanup.json",
+    "sha256": "sha256:8bbec4d04275ad9effbf027c91929a0fb5c6864c785b60f636f02c42d1832c9d"
+  },
+  "scratch_relocation": {
+    "path": "/private/tmp/aether-gap2-resume-x7pso2qh/scratch-relocation.json",
+    "sha256": "sha256:7a50ca6c2da24225b56c20a34200ab968ccf18b44ba5cc91302d517549023608"
+  },
+  "prior_halt": {
+    "path": "/Users/callumcowie/repos/Aether/.planning/phases/204.2-codex-native-worker-lifecycle/evidence/gap-closure-2/original-17-halted-summary.md",
+    "sha256": "sha256:92b888650395513626c9f9349e7c70fd61b79f4f93938ae0f127adb0f50334d9"
+  },
+  "qualification": "preflight only; final matrix and four regression suites still required"
+}

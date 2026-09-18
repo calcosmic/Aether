@@ -4,11 +4,11 @@ milestone: v1.28
 milestone_name: Classic Colony Restoration
 current_phase: 204.2
 current_phase_name: Codex Native Worker Lifecycle
-status: blocked
-stopped_at: Plan 204.2-17 halted on unadmitted embedded input and uncertain capacity; Plans 18–23 blocked
+status: executing
+stopped_at: Plan 204.2-17 resumed and passed; Plan18 executing; full qualification pending
 last_updated: "2026-09-18T07:05:09.824046+00:00"
 last_activity: 2026-09-18
-last_activity_desc: Plan 17 admission guards implemented and tested; live preflight and tracer blocked; qualification remains gaps_found
+last_activity_desc: Plan17 preflight and ordinary native worker passed; Plan18 host provenance executing; qualification remains gaps_found
 state_head: 6f3db30bc6641a71015bdd2e4abaee590f483981
 progress:
   total_phases: 13
@@ -32,11 +32,11 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 
 ## Current Position
 
-Phase: 204.2 (Codex Native Worker Lifecycle) — BLOCKED
+Phase: 204.2 (Codex Native Worker Lifecycle) — EXECUTING
 Next phase: 204.2 gap closure
-Status: Plan 17 halted; Plans 18–23 blocked; qualification remains gaps_found
-Plan: 16 of 23 complete; Plan 17 partially implemented and halted; Plans 18–23 not executed
-Last activity: 2026-09-18 — Build-input admission and storage guards implemented; preparation refuses an ignored embedded .codex/.DS_Store; storage requirement remains unknown because historical normal/go-cache is absent. No candidate build, live tracer or publication.
+Status: Plan17 completed; Plan18 executing; qualification remains gaps_found
+Plan: 17 of 23 execution reports complete; Plan18 executing; Plans19–23 pending
+Last activity: 2026-09-18 — Plan17 resumed: asset/guard repairs, normal/race preflight and ordinary native Builder proof passed. Plan18 executing; no publication.
 
 ## Performance Metrics
 
@@ -822,7 +822,7 @@ Historical receipts below describe the prepared 1.0.79 candidate. The owner subs
 
 ## Operator Next Steps
 
-- **Resolve Plan 204.2-17 admission and capacity blockers before resuming gap execution.** Its input/storage guard repairs are implemented, but an ignored `.codex/.DS_Store` is consumed by `all:.codex` and omitted by Git; historical normal-cache size needed for the storage estimate is unavailable. Raw evidence: `/tmp/aether-gap2-kw0zk0jl`; checked-in receipts: `evidence/gap-closure-2/`. Keep Plan 17 halted and Plans 18–23 blocked until preflight and the ordinary tracer actually pass. ANT-04/05/06/07 and canonical verification remain pending/gaps_found. Installed binary and hub remain 1.0.79; this run has not published a candidate.
+- **Continue Phase204.2 Plans18–23.** Plan17 input/storage blockers are repaired, both normal/race preflight lanes and ordinary native Builder trial passed on source `b5742d34`. Separate resumed receipts preserve the original halt. Plan18 host-provenance checks are executing. ANT-04/05/06/07 and phase qualification remain pending; no dev/stable publication yet.
 - Follow the inserted dependency order: names/updates, native worker lifecycle, full workflow coverage, shared recruitment/recovery, then real parity proof and candidate handoff. GSD plan checking remains enabled. Use disposable projects for engineering work.
 - **Preserved owner checkpoint:** .planning/phases/205-owner-acceptance-and-restoration-seal/205-14-CHECKPOINT.md. Plans 205-01..13 and task 205-14.1 remain complete; task 2 is still blocking-human and task 3 is pending. The Claude limit reset alone no longer determines the next engineering action.
 - Before the remaining owner walkthrough, Phase 204.5 must produce 205-CODEX-PARITY-HANDOFF.md for the exact new candidate and any controlled local preparation. Preserve the original release receipts, snapshots, and before-inventory; any new pre-session inventory is separately named and linked with preparation changes distinguished from owner evidence. If a session has already begun, preserve it and its original baseline.
