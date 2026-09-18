@@ -368,3 +368,48 @@ func nativeGapCaptureControlRefusals(t *testing.T, r codexNativeLiveReceipt, run
 		}
 	}
 }
+
+func TestCodexNativeGapControlCommandCorrelation(t *testing.T) {
+	const child, turn, workspace, probe, target = "child", "turn", "/fixture", "/fixture/probe.py", "/fixture/inside"
+	const output = "PROBE_CWD=/fixture\nPROBE_TARGET=/fixture/inside\nPROBE_WRITE_SUCCEEDED\n"
+	encode := func(typ string, payload any) []byte {
+		b, _ := json.Marshal(map[string]any{"type": typ, "payload": payload})
+		return append(b, '\n')
+	}
+	metadata := map[string]any{"turn_id": turn}
+	preamble := append(encode("session_meta", map[string]any{"id": child}), encode("event_msg", map[string]any{"thread_id": child, "turn_id": turn})...)
+	call := func(id string) []byte {
+		return encode("response_item", map[string]any{"type": "custom_tool_call", "name": "exec", "call_id": id, "input": `const result = await tools.exec_command({cmd:"python3 /fixture/probe.py /fixture/inside",workdir:"/fixture",max_output_tokens:2000}); text(result);`, "internal_chat_message_metadata_passthrough": metadata})
+	}
+	normalized := func(eventTurn string) []byte {
+		return encode("event_msg", map[string]any{"type": "item_completed", "thread_id": child, "turn_id": eventTurn, "item": map[string]any{"type": "CommandExecution", "id": "exec-id", "status": "completed", "exit_code": 0, "command": []string{"/bin/sh", "-c", "python3 /fixture/probe.py /fixture/inside"}, "cwd": workspace, "aggregated_output": output}})
+	}
+	result := func(id, stdout string) []byte {
+		b, _ := json.Marshal(map[string]any{"exit_code": 0, "output": stdout})
+		return encode("response_item", map[string]any{"type": "custom_tool_call_output", "call_id": id, "internal_chat_message_metadata_passthrough": metadata, "output": []any{map[string]any{"type": "input_text", "text": "Script completed\n"}, map[string]any{"type": "input_text", "text": string(b)}}})
+	}
+	join := func(parts ...[]byte) []byte {
+		var b []byte
+		for _, p := range parts {
+			b = append(b, p...)
+		}
+		return b
+	}
+	for _, tc := range []struct {
+		name     string
+		raw      []byte
+		repeated bool
+	}{
+		{"one-call-two-representations", join(preamble, call("c1"), normalized(turn), result("c1", output)), false},
+		{"two-real-calls", join(preamble, call("c1"), normalized(turn), result("c1", output), call("c2"), result("c2", output)), true},
+		{"different-turn-not-an-echo", join(preamble, call("c1"), normalized("other-turn"), result("c1", output)), true},
+		{"different-output-not-an-echo", join(preamble, call("c1"), normalized(turn), result("c1", output+"different")), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			facts := nativeControlToolEvidence(tc.raw, child, workspace, probe, map[string]string{"inside": target})
+			if !facts["inside_write_allowed"] || facts["inside_write_repeated"] != tc.repeated {
+				t.Fatalf("bad event correlation: %+v", facts)
+			}
+		})
+	}
+}

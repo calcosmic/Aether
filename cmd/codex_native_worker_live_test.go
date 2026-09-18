@@ -1848,7 +1848,12 @@ func nativeControlToolEvidence(raw []byte, child, workspace, probe string, targe
 			}
 		}
 	}
-	type call struct{ Name, Target, Turn string }
+	type call struct {
+		Name, Target, Turn string
+		Normalized         bool
+		Exit               int
+		Output             string
+	}
 	calls := map[string]call{}
 	seen := map[string]bool{}
 	for _, line := range bytes.Split(raw, []byte{'\n'}) {
@@ -1860,6 +1865,22 @@ func nativeControlToolEvidence(raw []byte, child, workspace, probe string, targe
 				for name, target := range targets {
 					if ok && len(words) == 3 && words[0] == "python3" && words[1] == probe && words[2] == target {
 						record(name, target, *i.ExitCode, i.Output)
+						// A code-mode command can also emit CommandExecution
+						// between its call and result. Join only one exact open
+						// call in the same child turn; do not count its echo twice.
+						matched := ""
+						matches := 0
+						for id, c := range calls {
+							if c.Name == name && c.Target == target && c.Turn == normalized.Payload.TurnID {
+								matched = id
+								matches++
+							}
+						}
+						if matches == 1 {
+							c := calls[matched]
+							c.Normalized, c.Exit, c.Output = true, *i.ExitCode, i.Output
+							calls[matched] = c
+						}
 					}
 				}
 			}
@@ -1882,7 +1903,7 @@ func nativeControlToolEvidence(raw []byte, child, workspace, probe string, targe
 				cmd := "python3 " + probe + " " + target
 				pattern := `^\s*const\s+result\s*=\s*await\s+tools\.exec_command\(\{\s*cmd:\s*` + regexp.QuoteMeta(strconv.Quote(cmd)) + `\s*,\s*workdir:\s*` + regexp.QuoteMeta(strconv.Quote(workspace)) + `\s*,\s*max_output_tokens:\s*2000\s*\}\);\s*text\(result\);\s*$`
 				if regexp.MustCompile(pattern).MatchString(p.Input) {
-					calls[p.CallID] = call{name, target, p.Metadata.TurnID}
+					calls[p.CallID] = call{Name: name, Target: target, Turn: p.Metadata.TurnID}
 				}
 			}
 		}
@@ -1899,6 +1920,9 @@ func nativeControlToolEvidence(raw []byte, child, workspace, probe string, targe
 			Output   string `json:"output"`
 		}
 		if json.Unmarshal([]byte(p.Output[1].Text), &result) == nil && result.ExitCode != nil {
+			if c.Normalized && c.Exit == *result.ExitCode && c.Output == result.Output {
+				continue
+			}
 			record(c.Name, c.Target, *result.ExitCode, result.Output)
 		}
 	}
