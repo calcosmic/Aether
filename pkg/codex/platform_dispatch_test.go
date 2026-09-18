@@ -551,6 +551,40 @@ func TestSelectPlatformInvokerUnknownShellRetainsOrderedFallback(t *testing.T) {
 	}
 }
 
+func TestDetectPlatformFromEnvIgnoresEmptyProviderPrefixes(t *testing.T) {
+	for _, entry := range os.Environ() {
+		key, _, _ := strings.Cut(entry, "=")
+		if strings.HasPrefix(key, "CLAUDE_CODE_") || strings.HasPrefix(key, "OPENCODE_") {
+			t.Setenv(key, "")
+		}
+	}
+	for _, key := range []string{"CODEX_THREAD_ID", "CODEX_SESSION_ID", "CODEX_CI", "CLAUDECODE", "CLAUDECODE_PROJECT_DIR", "CLAUDE_PROJECT_DIR"} {
+		t.Setenv(key, "")
+	}
+	t.Setenv("CLAUDE_CODE_SIMPLE", " \t ")
+	t.Setenv("OPENCODE_CONFIG", "")
+	if got := detectPlatformFromEnv(); got != PlatformUnknown {
+		t.Fatalf("empty ambient provider settings detected %s, want unknown", got)
+	}
+	for _, test := range []struct {
+		key      string
+		platform Platform
+	}{
+		{"CODEX_THREAD_ID", PlatformCodex},
+		{"CODEX_SESSION_ID", PlatformCodex},
+		{"CODEX_CI", PlatformCodex},
+		{"CLAUDE_CODE_SIMPLE", PlatformClaude},
+		{"OPENCODE_AGENT", PlatformOpenCode},
+	} {
+		t.Run(test.key, func(t *testing.T) {
+			t.Setenv(test.key, "1")
+			if got := detectPlatformFromEnv(); got != test.platform {
+				t.Fatalf("%s detected %s, want %s", test.key, got, test.platform)
+			}
+		})
+	}
+}
+
 func TestSelectPlatformInvokerRejectsUnsupportedWorkerPlatformOverride(t *testing.T) {
 	t.Setenv(envActivePlatform, string(PlatformCodex))
 	t.Setenv(envWorkerPlatform, "banana")
