@@ -140,7 +140,7 @@ func nativeGapCancellationFacts(parentRaw, childRaw []byte, parent, child string
 			continue
 		}
 		at, err := time.Parse(time.RFC3339Nano, event.Timestamp)
-		activity := p.Type == "function_call" || p.Type == "custom_tool_call" || p.Item.Type == "CommandExecution" || p.Item.Type == "FileChange"
+		activity := p.Type == "function_call" || p.Type == "custom_tool_call" || p.Type == "function_call_output" || p.Type == "custom_tool_call_output" || p.Item.Type == "CommandExecution" || p.Item.Type == "FileChange"
 		if err != nil && activity {
 			unknownTime = true
 		}
@@ -387,6 +387,15 @@ func TestCodexNativeGapControls(t *testing.T) {
 		if got := nativeGapCancellationFacts(parent, child, "parent", "child", observations); !got.IntervalStructurallyComplete || got.Qualified || got.NoPostAckWrites {
 			t.Fatalf("synthetic structural control failed or self-authorized provenance: %+v", got)
 		}
+		t.Run("post-ack-tool-output", func(t *testing.T) {
+			stream := event(0, "session_meta", map[string]any{"id": "child", "parent_thread_id": "parent"})
+			stream = append(stream, event(0, "event_msg", map[string]any{"type": "turn_started", "thread_id": "child", "turn_id": "child-turn"})...)
+			stream = append(stream, event(5, "response_item", map[string]any{"type": "function_call_output", "call_id": "prior-command", "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "child-turn"}})...)
+			got := nativeGapCancellationFacts(parent, boundary(stream, 6, "child", "codex-session-export/v1"), "parent", "child", observations)
+			if !got.PostAckActivity || got.IntervalStructurallyComplete || got.NoPostAckWrites || got.Qualified {
+				t.Fatalf("late tool output accepted: %+v", got)
+			}
+		})
 		for _, tc := range []struct {
 			name          string
 			parent, child []byte
@@ -397,6 +406,7 @@ func TestCodexNativeGapControls(t *testing.T) {
 			{"wrong-end-child", parent, boundary(unbounded, 6, "other", "codex-session-export/v1"), observations},
 			{"unproved-collector", parent, boundary(unbounded, 6, "child", "timer"), observations},
 			{"unknown-activity", parent, boundary(append(append([]byte(nil), unbounded...), event(5, "event_msg", map[string]any{"type": "item_completed", "thread_id": "child", "item": map[string]any{"type": "UnknownActivity"}})...), 6, "child", "codex-session-export/v1"), observations},
+			{"unattributable-call", parent, boundary(append(append([]byte(nil), unbounded...), event(5, "response_item", map[string]any{"type": "function_call", "name": "exec_command", "call_id": "unknown"})...), 6, "child", "codex-session-export/v1"), observations},
 			{"missing-time", parent, bytes.Replace(child, []byte(`"timestamp":"2026-09-18T00:00:04Z",`), nil, 1), observations},
 			{"corrupt-parent", append(append([]byte(nil), parent...), []byte("broken\n")...), child, observations},
 			{"truncated-final-record", parent, append(append([]byte(nil), child...), []byte(`{"type":"event_msg","payload":{"item":{"type":"FileChange"`)...), observations},
