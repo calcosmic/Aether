@@ -804,7 +804,7 @@ Plans:
 
 **Wave 12**
 
-- [ ] 204.2-15-PLAN.md — Freeze source and run the complete current-candidate native/Claude matrix; depends on 13 and 14.
+- [x] 204.2-15-PLAN.md — Freeze source and run the complete current-candidate native/Claude matrix; depends on 13 and 14.
 
 **Wave 13**
 
