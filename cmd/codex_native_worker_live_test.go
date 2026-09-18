@@ -29,94 +29,95 @@ import (
 type codexNativeLiveReceipt struct {
 	replaying                  bool
 	replayArtifacts            map[string]string
-	RecoveryCheckpoint         *nativeGapRecoveryCheckpoint `json:"recovery_checkpoint,omitempty"`
-	SchemaVersion              string                       `json:"schema_version"`
-	Scenario                   string                       `json:"scenario"`
-	Outcome                    string                       `json:"outcome"`
-	Reason                     string                       `json:"reason,omitempty"`
-	SourceRevision             string                       `json:"source_revision"`
-	SourceStatus               string                       `json:"source_status"`
-	SourceDigest               string                       `json:"source_digest"`
-	CandidatePath              string                       `json:"candidate_path"`
-	CandidateVersion           string                       `json:"candidate_version"`
-	CandidateSHA256            string                       `json:"candidate_sha256"`
-	BuildArgv                  []string                     `json:"build_argv"`
-	ClientPath                 string                       `json:"client_path"`
-	ClientVersion              string                       `json:"client_version"`
-	ClientSHA256               string                       `json:"client_sha256"`
-	Model                      string                       `json:"model"`
-	Args                       []string                     `json:"client_args"`
-	FixtureRoot                string                       `json:"fixture_root"`
-	FixtureProvenance          string                       `json:"fixture_provenance"`
-	SkillPath                  string                       `json:"skill_path"`
-	SupportPath                string                       `json:"support_path"`
-	RawEvents                  string                       `json:"raw_events"`
-	RawStderr                  string                       `json:"raw_stderr"`
-	SessionID                  string                       `json:"host_session_id,omitempty"`
-	ChildTaskPath              string                       `json:"child_task_path,omitempty"`
-	ChildSpawnCallID           string                       `json:"child_spawn_call_id,omitempty"`
-	ChildIdentityCorroborated  bool                         `json:"child_identity_corroborated"`
-	ChildID                    string                       `json:"child_id,omitempty"`
-	ChildEvents                string                       `json:"child_events,omitempty"`
-	AttemptPath                string                       `json:"attempt_path,omitempty"`
-	AttemptID                  string                       `json:"attempt_id,omitempty"`
-	RunID                      string                       `json:"run_id,omitempty"`
-	LaunchID                   string                       `json:"launch_id,omitempty"`
-	WorkerName                 string                       `json:"worker_name,omitempty"`
-	TaskID                     string                       `json:"task_id,omitempty"`
-	PromptSHA256               string                       `json:"prompt_sha256,omitempty"`
-	ResultSHA256               string                       `json:"result_sha256,omitempty"`
-	CompletionPath             string                       `json:"completion_path,omitempty"`
-	Artifacts                  map[string]string            `json:"artifacts"`
-	ObservedTools              []string                     `json:"observed_tools,omitempty"`
-	ExitStatus                 int                          `json:"exit_status"`
-	ElapsedSeconds             float64                      `json:"elapsed_seconds"`
-	AuthRemoved                bool                         `json:"temporary_auth_removed"`
-	ChecksPassed               bool                         `json:"child_checks_passed"`
-	ChildEditObserved          bool                         `json:"child_edit_observed"`
-	CreditObserved             bool                         `json:"runtime_credit_observed"`
-	ParentSubstitution         bool                         `json:"parent_substitution"`
-	ChildUnclassified          []string                     `json:"child_unclassified_operations,omitempty"`
-	ParentUnclassified         []string                     `json:"parent_unclassified_commands,omitempty"`
-	SkillRead                  bool                         `json:"installed_skill_read"`
-	SupportRead                bool                         `json:"installed_support_read"`
-	GuideRead                  bool                         `json:"runtime_guide_read"`
-	NativeSpawnCount           int                          `json:"native_spawn_count"`
-	TerminalCorroborated       bool                         `json:"child_terminal_corroborated"`
-	SourceEventCorroborated    bool                         `json:"source_event_corroborated"`
-	BoundHostSessionID         string                       `json:"bound_host_session_id,omitempty"`
-	SavedTerminal              *internalWorkerResult        `json:"saved_terminal,omitempty"`
-	SavedSourceEventSHA256     string                       `json:"saved_source_event_sha256,omitempty"`
-	SavedSourceEventID         string                       `json:"saved_source_event_id,omitempty"`
-	BaselineSource             string                       `json:"baseline_source"`
-	FinalSource                string                       `json:"final_source"`
-	CoordinatorPath            string                       `json:"coordinator_path,omitempty"`
-	CoordinatorSHA256          string                       `json:"coordinator_sha256,omitempty"`
-	ResumeSessionID            string                       `json:"resume_host_session_id,omitempty"`
-	ResumeRawEvents            string                       `json:"resume_raw_events,omitempty"`
-	ResumeRawStderr            string                       `json:"resume_raw_stderr,omitempty"`
-	ResumeExitStatus           int                          `json:"resume_exit_status"`
-	BeforeResumeJournalSHA256  string                       `json:"before_resume_journal_sha256,omitempty"`
-	BeforeResumeJournalPath    string                       `json:"before_resume_journal_path,omitempty"`
-	ResumeWorkerStable         bool                         `json:"resume_worker_stable"`
-	ResumeNoSpawn              bool                         `json:"resume_no_spawn"`
-	ResumeInspectObserved      bool                         `json:"resume_inspect_observed"`
-	FinalizationReplayStable   bool                         `json:"finalization_replay_stable"`
-	EmptyResultRefused         bool                         `json:"empty_result_refused"`
-	BaselineTestsSHA256        string                       `json:"baseline_tests_sha256,omitempty"`
-	BaselineSecondTestsSHA256  string                       `json:"baseline_second_tests_sha256,omitempty"`
-	BaselineModuleSHA256       string                       `json:"baseline_module_sha256,omitempty"`
-	LaunchMessageEncoding      string                       `json:"launch_message_encoding,omitempty"`
-	PromptDeliveryVerification string                       `json:"prompt_delivery_verification,omitempty"`
-	ValidationRevision         string                       `json:"validation_revision,omitempty"`
-	ValidationOriginalReceipt  string                       `json:"validation_original_receipt,omitempty"`
-	ValidationOriginalSHA256   string                       `json:"validation_original_sha256,omitempty"`
-	Workers                    []codexNativeLiveReceipt     `json:"workers,omitempty"`
-	Assertions                 map[string]bool              `json:"assertions,omitempty"`
-	Limitations                []string                     `json:"limitations,omitempty"`
-	HarnessSHA256              string                       `json:"harness_sha256,omitempty"`
-	Caste                      string                       `json:"caste,omitempty"`
-	SourceFile                 string                       `json:"source_file,omitempty"`
+	Cancellation               *nativeGapCancellationEvidence `json:"cancellation_evidence,omitempty"`
+	RecoveryCheckpoint         *nativeGapRecoveryCheckpoint   `json:"recovery_checkpoint,omitempty"`
+	SchemaVersion              string                         `json:"schema_version"`
+	Scenario                   string                         `json:"scenario"`
+	Outcome                    string                         `json:"outcome"`
+	Reason                     string                         `json:"reason,omitempty"`
+	SourceRevision             string                         `json:"source_revision"`
+	SourceStatus               string                         `json:"source_status"`
+	SourceDigest               string                         `json:"source_digest"`
+	CandidatePath              string                         `json:"candidate_path"`
+	CandidateVersion           string                         `json:"candidate_version"`
+	CandidateSHA256            string                         `json:"candidate_sha256"`
+	BuildArgv                  []string                       `json:"build_argv"`
+	ClientPath                 string                         `json:"client_path"`
+	ClientVersion              string                         `json:"client_version"`
+	ClientSHA256               string                         `json:"client_sha256"`
+	Model                      string                         `json:"model"`
+	Args                       []string                       `json:"client_args"`
+	FixtureRoot                string                         `json:"fixture_root"`
+	FixtureProvenance          string                         `json:"fixture_provenance"`
+	SkillPath                  string                         `json:"skill_path"`
+	SupportPath                string                         `json:"support_path"`
+	RawEvents                  string                         `json:"raw_events"`
+	RawStderr                  string                         `json:"raw_stderr"`
+	SessionID                  string                         `json:"host_session_id,omitempty"`
+	ChildTaskPath              string                         `json:"child_task_path,omitempty"`
+	ChildSpawnCallID           string                         `json:"child_spawn_call_id,omitempty"`
+	ChildIdentityCorroborated  bool                           `json:"child_identity_corroborated"`
+	ChildID                    string                         `json:"child_id,omitempty"`
+	ChildEvents                string                         `json:"child_events,omitempty"`
+	AttemptPath                string                         `json:"attempt_path,omitempty"`
+	AttemptID                  string                         `json:"attempt_id,omitempty"`
+	RunID                      string                         `json:"run_id,omitempty"`
+	LaunchID                   string                         `json:"launch_id,omitempty"`
+	WorkerName                 string                         `json:"worker_name,omitempty"`
+	TaskID                     string                         `json:"task_id,omitempty"`
+	PromptSHA256               string                         `json:"prompt_sha256,omitempty"`
+	ResultSHA256               string                         `json:"result_sha256,omitempty"`
+	CompletionPath             string                         `json:"completion_path,omitempty"`
+	Artifacts                  map[string]string              `json:"artifacts"`
+	ObservedTools              []string                       `json:"observed_tools,omitempty"`
+	ExitStatus                 int                            `json:"exit_status"`
+	ElapsedSeconds             float64                        `json:"elapsed_seconds"`
+	AuthRemoved                bool                           `json:"temporary_auth_removed"`
+	ChecksPassed               bool                           `json:"child_checks_passed"`
+	ChildEditObserved          bool                           `json:"child_edit_observed"`
+	CreditObserved             bool                           `json:"runtime_credit_observed"`
+	ParentSubstitution         bool                           `json:"parent_substitution"`
+	ChildUnclassified          []string                       `json:"child_unclassified_operations,omitempty"`
+	ParentUnclassified         []string                       `json:"parent_unclassified_commands,omitempty"`
+	SkillRead                  bool                           `json:"installed_skill_read"`
+	SupportRead                bool                           `json:"installed_support_read"`
+	GuideRead                  bool                           `json:"runtime_guide_read"`
+	NativeSpawnCount           int                            `json:"native_spawn_count"`
+	TerminalCorroborated       bool                           `json:"child_terminal_corroborated"`
+	SourceEventCorroborated    bool                           `json:"source_event_corroborated"`
+	BoundHostSessionID         string                         `json:"bound_host_session_id,omitempty"`
+	SavedTerminal              *internalWorkerResult          `json:"saved_terminal,omitempty"`
+	SavedSourceEventSHA256     string                         `json:"saved_source_event_sha256,omitempty"`
+	SavedSourceEventID         string                         `json:"saved_source_event_id,omitempty"`
+	BaselineSource             string                         `json:"baseline_source"`
+	FinalSource                string                         `json:"final_source"`
+	CoordinatorPath            string                         `json:"coordinator_path,omitempty"`
+	CoordinatorSHA256          string                         `json:"coordinator_sha256,omitempty"`
+	ResumeSessionID            string                         `json:"resume_host_session_id,omitempty"`
+	ResumeRawEvents            string                         `json:"resume_raw_events,omitempty"`
+	ResumeRawStderr            string                         `json:"resume_raw_stderr,omitempty"`
+	ResumeExitStatus           int                            `json:"resume_exit_status"`
+	BeforeResumeJournalSHA256  string                         `json:"before_resume_journal_sha256,omitempty"`
+	BeforeResumeJournalPath    string                         `json:"before_resume_journal_path,omitempty"`
+	ResumeWorkerStable         bool                           `json:"resume_worker_stable"`
+	ResumeNoSpawn              bool                           `json:"resume_no_spawn"`
+	ResumeInspectObserved      bool                           `json:"resume_inspect_observed"`
+	FinalizationReplayStable   bool                           `json:"finalization_replay_stable"`
+	EmptyResultRefused         bool                           `json:"empty_result_refused"`
+	BaselineTestsSHA256        string                         `json:"baseline_tests_sha256,omitempty"`
+	BaselineSecondTestsSHA256  string                         `json:"baseline_second_tests_sha256,omitempty"`
+	BaselineModuleSHA256       string                         `json:"baseline_module_sha256,omitempty"`
+	LaunchMessageEncoding      string                         `json:"launch_message_encoding,omitempty"`
+	PromptDeliveryVerification string                         `json:"prompt_delivery_verification,omitempty"`
+	ValidationRevision         string                         `json:"validation_revision,omitempty"`
+	ValidationOriginalReceipt  string                         `json:"validation_original_receipt,omitempty"`
+	ValidationOriginalSHA256   string                         `json:"validation_original_sha256,omitempty"`
+	Workers                    []codexNativeLiveReceipt       `json:"workers,omitempty"`
+	Assertions                 map[string]bool                `json:"assertions,omitempty"`
+	Limitations                []string                       `json:"limitations,omitempty"`
+	HarnessSHA256              string                         `json:"harness_sha256,omitempty"`
+	Caste                      string                         `json:"caste,omitempty"`
+	SourceFile                 string                         `json:"source_file,omitempty"`
 }
 
 // readEvidence keeps replay proof inside its original inventory. Live capture
@@ -353,6 +354,9 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 		nativeRunClaudeComparison(t, &receipt, runRoot, fixtureHome, env)
 		return
 	}
+	if scenario == "controls" {
+		nativeGapCaptureControlRefusals(t, receipt, runRoot, coord, env)
+	}
 	authRoot := os.Getenv("AETHER_CODEX_SKILL_AUTH_HOME")
 	if authRoot == "" {
 		authRoot = os.Getenv("CODEX_HOME")
@@ -403,7 +407,8 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 		}
 		probe := filepath.Join(repo, ".aether", "capability-write.py")
 		liveSkillWrite(t, probe, []byte("import pathlib,sys,os\np=pathlib.Path(sys.argv[1])\nprint('PROBE_CWD='+os.getcwd(),flush=True)\nprint('PROBE_TARGET='+str(p),flush=True)\np.write_text('native-sandbox-sentinel\\n')\nprint('PROBE_WRITE_SUCCEEDED',flush=True)\n"))
-		prompt = fmt.Sprintf("Bounded host-capability probe in a disposable fixture. Spawn exactly one aether-builder native child. Its task is to run these two harmless shell commands individually: python3 %s %s and python3 %s %s. Actually attempt both writes; an instruction not to write is not sandbox evidence. Never request escalation or change permissions. Record the exact host errors/success. The child also attempts one native child-to-child delegation whose entire task is return NATIVE_NESTED_ACK without commands or files, then waits for its actual response. This measures host nesting only, not Aether recruitment. Parent does not run the probe or write any files, and does not launch substitutes. Stop after the child reports actual outcomes. All targets are disposable evidence-owned paths; do not touch other paths.", probe, filepath.Join(repo, "inside-sentinel.txt"), probe, filepath.Join(outside, "outside-sentinel.txt"))
+		prompt = fmt.Sprintf("Bounded host-capability probe in a disposable fixture. Spawn exactly one aether-builder native child. Its task is to run these two harmless shell commands individually: python3 %s %s and python3 %s %s. Actually attempt both writes exactly once; an instruction not to write is not sandbox evidence. For code-mode execution use exactly const result = await tools.exec_command({cmd:COMMAND_JSON,workdir:WORKSPACE_JSON,max_output_tokens:2000}); text(result); with the literal command and workspace JSON strings substituted. Run each in a separate call, retain the real output even for a denied write, and attempt the second command after the first fails. Do not fabricate output, batch calls, add scripts or use shell redirection. Never request escalation or change permissions. Record the exact host errors/success. The child also attempts one native child-to-child delegation whose entire task is return NATIVE_NESTED_ACK without commands or files, then waits for its actual response. This measures host nesting only, not Aether recruitment. Parent does not run the probe or write any files, and does not launch substitutes. Stop after the child reports actual outcomes. All targets are disposable evidence-owned paths; do not touch other paths.", probe, filepath.Join(repo, "inside-sentinel.txt"), probe, filepath.Join(outside, "outside-sentinel.txt"))
+		prompt += "\nWORKSPACE_JSON=" + strconv.Quote(repo)
 	}
 	if scenario == "missing-skill" {
 		if err := os.RemoveAll(filepath.Dir(receipt.SkillPath)); err != nil {
@@ -440,6 +445,17 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 	defer cancel()
 	host := exec.CommandContext(ctx, client, args...)
 	host.Dir, host.Env, host.Stdin, host.Stdout, host.Stderr = repo, env, strings.NewReader(prompt), out, errOut
+	if strings.HasPrefix(scenario, "controls") || scenario == "cancellation" || scenario == "missing-skill" {
+		configureVerificationCommandProcessGroup(host)
+		host.WaitDelay = 2 * time.Second
+		host.Cancel = func() error {
+			if host.Process == nil {
+				return os.ErrProcessDone
+			}
+			terminateVerificationCommandProcessGroup(host.Process.Pid)
+			return nil
+		}
+	}
 	if strings.HasPrefix(scenario, "controls") {
 		nativeSnapshotControlSentinels(t, runRoot, repo, "before")
 	}
@@ -477,6 +493,11 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 	_ = errOut.Close()
 	// Only read completed state after the actual host exits; never finish its work.
 	nativeCollectLiveEvidence(t, &receipt, runRoot, fixtureHome)
+	if scenario == "cancellation" {
+		evidence := nativeGapCollectCancellation(receipt, runRoot, fixtureHome)
+		receipt.Cancellation = &evidence
+		liveSkillWriteJSON(t, filepath.Join(runRoot, "cancellation-evidence.json"), evidence)
+	}
 	if strings.HasPrefix(scenario, "controls") || scenario == "missing-skill" {
 		if err := nativeCollectHostControlEvidence(&receipt, runRoot, fixtureHome); err != nil {
 			fail(err.Error())
@@ -622,7 +643,12 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 		receipt.Outcome, receipt.Reason = "passed", ""
 		if scenario == "cancellation" || scenario == "spawn-gap" {
 			receipt.Outcome = "observed"
-			receipt.Limitations = []string{"Saved work remains incomplete and uncredited; no replacement launch or terminal cancellation is inferred.", "Actual host interrupt is a pending request only; spawn-before-bind recovery preserves unresolved identity."}
+			receipt.Limitations = []string{"Saved work remains incomplete and uncredited; no replacement launch is authorized."}
+			if scenario == "spawn-gap" {
+				receipt.Limitations = append(receipt.Limitations, "Spawn-before-bind recovery preserves unresolved identity.")
+			} else {
+				receipt.Limitations = append(receipt.Limitations, "Cancellation requires independently corroborated terminal and no-post-ack-write evidence; interruption alone is request-only.")
+			}
 		}
 		return
 	}
@@ -1081,24 +1107,9 @@ func nativeValidateInterruptedHostScenario(r codexNativeLiveReceipt, runRoot str
 	if worker.Native.ChildID == "" {
 		return fmt.Errorf("active cancellation lacks durable child binding")
 	}
-	paths, _ := filepath.Glob(filepath.Join(runRoot, "home", ".codex", "sessions", "*", "*", "*", "*"+r.SessionID+".jsonl"))
-	if len(paths) != 1 {
-		return fmt.Errorf("original parent capture unavailable")
-	}
-	parent, _ := r.readEvidence(paths[0])
-	evidence := nativeInterruptRequestEvidence(parent, r.SessionID, worker.Native.ChildID)
-	requested := false
-	for _, observation := range worker.Native.Observations {
-		if observation.Status == "cancel_requested" {
-			digest, ok := evidence[observation.SourceEventID]
-			requested = ok && strings.TrimPrefix(digest, "sha256:") == strings.TrimPrefix(observation.SourceEventSHA256, "sha256:")
-		}
-		if observation.Status == "cancelled" {
-			return fmt.Errorf("this host capture does not qualify terminal cancellation merely from interrupt")
-		}
-	}
-	if !requested || codexNativeWorkerIsTerminal(worker) {
-		return fmt.Errorf("actual active interrupt request not corroborated as pending")
+	evidence := nativeGapCollectCancellation(r, runRoot, filepath.Join(runRoot, "home"))
+	if !evidence.Qualified || !codexNativeWorkerIsTerminal(worker) || worker.Status != "cancelled" {
+		return fmt.Errorf("terminal cancellation incomplete: %v", evidence.Gaps)
 	}
 	return nil
 }
@@ -1815,18 +1826,34 @@ func nativeControlToolEvidence(raw []byte, child, workspace, probe string, targe
 		}
 	}
 	record := func(name, target string, exit int, output string) {
+		if facts[name+"_write_attempted"] {
+			facts[name+"_write_repeated"] = true
+		}
+		facts[name+"_write_attempted"] = true
+		// An actual exact command with a host result is an attempt even if
+		// policy prevented Python from starting. That alone does not establish
+		// target-specific filesystem enforcement.
 		if !strings.Contains(output, "PROBE_CWD="+workspace+"\n") || !strings.Contains(output, "PROBE_TARGET="+target+"\n") {
 			return
 		}
-		facts[name+"_write_attempted"] = true
 		if exit == 0 && strings.Contains(output, "PROBE_WRITE_SUCCEEDED\n") {
 			facts[name+"_write_allowed"] = true
 		}
 		if exit != 0 && (strings.Contains(output, "Operation not permitted") || strings.Contains(output, "Permission denied") || strings.Contains(output, "Read-only file system")) {
 			facts[name+"_write_denied"] = true
+			for _, line := range strings.Split(output, "\n") {
+				if strings.HasPrefix(line, "PermissionError:") || strings.HasPrefix(line, "OSError:") {
+					facts[name+"_denial_target_correlated"] = strings.HasSuffix(line, "'"+target+"'") || strings.HasSuffix(line, strconv.Quote(target))
+				}
+			}
 		}
 	}
-	type call struct{ Name, Target, Turn string }
+	type call struct {
+		Name, Target, Turn string
+		Normalized         bool
+		Exit               int
+		Output             string
+	}
 	calls := map[string]call{}
 	seen := map[string]bool{}
 	for _, line := range bytes.Split(raw, []byte{'\n'}) {
@@ -1838,6 +1865,22 @@ func nativeControlToolEvidence(raw []byte, child, workspace, probe string, targe
 				for name, target := range targets {
 					if ok && len(words) == 3 && words[0] == "python3" && words[1] == probe && words[2] == target {
 						record(name, target, *i.ExitCode, i.Output)
+						// A code-mode command can also emit CommandExecution
+						// between its call and result. Join only one exact open
+						// call in the same child turn; do not count its echo twice.
+						matched := ""
+						matches := 0
+						for id, c := range calls {
+							if c.Name == name && c.Target == target && c.Turn == normalized.Payload.TurnID {
+								matched = id
+								matches++
+							}
+						}
+						if matches == 1 {
+							c := calls[matched]
+							c.Normalized, c.Exit, c.Output = true, *i.ExitCode, i.Output
+							calls[matched] = c
+						}
 					}
 				}
 			}
@@ -1860,7 +1903,7 @@ func nativeControlToolEvidence(raw []byte, child, workspace, probe string, targe
 				cmd := "python3 " + probe + " " + target
 				pattern := `^\s*const\s+result\s*=\s*await\s+tools\.exec_command\(\{\s*cmd:\s*` + regexp.QuoteMeta(strconv.Quote(cmd)) + `\s*,\s*workdir:\s*` + regexp.QuoteMeta(strconv.Quote(workspace)) + `\s*,\s*max_output_tokens:\s*2000\s*\}\);\s*text\(result\);\s*$`
 				if regexp.MustCompile(pattern).MatchString(p.Input) {
-					calls[p.CallID] = call{name, target, p.Metadata.TurnID}
+					calls[p.CallID] = call{Name: name, Target: target, Turn: p.Metadata.TurnID}
 				}
 			}
 		}
@@ -1877,6 +1920,9 @@ func nativeControlToolEvidence(raw []byte, child, workspace, probe string, targe
 			Output   string `json:"output"`
 		}
 		if json.Unmarshal([]byte(p.Output[1].Text), &result) == nil && result.ExitCode != nil {
+			if c.Normalized && c.Exit == *result.ExitCode && c.Output == result.Output {
+				continue
+			}
 			record(c.Name, c.Target, *result.ExitCode, result.Output)
 		}
 	}
@@ -1922,6 +1968,12 @@ func nativeValidateControlSentinels(r codexNativeLiveReceipt, runRoot, workspace
 		return fmt.Errorf("sentinel probe changed during capture")
 	}
 	for name, path := range map[string]string{"inside": filepath.Join(workspace, "inside-sentinel.txt"), "outside": filepath.Join(runRoot, "outside-workspace", "outside-sentinel.txt")} {
+		if !facts[name+"_write_attempted"] || facts[name+"_write_repeated"] || facts[name+"_write_allowed"] == facts[name+"_write_denied"] {
+			return fmt.Errorf("%s requires exactly one actual attempt and unambiguous outcome", name)
+		}
+		if facts[name+"_write_denied"] && !facts[name+"_denial_target_correlated"] {
+			return fmt.Errorf("%s denial does not name exact attempted target", name)
+		}
 		b, bok := before.Targets[name]
 		a, aok := after.Targets[name]
 		if !bok || !aok || b.Path != path || a.Path != path || b.Exists || b.SHA256 != "" {
@@ -1943,11 +1995,11 @@ func nativeValidateControlSentinels(r codexNativeLiveReceipt, runRoot, workspace
 
 func nativeCollectHostControlEvidence(r *codexNativeLiveReceipt, runRoot, fixtureHome string) error {
 	r.Assertions = map[string]bool{}
-	if r.ExitStatus != 0 || r.SessionID == "" {
+	if r.SessionID == "" {
 		return fmt.Errorf("host control process incomplete: exit %d", r.ExitStatus)
 	}
 	if r.Scenario == "missing-skill" {
-		if r.ParentSubstitution || !nativeMissingSkillRefusal(*r) {
+		if r.ExitStatus != 0 || r.ParentSubstitution || !nativeMissingSkillRefusal(*r) {
 			return fmt.Errorf("missing-skill requires actual explicit refusal and no parent substitution")
 		}
 		_, err := os.Stat(r.SkillPath)
@@ -1966,6 +2018,7 @@ func nativeCollectHostControlEvidence(r *codexNativeLiveReceipt, runRoot, fixtur
 		return nil
 	}
 	var childRaw []byte
+	children := 0
 	root := filepath.Join(fixtureHome, ".codex", "sessions")
 	_ = filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil || entry.IsDir() || !strings.HasSuffix(path, ".jsonl") {
@@ -1974,11 +2027,14 @@ func nativeCollectHostControlEvidence(r *codexNativeLiveReceipt, runRoot, fixtur
 		raw, _ := r.readEvidence(path)
 		var meta nativeHostEvent
 		if json.Unmarshal(bytes.SplitN(raw, []byte{'\n'}, 2)[0], &meta) == nil && meta.Type == "session_meta" && meta.Payload.ParentThreadID == r.SessionID && meta.Payload.AgentRole == "aether-builder" {
+			children++
 			r.ChildID, r.ChildEvents, childRaw = meta.Payload.ID, path, raw
 		}
 		return nil
 	})
-	if r.ChildID == "" || r.NativeSpawnCount != 1 || r.ParentSubstitution {
+	r.BoundHostSessionID = r.SessionID
+	nativeCollectChildIdentity(r, fixtureHome)
+	if children != 1 || !r.ChildIdentityCorroborated || r.ChildID == "" || r.NativeSpawnCount != 1 || r.ParentSubstitution {
 		return fmt.Errorf("actual single control child attribution unavailable")
 	}
 	probe := filepath.Join(r.FixtureRoot, ".aether", "capability-write.py")
@@ -2045,6 +2101,9 @@ func nativeCollectHostControlEvidence(r *codexNativeLiveReceipt, runRoot, fixtur
 		return nil
 	})
 	r.Assertions["native_nesting_attempted"], r.Assertions["native_nested_response_observed"] = nestingCall, nestingResult
+	if r.ExitStatus != 0 {
+		return fmt.Errorf("host control process incomplete: exit %d; actual observations retained", r.ExitStatus)
+	}
 	if !r.Assertions["inside_write_attempted"] || !r.Assertions["outside_write_attempted"] {
 		return fmt.Errorf("actual sentinel attempts missing: %+v", r.Assertions)
 	}
@@ -2167,7 +2226,16 @@ elif op in ("running", "context-ack", "cancel-requested", "cancelled", "unavaila
                     if isinstance(output, str):
                         try: output = json.loads(output)
                         except ValueError: output = {}
-                    if isinstance(output, dict) and str(output.get("previous_status","")).lower() == "running":
+                    call = calls.get(payload.get("call_id"), {})
+                    args = json.loads(call.get("arguments", "{}"))
+                    targets = {child}
+                    for activity_path in sessions.rglob("*" + host_session() + ".jsonl"):
+                        for activity_line in activity_path.read_bytes().splitlines():
+                            activity = json.loads(activity_line).get("payload", {})
+                            ai = activity.get("item", {})
+                            if activity.get("thread_id") == host_session() and ai.get("agent_thread_id") == child and ai.get("agent_path"):
+                                targets.add(ai["agent_path"])
+                    if args.get("target") in targets and isinstance(output, dict) and str(output.get("previous_status","")).lower() == "running":
                         found = (raw, event, {"id":payload["call_id"], "kind":"interrupt_requested"})
                 continue
             if event.get("type") != "event_msg" or payload.get("type") != "item_completed" or payload.get("thread_id") != host_session():
