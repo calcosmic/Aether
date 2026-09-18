@@ -153,21 +153,18 @@ def admit_inputs(source, paths):
                         consumed += member.is_file()
                     if not consumed:
                         raise RuntimeError('empty embed input: ' + pattern)
-    # Ignored compilation files in tracked package directories can still affect
-    # Go compilation. Refuse them, including cgo/assembly inputs.
+    # Ignored compilation files can still be explicitly imported, including
+    # packages beneath hidden/testdata directories omitted by ./... discovery.
+    # Refuse Go files everywhere and native companions in Go package directories.
+    # Generated compiler scratch belongs outside the candidate checkout, not in
+    # an exception list. Unrelated native addon sources are not Go companions.
     package_dirs = {str(Path(name).parent) for name in paths if name.endswith('.go')}
     extensions = {'.go', '.s', '.S', '.c', '.h', '.cc', '.cpp', '.cxx', '.m', '.mm', '.f', '.F', '.for', '.f90', '.syso'}
     ignored = subprocess.check_output(['git', 'ls-files', '--others', '--ignored', '--exclude-standard', '-z'], cwd=source).decode().split('\0')
+    package_dirs.update(str(Path(name).parent) for name in ignored if name.endswith('.go'))
     for name in ignored:
-        if name and Path(name).suffix in extensions:
-            directory = Path(name).parent
-            # ./... excludes these directory subtrees. Still reject additions
-            # inside tracked packages (which may be explicitly imported), and
-            # independently inspect every go:embed above.
-            if str(directory) not in package_dirs and any(
-                    part.startswith(('.', '_')) or part == 'testdata'
-                    for part in directory.parts):
-                continue
+        if name and (Path(name).suffix == '.go' or
+                     (Path(name).suffix in extensions and str(Path(name).parent) in package_dirs)):
             raise RuntimeError('unadmitted ignored compilation input: ' + name)
     for directory in package_dirs:
         for member in (source / directory).iterdir():
