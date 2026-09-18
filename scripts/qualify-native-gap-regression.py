@@ -160,6 +160,14 @@ def admit_inputs(source, paths):
     ignored = subprocess.check_output(['git', 'ls-files', '--others', '--ignored', '--exclude-standard', '-z'], cwd=source).decode().split('\0')
     for name in ignored:
         if name and Path(name).suffix in extensions:
+            directory = Path(name).parent
+            # ./... excludes these directory subtrees. Still reject additions
+            # inside tracked packages (which may be explicitly imported), and
+            # independently inspect every go:embed above.
+            if str(directory) not in package_dirs and any(
+                    part.startswith(('.', '_')) or part == 'testdata'
+                    for part in directory.parts):
+                continue
             raise RuntimeError('unadmitted ignored compilation input: ' + name)
     for directory in package_dirs:
         for member in (source / directory).iterdir():
