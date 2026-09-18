@@ -5,10 +5,10 @@ milestone_name: Classic Colony Restoration
 current_phase: 204.2
 current_phase_name: Codex Native Worker Lifecycle
 status: executing
-stopped_at: Plan 25 child-fetch implementation committed and 93 focused tests pass normal/race; actual ordinary/review/question qualification next
-last_updated: "2026-09-18T23:19:23.478636+00:00"
-last_activity: 2026-09-19 -- Child-fetch implementation committed; 93 focused normal/race tests passed
-last_activity_desc: Plan 25 child-fetch implementation passed on 1f905181; actual full context and scoped-answer qualification remains required; Plan 26 historical safe-refusal result retained
+stopped_at: First actual child-fetch ordinary case incomplete; narrow passive-wait and observed-operation verifier corrections underway
+last_updated: "2026-09-18T23:45:41.604469+00:00"
+last_activity: 2026-09-19 -- Actual ordinary child-fetch capture retained incomplete; verifier corrections identified
+last_activity_desc: Actual worker read and ACK calls captured; passive wait and literal operation formats need source-grounded classification; replay storage admission refused; original failure retained
 state_head: 1f905181
 progress:
   total_phases: 13
@@ -29,16 +29,16 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 **Previous milestone:** v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02 (48/48 requirements; audit `tech_debt`, no blockers)
 **Product version:** local stable v1.0.81 — installed-baseline routing, bookkeeping and the CalVault five-fix local binary repair (2026-09-18, SHA-256 `45663b7cc4ca018b5024ad78675f4255f894143b820484a8c2846c8270a7f816`; receipt `.planning/calvault-local-runtime-install-2026-09-18.md`). This does not qualify inserted Phase204.2 work or establish Phase 205 acceptance.
 **Bookkeeping repair:** current verification is persisted before reviewer launch; prior task evidence survives targeted rebuilding; latest terminal outcomes replace contradictory old outcomes. Normal/race regression checks and CalVault snapshot replay passed. Installed binary/hub versions and all five integrity checks passed. The real CalVault reviewer passed; phase 1 remains BUILT solely because its accepted criterion still requires appearance-preview.png despite recorded owner scope clarification. No false advancement or accepted-plan rewrite. See `.planning/bookkeeping-hotfix-2026-09-18.md` and its JSON receipt.
-**Qualification:** Owner selection 1 prospectively corrects the proof contract (7654348b). Plan 24 admission and Task 25.1 are complete. Plan 26 now passes actual safe-refusal capture and strict independent replay on 2d7137df: all seven guards, 3,178 unchanged original artifacts and 19 focused normal/race tests. The storage-stopped first replay runner remains unchanged; a separately admitted replay passed. Unknown termination still has no cancellation/no-write/credit claim. Actual successful child plaintext output is demonstrated, enabling the prospectively versioned child-fetch design; child-fetch/v1 implementation is committed as 1f905181 and 93 focused checks pass normally and with race detection. Actual full context/answer/ACK and ordinary/review/question qualification remain incomplete. All 11 final scenarios, 4 standard regression runs, canonical gaps_found and Phase 205 owner acceptance remain pending. See 204.2-26-SUMMARY.md and 204.2-CHILD-FETCH-DESIGN.md.
+**Qualification:** Owner selection 1 prospectively corrects the proof contract (7654348b). Plan 24 admission and Task 25.1 are complete. Plan 26 now passes actual safe-refusal capture and strict independent replay on 2d7137df: all seven guards, 3,178 unchanged original artifacts and 19 focused normal/race tests. The storage-stopped first replay runner remains unchanged; a separately admitted replay passed. Unknown termination still has no cancellation/no-write/credit claim. Actual successful child plaintext output is demonstrated, enabling the prospectively versioned child-fetch design; child-fetch/v1 implementation is committed as 1f905181 and 93 focused checks pass normally and with race detection. Actual full context/answer/ACK and ordinary/review/question qualification remain incomplete. The first actual child-fetch ordinary attempt is retained incomplete: passive pre-release waiting and literal tool-output forms need verifier correction, and replay was refused below the unchanged storage floor. See 204.2-25-CHECKPOINT.md. All 11 final scenarios, 4 standard regression runs, canonical gaps_found and Phase 205 owner acceptance remain pending. See 204.2-26-SUMMARY.md and 204.2-CHILD-FETCH-DESIGN.md.
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
 
 ## Current Position
 
 Phase: 204.2 (codex-native-worker-lifecycle) — independent implementation active; qualification gaps_found
 Next phase: 204.2 mandatory delivery and recovery qualification
-Status: Plan 26 complete; Plan 25 child-fetch implementation passed focused normal/race checks; actual worker qualification next
+Status: Plan 26 complete; Plan 25 implementation passed 93 focused normal/race checks; first actual child-fetch capture incomplete and verifier corrections active
 Plan: 25 remaining tasks (22 summaries retained; Plan 26 actual safe-refusal scope complete; Plan 25 has a partial checkpoint)
-Last activity: 2026-09-19 -- Child-fetch implementation committed; all 93 focused normal/race tests passed
+Last activity: 2026-09-19 -- Actual ordinary capture incomplete; passive-wait and observed-operation verifier corrections identified
 
 ## Performance Metrics
 

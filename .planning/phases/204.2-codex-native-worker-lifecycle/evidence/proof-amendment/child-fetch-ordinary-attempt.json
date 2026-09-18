@@ -1,0 +1,1339 @@
+{
+  "candidate_sha256": "sha256:cc6fb93fe3f8c7fbc85845778fb54f4201ba2dcb83ac93872230eb166b04012f",
+  "classification_status": "Recorded wait_agent before release triggers the all-tools-before-ACK rejection. Output-wrapper and inspection-command attribution also remains unresolved. Original flags are retained, not regraded.",
+  "context_protocol": "child-fetch/v1",
+  "full_plan23_required_bytes": 14191223120,
+  "next_steps": [
+    "Correct the passive-wait distinction without allowing useful work before full-context ACK.",
+    "Classify only demonstrated literal command/output forms while retaining rejection of hidden operations.",
+    "Use a new resource-admitted focused run and affected live capture; preserve this original incomplete receipt."
+  ],
+  "original_flags": {
+    "child_checks_passed": false,
+    "child_edit_observed": true,
+    "child_terminal_corroborated": true,
+    "parent_substitution": true,
+    "runtime_credit_observed": true,
+    "source_event_corroborated": true,
+    "temporary_auth_removed": true
+  },
+  "original_outcome": "incomplete",
+  "original_reason": "child used a tool before acknowledging its complete context",
+  "original_receipt": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-v4-20260918T232703Z-ghme1q9w/capture/native-ordinary-1573517767/receipt.json",
+    "sha256": "sha256:4758ca54a2f99594ae0183f11633ae7f973743f801eaddd5f5498a5d73c42560"
+  },
+  "passed": false,
+  "qualification_complete": false,
+  "raw_live_run": {
+    "argv": [
+      "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+      "test",
+      "-p",
+      "1",
+      "./cmd",
+      "-run",
+      "^TestCodexNativeWorkerFreshHost$",
+      "-parallel",
+      "1",
+      "-count=1",
+      "-json",
+      "-timeout",
+      "60m"
+    ],
+    "bound_seconds": 3700,
+    "cleanup": {
+      "before_wait_processes": [],
+      "errors": [],
+      "purpose": "owned resource cleanup only; never host acknowledgement or no-post-ACK-write proof",
+      "remaining_pids": [],
+      "remaining_zombie_pids": [],
+      "signals": [],
+      "tracked_processes": [
+        {
+          "pgid": 4343,
+          "pid": 4343,
+          "ppid": 4273,
+          "started": "Sat Sep 19 01:33:02 2026",
+          "state": "Rs"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4353,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:03 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4355,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:03 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4361,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:03 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4365,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:03 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4370,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:04 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4372,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:04 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4374,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:04 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4377,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:05 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4380,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:05 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4386,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:05 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4390,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:05 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4395,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:05 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4407,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:06 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4420,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:09 2026",
+          "state": "?E"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4426,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:09 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4433,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:09 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4448,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:10 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4461,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:10 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4464,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:10 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4467,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:10 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4542,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:16 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4545,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:16 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4547,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:16 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4551,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:16 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4556,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:16 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4561,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:17 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4571,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:17 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4574,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:17 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4577,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:17 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4581,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:18 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4584,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:18 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4708,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:45 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4712,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:45 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4722,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:46 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4748,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:46 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4760,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:47 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4780,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:47 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4797,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:47 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4801,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:47 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4811,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:48 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4822,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:49 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4837,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:49 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4843,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:49 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4856,
+          "ppid": 4343,
+          "started": "Sat Sep 19 01:33:52 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4869,
+          "ppid": 4856,
+          "started": "Sat Sep 19 01:33:54 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4873,
+          "ppid": 4869,
+          "started": "Sat Sep 19 01:33:54 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4923,
+          "ppid": 4869,
+          "started": "Sat Sep 19 01:34:05 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4930,
+          "ppid": 4856,
+          "started": "Sat Sep 19 01:34:06 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4933,
+          "ppid": 4856,
+          "started": "Sat Sep 19 01:34:07 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4935,
+          "ppid": 4856,
+          "started": "Sat Sep 19 01:34:07 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4936,
+          "ppid": 4935,
+          "started": "Sat Sep 19 01:34:07 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4937,
+          "ppid": 4936,
+          "started": "Sat Sep 19 01:34:07 2026",
+          "state": "U"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4962,
+          "ppid": 4856,
+          "started": "Sat Sep 19 01:34:12 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 4968,
+          "ppid": 4856,
+          "started": "Sat Sep 19 01:34:13 2026",
+          "state": "U"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5057,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:13 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5062,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:13 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5064,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:13 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5065,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:13 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5066,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:13 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5083,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:13 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5101,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:14 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5109,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:14 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5111,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:14 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5112,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:14 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5113,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:14 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5114,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:14 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5119,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:14 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5134,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:14 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5144,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:15 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5146,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:15 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5148,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:15 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5149,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:15 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5150,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:15 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5151,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:15 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5180,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:15 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5182,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:15 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5184,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:15 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5185,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:15 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5187,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:15 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5188,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:15 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5189,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:15 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5200,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:15 2026",
+          "state": "?"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5202,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:15 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5204,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:15 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5206,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:15 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5218,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:15 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5232,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:15 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5235,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:15 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5237,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:15 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5242,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:16 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5248,
+          "ppid": 4968,
+          "started": "Sat Sep 19 01:34:16 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 4343,
+          "pid": 5251,
+          "ppid": 4856,
+          "started": "Sat Sep 19 01:34:16 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 5261,
+          "pid": 5261,
+          "ppid": 5251,
+          "started": "Sat Sep 19 01:34:17 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 5265,
+          "pid": 5265,
+          "ppid": 5251,
+          "started": "Sat Sep 19 01:34:17 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 5269,
+          "pid": 5269,
+          "ppid": 5251,
+          "started": "Sat Sep 19 01:34:17 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 5359,
+          "pid": 5359,
+          "ppid": 5251,
+          "started": "Sat Sep 19 01:34:27 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 5394,
+          "pid": 5394,
+          "ppid": 5251,
+          "started": "Sat Sep 19 01:34:35 2026",
+          "state": "Rs"
+        },
+        {
+          "pgid": 5432,
+          "pid": 5432,
+          "ppid": 5251,
+          "started": "Sat Sep 19 01:34:44 2026",
+          "state": "Rs"
+        },
+        {
+          "pgid": 5432,
+          "pid": 5434,
+          "ppid": 5432,
+          "started": "Sat Sep 19 01:34:44 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 5432,
+          "pid": 5436,
+          "ppid": 5434,
+          "started": "Sat Sep 19 01:34:44 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 5432,
+          "pid": 5442,
+          "ppid": 5434,
+          "started": "Sat Sep 19 01:34:45 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 5432,
+          "pid": 5443,
+          "ppid": 5442,
+          "started": "Sat Sep 19 01:34:45 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 5432,
+          "pid": 5451,
+          "ppid": 5432,
+          "started": "Sat Sep 19 01:34:46 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 5485,
+          "pid": 5485,
+          "ppid": 5251,
+          "started": "Sat Sep 19 01:34:54 2026",
+          "state": "Ss"
+        },
+        {
+          "pgid": 5485,
+          "pid": 5486,
+          "ppid": 5485,
+          "started": "Sat Sep 19 01:34:54 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 5485,
+          "pid": 5487,
+          "ppid": 5486,
+          "started": "Sat Sep 19 01:34:54 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 5485,
+          "pid": 5493,
+          "ppid": 5485,
+          "started": "Sat Sep 19 01:34:55 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 5485,
+          "pid": 5503,
+          "ppid": 5493,
+          "started": "Sat Sep 19 01:34:55 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 5682,
+          "pid": 5682,
+          "ppid": 5251,
+          "started": "Sat Sep 19 01:35:38 2026",
+          "state": "Ss"
+        },
+        {
+          "pgid": 5682,
+          "pid": 5683,
+          "ppid": 5682,
+          "started": "Sat Sep 19 01:35:38 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 5682,
+          "pid": 5687,
+          "ppid": 5683,
+          "started": "Sat Sep 19 01:35:38 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6095,
+          "pid": 6095,
+          "ppid": 5251,
+          "started": "Sat Sep 19 01:37:07 2026",
+          "state": "Rs"
+        },
+        {
+          "pgid": 6129,
+          "pid": 6129,
+          "ppid": 5251,
+          "started": "Sat Sep 19 01:37:14 2026",
+          "state": "Rs"
+        },
+        {
+          "pgid": 6221,
+          "pid": 6221,
+          "ppid": 5251,
+          "started": "Sat Sep 19 01:37:37 2026",
+          "state": "Ss"
+        },
+        {
+          "pgid": 6221,
+          "pid": 6224,
+          "ppid": 6221,
+          "started": "Sat Sep 19 01:37:37 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6296,
+          "pid": 6296,
+          "ppid": 5251,
+          "started": "Sat Sep 19 01:37:52 2026",
+          "state": "Rs"
+        },
+        {
+          "pgid": 6296,
+          "pid": 6352,
+          "ppid": 6296,
+          "started": "Sat Sep 19 01:37:53 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6296,
+          "pid": 6369,
+          "ppid": 6296,
+          "started": "Sat Sep 19 01:37:53 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6296,
+          "pid": 6370,
+          "ppid": 6296,
+          "started": "Sat Sep 19 01:37:53 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6296,
+          "pid": 6411,
+          "ppid": 6296,
+          "started": "Sat Sep 19 01:37:53 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6296,
+          "pid": 6427,
+          "ppid": 6296,
+          "started": "Sat Sep 19 01:37:54 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6296,
+          "pid": 6434,
+          "ppid": 6296,
+          "started": "Sat Sep 19 01:37:54 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6296,
+          "pid": 6451,
+          "ppid": 6296,
+          "started": "Sat Sep 19 01:37:54 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6296,
+          "pid": 6459,
+          "ppid": 6296,
+          "started": "Sat Sep 19 01:37:54 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6296,
+          "pid": 6461,
+          "ppid": 6296,
+          "started": "Sat Sep 19 01:37:54 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6296,
+          "pid": 6462,
+          "ppid": 6296,
+          "started": "Sat Sep 19 01:37:54 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6296,
+          "pid": 6463,
+          "ppid": 6296,
+          "started": "Sat Sep 19 01:37:54 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6296,
+          "pid": 6464,
+          "ppid": 6296,
+          "started": "Sat Sep 19 01:37:54 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6296,
+          "pid": 6465,
+          "ppid": 6296,
+          "started": "Sat Sep 19 01:37:54 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6296,
+          "pid": 6507,
+          "ppid": 6296,
+          "started": "Sat Sep 19 01:37:55 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6296,
+          "pid": 6509,
+          "ppid": 6296,
+          "started": "Sat Sep 19 01:37:55 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6296,
+          "pid": 6511,
+          "ppid": 6296,
+          "started": "Sat Sep 19 01:37:55 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6296,
+          "pid": 6512,
+          "ppid": 6296,
+          "started": "Sat Sep 19 01:37:55 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6296,
+          "pid": 6549,
+          "ppid": 6296,
+          "started": "Sat Sep 19 01:37:55 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6296,
+          "pid": 6559,
+          "ppid": 6296,
+          "started": "Sat Sep 19 01:37:55 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6296,
+          "pid": 6561,
+          "ppid": 6296,
+          "started": "Sat Sep 19 01:37:55 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6296,
+          "pid": 6565,
+          "ppid": 6296,
+          "started": "Sat Sep 19 01:37:55 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6296,
+          "pid": 6567,
+          "ppid": 6296,
+          "started": "Sat Sep 19 01:37:55 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6296,
+          "pid": 6574,
+          "ppid": 6296,
+          "started": "Sat Sep 19 01:37:56 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6296,
+          "pid": 6576,
+          "ppid": 6296,
+          "started": "Sat Sep 19 01:37:56 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 6665,
+          "pid": 6665,
+          "ppid": 5251,
+          "started": "Sat Sep 19 01:38:16 2026",
+          "state": "Rs"
+        },
+        {
+          "pgid": 6665,
+          "pid": 6675,
+          "ppid": 6665,
+          "started": "Sat Sep 19 01:38:16 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 6703,
+          "pid": 6703,
+          "ppid": 5251,
+          "started": "Sat Sep 19 01:38:23 2026",
+          "state": "Ss"
+        },
+        {
+          "pgid": 6703,
+          "pid": 6709,
+          "ppid": 6703,
+          "started": "Sat Sep 19 01:38:23 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 6721,
+          "pid": 6721,
+          "ppid": 5251,
+          "started": "Sat Sep 19 01:38:26 2026",
+          "state": "Rs"
+        },
+        {
+          "pgid": 6721,
+          "pid": 6744,
+          "ppid": 6721,
+          "started": "Sat Sep 19 01:38:26 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6721,
+          "pid": 6745,
+          "ppid": 6721,
+          "started": "Sat Sep 19 01:38:26 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6721,
+          "pid": 6746,
+          "ppid": 6721,
+          "started": "Sat Sep 19 01:38:26 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6721,
+          "pid": 6747,
+          "ppid": 6721,
+          "started": "Sat Sep 19 01:38:26 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6721,
+          "pid": 6749,
+          "ppid": 6721,
+          "started": "Sat Sep 19 01:38:26 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6721,
+          "pid": 6750,
+          "ppid": 6721,
+          "started": "Sat Sep 19 01:38:26 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6721,
+          "pid": 6751,
+          "ppid": 6721,
+          "started": "Sat Sep 19 01:38:26 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6721,
+          "pid": 6762,
+          "ppid": 6721,
+          "started": "Sat Sep 19 01:38:26 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6721,
+          "pid": 6796,
+          "ppid": 6721,
+          "started": "Sat Sep 19 01:38:27 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6822,
+          "pid": 6822,
+          "ppid": 5251,
+          "started": "Sat Sep 19 01:38:33 2026",
+          "state": "Rs"
+        },
+        {
+          "pgid": 6822,
+          "pid": 6833,
+          "ppid": 6822,
+          "started": "Sat Sep 19 01:38:33 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6822,
+          "pid": 6835,
+          "ppid": 6822,
+          "started": "Sat Sep 19 01:38:33 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 6822,
+          "pid": 6837,
+          "ppid": 6822,
+          "started": "Sat Sep 19 01:38:33 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6822,
+          "pid": 6838,
+          "ppid": 6822,
+          "started": "Sat Sep 19 01:38:33 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 6822,
+          "pid": 6852,
+          "ppid": 6822,
+          "started": "Sat Sep 19 01:38:33 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 6930,
+          "pid": 6930,
+          "ppid": 5251,
+          "started": "Sat Sep 19 01:38:49 2026",
+          "state": "Rs"
+        },
+        {
+          "pgid": 6931,
+          "pid": 6931,
+          "ppid": 5251,
+          "started": "Sat Sep 19 01:38:49 2026",
+          "state": "Rs"
+        },
+        {
+          "pgid": 7038,
+          "pid": 7038,
+          "ppid": 5251,
+          "started": "Sat Sep 19 01:39:15 2026",
+          "state": "Rs"
+        },
+        {
+          "pgid": 7069,
+          "pid": 7069,
+          "ppid": 5251,
+          "started": "Sat Sep 19 01:39:21 2026",
+          "state": "Ss"
+        },
+        {
+          "pgid": 7069,
+          "pid": 7070,
+          "ppid": 7069,
+          "started": "Sat Sep 19 01:39:21 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 7121,
+          "pid": 7121,
+          "ppid": 5251,
+          "started": "Sat Sep 19 01:39:31 2026",
+          "state": "Ss"
+        },
+        {
+          "pgid": 7121,
+          "pid": 7122,
+          "ppid": 7121,
+          "started": "Sat Sep 19 01:39:32 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 7121,
+          "pid": 7126,
+          "ppid": 7122,
+          "started": "Sat Sep 19 01:39:32 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 7173,
+          "pid": 7173,
+          "ppid": 5251,
+          "started": "Sat Sep 19 01:39:42 2026",
+          "state": "Rs"
+        },
+        {
+          "pgid": 7294,
+          "pid": 7294,
+          "ppid": 5251,
+          "started": "Sat Sep 19 01:40:10 2026",
+          "state": "Rs"
+        },
+        {
+          "pgid": 7319,
+          "pid": 7319,
+          "ppid": 5251,
+          "started": "Sat Sep 19 01:40:14 2026",
+          "state": "Rs"
+        },
+        {
+          "pgid": 7319,
+          "pid": 7321,
+          "ppid": 7319,
+          "started": "Sat Sep 19 01:40:14 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 7319,
+          "pid": 7337,
+          "ppid": 7321,
+          "started": "Sat Sep 19 01:40:15 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 7374,
+          "pid": 7374,
+          "ppid": 5251,
+          "started": "Sat Sep 19 01:40:24 2026",
+          "state": "Ss"
+        },
+        {
+          "pgid": 7374,
+          "pid": 7375,
+          "ppid": 7374,
+          "started": "Sat Sep 19 01:40:24 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 7374,
+          "pid": 7391,
+          "ppid": 7375,
+          "started": "Sat Sep 19 01:40:24 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 7374,
+          "pid": 7394,
+          "ppid": 7391,
+          "started": "Sat Sep 19 01:40:24 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 7476,
+          "pid": 7476,
+          "ppid": 5251,
+          "started": "Sat Sep 19 01:40:41 2026",
+          "state": "Rs"
+        },
+        {
+          "pgid": 4343,
+          "pid": 7532,
+          "ppid": 4856,
+          "started": "Sat Sep 19 01:40:53 2026",
+          "state": "R"
+        }
+      ]
+    },
+    "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-v4-20260918T232703Z-ghme1q9w/repo",
+    "elapsed_seconds": 474.68434404197615,
+    "exit_code": 1,
+    "stderr": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-v4-20260918T232703Z-ghme1q9w/live.stderr",
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "stdout": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-v4-20260918T232703Z-ghme1q9w/live.stdout",
+      "sha256": "sha256:4c669dcc9ed56cc10eb736c87688e824f65b66f5c67672e2205ffbb4d40c555b"
+    },
+    "stopped_reason": null
+  },
+  "recorded_at": "2026-09-18T23:45:41.604469+00:00",
+  "replay_launched": false,
+  "runner_error": "insufficient storage before before-independent-original-receipt-replay: {'stage': 'before-independent-original-receipt-replay', 'free_bytes': 10280493056, 'required_bytes': 10470596608, 'passed': False}",
+  "schema_version": "aether-native-child-fetch-attempt/v1",
+  "snapshot_revision": "e5c56fd5dc471b37ad955af6549417489501e12a",
+  "source_revision": "d11ed4945dbe4e4abd6bd38f7ed90693fe04f8c3",
+  "summary": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-v4-20260918T232703Z-ghme1q9w/summary.json",
+    "sha256": "sha256:2ecc81aec20da25ca5e2b5cd812a62f1e5e52310490727dd23c99363e28fea15"
+  },
+  "task": "204.2-25.2 and 25.3"
+}
