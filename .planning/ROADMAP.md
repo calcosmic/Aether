@@ -837,7 +837,7 @@ Plans:
 
 **Wave 19 — Task 1 tested; mandatory delivery source unresolved**
 
-- [ ] 204.2-25-PLAN.md — Metadata/proof identity and cancellation admission implemented; 21 focused tests pass normal/race. Actual complete delivery and ordinary/review/question proof remain pending.
+- [ ] 204.2-25-PLAN.md — Metadata/cancellation admission and child-fetch delivery implemented; 93 focused tests pass normal/race on 1f905181. Actual complete delivery and ordinary/review/question proof remain pending.
 
 **Wave 20 — independent refusal controls admitted after reviewed Task 25.1**
 
