@@ -287,6 +287,8 @@ func TestCodexNativeGapControls(t *testing.T) {
 			parent, child []byte
 			obs           []codexNativeHostObservation
 		}{
+			{"truncated-final-record", parent, append(append([]byte(nil), child...), []byte(`{"type":"event_msg","payload":{"item":{"type":"FileChange"`)...), observations},
+			{"malformed-middle-record", parent, append(append([]byte(nil), child...), []byte("broken\n{}\n")...), observations},
 			{"request-only", requestOnly, child, observations[:1]},
 			{"wrong-child-ack", bytes.ReplaceAll(parent, []byte(`"agent_thread_id":"child"`), []byte(`"agent_thread_id":"other"`)), child, observations},
 			{"unrelated-request", bytes.ReplaceAll(parent, []byte(`\"target\":\"child\"`), []byte(`\"target\":\"other\"`)), child, observations},
