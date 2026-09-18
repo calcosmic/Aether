@@ -1,0 +1,448 @@
+{
+  "schema_version": "aether-native-regression/v1",
+  "recorded_at": "2026-09-18T01:23:21.919587+00:00",
+  "plan": "204.2-16",
+  "status": "incomplete: race preflight linker exhausted host disk; broad runs refused",
+  "execution_report_complete": true,
+  "regression_accounting_complete": false,
+  "qualification_passed": false,
+  "qualification_sha256": "sha256:3af18c5a49d7f98b5a8531b11ec30a95a9bebfc84a000784d6128abe60203917",
+  "production_digest": "sha256:08cf994909e034ec397b454fcd848f0bdc7277fd2d5d13d3ef1191040eacdf0c",
+  "test_corpus_digest": "sha256:cf204ea86a8f9c8fc50dd460a6d2fd27e1dc00d2a7931bd0b0b0a9ee238b0695",
+  "harness_sha256": "sha256:780038c2155ba1000ab8ebfe742e2043a0052c793d69263d2159bb20160b91dd",
+  "regression_source": "4729f23aa56f997858417c44a4dd93bf9fd82c56",
+  "source_status_at_preparation": "",
+  "live_source": "f8315369d7f7990c7842da9c80ba5d34df0b604f",
+  "equal_live_source_bytes": true,
+  "runs": {},
+  "missing_runs": [
+    "focused_normal",
+    "focused_race",
+    "normal",
+    "race"
+  ],
+  "preparation": {
+    "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/prepare.json",
+    "sha256": "sha256:16f39e201438fc2263f1d9a144a8396b4dafe40f4706c11b6578dea073ca80c9"
+  },
+  "preflight_manifest": {
+    "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/final-regression/manifest.json",
+    "sha256": "sha256:df9bb0d48c12de4d73d9c9bfb57b5cb005bf42cf7a9ff1ea141d23f4ea84ecde"
+  },
+  "run_refusal": {
+    "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/run.json",
+    "sha256": "sha256:ea182a5409a682dada1cfe08c5fe27133407a25eb5dadab93a1a91dc8a724951"
+  },
+  "check_refusal": {
+    "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/check.json",
+    "sha256": "sha256:f337e012ccb13e27860947bad18011f1bd070a513d73e2f4e4d9577d5d65a3c0"
+  },
+  "live_readback": {
+    "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/live-readback.json",
+    "sha256": "sha256:575ef38ec6c079ff2ddd3ae001e979af67e909f49dff11b4159de7f928e292c0"
+  },
+  "historical_receipt": {
+    "path": "/Users/callumcowie/repos/Aether/.claude/worktrees/agent-p2042-16-1789694217/.planning/phases/204.2-codex-native-worker-lifecycle/evidence/native-regression.json",
+    "sha256": "sha256:5757b13fe04005b9593fbd92020635d245cd7547066878b85d87e487b7c14bc7"
+  },
+  "historical_baseline_verification": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/baseline-verification.json",
+    "sha256": "sha256:4c8a39314e471b4556058d284fa95ea53b464feedd4b766360add0635bf2f7ee"
+  },
+  "frozen_historical_comparison": [
+    {
+      "test": "TestAuditCatalogGolden",
+      "baseline": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestAuditCatalogGolden.txt",
+        "sha256": "sha256:42d8fa6c7625e3d4ab60a0ee9f27e471849a3a2336fbcc1dc7bf92847116f640",
+        "nonempty": true
+      },
+      "current_normal": "not executed: failed isolation preflight",
+      "current_race": "not executed: failed isolation preflight",
+      "comparison": "unavailable; no inherited exception granted"
+    },
+    {
+      "test": "TestBuildStartLegacyHelpersRetired200",
+      "baseline": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestBuildStartLegacyHelpersRetired200.txt",
+        "sha256": "sha256:44cf7ef69a2d2611fbbb01a3d0fc1898001580bbf815bb832e90624ab1ab0d16",
+        "nonempty": true
+      },
+      "current_normal": "not executed: failed isolation preflight",
+      "current_race": "not executed: failed isolation preflight",
+      "comparison": "unavailable; no inherited exception granted"
+    },
+    {
+      "test": "TestCodexBuildPlanOnlySpawnBudgetSeparatesCasteBudgetFromWorkerCount",
+      "baseline": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestCodexBuildPlanOnlySpawnBudgetSeparatesCasteBudgetFromWorkerCount.txt",
+        "sha256": "sha256:34e4f546fcaf731b845543936edc0a4695a5a1a311f3f1faaeef31c82510535b",
+        "nonempty": true
+      },
+      "current_normal": "not executed: failed isolation preflight",
+      "current_race": "not executed: failed isolation preflight",
+      "comparison": "unavailable; no inherited exception granted"
+    },
+    {
+      "test": "TestCompletionPacketSchemaMatchesStructs",
+      "baseline": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestCompletionPacketSchemaMatchesStructs.txt",
+        "sha256": "sha256:5ebec23bbabf37abf6f489264715afc538a363d99a0f13d2df88b66f3e0f2451",
+        "nonempty": true
+      },
+      "current_normal": "not executed: failed isolation preflight",
+      "current_race": "not executed: failed isolation preflight",
+      "comparison": "unavailable; no inherited exception granted"
+    },
+    {
+      "test": "TestCurrentVocabulary199",
+      "baseline": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestCurrentVocabulary199.txt",
+        "sha256": "sha256:153c0c0a5c8513359108fa03004d7657aed58773ad898a054e9688ecc8c3cc32",
+        "nonempty": true
+      },
+      "current_normal": "not executed: failed isolation preflight",
+      "current_race": "not executed: failed isolation preflight",
+      "comparison": "unavailable; no inherited exception granted"
+    },
+    {
+      "test": "TestFailedCheckSendsExactlyOneBuilderFixAttempt",
+      "baseline": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestFailedCheckSendsExactlyOneBuilderFixAttempt.txt",
+        "sha256": "sha256:72f80c680b11125574d7ed02d81e2cd071889429a4bfbc6424a716d1942308b3",
+        "nonempty": true
+      },
+      "current_normal": "not executed: failed isolation preflight",
+      "current_race": "not executed: failed isolation preflight",
+      "comparison": "unavailable; no inherited exception granted"
+    },
+    {
+      "test": "TestFixAttemptIsCountedSeparately",
+      "baseline": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestFixAttemptIsCountedSeparately.txt",
+        "sha256": "sha256:1c11491677a11cf6b08504b0e72cfa76d8d1cf2bf103987ff78c287c62ca1053",
+        "nonempty": true
+      },
+      "current_normal": "not executed: failed isolation preflight",
+      "current_race": "not executed: failed isolation preflight",
+      "comparison": "unavailable; no inherited exception granted"
+    },
+    {
+      "test": "TestFixAttemptNeverOverwritesTheFirstResult",
+      "baseline": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestFixAttemptNeverOverwritesTheFirstResult.txt",
+        "sha256": "sha256:ec27e59a9322e9e3ed72ee0a1b2ee4f588e811ade06daf8b318d1de0b3bf23cc",
+        "nonempty": true
+      },
+      "current_normal": "not executed: failed isolation preflight",
+      "current_race": "not executed: failed isolation preflight",
+      "comparison": "unavailable; no inherited exception granted"
+    },
+    {
+      "test": "TestGoSourceHintsMatchCobraContracts",
+      "baseline": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestGoSourceHintsMatchCobraContracts.txt",
+        "sha256": "sha256:29d70d45289f7d0567dabb884428f907438e77c342efd4518edd6fd9d465a5d9",
+        "nonempty": true
+      },
+      "current_normal": "not executed: failed isolation preflight",
+      "current_race": "not executed: failed isolation preflight",
+      "comparison": "unavailable; no inherited exception granted"
+    },
+    {
+      "test": "TestGoldenBuildVisualOutput",
+      "baseline": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestGoldenBuildVisualOutput.txt",
+        "sha256": "sha256:1913c7c299207c74c2b3ca7f3019b91094baa3747c75cc293a65fdb2d9256c87",
+        "nonempty": true
+      },
+      "current_normal": "not executed: failed isolation preflight",
+      "current_race": "not executed: failed isolation preflight",
+      "comparison": "unavailable; no inherited exception granted"
+    },
+    {
+      "test": "TestGoldenContinueVisualOutput",
+      "baseline": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestGoldenContinueVisualOutput.txt",
+        "sha256": "sha256:29b1e046201663f944d59bc6078680d140d7a211d9f2ddb5343fda81e060c92d",
+        "nonempty": true
+      },
+      "current_normal": "not executed: failed isolation preflight",
+      "current_race": "not executed: failed isolation preflight",
+      "comparison": "unavailable; no inherited exception granted"
+    },
+    {
+      "test": "TestHumanFacingOutputGoesThroughWriteVisualOutput",
+      "baseline": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestHumanFacingOutputGoesThroughWriteVisualOutput.txt",
+        "sha256": "sha256:93da9066c351f17e2daeae437d9778b42876946f1e4dcbeca479ba72636564a5",
+        "nonempty": true
+      },
+      "current_normal": "not executed: failed isolation preflight",
+      "current_race": "not executed: failed isolation preflight",
+      "comparison": "unavailable; no inherited exception granted"
+    },
+    {
+      "test": "TestNoSecondAutomaticFixAttempt",
+      "baseline": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestNoSecondAutomaticFixAttempt.txt",
+        "sha256": "sha256:04a418846bd43443392cfd0f39a717f16812cc88a976997ad5eafd89fe366fdd",
+        "nonempty": true
+      },
+      "current_normal": "not executed: failed isolation preflight",
+      "current_race": "not executed: failed isolation preflight",
+      "comparison": "unavailable; no inherited exception granted"
+    },
+    {
+      "test": "TestPhase199GateReceipt",
+      "baseline": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestPhase199GateReceipt.txt",
+        "sha256": "sha256:d595a0001dce102db9d8631c8857cf92aab58523ffae60411278be5b3cf9c299",
+        "nonempty": true
+      },
+      "current_normal": "not executed: failed isolation preflight",
+      "current_race": "not executed: failed isolation preflight",
+      "comparison": "unavailable; no inherited exception granted"
+    },
+    {
+      "test": "TestPlanningAdversarial200",
+      "baseline": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestPlanningAdversarial200.txt",
+        "sha256": "sha256:02b578c1ef3faa16e2729cca2c0f9dd13d5f23d62296008c78a510be68f03a42",
+        "nonempty": true
+      },
+      "current_normal": "not executed: failed isolation preflight",
+      "current_race": "not executed: failed isolation preflight",
+      "comparison": "unavailable; no inherited exception granted"
+    },
+    {
+      "test": "TestPlanningPublicPaths200",
+      "baseline": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestPlanningPublicPaths200.txt",
+        "sha256": "sha256:ca6377db1c6ca082a6104a2aa5c4f7438e7e7ff34625a905172b20def1beb9bb",
+        "nonempty": true
+      },
+      "current_normal": "not executed: failed isolation preflight",
+      "current_race": "not executed: failed isolation preflight",
+      "comparison": "unavailable; no inherited exception granted"
+    },
+    {
+      "test": "TestResolveTestCommand_GoProject",
+      "baseline": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan08/historical-diagnostics/TestResolveTestCommand_GoProject.txt",
+        "sha256": "sha256:c52c55036f39d3b47ce8b013c57e53913f37b8855cc70711dea64bd434fa5c23",
+        "nonempty": true
+      },
+      "current_normal": "not executed: failed isolation preflight",
+      "current_race": "not executed: failed isolation preflight",
+      "comparison": "unavailable; no inherited exception granted"
+    }
+  ],
+  "historical_exception_set_expanded": false,
+  "preflight_outcomes": {
+    "normal": {
+      "build": {
+        "argv": [
+          "go",
+          "build",
+          "-buildvcs=false",
+          "-ldflags",
+          "-X github.com/calcosmic/Aether/cmd.Version=1.0.79",
+          "-o",
+          "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/final-regression/normal/candidate-aether",
+          "./cmd/aether"
+        ],
+        "bound_seconds": 300,
+        "cwd": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/final-regression/normal/repo",
+        "elapsed_seconds": 20.693338871002197,
+        "exit_code": 0,
+        "started_epoch": 1789694304.645498,
+        "stderr": {
+          "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/final-regression/normal/build.stderr",
+          "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/final-regression/normal/build.stdout",
+          "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "timed_out": false
+      },
+      "candidate": {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/final-regression/normal/candidate-aether",
+        "sha256": "sha256:f425e2a8713658d50815917aeb5988a60c07be0ebad0d4724c322565b670f4f3"
+      },
+      "fixture": {
+        "argv": [
+          "go",
+          "test",
+          "./cmd",
+          "-run",
+          "^(TestCLIInterruptedBuildResumesThroughForceRedispatch|TestCLIInterruptedBuildReadinessCleanup|TestPackedNPMAncestorIsolation|TestPackedNPMReleaseCandidateContract|TestDisposedBranchesAreGoneFromTheRepository)$",
+          "-count=1",
+          "-timeout",
+          "180s",
+          "-json"
+        ],
+        "bound_seconds": 420,
+        "cwd": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/final-regression/normal/repo",
+        "elapsed_seconds": 47.88629508018494,
+        "exit_code": 0,
+        "started_epoch": 1789694325.3679318,
+        "stderr": {
+          "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/final-regression/normal/fixture.stderr",
+          "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/final-regression/normal/fixture.stdout",
+          "sha256": "sha256:03c49077d3f11b62a409833fc51b1ca9d34b866629df3f02e1af511d0274d15d"
+        },
+        "timed_out": false
+      },
+      "terminals": {
+        "TestCLIInterruptedBuildReadinessCleanup": "pass",
+        "TestCLIInterruptedBuildReadinessCleanup/descendant": "pass",
+        "TestCLIInterruptedBuildReadinessCleanup/exit": "pass",
+        "TestCLIInterruptedBuildReadinessCleanup/missing": "pass",
+        "TestCLIInterruptedBuildReadinessCleanup/success": "pass",
+        "TestCLIInterruptedBuildResumesThroughForceRedispatch": "pass",
+        "TestDisposedBranchesAreGoneFromTheRepository": "pass",
+        "TestPackedNPMAncestorIsolation": "pass",
+        "TestPackedNPMAncestorIsolation/prefix=false": "pass",
+        "TestPackedNPMAncestorIsolation/prefix=true": "pass",
+        "TestPackedNPMReleaseCandidateContract": "pass",
+        "TestPackedNPMReleaseCandidateContract/checksum_failure_preserves_the_previous_binary": "pass",
+        "TestPackedNPMReleaseCandidateContract/packed_candidate_migrates_and_rolls_back_an_n-1_colony_without_local_data_loss": "pass",
+        "TestPackedNPMReleaseCandidateContract/packed_npm_installs_the_matching_staged_archive": "pass",
+        "TestPackedNPMReleaseCandidateContract/retry_recovers_the_state_left_by_interrupted_activation": "pass",
+        "TestPackedNPMReleaseCandidateContract/wrong_version_archive_preserves_the_previous_binary": "pass"
+      },
+      "discovery_probe": {
+        "argv": [
+          "go",
+          "test",
+          "-overlay",
+          "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/final-regression/normal/discovery/overlay.json",
+          "./cmd",
+          "-run",
+          "^TestPlan13EvidenceProbe$",
+          "-count=1",
+          "-timeout",
+          "180s",
+          "-json"
+        ],
+        "bound_seconds": 300,
+        "cwd": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/final-regression/normal/repo",
+        "elapsed_seconds": 28.42130422592163,
+        "exit_code": 0,
+        "started_epoch": 1789694373.257845,
+        "stderr": {
+          "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/final-regression/normal/discovery/probe.stderr",
+          "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/final-regression/normal/discovery/probe.stdout",
+          "sha256": "sha256:a17c5d353d581680fde73281f749566b7d0eea07f36a3b85c9d74ab0b547f9a1"
+        },
+        "timed_out": false
+      },
+      "passed": true
+    },
+    "race": {
+      "build": {
+        "argv": [
+          "go",
+          "build",
+          "-buildvcs=false",
+          "-ldflags",
+          "-X github.com/calcosmic/Aether/cmd.Version=1.0.79",
+          "-o",
+          "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/final-regression/race/candidate-aether",
+          "./cmd/aether"
+        ],
+        "bound_seconds": 300,
+        "cwd": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/final-regression/race/repo",
+        "elapsed_seconds": 23.114328861236572,
+        "exit_code": 0,
+        "started_epoch": 1789694409.4892,
+        "stderr": {
+          "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/final-regression/race/build.stderr",
+          "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/final-regression/race/build.stdout",
+          "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "timed_out": false
+      },
+      "candidate": {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/final-regression/race/candidate-aether",
+        "sha256": "sha256:2db725efe521eaec21471e2a43de4213370f2d86f8d3e07ecfe1efccc9bf4222"
+      },
+      "fixture": {
+        "argv": [
+          "go",
+          "test",
+          "./cmd",
+          "-race",
+          "-run",
+          "^(TestCLIInterruptedBuildResumesThroughForceRedispatch|TestCLIInterruptedBuildReadinessCleanup|TestPackedNPMAncestorIsolation|TestPackedNPMReleaseCandidateContract|TestDisposedBranchesAreGoneFromTheRepository)$",
+          "-count=1",
+          "-timeout",
+          "180s",
+          "-json"
+        ],
+        "bound_seconds": 420,
+        "cwd": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/final-regression/race/repo",
+        "elapsed_seconds": 70.3096981048584,
+        "exit_code": 1,
+        "started_epoch": 1789694432.635017,
+        "stderr": {
+          "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/final-regression/race/fixture.stderr",
+          "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/final-regression/race/fixture.stdout",
+          "sha256": "sha256:72c4501d3ab3b00e492b310203a54e10cf3194eec1f317368d56e4f9bb984634"
+        },
+        "timed_out": false
+      },
+      "terminals": {},
+      "discovery_probe": null,
+      "passed": false
+    }
+  },
+  "new_failure_disposition": {
+    "host_disk": "Race cmd.test link: mapping output file failed: no space left on device. No race test began. Failed preflight is immutable; --run and --check exit 1 before broad execution. Only owned race compiler cache retired after raw preservation. Retrying without sufficient independent storage would repeat the same condition.",
+    "required_native_evidence": "Plan15 retains six incomplete scenarios and unavailable full host tool schema. This is not an inherited failure.",
+    "readiness_cleanup_disposed_npm": "All five preflight groups passed normally; current race/full qualification missing. Plan13 prior-corpus race pass remains historical.",
+    "schema_catalog_wiring": "Required passes, never inherited exceptions. No current full run exists; earlier passes are not current execution credit."
+  },
+  "prior_npm_incident": "Partial recovery only: 31 additions, 64 changes, 17 removals remain unestablished; no real-home restoration performed.",
+  "installed_aether": {
+    "path": "/Users/callumcowie/.local/bin/aether",
+    "role": "read-only identity; installed aether is not this candidate",
+    "sha256": "sha256:72707dc5d5fa34304c4a4b9455416a440eebad4d22aaede0a373ccf5dc7d8b90",
+    "version": "{\"ok\":true,\"result\":\"1.0.79\"}"
+  },
+  "scope": "Only disposable clone preparation and bounded checks. No new live host, shared install/hub/home/config change, auth/login, publication, owner walkthrough or Phase205 acceptance.",
+  "discovery": {
+    "packages": 21,
+    "top_level_cases": 6817,
+    "focused_cases": 386,
+    "full": {
+      "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/final-regression/normal/discovery/discovery.json",
+      "sha256": "sha256:28f202f104eb8199a590a2b42b9d3430f0d467eb3bf5742a556164d54ec923f7"
+    },
+    "execution_credit": false,
+    "race_independent_discovery": "not reached"
+  },
+  "strict_task1": {
+    "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/strict-task1.json",
+    "sha256": "sha256:aa9bf8f6a2ede04f2cc7b68db51dd1778cdd4cadb1ee62e7bf8379877f2240ae"
+  },
+  "cache_retirement": {
+    "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/cache-retirement.json",
+    "sha256": "sha256:4f7964b3915f45bfef2b608e4eff2ce6307d1b21405f6b17d8990a447434b7a9"
+  },
+  "strict_gate_outcome": "exit 1: incomplete actual qualification and required regression run absent: focused_normal; identity accepted, missing full execution not waived"
+}
