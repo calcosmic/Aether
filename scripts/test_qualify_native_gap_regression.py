@@ -55,6 +55,21 @@ class AdmissionTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'unadmitted'):
             q.inventory(self.repo)
 
+    def test_ignored_go_scratch_outside_discovery_is_not_compiled(self):
+        self.put('.gitignore', '.scratch/\n_scratch/\ntestdata/\n')
+        before = q.inventory(self.repo)
+        for name in ['.scratch/generated.go', '_scratch/generated.go', 'testdata/generated.go']:
+            self.put(name, 'package scratch')
+        self.assertEqual(before, q.inventory(self.repo))
+        self.put('main.go', '//go:embed all:.scratch\n')
+        with self.assertRaisesRegex(RuntimeError, 'unadmitted embedded'):
+            q.inventory(self.repo)
+        self.put('main.go', '//go:embed assets\n')
+        self.put('.scratch/tracked.go', 'package scratch')
+        subprocess.run(['git', 'add', '-f', '.scratch/tracked.go'], cwd=self.repo, check=True)
+        with self.assertRaisesRegex(RuntimeError, 'unadmitted ignored compilation'):
+            q.inventory(self.repo)
+
     def test_validate_source_and_both_prepared_lanes_before_launch(self):
         with tempfile.TemporaryDirectory() as external:
             root = Path(external)
