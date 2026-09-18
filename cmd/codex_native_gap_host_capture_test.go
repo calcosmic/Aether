@@ -36,6 +36,8 @@ type nativeGapToolDefinition struct {
 	Parameters map[string]json.RawMessage `json:"parameters"`
 }
 
+func nativeGapCollectHostCapture(t *testing.T, r *codexNativeLiveReceipt, root string) {}
+
 func nativeGapDecodeCapture(raw []byte) (nativeGapHostCapture, error) {
 	var c nativeGapHostCapture
 	d := json.NewDecoder(bytes.NewReader(raw))
@@ -146,6 +148,30 @@ func nativeGapValidateCapture(ref nativeEvidenceFile, kind string, r codexNative
 
 // These are deterministic adversarial bytes, never actual host exports.
 func TestCodexNativeGapHostCapture(t *testing.T) {
+	t.Run("collector-unavailable", func(t *testing.T) {
+		dir := t.TempDir()
+		r := codexNativeLiveReceipt{SessionID: "deterministic-session", ClientVersion: "deterministic-version", ClientPath: "/deterministic/client", ClientSHA256: "deterministic-hash", Args: []string{"exec"}, Model: "model", Artifacts: map[string]string{}}
+		nativeGapCollectHostCapture(t, &r, dir)
+		if r.HostProvenance == nil {
+			t.Fatal("collector omitted unavailable record")
+		}
+		for _, ref := range []nativeEvidenceFile{r.HostProvenance.Configuration, r.HostProvenance.ToolSchema} {
+			raw, err := nativeEvidenceBytes(ref)
+			if err != nil {
+				t.Fatal(err)
+			}
+			c, err := nativeGapDecodeCapture(raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c.Complete || c.Unavailable == "" || c.SessionID != r.SessionID {
+				t.Fatal("unavailable collector masquerades as complete export")
+			}
+		}
+		if err := nativeGapHostIdentity(*r.HostProvenance, r); err == nil {
+			t.Fatal("unavailable collector qualified")
+		}
+	})
 	t.Run("deterministic-semantic-contract-only", func(t *testing.T) {
 		r := codexNativeLiveReceipt{SessionID: "deterministic-session", ClientVersion: "deterministic-version", ClientPath: "/deterministic/client", ClientSHA256: "deterministic-hash", Args: []string{"exec", "-m", "model"}, Model: "model"}
 		base := nativeGapHostCapture{SchemaVersion: "aether-host-capture/v1", Kind: "configuration", SessionID: r.SessionID, Executable: nativeEvidenceFile{r.ClientPath, r.ClientSHA256}, Version: r.ClientVersion, Args: r.Args, Model: r.Model, Method: "deterministic-test-only", Provenance: "deterministic fixture; not an installed client export", Complete: true, Settings: map[string]json.RawMessage{"model": json.RawMessage(`"model"`)}}
