@@ -4,12 +4,12 @@ milestone: v1.28
 milestone_name: Classic Colony Restoration
 current_phase: 204.2
 current_phase_name: Codex Native Worker Lifecycle
-status: ready_to_execute
-stopped_at: Phase 204.2 gap Plans 17–23 checked; ready for gap-only execution; qualification remains gaps_found
-last_updated: "2026-09-18T06:47:13.006Z"
+status: blocked
+stopped_at: Plan 204.2-17 halted on unadmitted embedded input and uncertain capacity; Plans 18–23 blocked
+last_updated: "2026-09-18T07:05:09.824046+00:00"
 last_activity: 2026-09-18
-last_activity_desc: Gap Plans 17–23 planned and independently checked (15 tasks, waves 14–20); execution pending; verification remains gaps_found (0/5)
-state_head: 34429d5fd6b83bc91628ad6a86cb6c9f5de58b2d
+last_activity_desc: Plan 17 admission guards implemented and tested; live preflight and tracer blocked; qualification remains gaps_found
+state_head: 6f3db30bc6641a71015bdd2e4abaee590f483981
 progress:
   total_phases: 13
   completed_phases: 6
@@ -32,11 +32,11 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 
 ## Current Position
 
-Phase: 204.2 (Codex Native Worker Lifecycle) — READY TO EXECUTE
+Phase: 204.2 (Codex Native Worker Lifecycle) — BLOCKED
 Next phase: 204.2 gap closure
-Status: Ready to execute gap Plans 17–23; qualification remains gaps_found
-Plan: 16 of 23 execution reports delivered; 7 checked plans pending; next: gsd execute-phase 204.2 --gaps-only
-Last activity: 2026-09-18 — Gap Plans 17–23 planned and independently checked (15 tasks, waves 14–20); execution pending; verification remains gaps_found (0/5)
+Status: Plan 17 halted; Plans 18–23 blocked; qualification remains gaps_found
+Plan: 16 of 23 complete; Plan 17 partially implemented and halted; Plans 18–23 not executed
+Last activity: 2026-09-18 — Build-input admission and storage guards implemented; preparation refuses an ignored embedded .codex/.DS_Store; storage requirement remains unknown because historical normal/go-cache is absent. No candidate build, live tracer or publication.
 
 ## Performance Metrics
 
@@ -822,7 +822,7 @@ Historical receipts below describe the prepared 1.0.79 candidate. The owner subs
 
 ## Operator Next Steps
 
-- **Next GSD action: `gsd execute-phase 204.2 --gaps-only`.** Phase 204.2 has sixteen plans: nine earlier execution reports and seven independently checked gap-closure plans (10–16) in waves 8–13, covering ANT-04 through ANT-07. Planning checks passed; execution and mandatory qualification remain pending. All nine execution reports and the implementation review are complete; current-source native qualification and regression gaps remain. See 204.2-VERIFICATION.md and 204.2-REVIEW.md. Both original and final complete live matrices retain ten incomplete cases and one observed refusal. Mandatory native qualification remains incomplete; no phase completion is authorized. Phase 204.1 is complete: all seven plans and the bootstrap repair are merged, required proof passes, and the user-delegated scope reviews passed 3/3. GSD's combined UAT/verification completion predicate passed before phase.complete advanced to 204.2. Its final broad suite retains exactly 17 historical failures. Phases 204.3–204.5 still need detailed planning. No shared installation, release or Phase 205 owner acceptance is claimed.
+- **Resolve Plan 204.2-17 admission and capacity blockers before resuming gap execution.** Its input/storage guard repairs are implemented, but an ignored `.codex/.DS_Store` is consumed by `all:.codex` and omitted by Git; historical normal-cache size needed for the storage estimate is unavailable. Raw evidence: `/tmp/aether-gap2-kw0zk0jl`; checked-in receipts: `evidence/gap-closure-2/`. Keep Plan 17 halted and Plans 18–23 blocked until preflight and the ordinary tracer actually pass. ANT-04/05/06/07 and canonical verification remain pending/gaps_found. Installed binary and hub remain 1.0.79; this run has not published a candidate.
 - Follow the inserted dependency order: names/updates, native worker lifecycle, full workflow coverage, shared recruitment/recovery, then real parity proof and candidate handoff. GSD plan checking remains enabled. Use disposable projects for engineering work.
 - **Preserved owner checkpoint:** .planning/phases/205-owner-acceptance-and-restoration-seal/205-14-CHECKPOINT.md. Plans 205-01..13 and task 205-14.1 remain complete; task 2 is still blocking-human and task 3 is pending. The Claude limit reset alone no longer determines the next engineering action.
 - Before the remaining owner walkthrough, Phase 204.5 must produce 205-CODEX-PARITY-HANDOFF.md for the exact new candidate and any controlled local preparation. Preserve the original release receipts, snapshots, and before-inventory; any new pre-session inventory is separately named and linked with preparation changes distinguished from owner evidence. If a session has already begun, preserve it and its original baseline.

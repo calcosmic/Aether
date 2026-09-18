@@ -811,11 +811,11 @@ Plans:
 - [x] 204.2-16-PLAN.md — Account exact final normal/race regressions and refresh canonical verification after archiving its original bytes; depends on 15.
 
 
-**Second gap-closure pass — pending execution**
+**Second gap-closure pass — halted at Plan 17**
 
-**Wave 14 — blocked on Plan 16 completion**
+**Wave 14 — Plan 17 partially implemented; input/capacity preflight blocked**
 
-- [ ] 204.2-17-PLAN.md — Complete build-input admission, measured storage preflight and an ordinary native tracer.
+- [ ] 204.2-17-PLAN.md — Input/storage guard repairs tested; halted on unadmitted embedded `.codex/.DS_Store` and uncertain capacity (missing historical normal cache). Preflight/tracer not completed; Plans 18–23 remain blocked.
 
 **Wave 15 — blocked on Plan 17 completion**
 
