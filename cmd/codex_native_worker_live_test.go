@@ -1455,6 +1455,9 @@ func nativeAssignedFixtureTest(r codexNativeLiveReceipt, command []string, outpu
 	return nativeRequiredFixtureTest(command, output) || (r.Scenario == "partial-resume" && nativePartialFixtureTest(command, output))
 }
 func nativeCodeModeCommand(input string) (string, string, bool) {
+	if projected, ok := nativeCodeModeOutputProjection(input, ""); ok {
+		return projected.Command, projected.Cwd, true
+	}
 	// Parse only one awaited command and print its untouched returned object.
 	// No evaluation, arbitrary JS, loops, second commands or manufactured output.
 	pattern := regexp.MustCompile(`^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+tools\.exec_command\((\{[\s\S]*\})\);\s*text\(([A-Za-z_][A-Za-z0-9_]*)\);\s*$`)
@@ -3712,7 +3715,13 @@ func nativeParentCoordinationCommand(r *codexNativeLiveReceipt, command []string
 	case "head":
 		return len(words) == 4 && words[1] == "-n" && regexp.MustCompile(`^[0-9]+$`).MatchString(words[2]) && !strings.HasPrefix(words[3], "-")
 	case "rg":
-		return len(words) == 3 && words[1] == "--files" && filepath.IsAbs(words[2])
+		if len(words) == 3 && words[1] == "--files" && filepath.IsAbs(words[2]) {
+			return true
+		}
+		// The observed parent queried the fixture's Aether guidance with these
+		// three literal document globs. No executable option, expansion, alternate
+		// search root, symlink following or extra command is admitted here.
+		return len(actualCwd) == 1 && command[2] == `rg "spawn-log" .aether -g '*.md' -g '*.json' -g '*.yaml'`
 	case "jq":
 		args := words[1:]
 		if len(args) > 0 && (args[0] == "-r" || args[0] == "-c" || args[0] == "-S") {
@@ -4325,6 +4334,9 @@ func nativeCorroboratedLiteralPatch(r codexNativeLiveReceipt, raw []byte, callID
 }
 
 func nativeCodeModeCommands(input, defaultCwd string) ([]nativeRecordedShellCommand, bool) {
+	if projected, ok := nativeCodeModeOutputProjection(input, defaultCwd); ok {
+		return []nativeRecordedShellCommand{projected}, true
+	}
 	if strings.Contains(input, "Promise.allSettled") {
 		return nativeReadOnlyBatchCommands(input, defaultCwd)
 	}
@@ -4356,6 +4368,19 @@ func nativeCodeModeCommands(input, defaultCwd string) ([]nativeRecordedShellComm
 		input = input[end:]
 	}
 	return result, len(result) > 0
+}
+
+// The retained host also prints the sole literal exec result's output string.
+// This exact projection changes presentation only; invocation evidence still
+// comes from the separately correlated CommandExecution and call/result events.
+// Requiring the entire input excludes additional commands or result rewriting.
+func nativeCodeModeOutputProjection(input, defaultCwd string) (nativeRecordedShellCommand, bool) {
+	pattern := regexp.MustCompile(`^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+tools\.exec_command\((\{[\s\S]*\})\);\s*text\(([A-Za-z_][A-Za-z0-9_]*)\.output\);\s*$`)
+	match := pattern.FindStringSubmatch(input)
+	if len(match) != 4 || match[1] != match[3] {
+		return nativeRecordedShellCommand{}, false
+	}
+	return nativeLiteralCommandObject(match[2], defaultCwd)
 }
 
 // Decode only the small literal object accepted by this evidence contract.

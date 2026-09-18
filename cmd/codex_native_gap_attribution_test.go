@@ -177,6 +177,76 @@ func TestCodexNativeGapLiteralCommandAttribution(t *testing.T) {
 	}
 }
 
+func TestCodexNativeCodeModeOutputProjection(t *testing.T) {
+	// Actual Plan 26 wrapper shape, with disposable paths shortened for this
+	// deterministic decoder control. Printing output never supplies exit proof.
+	input := `const r = await tools.exec_command({"cmd":"aether command-guide build --platform codex","workdir":"/fixture","yield_time_ms":30000,"max_output_tokens":30000}); text(r.output);`
+	for _, tc := range []struct {
+		name, input string
+		want        bool
+	}{
+		{"observed", input, true},
+		{"same-variable-renamed", strings.Replace(strings.Replace(input, "const r =", "const result =", 1), "text(r.output)", "text(result.output)", 1), true},
+		{"single-quoted-command", `const result = await tools.exec_command({cmd:'aether status',workdir:'/fixture'}); text(result.output);`, true},
+		{"different-variable", strings.Replace(input, "text(r.output)", "text(other.output)", 1), false},
+		{"different-property", strings.Replace(input, ".output", ".exit_code", 1), false},
+		{"computed-property", strings.Replace(input, ".output", `["output"]`, 1), false},
+		{"rewritten-output", strings.Replace(input, "r.output", `r.output + "fabricated"`, 1), false},
+		{"method-call", strings.Replace(input, "r.output", "r.output.trim()", 1), false},
+		{"reassignment", strings.Replace(input, " text(", ` r.output = "forged"; text(`, 1), false},
+		{"extra-command", input + `text(await tools.exec_command({cmd:'touch clamp.go',workdir:'/fixture'}));`, false},
+		{"preceding-command", `text(await tools.exec_command({cmd:'aether status',workdir:'/fixture'}));` + input, false},
+		{"extra-js", input + " mutate();", false},
+		{"unawaited", strings.Replace(input, "await ", "", 1), false},
+		{"other-tool", strings.Replace(input, "tools.exec_command", "other.exec_command", 1), false},
+		{"computed-command", strings.Replace(input, `"aether command-guide build --platform codex"`, `command`, 1), false},
+		{"duplicate-key", strings.Replace(input, `"cmd":`, `"cmd":"touch clamp.go","cmd":`, 1), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			commands, ok := nativeCodeModeCommands(tc.input, "/fixture")
+			if ok != tc.want {
+				t.Fatalf("projection accepted=%v want=%v: %+v", ok, tc.want, commands)
+			}
+			command, cwd, single := nativeCodeModeCommand(tc.input)
+			if single != tc.want || (single && (len(commands) != 1 || command != commands[0].Command || cwd != commands[0].Cwd)) {
+				t.Fatalf("single-command decoder diverged: command=%q cwd=%q accepted=%v", command, cwd, single)
+			}
+		})
+	}
+	if _, ok := nativeCodeModeCommands(strings.Replace(input, `,"workdir":"/fixture"`, "", 1), ""); ok {
+		t.Fatal("output projection manufactured missing workspace attribution")
+	}
+}
+
+func TestCodexNativeGapDocsSearch(t *testing.T) {
+	observed := `rg "spawn-log" .aether -g '*.md' -g '*.json' -g '*.yaml'`
+	for _, tc := range []struct {
+		name, command, cwd string
+		want               bool
+	}{
+		{"observed", observed, "/fixture", true},
+		{"help-already-supported", "aether spawn-log --help", "/fixture", true},
+		{"foreign-cwd", observed, "/other", false},
+		{"missing-cwd", observed, "", false},
+		{"foreign-root", strings.Replace(observed, ".aether", "/other/.aether", 1), "/fixture", false},
+		{"escaping-root", strings.Replace(observed, ".aether", "../.aether", 1), "/fixture", false},
+		{"preprocessor", observed + " --pre mutate", "/fixture", false},
+		{"follow-symlinks", observed + " --follow", "/fixture", false},
+		{"hidden-files", observed + " --hidden", "/fixture", false},
+		{"extra-command", observed + "; touch clamp.go", "/fixture", false},
+		{"redirect", observed + " > clamp.go", "/fixture", false},
+		{"expansion", strings.Replace(observed, "spawn-log", "$(touch clamp.go)", 1), "/fixture", false},
+		{"glob-expansion", strings.Replace(observed, "'*.md'", "*.md", 1), "/fixture", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := codexNativeLiveReceipt{FixtureRoot: "/fixture"}
+			if got := nativeParentCoordinationCommand(&r, []string{"/bin/zsh", "-lc", tc.command}, tc.cwd); got != tc.want {
+				t.Fatalf("docs query accepted=%v want=%v", got, tc.want)
+			}
+		})
+	}
+}
+
 // Explicit immutable replay of the observed single-quoted call shapes. This
 // diagnoses parser behavior only and never upgrades the original receipt.
 func TestCodexNativeGapObservedSingleQuoteCapture(t *testing.T) {
@@ -302,43 +372,64 @@ func TestCodexNativeGapCapturedAttribution(t *testing.T) {
 }
 
 func TestCodexNativeGapParentCoordination(t *testing.T) {
-	for _, mode := range []string{"valid", "file_uri", "missing", "wrong_thread", "wrong_turn", "wrong_cwd", "wrong_argv", "reused_event", "duplicate_call"} {
-		t.Run(mode, func(t *testing.T) {
-			var raw []byte
-			add := func(v any) { b, _ := json.Marshal(v); raw = append(raw, append(b, '\n')...) }
-			add(map[string]any{"type": "session_meta", "payload": map[string]any{"id": "parent", "cwd": "/fixture"}})
-			call := map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call", "name": "exec", "call_id": "call", "input": `text(await tools.exec_command({cmd:"aether status",workdir:"/fixture"}));`, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}}
-			add(call)
-			if mode == "duplicate_call" {
+	for _, wrapper := range []string{"direct", "output-projection"} {
+		for _, mode := range []string{"valid", "file_uri", "actual_command_failure", "missing", "wrong_thread", "wrong_turn", "wrong_cwd", "wrong_argv", "reused_event", "duplicate_call", "missing_output", "wrong_output_call", "wrong_output_turn", "failed_script"} {
+			t.Run(wrapper+"/"+mode, func(t *testing.T) {
+				var raw []byte
+				add := func(v any) { b, _ := json.Marshal(v); raw = append(raw, append(b, '\n')...) }
+				add(map[string]any{"type": "session_meta", "payload": map[string]any{"id": "parent", "cwd": "/fixture"}})
+				input := `text(await tools.exec_command({cmd:"aether status",workdir:"/fixture"}));`
+				if wrapper == "output-projection" {
+					input = `const r = await tools.exec_command({cmd:"aether status",workdir:"/fixture"}); text(r.output);`
+				}
+				call := map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call", "name": "exec", "call_id": "call", "input": input, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}}
 				add(call)
-			}
-			thread, turn, cwd, command := "parent", "turn", "/fixture", "aether status"
-			switch mode {
-			case "file_uri":
-				cwd = "file:///fixture"
-			case "wrong_thread":
-				thread = "sibling"
-			case "wrong_turn":
-				turn = "other"
-			case "wrong_cwd":
-				cwd = "/other"
-			case "wrong_argv":
-				command = "aether pause"
-			}
-			event := map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": thread, "turn_id": turn, "item": map[string]any{"type": "CommandExecution", "id": "shell", "status": "completed", "cwd": cwd, "command": []string{"/bin/sh", "-c", command}, "exit_code": 0}}}
-			if mode != "missing" {
-				add(event)
-			}
-			add(map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call_output", "call_id": "call", "output": []any{map[string]any{"type": "input_text", "text": "Script completed\n"}}, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}})
-			if mode == "reused_event" {
-				add(event)
-			}
-			r := codexNativeLiveReceipt{SchemaVersion: "codex-native-tracer/v2", SessionID: "parent", FixtureRoot: "/fixture"}
-			nativeInspectParentEvents(&r, raw)
-			if r.ParentSubstitution != (mode != "valid" && mode != "file_uri") {
-				t.Fatalf("mode %s classification: %+v", mode, r.ParentUnclassified)
-			}
-		})
+				if mode == "duplicate_call" {
+					add(call)
+				}
+				thread, turn, cwd, command := "parent", "turn", "/fixture", "aether status"
+				switch mode {
+				case "file_uri":
+					cwd = "file:///fixture"
+				case "wrong_thread":
+					thread = "sibling"
+				case "wrong_turn":
+					turn = "other"
+				case "wrong_cwd":
+					cwd = "/other"
+				case "wrong_argv":
+					command = "aether pause"
+				}
+				status, exit := "completed", 0
+				if mode == "actual_command_failure" {
+					status, exit = "failed", 1
+				}
+				event := map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": thread, "turn_id": turn, "item": map[string]any{"type": "CommandExecution", "id": "shell", "status": status, "cwd": cwd, "command": []string{"/bin/sh", "-c", command}, "exit_code": exit}}}
+				if mode != "missing" {
+					add(event)
+				}
+				outputCall, outputTurn, outputText := "call", "turn", "Script completed\nactual output text"
+				switch mode {
+				case "wrong_output_call":
+					outputCall = "other-call"
+				case "wrong_output_turn":
+					outputTurn = "other-turn"
+				case "failed_script":
+					outputText = "Script failed\n"
+				}
+				if mode != "missing_output" {
+					add(map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call_output", "call_id": outputCall, "output": []any{map[string]any{"type": "input_text", "text": outputText}}, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": outputTurn}}})
+				}
+				if mode == "reused_event" {
+					add(event)
+				}
+				r := codexNativeLiveReceipt{SchemaVersion: "codex-native-tracer/v2", SessionID: "parent", FixtureRoot: "/fixture"}
+				nativeInspectParentEvents(&r, raw)
+				if r.ParentSubstitution != (mode != "valid" && mode != "file_uri" && mode != "actual_command_failure") || r.ChecksPassed {
+					t.Fatalf("mode %s classification: %+v", mode, r.ParentUnclassified)
+				}
+			})
+		}
 	}
 }
 
