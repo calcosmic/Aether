@@ -55,22 +55,38 @@ class AdmissionTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'unadmitted'):
             q.inventory(self.repo)
 
-    def test_ignored_go_scratch_outside_discovery_is_not_compiled(self):
-        self.put('.gitignore', '.scratch/\n_scratch/\ntestdata/\n')
-        before = q.inventory(self.repo)
-        for name in ['.scratch/generated.go', '_scratch/generated.go', 'testdata/generated.go']:
-            self.put(name, 'package scratch')
-        self.assertEqual(before, q.inventory(self.repo))
-        self.put('main.go', '//go:embed all:.scratch\n')
-        with self.assertRaisesRegex(RuntimeError, 'unadmitted embedded'):
-            q.inventory(self.repo)
-        self.put('main.go', '//go:embed assets\n')
+    def test_ignored_explicit_imports_refuse_before_preparation(self):
+        self.put('.gitignore', '.hidden/\n_hidden/\ntestdata/\n')
+        self.put('go.mod', 'module example.test/fixture\n\ngo 1.26\n')
+        subprocess.run(['git', 'add', 'go.mod'], cwd=self.repo, check=True)
+        for directory in ['.hidden', '_hidden', 'testdata/helper']:
+            with self.subTest(directory=directory):
+                self.put('main.go', 'package main\nimport _ "example.test/fixture/' + directory + '"\nfunc main() {}\n')
+                name = directory + '/helper.go'
+                self.put(name, 'package helper\n')
+                with self.assertRaisesRegex(RuntimeError, 'unadmitted ignored compilation'):
+                    q.inventory(self.repo)
+                with tempfile.TemporaryDirectory() as external:
+                    root = Path(external) / 'preparation'
+                    with patch.object(q, 'output', return_value='fixture'), patch.object(q.shutil, 'copytree') as copy, patch.object(q, 'record') as launch:
+                        self.assertEqual(q.prepare(None, self.repo, root), 1)
+                        receipt = q.json.loads((root / 'manifest.json').read_text())
+                        self.assertFalse(receipt['passed'])
+                        self.assertIn('unadmitted ignored compilation', receipt['error'])
+                        copy.assert_not_called()
+                        launch.assert_not_called()
+                (self.repo / name).unlink()
+
+    def test_ignored_addition_inside_tracked_hidden_package_refuses(self):
+        self.put('.gitignore', '.scratch/\n')
         self.put('.scratch/tracked.go', 'package scratch')
         subprocess.run(['git', 'add', '-f', '.scratch/tracked.go'], cwd=self.repo, check=True)
+        self.put('.scratch/generated.go', 'package scratch')
         with self.assertRaisesRegex(RuntimeError, 'unadmitted ignored compilation'):
             q.inventory(self.repo)
 
     def test_validate_source_and_both_prepared_lanes_before_launch(self):
+        self.put('.gitignore', '.hidden/\n_hidden/\ntestdata/\n')
         with tempfile.TemporaryDirectory() as external:
             root = Path(external)
             binary = root / 'binary'
@@ -88,9 +104,10 @@ class AdmissionTests(unittest.TestCase):
             q.write_new(root / 'manifest.sha256.json', q.file_ref(root / 'manifest.json'))
             self.assertEqual(manifest, q.validate(self.repo, root))
             for repo in [self.repo, root / 'normal', root / 'race']:
-                for name in ['new.go', 'new_test.go', 'assets/new.txt']:
+                for name in ['new.go', 'new_test.go', 'assets/new.txt', '.hidden/helper.go', '_hidden/helper.go', 'testdata/helper/helper.go']:
                     with self.subTest(repo=repo, name=name):
                         target = repo / name
+                        target.parent.mkdir(parents=True, exist_ok=True)
                         target.write_text('unadmitted')
                         with patch.object(q, 'record') as launch:
                             with self.assertRaisesRegex(RuntimeError, 'unadmitted'):
