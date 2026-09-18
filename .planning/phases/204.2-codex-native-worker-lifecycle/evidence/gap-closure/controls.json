@@ -1,0 +1,789 @@
+{
+  "schema": "codex-native-gap-controls/v1",
+  "phase": "204.2",
+  "plan": "14",
+  "recorded_at": "2026-09-18T00:02:08.496689+00:00",
+  "execution": "complete",
+  "qualification": "incomplete",
+  "requirements_addressed": [
+    "ANT-07"
+  ],
+  "requirements_completed": [],
+  "expected_base": "93d7878495a08ba6bfab809e367bf7aac9eb10ba",
+  "task1_commits": [
+    "2758505783f475c305b3d2956848f5cd96bb1858",
+    "0b31f525bce351a3ba24df28cb20285aecbffdde"
+  ],
+  "validator_source": {
+    "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/validator-source.json",
+    "sha256": "9cc76d839941eef0e74aec530b590effcadbf650251de3ebe156c25687a3fbd5"
+  },
+  "candidate_start": {
+    "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/candidate-start.json",
+    "sha256": "829c4b1da225714c06ae9fd92c63c0db23ea596fc6a347664e7e90fe297a2374"
+  },
+  "live_run": {
+    "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/live-run.json",
+    "sha256": "3569090e90361a5a42788bc170896802b9f01f6e1d165b4ee6349f31425ebb5c"
+  },
+  "replay_runs": {
+    "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/replay-runs.json",
+    "sha256": "4aa56f8bcbd0469ade3b1567146df3b88f256df3f019bb70805bb5df9defc087"
+  },
+  "raw_live": {
+    "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/live.jsonl",
+    "sha256": "bd27120961d7af78c588b66ad1b4ab2f32d62bbc6258c2576f2857aa595c46c2"
+  },
+  "integrity": {
+    "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/final-integrity.json",
+    "sha256": "22970b6a5a5fcd4e69f61531a9e0ba938daff059a121f2257ab511c1d0c2962a"
+  },
+  "checks": [
+    {
+      "name": "task1-parser-normal",
+      "receipt": {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/task1-parser-normal.json",
+        "sha256": "c08028c094dd7510a9d0660e9bf79783a05bc2d3ca9820b5a2812eed00e267a4"
+      },
+      "raw": {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/task1-parser-normal.jsonl",
+        "sha256": "00ea6bc61d9bfebec1840cb2f5ef5275d690dd196a9d9d8cdf4571097982edc0"
+      },
+      "exit": 0,
+      "top_level": 7,
+      "cases": 74,
+      "counts": {
+        "pass": 74,
+        "fail": 0,
+        "skip": 0
+      },
+      "final_inputs_match": true,
+      "argv": [
+        "go",
+        "test",
+        "./cmd",
+        "-run",
+        "^(TestCodexNativeGapControls|TestCodexNativeGapControlCommandCorrelation|TestCodexNativeWorkerCancellation|TestCodexNativeRecoveryCancelPending|TestCodexNativeRecoveryCancelConfirmed|TestCodexNativeQualificationCoordinator|TestCodexNativeReviewedProofBoundaries)$",
+        "-count=1",
+        "-json",
+        "-timeout",
+        "60s"
+      ]
+    },
+    {
+      "name": "task1-parser-race",
+      "receipt": {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/task1-parser-race.json",
+        "sha256": "c898eb8a3a25da311117dc6770e0217c124630d265a124ef49cbafb2d849670f"
+      },
+      "raw": {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/task1-parser-race.jsonl",
+        "sha256": "b97d3451b6ef845be390db9b687b6ada423cc22412b096d536f68c74e4013e26"
+      },
+      "exit": 0,
+      "top_level": 7,
+      "cases": 74,
+      "counts": {
+        "pass": 74,
+        "fail": 0,
+        "skip": 0
+      },
+      "final_inputs_match": true,
+      "argv": [
+        "go",
+        "test",
+        "./cmd",
+        "-run",
+        "^(TestCodexNativeGapControls|TestCodexNativeGapControlCommandCorrelation|TestCodexNativeWorkerCancellation|TestCodexNativeRecoveryCancelPending|TestCodexNativeRecoveryCancelConfirmed|TestCodexNativeQualificationCoordinator|TestCodexNativeReviewedProofBoundaries)$",
+        "-count=1",
+        "-json",
+        "-timeout",
+        "60s",
+        "-race"
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "scenario": "cancellation",
+      "receipt": {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/controls/native-cancellation-4193846394/receipt.json",
+        "sha256": "ad6f6c56334d79e1131c62ac0d359ca46ccf2ba3e8c1021663db8788779caf33"
+      },
+      "capture_outcome": "incomplete",
+      "reason": "terminal cancellation incomplete: [actual child-correlated cancelled acknowledgement missing; interrupt is request-only runtime cancelled terminal is not corroborated no-post-ack-write interval unproved or contains activity]",
+      "exit": 0,
+      "elapsed_seconds": 227.728026583,
+      "source_revision": "2758505783f475c305b3d2956848f5cd96bb1858",
+      "source_digest": "sha256:08cf994909e034ec397b454fcd848f0bdc7277fd2d5d13d3ef1191040eacdf0c",
+      "harness_sha256": "sha256:d4a56022acf781293738dd1b5e4ddbbefa99ade84a5dd4157277084e53112d69",
+      "candidate_path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/controls/native-cancellation-4193846394/bin/aether",
+      "candidate_sha256": "sha256:07290062eb72816f7536907970dc5910bd3ba0b52d8b6169c503bf85bf6ce97b",
+      "candidate_version": "{\"ok\":true,\"result\":\"1.0.79\"}",
+      "build_argv": [
+        "go",
+        "build",
+        "-buildvcs=false",
+        "-ldflags",
+        "-X github.com/calcosmic/Aether/cmd.Version=1.0.79",
+        "-o",
+        "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/controls/native-cancellation-4193846394/bin/aether",
+        "./cmd/aether"
+      ],
+      "client_path": "/Users/callumcowie/.codex-5x/packages/standalone/releases/0.154.0-aarch64-apple-darwin/bin/codex",
+      "client_version": "codex-cli 0.154.0",
+      "client_sha256": "sha256:4f85982624b3898c8991cb80c0981b2aa71070e3537046c9a95950318a95afcc",
+      "model": "gpt-6-astra",
+      "client_args": [
+        "exec",
+        "--ignore-user-config",
+        "--ignore-rules",
+        "-s",
+        "workspace-write",
+        "--json",
+        "--color",
+        "never",
+        "-C",
+        "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/controls/native-cancellation-4193846394/repository",
+        "-c",
+        "cli_auth_credentials_store=\"file\"",
+        "-c",
+        "approval_policy=\"never\"",
+        "--enable",
+        "multi_agent",
+        "-c",
+        "shell_environment_policy.set.PATH=\"/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/controls/native-cancellation-4193846394/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin\"",
+        "-c",
+        "shell_environment_policy.set.AETHER_OUTPUT_MODE=\"json\"",
+        "-m",
+        "gpt-6-astra",
+        "-c",
+        "shell_environment_policy.set.GOCACHE=\"/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/aether-native-gocache-2218786783\"",
+        "-c",
+        "model_reasoning_effort=\"medium\"",
+        "-"
+      ],
+      "host_session_id": "01a0b1c6-eccb-7691-80ef-e19bb6c962ec",
+      "child_id": "01a0b1c9-cb09-7350-86d7-91fb7d341132",
+      "child_task_path": "/root/brick_46",
+      "child_identity_corroborated": true,
+      "native_spawn_count": 1,
+      "credit_observed": false,
+      "assertions": {},
+      "cancellation": {
+        "parent": "01a0b1c6-eccb-7691-80ef-e19bb6c962ec",
+        "child": "01a0b1c9-cb09-7350-86d7-91fb7d341132",
+        "request_events": {
+          "call_PmshFKjJkk0mmdSdZa021KwJ": "sha256:3fa83a75f2b3a1150113d7e7a076ca365b20bc35817ba111ecf3d1b6e978dabf"
+        },
+        "runtime_requested": true,
+        "runtime_cancelled": false,
+        "post_ack_activity": false,
+        "no_post_ack_writes": false,
+        "qualified": false,
+        "gaps": [
+          "actual child-correlated cancelled acknowledgement missing; interrupt is request-only",
+          "runtime cancelled terminal is not corroborated",
+          "no-post-ack-write interval unproved or contains activity"
+        ]
+      },
+      "actual_host_activity": [
+        {
+          "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/controls/native-cancellation-4193846394/home/.codex/sessions/2026/09/18/rollout-2026-09-18T01-49-59-01a0b1c6-eccb-7691-80ef-e19bb6c962ec.jsonl",
+          "line": 83,
+          "event_sha256": "e31cd652c66db53e1a3faffb7762cae43e3a4800ec313a192e6ebeb2131a10da",
+          "timestamp": "2026-09-17T23:53:07.161Z",
+          "id": "call_4c1HuZMmdMvSVFy6zEGMehsA",
+          "kind": "started",
+          "child": "01a0b1c9-cb09-7350-86d7-91fb7d341132",
+          "task_path": "/root/brick_46"
+        },
+        {
+          "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/controls/native-cancellation-4193846394/home/.codex/sessions/2026/09/18/rollout-2026-09-18T01-49-59-01a0b1c6-eccb-7691-80ef-e19bb6c962ec.jsonl",
+          "line": 96,
+          "event_sha256": "9e9fea624e1d81158521db8b2b41071e6bb98cc786af657445856c09cd1e9c21",
+          "timestamp": "2026-09-17T23:53:16.924Z",
+          "id": "call_nc5NeWCVcTjE3KjDgIz1DDbh",
+          "kind": "interacted",
+          "child": "01a0b1c9-cb09-7350-86d7-91fb7d341132",
+          "task_path": "/root/brick_46"
+        },
+        {
+          "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/controls/native-cancellation-4193846394/home/.codex/sessions/2026/09/18/rollout-2026-09-18T01-49-59-01a0b1c6-eccb-7691-80ef-e19bb6c962ec.jsonl",
+          "line": 104,
+          "event_sha256": "3011cf7f6099456928c1b37356536dac0750b775a59faa28e413c5805435e693",
+          "timestamp": "2026-09-17T23:53:21.837Z",
+          "id": "call_PmshFKjJkk0mmdSdZa021KwJ",
+          "kind": "interrupted",
+          "child": "01a0b1c9-cb09-7350-86d7-91fb7d341132",
+          "task_path": "/root/brick_46"
+        }
+      ],
+      "limitations": [],
+      "auth_removed": true,
+      "raw_provider_usage_event_count": 3,
+      "aether_usage": "unreported",
+      "aether_cost": "unreported",
+      "replays": [
+        {
+          "mode": "normal",
+          "receipt": {
+            "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/replay/cancellation-normal-derived.json",
+            "sha256": "03c6b1b903e12374cbdf80dd1c9c29097465334b05cfcc75fde24a30aa6be5fa"
+          },
+          "run": {
+            "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/replay/cancellation-normal-run.json",
+            "sha256": "bd00020dbbf49f7e86ab330727c72744eadb3aaa0e9624eff44cb1db1524f0b4"
+          },
+          "raw": {
+            "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/replay/cancellation-normal.jsonl",
+            "sha256": "e9b46eebf6b552ba49a1123880916b357f82c5088d6242b7af8e5b84d59f93e4"
+          },
+          "exit": 0,
+          "outcome": "incomplete",
+          "reason": "terminal cancellation incomplete: [actual child-correlated cancelled acknowledgement missing; interrupt is request-only runtime cancelled terminal is not corroborated no-post-ack-write interval unproved or contains activity]",
+          "validator": "0b31f525bce351a3ba24df28cb20285aecbffdde",
+          "expected_incomplete": true
+        },
+        {
+          "mode": "race",
+          "receipt": {
+            "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/replay/cancellation-race-derived.json",
+            "sha256": "03c6b1b903e12374cbdf80dd1c9c29097465334b05cfcc75fde24a30aa6be5fa"
+          },
+          "run": {
+            "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/replay/cancellation-race-run.json",
+            "sha256": "99eff1b32a1ac7594a48315fe72b79affca8a35177b9c93708693befcf51427b"
+          },
+          "raw": {
+            "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/replay/cancellation-race.jsonl",
+            "sha256": "a7b38b71bb7022a3b9276ad2fecbee47160b15c8afd0e8a002c77d02effc4ab3"
+          },
+          "exit": 0,
+          "outcome": "incomplete",
+          "reason": "terminal cancellation incomplete: [actual child-correlated cancelled acknowledgement missing; interrupt is request-only runtime cancelled terminal is not corroborated no-post-ack-write interval unproved or contains activity]",
+          "validator": "0b31f525bce351a3ba24df28cb20285aecbffdde",
+          "expected_incomplete": true
+        }
+      ],
+      "final_interpretation": {
+        "outcome": "incomplete",
+        "reason": "terminal cancellation incomplete: [actual child-correlated cancelled acknowledgement missing; interrupt is request-only runtime cancelled terminal is not corroborated no-post-ack-write interval unproved or contains activity]",
+        "assertions": {}
+      }
+    },
+    {
+      "scenario": "controls",
+      "receipt": {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/controls/native-controls-379287335/receipt.json",
+        "sha256": "ae5adb3a38eb15b2416280b0d0757199a12ea0a489aa5b1de0f4e4c947f3b69b"
+      },
+      "capture_outcome": "incomplete",
+      "reason": "inside requires exactly one actual attempt and unambiguous outcome",
+      "exit": 0,
+      "elapsed_seconds": 72.623608,
+      "source_revision": "2758505783f475c305b3d2956848f5cd96bb1858",
+      "source_digest": "sha256:08cf994909e034ec397b454fcd848f0bdc7277fd2d5d13d3ef1191040eacdf0c",
+      "harness_sha256": "sha256:d4a56022acf781293738dd1b5e4ddbbefa99ade84a5dd4157277084e53112d69",
+      "candidate_path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/controls/native-controls-379287335/bin/aether",
+      "candidate_sha256": "sha256:07290062eb72816f7536907970dc5910bd3ba0b52d8b6169c503bf85bf6ce97b",
+      "candidate_version": "{\"ok\":true,\"result\":\"1.0.79\"}",
+      "build_argv": [
+        "go",
+        "build",
+        "-buildvcs=false",
+        "-ldflags",
+        "-X github.com/calcosmic/Aether/cmd.Version=1.0.79",
+        "-o",
+        "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/controls/native-controls-379287335/bin/aether",
+        "./cmd/aether"
+      ],
+      "client_path": "/Users/callumcowie/.codex-5x/packages/standalone/releases/0.154.0-aarch64-apple-darwin/bin/codex",
+      "client_version": "codex-cli 0.154.0",
+      "client_sha256": "sha256:4f85982624b3898c8991cb80c0981b2aa71070e3537046c9a95950318a95afcc",
+      "model": "gpt-6-astra",
+      "client_args": [
+        "exec",
+        "--ignore-user-config",
+        "--ignore-rules",
+        "-s",
+        "workspace-write",
+        "--json",
+        "--color",
+        "never",
+        "-C",
+        "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/controls/native-controls-379287335/repository",
+        "-c",
+        "cli_auth_credentials_store=\"file\"",
+        "-c",
+        "approval_policy=\"never\"",
+        "--enable",
+        "multi_agent",
+        "-c",
+        "shell_environment_policy.set.PATH=\"/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/controls/native-controls-379287335/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin\"",
+        "-c",
+        "shell_environment_policy.set.AETHER_OUTPUT_MODE=\"json\"",
+        "-m",
+        "gpt-6-astra",
+        "-c",
+        "shell_environment_policy.set.GOCACHE=\"/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/aether-native-gocache-1173808120\"",
+        "-c",
+        "model_reasoning_effort=\"medium\"",
+        "-"
+      ],
+      "host_session_id": "01a0b1ca-a5ee-7703-8315-923102b71f13",
+      "child_id": "01a0b1ca-f3a0-7422-b266-2c7c6f70290f",
+      "child_task_path": "/root/capability_probe",
+      "child_identity_corroborated": true,
+      "native_spawn_count": 1,
+      "credit_observed": false,
+      "assertions": {
+        "inside_write_allowed": true,
+        "inside_write_attempted": true,
+        "inside_write_repeated": true,
+        "native_nested_response_observed": true,
+        "native_nesting_attempted": true,
+        "outside_denial_target_correlated": true,
+        "outside_write_attempted": true,
+        "outside_write_denied": true
+      },
+      "cancellation": null,
+      "actual_host_activity": [
+        {
+          "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/controls/native-controls-379287335/home/.codex/sessions/2026/09/18/rollout-2026-09-18T01-54-03-01a0b1ca-a5ee-7703-8315-923102b71f13.jsonl",
+          "line": 15,
+          "event_sha256": "84d55d24ebf1c08cbb1e1143a058bd25c32e06d9b4068c5f36437df03cc181d5",
+          "timestamp": "2026-09-17T23:54:23.089Z",
+          "id": "call_8QSkzs3HCSCELTddEtR7awl4",
+          "kind": "started",
+          "child": "01a0b1ca-f3a0-7422-b266-2c7c6f70290f",
+          "task_path": "/root/capability_probe"
+        },
+        {
+          "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/controls/native-controls-379287335/home/.codex/sessions/2026/09/18/rollout-2026-09-18T01-54-03-01a0b1ca-a5ee-7703-8315-923102b71f13.jsonl",
+          "line": 38,
+          "event_sha256": "58e9cc950abf34dc707ee1ba7e4ff321ca66485129d7407de51f9f5c5b902a1c",
+          "timestamp": "2026-09-17T23:55:08.607Z",
+          "id": "subagent-completed-01a0b1ca-f3f1-79e2-9181-63cf3a442bc4",
+          "kind": "completed",
+          "child": "01a0b1ca-f3a0-7422-b266-2c7c6f70290f",
+          "task_path": "/root/capability_probe"
+        }
+      ],
+      "limitations": [],
+      "auth_removed": true,
+      "raw_provider_usage_event_count": 5,
+      "aether_usage": "unreported",
+      "aether_cost": "unreported",
+      "replays": [
+        {
+          "mode": "normal",
+          "receipt": {
+            "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/replay/controls-normal-derived.json",
+            "sha256": "66128e894f62d22d6338de2aa056195e3c1e71f377a60007129bb4d48b51705d"
+          },
+          "run": {
+            "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/replay/controls-normal-run.json",
+            "sha256": "e02e92facba59ff1f77e51a8518461259c7335d25f80b927f530307a71cc4e83"
+          },
+          "raw": {
+            "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/replay/controls-normal.jsonl",
+            "sha256": "36710ab52943fdd0f5ee934ba7f12e6f844fd82bb72180ceeadce2620398683c"
+          },
+          "exit": 0,
+          "outcome": "observed",
+          "reason": null,
+          "validator": "0b31f525bce351a3ba24df28cb20285aecbffdde",
+          "expected_incomplete": false
+        },
+        {
+          "mode": "race",
+          "receipt": {
+            "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/replay/controls-race-derived.json",
+            "sha256": "66128e894f62d22d6338de2aa056195e3c1e71f377a60007129bb4d48b51705d"
+          },
+          "run": {
+            "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/replay/controls-race-run.json",
+            "sha256": "ea82bf75cb93ad9ea68c0c7ae40d3fec963e4693eb9cb7e51a84cb78a7964b94"
+          },
+          "raw": {
+            "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/replay/controls-race.jsonl",
+            "sha256": "127ffb13038174293ffd8f7f180baae69878fdc9af5ccdeb9121dfb9255351dc"
+          },
+          "exit": 0,
+          "outcome": "observed",
+          "reason": null,
+          "validator": "0b31f525bce351a3ba24df28cb20285aecbffdde",
+          "expected_incomplete": false
+        }
+      ],
+      "final_interpretation": {
+        "outcome": "observed",
+        "reason": null,
+        "assertions": {
+          "inside_write_allowed": true,
+          "inside_write_attempted": true,
+          "native_nested_response_observed": true,
+          "native_nesting_attempted": true,
+          "outside_denial_target_correlated": true,
+          "outside_write_attempted": true,
+          "outside_write_denied": true
+        }
+      }
+    },
+    {
+      "scenario": "controls-read-only",
+      "receipt": {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/controls/native-controls-read-only-1665029889/receipt.json",
+        "sha256": "62947b0079b469d07840ca3144013092503ba9248fdc5876fded2f8c39fd3b2a"
+      },
+      "capture_outcome": "observed",
+      "reason": null,
+      "exit": 0,
+      "elapsed_seconds": 74.912853041,
+      "source_revision": "2758505783f475c305b3d2956848f5cd96bb1858",
+      "source_digest": "sha256:08cf994909e034ec397b454fcd848f0bdc7277fd2d5d13d3ef1191040eacdf0c",
+      "harness_sha256": "sha256:d4a56022acf781293738dd1b5e4ddbbefa99ade84a5dd4157277084e53112d69",
+      "candidate_path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/controls/native-controls-read-only-1665029889/bin/aether",
+      "candidate_sha256": "sha256:07290062eb72816f7536907970dc5910bd3ba0b52d8b6169c503bf85bf6ce97b",
+      "candidate_version": "{\"ok\":true,\"result\":\"1.0.79\"}",
+      "build_argv": [
+        "go",
+        "build",
+        "-buildvcs=false",
+        "-ldflags",
+        "-X github.com/calcosmic/Aether/cmd.Version=1.0.79",
+        "-o",
+        "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/controls/native-controls-read-only-1665029889/bin/aether",
+        "./cmd/aether"
+      ],
+      "client_path": "/Users/callumcowie/.codex-5x/packages/standalone/releases/0.154.0-aarch64-apple-darwin/bin/codex",
+      "client_version": "codex-cli 0.154.0",
+      "client_sha256": "sha256:4f85982624b3898c8991cb80c0981b2aa71070e3537046c9a95950318a95afcc",
+      "model": "gpt-6-astra",
+      "client_args": [
+        "exec",
+        "--ignore-user-config",
+        "--ignore-rules",
+        "-s",
+        "read-only",
+        "--json",
+        "--color",
+        "never",
+        "-C",
+        "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/controls/native-controls-read-only-1665029889/repository",
+        "-c",
+        "cli_auth_credentials_store=\"file\"",
+        "-c",
+        "approval_policy=\"never\"",
+        "--enable",
+        "multi_agent",
+        "-c",
+        "shell_environment_policy.set.PATH=\"/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/controls/native-controls-read-only-1665029889/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin\"",
+        "-c",
+        "shell_environment_policy.set.AETHER_OUTPUT_MODE=\"json\"",
+        "-m",
+        "gpt-6-astra",
+        "-c",
+        "shell_environment_policy.set.GOCACHE=\"/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/aether-native-gocache-1398354218\"",
+        "-c",
+        "model_reasoning_effort=\"medium\"",
+        "-"
+      ],
+      "host_session_id": "01a0b1cb-f3e2-7272-aa81-c4e9e290936c",
+      "child_id": "01a0b1cc-4589-75b2-92e0-21bc30f8f76c",
+      "child_task_path": "/root/capability_probe",
+      "child_identity_corroborated": true,
+      "native_spawn_count": 1,
+      "credit_observed": false,
+      "assertions": {
+        "inside_denial_target_correlated": true,
+        "inside_write_attempted": true,
+        "inside_write_denied": true,
+        "native_nested_response_observed": true,
+        "native_nesting_attempted": true,
+        "outside_denial_target_correlated": true,
+        "outside_write_attempted": true,
+        "outside_write_denied": true
+      },
+      "cancellation": null,
+      "actual_host_activity": [
+        {
+          "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/controls/native-controls-read-only-1665029889/home/.codex/sessions/2026/09/18/rollout-2026-09-18T01-55-28-01a0b1cb-f3e2-7272-aa81-c4e9e290936c.jsonl",
+          "line": 15,
+          "event_sha256": "945cac08290be5607825772861ea233526fb42363d555cf3639b422d54708cf5",
+          "timestamp": "2026-09-17T23:55:49.595Z",
+          "id": "call_6nglD1kmxO5ovjTCS2XHPqI0",
+          "kind": "started",
+          "child": "01a0b1cc-4589-75b2-92e0-21bc30f8f76c",
+          "task_path": "/root/capability_probe"
+        },
+        {
+          "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/controls/native-controls-read-only-1665029889/home/.codex/sessions/2026/09/18/rollout-2026-09-18T01-55-28-01a0b1cb-f3e2-7272-aa81-c4e9e290936c.jsonl",
+          "line": 38,
+          "event_sha256": "265889dec1392fb8c7ebc943b39a91b4d61cb31007f79dcbb814889587b6217f",
+          "timestamp": "2026-09-17T23:56:34.590Z",
+          "id": "subagent-completed-01a0b1cc-45db-73c2-b42c-a946778017bb",
+          "kind": "completed",
+          "child": "01a0b1cc-4589-75b2-92e0-21bc30f8f76c",
+          "task_path": "/root/capability_probe"
+        }
+      ],
+      "limitations": [
+        "Only inherited parent sandbox behavior was measured; no per-child stricter sandbox/workspace selector is qualified.",
+        "Host nesting is not Aether-governed recruitment or worktree allocation."
+      ],
+      "auth_removed": true,
+      "raw_provider_usage_event_count": 5,
+      "aether_usage": "unreported",
+      "aether_cost": "unreported",
+      "replays": [
+        {
+          "mode": "normal",
+          "receipt": {
+            "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/replay/controls-read-only-normal-derived.json",
+            "sha256": "44c36973ead83fbd8da713cbb6b30ed61d84e0d7e8ecff416be0aa89fc563df7"
+          },
+          "run": {
+            "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/replay/controls-read-only-normal-run.json",
+            "sha256": "ed54c1afafa8e2b7c77c9d63465726159bc6fc4fa7f418011bf681f1eafd1120"
+          },
+          "raw": {
+            "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/replay/controls-read-only-normal.jsonl",
+            "sha256": "9fb9e3edc811722159fa7e0c09f951d8fd1dd6459a879ec411af8c1e85fc68fe"
+          },
+          "exit": 0,
+          "outcome": "observed",
+          "reason": null,
+          "validator": "0b31f525bce351a3ba24df28cb20285aecbffdde",
+          "expected_incomplete": false
+        },
+        {
+          "mode": "race",
+          "receipt": {
+            "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/replay/controls-read-only-race-derived.json",
+            "sha256": "44c36973ead83fbd8da713cbb6b30ed61d84e0d7e8ecff416be0aa89fc563df7"
+          },
+          "run": {
+            "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/replay/controls-read-only-race-run.json",
+            "sha256": "da1d4d7dee857a2fb229330a2958a5afb79e2e7123eff23eb3e4805668fa71fb"
+          },
+          "raw": {
+            "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/replay/controls-read-only-race.jsonl",
+            "sha256": "7b73669b34e058c74a1eaf8eb37cc77efcdbaa98466e78d3025390abb5219ae8"
+          },
+          "exit": 0,
+          "outcome": "observed",
+          "reason": null,
+          "validator": "0b31f525bce351a3ba24df28cb20285aecbffdde",
+          "expected_incomplete": false
+        }
+      ],
+      "final_interpretation": {
+        "outcome": "observed",
+        "reason": null,
+        "assertions": {
+          "inside_denial_target_correlated": true,
+          "inside_write_attempted": true,
+          "inside_write_denied": true,
+          "native_nested_response_observed": true,
+          "native_nesting_attempted": true,
+          "outside_denial_target_correlated": true,
+          "outside_write_attempted": true,
+          "outside_write_denied": true
+        }
+      }
+    },
+    {
+      "scenario": "missing-skill",
+      "receipt": {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/controls/native-missing-skill-3232600157/receipt.json",
+        "sha256": "e3974311dd014b4483babb67b7eab39db714ad8e2d328a0e63be95cfd7f60bf8"
+      },
+      "capture_outcome": "observed",
+      "reason": null,
+      "exit": 0,
+      "elapsed_seconds": 5.611217959,
+      "source_revision": "2758505783f475c305b3d2956848f5cd96bb1858",
+      "source_digest": "sha256:08cf994909e034ec397b454fcd848f0bdc7277fd2d5d13d3ef1191040eacdf0c",
+      "harness_sha256": "sha256:d4a56022acf781293738dd1b5e4ddbbefa99ade84a5dd4157277084e53112d69",
+      "candidate_path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/controls/native-missing-skill-3232600157/bin/aether",
+      "candidate_sha256": "sha256:07290062eb72816f7536907970dc5910bd3ba0b52d8b6169c503bf85bf6ce97b",
+      "candidate_version": "{\"ok\":true,\"result\":\"1.0.79\"}",
+      "build_argv": [
+        "go",
+        "build",
+        "-buildvcs=false",
+        "-ldflags",
+        "-X github.com/calcosmic/Aether/cmd.Version=1.0.79",
+        "-o",
+        "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/controls/native-missing-skill-3232600157/bin/aether",
+        "./cmd/aether"
+      ],
+      "client_path": "/Users/callumcowie/.codex-5x/packages/standalone/releases/0.154.0-aarch64-apple-darwin/bin/codex",
+      "client_version": "codex-cli 0.154.0",
+      "client_sha256": "sha256:4f85982624b3898c8991cb80c0981b2aa71070e3537046c9a95950318a95afcc",
+      "model": "gpt-6-astra",
+      "client_args": [
+        "exec",
+        "--ignore-user-config",
+        "--ignore-rules",
+        "-s",
+        "workspace-write",
+        "--json",
+        "--color",
+        "never",
+        "-C",
+        "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/controls/native-missing-skill-3232600157/repository",
+        "-c",
+        "cli_auth_credentials_store=\"file\"",
+        "-c",
+        "approval_policy=\"never\"",
+        "--enable",
+        "multi_agent",
+        "-c",
+        "shell_environment_policy.set.PATH=\"/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/controls/native-missing-skill-3232600157/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin\"",
+        "-c",
+        "shell_environment_policy.set.AETHER_OUTPUT_MODE=\"json\"",
+        "-m",
+        "gpt-6-astra",
+        "-c",
+        "shell_environment_policy.set.GOCACHE=\"/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/aether-native-gocache-2466544305\"",
+        "-c",
+        "model_reasoning_effort=\"medium\"",
+        "-"
+      ],
+      "host_session_id": "01a0b1cd-4ad6-77e1-8420-4b0dfc604f72",
+      "child_id": null,
+      "child_task_path": null,
+      "child_identity_corroborated": false,
+      "native_spawn_count": 0,
+      "credit_observed": false,
+      "assertions": {
+        "durable_inventory_unchanged": true,
+        "installed_skill_absent": true,
+        "no_native_launch": true,
+        "no_parent_source_edit": true
+      },
+      "cancellation": null,
+      "actual_host_activity": [],
+      "limitations": [
+        "Missing installed entrypoint is an explicit refusal; no workflow success claimed."
+      ],
+      "auth_removed": true,
+      "raw_provider_usage_event_count": 0,
+      "aether_usage": "unreported",
+      "aether_cost": "unreported",
+      "replays": [
+        {
+          "mode": "normal",
+          "receipt": {
+            "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/replay/missing-skill-normal-derived.json",
+            "sha256": "01d27c84570473d124259cb971f862bb4f0733d45a750d7344593af62725938a"
+          },
+          "run": {
+            "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/replay/missing-skill-normal-run.json",
+            "sha256": "9e123585d39ba24023a5f57edf147db2d0db640d2d452e79dfee16b752c75b8e"
+          },
+          "raw": {
+            "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/replay/missing-skill-normal.jsonl",
+            "sha256": "6f7a13dcdbb4ab25b56aa72cf2bcab54dbf5e683fab7059911baf84aa98caf31"
+          },
+          "exit": 0,
+          "outcome": "observed",
+          "reason": null,
+          "validator": "0b31f525bce351a3ba24df28cb20285aecbffdde",
+          "expected_incomplete": false
+        },
+        {
+          "mode": "race",
+          "receipt": {
+            "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/replay/missing-skill-race-derived.json",
+            "sha256": "01d27c84570473d124259cb971f862bb4f0733d45a750d7344593af62725938a"
+          },
+          "run": {
+            "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/replay/missing-skill-race-run.json",
+            "sha256": "b1a5de409b08b7f7bb77ee16dda411835c0cfdbcca8a672093a05aef0a17480d"
+          },
+          "raw": {
+            "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/replay/missing-skill-race.jsonl",
+            "sha256": "9051c2ce152122b050a65ec1929e43b002479ccee2d81f495087a948d64d7e39"
+          },
+          "exit": 0,
+          "outcome": "observed",
+          "reason": null,
+          "validator": "0b31f525bce351a3ba24df28cb20285aecbffdde",
+          "expected_incomplete": false
+        }
+      ],
+      "final_interpretation": {
+        "outcome": "observed",
+        "reason": null,
+        "assertions": {
+          "durable_inventory_unchanged": true,
+          "installed_skill_absent": true,
+          "no_native_launch": true,
+          "no_parent_source_edit": true
+        }
+      }
+    }
+  ],
+  "runtime_refusals": [
+    {
+      "case": "control-refusal-governed-nesting",
+      "receipt": {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/controls/native-controls-379287335/control-refusal-governed-nesting.json",
+        "sha256": "3970b1bb31bbcbec0acb90e3c836a0f2a06cf7cf5b64514a17b94bd1cd7ebac8"
+      },
+      "passed": true,
+      "exit": 1,
+      "launch_allowed": false
+    },
+    {
+      "case": "control-refusal-separate-workspace",
+      "receipt": {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/controls/native-controls-379287335/control-refusal-separate-workspace.json",
+        "sha256": "337c42a4660165637e19562b81ec50de14bb9516cfa334fd425732862f5e8209"
+      },
+      "passed": true,
+      "exit": 1,
+      "launch_allowed": false
+    },
+    {
+      "case": "control-refusal-read-only",
+      "receipt": {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/controls/native-controls-379287335/control-refusal-read-only.json",
+        "sha256": "9b640b1c9cb47699c7a2ad234d593d9f53079a3ed4bea2c1babc1fdfb853159b"
+      },
+      "passed": true,
+      "exit": 1,
+      "launch_allowed": false
+    }
+  ],
+  "gaps": [
+    "ANT-07 unclassified capability probe remains unresolved; findings apply only to the captured host/version/settings.",
+    "No complete independent tool-schema export is available; observed tool calls/results are retained, not a broader schema guarantee.",
+    "Actual host interruption is not runtime terminal cancellation. Missing acknowledgement or no-post-ack-write proof prevents qualification.",
+    "Host nesting, if observed, is not Aether-governed recruitment. Per-child restrictions and separate native workspace allocation remain unsupported.",
+    "Raw provider tokens, if present, are not Aether-collected usage or cost."
+  ],
+  "boundaries": [
+    "Historical Plans01-09, reports/evidence and Phase205 preserved against root start manifest.",
+    "Shared trackers remain root-owned; no original-checkout edit or branch switch.",
+    "No shared installation/hub/config change, new authentication, publication, or owner walkthrough.",
+    "No broad suite run; Plan13 preparation does not qualify this changed corpus. Plan16 owns final full normal/race checks."
+  ],
+  "notes": [
+    "Execution report completion does not mark the phase or ANT-07 complete. Missing-skill observed refusal is not workflow success.",
+    "Earlier checks are retained; task1-frozen-normal/race qualified the capture harness, and task1-parser-normal/race supply final-validator focused credit.",
+    "Workspace-write originally failed because CommandExecution and its exact awaited wrapper output were counted twice. Parser-only same-child/turn/open-call/output correlation fixes this, with negative controls. Separately pinned replay preserves the original failed receipt and binary identity."
+  ],
+  "post_run_boundaries": {
+    "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-14/post-run-boundaries.json",
+    "sha256": "c489cbda5695f43607efea0ee8a3be7b25c5a3adb09361a64cd021c4c71ac907"
+  },
+  "root_start_manifest": {
+    "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/execution-start.json",
+    "sha256": "fea5de87dbe4a9c92dc908fca7428b00063f2c507047f7979d6c21607031e6f4"
+  }
+}
