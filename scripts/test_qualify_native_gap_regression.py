@@ -85,6 +85,15 @@ class AdmissionTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'unadmitted ignored compilation'):
             q.inventory(self.repo)
 
+    def test_native_companions_refuse_only_in_go_package_directories(self):
+        self.put('.gitignore', 'node_modules/\n*.cpp\n')
+        before = q.inventory(self.repo)
+        self.put('node_modules/addon/src/extract.cpp', 'native addon source')
+        self.assertEqual(before, q.inventory(self.repo))
+        self.put('extra.cpp', 'native Go package companion')
+        with self.assertRaisesRegex(RuntimeError, 'unadmitted ignored compilation'):
+            q.inventory(self.repo)
+
     def test_validate_source_and_both_prepared_lanes_before_launch(self):
         self.put('.gitignore', '.hidden/\n_hidden/\ntestdata/\n')
         with tempfile.TemporaryDirectory() as external:
