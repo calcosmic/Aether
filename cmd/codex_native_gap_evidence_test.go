@@ -122,7 +122,10 @@ func nativeGapHostIdentity(p nativeGapHostProvenance, r codexNativeLiveReceipt) 
 			return fmt.Errorf("host schema/configuration absent from original capture")
 		}
 	}
-	return nil
+	if err := nativeGapValidateCapture(p.Configuration, "configuration", r); err != nil {
+		return err
+	}
+	return nativeGapValidateCapture(p.ToolSchema, "tool-definitions", r)
 }
 
 func nativeGapQualificationOutcomes(q nativeEvidenceQualification) error {
@@ -254,8 +257,11 @@ func TestCodexNativeGapEvidencePaths(t *testing.T) {
 				ref := nativeEvidenceFile{path, lifecycleDigest(raw)}
 				r := codexNativeLiveReceipt{ClientVersion: "measured", Model: "measured-model", ClientPath: path, ClientSHA256: ref.SHA256, Args: []string{"actual-argv"}, Artifacts: map[string]string{path: ref.SHA256}}
 				p := nativeGapHostProvenance{Version: r.ClientVersion, Model: r.Model, Args: r.Args, Executable: ref, ToolSchema: ref, Configuration: ref}
-				if err := nativeGapHostIdentity(p, r); err != nil {
-					t.Fatal(err)
+				// Arbitrary bytes are a negative substitution control, even
+				// before any identity mutation. Semantic positives live in
+				// TestCodexNativeGapHostCapture and are deterministic only.
+				if err := nativeGapHostIdentity(p, r); err == nil {
+					t.Fatal("arbitrary host bytes accepted")
 				}
 				switch mutation {
 				case "version":

@@ -46,6 +46,7 @@ type codexNativeLiveReceipt struct {
 	ClientVersion              string                         `json:"client_version"`
 	ClientSHA256               string                         `json:"client_sha256"`
 	Model                      string                         `json:"model"`
+	HostEffort                 *string                        `json:"host_effort,omitempty"`
 	Args                       []string                       `json:"client_args"`
 	FixtureRoot                string                         `json:"fixture_root"`
 	FixtureProvenance          string                         `json:"fixture_provenance"`
