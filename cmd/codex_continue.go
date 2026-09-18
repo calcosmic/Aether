@@ -1936,6 +1936,7 @@ func plannedContinueReviewDispatches(root string, phase colony.Phase, manifest c
 func renderCodexContinueReviewBrief(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, spec codexContinueReviewSpec) string {
 	var b strings.Builder
 	b.WriteString("# Continue Review\n\n")
+	b.WriteString("Prior continue.json and review.json outcomes are historical. A result-collection.json report describes only its recorded attempt; compare its recorded_at with the current manifest and later attempt journal before treating unfinished tasks as current. Reassess their findings against current evidence; their old status alone is not a current blocker.\n\n")
 	b.WriteString("- Phase: ")
 	b.WriteString(fmt.Sprintf("%d — %s\n", phase.ID, phase.Name))
 	b.WriteString("- Repo: ")
@@ -2171,6 +2172,23 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 	var continueWatcher codexWatcherVerification
 	var watcherFlow *codexContinueWorkerFlowStep
 	if dispatchReviewer {
+		// Persist the current deterministic evidence before a reviewer is asked
+		// to read it. Pending review must never look like completed verification.
+		snapshot := codexContinueVerificationReport{
+			Phase: phase.ID, GeneratedAt: now.Format(time.RFC3339),
+			VerificationTimeoutSeconds: int(effectiveContinueVerificationTimeout(verificationTimeout) / time.Second),
+			Steps:                      floor.Steps, Claims: floor.Claims,
+			Watcher:        codexWatcherVerification{Status: "pending"},
+			CriteriaPolicy: floor.Criteria.Policy, CriteriaEnforced: floor.Criteria.Enforced,
+			CriteriaPassed: floor.Criteria.Passed, Criteria: floor.Criteria.Criteria,
+			ChecksPassed: floor.ChecksPassed, Passed: false,
+			BlockingIssues: append([]string{}, floor.BlockingIssues...), Warnings: floor.Warnings,
+		}
+		if err := store.SaveJSON(continuePlanArtifactsPath(phase.ID, "verification.json"), snapshot); err != nil {
+			snapshot.ChecksPassed = false
+			snapshot.BlockingIssues = append(snapshot.BlockingIssues, fmt.Sprintf("could not persist verification snapshot: %v", err))
+			return snapshot, nil
+		}
 		continueWatcher, watcherFlow = runCodexContinueWatcherVerification(ctx, root, phase, manifest, floor.Steps, floor.Claims, buildWatcher, workerTimeout)
 	} else {
 		continueWatcher = skipped
@@ -2507,6 +2525,7 @@ func renderCodexContinueWatcherBrief(root string, phase colony.Phase, manifest c
 	}
 	b.WriteString("\nFull verification output: see .aether/data/build/phase-")
 	b.WriteString(fmt.Sprintf("%d/verification.json\n", phase.ID))
+	b.WriteString("This snapshot contains current command results; watcher status is pending until your review completes. Prior continue.json and review.json outcomes are historical: reassess their findings against current evidence.\n")
 	if len(phase.Tasks) > 0 {
 		b.WriteString("\nPhase tasks:\n")
 		if phase.Mode == colony.PhaseModeDiscovery && len(phase.Tasks) > 5 {
@@ -2654,22 +2673,26 @@ func priorAttemptDispatchStatuses(phaseID int, current map[string][]string) (map
 	if phaseID < 1 {
 		return filled, trusted
 	}
-	for _, record := range listBuildAttemptsForPhase(phaseID) {
-		mode := strings.ToLower(strings.TrimSpace(record.DispatchMode))
-		if mode == "simulated" || mode == "synthetic" {
+	for taskID, record := range latestPhaseTaskAttempts(phaseID) {
+		if len(current[taskID]) > 0 {
 			continue
 		}
 		for _, dispatch := range record.Dispatches {
-			status := strings.TrimSpace(dispatch.Status)
-			if status == "" {
-				continue
-			}
-			for _, taskID := range dispatchCoveredTaskIDs(dispatch) {
-				if len(current[taskID]) > 0 {
+			for _, covered := range dispatchCoveredTaskIDs(dispatch) {
+				if covered != taskID {
 					continue
 				}
-				filled[taskID] = append(filled[taskID], status)
-				trusted[taskID] = struct{}{}
+				status := strings.TrimSpace(dispatch.Status)
+				if _, credited := completedBuildTaskIDs([]codexBuildDispatch{dispatch})[taskID]; credited {
+					status = "completed"
+				}
+				if record.Status != buildAttemptBuilt && record.Status != buildAttemptPartial {
+					status = "failed"
+				}
+				if status != "" {
+					filled[taskID] = append(filled[taskID], status)
+					trusted[taskID] = struct{}{}
+				}
 			}
 		}
 	}
@@ -3888,6 +3911,8 @@ func verifyCodexBuildClaims(root string, manifest codexContinueManifest) codexCl
 			Summary: missingClaimsSummary(manifest),
 		}
 	}
+
+	claims = phaseClaimsForContinue(manifest, claims)
 
 	// The union of everything the claims file says changed this phase — the
 	// single notion of "what changed" that both mismatch checking above and

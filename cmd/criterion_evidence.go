@@ -655,7 +655,7 @@ func loadCriterionEvidenceClaims(manifest codexContinueManifest) (codexBuildClai
 	if manifest.Present && manifest.Data.Phase > 0 && claims.BuildPhase != manifest.Data.Phase {
 		return claims, fmt.Errorf("claims phase %d does not match manifest phase %d", claims.BuildPhase, manifest.Data.Phase)
 	}
-	return claims, nil
+	return phaseClaimsForContinue(manifest, claims), nil
 }
 
 func criterionClaimSets(claims codexBuildClaims) map[string]map[string]bool {
