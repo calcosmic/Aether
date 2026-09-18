@@ -4,12 +4,12 @@ milestone: v1.28
 milestone_name: Classic Colony Restoration
 current_phase: 204.2
 current_phase_name: Codex Native Worker Lifecycle
-status: ready_to_execute
-stopped_at: Acquisition gap planning complete; execute Plan 24 first; qualification remains gaps_found
-last_updated: "2026-09-18T10:39:25.956101+00:00"
-last_activity: 2026-09-18
-last_activity_desc: Added acquisition prerequisites 24–26 before pending 21–23; no execution or qualification claimed
-state_head: 4f11bebfb8b698e1be986422bcb75b4a3ab0759b
+status: blocked
+stopped_at: Blocked Plan 204.2-24 acquisition; actual source unavailable; no SUMMARY or downstream execution
+last_updated: "2026-09-18T10:50:36.067Z"
+last_activity: 2026-09-18 -- Plan 204.2-24 bounded acquisition blocked; source unavailable
+last_activity_desc: Plan 24 discovery retained; actual acquisition unavailable; no plan or requirement completion
+state_head: 71eba9c1
 progress:
   total_phases: 13
   completed_phases: 6
@@ -25,20 +25,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-16)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 204.2 — Codex Native Worker Lifecycle
+**Current focus:** Phase 204.2 — codex-native-worker-lifecycle
 **Previous milestone:** v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02 (48/48 requirements; audit `tech_debt`, no blockers)
 **Product version:** local stable v1.0.81 — installed-baseline routing plus bookkeeping fixes. This does not qualify inserted Phase204.2 work or establish Phase205 acceptance.
 **Bookkeeping repair:** current verification is persisted before reviewer launch; prior task evidence survives targeted rebuilding; latest terminal outcomes replace contradictory old outcomes. Normal/race regression checks and CalVault snapshot replay passed. Installed binary/hub versions and all five integrity checks passed. The real CalVault reviewer passed; phase 1 remains BUILT solely because its accepted criterion still requires appearance-preview.png despite recorded owner scope clarification. No false advancement or accepted-plan rewrite. See `.planning/bookkeeping-hotfix-2026-09-18.md` and its JSON receipt.
-**Qualification:** Codex 0.155.0 exposed help was rechecked. No supported invocation-bound complete tool/settings or cancellation-end evidence exporter was established; the verdict remains gaps_found. Plan 24 is ready for bounded acquisition discovery; Plans 25–26 and 21–23 remain dependent on actual evidence. Phase205 owner acceptance remains pending.
+**Qualification:** Plan 24 examined three mechanisms per host, generated the installed Codex 0.155.0 protocol, rendered a disposable standalone prompt, and checked Claude 2.1.272 documented sources. No complete same-invocation settings/tools or cancellation coverage source was demonstrated. Acquisition is blocked with ready_for_adapter=false; no live worker probe or SUMMARY was created. Resume Plan 24 after a supported source or scoped owner decision. Plans 25–26 and 21–23 remain dependent; canonical gaps_found and Phase205 owner acceptance remain pending.
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
 
 ## Current Position
 
-Phase: 204.2 (Codex Native Worker Lifecycle) — acquisition prerequisite ready; qualification BLOCKED
+Phase: 204.2 (codex-native-worker-lifecycle) — BLOCKED; gaps_found
 Next phase: 204.2 acquisition gap closure
-Status: Ready to execute Plan 24; downstream qualification remains gaps_found
-Plan: 20 of 26 execution reports delivered; order 24 → 25 → 26 → 21 → 22 → 23
-Last activity: 2026-09-18 — Added and checked three acquisition prerequisite plans. Real supported-source probes must succeed before capture adapters and dependent qualification run. No implementation, live proof, requirement completion or Phase 205 acceptance is claimed.
+Status: Blocked at Plan 24 acquisition prerequisite; no downstream execution
+Plan: 24 of 26 (execution wave 18; incomplete; 20 historical summaries retained)
+Last activity: 2026-09-18 -- Plan 204.2-24 bounded acquisition blocked; source unavailable
 
 ## Performance Metrics
 
@@ -709,6 +709,7 @@ Last activity: 2026-09-18 — Added and checked three acquisition prerequisite p
 - Phase 200 full and race gates remain nonzero because protected Phase 199 file 199-UAT.md contains legacy_pause and legacy_resume occurrences absent from the Phase 199 exhaustive vocabulary inventory; Phase 200-owned gates pass.
 - ℹ️ [Phase 204 carry-forward] The automatic hypothesis-to-validated promoter is wired but cannot fire in production (WINDOWS.md entry 44, reopened); check-lane token usage and cost stay recorded as absent (entry 48); 30 of 51 confirmed incidents still have no guard test (entry 42); swarm worker names can collide about one run in fifty and the manifest refuses instead of de-duplicating (entry 47).
 - ℹ️ [Phase 204 side finding] The fixture bank's sanitiser silently drops any confirmed incident whose text contains backticks or XML-looking tags; eight pre-existing incidents have never been in the bank for that reason and WINDOWS.md descriptions that must seed a fixture need plain names.
+- Plan 204.2-24 blocked: examined host sources do not establish full invocation tools/settings or complete post-cancellation write coverage. ready_for_adapter=false; resume Plan 24 after supported source or scoped owner decision. See 204.2-24-BLOCKED-2026-09-18.md.
 
 ## Deferred Items
 
@@ -769,10 +770,9 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-18T10:39:25.956101+00:00
-Stopped at: Gap planning complete; next action is gsd execute-phase 204.2 --gaps-only, starting Plan 24 (wave 18).
-Resume file: .planning/phases/204.2-codex-native-worker-lifecycle/204.2-GAP3-PLANNING.md — sequence 24 → 25 → 26 → 21 → 22 → 23; only Plan 24 is ready to attempt. A blocked acquisition must not create a successful SUMMARY. Preserve actual-source gates, stable 1.0.81 and Phase 205 owner boundary.
-
+Last session: 2026-09-18T10:50:35.817Z
+Stopped at: Blocked Plan 204.2-24 acquisition; actual source unavailable; no SUMMARY or downstream execution
+Resume file: .planning/phases/204.2-codex-native-worker-lifecycle/204.2-24-BLOCKED-2026-09-18.md
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
 
