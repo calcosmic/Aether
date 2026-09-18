@@ -751,7 +751,7 @@ For dummies: A worker actually receives the job, does it, and returns saved work
 
 **Context and research:** [204.2-CONTEXT.md](phases/204.2-codex-native-worker-lifecycle/204.2-CONTEXT.md), [204.2-RESEARCH.md](phases/204.2-codex-native-worker-lifecycle/204.2-RESEARCH.md).
 
-**Plans:** 16 execution reports delivered across 13 waves, including gap Plans 10–16. Verification remains `gaps_found` (0/5 fully qualified criteria); ANT-04 through ANT-07 remain pending. Plan 16 could not run the final focused/full normal/race pair after race preflight exhausted disk space. Advisory review adds three evidence-reliability blockers and one warning.
+**Plans:** 23 plans across 20 waves: 16 execution reports delivered, including gap Plans 10–16, and 7 new gap plans (17–23) pending execution. Verification remains `gaps_found` (0/5 fully qualified criteria); ANT-04 through ANT-07 remain pending. Plan 16 could not run the final focused/full normal/race pair after race preflight exhausted disk space. Advisory review adds three evidence-reliability blockers and one warning.
 
 Plans:
 
@@ -809,6 +809,39 @@ Plans:
 **Wave 13**
 
 - [x] 204.2-16-PLAN.md — Account exact final normal/race regressions and refresh canonical verification after archiving its original bytes; depends on 15.
+
+
+**Second gap-closure pass — pending execution**
+
+**Wave 14 — blocked on Plan 16 completion**
+
+- [ ] 204.2-17-PLAN.md — Complete build-input admission, measured storage preflight and an ordinary native tracer.
+
+**Wave 15 — blocked on Plan 17 completion**
+
+- [ ] 204.2-18-PLAN.md — Validate and acquire semantic host configuration and full tool-schema provenance.
+
+**Wave 16 — blocked on Plan 18 completion**
+
+- [ ] 204.2-19-PLAN.md — Reject malformed cancellation intervals and validate retained recovery cut-point semantics.
+
+**Wave 17 — blocked on Plan 19 completion**
+
+- [ ] 204.2-20-PLAN.md — Prove actual independent review and exact context/scoped answer delivery.
+
+**Wave 18 — blocked on Plan 20 completion**
+
+- [ ] 204.2-21-PLAN.md — Capture attributable fresh-parent recovery and acknowledged cancellation.
+
+**Wave 19 — blocked on Plan 21 completion**
+
+- [ ] 204.2-22-PLAN.md — Freeze the candidate and rerun all eleven native/Claude qualification cases.
+
+**Wave 20 — blocked on Plan 22 completion**
+
+- [ ] 204.2-23-PLAN.md — Account all four focused/full normal/race runs and archive/refresh canonical verification.
+
+**Cross-cutting constraints:** Preserve prior evidence and Phase 205 owner authority; admit and freeze actual build inputs; obtain real host provenance; stop affected qualification when required proof or storage is unavailable; repeat affected qualification after source/capture/corpus changes. See [second gap planning audit](phases/204.2-codex-native-worker-lifecycle/204.2-GAP2-PLANNING.md). Planning does not resolve the existing verification gaps.
 
 Plan checkboxes record delivered execution reports, not successful qualification; Plan 16 retains missing regression execution explicitly. See [current verification](phases/204.2-codex-native-worker-lifecycle/204.2-VERIFICATION.md) and [gap execution review](phases/204.2-codex-native-worker-lifecycle/204.2-GAP-EXECUTION-REVIEW.md).
 

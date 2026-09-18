@@ -4,16 +4,16 @@ milestone: v1.28
 milestone_name: Classic Colony Restoration
 current_phase: 204.2
 current_phase_name: Codex Native Worker Lifecycle
-status: gaps_found
-stopped_at: Phase 204.2 gap execution and independent verification finished; further gap planning required
-last_updated: "2026-09-18T01:42:22.758423+00:00"
+status: ready_to_execute
+stopped_at: Phase 204.2 gap Plans 17–23 checked; ready for gap-only execution; qualification remains gaps_found
+last_updated: "2026-09-18T06:47:13.006Z"
 last_activity: 2026-09-18
-last_activity_desc: Gap Plans 10–16 reported; gaps_found (0/5); live proof incomplete, regression preflight disk-blocked, review has 3 blockers and 1 warning
-state_head: 57c3a9209cace6b1a6d4d9471db06604b14116a3
+last_activity_desc: Gap Plans 17–23 planned and independently checked (15 tasks, waves 14–20); execution pending; verification remains gaps_found (0/5)
+state_head: 34429d5fd6b83bc91628ad6a86cb6c9f5de58b2d
 progress:
   total_phases: 13
   completed_phases: 6
-  total_plans: 207
+  total_plans: 214
   completed_plans: 193
   percent: 46
 ---
@@ -32,11 +32,11 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 
 ## Current Position
 
-Phase: 204.2 (Codex Native Worker Lifecycle) — GAPS FOUND
+Phase: 204.2 (Codex Native Worker Lifecycle) — READY TO EXECUTE
 Next phase: 204.2 gap closure
-Status: Gap execution reported; qualification incomplete
-Plan: 16 of 16 execution reports delivered; Plan 16 full regression remains blocked; next: gsd plan-phase 204.2 --gaps
-Last activity: 2026-09-18 — Gap Plans 10–16 reported; gaps_found (0/5); live proof incomplete, regression preflight disk-blocked, review has 3 blockers and 1 warning
+Status: Ready to execute gap Plans 17–23; qualification remains gaps_found
+Plan: 16 of 23 execution reports delivered; 7 checked plans pending; next: gsd execute-phase 204.2 --gaps-only
+Last activity: 2026-09-18 — Gap Plans 17–23 planned and independently checked (15 tasks, waves 14–20); execution pending; verification remains gaps_found (0/5)
 
 ## Performance Metrics
 
@@ -769,7 +769,7 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 Last session: 2026-09-17T20:36:40.734357+00:00
 Stopped at: Phase 204.2 gap planning complete; next action is gsd execute-phase 204.2 --gaps-only
-Resume file: .planning/phases/204.2-codex-native-worker-lifecycle/204.2-GAP-PLAN-AUDIT.md — use gsd execute-phase 204.2 --gaps-only. Seven checked plans (10–16), fourteen tasks, waves 8–13. Start with Plans 10 and 13. Original verification remains gaps_found; preserve Phase 205 owner checkpoint and installed narrow CalVault hotfix.
+Resume file: .planning/phases/204.2-codex-native-worker-lifecycle/204.2-GAP2-PLANNING.md — use gsd execute-phase 204.2 --gaps-only. Seven checked plans (17–23), fifteen tasks, waves 14–20. Start with Plan 17. Canonical verification remains gaps_found; preserve prior evidence, Phase 205 owner checkpoint and installed narrow CalVault hotfix.
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
 
