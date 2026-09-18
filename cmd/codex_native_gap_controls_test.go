@@ -17,18 +17,21 @@ import (
 // In particular an interrupt result reporting previous_status=running is only
 // a request. Neither it nor a disappearing process proves terminal cancelled.
 type nativeGapCancellationEvidence struct {
-	Parent                string            `json:"parent"`
-	Child                 string            `json:"child"`
-	RequestEvents         map[string]string `json:"request_events"`
-	AcknowledgementID     string            `json:"acknowledgement_id,omitempty"`
-	AcknowledgementSHA256 string            `json:"acknowledgement_sha256,omitempty"`
-	AcknowledgedAt        string            `json:"acknowledged_at,omitempty"`
-	RuntimeRequested      bool              `json:"runtime_requested"`
-	RuntimeCancelled      bool              `json:"runtime_cancelled"`
-	PostAckActivity       bool              `json:"post_ack_activity"`
-	NoPostAckWrites       bool              `json:"no_post_ack_writes"`
-	Qualified             bool              `json:"qualified"`
-	Gaps                  []string          `json:"gaps"`
+	Parent                       string            `json:"parent"`
+	Child                        string            `json:"child"`
+	RequestEvents                map[string]string `json:"request_events"`
+	AcknowledgementID            string            `json:"acknowledgement_id,omitempty"`
+	AcknowledgementSHA256        string            `json:"acknowledgement_sha256,omitempty"`
+	AcknowledgedAt               string            `json:"acknowledged_at,omitempty"`
+	ObservationEndID             string            `json:"observation_end_id,omitempty"`
+	ObservationEndSHA256         string            `json:"observation_end_sha256,omitempty"`
+	RuntimeRequested             bool              `json:"runtime_requested"`
+	RuntimeCancelled             bool              `json:"runtime_cancelled"`
+	PostAckActivity              bool              `json:"post_ack_activity"`
+	IntervalStructurallyComplete bool              `json:"interval_structurally_complete"`
+	NoPostAckWrites              bool              `json:"no_post_ack_writes"`
+	Qualified                    bool              `json:"qualified"`
+	Gaps                         []string          `json:"gaps"`
 }
 
 func nativeGapCancellationFacts(parentRaw, childRaw []byte, parent, child string, observations []codexNativeHostObservation) nativeGapCancellationEvidence {
@@ -101,13 +104,21 @@ func nativeGapCancellationFacts(parentRaw, childRaw []byte, parent, child string
 			e.RuntimeCancelled = true
 		}
 	}
-	// Unknown or incomplete child exports cannot establish an absence of writes.
+	// Unknown or incomplete exports cannot establish an absence of writes. The
+	// collector must retain an explicit host-export boundary; a timer, parent
+	// exit, or an arbitrary later activity event is not a complete interval.
 	var meta nativeHostEvent
 	validChild := json.Unmarshal(bytes.SplitN(childRaw, []byte{'\n'}, 2)[0], &meta) == nil && meta.Type == "session_meta" && meta.Payload.ID == child && meta.Payload.ParentThreadID == parent
 	ack, _ := time.Parse(time.RFC3339Nano, e.AcknowledgedAt)
 	turns := nativeOwnedHostTurns(childRaw, child)
-	observedAfter := false
-	unknownTime := false
+	completeParent, _ := nativeGapCompleteCancellationStream(parentRaw, parent, "")
+	completeChild, end := nativeGapCompleteCancellationStream(childRaw, child, parent)
+	endAt, _ := time.Parse(time.RFC3339Nano, end.Timestamp)
+	bounded := completeParent && completeChild && end.ID != "" && endAt.After(ack) && !ack.IsZero()
+	if bounded {
+		e.ObservationEndID, e.ObservationEndSHA256 = end.ID, end.SHA256
+	}
+	unknownTime := !completeParent || !completeChild
 	for _, line := range bytes.Split(childRaw, []byte{'\n'}) {
 		var event struct {
 			Type, Timestamp string
@@ -134,13 +145,16 @@ func nativeGapCancellationFacts(parentRaw, childRaw []byte, parent, child string
 			unknownTime = true
 		}
 		if err == nil && !ack.IsZero() && !at.Before(ack) {
-			observedAfter = true
 			if activity {
 				e.PostAckActivity = true
 			}
 		}
 	}
-	e.NoPostAckWrites = validChild && observedAfter && !unknownTime && !e.PostAckActivity && !ack.IsZero()
+	e.IntervalStructurallyComplete = validChild && bounded && !unknownTime && !e.PostAckActivity && e.RuntimeRequested && e.RuntimeCancelled
+	// Structural consistency cannot authenticate a collector. The available
+	// rollout acquisition has no supported complete-interval export attestation.
+	// Keep this separate from NoPostAckWrites, which requires actual provenance.
+	e.Gaps = append(e.Gaps, "supported host observation-end acquisition provenance unavailable; self-declared collector and prefix hashes are not absence-of-write proof")
 	if !e.RuntimeRequested {
 		e.Gaps = append(e.Gaps, "actual bound runtime interrupt request missing")
 	}
@@ -151,10 +165,96 @@ func nativeGapCancellationFacts(parentRaw, childRaw []byte, parent, child string
 		e.Gaps = append(e.Gaps, "runtime cancelled terminal is not corroborated")
 	}
 	if !e.NoPostAckWrites {
-		e.Gaps = append(e.Gaps, "no-post-ack-write interval unproved or contains activity")
+		e.Gaps = append(e.Gaps, "no-post-ack-write interval unproved: require complete attributed records and a host-export observation end after cancelled ACK, without activity")
 	}
 	e.Qualified = len(e.Gaps) == 0
 	return e
+}
+
+type nativeGapObservationEnd struct{ ID, Timestamp, SHA256 string }
+
+// This is a replay contract, not an event generator. Actual collectors may
+// supply this boundary only when a supported host export explicitly attests
+// complete coverage of the exact preceding bytes. Current rollout-only capture
+// has no such attestation and therefore remains unqualified.
+func nativeGapCompleteCancellationStream(raw []byte, owner, parent string) (bool, nativeGapObservationEnd) {
+	var end nativeGapObservationEnd
+	turns := nativeOwnedHostTurns(raw, owner)
+	offset, records := 0, 0
+	var previous time.Time
+	for _, line := range bytes.Split(raw, []byte{'\n'}) {
+		prefix := raw[:offset]
+		offset += len(line) + 1
+		if len(bytes.TrimSpace(line)) == 0 {
+			continue
+		}
+		if end.ID != "" {
+			return false, end
+		}
+		var e struct {
+			Type, Timestamp string
+			Payload         struct {
+				Type, ID, Collector, Coverage string
+				Thread                        string `json:"thread_id"`
+				Parent                        string `json:"parent_thread_id"`
+				StreamSHA256                  string `json:"stream_sha256"`
+				Metadata                      struct {
+					Turn string `json:"turn_id"`
+				} `json:"internal_chat_message_metadata_passthrough"`
+				Item struct{ Type string } `json:"item"`
+			}
+		}
+		if json.Unmarshal(line, &e) != nil {
+			return false, end
+		}
+		at, err := time.Parse(time.RFC3339Nano, e.Timestamp)
+		if err != nil || (!previous.IsZero() && at.Before(previous)) {
+			return false, end
+		}
+		previous = at
+		p := e.Payload
+		if records == 0 {
+			if e.Type != "session_meta" || p.ID != owner || p.Parent != parent {
+				return false, end
+			}
+		} else {
+			switch e.Type {
+			case "response_item":
+				if !turns[p.Metadata.Turn] {
+					return false, end
+				}
+				switch p.Type {
+				case "function_call", "function_call_output", "custom_tool_call", "custom_tool_call_output", "message", "reasoning":
+				default:
+					return false, end
+				}
+			case "event_msg":
+				if p.Thread != owner {
+					return false, end
+				}
+				switch p.Type {
+				case "turn_started", "turn_aborted", "turn_complete", "token_count", "agent_message", "agent_reasoning":
+				case "item_started", "item_completed":
+					switch p.Item.Type {
+					case "CommandExecution", "FileChange", "SubAgentActivity", "AgentMessage", "Reasoning":
+					default:
+						return false, end
+					}
+				case "observation_end":
+					if parent == "" || p.Parent != parent || p.ID == "" || p.Collector != "codex-session-export/v1" || p.Coverage != "complete" || p.StreamSHA256 != lifecycleDigest(prefix) {
+						return false, end
+					}
+					end = nativeGapObservationEnd{p.ID, e.Timestamp, lifecycleDigest(line)}
+				default:
+					return false, end
+				}
+			default:
+				return false, end
+			}
+		}
+		records++
+	}
+	return records > 0, end
 }
 
 func nativeGapCollectCancellation(r codexNativeLiveReceipt, runRoot, home string) nativeGapCancellationEvidence {
@@ -268,7 +368,7 @@ func TestCodexNativeGapControls(t *testing.T) {
 			return append(raw, '\n')
 		}
 		parent := event(0, "session_meta", map[string]any{"id": "parent"})
-		parent = append(parent, event(0, "event_msg", map[string]any{"thread_id": "parent", "turn_id": "parent-turn"})...)
+		parent = append(parent, event(0, "event_msg", map[string]any{"type": "turn_started", "thread_id": "parent", "turn_id": "parent-turn"})...)
 		metadata := map[string]any{"turn_id": "parent-turn"}
 		parent = append(parent, event(1, "response_item", map[string]any{"type": "function_call", "name": "collaboration.interrupt_agent", "call_id": "interrupt", "arguments": `{"target":"child"}`, "internal_chat_message_metadata_passthrough": metadata})...)
 		result := event(2, "response_item", map[string]any{"type": "function_call_output", "call_id": "interrupt", "output": `{"previous_status":"running"}`, "internal_chat_message_metadata_passthrough": metadata})
@@ -278,15 +378,27 @@ func TestCodexNativeGapControls(t *testing.T) {
 		parent = append(parent, ack...)
 		child := event(0, "session_meta", map[string]any{"id": "child", "parent_thread_id": "parent"})
 		child = append(child, event(4, "event_msg", map[string]any{"type": "turn_aborted", "thread_id": "child"})...)
+		unbounded := append([]byte(nil), child...)
+		boundary := func(stream []byte, at int, who, collector string) []byte {
+			return append(append([]byte(nil), stream...), event(at, "event_msg", map[string]any{"type": "observation_end", "id": "export-end", "thread_id": who, "parent_thread_id": "parent", "collector": collector, "coverage": "complete", "stream_sha256": lifecycleDigest(stream)})...)
+		}
+		child = boundary(child, 6, "child", "codex-session-export/v1")
 		observations := []codexNativeHostObservation{{Status: "cancel_requested", ChildID: "child", SourceEventID: "interrupt", SourceEventSHA256: lifecycleDigest(bytes.TrimSpace(result))}, {Status: "cancelled", ChildID: "child", SourceEventID: "ack", SourceEventSHA256: lifecycleDigest(bytes.TrimSpace(ack))}}
-		if got := nativeGapCancellationFacts(parent, child, "parent", "child", observations); !got.Qualified {
-			t.Fatalf("valid synthetic control failed: %+v", got)
+		if got := nativeGapCancellationFacts(parent, child, "parent", "child", observations); !got.IntervalStructurallyComplete || got.Qualified || got.NoPostAckWrites {
+			t.Fatalf("synthetic structural control failed or self-authorized provenance: %+v", got)
 		}
 		for _, tc := range []struct {
 			name          string
 			parent, child []byte
 			obs           []codexNativeHostObservation
 		}{
+			{"missing-end", parent, unbounded, observations},
+			{"early-end", parent, boundary(unbounded, 2, "child", "codex-session-export/v1"), observations},
+			{"wrong-end-child", parent, boundary(unbounded, 6, "other", "codex-session-export/v1"), observations},
+			{"unproved-collector", parent, boundary(unbounded, 6, "child", "timer"), observations},
+			{"unknown-activity", parent, boundary(append(append([]byte(nil), unbounded...), event(5, "event_msg", map[string]any{"type": "item_completed", "thread_id": "child", "item": map[string]any{"type": "UnknownActivity"}})...), 6, "child", "codex-session-export/v1"), observations},
+			{"missing-time", parent, bytes.Replace(child, []byte(`"timestamp":"2026-09-18T00:00:04Z",`), nil, 1), observations},
+			{"corrupt-parent", append(append([]byte(nil), parent...), []byte("broken\n")...), child, observations},
 			{"truncated-final-record", parent, append(append([]byte(nil), child...), []byte(`{"type":"event_msg","payload":{"item":{"type":"FileChange"`)...), observations},
 			{"malformed-middle-record", parent, append(append([]byte(nil), child...), []byte("broken\n{}\n")...), observations},
 			{"request-only", requestOnly, child, observations[:1]},
@@ -297,7 +409,7 @@ func TestCodexNativeGapControls(t *testing.T) {
 			{"runtime-request-only", parent, child, observations[:1]},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
-				if got := nativeGapCancellationFacts(tc.parent, tc.child, "parent", "child", tc.obs); got.Qualified {
+				if got := nativeGapCancellationFacts(tc.parent, tc.child, "parent", "child", tc.obs); got.Qualified || got.NoPostAckWrites || got.IntervalStructurallyComplete {
 					t.Fatalf("incomplete cancellation accepted: %+v", got)
 				}
 			})
