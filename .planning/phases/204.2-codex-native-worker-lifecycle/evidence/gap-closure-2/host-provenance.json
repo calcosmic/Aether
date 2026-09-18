@@ -1,0 +1,272 @@
+{
+  "schema_version": "aether-gap2-host-provenance/v1",
+  "plan": "204.2-18",
+  "qualification_complete": false,
+  "requirements_completed": [],
+  "source_revision": "c1e63b8e961120a5dfa23fa36c1802b53bc899b7",
+  "source_status": "",
+  "production_digest": "sha256:5c71573ed6ab717e9aca8a1ce2db19271297b5bebc60d2c740402e9947642f99",
+  "harness_sha256": "sha256:bfa2f117180d1bbf767e5ac076aad4215d2ca8b6e626d657fd1dc95d8c2b28cd",
+  "candidate": {
+    "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/live-clean/capture/native-ordinary-777367638/bin/aether",
+    "sha256": "sha256:aa7441c4c91faa9569b3f761ef58173b0bfa38a626235a9c8ecb5c835fb0722a",
+    "build_argv": [
+      "go",
+      "build",
+      "-buildvcs=false",
+      "-ldflags",
+      "-X github.com/calcosmic/Aether/cmd.Version=1.0.79",
+      "-o",
+      "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/live-clean/capture/native-ordinary-777367638/bin/aether",
+      "./cmd/aether"
+    ]
+  },
+  "actual_invocation": {
+    "original_receipt": {
+      "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/live-clean/capture/native-ordinary-777367638/receipt.json",
+      "sha256": "sha256:68285c4307c9ef7484e98104e01700c34c29e62a16206650d0b1d6bb9d9c9a57"
+    },
+    "session_id": "01a0b379-429d-7e43-9774-661e2eb21d74",
+    "client_path": "/Users/callumcowie/.codex-5x/packages/standalone/releases/0.154.0-aarch64-apple-darwin/bin/codex",
+    "client_sha256": "sha256:4f85982624b3898c8991cb80c0981b2aa71070e3537046c9a95950318a95afcc",
+    "client_version": "codex-cli 0.154.0",
+    "model": "gpt-6-astra",
+    "effort": "medium",
+    "args": [
+      "exec",
+      "--ignore-user-config",
+      "--ignore-rules",
+      "-s",
+      "workspace-write",
+      "--json",
+      "--color",
+      "never",
+      "-C",
+      "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/live-clean/capture/native-ordinary-777367638/repository",
+      "-c",
+      "cli_auth_credentials_store=\"file\"",
+      "-c",
+      "approval_policy=\"never\"",
+      "--enable",
+      "multi_agent",
+      "-c",
+      "shell_environment_policy.set.PATH=\"/private/tmp/aether-gap2-resume-x7pso2qh/plan18/live-clean/capture/native-ordinary-777367638/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin\"",
+      "-c",
+      "shell_environment_policy.set.AETHER_OUTPUT_MODE=\"json\"",
+      "-m",
+      "gpt-6-astra",
+      "-c",
+      "shell_environment_policy.set.GOCACHE=\"/private/tmp/aether-gap2-resume-x7pso2qh/admission-preflight-final/normal/tmp/aether-native-gocache-1662623403\"",
+      "-c",
+      "model_reasoning_effort=\"medium\"",
+      "-"
+    ],
+    "worker_outcome": "incomplete",
+    "native_spawn_count": 1,
+    "temporary_auth_removed": true,
+    "host_provenance": {
+      "version": "codex-cli 0.154.0",
+      "model": "gpt-6-astra",
+      "args": [
+        "exec",
+        "--ignore-user-config",
+        "--ignore-rules",
+        "-s",
+        "workspace-write",
+        "--json",
+        "--color",
+        "never",
+        "-C",
+        "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/live-clean/capture/native-ordinary-777367638/repository",
+        "-c",
+        "cli_auth_credentials_store=\"file\"",
+        "-c",
+        "approval_policy=\"never\"",
+        "--enable",
+        "multi_agent",
+        "-c",
+        "shell_environment_policy.set.PATH=\"/private/tmp/aether-gap2-resume-x7pso2qh/plan18/live-clean/capture/native-ordinary-777367638/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin\"",
+        "-c",
+        "shell_environment_policy.set.AETHER_OUTPUT_MODE=\"json\"",
+        "-m",
+        "gpt-6-astra",
+        "-c",
+        "shell_environment_policy.set.GOCACHE=\"/private/tmp/aether-gap2-resume-x7pso2qh/admission-preflight-final/normal/tmp/aether-native-gocache-1662623403\"",
+        "-c",
+        "model_reasoning_effort=\"medium\"",
+        "-"
+      ],
+      "executable": {
+        "path": "/Users/callumcowie/.codex-5x/packages/standalone/releases/0.154.0-aarch64-apple-darwin/bin/codex",
+        "sha256": "sha256:4f85982624b3898c8991cb80c0981b2aa71070e3537046c9a95950318a95afcc"
+      },
+      "tool_schema": {
+        "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/live-clean/capture/native-ordinary-777367638/host-tool-definitions-capture.json",
+        "sha256": "sha256:f9a81f5735a7bdc5afbdbad0ad1e8b163776a7a9e2cf7c1390d8cbef032111e1"
+      },
+      "configuration": {
+        "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/live-clean/capture/native-ordinary-777367638/host-configuration-capture.json",
+        "sha256": "sha256:a57d85469b1b726c78c1119074784f61f540a7f45eece75d297c489b349a5573"
+      }
+    }
+  },
+  "live_run": {
+    "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/live-clean/receipt.json",
+    "sha256": "sha256:dfc291a6b55ae316596fd827c112bcd09c586a06a934ac53416e68dd58b9ec10"
+  },
+  "admission": {
+    "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/live-clean/preflight.json",
+    "sha256": "sha256:8585ce0682b555a4f2a8800c71b2a2c29d1d787da63cf12fe7ef4542390e9de9"
+  },
+  "rejected_dirty_source_attempt": {
+    "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/live/receipt.json",
+    "sha256": "sha256:15283d216fc387d795053ffdac4c987731f41b4fa67909f419da8ce9fb102a36"
+  },
+  "measured_help": {
+    "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/help/receipt.json",
+    "sha256": "sha256:25929beb53701e9c08695a046c7edb1306555f603be25bc3c6c37fcea92b7367"
+  },
+  "retained_event_inspection": {
+    "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/retained-event-inspection.json",
+    "sha256": "sha256:41be31544a7bd05873ea0bb42f40fcbc7ec0fdca01d50eba6044c1ade0e326ed"
+  },
+  "actual_provenance_gate": {
+    "receipt": {
+      "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/actual-provenance-gate/receipt.json",
+      "sha256": "sha256:20b2e47caf1e909c7e4a842a9c230214198dbf91cc84806f1c216a178bb0310e"
+    },
+    "exit_code": 0,
+    "expected_rejection": "host export unavailable or incomplete"
+  },
+  "focused_checks": {
+    "red": {
+      "receipt": {
+        "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/red/receipt.json",
+        "sha256": "sha256:f43b2580442082450230754293116ebedd1f58208cb8487dbef2eb1a4301f6b4"
+      },
+      "stdout": {
+        "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/red/stdout.jsonl",
+        "sha256": "sha256:f0b0544ee9c2ebe45cca3a2bc0932434e1edc94724d996fb941a1d9cf8155fe2"
+      },
+      "stderr": {
+        "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/red/stderr.txt",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "exit_code": 1,
+      "cases": {
+        "pass": 29,
+        "fail": 6,
+        "skip": 0
+      }
+    },
+    "green-normal": {
+      "receipt": {
+        "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/green-normal/receipt.json",
+        "sha256": "sha256:5af4e92fb8d11d97895cdff58462833e8df7f3091822694ac783086e943d5c64"
+      },
+      "stdout": {
+        "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/green-normal/stdout.jsonl",
+        "sha256": "sha256:3adf970f3f81001f031bf056ceaee93378d4d96dab4c8a165d855c41b170301d"
+      },
+      "stderr": {
+        "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/green-normal/stderr.txt",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "exit_code": 0,
+      "cases": {
+        "pass": 54,
+        "fail": 0,
+        "skip": 0
+      }
+    },
+    "green-race": {
+      "receipt": {
+        "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/green-race/receipt.json",
+        "sha256": "sha256:0e787e08a24ed1f497cf1b8d2ce0bbdc8d443d17186188147b04b2fff0feb324"
+      },
+      "stdout": {
+        "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/green-race/stdout.jsonl",
+        "sha256": "sha256:78c2730d27724ed9d1ef2553475d35dd1e080c170bff4b93d1d92ceb0b695a04"
+      },
+      "stderr": {
+        "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/green-race/stderr.txt",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "exit_code": 0,
+      "cases": {
+        "pass": 54,
+        "fail": 0,
+        "skip": 0
+      }
+    },
+    "collector-red": {
+      "receipt": {
+        "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/collector-red/receipt.json",
+        "sha256": "sha256:50a4dc27b31256533126ec631603fba62ed3b59a8413f1f48dd518a9b1589b5c"
+      },
+      "stdout": {
+        "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/collector-red/stdout.jsonl",
+        "sha256": "sha256:efa7de491f890dadfd138769b0667c886bdff5f6cc6a0bf485c954f95cf34ff9"
+      },
+      "stderr": {
+        "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/collector-red/stderr.txt",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "exit_code": 1,
+      "cases": {
+        "pass": 53,
+        "fail": 2,
+        "skip": 0
+      }
+    },
+    "collector-green-normal": {
+      "receipt": {
+        "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/collector-green-normal/receipt.json",
+        "sha256": "sha256:b2318d635acdf5525b0ca4e954e9a17f6c6d64e8d1ee47eb45a35273dc38d444"
+      },
+      "stdout": {
+        "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/collector-green-normal/stdout.jsonl",
+        "sha256": "sha256:e259e7ccce3f19943cf85af02eb7eafe06e0916428dc9280f93b6ecc664d2681"
+      },
+      "stderr": {
+        "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/collector-green-normal/stderr.txt",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "exit_code": 0,
+      "cases": {
+        "pass": 55,
+        "fail": 0,
+        "skip": 0
+      }
+    },
+    "collector-green-race": {
+      "receipt": {
+        "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/collector-green-race/receipt.json",
+        "sha256": "sha256:b2e1093899cdf7f9e214a317dbda219618e8e0362d91e7f49b9a5c259498f9ff"
+      },
+      "stdout": {
+        "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/collector-green-race/stdout.jsonl",
+        "sha256": "sha256:c33e3d978ca88ce35f5a296e90fcdeae40d2b39046fa96194894e5454af0b390"
+      },
+      "stderr": {
+        "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/collector-green-race/stderr.txt",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "exit_code": 0,
+      "cases": {
+        "pass": 55,
+        "fail": 0,
+        "skip": 0
+      }
+    }
+  },
+  "limitations": [
+    "No supported complete same-invocation effective configuration and full model-facing tool-definition export established in the examined Codex 0.154.0 / Claude 2.1.272 help and retained event surfaces; this is not a universal claim that no such facility exists.",
+    "Codex app-server generate-json-schema explicitly describes app-server protocol schemas, not actual model-facing tool definitions. Claude settings/tool-name selectors do not establish an export.",
+    "Retained turn_context contains partial actual model/effort/permission observations; it does not establish complete configuration or all tool schemas.",
+    "Normalized envelopes are Aether-owned evidence contracts, never raw host sources. No accepting actual-source adapter is implemented without a supported raw acquisition path. Deterministic valid shapes exercise semantic validation only.",
+    "Actual ordinary worker behavior and full host provenance are separate verdicts. Unavailable provenance rejects and blocks dependent qualification/publication.",
+    "No full matrix, Claude live comparison, owner walkthrough, or publication performed in this plan."
+  ],
+  "generated_at": "2026-09-18T07:49:44.543779+00:00"
+}
