@@ -751,7 +751,7 @@ For dummies: A worker actually receives the job, does it, and returns saved work
 
 **Context and research:** [204.2-CONTEXT.md](phases/204.2-codex-native-worker-lifecycle/204.2-CONTEXT.md), [204.2-RESEARCH.md](phases/204.2-codex-native-worker-lifecycle/204.2-RESEARCH.md).
 
-**Plans:** 26 plans across 23 waves; 20 execution reports delivered (several retain incomplete qualification), 6 plans pending. New acquisition prerequisites 24–26 execute before 21–23. Verification remains `gaps_found`; ANT-04 through ANT-07 remain pending. Only Plan 24 is ready to attempt; dependent execution requires supported actual source evidence.
+**Plans:** 26 plans across 23 waves; 20 execution reports delivered (several retain incomplete qualification), 6 plans pending. New acquisition prerequisites 24–26 execute before 21–23. Verification remains `gaps_found`; ANT-04 through ANT-07 remain pending. Plan 24 acquisition is blocked. The owner-selected [scoped collector design](phases/204.2-codex-native-worker-lifecycle/204.2-COLLECTOR-DESIGN.md) is complete; collector implementation and source qualification remain pending. Dependent execution still requires supported actual source evidence.
 
 Plans:
 

@@ -5,10 +5,10 @@ milestone_name: Classic Colony Restoration
 current_phase: 204.2
 current_phase_name: Codex Native Worker Lifecycle
 status: blocked
-stopped_at: Blocked Plan 204.2-24 acquisition; actual source unavailable; no SUMMARY or downstream execution
-last_updated: "2026-09-18T10:50:36.067Z"
-last_activity: 2026-09-18 -- Plan 204.2-24 bounded acquisition blocked; source unavailable
-last_activity_desc: Plan 24 discovery retained; actual acquisition unavailable; no plan or requirement completion
+stopped_at: Scoped collector design complete; Plan 24 source qualification still blocked; no downstream execution
+last_updated: "2026-09-18T13:58:41.917483+00:00"
+last_activity: 2026-09-18 -- Scoped collector design complete; Plan 24 acquisition remains blocked
+last_activity_desc: Owner-selected scoped collector design completed; proof requirements and blocked acquisition preserved
 state_head: 71eba9c1
 progress:
   total_phases: 13
@@ -29,16 +29,16 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 **Previous milestone:** v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02 (48/48 requirements; audit `tech_debt`, no blockers)
 **Product version:** local stable v1.0.81 — installed-baseline routing plus bookkeeping fixes. This does not qualify inserted Phase204.2 work or establish Phase205 acceptance.
 **Bookkeeping repair:** current verification is persisted before reviewer launch; prior task evidence survives targeted rebuilding; latest terminal outcomes replace contradictory old outcomes. Normal/race regression checks and CalVault snapshot replay passed. Installed binary/hub versions and all five integrity checks passed. The real CalVault reviewer passed; phase 1 remains BUILT solely because its accepted criterion still requires appearance-preview.png despite recorded owner scope clarification. No false advancement or accepted-plan rewrite. See `.planning/bookkeeping-hotfix-2026-09-18.md` and its JSON receipt.
-**Qualification:** Plan 24 examined three mechanisms per host, generated the installed Codex 0.155.0 protocol, rendered a disposable standalone prompt, and checked Claude 2.1.272 documented sources. No complete same-invocation settings/tools or cancellation coverage source was demonstrated. Acquisition is blocked with ready_for_adapter=false; no live worker probe or SUMMARY was created. Resume Plan 24 after a supported source or scoped owner decision. Plans 25–26 and 21–23 remain dependent; canonical gaps_found and Phase205 owner acceptance remain pending.
+**Qualification:** Plan 24 examined three mechanisms per host, generated the installed Codex 0.155.0 protocol, rendered a disposable standalone prompt, and checked Claude 2.1.272 documented sources. No complete same-invocation settings/tools or cancellation coverage source was demonstrated. Acquisition is blocked with ready_for_adapter=false; no live worker probe or SUMMARY was created. Owner selected scoped collector design with unchanged proof requirements; see 204.2-COLLECTOR-DESIGN.md. Design is complete; implementation needs its narrow Plan 24 scope amendment, and actual source qualification remains blocked. Plans 25–26 and 21–23 remain dependent; canonical gaps_found and Phase205 owner acceptance remain pending.
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
 
 ## Current Position
 
 Phase: 204.2 (codex-native-worker-lifecycle) — BLOCKED; gaps_found
 Next phase: 204.2 acquisition gap closure
-Status: Blocked at Plan 24 acquisition prerequisite; no downstream execution
+Status: Collector design complete; blocked at Plan 24 source qualification; no downstream execution
 Plan: 24 of 26 (execution wave 18; incomplete; 20 historical summaries retained)
-Last activity: 2026-09-18 -- Plan 204.2-24 bounded acquisition blocked; source unavailable
+Last activity: 2026-09-18 -- Scoped collector design complete; Plan 24 acquisition remains blocked
 
 ## Performance Metrics
 
@@ -222,6 +222,8 @@ Last activity: 2026-09-18 -- Plan 204.2-24 bounded acquisition blocked; source u
 - Phase 204.5 inserted after Phase 204: Codex Parity Proof and Acceptance Handoff; owner-requested Codex ant parity before the remaining Phase 205 walkthrough (2026-09-16) (URGENT)
 
 ### Decisions
+
+- [Phase 204.2, 2026-09-18]: Owner selected “Design a scoped evidence collector while preserving current proof requirements”. Design recorded in `204.2-COLLECTOR-DESIGN.md`: passive fixture recorder, immutable originals, strict source/identity replay, no replacement launcher or manufactured coverage. This authorizes design only; no vendor upgrade, proof relaxation, implementation completion or requirement credit.
 
 - [Phase 204.1, 2026-09-16]: User response “i trust you” delegated the three guidance/claim-boundary reviews. Record assistant provenance, retain the 17 historical suite failures, and keep the separate Phase 205 owner walkthrough and verdict pending.
 
