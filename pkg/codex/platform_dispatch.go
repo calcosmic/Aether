@@ -1649,7 +1649,8 @@ func hasEnvPrefix(prefix string) bool {
 		return false
 	}
 	for _, entry := range os.Environ() {
-		if strings.HasPrefix(entry, prefix) {
+		key, value, _ := strings.Cut(entry, "=")
+		if strings.HasPrefix(key, prefix) && strings.TrimSpace(value) != "" {
 			return true
 		}
 	}
