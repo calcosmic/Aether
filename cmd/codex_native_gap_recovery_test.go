@@ -435,6 +435,14 @@ func TestCodexNativeGapRecovery(t *testing.T) {
 		if !nativeGapCheckpointRetained(r) {
 			t.Fatal("valid retained controller receipt rejected")
 		}
+		t.Run("hash-valid-arbitrary-attempt", func(t *testing.T) {
+			path := filepath.Join(root, "attempt.json")
+			liveSkillWrite(t, path, []byte("different arbitrary bytes"))
+			c.Inventory[path] = lifecycleDigest([]byte("different arbitrary bytes"))
+			if nativeGapCheckpointRetained(r) { t.Fatal("hash-valid arbitrary attempt accepted") }
+			liveSkillWrite(t, path, []byte("proof"))
+			c.Inventory[path] = lifecycleDigest([]byte("proof"))
+		})
 		c.KillSucceeded = false
 		if nativeGapParentExitAccepted(r) {
 			t.Fatal("natural exit converted into interruption")
