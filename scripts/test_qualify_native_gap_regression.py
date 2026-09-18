@@ -106,19 +106,38 @@ class AdmissionTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'unadmitted embedded'):
             q.inventory(self.repo)
 
+    def test_hidden_only_directory_cannot_satisfy_normal_embed(self):
+        self.put('.gitignore', '.DS_Store\n')
+        self.put('assets/.DS_Store', 'ignored Finder metadata')
+        (self.repo / 'assets/a.txt').unlink()
+        with self.assertRaisesRegex(RuntimeError, 'empty embed input'):
+            q.inventory(self.repo)
+
     def test_storage_uses_current_measurements_without_retired_cache(self):
         history = self.repo / 'old-manifest.json'
-        history.write_text(q.json.dumps({'disk_free_before_copy': 1000}))
+        candidate = self.repo / 'candidate'
+        candidate.write_text('binary')
+        history.write_text(q.json.dumps({'disk_free_before_copy': 1000, 'lanes': {'normal': {'candidate': q.file_ref(candidate)}}}))
+        retirement = self.repo / 'retirement.json'
+        retirement.write_text(q.json.dumps({'bytes': 100, 'manifest': q.file_ref(history)}))
         self.put('.planning/phases/204.2-codex-native-worker-lifecycle/evidence/gap-closure/native-regression.json',
-                 q.json.dumps({'preflight_manifest': q.file_ref(history)}))
+                 q.json.dumps({'preflight_manifest': q.file_ref(history), 'cache_retirement': q.file_ref(retirement)}))
         for name in ['modules/data', 'current-cache/data', 'toolchain/data']:
             self.put(name, 'measurable bytes')
         env = {'GOCACHE': str(self.repo / 'current-cache'), 'GOROOT': str(self.repo / 'toolchain')}
-        with patch.object(q, 'output', return_value=q.json.dumps(env)):
+        def answer(argv, *args):
+            return q.json.dumps(env) if argv[0] == 'go' else '.git'
+        with patch.object(q, 'output', side_effect=answer):
             estimate = q.storage_estimate(self.repo, self.repo / 'modules')
         self.assertGreater(estimate['required_bytes'], 1000)
-        self.assertEqual(estimate['measured_bytes']['current_cache'], 16)
+        self.assertEqual(estimate['measured_bytes']['toolchain'], 16)
+        self.assertEqual(estimate['measured_bytes']['prior_compiler_cache'], 100)
         self.assertEqual(estimate['historical_manifest'], q.file_ref(history))
+        retirement.write_text('tampered historical measurement')
+        with patch.object(q, 'output', side_effect=answer):
+            refused = q.storage_estimate(self.repo, self.repo / 'modules')
+        self.assertIsNone(refused['required_bytes'])
+        self.assertIn('cache retirement identity mismatch', refused['uncertainties'][0])
 
     def test_unreadable_tree_cannot_be_zero_capacity(self):
         def denied(path, onerror=None, **kwargs):

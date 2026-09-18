@@ -129,22 +129,30 @@ def admit_inputs(source, paths):
             if not directive:
                 continue
             for pattern in shlex.split(directive[1]):
+                include_hidden = pattern.startswith('all:')
                 pattern = pattern.removeprefix('all:')
                 if '..' in Path(pattern).parts or Path(pattern).is_absolute():
                     raise RuntimeError('unsupported embed pattern: ' + pattern)
                 matches = list(path.parent.glob(pattern))
                 if not matches:
                     raise RuntimeError('missing embed input: ' + pattern)
-                if not any(m.is_file() or (m.is_dir() and any(p.is_file() for p in m.rglob('*'))) for m in matches):
-                    raise RuntimeError('empty embed input: ' + pattern)
                 for match in matches:
                     members = [match, *match.rglob('*')] if match.is_dir() else [match]
+                    consumed = 0
                     for member in members:
+                        # Go skips dot/underscore descendants when walking a
+                        # matched directory, not explicitly matched files.
+                        if member != match and not include_hidden and any(
+                                part.startswith(('.', '_')) for part in member.relative_to(match).parts):
+                            continue
                         relative = member.relative_to(source).as_posix()
                         if member.is_symlink():
                             raise RuntimeError('symlink embed input: ' + relative)
                         if member.is_file() and relative not in tracked:
                             raise RuntimeError('unadmitted embedded input: ' + relative)
+                        consumed += member.is_file()
+                    if not consumed:
+                        raise RuntimeError('empty embed input: ' + pattern)
     # Ignored compilation files in tracked package directories can still affect
     # Go compilation. Refuse them, including cgo/assembly inputs.
     package_dirs = {str(Path(name).parent) for name in paths if name.endswith('.go')}
@@ -237,7 +245,9 @@ def probe(root, clone, env, receipt=None):
 
 def tree_bytes(path, exclude_toolchains=False):
     total = 0
-    for directory, dirs, files in os.walk(path):
+    def fail(exc):
+        raise exc
+    for directory, dirs, files in os.walk(path, onerror=fail):
         if exclude_toolchains:
             dirs[:] = [d for d in dirs if not d.startswith('toolchain@') and not (d == 'toolchain' and 'cache/download/golang.org' in directory)]
         for name in files:
@@ -255,30 +265,52 @@ def storage_estimate(source, cache_source):
     if file_ref(historical) != ref:
         raise RuntimeError('storage baseline identity mismatch')
     old = json.loads(historical.read_text())
-    normal = Path(old['lanes']['normal']['root'])
     sizes = {'prior_exhausted_free_bytes': old['disk_free_before_copy']}
     missing = []
-    for key, path in [('module_copy', cache_source), ('standalone_clone', normal / 'repo'), ('normal_cache', normal / 'go-cache')]:
-        try:
-            sizes[key] = tree_bytes(path, key == 'module_copy')
-        except OSError as exc:
-            missing.append(str(exc))
-        except RuntimeError as exc:
-            missing.append(str(exc))
+    measurements = {}
     try:
-        sizes['candidate_binary'] = (normal / 'candidate-aether').stat().st_size
-    except OSError as exc:
+        # The old cache was deliberately retired. Its immutable retirement
+        # receipt preserves a measured working-set floor without requiring it
+        # to exist again or charging the shared multi-revision cache as one run.
+        retirement_ref = receipt['cache_retirement']
+        retirement_path = Path(retirement_ref['path'])
+        if file_ref(retirement_path) != retirement_ref:
+            raise RuntimeError('cache retirement identity mismatch')
+        retirement = json.loads(retirement_path.read_text())
+        if retirement['manifest'] != ref or retirement['bytes'] <= 0:
+            raise RuntimeError('cache retirement baseline mismatch')
+        sizes['prior_compiler_cache'] = retirement['bytes']
+        env = json.loads(output(['go', 'env', '-json'], source))
+        common = Path(output(['git', 'rev-parse', '--git-common-dir'], source))
+        common = common if common.is_absolute() else source / common
+        measurements = {'module_copy': str(cache_source), 'toolchain': env['GOROOT'],
+                        'git_objects': str(common / 'objects')}
+        for key, value in measurements.items():
+            path = Path(value)
+            sizes[key] = tree_bytes(path, key == 'module_copy')
+        paths = subprocess.check_output(['git', 'ls-files', '-z'], cwd=source).decode().split('\0')
+        sizes['checkout'] = sum((source / name).lstat().st_size for name in set(paths)
+                                if name and ((source / name).exists() or (source / name).is_symlink()))
+        candidate = old['lanes']['normal']['candidate']
+        if file_ref(Path(candidate['path'])) != candidate:
+            raise RuntimeError('historical candidate identity mismatch')
+        sizes['candidate_binary'] = Path(candidate['path']).stat().st_size
+    except (OSError, RuntimeError, KeyError, ValueError) as exc:
         missing.append(str(exc))
     if missing:
         return {'required_bytes': None, 'required_lower_bound_bytes': sizes['prior_exhausted_free_bytes'],
                 'measured_bytes': sizes, 'historical_manifest': ref, 'uncertainties': missing,
                 'method': 'Incomplete measurements prohibit admission; prior exhausted free bytes are only a lower bound.'}
-    # Retain both lanes and reserve a further measured normal compiler working
-    # set for race expansion. Prior exhausted capacity is a floor, never a pass.
-    measured = sizes['module_copy'] + 2*sizes['standalone_clone'] + 3*sizes['normal_cache'] + 2*sizes['candidate_binary']
-    required = max(measured, sizes['prior_exhausted_free_bytes']) + sizes['normal_cache']
-    return {'required_bytes': required, 'measured_bytes': sizes, 'historical_manifest': ref,
-            'method': 'max(module + two clones + three normal caches + two binaries, exhausted prior free bytes) + one measured normal cache headroom; conservative estimate, not universal threshold'}
+    working = max(sizes['prior_compiler_cache'], sizes['checkout'] + sizes['module_copy'] + sizes['toolchain'])
+    sizes['standalone_clone'] = sizes['checkout'] + sizes['git_objects']
+    # Two caches, race expansion and link scratch, plus one additional working
+    # set of headroom beyond the greater of our model and prior exhaustion.
+    measured = sizes['module_copy'] + 2*sizes['standalone_clone'] + 4*working + 2*sizes['candidate_binary']
+    required = max(measured, sizes['prior_exhausted_free_bytes']) + working
+    return {'required_bytes': required, 'measured_bytes': sizes, 'measurement_paths': measurements,
+            'compiler_working_set_bytes': working, 'historical_manifest': ref,
+            'cache_retirement': retirement_ref,
+            'method': 'working=max(retained measured compiler cache, current checkout+modules+toolchain); max(module+two standalone clones+four working sets+two binaries, exhausted prior free bytes)+one working set headroom; conservative estimate, not a guarantee or universal threshold'}
 
 
 def storage_admit(manifest, root, stage):
