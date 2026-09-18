@@ -811,17 +811,17 @@ Plans:
 - [x] 204.2-16-PLAN.md — Account exact final normal/race regressions and refresh canonical verification after archiving its original bytes; depends on 15.
 
 
-**Second gap-closure pass — Plan17 resumed and passed; Plan18 executing**
+**Second gap-closure pass — Plans17–18 reported; qualification incomplete; Plan19 finishing**
 
 **Wave 14 — completed**
 
 - [x] 204.2-17-PLAN.md — Input/storage blockers repaired; normal/race preflight and ordinary native Builder tracer passed.
 
-**Wave 15 — executing**
+**Wave 15 — execution reported; actual provenance remains unavailable**
 
-- [ ] 204.2-18-PLAN.md — Validate and acquire semantic host configuration and full tool-schema provenance.
+- [x] 204.2-18-PLAN.md — Semantic provenance controls passed; actual full host/tool export unavailable and live trial incomplete.
 
-**Wave 16 — blocked on Plan 18 completion**
+**Wave 16 — finishing independent validator repairs; qualification still incomplete**
 
 - [ ] 204.2-19-PLAN.md — Reject malformed cancellation intervals and validate retained recovery cut-point semantics.
 
