@@ -14,6 +14,7 @@ from pathlib import Path
 import re
 import shutil
 import signal
+import shlex
 import subprocess
 import sys
 import time
@@ -99,14 +100,64 @@ def record(root, label, argv, cwd, env, bound):
     return receipt
 
 
+def admit_inputs(source, paths):
+    """Reject inputs omitted by git diff; inspect ignored embeds without a build."""
+    # This single known GSD instruction copy is never part of the Go build.
+    metadata = {'.gsd/.agents/skills/to-prd/SKILL.md'}
+    untracked = subprocess.check_output(
+        ['git', 'ls-files', '--others', '--exclude-standard', '-z'], cwd=source).decode().split('\0')
+    for name in untracked:
+        if name and name not in metadata:
+            raise RuntimeError('unadmitted untracked input: ' + name)
+    tracked = set(paths)
+    for name in paths:
+        if not name:
+            continue
+        path = source / name
+        if path.is_symlink():
+            raise RuntimeError('symlink input requires explicit admission: ' + name)
+        if not name.endswith('.go') or not path.exists():
+            continue
+        for line in path.read_text().splitlines():
+            if not line.startswith('//go:embed '):
+                continue
+            for pattern in shlex.split(line[len('//go:embed '):]):
+                pattern = pattern.removeprefix('all:')
+                if '..' in Path(pattern).parts or Path(pattern).is_absolute():
+                    raise RuntimeError('unsupported embed pattern: ' + pattern)
+                matches = list(path.parent.glob(pattern))
+                if not matches:
+                    raise RuntimeError('missing embed input: ' + pattern)
+                if not any(m.is_file() or (m.is_dir() and any(p.is_file() for p in m.rglob('*'))) for m in matches):
+                    raise RuntimeError('empty embed input: ' + pattern)
+                for match in matches:
+                    members = [match, *match.rglob('*')] if match.is_dir() else [match]
+                    for member in members:
+                        relative = member.relative_to(source).as_posix()
+                        if member.is_symlink():
+                            raise RuntimeError('symlink embed input: ' + relative)
+                        if member.is_file() and relative not in tracked:
+                            raise RuntimeError('unadmitted embedded input: ' + relative)
+    # Ignored compilation files in tracked package directories can still affect
+    # Go compilation. Refuse them, including cgo/assembly inputs.
+    package_dirs = {str(Path(name).parent) for name in paths if name.endswith('.go')}
+    extensions = {'.go', '.s', '.S', '.c', '.h', '.cc', '.cpp', '.cxx', '.m', '.mm', '.f', '.F', '.for', '.f90', '.syso'}
+    for directory in package_dirs:
+        for member in (source / directory).iterdir():
+            if member.suffix in extensions and member.relative_to(source).as_posix() not in tracked:
+                raise RuntimeError('unadmitted compilation input: ' + str(member))
+
+
 def inventory(source):
     paths = subprocess.check_output(['git', 'ls-files', '-z'], cwd=source).decode().split('\0')
+    admit_inputs(source, paths)
     production, corpus = {}, {}
     for name in sorted(set(paths)):
         if not name or name.startswith('.planning/'):
             continue
         path = source / name
-        data = ('symlink:' + os.readlink(path)).encode() if path.is_symlink() else path.read_bytes()
+        # An unstaged tracked deletion is part of the patch and must alter identity.
+        data = path.read_bytes() if path.exists() else b'absent:tracked-deletion'
         (corpus if name.endswith('_test.go') else production)[name] = digest(data)
     def aggregate(files):
         return digest(''.join(f'{key}\0{files[key]}\n' for key in sorted(files)).encode())
@@ -312,6 +363,7 @@ def run(args,source,root):
     manifest = validate(source,root)
     runs = {}
     for name in ['focused_normal','focused_race','normal','race']:
+        manifest = validate(source,root)
         lane = manifest['lanes']['race' if name.endswith('race') else 'normal']
         clone, lane_root = Path(lane['clone']),Path(lane['root'])
         result = record(root,name,argv_for(name,clone),clone,lane['env'],5500)
