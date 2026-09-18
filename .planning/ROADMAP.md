@@ -800,7 +800,7 @@ Plans:
 
 **Wave 11**
 
-- [ ] 204.2-14-PLAN.md — Measure actual sentinels, cancellation and unsupported-control refusals; depends on 12.
+- [x] 204.2-14-PLAN.md — Measure actual sentinels, cancellation and unsupported-control refusals; depends on 12.
 
 **Wave 12**
 
