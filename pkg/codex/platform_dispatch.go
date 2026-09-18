@@ -479,7 +479,13 @@ func fileExists(path string) bool {
 func SelectPlatformInvoker(ctx context.Context) WorkerInvoker {
 	active := DetectActivePlatform()
 	preferences := defaultWorkerPlatformPreferences(active)
-	explicitOverride := PlatformUnknown
+	// A detected host owns its worker dispatch. Availability failure must not
+	// silently transfer the assignment to a different installed provider.
+	pinnedPlatform := PlatformUnknown
+	switch active {
+	case PlatformCodex, PlatformClaude, PlatformOpenCode:
+		pinnedPlatform = active
+	}
 	if rawOverride := strings.TrimSpace(os.Getenv(envWorkerPlatform)); rawOverride != "" {
 		override := normalizePlatform(rawOverride)
 		if override == PlatformUnknown {
@@ -489,7 +495,7 @@ func SelectPlatformInvoker(ctx context.Context) WorkerInvoker {
 			}
 		}
 		if override != PlatformFake {
-			explicitOverride = override
+			pinnedPlatform = override
 			preferences = []Platform{override}
 		}
 	}
@@ -499,9 +505,9 @@ func SelectPlatformInvoker(ctx context.Context) WorkerInvoker {
 		NewClaudeDispatcher(),
 		NewOpenCodeDispatcher(),
 	}, preferences...)
-	if explicitOverride != PlatformUnknown {
+	if pinnedPlatform != PlatformUnknown {
 		for _, dispatcher := range dispatchers {
-			if dispatcher.Platform() == explicitOverride {
+			if dispatcher.Platform() == pinnedPlatform {
 				dispatchers = []PlatformDispatcher{dispatcher}
 				break
 			}
@@ -573,7 +579,7 @@ func DescribeInvokerAvailability(invoker WorkerInvoker, ctx context.Context) str
 					if active == status.Platform {
 						return fmt.Sprintf("using %s worker dispatcher (detected host: %s)", status.Platform, active)
 					}
-					return fmt.Sprintf("detected host %s, falling back to %s worker dispatcher", active, status.Platform)
+					return fmt.Sprintf("using %s worker dispatcher (explicit override; detected host: %s)", status.Platform, active)
 				}
 				return fmt.Sprintf("using %s worker dispatcher", status.Platform)
 			}
@@ -1651,12 +1657,12 @@ func hasEnvPrefix(prefix string) bool {
 }
 
 func defaultWorkerPlatformPreferences(active Platform) []Platform {
-	preferences := []Platform{PlatformClaude}
-	if active != PlatformUnknown && active != PlatformClaude {
-		preferences = append(preferences, active)
+	switch active {
+	case PlatformCodex, PlatformClaude, PlatformOpenCode:
+		return []Platform{active}
 	}
-	preferences = append(preferences, PlatformCodex, PlatformOpenCode)
-	return preferences
+	// Preserve standalone-shell selection when no supported host is detected.
+	return []Platform{PlatformClaude, PlatformCodex, PlatformOpenCode}
 }
 
 func reorderDispatchers(dispatchers []PlatformDispatcher, preferred ...Platform) []PlatformDispatcher {
