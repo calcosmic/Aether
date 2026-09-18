@@ -75,3 +75,13 @@ Cross-review corrected whitespace normalization of dependency aliases, accidenta
 ### Delivery boundary
 
 These fixes make prerequisite admission and reporting honest; they do not approve migration work. Installed Aether 1.0.81 has not been replaced. No CalVault retry, migration, manifest promotion, draft deletion, pending-prompt approval, Phase 205 acceptance or evidence qualification was performed. Plan 24's scoped collector remains a design, and acquisition/proof gates remain blocked.
+
+## Subsequent local installation — 2026-09-18
+
+The earlier delivery boundary above is historical. The five fixes were applied
+to the previously installed stable baseline, focused normal/race checks passed,
+and the repaired executable was atomically installed. CalVault resolves the new
+SHA-256 `45663b7cc4ca018b5024ad78675f4255f894143b820484a8c2846c8270a7f816`.
+The version label and hub remain 1.0.81. See
+[local installation receipt](calvault-local-runtime-install-2026-09-18.md).
+Full-suite qualification remains unpassed; no CalVault retry or migration approval.

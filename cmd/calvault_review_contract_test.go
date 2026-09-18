@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -9,6 +10,13 @@ import (
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
+
+// Keep this regression independent of the unqualified native-host test suite.
+type calVaultNoSchemaLoader struct{}
+
+func (calVaultNoSchemaLoader) Load(string) (any, error) {
+	return nil, errors.New("external schema reference refused")
+}
 
 // Exercise the real producer schema, parser and continue consumer together.
 // Separate producer/consumer tests missed the impossible Auditor contract.
@@ -36,7 +44,7 @@ func TestCalVaultAuditorProducerConsumerContract(t *testing.T) {
 				t.Fatal(err)
 			}
 			compiler := jsonschema.NewCompiler()
-			compiler.UseLoader(nativeGapNoSchemaLoader{})
+			compiler.UseLoader(calVaultNoSchemaLoader{})
 			if err := compiler.AddResource("urn:calvault:actual-worker-schema", schemaDoc); err != nil {
 				t.Fatal(err)
 			}
