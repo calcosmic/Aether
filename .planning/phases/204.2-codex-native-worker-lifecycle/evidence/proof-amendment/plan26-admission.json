@@ -1,0 +1,16 @@
+{
+  "amendment_sha256": "sha256:9db637757528466e0e19bcf5789ccd6c125944e4e6f910d624c9211bbc46ccbd",
+  "implementation_commit": "88f79590",
+  "implementation_tests": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-v2-20260918T200530Z-2d9e28/summary.json",
+    "sha256": "sha256:fb2422d731318233538cef9b3d0d97f9aab529a235308aaf428b6ee4a8b9b1a5"
+  },
+  "mandatory_context_delivery_source": "unresolved; historical WAL-aware source has no full child prompt",
+  "plan25_complete": false,
+  "qualification_complete": false,
+  "recorded_at": "2026-09-18T20:29:17.989770+00:00",
+  "satisfied_condition": "reviewed and normally/race-tested Task25.1 implementation",
+  "schema_version": "aether-native-plan26-implementation-admission/v1",
+  "task26_1_admitted": true,
+  "task26_2_admission": "requires frozen candidate, resource preflight and actual bound-child capture; not implied by this record"
+}

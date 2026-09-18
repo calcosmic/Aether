@@ -1,0 +1,14 @@
+{
+  "schema_version": "aether-native-history-source-feasibility/v1",
+  "source": "owned Plan18 historical0.154 fixture thread_history_1.sqlite plus WAL/SHM",
+  "result": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/thread-history-h5bu1h0u/result.json",
+    "sha256": "sha256:d13ac004fbb50401af88daff566a1132eb1d5b2a170b29e535c66c24410f24e2"
+  },
+  "new_source_examined": true,
+  "mandatory_plaintext_demonstrated": false,
+  "qualification_complete": false,
+  "finding": "63 items,2turns,2projection records. Six collabAgentToolCall rows were wait with prompt=null; no child userMessage; four activity records carried identities without prompt/content. Parent userMessage is only the1897byte test instruction. This historical result does not establish impossibility for every current host.",
+  "originals_unchanged": true,
+  "no_app_server_or_model_launched": true
+}

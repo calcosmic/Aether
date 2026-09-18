@@ -751,7 +751,7 @@ For dummies: A worker actually receives the job, does it, and returns saved work
 
 **Context and research:** [204.2-CONTEXT.md](phases/204.2-codex-native-worker-lifecycle/204.2-CONTEXT.md), [204.2-RESEARCH.md](phases/204.2-codex-native-worker-lifecycle/204.2-RESEARCH.md).
 
-**Plans:** 26 plans across 23 waves; 20 execution reports delivered (several retain incomplete qualification), 6 plans pending. New acquisition prerequisites 24–26 execute before 21–23. Verification remains `gaps_found`; ANT-04 through ANT-07 remain pending. Plan 24 acquisition is blocked. The owner-selected [scoped collector design](phases/204.2-codex-native-worker-lifecycle/204.2-COLLECTOR-DESIGN.md) is complete; collector implementation and source qualification remain pending. Dependent execution still requires supported actual source evidence.
+**Plans:** 26 plans across 23 waves; 20 execution reports delivered (several retain incomplete qualification), 6 plans pending. New acquisition prerequisites 24–26 execute before 21–23. Verification remains `gaps_found`; ANT-04 through ANT-07 remain pending. Plan 24 acquisition is blocked. The owner-selected [scoped collector design](phases/204.2-codex-native-worker-lifecycle/204.2-COLLECTOR-DESIGN.md) is complete; Plan 24 Tasks 1a/1b are delivered: the offline collector passes 19 tests, while version-pinned feasibility blocks live acquisition. Source qualification remains pending. Dependent execution still requires supported actual source evidence.
 
 Plans:
 
@@ -831,21 +831,21 @@ Plans:
 
 **Third gap pass — supported acquisition before dependent qualification**
 
-**Wave 18 — bounded acquisition feasibility**
+**Wave 18 — prospective contract admission complete**
 
-- [ ] 204.2-24-PLAN.md — Trace supported sources and obtain an actual acquisition probe; unavailable evidence stops the chain.
+- [x] 204.2-24-PLAN.md — Owner-approved prospective contract and per-task admission; historical blocked evidence preserved; no live qualification credit.
 
-**Wave 19 — blocked on Plan 24 supported evidence**
+**Wave 19 — Task 1 tested; mandatory delivery source unresolved**
 
-- [ ] 204.2-25-PLAN.md — Implement strict host/context acquisition and complete actual ordinary/review/question tracers.
+- [ ] 204.2-25-PLAN.md — Metadata/proof identity and cancellation admission implemented; 21 focused tests pass normal/race. Actual complete delivery and ordinary/review/question proof remain pending.
 
-**Wave 20 — blocked on Plan 25 completion**
+**Wave 20 — independent refusal controls admitted after reviewed Task 25.1**
 
-- [ ] 204.2-26-PLAN.md — Implement authentic cancellation coverage acquisition and prove one actual tracer.
+- [ ] 204.2-26-PLAN.md — Task 1 refusal checker implemented; 16 focused tests pass normal/race. Task 2 real bound-child capture and replay remain required; unknown termination cannot earn credit.
 
 **Wave 21 — blocked on Plan 26 and successful acquisition receipts**
 
-- [ ] 204.2-21-PLAN.md — Capture attributable fresh-parent recovery and acknowledged cancellation.
+- [ ] 204.2-21-PLAN.md — Capture attributable fresh-parent recovery and actual cancellation support or safe refusal.
 
 **Wave 22 — blocked on Plan 21 completion**
 
@@ -855,13 +855,13 @@ Plans:
 
 - [ ] 204.2-23-PLAN.md — Account all four focused/full normal/race runs and archive/refresh canonical verification.
 
-See [acquisition prerequisite planning](phases/204.2-codex-native-worker-lifecycle/204.2-GAP3-PLANNING.md). Supported sources must be demonstrated, not assumed; no proof requirement is waived.
+See [acquisition prerequisite planning](phases/204.2-codex-native-worker-lifecycle/204.2-GAP3-PLANNING.md). Apply the owner-approved prospective proof contract: optional unknowns stay unknown, mandatory behavior still needs actual source proof.
 
 **Cross-cutting constraints:** Preserve prior evidence and Phase 205 owner authority; admit and freeze actual build inputs; obtain real host provenance; stop affected qualification when required proof or storage is unavailable; repeat affected qualification after source/capture/corpus changes. See [second gap planning audit](phases/204.2-codex-native-worker-lifecycle/204.2-GAP2-PLANNING.md). Planning does not resolve the existing verification gaps.
 
 Plan checkboxes record delivered execution reports, not successful qualification; Plan 16 retains missing regression execution explicitly. See [current verification](phases/204.2-codex-native-worker-lifecycle/204.2-VERIFICATION.md) and [gap execution review](phases/204.2-codex-native-worker-lifecycle/204.2-GAP-EXECUTION-REVIEW.md).
 
-Gap plans preserve original reports/evidence, current Go/host/candidate identity, the exact historical failure comparison, partial NPM recovery disclosure, the installed narrow CalVault hotfix and Phase205 owner authority. Missing actual proof or authentication remains a gap. See [gap planning audit](phases/204.2-codex-native-worker-lifecycle/204.2-GAP-PLAN-AUDIT.md).
+Gap plans preserve original reports/evidence, current Go/host/candidate identity, the exact historical failure comparison, partial NPM recovery disclosure, the installed narrow CalVault hotfix and Phase 205 owner authority. Missing actual proof or authentication remains a gap. See [gap planning audit](phases/204.2-codex-native-worker-lifecycle/204.2-GAP-PLAN-AUDIT.md).
 
 ### Phase 204.3: Codex Workflow Parity (INSERTED)
 
