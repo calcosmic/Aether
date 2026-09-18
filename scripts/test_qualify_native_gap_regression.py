@@ -44,6 +44,45 @@ class AdmissionTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             q.inventory(self.repo)
 
+    def test_ignored_new_package_and_whitespace_embed(self):
+        self.put('.gitignore', 'newpkg/\n*.ignored\n')
+        self.put('newpkg/new.go', 'package newpkg')
+        with self.assertRaisesRegex(RuntimeError, 'unadmitted'):
+            q.inventory(self.repo)
+        (self.repo / 'newpkg/new.go').unlink()
+        self.put('main.go', '\t//go:embed\tassets\n')
+        self.put('assets/new.ignored', 'asset')
+        with self.assertRaisesRegex(RuntimeError, 'unadmitted'):
+            q.inventory(self.repo)
+
+    def test_validate_source_and_both_prepared_lanes_before_launch(self):
+        with tempfile.TemporaryDirectory() as external:
+            root = Path(external)
+            binary = root / 'binary'
+            binary.write_text('binary')
+            log = root / 'log'
+            log.write_text('retained output')
+            result = {'stdout': q.file_ref(log), 'stderr': q.file_ref(log)}
+            lanes = {}
+            for name in ['normal', 'race']:
+                clone = root / name
+                q.shutil.copytree(self.repo, clone)
+                lanes[name] = {'clone': str(clone), 'root': str(root), 'env': {}, 'fixture': result, 'build': result, 'discovery_probe': result, 'candidate': q.file_ref(binary)}
+            manifest = {'passed': True, 'script': q.file_ref(Path(q.__file__)), 'identity': q.inventory(self.repo), 'go_executable': q.file_ref(binary), 'tools': {}, 'lanes': lanes, 'disposed_commits': []}
+            q.write_new(root / 'manifest.json', manifest)
+            q.write_new(root / 'manifest.sha256.json', q.file_ref(root / 'manifest.json'))
+            self.assertEqual(manifest, q.validate(self.repo, root))
+            for repo in [self.repo, root / 'normal', root / 'race']:
+                for name in ['new.go', 'new_test.go', 'assets/new.txt']:
+                    with self.subTest(repo=repo, name=name):
+                        target = repo / name
+                        target.write_text('unadmitted')
+                        with patch.object(q, 'record') as launch:
+                            with self.assertRaisesRegex(RuntimeError, 'unadmitted'):
+                                q.run(None, self.repo, root)
+                            launch.assert_not_called()
+                        target.unlink()
+
     def test_symlink_refused(self):
         (self.repo / 'main.go').unlink()
         (self.repo / 'main.go').symlink_to('/etc/hosts')

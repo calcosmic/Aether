@@ -102,8 +102,9 @@ def record(root, label, argv, cwd, env, bound):
 
 def admit_inputs(source, paths):
     """Reject inputs omitted by git diff; inspect ignored embeds without a build."""
-    # This single known GSD instruction copy is never part of the Go build.
-    metadata = {'.gsd/.agents/skills/to-prd/SKILL.md'}
+    # Exact GSD instruction/dispatch metadata, outside current Go inputs. The
+    # embed scan below still refuses these if a source begins consuming them.
+    metadata = {'.gsd/.agents/skills/to-prd/SKILL.md', '.gsd/dispatch-isolation-sentinel.json'}
     untracked = subprocess.check_output(
         ['git', 'ls-files', '--others', '--exclude-standard', '-z'], cwd=source).decode().split('\0')
     for name in untracked:
@@ -119,9 +120,10 @@ def admit_inputs(source, paths):
         if not name.endswith('.go') or not path.exists():
             continue
         for line in path.read_text().splitlines():
-            if not line.startswith('//go:embed '):
+            directive = re.match(r'^\s*//go:embed\s+(.+)$', line)
+            if not directive:
                 continue
-            for pattern in shlex.split(line[len('//go:embed '):]):
+            for pattern in shlex.split(directive[1]):
                 pattern = pattern.removeprefix('all:')
                 if '..' in Path(pattern).parts or Path(pattern).is_absolute():
                     raise RuntimeError('unsupported embed pattern: ' + pattern)
@@ -142,6 +144,10 @@ def admit_inputs(source, paths):
     # Go compilation. Refuse them, including cgo/assembly inputs.
     package_dirs = {str(Path(name).parent) for name in paths if name.endswith('.go')}
     extensions = {'.go', '.s', '.S', '.c', '.h', '.cc', '.cpp', '.cxx', '.m', '.mm', '.f', '.F', '.for', '.f90', '.syso'}
+    ignored = subprocess.check_output(['git', 'ls-files', '--others', '--ignored', '--exclude-standard', '-z'], cwd=source).decode().split('\0')
+    for name in ignored:
+        if name and Path(name).suffix in extensions:
+            raise RuntimeError('unadmitted ignored compilation input: ' + name)
     for directory in package_dirs:
         for member in (source / directory).iterdir():
             if member.suffix in extensions and member.relative_to(source).as_posix() not in tracked:
@@ -224,6 +230,49 @@ def probe(root, clone, env, receipt=None):
                   clone, child, 300)
 
 
+def tree_bytes(path, exclude_toolchains=False):
+    total = 0
+    for directory, dirs, files in os.walk(path):
+        if exclude_toolchains:
+            dirs[:] = [d for d in dirs if not d.startswith('toolchain@') and not (d == 'toolchain' and 'cache/download/golang.org' in directory)]
+        for name in files:
+            item = Path(directory) / name
+            total += item.lstat().st_size
+    if not Path(path).exists():
+        raise RuntimeError('storage estimate input unavailable: ' + str(path))
+    return total
+
+
+def storage_estimate(source, cache_source):
+    receipt = json.loads((source / '.planning/phases/204.2-codex-native-worker-lifecycle/evidence/gap-closure/native-regression.json').read_text())
+    ref = receipt['preflight_manifest']
+    historical = Path(ref['path'])
+    if file_ref(historical) != ref:
+        raise RuntimeError('storage baseline identity mismatch')
+    old = json.loads(historical.read_text())
+    normal = Path(old['lanes']['normal']['root'])
+    sizes = {'module_copy': tree_bytes(cache_source, True),
+             'standalone_clone': tree_bytes(normal / 'repo'),
+             'normal_cache': tree_bytes(normal / 'go-cache'),
+             'candidate_binary': (normal / 'candidate-aether').stat().st_size,
+             'prior_exhausted_free_bytes': old['disk_free_before_copy']}
+    # Retain both lanes and reserve a further measured normal compiler working
+    # set for race expansion. Prior exhausted capacity is a floor, never a pass.
+    measured = sizes['module_copy'] + 2*sizes['standalone_clone'] + 3*sizes['normal_cache'] + 2*sizes['candidate_binary']
+    required = max(measured, sizes['prior_exhausted_free_bytes']) + sizes['normal_cache']
+    return {'required_bytes': required, 'measured_bytes': sizes, 'historical_manifest': ref,
+            'method': 'max(module + two clones + three normal caches + two binaries, exhausted prior free bytes) + one measured normal cache headroom; conservative estimate, not universal threshold'}
+
+
+def storage_admit(manifest, root, stage):
+    item = {'stage': stage, 'free_bytes': shutil.disk_usage(root).free,
+            'required_bytes': manifest['storage_estimate']['required_bytes']}
+    manifest.setdefault('storage_admissions', []).append(item)
+    item['passed'] = item['free_bytes'] >= item['required_bytes']
+    if not item['passed']:
+        raise RuntimeError('insufficient storage before ' + stage + ': ' + str(item))
+
+
 def prepare(args, source, root):
     if root.exists():
         raise RuntimeError('prepare requires a new evidence root; previous evidence is immutable')
@@ -232,10 +281,12 @@ def prepare(args, source, root):
                 'source': str(source), 'source_revision': output(['git','rev-parse','HEAD'],source),
                 'source_status': output(['git','status','--porcelain=v1','--untracked-files=all'],source),
                 'source_refs_before': output(['git','show-ref'],source),
-                'identity': inventory(source), 'disposed_commits': objects(source), 'lanes': {},
+                'lanes': {},
                 'native_qualification': 'not attempted; regression preparation is not native proof',
                 'prior_npm_incident': 'Partial recovery only: 31 additions, 64 changes, 17 removals remain unestablished; no real-home restoration performed.'}
     try:
+        manifest['identity'] = inventory(source)
+        manifest['disposed_commits'] = objects(source)
         patch = subprocess.check_output(['git','diff','--binary','HEAD'],cwd=source)
         (root/'candidate.patch').write_bytes(patch)
         manifest['patch'] = file_ref(root/'candidate.patch')
@@ -259,6 +310,8 @@ def prepare(args, source, root):
         modules = root/'module-cache'
         # A disposable copy prevents even module-cache lock writes in real home.
         cache_source = Path(manifest['go_env']['GOMODCACHE'])
+        manifest['storage_estimate'] = storage_estimate(source, cache_source)
+        storage_admit(manifest, root, 'module-copy')
         def exclude_unused_toolchain(directory, names):
             # The pinned Go executable above is read-only and GOTOOLCHAIN=local;
             # copying other downloaded toolchains wastes gigabytes, not proof.
@@ -271,6 +324,7 @@ def prepare(args, source, root):
         manifest['disk_free_before_copy'] = shutil.disk_usage(root).free
         shutil.copytree(cache_source, modules, symlinks=True, ignore=exclude_unused_toolchain)
         for lane in ['normal','race']:
+            storage_admit(manifest, root, lane + '-clone')
             lane_root = root/lane
             lane_root.mkdir()
             clone = lane_root/'repo'
@@ -298,12 +352,14 @@ def prepare(args, source, root):
             entry['git_dir'] = output(['git','rev-parse','--absolute-git-dir'],clone,env)
             version = json.loads((clone/'.aether/version.json').read_text())['version']
             binary = lane_root/'candidate-aether'
+            storage_admit(manifest, root, lane + '-build-link')
             entry['build'] = record(lane_root,'build',['go','build','-buildvcs=false','-ldflags',
                 '-X github.com/calcosmic/Aether/cmd.Version='+version,'-o',str(binary),'./cmd/aether'],clone,env,300)
             if entry['build']['exit_code']:
                 raise RuntimeError('candidate build failed')
             entry['candidate'] = file_ref(binary)
             argv = ['go','test','./cmd'] + (['-race'] if lane == 'race' else []) + ['-run',PREFLIGHT,'-count=1','-timeout','180s','-json']
+            storage_admit(manifest, root, lane + '-fixture-link')
             entry['fixture'] = record(lane_root,'fixture',argv,clone,env,420)
             events = [json.loads(line) for line in (lane_root/'fixture.stdout').read_text().splitlines() if line.strip()]
             terminals = {e.get('Test'):e['Action'] for e in events if e.get('Test') and e['Action'] in ['pass','fail','skip']}
@@ -317,13 +373,20 @@ def prepare(args, source, root):
                 raise RuntimeError('fixture changed candidate/corpus')
         manifest['passed'] = all(lane['passed'] for lane in manifest['lanes'].values())
     except Exception as exc:
+        manifest['passed'] = False
         manifest['error'] = str(exc)
     finally:
-        manifest['source_refs_after'] = output(['git','show-ref'],source)
-        manifest['source_revision_after'] = output(['git','rev-parse','HEAD'],source)
-        if manifest['source_revision_after'] != manifest['source_revision'] or inventory(source) != manifest['identity']:
+        try:
+            manifest['source_refs_after'] = output(['git','show-ref'],source)
+            manifest['source_revision_after'] = output(['git','rev-parse','HEAD'],source)
+            if manifest['source_revision_after'] != manifest['source_revision'] or inventory(source) != manifest.get('identity'):
+                raise RuntimeError('source changed during preparation')
+        except Exception as exc:
             manifest['passed'] = False
-            manifest['error'] = 'source changed during preparation'
+            if 'error' in manifest:
+                manifest.setdefault('secondary_errors', []).append(str(exc))
+            else:
+                manifest['error'] = str(exc)
         write_new(root/'manifest.json',manifest)
         write_new(root/'manifest.sha256.json',file_ref(root/'manifest.json'))
     return 0 if manifest['passed'] else 1
