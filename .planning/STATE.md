@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
 **Current focus:** Phase 204.2 — Codex Native Worker Lifecycle
 **Previous milestone:** v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02 (48/48 requirements; audit `tech_debt`, no blockers)
-**Product version:** v1.0.79 — last verified local release from 205-13; the inserted work requires a new qualified candidate before owner acceptance.
-**Local routing hotfix:** `aether-dev` 1.0.80-dev.routing.1 delivered from installed baseline plus routing-only fixes; stable unchanged. See `.planning/routing-hotfix-2026-09-18.md`. Phase204.2 qualification remains blocked.
+**Product version:** local stable v1.0.80 — installed-baseline routing hotfix published at explicit owner request; this does not qualify inserted Phase204.2 work or establish Phase205 acceptance.
+**Routing hotfix:** normal `aether` upgraded to 1.0.80; binary/hub versions, 5/5 integrity checks and disposable consumer setup/update passed. See `.planning/routing-stable-hotfix-2026-09-18.json`. Separate reported phase1 bookkeeping issue awaits affected repo identification; Phase204.2 qualification remains blocked.
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
 
 ## Current Position
