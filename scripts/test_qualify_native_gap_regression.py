@@ -89,6 +89,45 @@ class AdmissionTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'symlink'):
             q.inventory(self.repo)
 
+    def test_normal_embed_skips_hidden_descendants_but_all_consumes_them(self):
+        self.put('.gitignore', '.DS_Store\n_hidden/\n')
+        before = q.inventory(self.repo)
+        self.put('assets/.DS_Store', 'Finder metadata')
+        self.put('assets/_hidden/nested.txt', 'hidden asset')
+        self.assertEqual(before, q.inventory(self.repo))
+        self.put('main.go', '//go:embed all:assets\n')
+        with self.assertRaisesRegex(RuntimeError, 'unadmitted embedded'):
+            q.inventory(self.repo)
+
+    def test_explicit_hidden_embed_match_is_consumed(self):
+        self.put('.gitignore', '.DS_Store\n')
+        self.put('assets/.DS_Store', 'explicitly consumed')
+        self.put('main.go', '//go:embed assets/.DS_Store\n')
+        with self.assertRaisesRegex(RuntimeError, 'unadmitted embedded'):
+            q.inventory(self.repo)
+
+    def test_storage_uses_current_measurements_without_retired_cache(self):
+        history = self.repo / 'old-manifest.json'
+        history.write_text(q.json.dumps({'disk_free_before_copy': 1000}))
+        self.put('.planning/phases/204.2-codex-native-worker-lifecycle/evidence/gap-closure/native-regression.json',
+                 q.json.dumps({'preflight_manifest': q.file_ref(history)}))
+        for name in ['modules/data', 'current-cache/data', 'toolchain/data']:
+            self.put(name, 'measurable bytes')
+        env = {'GOCACHE': str(self.repo / 'current-cache'), 'GOROOT': str(self.repo / 'toolchain')}
+        with patch.object(q, 'output', return_value=q.json.dumps(env)):
+            estimate = q.storage_estimate(self.repo, self.repo / 'modules')
+        self.assertGreater(estimate['required_bytes'], 1000)
+        self.assertEqual(estimate['measured_bytes']['current_cache'], 16)
+        self.assertEqual(estimate['historical_manifest'], q.file_ref(history))
+
+    def test_unreadable_tree_cannot_be_zero_capacity(self):
+        def denied(path, onerror=None, **kwargs):
+            onerror(PermissionError('cannot measure tree'))
+            return iter(())
+        with patch.object(q.os, 'walk', side_effect=denied):
+            with self.assertRaisesRegex(PermissionError, 'cannot measure'):
+                q.tree_bytes(self.repo)
+
     def test_deletion_is_pinned(self):
         before = q.inventory(self.repo)
         (self.repo / q.HARNESS).unlink()
