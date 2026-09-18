@@ -1,0 +1,98 @@
+{
+  "amendment": "sha256:9db637757528466e0e19bcf5789ccd6c125944e4e6f910d624c9211bbc46ccbd",
+  "cleanup_complete": true,
+  "completion_credit": false,
+  "derived_receipt": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/plan26-independent-replay-k0wzf4c4/derived-cancellation.json",
+    "sha256": "sha256:83c9a5d44ba89259f4196cf8e64ac404b93aedd0a9ff57779ca0d23afa754df2"
+  },
+  "disposition": "refused",
+  "focused_validation": {
+    "normal_and_race": true,
+    "passed": true,
+    "summary": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-plan26-inventory-20260918T212846Z-o8e4_h83/summary.json",
+      "sha256": "sha256:97469bf18f4113a7a4a38daed4ad04fcfb7c9ed109f3376ba5f49da96365a066"
+    },
+    "top_level_tests": 19
+  },
+  "full_plan23_estimate_unchanged": 14191223120,
+  "guards": [
+    "required-cancellation-reserve",
+    "stage",
+    "pause",
+    "resume",
+    "duplicate-reserve-no-new-launch",
+    "forced-redispatch",
+    "adversarial-completion"
+  ],
+  "identity": {
+    "attempt_id": "attempt-20260918T215208.586605000Z-80180",
+    "candidate_path": "/Users/callumcowie/.aether-backups/phase204-2-collector/plan26-live-inventory-20260918T213004Z-5cg1cpsh/capture/native-cancellation-1723518675/bin/aether",
+    "candidate_sha256": "sha256:22df34921d8776f30faec24265eaee98c1c0909c2e7804c40da9d3f51620797e",
+    "child_id": "01a0b683-51fe-7303-afd5-233ecba111e7",
+    "client_path": "/Users/callumcowie/.codex-5x/packages/standalone/releases/0.155.0-aarch64-apple-darwin/bin/codex",
+    "client_sha256": "sha256:b0b14f9c1901c1ec44671094b2dc18b39e4bd8d36a6dc2302cc9d961a7e2a197",
+    "client_version": "codex-cli 0.155.0",
+    "harness_sha256": "sha256:2c4d5c21d9e75a9d83b77b30562100b72f81c1138f71d329162b48225f93540e",
+    "host_session_id": "01a0b680-af69-7eb2-a191-abb8c633b753",
+    "launch_id": "run-ca4be8dfcf4e0f570deb424cb514cd65",
+    "source_digest": "sha256:aba41a028f2fbcddb86e6a2126630daec41c2d2f61faf6119199f8eef5ff5d23"
+  },
+  "independent_replay": {
+    "elapsed_seconds": 8.810291999951005,
+    "exit_code": 0,
+    "idempotent_derivation_checked_by_test": true,
+    "passed": true,
+    "runner": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/plan26-independent-replay-k0wzf4c4/run-replay.py",
+      "sha256": "sha256:b5ebe25eef8f18d01fd2c2c567b0f99b45fc9eea23d513e36725c161597af82b"
+    },
+    "summary": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/plan26-independent-replay-k0wzf4c4/summary.json",
+      "sha256": "sha256:c0a1fea55dde837912e25f2bf207e3994bb9ffa9c2e0981e5d8ca9582a6c9d62"
+    }
+  },
+  "live_run": {
+    "elapsed_seconds": 394.36599054094404,
+    "exit_code": 0,
+    "overall_runner_passed": false,
+    "runner_limitation": "Live test passed; initial independent replay was not launched because measured storage admission failed. Original summary preserved unchanged.",
+    "summary": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/plan26-live-inventory-20260918T213004Z-5cg1cpsh/summary.json",
+      "sha256": "sha256:35db5370adf9956739b2aa9ea6a95ed2047d61c651234f2b3f009733afd5618b"
+    },
+    "test_passed": true
+  },
+  "no_post_ack_writes": false,
+  "original_artifact_count": 3178,
+  "original_artifacts_verified_unchanged": true,
+  "original_receipt": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/plan26-live-inventory-20260918T213004Z-5cg1cpsh/capture/native-cancellation-1723518675/receipt.json",
+    "sha256": "sha256:6a4591ca62e78a02961161dfda67215dc9559361c264452b0c1d5faa1c7519bf"
+  },
+  "phase_complete": false,
+  "plan": "204.2-26",
+  "plan_complete": true,
+  "proof_contract": "aether-native-capability-proof/v1",
+  "qualified": true,
+  "recorded_at": "2026-09-18T22:02:57.160209+00:00",
+  "remaining": "Plan25 actual full context/answer/ACK qualification, Plan21 core recovery, all11 final scenarios and4 regression runs remain required. Source changes require affected recapture.",
+  "requirements_completed": [],
+  "resource_retirements": [
+    {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/cache-retirement-plan26-20260918T213942Z-q0vqnke4/receipt.json",
+      "sha256": "sha256:60962e2abe8dbcc6290011dcb6bcf563446ce7896e7e6cf9e664c5b4d1c61ab6"
+    },
+    {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/cache-retirement-replay-2f04fv4u/receipt.json",
+      "sha256": "sha256:4e5ca7d7969a70d75dbb73e8d5e4e94b82b05cb840d4cd7caf8f5da1f4f44517"
+    }
+  ],
+  "runtime_cancelled": false,
+  "schema_version": "aether-plan26-cancellation-acquisition/v1",
+  "snapshot_revision": "97d4b501c56ca2570f63830958c5864fe0a3fb1a",
+  "source_revision": "2d7137df17c746be00f7d6a31df57685d607c9e2",
+  "storage_estimate_unchanged": 10469163008,
+  "temporary_auth_removed": true
+}

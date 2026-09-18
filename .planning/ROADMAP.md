@@ -841,9 +841,9 @@ Plans:
 
 **Wave 20 — independent refusal controls admitted after reviewed Task 25.1**
 
-- [ ] 204.2-26-PLAN.md — Task 1 refusal checker implemented; 16 focused tests pass normal/race. Task 2 real bound-child capture and replay remain required; unknown termination cannot earn credit.
+- [x] 204.2-26-PLAN.md — Actual bound-child safe refusal and independent replay passed on 2d7137df; 19 focused tests pass normal/race. Unknown termination retains no cancellation/no-write/credit claim; final-candidate recapture remains required.
 
-**Wave 21 — blocked on Plan 26 and successful acquisition receipts**
+**Wave 21 — Plan 26 complete; mandatory Plan 25 delivery acquisition still pending**
 
 - [ ] 204.2-21-PLAN.md — Capture attributable fresh-parent recovery and actual cancellation support or safe refusal.
 
