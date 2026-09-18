@@ -4,12 +4,12 @@ milestone: v1.28
 milestone_name: Classic Colony Restoration
 current_phase: 204.2
 current_phase_name: Codex Native Worker Lifecycle
-status: executing
-stopped_at: Phase 204.2 Gap wave 12 merged; 15 reports; native qualification remains incomplete; next Plan 16
-last_updated: "2026-09-18T01:16:36.324534+00:00"
+status: gaps_found
+stopped_at: Phase 204.2 gap execution and independent verification finished; further gap planning required
+last_updated: "2026-09-18T01:42:22.758423+00:00"
 last_activity: 2026-09-18
-last_activity_desc: Gap wave 12 merged; 15 reports; native qualification remains incomplete; next Plan 16
-state_head: 65dafe3e41618b6c26f8f98b0c29672d33406938
+last_activity_desc: Gap Plans 10–16 reported; gaps_found (0/5); live proof incomplete, regression preflight disk-blocked, review has 3 blockers and 1 warning
+state_head: 57c3a9209cace6b1a6d4d9471db06604b14116a3
 progress:
   total_phases: 13
   completed_phases: 6
@@ -32,11 +32,11 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 
 ## Current Position
 
-Phase: 204.2 (Codex Native Worker Lifecycle) — EXECUTING
+Phase: 204.2 (Codex Native Worker Lifecycle) — GAPS FOUND
 Next phase: 204.2 gap closure
-Status: Executing Phase 204.2
-Plan: 15 of 16 execution reports delivered; next gap Plan 16
-Last activity: 2026-09-18 — Gap wave 12 merged; 15 reports; native qualification remains incomplete; next Plan 16
+Status: Gap execution reported; qualification incomplete
+Plan: 16 of 16 execution reports delivered; Plan 16 full regression remains blocked; next: gsd plan-phase 204.2 --gaps
+Last activity: 2026-09-18 — Gap Plans 10–16 reported; gaps_found (0/5); live proof incomplete, regression preflight disk-blocked, review has 3 blockers and 1 warning
 
 ## Performance Metrics
 

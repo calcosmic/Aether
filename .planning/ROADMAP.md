@@ -751,7 +751,7 @@ For dummies: A worker actually receives the job, does it, and returns saved work
 
 **Context and research:** [204.2-CONTEXT.md](phases/204.2-codex-native-worker-lifecycle/204.2-CONTEXT.md), [204.2-RESEARCH.md](phases/204.2-codex-native-worker-lifecycle/204.2-RESEARCH.md).
 
-**Plans:** 16 plans: 9 execution reports delivered in 7 waves, plus 7 gap-closure plans in waves 8–13. Verification remains `gaps_found`; current-candidate native proof and ANT-04 through ANT-07 remain pending.
+**Plans:** 16 execution reports delivered across 13 waves, including gap Plans 10–16. Verification remains `gaps_found` (0/5 fully qualified criteria); ANT-04 through ANT-07 remain pending. Plan 16 could not run the final focused/full normal/race pair after race preflight exhausted disk space. Advisory review adds three evidence-reliability blockers and one warning.
 
 Plans:
 
@@ -808,7 +808,9 @@ Plans:
 
 **Wave 13**
 
-- [ ] 204.2-16-PLAN.md — Account exact final normal/race regressions and refresh canonical verification after archiving its original bytes; depends on 15.
+- [x] 204.2-16-PLAN.md — Account exact final normal/race regressions and refresh canonical verification after archiving its original bytes; depends on 15.
+
+Plan checkboxes record delivered execution reports, not successful qualification; Plan 16 retains missing regression execution explicitly. See [current verification](phases/204.2-codex-native-worker-lifecycle/204.2-VERIFICATION.md) and [gap execution review](phases/204.2-codex-native-worker-lifecycle/204.2-GAP-EXECUTION-REVIEW.md).
 
 Gap plans preserve original reports/evidence, current Go/host/candidate identity, the exact historical failure comparison, partial NPM recovery disclosure, the installed narrow CalVault hotfix and Phase205 owner authority. Missing actual proof or authentication remains a gap. See [gap planning audit](phases/204.2-codex-native-worker-lifecycle/204.2-GAP-PLAN-AUDIT.md).
 
