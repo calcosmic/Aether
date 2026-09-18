@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
 // Aether-owned normalized evidence contract, not a purported client export
@@ -36,7 +38,33 @@ type nativeGapToolDefinition struct {
 	Parameters map[string]json.RawMessage `json:"parameters"`
 }
 
-func nativeGapCollectHostCapture(t *testing.T, r *codexNativeLiveReceipt, root string) {}
+func nativeGapCollectHostCapture(t *testing.T, r *codexNativeLiveReceipt, root string) {
+	t.Helper()
+	p := nativeGapHostProvenance{Version: r.ClientVersion, Model: r.Model, Args: r.Args, Executable: nativeEvidenceFile{r.ClientPath, r.ClientSHA256}}
+	for _, kind := range []string{"configuration", "tool-definitions"} {
+		c := nativeGapHostCapture{SchemaVersion: "aether-host-capture/v1", Kind: kind, SessionID: r.SessionID, Executable: p.Executable, Version: r.ClientVersion, Args: r.Args, Model: r.Model, Effort: r.HostEffort, Method: "unavailable", Provenance: "Actual invocation metadata and retained events only; no complete supported effective configuration/tool definition export established", Complete: false, Unavailable: "Retained client events do not establish complete effective settings and full model-facing tool definitions. Observed names and app-server protocol schemas cannot substitute."}
+		if raw, err := os.ReadFile(r.RawEvents); err == nil {
+			c.Raw = nativeEvidenceFile{r.RawEvents, lifecycleDigest(raw)}
+		}
+		path := filepath.Join(root, "host-"+kind+"-capture.json")
+		liveSkillWriteJSON(t, path, c)
+		ref := nativeEvidenceFile{path, liveSkillFileDigest(t, path)}
+		if kind == "configuration" {
+			p.Configuration = ref
+		} else {
+			p.ToolSchema = ref
+		}
+	}
+	r.HostProvenance = &p
+}
+
+// Schema compilation is offline. A capture must not cause network requests or
+// reads of unrelated local paths through a parameter schema's $ref.
+type nativeGapNoSchemaLoader struct{}
+
+func (nativeGapNoSchemaLoader) Load(url string) (any, error) {
+	return nil, fmt.Errorf("external schema reference refused: %s", url)
+}
 
 func nativeGapDecodeCapture(raw []byte) (nativeGapHostCapture, error) {
 	var c nativeGapHostCapture
@@ -82,6 +110,22 @@ func nativeGapCaptureSemantics(c nativeGapHostCapture, kind string, r codexNativ
 		}
 		names := map[string]bool{}
 		for _, tool := range c.Tools {
+			encoded, err := json.Marshal(tool.Parameters)
+			if err != nil {
+				return err
+			}
+			var document any
+			if err = json.Unmarshal(encoded, &document); err != nil {
+				return err
+			}
+			compiler := jsonschema.NewCompiler()
+			compiler.UseLoader(nativeGapNoSchemaLoader{})
+			if err = compiler.AddResource("urn:aether:tool-parameters", document); err != nil {
+				return err
+			}
+			if _, err = compiler.Compile("urn:aether:tool-parameters"); err != nil {
+				return fmt.Errorf("invalid tool parameter schema: %w", err)
+			}
 			var typ string
 			if tool.Name == "" || names[tool.Name] || len(tool.Parameters) == 0 || json.Unmarshal(tool.Parameters["type"], &typ) != nil || typ != "object" {
 				return fmt.Errorf("tool name/parameter object invalid")

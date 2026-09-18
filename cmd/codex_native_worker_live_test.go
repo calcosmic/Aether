@@ -223,6 +223,9 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 	}
 	receipt := codexNativeLiveReceipt{SchemaVersion: "codex-native-tracer/v2", Scenario: scenario, Outcome: "incomplete", Reason: "harness did not reach all evidence gates", ExitStatus: -1, Artifacts: map[string]string{}, FixtureProvenance: "Fixture-prepared one-task accepted plan through specification, staged planning coordinator and exact acceptPlanCandidate; no live planning claim."}
 	defer func() {
+		// Collect before closing the original inventory. An unavailable export
+		// stays explicitly unqualified even when ordinary worker behavior passes.
+		nativeGapCollectHostCapture(t, &receipt, runRoot)
 		// Index complete raw captures and installed inputs, but never credential caches.
 		_ = filepath.WalkDir(runRoot, func(path string, entry fs.DirEntry, err error) error {
 			if err != nil || entry.IsDir() {
@@ -375,6 +378,9 @@ func runCodexNativeLiveScenario(t *testing.T, scenarioSpec codexNativeLiveScenar
 		_, _ = toml.Decode(string(config), &preferences)
 	}
 	receipt.Model = preferences.Model
+	if preferences.Effort != "" {
+		receipt.HostEffort = &preferences.Effort
+	}
 	auth, err := os.ReadFile(filepath.Join(authRoot, "auth.json"))
 	if err != nil {
 		fail("file authentication unavailable")
