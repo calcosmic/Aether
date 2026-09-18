@@ -483,6 +483,12 @@ AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion
 
 ## Continue Flow
 
+The runtime defaults workers to the detected host: Codex to Codex, Claude Code
+to Claude Code, and OpenCode to OpenCode. If that runtime is unavailable, report
+the blocker; do not ask for credentials for another provider. Only an explicit
+`AETHER_WORKER_PLATFORM` override selects a different provider. This selection
+does not replace missing completion evidence or change the launch owner.
+
 Default path:
 
 ```bash

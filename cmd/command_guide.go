@@ -309,7 +309,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 		RunCommand: "AETHER_OUTPUT_MODE=visual aether oracle --depth <depth> --confidence-target <percent> --template <template> --background \"<synthesized prompt>\"",
 		PostSteps: []string{
 			"If the shell/tool call times out, run `aether oracle status` before declaring failure or switching to ad hoc agents.",
-			"If OpenCode subprocess dispatch is unavailable, let Oracle use its automatic Codex/Claude fallback unless the user explicitly set `AETHER_WORKER_PLATFORM=opencode`.",
+			"In a detected Codex, Claude Code, or OpenCode session, use the same host for workers. If its dispatcher is unavailable, stop with the runtime diagnostic; switch providers only through an explicit AETHER_WORKER_PLATFORM override.",
 			"Do not fake Oracle worker completion; if no dispatcher is available, surface the blocker and keep the saved Oracle workspace.",
 			"Summarize confidence, blockers, and concrete recommendations from runtime output.",
 			"Suggest persisting high-value findings as pheromones or hive wisdom only with user approval.",
@@ -624,6 +624,7 @@ func intelligentCommandDriftGuards(command, skill string) []string {
 		fmt.Sprintf("When changing `%s` wrapper intelligence, update `.aether/commands/%s.yaml`, Claude/OpenCode wrappers, `.aether/skills/colony/%s/SKILL.md` (source for installed `../support/%s.md`), and `command-guide` together.", command, command, skill, skill),
 		"Runtime owns state mutation; wrappers and Codex skills may interview, synthesize, spawn, and summarize, but must not hand-edit state files.",
 		"Choose exactly one worker launch owner per run: platform-native Task/subagent panels after a dry-run manifest, or Go-adapter subprocess execution through the TS host/direct runtime. Never dispatch both paths for the same manifest.",
+		"Detected Codex, Claude Code, and OpenCode sessions use their own worker runtime by default. If it is unavailable, stop rather than silently switching providers.",
 		"Treat AETHER_WORKER_PLATFORM as a hard provider pin. If that provider is unavailable, stop with the Go-owned diagnostic; never fall back to another provider.",
 		"Keep YAML `codex_orchestration` metadata aligned with this guide; command-guide tests enforce that contract.",
 	}

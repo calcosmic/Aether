@@ -60,7 +60,7 @@ guardrails:
   - "If docs and runtime disagree, runtime wins."
   - "If the shell/tool call times out, immediately run `aether oracle status` and report the runtime status; do not assume Oracle failed or bypass it with ad hoc agents."
   - "`aether oracle status` only reports; it never repairs. When it flags a stale controller, `aether oracle recover` is the command that clears it."
-  - "If OpenCode subprocess dispatch is unavailable, let Oracle use its automatic Codex/Claude fallback unless the user explicitly set `AETHER_WORKER_PLATFORM=opencode`."
+  - "In a detected Codex, Claude Code, or OpenCode session, use the same host for workers. If its dispatcher is unavailable, stop with the runtime diagnostic; switch providers only through an explicit AETHER_WORKER_PLATFORM override."
   - "Do not fake Oracle worker completion; if no real dispatcher is available, surface the runtime error and preserve the Oracle workspace."
 follow_up:
   persistence: "After oracle completes, suggest persisting high-value findings as pheromone signals (aether pheromone-write) or hive wisdom (aether hive-store). User approves each suggestion."

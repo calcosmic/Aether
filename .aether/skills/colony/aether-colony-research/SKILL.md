@@ -98,8 +98,10 @@ AETHER_OUTPUT_MODE=visual aether oracle --depth quick --confidence-target <perce
 
 If the shell/tool call times out, run `aether oracle status` before declaring
 failure or switching to ad hoc agents.
-If OpenCode subprocess dispatch is unavailable, let Oracle use its automatic
-Codex/Claude fallback unless the user explicitly set `AETHER_WORKER_PLATFORM=opencode`.
+In a detected Codex, Claude Code, or OpenCode session, Oracle uses that same
+host for workers. If its dispatcher is unavailable, report the blocker rather
+than switching providers. Switch only when the user explicitly selects
+`AETHER_WORKER_PLATFORM`.
 
 9. After Oracle completes, suggest persisting high-value findings as pheromones
    or hive wisdom only after user approval.

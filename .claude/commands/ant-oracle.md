@@ -188,8 +188,10 @@ aether oracle status
 
 Report that status. Do not assume Oracle failed, and do not bypass it with ad
 hoc agents until the runtime status says it is blocked, stopped, or complete.
-If OpenCode subprocess dispatch is unavailable, let Oracle use its automatic
-Codex/Claude fallback unless the user explicitly set `AETHER_WORKER_PLATFORM=opencode`.
+In a detected Codex, Claude Code, or OpenCode session, Oracle uses that same
+host for workers. If its dispatcher is unavailable, report the blocker rather
+than switching providers. Switch only when the user explicitly selects
+`AETHER_WORKER_PLATFORM`.
 Do not fake Oracle worker completion; if the runtime reports no dispatcher,
 preserve the Oracle workspace and surface the blocker plainly.
 
