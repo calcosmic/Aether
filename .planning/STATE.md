@@ -28,6 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 **Current focus:** Phase 204.2 — Codex Native Worker Lifecycle
 **Previous milestone:** v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02 (48/48 requirements; audit `tech_debt`, no blockers)
 **Product version:** v1.0.79 — last verified local release from 205-13; the inserted work requires a new qualified candidate before owner acceptance.
+**Local routing hotfix:** `aether-dev` 1.0.80-dev.routing.1 delivered from installed baseline plus routing-only fixes; stable unchanged. See `.planning/routing-hotfix-2026-09-18.md`. Phase204.2 qualification remains blocked.
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
 
 ## Current Position
