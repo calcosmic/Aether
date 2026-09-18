@@ -5,11 +5,11 @@ milestone_name: Classic Colony Restoration
 current_phase: 204.2
 current_phase_name: Codex Native Worker Lifecycle
 status: blocked
-stopped_at: Plans17–20 reported; actual host evidence unavailable; routing fixed; no publication
-last_updated: "2026-09-18T08:10:33.645657+00:00"
+stopped_at: Bookkeeping repair installed as stable 1.0.81; CalVault reviewer passed; qualification still lacks host evidence
+last_updated: "2026-09-18T09:08:50.287878+00:00"
 last_activity: 2026-09-18
-last_activity_desc: Same-host routing and evidence parser repaired; dependent qualification blocked on unavailable actual host provenance
-state_head: 6f3db30bc6641a71015bdd2e4abaee590f483981
+last_activity_desc: Stable bookkeeping repair validated with live CalVault reviewer; full lifecycle qualification remains blocked
+state_head: 4f11bebfb8b698e1be986422bcb75b4a3ab0759b
 progress:
   total_phases: 13
   completed_phases: 6
@@ -27,8 +27,9 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
 **Current focus:** Phase 204.2 — Codex Native Worker Lifecycle
 **Previous milestone:** v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02 (48/48 requirements; audit `tech_debt`, no blockers)
-**Product version:** local stable v1.0.80 — installed-baseline routing hotfix published at explicit owner request; this does not qualify inserted Phase204.2 work or establish Phase205 acceptance.
-**Routing hotfix:** normal `aether` upgraded to 1.0.80; binary/hub versions, 5/5 integrity checks and disposable consumer setup/update passed. See `.planning/routing-stable-hotfix-2026-09-18.json`. Separate reported phase1 bookkeeping issue awaits affected repo identification; Phase204.2 qualification remains blocked.
+**Product version:** local stable v1.0.81 — installed-baseline routing plus bookkeeping fixes. This does not qualify inserted Phase204.2 work or establish Phase205 acceptance.
+**Bookkeeping repair:** current verification is persisted before reviewer launch; prior task evidence survives targeted rebuilding; latest terminal outcomes replace contradictory old outcomes. Normal/race regression checks and CalVault snapshot replay passed. Installed binary/hub versions and all five integrity checks passed. The real CalVault reviewer passed; phase 1 remains BUILT solely because its accepted criterion still requires appearance-preview.png despite recorded owner scope clarification. No false advancement or accepted-plan rewrite. See `.planning/bookkeeping-hotfix-2026-09-18.md` and its JSON receipt.
+**Qualification:** Codex 0.155.0 exposed help was rechecked. No supported invocation-bound complete tool/settings or cancellation-end evidence exporter was established; the verdict remains gaps_found. Plans21–23 and Phase205 owner acceptance remain pending.
 **Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
 
 ## Current Position
@@ -37,7 +38,7 @@ Phase: 204.2 (Codex Native Worker Lifecycle) — BLOCKED
 Next phase: 204.2 gap closure
 Status: Plans17–20 execution reported; dependent qualification blocked; canonical verdict remains gaps_found
 Plan: 20 of 23 execution reports complete; Plans21–23 pending on supported actual host evidence
-Last activity: 2026-09-18 — Same-host provider routing fixed and tested. Plans19–20 source controls passed normal/race and review. Actual host/tool export and cancellation observation provenance remain unavailable, so dependent qualification stopped. No publication.
+Last activity: 2026-09-18 — Bookkeeping fixes validated and locally published from the isolated stable source as 1.0.81. Live CalVault review passed; its remaining screenshot criterion is a scope mismatch. Full qualification remains blocked on actual host/tool export and cancellation observation provenance; no public release or Phase205 acceptance.
 
 ## Performance Metrics
 
@@ -823,7 +824,7 @@ Historical receipts below describe the prepared 1.0.79 candidate. The owner subs
 
 ## Operator Next Steps
 
-- **Continue Phase204.2 Plans18–23.** Plan17 input/storage blockers are repaired, both normal/race preflight lanes and ordinary native Builder trial passed on source `b5742d34`. Separate resumed receipts preserve the original halt. Plan18 host-provenance checks are executing. ANT-04/05/06/07 and phase qualification remain pending; no dev/stable publication yet.
+- **Phase204.2 Plans21–23 remain blocked on supported actual host evidence.** Plans17–20 execution reports do not qualify missing provenance. Codex 0.155.0 help reinspection did not establish the required exporter; unchanged expensive retries were not run. ANT-04/05/06/07 remain pending. Separate owner-authorized local stable 1.0.81 delivers the routing/bookkeeping repairs only; see the 2026-09-18 hotfix receipts.
 - Follow the inserted dependency order: names/updates, native worker lifecycle, full workflow coverage, shared recruitment/recovery, then real parity proof and candidate handoff. GSD plan checking remains enabled. Use disposable projects for engineering work.
 - **Preserved owner checkpoint:** .planning/phases/205-owner-acceptance-and-restoration-seal/205-14-CHECKPOINT.md. Plans 205-01..13 and task 205-14.1 remain complete; task 2 is still blocking-human and task 3 is pending. The Claude limit reset alone no longer determines the next engineering action.
 - Before the remaining owner walkthrough, Phase 204.5 must produce 205-CODEX-PARITY-HANDOFF.md for the exact new candidate and any controlled local preparation. Preserve the original release receipts, snapshots, and before-inventory; any new pre-session inventory is separately named and linked with preparation changes distinguished from owner evidence. If a session has already begun, preserve it and its original baseline.
