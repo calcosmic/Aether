@@ -5,8 +5,8 @@ milestone_name: Classic Colony Restoration
 current_phase: 204.2
 current_phase_name: Codex Native Worker Lifecycle
 status: blocked
-stopped_at: Bookkeeping repair installed as stable 1.0.81; CalVault reviewer passed; qualification still lacks host evidence
-last_updated: "2026-09-18T09:08:50.287878+00:00"
+stopped_at: Plan 21 preflight blocked on host acquisition; sequential execution authorized and configured
+last_updated: "2026-09-18T10:25:20.202642+00:00"
 last_activity: 2026-09-18
 last_activity_desc: Stable bookkeeping repair validated with live CalVault reviewer; full lifecycle qualification remains blocked
 state_head: 4f11bebfb8b698e1be986422bcb75b4a3ab0759b
@@ -769,9 +769,10 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-17T20:36:40.734357+00:00
-Stopped at: Phase 204.2 gap planning complete; next action is gsd execute-phase 204.2 --gaps-only
-Resume file: .planning/phases/204.2-codex-native-worker-lifecycle/204.2-GAP2-PLANNING.md — use gsd execute-phase 204.2 --gaps-only. Seven checked plans (17–23), fifteen tasks, waves 14–20. Start with Plan 17. Canonical verification remains gaps_found; preserve prior evidence, Phase 205 owner checkpoint and installed narrow CalVault hotfix.
+Last session: 2026-09-18T10:25:20.202642+00:00
+Stopped at: Plan 21 prerequisite check blocked; current Codex 0.155.0 help and source still do not establish required acquisition. Plans 21–23 remain pending. Owner-approved workflow.use_worktrees=false is applied.
+Resume file: .planning/phases/204.2-codex-native-worker-lifecycle/204.2-21-PREFLIGHT.md — establish supported actual host-export and cancellation observation acquisition before restarting dependent live runs. Preserve installed stable 1.0.81, gaps_found verdict and Phase 205 owner boundary.
+
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
 
