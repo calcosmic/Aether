@@ -2889,6 +2889,7 @@ type nativeHostEvent struct {
 		TurnID         string `json:"turn_id"`
 		Item           struct {
 			Type     string          `json:"type"`
+			Kind     string          `json:"kind"`
 			ID       string          `json:"id"`
 			Phase    string          `json:"phase"`
 			Status   string          `json:"status"`
