@@ -14,6 +14,7 @@ import (
 // These captures model the final165 spawn call/activity/result and metadata,
 // not worker prose. They never launch a native worker.
 func TestCodexNativeGapAttribution(t *testing.T) {
+	t.Run("literal-command-attribution", TestCodexNativeGapLiteralCommandAttribution)
 	parent := map[string]any{"type": "session_meta", "payload": map[string]any{"id": "parent", "cwd": "/fixture"}}
 	child := map[string]any{"type": "session_meta", "payload": map[string]any{"id": "child-uuid", "parent_thread_id": "parent", "cwd": "/fixture", "agent_path": "/root/brick", "agent_role": "aether-builder"}}
 	turn := map[string]any{"turn_id": "turn"}
@@ -112,6 +113,102 @@ func TestCodexNativeGapAttribution(t *testing.T) {
 	})
 	t.Run("parent_only_edits_and_unclassified_writes", TestCodexNativeEvidenceDerivation)
 	t.Run("unique_command_events", TestCodexNativeGapParentCoordination)
+}
+
+func TestCodexNativeGapLiteralCommandAttribution(t *testing.T) {
+	for _, input := range []string{
+		`text(await tools.exec_command({cmd:'aether spawn-log --help',max_output_tokens:2000}));`,
+		`text(await tools.exec_command({'cmd':'aether spawn-log --name Brick-46 --caste builder --parent Queen --phase 1 --task "Fix Clamp"',workdir:'/fixture',max_output_tokens:1000}));`,
+		`text(await tools.exec_command({cmd:"aether status"})); text(await tools.exec_command({cmd:'aether spawn-complete --name Brick-46 --status completed --summary "Fixed Clamp"'}));`,
+		`const result = await tools.exec_command({cmd:'aether status',workdir:'/fixture'}); text(result);`,
+	} {
+		t.Run(input, func(t *testing.T) {
+			if _, ok := nativeCodeModeCommands(input, "/fixture"); !ok {
+				t.Fatal("observed literal grammar rejected")
+			}
+		})
+	}
+	for _, object := range []string{
+		`{cmd:'aether status' + suffix}`, `{cmd:command}`, "{cmd:`aether status`}",
+		`{...defaults,cmd:'aether status'}`, `{['cmd']:'aether status'}`, `{cmd:'aether status',cmd:'touch clamp.go'}`,
+		`{"cmd":"aether status","cmd":"touch clamp.go"}`, `{cmd:'aether status',workdir:'/fixture',workdir:'/other'}`,
+		`{cmd:'aether status',max_output_tokens:expression()}`, `{cmd:'aether status',max_output_tokens:{x:1}}`,
+		`{cmd:'aether status',yield_time_ms:NaN}`, `{cmd:'aether status',unknown:1}`, `{cmd:'aether status',__proto__:{}}`,
+	} {
+		t.Run("reject-"+object, func(t *testing.T) {
+			if _, ok := nativeCodeModeCommands("text(await tools.exec_command("+object+"));", "/fixture"); ok {
+				t.Fatal("nonliteral or ambiguous object accepted")
+			}
+		})
+	}
+	for _, input := range []string{
+		`text(await tools.exec_command({cmd:'aether status'})); mutate();`,
+		`text(await other.exec_command({cmd:'aether status'}));`,
+		`const x=await tools.exec_command({cmd:'aether status'});text(y);`,
+		`text(await tools.exec_command({cmd:'aether status'})); text(await tools.apply_patch('x'));`,
+	} {
+		t.Run("reject-extra-"+input, func(t *testing.T) {
+			if _, ok := nativeCodeModeCommands(input, "/fixture"); ok {
+				t.Fatal("unsupported execution accepted")
+			}
+		})
+	}
+	// Syntax decoding must not itself authorize a parent edit or required check.
+	r := codexNativeLiveReceipt{SchemaVersion: "codex-native-tracer/v2", SessionID: "parent", FixtureRoot: "/fixture"}
+	for _, cmd := range []string{"go test ./... -json -count=1", "touch unrelated", "python3 -c 'print(1)'", "echo wrong > clamp.go"} {
+		if nativeParentCoordinationCommand(&r, []string{"/bin/sh", "-c", cmd}, "/fixture") {
+			t.Fatalf("parent substitution accepted: %s", cmd)
+		}
+	}
+}
+
+// Explicit immutable replay of the observed single-quoted call shapes. This
+// diagnoses parser behavior only and never upgrades the original receipt.
+func TestCodexNativeGapObservedSingleQuoteCapture(t *testing.T) {
+	root := os.Getenv("AETHER_CODEX_GAP_CAPTURE")
+	if root == "" {
+		t.Skip("explicit immutable capture required")
+	}
+	rawReceipt, err := os.ReadFile(filepath.Join(root, "receipt.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var receipt codexNativeLiveReceipt
+	if json.Unmarshal(rawReceipt, &receipt) != nil {
+		t.Fatal("invalid original receipt")
+	}
+	paths, err := filepath.Glob(filepath.Join(root, "home/.codex/sessions/*/*/*/*.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wanted := map[string]bool{"call_ymn3RdT67KSPzOXx22HtWAWe": false, "call_WkaJC0j7lB5KyMQ74kVWOoPO": false, "call_xTUsSlBu4mtuSnP3Q7Cf8FEf": false}
+	for _, path := range paths {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, line := range bytes.Split(raw, []byte{'\n'}) {
+			var w nativeCodeModeWire
+			if json.Unmarshal(line, &w) != nil || w.Type != "response_item" || w.Payload.Type != "custom_tool_call" {
+				continue
+			}
+			if _, ok := wanted[w.Payload.CallID]; !ok {
+				continue
+			}
+			commands, ok := nativeCodeModeCommands(w.Payload.Input, receipt.FixtureRoot)
+			if !ok || !nativeCorroboratedBatch(raw, receipt.SessionID, w.Payload.CallID, commands) {
+				t.Errorf("actual call %s rejected", w.Payload.CallID)
+				continue
+			}
+			wanted[w.Payload.CallID] = true
+			t.Logf("actual raw=%s line=%s call=%s", lifecycleDigest(raw), lifecycleDigest(line), w.Payload.CallID)
+		}
+	}
+	for call, seen := range wanted {
+		if !seen {
+			t.Errorf("missing accepted actual call %s", call)
+		}
+	}
 }
 
 func nativeGapResolverScript(t *testing.T) string {
