@@ -692,7 +692,7 @@ func nativeGapUncachedCodeModeResultWithoutNestedEvent(t *testing.T) {
 }
 
 func TestCodexNativeGapUncachedCheckSurvivesCoverageRecheck(t *testing.T) {
-	for _, check := range []string{"go test ./...", "go test ./... -cover", "go test ./... -cover -count=1"} {
+	for _, check := range []string{"go test ./...", "go test ./... -cover", "go test ./... -cover -count=1", "go test -cover ./..."} {
 		for _, projected := range []bool{false, true} {
 			for _, mode := range []string{"valid", "no_prior", "prior_failure", "prior_edit", "failed_since_prior", "wrong_thread", "wrong_turn", "duplicate_event", "duplicate_call", "duplicate_output", "failure", "failed_zero", "missing_exit", "missing_event", "missing_output", "later_edit", "wrong_argv", "wrong_cwd", "copied_output", "interrupted_output", "interleaved_call", "forged_projection"} {
 				t.Run(check+"/projected="+strconv.FormatBool(projected)+"/"+mode, func(t *testing.T) {
@@ -744,6 +744,9 @@ func TestCodexNativeGapUncachedCheckSurvivesCoverageRecheck(t *testing.T) {
 					command, cwd := check, "/fixture"
 					if mode == "wrong_argv" {
 						command = "go test -cover ./..."
+						if command == check {
+							command = "go test ./... -cover"
+						}
 					}
 					if mode == "wrong_cwd" {
 						cwd = "/other"
@@ -881,6 +884,7 @@ func TestCodexNativeObservedFixtureInspections(t *testing.T) {
 		{`date -u +%Y-%m-%dT%H:%M:%SZ`, true, true},
 		{`go test ./... -cover -count=1`, true, false},
 		{`go test ./... -cover`, true, false},
+		{`go test -cover ./...`, true, false},
 		{`rg --files -g '*.go'`, false, false},
 		{`rg --files -g 'clamp.go' -g 'clamp.go'`, false, false},
 		{`rg --files -g '../clamp.go'`, false, false},
@@ -908,6 +912,11 @@ func TestCodexNativeObservedFixtureInspections(t *testing.T) {
 		{`date -u -s tomorrow`, false, false},
 		{`go test ./... -coverprofile=/tmp/profile`, false, false},
 		{`go test ./... -cover -count=1; touch clamp.go`, false, false},
+		{`go test -cover ./... -run TestClamp`, false, false},
+		{`go test -cover ./... -coverprofile=/tmp/profile`, false, false},
+		{`go test -cover ./...; touch clamp.go`, false, false},
+		{`go test -cover ./... > /tmp/result`, false, false},
+		{`go test -cover ./other`, false, false},
 	} {
 		t.Run(tc.command, func(t *testing.T) {
 			if got := nativeChildCommandAllowed(r, []string{"/bin/sh", "-c", tc.command}); got != tc.child {
@@ -918,7 +927,7 @@ func TestCodexNativeObservedFixtureInspections(t *testing.T) {
 			}
 		})
 	}
-	for _, command := range []string{`gofmt -w clamp.go`, `go test ./... -cover -count=1`} {
+	for _, command := range []string{`gofmt -w clamp.go`, `go test ./... -cover -count=1`, `go test -cover ./...`} {
 		if nativeParentCoordinationCommand(&r, []string{"/bin/sh", "-c", command}, "/fixture") {
 			t.Fatalf("child operation admitted for parent: %s", command)
 		}
