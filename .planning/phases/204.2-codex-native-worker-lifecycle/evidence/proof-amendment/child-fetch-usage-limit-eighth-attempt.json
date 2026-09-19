@@ -1,0 +1,160 @@
+{
+  "schema_version": "phase204.2-child-fetch-attempt/v1",
+  "recorded_at": "2026-09-19T17:20:58.513572+00:00",
+  "attempt": 8,
+  "source_revision": "9f9194e631c4e3f0346f21d21bd30b3d5a548042",
+  "snapshot_revision": "761735ffa9244ad3bfed0787c46b01288559c5c9",
+  "focused_summary": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-listing-repair-xxl80ngj/summary.json",
+    "sha256": "sha256:2af28e1f87067504e3ecd4c3c44bb5e5bf34ce50d2a0cb5fe87be44098984d3f"
+  },
+  "focused_result": {
+    "families": 24,
+    "normal_pass": 780,
+    "race_pass": 780,
+    "fail": 0,
+    "skip": 0
+  },
+  "runner": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-listing-repair-jbl6dac_/run-live-listing-repair.PENDING.py",
+    "sha256": "sha256:c8bd94a1cf99ad6e2686668475e711639fb659f63a66bf63d4c9ec7b7e8ae808"
+  },
+  "config": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-listing-repair-jbl6dac_/config.READY.json",
+    "sha256": "sha256:4e5f59f9ec130fda41407b014f3076d97e343b942264d6ca97f7fa63c3634289"
+  },
+  "summary": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-listing-repair-jbl6dac_/summary.json",
+    "sha256": "sha256:094b3d34cf854f3d7704d0b3ed9a6e6b1110b0c00792bdc37d6be3731c2fd2d7"
+  },
+  "original_receipt": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-listing-repair-jbl6dac_/capture/native-ordinary-2098161224/receipt.json",
+    "sha256": "sha256:4540d4b5c0d9f0e048059226f768c2198c902b6c90f581d8330b82634eb8971c"
+  },
+  "derived_receipt": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-listing-repair-jbl6dac_/derived-ordinary.json",
+    "sha256": "sha256:1f13cd177f9cb21e74580362c634213bef4a9700fd68c80bee7d8b2daaec8042"
+  },
+  "original_outcome": "incomplete",
+  "derived_outcome": "incomplete",
+  "runs": {
+    "live": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-run",
+        "^TestCodexNativeWorkerFreshHost$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-json",
+        "-timeout",
+        "60m"
+      ],
+      "bound_seconds": 3700,
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-listing-repair-xxl80ngj/repo",
+      "elapsed_seconds": 258.1526561669998,
+      "exit_code": 1,
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-listing-repair-jbl6dac_/live.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-listing-repair-jbl6dac_/live.stdout",
+        "sha256": "sha256:e2d9e690560df809633f7d8c48872c7c40bef652c050ca3e79441ef117d4b92d"
+      },
+      "stopped_reason": null,
+      "cleanup": {
+        "before_wait_processes": [],
+        "errors": [],
+        "purpose": "owned resource cleanup only; never host acknowledgement or no-post-ACK-write proof",
+        "remaining_pids": [],
+        "remaining_zombie_pids": [],
+        "signals": []
+      }
+    },
+    "replay": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-run",
+        "^TestCodexNativeQualificationReceiptReplay$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-timeout",
+        "180s",
+        "-json"
+      ],
+      "bound_seconds": 300,
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-listing-repair-xxl80ngj/repo",
+      "elapsed_seconds": 4.618712624996988,
+      "exit_code": 1,
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-listing-repair-jbl6dac_/replay.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-listing-repair-jbl6dac_/replay.stdout",
+        "sha256": "sha256:4673da1102b7e61c39b00a349c7c8a19b3f981e41ca8c00d48f759ca34416f7b"
+      },
+      "stopped_reason": null,
+      "cleanup": {
+        "before_wait_processes": [],
+        "errors": [],
+        "purpose": "owned resource cleanup only; never host acknowledgement or no-post-ACK-write proof",
+        "remaining_pids": [],
+        "remaining_zombie_pids": [],
+        "signals": []
+      }
+    }
+  },
+  "raw_events": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-listing-repair-jbl6dac_/capture/native-ordinary-2098161224/parent-events.jsonl",
+    "sha256": "sha256:faad4d9bfe63ede7902a7286764dea190403cbd136595ed1738ddf007eab2148"
+  },
+  "quota_source_events": [
+    {
+      "line": 43,
+      "event": {
+        "type": "error",
+        "message": "You\u2019ve hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at Sep 25th, 2026 9:47 AM."
+      }
+    },
+    {
+      "line": 44,
+      "event": {
+        "type": "turn.failed",
+        "error": {
+          "message": "You\u2019ve hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at Sep 25th, 2026 9:47 AM."
+        }
+      }
+    }
+  ],
+  "observed_flags": {
+    "child_checks_passed": false,
+    "child_edit_observed": false,
+    "runtime_credit_observed": false,
+    "parent_substitution": false,
+    "child_terminal_corroborated": false,
+    "temporary_auth_removed": true,
+    "prompt_delivery_verification": "Exact plaintext unavailable in exported launch event; runtime-issued prompt bytes/digest retained. Full context delivery qualification remains Plan 03/07."
+  },
+  "fallback_auth_cleanup": {
+    "errors": [],
+    "purpose": "fixture-local credential cleanup only; never workflow proof",
+    "removed_paths": []
+  },
+  "passed": false,
+  "phase_complete": false,
+  "requirements_completed": [],
+  "interpretation": "Live client usage limit interrupted the ordinary trial; strict replay remains incomplete. Cleanup is resource closure, not workflow or cancellation proof. Preserve original outcomes.",
+  "resume_authority": "Owner subsequently reported a quota reset and explicitly instructed safe resumption. A new uniquely admitted ordinary capture/replay is authorized on unchanged candidate; never reuse this single-use runner or reinterpret this failed receipt.",
+  "next": "Fresh ordinary capture plus strict replay; new prospective review/question bindings require actual ordinary success. Current cancellation recapture, recovery, all eleven final cases and four regression runs remain required."
+}

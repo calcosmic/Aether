@@ -1,0 +1,1171 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-09-19T15:33:28.122396+00:00",
+  "scope": "Plan25 canonical bootstrap repair focused checks and fourth actual ordinary attempt; no plan completion",
+  "phase_complete": false,
+  "requirements_completed": [],
+  "tested_source_commit": "dada224d84d504f83ca5aaf257b99a538ef7038b",
+  "focused_summary": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-ordinary-repair-11fc3hr1/summary.json",
+    "sha256": "sha256:355c9ba694967ba823a8aa9ec2da1209bba672cf08078d93e6ae444c01a859e1"
+  },
+  "focused_snapshot_revision": "0f6eb5dba6a076aca00779ee18f808d827dddc2e",
+  "focused_runs": {
+    "normal-cmd": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-run",
+        "^(TestCodexNativeChildContextFetchEvidence|TestCodexNativeChildContextBootstrap|TestCodexNativeChildContextPassiveWait|TestCodexNativeChildFetchFactoryAndLegacy|TestCodexNativeChildFetchReadAckNoMutation|TestCodexNativeChildFetchAckRefusals|TestCodexNativeGapLiteralCommandAttribution|TestCodexNativeCodeModeOutputProjection|TestCodexNativeGapObservedSingleQuoteCapture|TestCodexNativeGapParentCoordination|TestCodexNativeGapUncachedCheckSurvivesPlainRecheck|TestCodexNativeGapUncachedCheckSurvivesCoverageRecheck|TestCodexNativeGapRecordedFailedRefusal|TestCodexNativeGapObservedRefusal|TestCodexNativeObservedOperationWrappers|TestCodexNativeObservedReadOnlyBatch|TestCodexNativeObservedFixtureInspections|TestCodexNativeObservedLiteralPatch|TestCodexNativeCodeModeSequenceBoundary|TestCodexNativeReadOnlyBatchBoundary|TestCodexNativeLiteralPatchBoundary|TestCodexNativeReadOnlyBatchEventLinkage|TestCodexNativeThirdReviewCodeModeOutcome|TestCodexNativeSecondReviewControls)$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-timeout",
+        "600s",
+        "-json"
+      ],
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-ordinary-repair-11fc3hr1/repo",
+      "exit_code": 0,
+      "elapsed_seconds": 45.021037101745605,
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-ordinary-repair-11fc3hr1/normal-cmd.stdout",
+        "sha256": "sha256:b3cf512f0babcbac32e5e50021b27338f9dff7eaec572cad7861130f79209571"
+      },
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-ordinary-repair-11fc3hr1/normal-cmd.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "test_counts": {
+        "pass": 613,
+        "fail": 0,
+        "skip": 0
+      },
+      "families": 24
+    },
+    "race-cmd": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-race",
+        "-run",
+        "^(TestCodexNativeChildContextFetchEvidence|TestCodexNativeChildContextBootstrap|TestCodexNativeChildContextPassiveWait|TestCodexNativeChildFetchFactoryAndLegacy|TestCodexNativeChildFetchReadAckNoMutation|TestCodexNativeChildFetchAckRefusals|TestCodexNativeGapLiteralCommandAttribution|TestCodexNativeCodeModeOutputProjection|TestCodexNativeGapObservedSingleQuoteCapture|TestCodexNativeGapParentCoordination|TestCodexNativeGapUncachedCheckSurvivesPlainRecheck|TestCodexNativeGapUncachedCheckSurvivesCoverageRecheck|TestCodexNativeGapRecordedFailedRefusal|TestCodexNativeGapObservedRefusal|TestCodexNativeObservedOperationWrappers|TestCodexNativeObservedReadOnlyBatch|TestCodexNativeObservedFixtureInspections|TestCodexNativeObservedLiteralPatch|TestCodexNativeCodeModeSequenceBoundary|TestCodexNativeReadOnlyBatchBoundary|TestCodexNativeLiteralPatchBoundary|TestCodexNativeReadOnlyBatchEventLinkage|TestCodexNativeThirdReviewCodeModeOutcome|TestCodexNativeSecondReviewControls)$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-timeout",
+        "600s",
+        "-json"
+      ],
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-ordinary-repair-11fc3hr1/repo",
+      "exit_code": 0,
+      "elapsed_seconds": 70.27279305458069,
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-ordinary-repair-11fc3hr1/race-cmd.stdout",
+        "sha256": "sha256:ead24d89150b0faf8167fd93ce87daa6865c12cd5bd05fed836140c7b9d71743"
+      },
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-ordinary-repair-11fc3hr1/race-cmd.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "test_counts": {
+        "pass": 613,
+        "fail": 0,
+        "skip": 0
+      },
+      "families": 24
+    }
+  },
+  "live_summary": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-repair-pc1cwk2j/summary.json",
+    "sha256": "sha256:b9ca0894a7ec2d85b1c6f6a3dc05ca3f097067ae9f411ece86b6f55074b1e772"
+  },
+  "live_runner_review": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-repair-pc1cwk2j/activation-review.json",
+    "sha256": "sha256:ef6821763013a2b0111062b06686c025cb7aac27ec92b8667859bb9b3da737bc"
+  },
+  "cache_controls": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-repair-pc1cwk2j/offline-cache-controls.json",
+    "sha256": "sha256:31ae938ede1243d5621d79c3ef1e222d499264c6ccd41cf35508026f4c7ff02b"
+  },
+  "live_runs": {
+    "live": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-run",
+        "^TestCodexNativeWorkerFreshHost$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-json",
+        "-timeout",
+        "60m"
+      ],
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-ordinary-repair-11fc3hr1/repo",
+      "exit_code": 1,
+      "elapsed_seconds": 478.07194787499975,
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-repair-pc1cwk2j/live.stdout",
+        "sha256": "sha256:e10cf47749e3e80b088422cacc3314ad1ea720485001c8f19fbb62e750c1f756"
+      },
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-repair-pc1cwk2j/live.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stopped_reason": null,
+      "cleanup": {
+        "before_wait_processes": [],
+        "errors": [],
+        "purpose": "owned resource cleanup only; never host acknowledgement or no-post-ACK-write proof",
+        "remaining_pids": [],
+        "remaining_zombie_pids": [],
+        "signals": [],
+        "tracked_processes": [
+          {
+            "pgid": 46621,
+            "pid": 46621,
+            "ppid": 46508,
+            "started": "Sat Sep 19 17:21:47 2026",
+            "state": "Rs"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46631,
+            "ppid": 46621,
+            "started": "Sat Sep 19 17:21:48 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46636,
+            "ppid": 46621,
+            "started": "Sat Sep 19 17:21:48 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46648,
+            "ppid": 46636,
+            "started": "Sat Sep 19 17:21:50 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46652,
+            "ppid": 46648,
+            "started": "Sat Sep 19 17:21:50 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46711,
+            "ppid": 46648,
+            "started": "Sat Sep 19 17:22:00 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46716,
+            "ppid": 46636,
+            "started": "Sat Sep 19 17:22:01 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46721,
+            "ppid": 46636,
+            "started": "Sat Sep 19 17:22:02 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46722,
+            "ppid": 46721,
+            "started": "Sat Sep 19 17:22:02 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46723,
+            "ppid": 46722,
+            "started": "Sat Sep 19 17:22:02 2026",
+            "state": "U"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46752,
+            "ppid": 46636,
+            "started": "Sat Sep 19 17:22:07 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46753,
+            "pid": 46753,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:07 2026",
+            "state": "Ss"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46779,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:08 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46781,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:08 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46787,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:08 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46792,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:08 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46793,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:08 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46794,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:08 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46795,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:08 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46796,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:08 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46867,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:08 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46882,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:09 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46885,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:09 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46886,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:09 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46887,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:09 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46900,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:09 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46908,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:09 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46915,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:09 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46917,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:09 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46920,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:09 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46934,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:09 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46956,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:09 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46958,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:09 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46959,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:09 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46960,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:10 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 46977,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:10 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 47002,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:10 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 47010,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:10 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 47012,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:10 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 47013,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:10 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 47014,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:10 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 47016,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:10 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 47020,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:10 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 47024,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:10 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 47030,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:10 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 47032,
+            "ppid": 46752,
+            "started": "Sat Sep 19 17:22:10 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 46621,
+            "pid": 47034,
+            "ppid": 46636,
+            "started": "Sat Sep 19 17:22:11 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 47154,
+            "pid": 47154,
+            "ppid": 47034,
+            "started": "Sat Sep 19 17:22:23 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 47178,
+            "pid": 47178,
+            "ppid": 47034,
+            "started": "Sat Sep 19 17:22:28 2026",
+            "state": "Rs"
+          },
+          {
+            "pgid": 47227,
+            "pid": 47227,
+            "ppid": 47034,
+            "started": "Sat Sep 19 17:22:40 2026",
+            "state": "Rs"
+          },
+          {
+            "pgid": 47255,
+            "pid": 47255,
+            "ppid": 47034,
+            "started": "Sat Sep 19 17:22:46 2026",
+            "state": "Ss"
+          },
+          {
+            "pgid": 47255,
+            "pid": 47256,
+            "ppid": 47255,
+            "started": "Sat Sep 19 17:22:46 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 47255,
+            "pid": 47258,
+            "ppid": 47256,
+            "started": "Sat Sep 19 17:22:46 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 47255,
+            "pid": 47263,
+            "ppid": 47256,
+            "started": "Sat Sep 19 17:22:47 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 47255,
+            "pid": 47264,
+            "ppid": 47263,
+            "started": "Sat Sep 19 17:22:47 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 47316,
+            "pid": 47316,
+            "ppid": 47034,
+            "started": "Sat Sep 19 17:22:56 2026",
+            "state": "Ss"
+          },
+          {
+            "pgid": 47316,
+            "pid": 47317,
+            "ppid": 47316,
+            "started": "Sat Sep 19 17:22:56 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 47316,
+            "pid": 47318,
+            "ppid": 47317,
+            "started": "Sat Sep 19 17:22:56 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 47316,
+            "pid": 47324,
+            "ppid": 47316,
+            "started": "Sat Sep 19 17:22:57 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 47327,
+            "pid": 47327,
+            "ppid": 47324,
+            "started": "Sat Sep 19 17:22:57 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 47530,
+            "pid": 47530,
+            "ppid": 47034,
+            "started": "Sat Sep 19 17:23:34 2026",
+            "state": "Rs"
+          },
+          {
+            "pgid": 48193,
+            "pid": 48193,
+            "ppid": 47034,
+            "started": "Sat Sep 19 17:25:36 2026",
+            "state": "Rs"
+          },
+          {
+            "pgid": 48353,
+            "pid": 48353,
+            "ppid": 47034,
+            "started": "Sat Sep 19 17:26:07 2026",
+            "state": "Ss"
+          },
+          {
+            "pgid": 48353,
+            "pid": 48357,
+            "ppid": 48353,
+            "started": "Sat Sep 19 17:26:07 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 48495,
+            "pid": 48495,
+            "ppid": 47034,
+            "started": "Sat Sep 19 17:26:39 2026",
+            "state": "?Es"
+          },
+          {
+            "pgid": 48533,
+            "pid": 48533,
+            "ppid": 47034,
+            "started": "Sat Sep 19 17:26:45 2026",
+            "state": "Ss"
+          },
+          {
+            "pgid": 48533,
+            "pid": 48536,
+            "ppid": 48533,
+            "started": "Sat Sep 19 17:26:45 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 48533,
+            "pid": 48538,
+            "ppid": 48533,
+            "started": "Sat Sep 19 17:26:45 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 48533,
+            "pid": 48539,
+            "ppid": 48533,
+            "started": "Sat Sep 19 17:26:45 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 48533,
+            "pid": 48540,
+            "ppid": 48533,
+            "started": "Sat Sep 19 17:26:45 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 48533,
+            "pid": 48611,
+            "ppid": 48533,
+            "started": "Sat Sep 19 17:26:45 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 48533,
+            "pid": 48634,
+            "ppid": 48533,
+            "started": "Sat Sep 19 17:26:45 2026",
+            "state": "Z"
+          },
+          {
+            "pgid": 48533,
+            "pid": 48635,
+            "ppid": 48533,
+            "started": "Sat Sep 19 17:26:45 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 48533,
+            "pid": 48636,
+            "ppid": 48533,
+            "started": "Sat Sep 19 17:26:45 2026",
+            "state": "?"
+          },
+          {
+            "pgid": 48533,
+            "pid": 48637,
+            "ppid": 48533,
+            "started": "Sat Sep 19 17:26:45 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 48533,
+            "pid": 48639,
+            "ppid": 48533,
+            "started": "Sat Sep 19 17:26:45 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 48533,
+            "pid": 48648,
+            "ppid": 48533,
+            "started": "Sat Sep 19 17:26:45 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 48533,
+            "pid": 48687,
+            "ppid": 48533,
+            "started": "Sat Sep 19 17:26:47 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 48533,
+            "pid": 48712,
+            "ppid": 48533,
+            "started": "Sat Sep 19 17:26:47 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 48533,
+            "pid": 48726,
+            "ppid": 48533,
+            "started": "Sat Sep 19 17:26:47 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 48533,
+            "pid": 48728,
+            "ppid": 48533,
+            "started": "Sat Sep 19 17:26:47 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 48533,
+            "pid": 48729,
+            "ppid": 48533,
+            "started": "Sat Sep 19 17:26:47 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 48533,
+            "pid": 48730,
+            "ppid": 48533,
+            "started": "Sat Sep 19 17:26:47 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 48533,
+            "pid": 48731,
+            "ppid": 48533,
+            "started": "Sat Sep 19 17:26:47 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 48533,
+            "pid": 48732,
+            "ppid": 48533,
+            "started": "Sat Sep 19 17:26:47 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 48533,
+            "pid": 48733,
+            "ppid": 48533,
+            "started": "Sat Sep 19 17:26:47 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 48533,
+            "pid": 48759,
+            "ppid": 48533,
+            "started": "Sat Sep 19 17:26:47 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 48533,
+            "pid": 48783,
+            "ppid": 48533,
+            "started": "Sat Sep 19 17:26:47 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 48533,
+            "pid": 48792,
+            "ppid": 48533,
+            "started": "Sat Sep 19 17:26:47 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 48533,
+            "pid": 48794,
+            "ppid": 48533,
+            "started": "Sat Sep 19 17:26:47 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 48533,
+            "pid": 48801,
+            "ppid": 48533,
+            "started": "Sat Sep 19 17:26:48 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 48533,
+            "pid": 48808,
+            "ppid": 48533,
+            "started": "Sat Sep 19 17:26:48 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 48533,
+            "pid": 48812,
+            "ppid": 48533,
+            "started": "Sat Sep 19 17:26:48 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 48876,
+            "pid": 48876,
+            "ppid": 47034,
+            "started": "Sat Sep 19 17:26:58 2026",
+            "state": "Rs"
+          },
+          {
+            "pgid": 48877,
+            "pid": 48877,
+            "ppid": 47034,
+            "started": "Sat Sep 19 17:26:58 2026",
+            "state": "Rs"
+          },
+          {
+            "pgid": 48933,
+            "pid": 48933,
+            "ppid": 47034,
+            "started": "Sat Sep 19 17:27:10 2026",
+            "state": "Ss"
+          },
+          {
+            "pgid": 48933,
+            "pid": 48941,
+            "ppid": 48933,
+            "started": "Sat Sep 19 17:27:10 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 48933,
+            "pid": 48943,
+            "ppid": 48933,
+            "started": "Sat Sep 19 17:27:10 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 48962,
+            "pid": 48962,
+            "ppid": 47034,
+            "started": "Sat Sep 19 17:27:14 2026",
+            "state": "Rs"
+          },
+          {
+            "pgid": 48962,
+            "pid": 48964,
+            "ppid": 48962,
+            "started": "Sat Sep 19 17:27:14 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 48962,
+            "pid": 48968,
+            "ppid": 48964,
+            "started": "Sat Sep 19 17:27:14 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 48988,
+            "pid": 48988,
+            "ppid": 47034,
+            "started": "Sat Sep 19 17:27:17 2026",
+            "state": "Rs"
+          },
+          {
+            "pgid": 49008,
+            "pid": 49008,
+            "ppid": 47034,
+            "started": "Sat Sep 19 17:27:20 2026",
+            "state": "Ss"
+          },
+          {
+            "pgid": 49008,
+            "pid": 49068,
+            "ppid": 49008,
+            "started": "Sat Sep 19 17:27:20 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 49122,
+            "pid": 49122,
+            "ppid": 47034,
+            "started": "Sat Sep 19 17:27:27 2026",
+            "state": "Rs"
+          },
+          {
+            "pgid": 49122,
+            "pid": 49138,
+            "ppid": 49122,
+            "started": "Sat Sep 19 17:27:27 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 49122,
+            "pid": 49140,
+            "ppid": 49122,
+            "started": "Sat Sep 19 17:27:27 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 49122,
+            "pid": 49141,
+            "ppid": 49122,
+            "started": "Sat Sep 19 17:27:27 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 49122,
+            "pid": 49143,
+            "ppid": 49122,
+            "started": "Sat Sep 19 17:27:27 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 49122,
+            "pid": 49144,
+            "ppid": 49122,
+            "started": "Sat Sep 19 17:27:27 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 49122,
+            "pid": 49152,
+            "ppid": 49122,
+            "started": "Sat Sep 19 17:27:27 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 49638,
+            "pid": 49638,
+            "ppid": 47034,
+            "started": "Sat Sep 19 17:28:04 2026",
+            "state": "Rs"
+          },
+          {
+            "pgid": 49670,
+            "pid": 49670,
+            "ppid": 47034,
+            "started": "Sat Sep 19 17:28:09 2026",
+            "state": "Rs"
+          },
+          {
+            "pgid": 49670,
+            "pid": 49672,
+            "ppid": 49670,
+            "started": "Sat Sep 19 17:28:09 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 49670,
+            "pid": 49678,
+            "ppid": 49672,
+            "started": "Sat Sep 19 17:28:09 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 49837,
+            "pid": 49837,
+            "ppid": 47034,
+            "started": "Sat Sep 19 17:28:37 2026",
+            "state": "Ss"
+          },
+          {
+            "pgid": 49837,
+            "pid": 49838,
+            "ppid": 49837,
+            "started": "Sat Sep 19 17:28:37 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 49922,
+            "pid": 49922,
+            "ppid": 47034,
+            "started": "Sat Sep 19 17:28:50 2026",
+            "state": "Rs"
+          },
+          {
+            "pgid": 49967,
+            "pid": 49967,
+            "ppid": 47034,
+            "started": "Sat Sep 19 17:28:56 2026",
+            "state": "Rs"
+          },
+          {
+            "pgid": 50007,
+            "pid": 50007,
+            "ppid": 47034,
+            "started": "Sat Sep 19 17:29:01 2026",
+            "state": "Ss"
+          },
+          {
+            "pgid": 50007,
+            "pid": 50009,
+            "ppid": 50007,
+            "started": "Sat Sep 19 17:29:01 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 50007,
+            "pid": 50016,
+            "ppid": 50009,
+            "started": "Sat Sep 19 17:29:02 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 50064,
+            "pid": 50064,
+            "ppid": 47034,
+            "started": "Sat Sep 19 17:29:10 2026",
+            "state": "Ss"
+          },
+          {
+            "pgid": 50064,
+            "pid": 50065,
+            "ppid": 50064,
+            "started": "Sat Sep 19 17:29:10 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 50064,
+            "pid": 50069,
+            "ppid": 50065,
+            "started": "Sat Sep 19 17:29:10 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 50064,
+            "pid": 50081,
+            "ppid": 50065,
+            "started": "Sat Sep 19 17:29:10 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 50064,
+            "pid": 50093,
+            "ppid": 50065,
+            "started": "Sat Sep 19 17:29:11 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 50173,
+            "pid": 50173,
+            "ppid": 47034,
+            "started": "Sat Sep 19 17:29:24 2026",
+            "state": "Ss"
+          },
+          {
+            "pgid": 50173,
+            "pid": 50176,
+            "ppid": 50173,
+            "started": "Sat Sep 19 17:29:24 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 50173,
+            "pid": 50181,
+            "ppid": 50176,
+            "started": "Sat Sep 19 17:29:24 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 46621,
+            "pid": 50286,
+            "ppid": 46636,
+            "started": "Sat Sep 19 17:29:43 2026",
+            "state": "?"
+          }
+        ]
+      }
+    },
+    "replay": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-run",
+        "^TestCodexNativeQualificationReceiptReplay$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-timeout",
+        "180s",
+        "-json"
+      ],
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-ordinary-repair-11fc3hr1/repo",
+      "exit_code": 1,
+      "elapsed_seconds": 6.082828665999841,
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-repair-pc1cwk2j/replay.stdout",
+        "sha256": "sha256:0cb524fd82d1d2dda2f6017f793a48062b5f329b7f108a5b597dbb334560699b"
+      },
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-repair-pc1cwk2j/replay.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stopped_reason": null,
+      "cleanup": {
+        "before_wait_processes": [],
+        "errors": [],
+        "purpose": "owned resource cleanup only; never host acknowledgement or no-post-ACK-write proof",
+        "remaining_pids": [],
+        "remaining_zombie_pids": [],
+        "signals": [],
+        "tracked_processes": [
+          {
+            "pgid": 50317,
+            "pid": 50317,
+            "ppid": 46508,
+            "started": "Sat Sep 19 17:29:58 2026",
+            "state": "Rs"
+          },
+          {
+            "pgid": 50317,
+            "pid": 50335,
+            "ppid": 50317,
+            "started": "Sat Sep 19 17:29:58 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 50317,
+            "pid": 50341,
+            "ppid": 50317,
+            "started": "Sat Sep 19 17:29:59 2026",
+            "state": "S"
+          }
+        ]
+      }
+    }
+  },
+  "original_receipt": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-repair-pc1cwk2j/capture/native-ordinary-2890562848/receipt.json",
+    "sha256": "sha256:af4000980dcb5e281f952934f1016c9b6d38d09a93247f63f774c0fefa12b379"
+  },
+  "derived_receipt": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-repair-pc1cwk2j/derived-ordinary.json",
+    "sha256": "sha256:20c5159c8aae6139ed0ff2787963498a691172c73b831387d5d18abd00f95f5c"
+  },
+  "actual_outcomes": {
+    "original": {
+      "outcome": "incomplete",
+      "reason": "child used a tool before acknowledging its complete context",
+      "context_protocol": "child-fetch/v1",
+      "child_checks_passed": false,
+      "child_edit_observed": true,
+      "child_terminal_corroborated": true,
+      "runtime_credit_observed": true,
+      "parent_substitution": false,
+      "parent_unclassified_commands": null,
+      "child_unclassified_operations": [
+        "unclassified child code-mode: const [status, source, tests] = await Promise.all([\n  tools.exec_command({cmd:\"git status --short\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-repair-pc1cwk2j/capture/native-ordinary-2890562848/repository\",max_output_tokens:2000}),\n  tools.exec_command({cmd:\"sed -n '1,200p' clamp.go\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-repair-pc1cwk2j/capture/native-ordinary-2890562848/repository\",max_output_tokens:4000}),\n  tools.exec_command({cmd:\"sed -n '1,200p' clamp_test.go\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-repair-pc1cwk2j/capture/native-ordinary-2890562848/repository\",max_output_tokens:4000})\n]); text(JSON.stringify({status,source,tests}));\n",
+        "unclassified child code-mode: const [diff, status, freshness] = await Promise.all([\n  tools.exec_command({cmd:\"git diff -- clamp.go\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-repair-pc1cwk2j/capture/native-ordinary-2890562848/repository\",max_output_tokens:5000}),\n  tools.exec_command({cmd:\"git status --short\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-repair-pc1cwk2j/capture/native-ordinary-2890562848/repository\",max_output_tokens:2000}),\n  tools.exec_command({cmd:\"date -u +%Y-%m-%dT%H:%M:%SZ\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-repair-pc1cwk2j/capture/native-ordinary-2890562848/repository\",max_output_tokens:1000})\n]); text(JSON.stringify({diff,status,freshness}));\n"
+      ],
+      "temporary_auth_removed": true
+    },
+    "derived": {
+      "outcome": "incomplete",
+      "reason": "child used a tool before acknowledging its complete context",
+      "context_protocol": "child-fetch/v1",
+      "child_checks_passed": false,
+      "child_edit_observed": true,
+      "child_terminal_corroborated": true,
+      "runtime_credit_observed": true,
+      "parent_substitution": false,
+      "parent_unclassified_commands": null,
+      "child_unclassified_operations": [
+        "unclassified child code-mode: const [status, source, tests] = await Promise.all([\n  tools.exec_command({cmd:\"git status --short\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-repair-pc1cwk2j/capture/native-ordinary-2890562848/repository\",max_output_tokens:2000}),\n  tools.exec_command({cmd:\"sed -n '1,200p' clamp.go\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-repair-pc1cwk2j/capture/native-ordinary-2890562848/repository\",max_output_tokens:4000}),\n  tools.exec_command({cmd:\"sed -n '1,200p' clamp_test.go\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-repair-pc1cwk2j/capture/native-ordinary-2890562848/repository\",max_output_tokens:4000})\n]); text(JSON.stringify({status,source,tests}));\n",
+        "unclassified child code-mode: const [diff, status, freshness] = await Promise.all([\n  tools.exec_command({cmd:\"git diff -- clamp.go\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-repair-pc1cwk2j/capture/native-ordinary-2890562848/repository\",max_output_tokens:5000}),\n  tools.exec_command({cmd:\"git status --short\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-repair-pc1cwk2j/capture/native-ordinary-2890562848/repository\",max_output_tokens:2000}),\n  tools.exec_command({cmd:\"date -u +%Y-%m-%dT%H:%M:%SZ\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-repair-pc1cwk2j/capture/native-ordinary-2890562848/repository\",max_output_tokens:1000})\n]); text(JSON.stringify({diff,status,freshness}));\n"
+      ],
+      "temporary_auth_removed": true
+    }
+  },
+  "diagnosis": {
+    "actual_order": "Child read call 15:26:07.425Z and output precede send_message call_w2aeQxJEKtn62qoky503PHw6 at15:26:21.684Z and wait_agent call_Ui2DUrZj2C16Gxwdfn43NJBI at15:26:24.174Z, before ACK call_SiJWnXsav0GNBCi3PlfeJB4B at15:26:39.053Z.",
+    "message_body_unavailable": true,
+    "work_order_validator_unchanged": true,
+    "runtime_credit_is_not_qualification": true,
+    "unclassified_batches": "Two actual literal Promise.all destructuring plus JSON.stringify named-object inspection batches remain unclassified.",
+    "prospective_repair": "Clarify immediate ACK without renewed waiting/parent handshake in canonical child prompt, and add strictly source-bound observed read-only batch grammar with negative controls. No corrected historical outcome inferred."
+  },
+  "focused_required_bytes": 10471960576,
+  "full_plan23_required_bytes": 14191223120,
+  "fallback_auth_cleanup": {
+    "errors": [],
+    "purpose": "fixture-local credential cleanup only; never workflow proof",
+    "removed_paths": []
+  }
+}
