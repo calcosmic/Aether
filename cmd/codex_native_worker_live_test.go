@@ -3099,6 +3099,7 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 		priorProof     bool
 		observedPlain  bool
 		observedOutput string
+		projected      bool
 	}
 	pendingChecks := map[string]pendingCheck{}
 	callCounts, outputCounts := map[string]int{}, map[string]int{}
@@ -3172,8 +3173,13 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 								priorProof := r.ChecksPassed
 								r.ChecksPassed = false
 								checkEpoch++
-								if allowed && len(commands) == 1 && p.CallID != "" && callCounts[p.CallID] == 1 && outputCounts[p.CallID] == 1 {
-									pendingChecks[p.CallID] = pendingCheck{command: argv, turn: p.Metadata.TurnID, epoch: checkEpoch, priorProof: priorProof}
+								projected := nativeCodeModePlainOutput(p.Input, r.FixtureRoot)
+								// A complete uncached result can establish proof without a
+								// nested event. Plain rechecks and .output projections still
+								// require exact event corroboration to preserve prior proof.
+								fullResult := nativeAssignedFixtureCommand(*r, argv) && !projected
+								if allowed && len(commands) == 1 && p.CallID != "" && callCounts[p.CallID] == 1 && outputCounts[p.CallID] == 1 && (fullResult || nativeCorroboratedBatch(raw, r.ChildID, p.CallID, commands)) {
+									pendingChecks[p.CallID] = pendingCheck{command: argv, turn: p.Metadata.TurnID, epoch: checkEpoch, priorProof: priorProof, projected: projected}
 								}
 							}
 						}
@@ -3185,6 +3191,12 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 					if ok && pending.turn == p.Metadata.TurnID && pending.epoch == checkEpoch {
 						exit, output, complete := nativeCodeModeResult(wire)
 						r.ChecksPassed = complete && exit == 0 && (nativeAssignedFixtureTest(*r, pending.command, output) || (pending.priorProof && pending.observedPlain && output == pending.observedOutput))
+						// A literal .output projection omits the result's exit code.
+						// Only the separately matched successful event may supply it,
+						// and only to preserve an existing unchanged-source proof.
+						if pending.projected && pending.priorProof && pending.observedPlain && len(p.Output) == 2 && p.Output[0].Type == "input_text" && strings.HasPrefix(p.Output[0].Text, "Script completed\n") && p.Output[1].Type == "input_text" && p.Output[1].Text == pending.observedOutput {
+							r.ChecksPassed = true
+						}
 					}
 				}
 			}
@@ -3221,6 +3233,7 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 			words, _ := nativeFixtureShellWords(i.Command)
 			if len(words) >= 2 && words[0] == "go" && words[1] == "test" {
 				checkEpoch++
+				r.ChecksPassed = false
 			}
 			if i.Status != "completed" {
 				continue
@@ -3860,6 +3873,21 @@ func nativeToolOutputText(raw json.RawMessage) string {
 }
 
 func nativeAdditionalFixtureInspection(words []string, allowed func(string) bool) bool {
+	if len(words) == 3 && words[0] == "git" && words[1] == "diff" && words[2] == "--check" {
+		return true
+	}
+	// Only explicit fixture basenames; no search root, executable option,
+	// wildcard, symlink following or output file is admitted.
+	if len(words) >= 4 && len(words) <= 14 && len(words)%2 == 0 && words[0] == "rg" && words[1] == "--files" {
+		seen := map[string]bool{}
+		for i := 2; i < len(words); i += 2 {
+			if words[i] != "-g" || !allowed(words[i+1]) || filepath.Base(words[i+1]) != words[i+1] || seen[words[i+1]] {
+				return false
+			}
+			seen[words[i+1]] = true
+		}
+		return true
+	}
 	if len(words) == 4 && words[0] == "sed" && words[1] == "-n" && regexp.MustCompile(`^[0-9]{1,6}(?:,[0-9]{1,6})?p$`).MatchString(words[2]) {
 		return allowed(words[3])
 	}
@@ -3871,12 +3899,42 @@ func nativeAdditionalFixtureInspection(words []string, allowed func(string) bool
 
 func nativeAdditionalFixtureCheck(words []string) bool {
 	joined := strings.Join(words, " ")
-	return joined == "go test ./..." || joined == "go test ./... -cover -count=1"
+	return joined == "go test ./..." || joined == "go test ./... -cover" || joined == "go test ./... -cover -count=1"
 }
 
 func nativeChildCommandAllowed(r codexNativeLiveReceipt, command []string) bool {
 	if len(command) != 3 || (command[1] != "-c" && command[1] != "-lc") {
 		return false
+	}
+	allowed := func(path string) bool {
+		if filepath.IsAbs(path) {
+			if !nativeSameCwd(filepath.Dir(path), r.FixtureRoot) {
+				return false
+			}
+			path = filepath.Base(path)
+		}
+		for _, name := range []string{"AGENTS.md", "clamp.go", "clamp_test.go", "double.go", "double_test.go", "go.mod"} {
+			if path == name {
+				return true
+			}
+		}
+		return false
+	}
+	// The observed shell form joins only bounded fixture inspections with
+	// literal spaced &&. Each component still uses the strict word decoder.
+	// Tests, edits, expansions and other shell operators cannot enter here.
+	if parts := strings.Split(command[2], " && "); len(parts) > 1 {
+		if len(parts) > 8 {
+			return false
+		}
+		for _, part := range parts {
+			words, ok := nativeSimpleShellWords(part)
+			status := len(words) == 3 && words[0] == "git" && words[1] == "status" && words[2] == "--short"
+			if !ok || (!nativeAdditionalFixtureInspection(words, allowed) && !status) {
+				return false
+			}
+		}
+		return true
 	}
 	words, ok := nativeSimpleShellWords(command[2])
 	if !ok || len(words) == 0 {
@@ -3897,20 +3955,6 @@ func nativeChildCommandAllowed(r codexNativeLiveReceipt, command []string) bool 
 	joined := strings.Join(words, " ")
 	if joined == "go build ./..." || nativeAdditionalFixtureCheck(words) || joined == "go vet ./..." || joined == "git status --short" || joined == "date -u +%Y-%m-%dT%H:%M:%SZ" {
 		return true
-	}
-	allowed := func(path string) bool {
-		if filepath.IsAbs(path) {
-			if !nativeSameCwd(filepath.Dir(path), r.FixtureRoot) {
-				return false
-			}
-			path = filepath.Base(path)
-		}
-		for _, name := range []string{"AGENTS.md", "clamp.go", "clamp_test.go", "double.go", "double_test.go", "go.mod"} {
-			if path == name {
-				return true
-			}
-		}
-		return false
 	}
 	if nativeAdditionalFixtureInspection(words, allowed) {
 		return true
@@ -4393,9 +4437,12 @@ func nativeCodeModeLiteralPatch(input string) (string, bool) {
 	literal := ""
 	direct := regexp.MustCompile(`^\s*text\(await\s+tools\.apply_patch\(("(?:[^"\\]|\\.)*")\)\);\s*$`)
 	assigned := regexp.MustCompile(`^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*("(?:[^"\\]|\\.)*");\s*text\(await\s+tools\.apply_patch\(([A-Za-z_][A-Za-z0-9_]*)\)\);\s*$`)
+	result := regexp.MustCompile(`^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*("(?:[^"\\]|\\.)*");\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+tools\.apply_patch\(([A-Za-z_][A-Za-z0-9_]*)\);\s*text\(([A-Za-z_][A-Za-z0-9_]*)\);\s*$`)
 	if match := direct.FindStringSubmatch(input); len(match) == 2 {
 		literal = match[1]
 	} else if match := assigned.FindStringSubmatch(input); len(match) == 4 && match[1] == match[3] {
+		literal = match[2]
+	} else if match := result.FindStringSubmatch(input); len(match) == 6 && match[1] == match[4] && match[3] == match[5] && match[1] != match[3] {
 		literal = match[2]
 	} else {
 		return "", false
@@ -4464,6 +4511,11 @@ func nativeCodeModeOutputProjection(input, defaultCwd string) (nativeRecordedShe
 		return nativeRecordedShellCommand{}, false
 	}
 	return nativeLiteralCommandObject(match[2], defaultCwd)
+}
+
+func nativeCodeModePlainOutput(input, defaultCwd string) bool {
+	_, ok := nativeCodeModeOutputProjection(input, defaultCwd)
+	return ok && regexp.MustCompile(`text\([A-Za-z_][A-Za-z0-9_]*\.output\);\s*$`).MatchString(input)
 }
 
 // Decode only the small literal object accepted by this evidence contract.
