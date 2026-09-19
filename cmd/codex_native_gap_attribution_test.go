@@ -374,7 +374,11 @@ func TestCodexNativeGapCapturedAttribution(t *testing.T) {
 
 func TestCodexNativeGapParentCoordination(t *testing.T) {
 	for _, wrapper := range []string{"direct", "output-projection", "json-result", "output-exit", "all-output", "all-json"} {
-		for _, mode := range []string{"valid", "file_uri", "actual_command_failure", "missing", "wrong_thread", "wrong_turn", "wrong_cwd", "wrong_argv", "reused_event", "duplicate_call", "missing_output", "wrong_output_call", "wrong_output_turn", "failed_script"} {
+		modes := []string{"valid", "file_uri", "actual_command_failure", "missing", "wrong_thread", "wrong_turn", "wrong_cwd", "wrong_argv", "reused_event", "duplicate_call", "missing_output", "wrong_output_call", "wrong_output_turn", "failed_script"}
+		if wrapper == "output-exit" {
+			modes = append(modes, "legacy_single_block", "missing_exit_block", "reordered_blocks", "forged_exit", "forged_output", "extra_block")
+		}
+		for _, mode := range modes {
 			t.Run(wrapper+"/"+mode, func(t *testing.T) {
 				var raw []byte
 				add := func(v any) { b, _ := json.Marshal(v); raw = append(raw, append(b, '\n')...) }
@@ -417,7 +421,7 @@ func TestCodexNativeGapParentCoordination(t *testing.T) {
 				if mode == "actual_command_failure" {
 					status, exit = "failed", 1
 				}
-				event := map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": thread, "turn_id": turn, "item": map[string]any{"type": "CommandExecution", "id": "shell", "status": status, "cwd": cwd, "command": []string{"/bin/sh", "-c", command}, "exit_code": exit}}}
+				event := map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": thread, "turn_id": turn, "item": map[string]any{"type": "CommandExecution", "id": "shell", "status": status, "cwd": cwd, "command": []string{"/bin/sh", "-c", command}, "exit_code": exit, "output": "actual output text"}}}
 				if mode != "missing" {
 					add(event)
 				}
@@ -431,7 +435,29 @@ func TestCodexNativeGapParentCoordination(t *testing.T) {
 					outputText = "Script failed\n"
 				}
 				if mode != "missing_output" {
-					add(map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call_output", "call_id": outputCall, "output": []any{map[string]any{"type": "input_text", "text": outputText}}, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": outputTurn}}})
+					blocks := []any{map[string]any{"type": "input_text", "text": outputText}}
+					if wrapper == "output-exit" && mode != "legacy_single_block" {
+						// Two text calls emit two distinct blocks after the host header.
+						// Keep this literal fixture independent of the presentation renderer.
+						header := "Script completed\n"
+						if mode == "failed_script" {
+							header = "Script failed\n"
+						}
+						blocks = []any{map[string]any{"type": "input_text", "text": header}, map[string]any{"type": "input_text", "text": "actual output text"}, map[string]any{"type": "input_text", "text": "\nEXIT_CODE=" + strconv.Itoa(exit)}}
+						switch mode {
+						case "missing_exit_block":
+							blocks = blocks[:2]
+						case "reordered_blocks":
+							blocks[1], blocks[2] = blocks[2], blocks[1]
+						case "forged_exit":
+							blocks[2] = map[string]any{"type": "input_text", "text": "\nEXIT_CODE=1"}
+						case "forged_output":
+							blocks[1] = map[string]any{"type": "input_text", "text": "different output"}
+						case "extra_block":
+							blocks = append(blocks, blocks[2])
+						}
+					}
+					add(map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call_output", "call_id": outputCall, "output": blocks, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": outputTurn}}})
 				}
 				if mode == "reused_event" {
 					add(event)
@@ -1750,6 +1776,31 @@ func nativePresentationPlanBoundaries(t *testing.T) {
 
 func nativeSharedInspectionAtoms(t *testing.T) {
 	r := codexNativeLiveReceipt{FixtureRoot: "/fixture"}
+	for _, tc := range []struct {
+		command string
+		allowed bool
+	}{
+		{`'pwd'`, true},
+		{`'git' 'status' '--short'`, true},
+		{`'date' '-u' '+%Y-%m-%dT%H:%M:%SZ'`, true},
+		{`'git status' --short`, false},
+		{`git 'status --short'`, false},
+		{`'git status --short'`, false},
+		{`'date -u' +%Y-%m-%dT%H:%M:%SZ`, false},
+		{`date '-u +%Y-%m-%dT%H:%M:%SZ'`, false},
+		{`'date -u +%Y-%m-%dT%H:%M:%SZ'`, false},
+	} {
+		t.Run("argv-boundaries/"+tc.command, func(t *testing.T) {
+			if nativeChildInspectionAtom(r, tc.command) != tc.allowed {
+				t.Fatal("inspection atom lost argv boundaries")
+			}
+			for _, command := range []string{tc.command, "pwd && " + tc.command, "pwd; " + tc.command} {
+				if got := nativeChildCommandAllowed(r, []string{"/bin/sh", "-c", command}); got != tc.allowed {
+					t.Fatalf("command %q classified=%v want=%v", command, got, tc.allowed)
+				}
+			}
+		})
+	}
 	atoms := []string{"pwd", "git status --short", "date -u +%Y-%m-%dT%H:%M:%SZ", "cat clamp.go go.mod", "git diff -- /fixture/clamp.go", "git diff --check", "rg --files -g '!*vendor*'", "sed -n '1,240p' clamp.go clamp_test.go", "gofmt -d clamp.go", "test -r go.mod"}
 	for _, atom := range atoms {
 		t.Run(atom, func(t *testing.T) {

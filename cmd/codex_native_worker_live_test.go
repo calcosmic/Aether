@@ -3979,8 +3979,12 @@ func nativeChildInspectionWords(r codexNativeLiveReceipt, raw string, words []st
 	if len(words) == 0 {
 		return false
 	}
-	joined := strings.Join(words, " ")
-	if joined == "pwd" || joined == "git status --short" || joined == "date -u +%Y-%m-%dT%H:%M:%SZ" || nativeAdditionalFixtureInspection(raw, words, allowed) {
+	// Preserve argv boundaries: 'git status' is one executable name, not git
+	// followed by its status subcommand. Quoting individual words is harmless.
+	if (len(words) == 1 && words[0] == "pwd") ||
+		(len(words) == 3 && words[0] == "git" && words[1] == "status" && words[2] == "--short") ||
+		(len(words) == 3 && words[0] == "date" && words[1] == "-u" && words[2] == "+%Y-%m-%dT%H:%M:%SZ") ||
+		nativeAdditionalFixtureInspection(raw, words, allowed) {
 		return true
 	}
 	paths := []string(nil)
