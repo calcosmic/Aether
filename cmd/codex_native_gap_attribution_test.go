@@ -1223,6 +1223,29 @@ func TestCodexNativeObservedFixtureInspections(t *testing.T) {
 		child, batch bool
 	}{
 		{`sed -n '1,200p' clamp.go`, true, true},
+		{`sed -n '1,200p' clamp.go clamp_test.go`, true, true},
+		{`sed -n '200p' clamp.go clamp_test.go`, true, true},
+		{`sed -n '1,999999p' AGENTS.md clamp.go clamp_test.go double.go double_test.go go.mod`, true, true},
+		{`sed -n '1,200p' /fixture/clamp.go clamp_test.go`, true, false},
+		{`sed -n '1,200p' clamp.go clamp_test.go go.mod AGENTS.md double.go double_test.go clamp.go`, false, false},
+		{`sed -n '1,200p' clamp.go clamp.go`, false, false},
+		{`sed -n '1,200p' clamp.go /fixture/clamp.go`, false, false},
+		{`sed -n '1,200p' clamp.go /other/clamp_test.go`, false, false},
+		{`sed -n '1,200p' clamp.go ../clamp_test.go`, false, false},
+		{`sed -n '1,200p' clamp.go other.go`, false, false},
+		{`sed -n '1,200p' clamp.go -`, false, false},
+		{`sed -n '1,200p' clamp.go --follow-symlinks`, false, false},
+		{`sed -n '1,200p' clamp.go -i clamp_test.go`, false, false},
+		{`sed -n -e '1,200p' clamp.go clamp_test.go`, false, false},
+		{`sed -n -f clamp.go clamp_test.go`, false, false},
+		{`sed -n '1,200p;w clamp.go' clamp.go clamp_test.go`, false, false},
+		{`sed -n '1,200r' clamp.go clamp_test.go`, false, false},
+		{`sed -n '1,200w' clamp.go clamp_test.go`, false, false},
+		{`sed -n '1,1000000p' clamp.go clamp_test.go`, false, false},
+		{`sed -n '1,200p' clamp.go clamp_test.go > clamp.go`, false, false},
+		{`sed -n '1,200p' clamp.go clamp_test.go && go test ./...`, false, false},
+		{`sed -n '1,200p' clamp.go clamp_test.go; gofmt -w clamp.go`, false, false},
+		{`sed -n '1,200p' clamp.go $(touch clamp_test.go)`, false, false},
 		{`sed -n '1,200p' /fixture/clamp_test.go`, true, true},
 		{`gofmt -d clamp.go`, true, true},
 		{`git diff --check -- clamp.go`, true, true},
@@ -1345,7 +1368,7 @@ func TestCodexNativeObservedFixtureInspections(t *testing.T) {
 
 func nativeObservedSemicolonInspection(t *testing.T) {
 	const chain = `sed -n '1,240p' clamp.go; sed -n '1,280p' clamp_test.go; git status --short`
-	for _, command := range []string{chain, `rg --files`, `rg --files -g '!*.sum'`, `rg --files -g '!*vendor*'`, `rg --files /other`, `rg --files -g '!*.sum' /other`} {
+	for _, command := range []string{chain, `sed -n '1,200p' clamp.go clamp_test.go`, `sed -n '1,200p' /fixture/clamp.go clamp_test.go`, `rg --files`, `rg --files -g '!*.sum'`, `rg --files -g '!*vendor*'`, `rg --files /other`, `rg --files -g '!*.sum' /other`} {
 		for _, mode := range []string{"valid", "invocation-cwd", "wrong-cwd", "wrong-thread", "wrong-turn", "missing-event", "duplicate-event", "split-events", "changed-command", "missing-output", "duplicate-output", "interleaved-call"} {
 			// Bare listing uses the pre-existing direct-command classifier;
 			// only its actual invocation/event workspace needs a new control.
@@ -1389,7 +1412,11 @@ func nativeObservedSemicolonInspection(t *testing.T) {
 					return map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": thread, "turn_id": turn, "item": map[string]any{"type": "CommandExecution", "id": id, "status": "completed", "command": []string{"/bin/zsh", "-lc", command}, "cwd": cwd, "exit_code": 0, "aggregated_output": "actual inspection output"}}}
 				}
 				if mode == "split-events" {
-					for index, part := range strings.Split(command, ";") {
+					parts := strings.Split(command, ";")
+					if len(parts) == 1 && strings.HasPrefix(command, "sed ") {
+						parts = []string{`sed -n '1,200p' clamp.go`, `sed -n '1,200p' clamp_test.go`}
+					}
+					for index, part := range parts {
 						add(event("split"+strconv.Itoa(index), strings.TrimSpace(part)))
 					}
 				} else if mode != "missing-event" {

@@ -3162,6 +3162,10 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 						// A semicolon inspection chain is one actual invocation,
 						// corroborated as a whole, never split into invented events.
 						needsCommandEvent = needsCommandEvent || strings.Contains(command.Command, ";")
+						// A multi-file sed read is likewise one invocation, not one
+						// event per operand. Require its exact child/cwd event.
+						words, literal := nativeSimpleShellWords(command.Command)
+						needsCommandEvent = needsCommandEvent || (literal && len(words) > 4 && words[0] == "sed" && words[1] == "-n")
 					}
 					if ok && needsCommandEvent {
 						ok = nativeCorroboratedBatch(raw, r.ChildID, p.CallID, commands)
@@ -3918,8 +3922,17 @@ func nativeAdditionalFixtureInspection(raw string, words []string, allowed func(
 		}
 		return true
 	}
-	if len(words) == 4 && words[0] == "sed" && words[1] == "-n" && regexp.MustCompile(`^[0-9]{1,6}(?:,[0-9]{1,6})?p$`).MatchString(words[2]) {
-		return allowed(words[3])
+	if len(words) >= 4 && len(words) <= 9 && words[0] == "sed" && words[1] == "-n" && regexp.MustCompile(`^[0-9]{1,6}(?:,[0-9]{1,6})?p$`).MatchString(words[2]) {
+		seen := map[string]bool{}
+		for _, path := range words[3:] {
+			// Validate the complete path before deduplicating fixture aliases.
+			name := filepath.Base(path)
+			if !allowed(path) || seen[name] {
+				return false
+			}
+			seen[name] = true
+		}
+		return true
 	}
 	if len(words) == 3 && ((words[0] == "gofmt" && words[1] == "-d") || (words[0] == "test" && words[1] == "-r")) {
 		return allowed(words[2])
