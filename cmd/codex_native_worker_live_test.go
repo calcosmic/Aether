@@ -3890,15 +3890,18 @@ func nativeAdditionalFixtureInspection(words []string, allowed func(string) bool
 	if len(words) == 2 && words[0] == "rg" && words[1] == "--files" {
 		return true
 	}
-	// Only explicit fixture basenames; no search root, executable option,
-	// wildcard, symlink following or output file is admitted.
+	// Only explicit fixture basenames and the observed !*.sum exclusion.
+	// That literal exclusion narrows the already-admitted cwd-only listing;
+	// no arbitrary glob, search root, executable option or output is admitted.
 	if len(words) >= 4 && len(words) <= 14 && len(words)%2 == 0 && words[0] == "rg" && words[1] == "--files" {
 		seen := map[string]bool{}
 		for i := 2; i < len(words); i += 2 {
-			if words[i] != "-g" || !allowed(words[i+1]) || filepath.Base(words[i+1]) != words[i+1] || seen[words[i+1]] {
+			filter := words[i+1]
+			fixtureFilter := allowed(filter) && filepath.Base(filter) == filter
+			if words[i] != "-g" || (!fixtureFilter && filter != "!*.sum") || seen[filter] {
 				return false
 			}
-			seen[words[i+1]] = true
+			seen[filter] = true
 		}
 		return true
 	}

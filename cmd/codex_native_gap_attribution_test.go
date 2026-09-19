@@ -1059,6 +1059,22 @@ func TestCodexNativeObservedFixtureInspections(t *testing.T) {
 		{`git diff --check -- clamp.go`, true, true},
 		{`git diff --check`, true, true},
 		{`rg --files`, true, true},
+		{`rg --files -g '!*.sum'`, true, true},
+		{`rg --files -g '!*.sum' -g 'clamp.go'`, true, true},
+		{`rg --files -g '!*.sum' -g 'AGENTS.md' -g 'clamp.go' -g 'clamp_test.go' -g 'double.go' -g 'go.mod'`, true, true},
+		{`rg --files -g '!*.sum' -g 'AGENTS.md' -g 'clamp.go' -g 'clamp_test.go' -g 'double.go' -g 'double_test.go' -g 'go.mod'`, false, false},
+		{`rg --files -g '!*.sum' -g '!*.sum'`, false, false},
+		{`rg --files -g '!*.sum' /other`, false, false},
+		{`rg --files -g '!*.sum' --hidden`, false, false},
+		{`rg --files -g '!*.sum' --follow`, false, false},
+		{`rg --files -g '!*.sum' --pre mutate`, false, false},
+		{`rg --files -g '!*.sum' --output clamp.go`, false, false},
+		{`rg --files -g '!*.sum' -g '--follow'`, false, false},
+		{`rg --files -g '!../*.sum'`, false, false},
+		{`rg --files -g '!*.sum' > clamp.go`, false, false},
+		{`rg --files -g '!*.sum' && go test ./...`, false, false},
+		{`rg --files -g '!*.sum'; touch clamp.go`, false, false},
+		{`rg --files -g "!$(touch clamp.go)"`, false, false},
 		{`sed -n '1,240p' clamp.go; sed -n '1,280p' clamp_test.go; git status --short`, true, false},
 		{`rg --files; git status --short`, true, false},
 		// Generic parent-readonly syntax admits an absolute listing root;
@@ -1138,14 +1154,14 @@ func TestCodexNativeObservedFixtureInspections(t *testing.T) {
 
 func nativeObservedSemicolonInspection(t *testing.T) {
 	const chain = `sed -n '1,240p' clamp.go; sed -n '1,280p' clamp_test.go; git status --short`
-	for _, command := range []string{chain, `rg --files`, `rg --files /other`} {
+	for _, command := range []string{chain, `rg --files`, `rg --files -g '!*.sum'`, `rg --files /other`, `rg --files -g '!*.sum' /other`} {
 		for _, mode := range []string{"valid", "invocation-cwd", "wrong-cwd", "wrong-thread", "wrong-turn", "missing-event", "duplicate-event", "split-events", "changed-command", "missing-output", "duplicate-output", "interleaved-call"} {
 			// Bare listing uses the pre-existing direct-command classifier;
 			// only its actual invocation/event workspace needs a new control.
-			if command == "rg --files" && mode != "valid" && mode != "invocation-cwd" && mode != "wrong-cwd" {
+			if strings.HasPrefix(command, "rg --files") && mode != "valid" && mode != "invocation-cwd" && mode != "wrong-cwd" {
 				continue
 			}
-			if command == "rg --files /other" && mode != "valid" {
+			if strings.HasSuffix(command, " /other") && mode != "valid" {
 				continue
 			}
 			t.Run(command+"/"+mode, func(t *testing.T) {
@@ -1199,7 +1215,7 @@ func nativeObservedSemicolonInspection(t *testing.T) {
 					add(result)
 				}
 				nativeInspectChildEvents(&r, raw)
-				wantClassified := mode == "valid" && command != "rg --files /other"
+				wantClassified := mode == "valid" && !strings.HasSuffix(command, " /other")
 				if (len(r.ChildUnclassified) == 0) != wantClassified || r.ChecksPassed || r.ChildEditObserved {
 					t.Fatalf("unclassified=%v checks=%v edits=%v", r.ChildUnclassified, r.ChecksPassed, r.ChildEditObserved)
 				}
