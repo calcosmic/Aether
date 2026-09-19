@@ -805,112 +805,139 @@ func nativeObservedExitOutputProjection(t *testing.T) {
 		t.Fatal(err)
 	}
 	command := "python3 " + coordinator + " empty-result"
-	for _, mode := range []string{"success", "expected-refusal", "file-uri", "renamed-alias", "missing-event", "wrong-thread", "wrong-turn", "wrong-cwd", "changed-command", "duplicate-event", "duplicate-call", "interleaved-call", "missing-output", "duplicate-output", "wrong-output-call", "wrong-output-turn", "incomplete", "omitted-exit", "forged-exit", "forged-output", "reordered", "extra-output", "extra-field", "child-plain-no-credit"} {
-		t.Run(mode, func(t *testing.T) {
-			r := codexNativeLiveReceipt{SchemaVersion: "codex-native-tracer/v2", SessionID: "parent", FixtureRoot: root, CoordinatorPath: coordinator, CoordinatorSHA256: lifecycleDigest(body)}
-			thread, cwd, selected := "parent", root, command
-			if mode == "child-plain-no-credit" {
-				thread, selected = "child", "go test ./..."
-				r.ChildID, r.BoundHostSessionID, r.Caste = "child", "parent", "builder"
-			}
-			var raw []byte
-			add := func(v any) { b, _ := json.Marshal(v); raw = append(raw, append(b, '\n')...) }
-			parent := ""
-			if thread == "child" {
-				parent = "parent"
-			}
-			add(map[string]any{"type": "session_meta", "payload": map[string]any{"id": thread, "parent_thread_id": parent, "cwd": root, "agent_role": "aether-builder"}})
-			add(map[string]any{"type": "event_msg", "payload": map[string]any{"thread_id": thread, "turn_id": "turn"}})
-			input := "const r = await tools.exec_command({cmd:" + strconv.Quote(selected) + ",workdir:" + strconv.Quote(root) + "}); text(`exit_code=${r.exit_code}\\n${r.output}`);\n"
-			if mode == "renamed-alias" {
-				input = strings.ReplaceAll(strings.ReplaceAll(input, "const r =", "const result ="), "${r.", "${result.")
-			}
-			call := map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call", "name": "exec", "call_id": "call", "input": input, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}}
-			add(call)
-			if mode == "duplicate-call" {
+	for _, presentation := range []struct {
+		name, suffix string
+		printed      func(int, string) []string
+	}{
+		{"exit-first-combined", "text(`exit_code=${r.exit_code}\\n${r.output}`);", func(exit int, output string) []string {
+			return []string{"exit_code=" + strconv.Itoa(exit) + "\n" + output}
+		}},
+		{"output-first-combined", "text(`${r.output}\\nexit_code=${r.exit_code}`);", func(exit int, output string) []string { return []string{output + "\nexit_code=" + strconv.Itoa(exit)} }},
+		{"actual-lowercase-sequence", "text(r.output); text(`\\nexit_code=${r.exit_code}`);", func(exit int, output string) []string { return []string{output, "\nexit_code=" + strconv.Itoa(exit)} }},
+		{"uppercase-sequence-eof", "text(r.output); text(`\\nEXIT_CODE=${r.exit_code}`)\n", func(exit int, output string) []string { return []string{output, "\nEXIT_CODE=" + strconv.Itoa(exit)} }},
+		{"exit-first-sequence", "text(`status=${r.exit_code}`); text(r.output);", func(exit int, output string) []string { return []string{"status=" + strconv.Itoa(exit), output} }},
+		{"literal-annotation", "text(`\\nProcess status=${r.exit_code}`); text(r.output)\n", func(exit int, output string) []string {
+			return []string{"\nProcess status=" + strconv.Itoa(exit), output}
+		}},
+		{"max-label", "text(`ABCDEFGHIJKLMNOPQRSTUVWXYZ_12345=${r.exit_code}\\n${r.output}`);", func(exit int, output string) []string {
+			return []string{"ABCDEFGHIJKLMNOPQRSTUVWXYZ_12345=" + strconv.Itoa(exit) + "\n" + output}
+		}},
+	} {
+		for _, mode := range []string{"success", "expected-refusal", "file-uri", "renamed-alias", "missing-event", "wrong-thread", "wrong-turn", "wrong-cwd", "changed-command", "duplicate-event", "duplicate-call", "interleaved-call", "missing-output", "duplicate-output", "wrong-output-call", "wrong-output-turn", "incomplete", "omitted-exit", "forged-exit", "forged-output", "reordered", "extra-output", "extra-field", "child-plain-no-credit"} {
+			t.Run(presentation.name+"/"+mode, func(t *testing.T) {
+				r := codexNativeLiveReceipt{SchemaVersion: "codex-native-tracer/v2", SessionID: "parent", FixtureRoot: root, CoordinatorPath: coordinator, CoordinatorSHA256: lifecycleDigest(body)}
+				thread, cwd, selected := "parent", root, command
+				if mode == "child-plain-no-credit" {
+					thread, selected = "child", "go test ./..."
+					r.ChildID, r.BoundHostSessionID, r.Caste = "child", "parent", "builder"
+				}
+				var raw []byte
+				add := func(v any) { b, _ := json.Marshal(v); raw = append(raw, append(b, '\n')...) }
+				parent := ""
+				if thread == "child" {
+					parent = "parent"
+				}
+				add(map[string]any{"type": "session_meta", "payload": map[string]any{"id": thread, "parent_thread_id": parent, "cwd": root, "agent_role": "aether-builder"}})
+				add(map[string]any{"type": "event_msg", "payload": map[string]any{"thread_id": thread, "turn_id": "turn"}})
+				input := "const r = await tools.exec_command({cmd:" + strconv.Quote(selected) + ",workdir:" + strconv.Quote(root) + "}); " + presentation.suffix
+				if mode == "renamed-alias" {
+					input = strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(input, "const r =", "const result ="), "${r.", "${result."), "text(r.", "text(result.")
+				}
+				call := map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call", "name": "exec", "call_id": "call", "input": input, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}}
 				add(call)
-			}
-			if mode == "interleaved-call" {
-				add(map[string]any{"type": "response_item", "payload": map[string]any{"type": "function_call", "name": "send_message", "call_id": "other"}})
-			}
-			turn, status, exit, output := "turn", "completed", 0, "actual output\n"
-			if mode == "expected-refusal" {
-				status, exit, output = "failed", 1, "{\"ok\":false,\"error\":\"nonempty terminal result and summary are required\",\"code\":1}\n\n\n"
-			}
-			if mode == "child-plain-no-credit" {
-				output = "ok  \texample.invalid/nativefixture\t0.2s\n"
-			}
-			switch mode {
-			case "file-uri":
-				cwd = "file://" + root
-			case "wrong-thread":
-				thread = "foreign"
-			case "wrong-turn":
-				turn = "foreign"
-			case "wrong-cwd":
-				cwd = "/other"
-			case "changed-command":
-				selected = "aether status"
-			}
-			event := map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": thread, "turn_id": turn, "item": map[string]any{"type": "CommandExecution", "id": "event", "status": status, "command": []string{"/bin/zsh", "-lc", selected}, "cwd": cwd, "exit_code": exit, "aggregated_output": output}}}
-			if mode != "missing-event" {
-				add(event)
-			}
-			if mode == "duplicate-event" {
-				add(event)
-			}
-			id, outputTurn, header := "call", "turn", "Script completed\n"
-			printed := "exit_code=" + strconv.Itoa(exit) + "\n" + output
-			switch mode {
-			case "wrong-output-call":
-				id = "other"
-			case "wrong-output-turn":
-				outputTurn = "other"
-			case "incomplete":
-				header = "Script running with cell ID pending\n"
-			case "omitted-exit":
-				printed = output
-			case "forged-exit":
-				printed = "exit_code=1\n" + output
-			case "forged-output":
-				printed = "exit_code=0\nforged"
-			case "reordered":
-				printed = output + "\nexit_code=0"
-			case "extra-field":
-				printed += "\nextra=field"
-			}
-			parts := []any{map[string]any{"type": "input_text", "text": header}, map[string]any{"type": "input_text", "text": printed}}
-			if mode == "extra-output" {
-				parts = append(parts, parts[1])
-			}
-			result := map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call_output", "call_id": id, "output": parts, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": outputTurn}}}
-			if mode != "missing-output" {
-				add(result)
-			}
-			if mode == "duplicate-output" {
-				add(result)
-			}
-			if mode == "child-plain-no-credit" {
-				nativeInspectChildEvents(&r, raw)
-				if len(r.ChildUnclassified) != 0 || r.ChecksPassed || r.ChildEditObserved {
-					t.Fatalf("presentation minted child proof: %+v", r)
+				if mode == "duplicate-call" {
+					add(call)
 				}
-			} else {
-				nativeInspectParentEvents(&r, raw)
-				if mode == "expected-refusal" && !r.EmptyResultRefused {
-					t.Fatal("actual failed empty-result refusal lost")
+				if mode == "interleaved-call" {
+					add(map[string]any{"type": "response_item", "payload": map[string]any{"type": "function_call", "name": "send_message", "call_id": "other"}})
 				}
-				want := mode == "success" || mode == "expected-refusal" || mode == "file-uri" || mode == "renamed-alias"
-				if r.ParentSubstitution == want || r.ChecksPassed || r.ChildEditObserved {
-					t.Fatalf("parent classification: %+v", r.ParentUnclassified)
+				turn, status, exit, output := "turn", "completed", 0, "actual output\n"
+				if mode == "expected-refusal" {
+					status, exit, output = "failed", 1, "{\"ok\":false,\"error\":\"nonempty terminal result and summary are required\",\"code\":1}\n\n\n"
 				}
-			}
-		})
+				if mode == "child-plain-no-credit" {
+					output = "ok  \texample.invalid/nativefixture\t0.2s\n"
+				}
+				switch mode {
+				case "file-uri":
+					cwd = "file://" + root
+				case "wrong-thread":
+					thread = "foreign"
+				case "wrong-turn":
+					turn = "foreign"
+				case "wrong-cwd":
+					cwd = "/other"
+				case "changed-command":
+					selected = "aether status"
+				}
+				event := map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": thread, "turn_id": turn, "item": map[string]any{"type": "CommandExecution", "id": "event", "status": status, "command": []string{"/bin/zsh", "-lc", selected}, "cwd": cwd, "exit_code": exit, "aggregated_output": output}}}
+				if mode != "missing-event" {
+					add(event)
+				}
+				if mode == "duplicate-event" {
+					add(event)
+				}
+				id, outputTurn, header := "call", "turn", "Script completed\n"
+				printed := presentation.printed(exit, output)
+				switch mode {
+				case "wrong-output-call":
+					id = "other"
+				case "wrong-output-turn":
+					outputTurn = "other"
+				case "incomplete":
+					header = "Script running with cell ID pending\n"
+				case "omitted-exit":
+					printed = []string{output}
+				case "forged-exit":
+					printed = presentation.printed(exit+1, output)
+				case "forged-output":
+					printed = presentation.printed(exit, "forged")
+				case "reordered":
+					if len(printed) == 2 {
+						printed[0], printed[1] = printed[1], printed[0]
+					} else {
+						printed[0] = "reordered\n" + printed[0]
+					}
+				case "extra-field":
+					printed[len(printed)-1] += "\nextra=field"
+				}
+				parts := []any{map[string]any{"type": "input_text", "text": header}}
+				for _, text := range printed {
+					parts = append(parts, map[string]any{"type": "input_text", "text": text})
+				}
+				if mode == "extra-output" {
+					parts = append(parts, parts[1])
+				}
+				result := map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call_output", "call_id": id, "output": parts, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": outputTurn}}}
+				if mode != "missing-output" {
+					add(result)
+				}
+				if mode == "duplicate-output" {
+					add(result)
+				}
+				if mode == "child-plain-no-credit" {
+					nativeInspectChildEvents(&r, raw)
+					if len(r.ChildUnclassified) != 0 || r.ChecksPassed || r.ChildEditObserved {
+						t.Fatalf("presentation minted child proof: %+v", r)
+					}
+				} else {
+					nativeInspectParentEvents(&r, raw)
+					if mode == "expected-refusal" && !r.EmptyResultRefused {
+						t.Fatal("actual failed empty-result refusal lost")
+					}
+					want := mode == "success" || mode == "expected-refusal" || mode == "file-uri" || mode == "renamed-alias"
+					if r.ParentSubstitution == want || r.ChecksPassed || r.ChildEditObserved {
+						t.Fatalf("parent classification: %+v", r.ParentUnclassified)
+					}
+				}
+			})
+		}
 	}
 }
 
 func TestCodexNativeObservedOperationWrappers(t *testing.T) {
 	t.Run("exit-output-event-projection", nativeObservedExitOutputProjection)
+	t.Run("bounded-presentation-plan", nativePresentationPlanBoundaries)
 	const prefix = `const r = await tools.exec_command({cmd:"go test ./... -json -count=1",workdir:"/fixture"}); `
 	for _, tc := range []struct {
 		name, suffix string
@@ -921,7 +948,7 @@ func TestCodexNativeObservedOperationWrappers(t *testing.T) {
 		{"exit-output-eof", "text(`exit_code=${r.exit_code}\\n${r.output}`)\n", true},
 		{"exit-output-wrong-alias", "text(`exit_code=${other.exit_code}\\n${r.output}`);", false},
 		{"exit-output-omitted", "text(`exit_code=${r.exit_code}`);", false},
-		{"exit-output-reordered", "text(`${r.output}\\nexit_code=${r.exit_code}`);", false},
+		{"exit-output-source-order", "text(`${r.output}\\nexit_code=${r.exit_code}`);", true},
 		{"exit-output-fake-exit", "text(`exit_code=0\\n${r.output}`);", false},
 		{"exit-output-transformed", "text(`exit_code=${r.exit_code}\\n${r.output.trim()}`);", false},
 		{"exit-output-extra", "text(`exit_code=${r.exit_code}\\n${r.output}extra`);", false},
@@ -1340,6 +1367,7 @@ func nativeObservedNamedReadOnlyBatch(t *testing.T) {
 
 func TestCodexNativeObservedFixtureInspections(t *testing.T) {
 	t.Run("single-invocation-semicolon", nativeObservedSemicolonInspection)
+	t.Run("shared-inspection-atoms", nativeSharedInspectionAtoms)
 	r := codexNativeLiveReceipt{FixtureRoot: "/fixture"}
 	for _, tc := range []struct {
 		command      string
@@ -1505,9 +1533,9 @@ func TestCodexNativeObservedFixtureInspections(t *testing.T) {
 
 func nativeObservedSemicolonInspection(t *testing.T) {
 	const chain = `sed -n '1,240p' clamp.go; sed -n '1,280p' clamp_test.go; git status --short`
-	for _, command := range []string{`git diff -- clamp.go && git status --short && date -u +%Y-%m-%dT%H:%M:%SZ`, chain, `sed -n '1,200p' clamp.go clamp_test.go`, `sed -n '1,200p' /fixture/clamp.go clamp_test.go`, `rg --files`, `rg --files -g '!*.sum'`, `rg --files -g '!*vendor*'`, `rg --files /other`, `rg --files -g '!*.sum' /other`} {
+	for _, command := range []string{`pwd && rg --files -g '!*vendor*' && git status --short && sed -n '1,240p' clamp.go && sed -n '1,280p' clamp_test.go && sed -n '1,160p' go.mod`, `pwd; cat clamp.go; git diff -- clamp.go`, `git diff -- clamp.go && git status --short && date -u +%Y-%m-%dT%H:%M:%SZ`, chain, `sed -n '1,200p' clamp.go clamp_test.go`, `sed -n '1,200p' /fixture/clamp.go clamp_test.go`, `rg --files`, `rg --files -g '!*.sum'`, `rg --files -g '!*vendor*'`, `rg --files /other`, `rg --files -g '!*.sum' /other`} {
 		for _, mode := range []string{"valid", "invocation-cwd", "wrong-cwd", "wrong-thread", "wrong-turn", "missing-event", "duplicate-event", "split-events", "changed-command", "missing-output", "duplicate-output", "interleaved-call", "prior-pass", "failed-inspection", "later-failed-check", "later-edit"} {
-			if !strings.Contains(command, " && ") && (mode == "prior-pass" || mode == "failed-inspection" || mode == "later-failed-check" || mode == "later-edit") {
+			if !strings.Contains(command, " && ") && !strings.Contains(command, ";") && (mode == "prior-pass" || mode == "failed-inspection" || mode == "later-failed-check" || mode == "later-edit") {
 				continue
 			}
 			// Bare listing uses the pre-existing direct-command classifier;
@@ -1673,5 +1701,90 @@ func TestCodexNativeObservedLiteralPatch(t *testing.T) {
 				t.Fatal("parent literal alias patch accepted")
 			}
 		})
+	}
+}
+
+func nativePresentationPlanBoundaries(t *testing.T) {
+	const prefix = `const r = await tools.exec_command({cmd:"git status --short",workdir:"/fixture"}); `
+	const suffix = "text(r.output); text(`\\nexit_code=${r.exit_code}`);"
+	for _, tc := range []struct{ name, input string }{
+		{"extra-exec", prefix + suffix + `text(await tools.exec_command({cmd:"touch clamp.go",workdir:"/fixture"}));`},
+		{"extra-print", prefix + suffix + `text(r.output);`},
+		{"omitted-output", prefix + "text(`exit_code=${r.exit_code}`);"},
+		{"omitted-exit", prefix + `text(r.output);`},
+		{"duplicate-output", prefix + "text(`${r.output}\\n${r.output}\\nexit_code=${r.exit_code}`);"},
+		{"duplicate-exit", prefix + "text(`${r.output}\\nexit_code=${r.exit_code}${r.exit_code}`);"},
+		{"other-property", prefix + strings.Replace(suffix, "r.exit_code", "r.stderr", 1)},
+		{"computed-property", prefix + strings.Replace(suffix, "r.output", `r["output"]`, 1)},
+		{"prototype", prefix + strings.Replace(suffix, "r.output", "r.__proto__.output", 1)},
+		{"transformed", prefix + strings.Replace(suffix, "r.output", "r.output.trim()", 1)},
+		{"fake-exit", prefix + strings.Replace(suffix, "${r.exit_code}", "0", 1)},
+		{"wrong-alias", prefix + strings.Replace(suffix, "r.exit_code", "other.exit_code", 1)},
+		{"long-label", prefix + strings.Replace(suffix, "exit_code", strings.Repeat("L", 33), 1)},
+		{"label-expression", prefix + strings.Replace(suffix, "exit_code=", "${mutate()}=", 1)},
+		{"label-escape", prefix + strings.Replace(suffix, "exit_code=", `exit\u005fcode=`, 1)},
+		{"label-newline", prefix + strings.Replace(suffix, "exit_code=", "exit\ncode=", 1)},
+		{"output-suffix", prefix + "text(`exit_code=${r.exit_code}\\n${r.output}forged`);"},
+		{"missing-separator", prefix + strings.Replace(suffix, "); text", ")\ntext", 1)},
+		{"middle-eof-effect", prefix + strings.TrimSuffix(suffix, ";") + "\nmutate();"},
+		{"mutate-result", prefix + `r.exit_code=0; ` + suffix},
+		{"dynamic-command", strings.Replace(prefix, `"git status --short"`, `command`, 1) + suffix},
+		{"unawaited", strings.Replace(prefix, "await ", "", 1) + suffix},
+		{"reserved-alias", strings.ReplaceAll(strings.ReplaceAll(prefix+suffix, "const r =", "const text ="), "r.", "text.")},
+		{"reserved-uppercase-no-fallback", strings.ReplaceAll(strings.ReplaceAll(strings.Replace(prefix+suffix, "exit_code=", "EXIT_CODE=", 1), "const r =", "const text ="), "r.", "text.")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, _, ok := nativeCodeModePresentation(tc.input, "/fixture"); ok {
+				t.Fatal("unsafe/incomplete presentation accepted")
+			}
+			// Existing single-output projection remains an explicitly separate
+			// grammar; rejecting it as a complete presentation must not remove it.
+			if tc.name != "omitted-exit" {
+				if _, ok := nativeCodeModeCommands(tc.input, "/fixture"); ok {
+					t.Fatal("unsafe presentation escaped via another decoder")
+				}
+			}
+		})
+	}
+}
+
+func nativeSharedInspectionAtoms(t *testing.T) {
+	r := codexNativeLiveReceipt{FixtureRoot: "/fixture"}
+	atoms := []string{"pwd", "git status --short", "date -u +%Y-%m-%dT%H:%M:%SZ", "cat clamp.go go.mod", "git diff -- /fixture/clamp.go", "git diff --check", "rg --files -g '!*vendor*'", "sed -n '1,240p' clamp.go clamp_test.go", "gofmt -d clamp.go", "test -r go.mod"}
+	for _, atom := range atoms {
+		t.Run(atom, func(t *testing.T) {
+			if !nativeChildInspectionAtom(r, atom) || !nativeChildCommandAllowed(r, []string{"/bin/sh", "-c", atom}) {
+				t.Fatal("standalone atom rejected")
+			}
+			for _, other := range atoms {
+				for _, separator := range []string{" && ", "; "} {
+					if !nativeChildCommandAllowed(r, []string{"/bin/sh", "-c", atom + separator + other}) {
+						t.Fatalf("composition differs: %s%s%s", atom, separator, other)
+					}
+				}
+			}
+		})
+	}
+	for _, bad := range []string{"pwd -P", "pwd /other", "ls /other", "cat /other/clamp.go", "cat ../clamp.go", "git diff -- /other/clamp.go", "rg --files /other", "rg --files -g !*vendor*", "sed -n '1,3w' clamp.go", "sed -i '1,3p' clamp.go", "gofmt -w clamp.go", "GOCACHE=/fixture/cache cat clamp.go", "go test ./...", "go test ./... -json -count=1", "aether codex-native-worker context --request /fixture/request.json", "pwd > clamp.go", "pwd || cat clamp.go", "pwd && cat clamp.go; pwd", "pwd; cat clamp.go && pwd", "pwd $(touch clamp.go)", "pwd | cat clamp.go", "pwd & cat clamp.go", "pwd\ncat clamp.go", "", strings.Repeat("pwd && ", 8) + "pwd"} {
+		t.Run("reject/"+bad, func(t *testing.T) {
+			// Test and context commands may be individually permitted after ACK;
+			// neither is an inspection atom and neither may enter a read chain.
+			if nativeChildInspectionAtom(r, bad) {
+				t.Fatal("noninspection atom accepted")
+			}
+			for _, separator := range []string{" && ", "; "} {
+				if nativeChildCommandAllowed(r, []string{"/bin/sh", "-c", "pwd" + separator + bad}) {
+					t.Fatal("noninspection composition accepted")
+				}
+			}
+		})
+	}
+	if !nativeChildCommandAllowed(r, []string{"/bin/sh", "-c", "GOCACHE=/fixture/cache cat clamp.go"}) {
+		t.Fatal("existing standalone cache-prefix read changed")
+	}
+	for _, separator := range []string{" && ", "; "} {
+		if !nativeChildCommandAllowed(r, []string{"/bin/sh", "-c", strings.Repeat("pwd"+separator, 7) + "pwd"}) {
+			t.Fatal("eight atom boundary rejected")
+		}
 	}
 }

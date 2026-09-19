@@ -3163,7 +3163,7 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 					for _, command := range commands {
 						// A semicolon inspection chain is one actual invocation,
 						// corroborated as a whole, never split into invented events.
-						inspectionChain = inspectionChain || strings.Contains(command.Command, " && ")
+						inspectionChain = inspectionChain || strings.Contains(command.Command, " && ") || strings.Contains(command.Command, ";")
 						needsCommandEvent = needsCommandEvent || inspectionChain || strings.Contains(command.Command, ";")
 						// A multi-file sed read is likewise one invocation, not one
 						// event per operand. Require its exact child/cwd event.
@@ -3173,7 +3173,7 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 					if ok && needsCommandEvent {
 						ok = nativeCorroboratedBatch(raw, r.ChildID, p.CallID, commands, inspectionChain)
 						if ok && exitOutput {
-							ok = nativeCorroboratedExitOutput(raw, p.CallID)
+							ok = nativeCorroboratedExitOutput(raw, p.CallID, r.FixtureRoot)
 						}
 						if ok && fullBatchResults {
 							ok = nativeCorroboratedBatchResults(raw, p.CallID, commands)
@@ -3673,7 +3673,7 @@ func nativeInspectParentEvents(r *codexNativeLiveReceipt, raw []byte) {
 				ok = nativeCorroboratedBatch(raw, r.SessionID, p.CallID, commands)
 			}
 			if _, projected := nativeCodeModeExitOutputProjection(p.Input, metadata.Payload.Cwd); ok && projected {
-				ok = nativeCorroboratedBatch(raw, r.SessionID, p.CallID, commands) && nativeCorroboratedExitOutput(raw, p.CallID)
+				ok = nativeCorroboratedBatch(raw, r.SessionID, p.CallID, commands) && nativeCorroboratedExitOutput(raw, p.CallID, r.FixtureRoot)
 			}
 			if !ok {
 				r.ParentSubstitution = true
@@ -3954,10 +3954,14 @@ func nativeAdditionalFixtureCheck(words []string) bool {
 	return joined == "go test ./..." || joined == "go test ./... -cover" || joined == "go test ./... -cover -count=1" || joined == "go test -cover ./..."
 }
 
-func nativeChildCommandAllowed(r codexNativeLiveReceipt, command []string) bool {
-	if len(command) != 3 || (command[1] != "-c" && command[1] != "-lc") {
-		return false
-	}
+// A single child-owned inspection atom. Standalone commands and composed
+// inspections share this exact predicate; parent discovery allowances stay out.
+func nativeChildInspectionAtom(r codexNativeLiveReceipt, raw string) bool {
+	words, ok := nativeSimpleShellWords(raw)
+	return ok && nativeChildInspectionWords(r, raw, words)
+}
+
+func nativeChildInspectionWords(r codexNativeLiveReceipt, raw string, words []string) bool {
 	allowed := func(path string) bool {
 		if filepath.IsAbs(path) {
 			if !nativeSameCwd(filepath.Dir(path), r.FixtureRoot) {
@@ -3972,10 +3976,37 @@ func nativeChildCommandAllowed(r codexNativeLiveReceipt, command []string) bool 
 		}
 		return false
 	}
-	// The observed shell form joins only bounded fixture inspections with
-	// literal spaced && or semicolons in one shell invocation. Each component
-	// still uses the strict word decoder; mixed operators remain rejected.
-	// Tests, edits, expansions and other shell operators cannot enter here.
+	if len(words) == 0 {
+		return false
+	}
+	joined := strings.Join(words, " ")
+	if joined == "pwd" || joined == "git status --short" || joined == "date -u +%Y-%m-%dT%H:%M:%SZ" || nativeAdditionalFixtureInspection(raw, words, allowed) {
+		return true
+	}
+	paths := []string(nil)
+	if words[0] == "cat" && len(words) > 1 {
+		paths = words[1:]
+	}
+	if len(words) > 3 && words[0] == "git" && words[1] == "diff" && words[2] == "--" {
+		paths = words[3:]
+	}
+	if len(paths) == 0 {
+		return false
+	}
+	for _, path := range paths {
+		if !allowed(path) {
+			return false
+		}
+	}
+	return true
+}
+
+func nativeChildCommandAllowed(r codexNativeLiveReceipt, command []string) bool {
+	if len(command) != 3 || (command[1] != "-c" && command[1] != "-lc") {
+		return false
+	}
+	// One invocation, at most eight identical separators. Atom decoding rejects
+	// mixed operators, expansion, writes, context calls and tests in a chain.
 	separator := " && "
 	if strings.Contains(command[2], ";") {
 		separator = ";"
@@ -3985,20 +4016,13 @@ func nativeChildCommandAllowed(r codexNativeLiveReceipt, command []string) bool 
 			return false
 		}
 		for _, part := range parts {
-			words, ok := nativeSimpleShellWords(part)
-			status := len(words) == 3 && words[0] == "git" && words[1] == "status" && words[2] == "--short"
-			date := strings.Join(words, " ") == "date -u +%Y-%m-%dT%H:%M:%SZ"
-			diff := len(words) > 3 && words[0] == "git" && words[1] == "diff" && words[2] == "--"
-			if diff {
-				for _, path := range words[3:] {
-					diff = diff && allowed(path)
-				}
-			}
-			// These are exactly the standalone fixture diff/date forms below.
-			if !ok || (!nativeAdditionalFixtureInspection(part, words, allowed) && !status && !date && !diff) {
+			if !nativeChildInspectionAtom(r, part) {
 				return false
 			}
 		}
+		return true
+	}
+	if nativeChildInspectionAtom(r, command[2]) {
 		return true
 	}
 	words, ok := nativeSimpleShellWords(command[2])
@@ -4011,37 +4035,18 @@ func nativeChildCommandAllowed(r codexNativeLiveReceipt, command []string) bool 
 	if len(words) == 0 {
 		return false
 	}
-	if nativeChildFetchCommandAllowed(r, words) {
+	// Preserve the prior standalone cache-prefix interpretation. Composed
+	// atoms never strip environment assignments. Raw glob quotes stay intact.
+	if nativeChildInspectionWords(r, command[2], words) {
 		return true
 	}
-	if nativeAssignedFixtureCommand(r, command) {
+	if nativeChildFetchCommandAllowed(r, words) || nativeAssignedFixtureCommand(r, command) {
 		return true
 	}
 	joined := strings.Join(words, " ")
-	if joined == "go build ./..." || nativeAdditionalFixtureCheck(words) || joined == "go vet ./..." || joined == "git status --short" || joined == "date -u +%Y-%m-%dT%H:%M:%SZ" {
-		return true
-	}
-	if nativeAdditionalFixtureInspection(command[2], words, allowed) {
-		return true
-	}
-	if words[0] == "cat" && len(words) > 1 {
-		for _, path := range words[1:] {
-			if !allowed(path) {
-				return false
-			}
-		}
-		return true
-	}
-	if len(words) > 3 && words[0] == "git" && words[1] == "diff" && words[2] == "--" {
-		for _, path := range words[3:] {
-			if !allowed(path) {
-				return false
-			}
-		}
-		return true
-	}
-	return false
+	return joined == "go build ./..." || nativeAdditionalFixtureCheck(words) || joined == "go vet ./..."
 }
+
 func nativeFinalizationReplayEvidence(r codexNativeLiveReceipt, coord string) bool {
 	if r.RecoveryCheckpoint != nil {
 		a, e1 := r.readEvidence(filepath.Join(coord, "post-finalize-1-attempt.json"))
@@ -4529,6 +4534,11 @@ func nativeCodeModeCommands(input, defaultCwd string) ([]nativeRecordedShellComm
 		return []nativeRecordedShellCommand{projected}, true
 	}
 	if projected, ok := nativeCodeModeOutputProjection(input, defaultCwd); ok {
+		// Complete exit annotations must use the shared presentation plan above.
+		// Keep the old decoder itself unchanged for strict context/test paths.
+		if !nativeCodeModePlainOutput(input, defaultCwd) && !regexp.MustCompile(`text\(JSON\.stringify\([A-Za-z_][A-Za-z0-9_]*\)\);?\s*$`).MatchString(input) {
+			return nil, false
+		}
 		return []nativeRecordedShellCommand{projected}, true
 	}
 	if strings.Contains(input, "Promise.all") {
@@ -4565,36 +4575,116 @@ func nativeCodeModeCommands(input, defaultCwd string) ([]nativeRecordedShellComm
 	return result, len(result) > 0
 }
 
-// This fixed template only presents a single result. It is never decoded as
-// context or Go-test evidence, and its caller must corroborate the actual event
-// and compare the entire printed string with that event's exit and output.
-func nativeCodeModeExitOutputProjection(input, defaultCwd string) (nativeRecordedShellCommand, bool) {
+// A complete presentation contains the untouched output and numeric exit once
+// each. One combined template or two separate text calls may place them in
+// either order. Labels are bounded literal annotations, never evidence values.
+type nativeExitOutputPresentation struct {
+	Label                                 string
+	OutputFirst, Separate, LeadingNewline bool
+}
+
+func (p nativeExitOutputPresentation) render(exit int, output string) []string {
+	annotation := p.Label + "=" + strconv.Itoa(exit)
+	if p.Separate {
+		if p.LeadingNewline {
+			annotation = "\n" + annotation
+		}
+		if p.OutputFirst {
+			return []string{output, annotation}
+		}
+		return []string{annotation, output}
+	}
+	if p.OutputFirst {
+		return []string{output + "\n" + annotation}
+	}
+	return []string{annotation + "\n" + output}
+}
+
+func nativeCodeModePresentation(input, defaultCwd string) (nativeRecordedShellCommand, nativeExitOutputPresentation, bool) {
+	var plan nativeExitOutputPresentation
 	pattern := regexp.MustCompile(`^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+tools\.exec_command\((\{[\s\S]*\})\);\s*([\s\S]*)$`)
 	match := pattern.FindStringSubmatch(input)
-	if len(match) != 4 || strings.Contains(" text tools await const let var return true false null ", " "+match[1]+" ") {
-		return nativeRecordedShellCommand{}, false
+	reserved := " JSON Promise tools text await break case catch class const continue debugger default delete do else enum export extends false finally for function if import in instanceof let new null return super switch this throw true try typeof var void while with yield implements interface package private protected public static eval arguments "
+	if len(match) != 4 || strings.Contains(reserved, " "+match[1]+" ") {
+		return nativeRecordedShellCommand{}, plan, false
 	}
-	print := regexp.QuoteMeta("text(`exit_code=${" + match[1] + ".exit_code}\\n${" + match[1] + ".output}`)")
-	if !regexp.MustCompile(`^\s*` + print + `;?\s*$`).MatchString(match[3]) {
-		return nativeRecordedShellCommand{}, false
+	command, ok := nativeLiteralCommandObject(match[2], defaultCwd)
+	if !ok {
+		return command, plan, false
 	}
-	return nativeLiteralCommandObject(match[2], defaultCwd)
+	// Only these two fields and literal safe labels are admitted. No generic
+	// template evaluation, extra printing, property access or transformations.
+	label := `([A-Za-z_][A-Za-z0-9_ -]{0,31})`
+	output := regexp.QuoteMeta("${" + match[1] + ".output}")
+	exit := regexp.QuoteMeta("${" + match[1] + ".exit_code}")
+	textOutput := regexp.QuoteMeta("text(" + match[1] + ".output)")
+	annotation := label + `=` + exit
+	template := func(body string) string { return regexp.QuoteMeta("text(`") + body + regexp.QuoteMeta("`)") }
+	for _, separate := range []bool{false, true} {
+		for _, outputFirst := range []bool{false, true} {
+			body := ""
+			if separate {
+				printExit := template(`(\\n)?` + annotation)
+				body = printExit + `;\s*` + textOutput
+				if outputFirst {
+					body = textOutput + `;\s*` + printExit
+				}
+			} else {
+				body = template(annotation + `\\n` + output)
+				if outputFirst {
+					body = template(output + `\\n` + annotation)
+				}
+			}
+			m := regexp.MustCompile(`^\s*` + body + `;?\s*$`).FindStringSubmatch(match[3])
+			if m == nil {
+				continue
+			}
+			plan.OutputFirst, plan.Separate = outputFirst, separate
+			if separate {
+				plan.LeadingNewline, plan.Label = m[1] != "", m[2]
+			} else {
+				plan.Label = m[1]
+			}
+			return command, plan, true
+		}
+	}
+	return command, plan, false
+}
+
+func nativeCodeModeExitOutputProjection(input, defaultCwd string) (nativeRecordedShellCommand, bool) {
+	command, _, ok := nativeCodeModePresentation(input, defaultCwd)
+	return command, ok
 }
 
 // Called only after nativeCorroboratedBatch proves the unique same-thread/turn
-// single invocation and completed outer output, including failed CLI refusals.
-func nativeCorroboratedExitOutput(raw []byte, callID string) bool {
+// invocation and completed outer output. Compare every printed block in source
+// order to that exact event, including genuine failed CLI refusals.
+func nativeCorroboratedExitOutput(raw []byte, callID, defaultCwd string) bool {
 	active, observed := false, false
-	want := ""
+	var plan nativeExitOutputPresentation
+	var want []string
 	for _, line := range bytes.Split(raw, []byte{'\n'}) {
 		var w nativeCodeModeWire
 		_ = json.Unmarshal(line, &w)
 		p := w.Payload
 		if w.Type == "response_item" && p.Type == "custom_tool_call" && p.CallID == callID {
+			var ok bool
+			_, plan, ok = nativeCodeModePresentation(p.Input, defaultCwd)
+			if active || !ok {
+				return false
+			}
 			active = true
 		}
 		if active && w.Type == "response_item" && p.Type == "custom_tool_call_output" && p.CallID == callID {
-			return observed && len(p.Output) == 2 && p.Output[0].Type == "input_text" && p.Output[1].Type == "input_text" && p.Output[1].Text == want
+			if !observed || len(p.Output) != len(want)+1 || p.Output[0].Type != "input_text" {
+				return false
+			}
+			for index, expected := range want {
+				if p.Output[index+1].Type != "input_text" || p.Output[index+1].Text != expected {
+					return false
+				}
+			}
+			return true
 		}
 		var e nativeHostEvent
 		if active && json.Unmarshal(line, &e) == nil && e.Type == "event_msg" && e.Payload.Type == "item_completed" && e.Payload.Item.Type == "CommandExecution" {
@@ -4603,7 +4693,7 @@ func nativeCorroboratedExitOutput(raw []byte, callID string) bool {
 				return false
 			}
 			observed = true
-			want = "exit_code=" + strconv.Itoa(*i.ExitCode) + "\n" + i.Output
+			want = plan.render(*i.ExitCode, i.Output)
 		}
 	}
 	return false

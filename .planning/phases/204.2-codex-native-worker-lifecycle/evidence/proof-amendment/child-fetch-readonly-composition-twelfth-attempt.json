@@ -1,0 +1,168 @@
+{
+  "schema_version": "phase204.2-child-fetch-attempt/v1",
+  "recorded_at": "2026-09-19T19:53:13.214199+00:00",
+  "attempt": 12,
+  "source_revision": "f3187a00aa0226551d73457361bade777b62b2cd",
+  "snapshot_revision": "d308d3ee94811ffd176f6156dd5336eb4c68bb58",
+  "focused_summary": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-inspection-chain-repair-huujjjxp/summary.json",
+    "sha256": "sha256:51364a894300531471503ba6a1c8f003cfc67c60738109c674cceb122bea041b"
+  },
+  "focused_result": {
+    "families": 24,
+    "normal_pass": 962,
+    "race_pass": 962,
+    "fail": 0,
+    "skip": 0
+  },
+  "summary": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-inspection-chain-repair-bklymt4h/summary.json",
+    "sha256": "sha256:49d08e83aa3ca4858aacccb21663bcc23899638c992c7c9658c26635ca04934f"
+  },
+  "runner": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-inspection-chain-repair-bklymt4h/run-live-inspection-chain-repair.PENDING.py",
+    "sha256": "sha256:374120ee3cd850a220a8109feed7fb04f730df427b456c89900047fc73525dfb"
+  },
+  "config": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-inspection-chain-repair-bklymt4h/config.READY.json",
+    "sha256": "sha256:cc7c5cf1867989f255236a48cbce65bc32a3466056e28ba37e8a24bdf439e109"
+  },
+  "original_receipt": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-inspection-chain-repair-bklymt4h/capture/native-ordinary-1597903521/receipt.json",
+    "sha256": "sha256:9e2cf8959d8cbd1892514d69151d14cf56670d465594192312ac4a2602b18408"
+  },
+  "derived_receipt": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-inspection-chain-repair-bklymt4h/derived-ordinary.json",
+    "sha256": "sha256:fb9eb259001005ad3fb0f1b4ac3d37ae44db3b8f5bade6e363e78ca26a283ed8"
+  },
+  "original_outcome": "incomplete",
+  "derived_outcome": "incomplete",
+  "reason": "parent writes or unclassified operations prevent child-only attribution: [unclassified code-mode: const r = await tools.exec_command({\"cmd\":\"python3 /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-inspection-chain-repair-bklymt4h/capture/native-ordinary-1597903521/repository/.aether/native-fixture-coordinate.py empty-result\",\"workdir\":\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-inspection-chain-repair-bklymt4h/capture/native-ordinary-1597903521/repository\",\"yield_time_ms\":10000,\"max_output_tokens\":12000}); text(r.output); text(`\\nexit_code=${r.exit_code}`);]",
+  "observed_flags": {
+    "child_checks_passed": true,
+    "child_edit_observed": true,
+    "parent_substitution": true,
+    "runtime_credit_observed": true,
+    "child_terminal_corroborated": true,
+    "source_event_corroborated": true,
+    "temporary_auth_removed": true
+  },
+  "child_unclassified_operations": [
+    "pwd && rg --files -g '!*vendor*' && git status --short && sed -n '1,240p' clamp.go && sed -n '1,280p' clamp_test.go && sed -n '1,160p' go.mod",
+    "/bin/zsh -lc pwd && rg --files -g '!*vendor*' && git status --short && sed -n '1,240p' clamp.go && sed -n '1,280p' clamp_test.go && sed -n '1,160p' go.mod"
+  ],
+  "fallback_auth_cleanup": {
+    "errors": [],
+    "purpose": "fixture-local credential cleanup only; never workflow proof",
+    "removed_paths": []
+  },
+  "runs": {
+    "live": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-run",
+        "^TestCodexNativeWorkerFreshHost$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-json",
+        "-timeout",
+        "60m"
+      ],
+      "bound_seconds": 3700,
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-inspection-chain-repair-huujjjxp/repo",
+      "elapsed_seconds": 420.7478043750016,
+      "exit_code": 1,
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-inspection-chain-repair-bklymt4h/live.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-inspection-chain-repair-bklymt4h/live.stdout",
+        "sha256": "sha256:3fa20be6aec9ba6b2eb710ee1e3b87926918545726533f762786075658085193"
+      },
+      "stopped_reason": null,
+      "cleanup": {
+        "before_wait_processes": [],
+        "errors": [],
+        "purpose": "owned resource cleanup only; never host acknowledgement or no-post-ACK-write proof",
+        "remaining_pids": [],
+        "remaining_zombie_pids": [],
+        "signals": []
+      }
+    },
+    "replay": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-run",
+        "^TestCodexNativeQualificationReceiptReplay$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-timeout",
+        "180s",
+        "-json"
+      ],
+      "bound_seconds": 300,
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-inspection-chain-repair-huujjjxp/repo",
+      "elapsed_seconds": 6.4658808749991294,
+      "exit_code": 1,
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-inspection-chain-repair-bklymt4h/replay.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-inspection-chain-repair-bklymt4h/replay.stdout",
+        "sha256": "sha256:f30970eb065dceab5379f3ebb6c2c5c8f1f9669f0950c4147ce7ea3be84ba4df"
+      },
+      "stopped_reason": null,
+      "cleanup": {
+        "before_wait_processes": [],
+        "errors": [],
+        "purpose": "owned resource cleanup only; never host acknowledgement or no-post-ACK-write proof",
+        "remaining_pids": [],
+        "remaining_zombie_pids": [],
+        "signals": []
+      }
+    }
+  },
+  "source_mapping": {
+    "child_id": "01a0bb33-c60d-7c83-82e8-8e783ac1f129",
+    "child_events": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-inspection-chain-repair-bklymt4h/capture/native-ordinary-1597903521/home/.codex/sessions/2026/09/19/rollout-2026-09-19T21-45-27-01a0bb33-c60d-7c83-82e8-8e783ac1f129.jsonl",
+      "sha256": "sha256:eb8be9bc337e048805d5f7a518f56042c50085152447d02815b51273ba31889d"
+    },
+    "parent_events": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-inspection-chain-repair-bklymt4h/capture/native-ordinary-1597903521/parent-events.jsonl",
+      "sha256": "sha256:0f8751bac86e9b82b4900fdeaa35c2d735282aa9700c9b489ecbe82c69d342b2"
+    },
+    "child_inspection": {
+      "call": 40,
+      "event": 42,
+      "output": 43,
+      "exit": 0,
+      "same_child_turn_fixture_cwd": true,
+      "diagnosis": "Six-part read-only inspection starts with bare pwd, absent from child inspection allowlist; other five parts already individually admitted."
+    },
+    "parent_expected_refusal": {
+      "call": 179,
+      "event": 181,
+      "output": 182,
+      "exit": 1,
+      "diagnosis": "Authorized empty-result refusal printed as unchanged stdout then newline plus exit_code=1. Fixed projection forms inconsistently admit uppercase output-first and lowercase exit-first."
+    },
+    "independent_review": "Child edit, checks, terminal and credit observed; both classification gaps independently confirmed. Original and derived outcomes remain incomplete. No historical regrade."
+  },
+  "passed": false,
+  "phase_complete": false,
+  "requirements_completed": [],
+  "next": "Shared child-specific inspection predicate and bounded literal presentation parser with rejecting controls; independently reviewed fresh normal/race snapshot and newly admitted actual trial."
+}
