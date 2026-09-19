@@ -3156,7 +3156,13 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 						continue
 					}
 					commands, ok := nativeCodeModeCommands(p.Input, r.FixtureRoot)
-					if ok && regexp.MustCompile(`^\s*const\s+\[`).MatchString(p.Input) {
+					needsCommandEvent := regexp.MustCompile(`^\s*const\s+\[`).MatchString(p.Input)
+					for _, command := range commands {
+						// A semicolon inspection chain is one actual invocation,
+						// corroborated as a whole, never split into invented events.
+						needsCommandEvent = needsCommandEvent || strings.Contains(command.Command, ";")
+					}
+					if ok && needsCommandEvent {
 						ok = nativeCorroboratedBatch(raw, r.ChildID, p.CallID, commands)
 					}
 					if !ok {
@@ -3880,6 +3886,10 @@ func nativeAdditionalFixtureInspection(words []string, allowed func(string) bool
 	if len(words) == 3 && words[0] == "git" && words[1] == "diff" && words[2] == "--check" {
 		return true
 	}
+	// The exact bare listing stays in the separately verified fixture cwd.
+	if len(words) == 2 && words[0] == "rg" && words[1] == "--files" {
+		return true
+	}
 	// Only explicit fixture basenames; no search root, executable option,
 	// wildcard, symlink following or output file is admitted.
 	if len(words) >= 4 && len(words) <= 14 && len(words)%2 == 0 && words[0] == "rg" && words[1] == "--files" {
@@ -3925,9 +3935,14 @@ func nativeChildCommandAllowed(r codexNativeLiveReceipt, command []string) bool 
 		return false
 	}
 	// The observed shell form joins only bounded fixture inspections with
-	// literal spaced &&. Each component still uses the strict word decoder.
+	// literal spaced && or semicolons in one shell invocation. Each component
+	// still uses the strict word decoder; mixed operators remain rejected.
 	// Tests, edits, expansions and other shell operators cannot enter here.
-	if parts := strings.Split(command[2], " && "); len(parts) > 1 {
+	separator := " && "
+	if strings.Contains(command[2], ";") {
+		separator = ";"
+	}
+	if parts := strings.Split(command[2], separator); len(parts) > 1 {
 		if len(parts) > 8 {
 			return false
 		}

@@ -1047,6 +1047,7 @@ func nativeObservedNamedReadOnlyBatch(t *testing.T) {
 }
 
 func TestCodexNativeObservedFixtureInspections(t *testing.T) {
+	t.Run("single-invocation-semicolon", nativeObservedSemicolonInspection)
 	r := codexNativeLiveReceipt{FixtureRoot: "/fixture"}
 	for _, tc := range []struct {
 		command      string
@@ -1057,6 +1058,27 @@ func TestCodexNativeObservedFixtureInspections(t *testing.T) {
 		{`gofmt -d clamp.go`, true, true},
 		{`git diff --check -- clamp.go`, true, true},
 		{`git diff --check`, true, true},
+		{`rg --files`, true, true},
+		{`sed -n '1,240p' clamp.go; sed -n '1,280p' clamp_test.go; git status --short`, true, false},
+		{`rg --files; git status --short`, true, false},
+		// Generic parent-readonly syntax admits an absolute listing root;
+		// the child classifier separately restricts operations to its fixture.
+		{`rg --files /other`, false, true},
+		{`rg --files --hidden`, false, false},
+		{`rg --files --follow`, false, false},
+		{`rg --files; go test ./...`, false, false},
+		{`rg --files; gofmt -w clamp.go`, false, false},
+		{`rg --files; /fixture/aether codex-native-worker context --request /fixture/request.json`, false, false},
+		{`rg --files; cat ../clamp.go`, false, false},
+		{`rg --files; sed -n '1,20p' /other/clamp.go`, false, false},
+		{`rg --files; git status --short > clamp.go`, false, false},
+		{`rg --files; $(touch clamp.go)`, false, false},
+		{`rg --files; git status --short && git diff --check`, false, false},
+		{`rg --files;; git status --short`, false, false},
+		{`rg --files;`, false, false},
+		{`;rg --files`, false, false},
+		{strings.Repeat(`git status --short;`, 8), false, false},
+		{strings.Repeat(`git status --short;`, 8) + `git status --short`, false, false},
 		{`rg --files -g 'AGENTS.md' -g 'clamp.go' -g 'clamp_test.go' -g 'go.mod'`, true, true},
 		{`rg --files -g 'AGENTS.md' -g 'clamp.go' -g 'clamp_test.go' -g 'go.mod' && git status --short`, true, false},
 		{`sed -n '1,220p' clamp.go && sed -n '1,260p' clamp_test.go && sed -n '1,120p' go.mod`, true, false},
@@ -1110,6 +1132,78 @@ func TestCodexNativeObservedFixtureInspections(t *testing.T) {
 	for _, command := range []string{`gofmt -w clamp.go`, `go test ./... -cover -count=1`, `go test -cover ./...`} {
 		if nativeParentCoordinationCommand(&r, []string{"/bin/sh", "-c", command}, "/fixture") {
 			t.Fatalf("child operation admitted for parent: %s", command)
+		}
+	}
+}
+
+func nativeObservedSemicolonInspection(t *testing.T) {
+	const chain = `sed -n '1,240p' clamp.go; sed -n '1,280p' clamp_test.go; git status --short`
+	for _, command := range []string{chain, `rg --files`, `rg --files /other`} {
+		for _, mode := range []string{"valid", "invocation-cwd", "wrong-cwd", "wrong-thread", "wrong-turn", "missing-event", "duplicate-event", "split-events", "changed-command", "missing-output", "duplicate-output", "interleaved-call"} {
+			// Bare listing uses the pre-existing direct-command classifier;
+			// only its actual invocation/event workspace needs a new control.
+			if command == "rg --files" && mode != "valid" && mode != "invocation-cwd" && mode != "wrong-cwd" {
+				continue
+			}
+			if command == "rg --files /other" && mode != "valid" {
+				continue
+			}
+			t.Run(command+"/"+mode, func(t *testing.T) {
+				r := codexNativeLiveReceipt{ChildID: "child", BoundHostSessionID: "parent", FixtureRoot: "/fixture", Caste: "builder"}
+				var raw []byte
+				add := func(v any) { b, _ := json.Marshal(v); raw = append(raw, append(b, '\n')...) }
+				add(map[string]any{"type": "session_meta", "payload": map[string]any{"id": "child", "parent_thread_id": "parent", "cwd": "/fixture", "agent_role": "aether-builder"}})
+				add(map[string]any{"type": "event_msg", "payload": map[string]any{"thread_id": "child", "turn_id": "turn"}})
+				cwd := "/fixture"
+				if mode == "invocation-cwd" {
+					cwd = "/other"
+				}
+				input := "const r = await tools.exec_command({cmd:" + strconv.Quote(command) + ",workdir:" + strconv.Quote(cwd) + "}); text(r)\n"
+				commands, ok := nativeCodeModeCommands(input, "/fixture")
+				if !ok || len(commands) != 1 || commands[0].Command != command {
+					t.Fatal("one shell invocation was split or rewritten")
+				}
+				add(map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call", "name": "exec", "call_id": "inspection", "input": input, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}})
+				if mode == "interleaved-call" {
+					add(map[string]any{"type": "response_item", "payload": map[string]any{"type": "function_call", "name": "send_message", "call_id": "other"}})
+				}
+				thread, turn, observed := "child", "turn", command
+				switch mode {
+				case "wrong-cwd":
+					cwd = "/other"
+				case "wrong-thread":
+					thread = "other"
+				case "wrong-turn":
+					turn = "other"
+				case "changed-command":
+					observed = "git status --short"
+				}
+				event := func(id, command string) map[string]any {
+					return map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": thread, "turn_id": turn, "item": map[string]any{"type": "CommandExecution", "id": id, "status": "completed", "command": []string{"/bin/zsh", "-lc", command}, "cwd": cwd, "exit_code": 0, "aggregated_output": "actual inspection output"}}}
+				}
+				if mode == "split-events" {
+					for index, part := range strings.Split(command, ";") {
+						add(event("split"+strconv.Itoa(index), strings.TrimSpace(part)))
+					}
+				} else if mode != "missing-event" {
+					add(event("event", observed))
+					if mode == "duplicate-event" {
+						add(event("event", observed))
+					}
+				}
+				result := map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call_output", "call_id": "inspection", "output": []any{map[string]any{"type": "input_text", "text": "Script completed\n"}, map[string]any{"type": "input_text", "text": `{"exit_code":0,"output":"actual inspection output"}`}}, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}}
+				if mode != "missing-output" {
+					add(result)
+				}
+				if mode == "duplicate-output" {
+					add(result)
+				}
+				nativeInspectChildEvents(&r, raw)
+				wantClassified := mode == "valid" && command != "rg --files /other"
+				if (len(r.ChildUnclassified) == 0) != wantClassified || r.ChecksPassed || r.ChildEditObserved {
+					t.Fatalf("unclassified=%v checks=%v edits=%v", r.ChildUnclassified, r.ChecksPassed, r.ChildEditObserved)
+				}
+			})
 		}
 	}
 }

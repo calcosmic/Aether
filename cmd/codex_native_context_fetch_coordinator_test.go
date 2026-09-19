@@ -121,9 +121,9 @@ def native_fetch_literal_object(source):
 
 def native_fetch_exec(input_text, cwd):
     patterns = [
-        (r"\s*text\(await\s+tools\.exec_command\((\{[\s\S]*\})\)\);\s*", "object"),
-        (r"\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+tools\.exec_command\((\{[\s\S]*\})\);\s*text\(\1\);\s*", "object"),
-        (r"\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+tools\.exec_command\((\{[\s\S]*\})\);\s*text\(\1\.output\);\s*", "output"),
+        (r"\s*text\(await\s+tools\.exec_command\((\{[\s\S]*\})\)\);?\s*", "object"),
+        (r"\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+tools\.exec_command\((\{[\s\S]*\})\);\s*text\(\1\);?\s*", "object"),
+        (r"\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+tools\.exec_command\((\{[\s\S]*\})\);\s*text\(\1\.output\);?\s*", "output"),
     ]
     for pattern, projection in patterns:
         match = re.fullmatch(pattern, input_text or "")

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -177,7 +178,7 @@ func nativeContextCommand(input, cwd string) (nativeRecordedShellCommand, bool, 
 		// The shared operation recognizer admits several presentations. Context
 		// evidence must distinguish exact stdout from the untouched full result
 		// so its exit/session/output fields are still checked independently.
-		pattern := regexp.MustCompile(`^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+tools\.exec_command\((\{[\s\S]*\})\);\s*text\(([\s\S]*)\);\s*$`)
+		pattern := regexp.MustCompile(`^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+tools\.exec_command\((\{[\s\S]*\})\);\s*text\(([\s\S]*)\);?\s*$`)
 		match := pattern.FindStringSubmatch(input)
 		if len(match) == 4 {
 			switch match[3] {
@@ -885,6 +886,7 @@ func nativeContextFixtureBytes(t *testing.T, records []map[string]any) []byte {
 }
 
 func TestCodexNativeChildContextFetchEvidence(t *testing.T) {
+	t.Run("coordinator-eof-source", nativeContextCoordinatorEOFSource)
 	for _, purpose := range []string{"initial", "answers"} {
 		t.Run("complete-"+purpose, func(t *testing.T) {
 			records, want := nativeContextFetchFixture(t, purpose)
@@ -1179,6 +1181,99 @@ func TestCodexNativeChildContextFetchEvidence(t *testing.T) {
 			t.Fatal("ambiguous JSON source accepted")
 		}
 	})
+}
+
+func nativeContextCoordinatorEOFSource(t *testing.T) {
+	for _, presentation := range []string{"object", "output", "direct"} {
+		for _, mode := range []string{"valid", "missing-separator", "extra-effect", "wrong-variable", "wrong-cwd", "wrong-turn", "missing-event", "duplicate-event", "wrong-stdout", "missing-exit", "substituted-result"} {
+			t.Run(presentation+"/"+mode, func(t *testing.T) {
+				records, want := nativeContextFetchFixture(t, "initial")
+				for _, index := range []int{1, 4} {
+					call := records[index]["payload"].(map[string]any)
+					input := call["input"].(string)
+					print := "text(r)"
+					if presentation == "output" {
+						print = "text(r.output)"
+					}
+					input = strings.Replace(input, "text(r.output);", print+"\n", 1)
+					if presentation == "direct" {
+						input = "text(" + strings.TrimSuffix(strings.TrimPrefix(input, "const r = "), "; text(r)\n") + ")\n"
+					}
+					if mode == "missing-separator" {
+						if presentation == "direct" {
+							input += input
+						} else {
+							input = strings.Replace(input, "; text(", "\ntext(", 1)
+						}
+					} else if mode == "extra-effect" {
+						input += "mutate();"
+					} else if mode == "wrong-variable" {
+						if presentation == "direct" {
+							input = strings.Replace(input, "text(", "other(", 1)
+						} else {
+							input = strings.ReplaceAll(input, "text(r", "text(other")
+							input = strings.ReplaceAll(input, "stringify(r)", "stringify(other)")
+						}
+					}
+					call["input"] = input
+					item := records[index+1]["payload"].(map[string]any)["item"].(map[string]any)
+					out := records[index+2]["payload"].(map[string]any)["output"].([]map[string]any)
+					if presentation != "output" {
+						result := map[string]any{"exit_code": 0, "output": out[1]["text"]}
+						if mode == "missing-exit" {
+							delete(result, "exit_code")
+						}
+						if mode == "substituted-result" {
+							result["output"] = "substituted"
+						}
+						encoded, _ := json.Marshal(result)
+						out[1]["text"] = string(encoded)
+					} else if mode == "substituted-result" {
+						out[1]["text"] = "substituted"
+					}
+					switch mode {
+					case "wrong-cwd":
+						item["cwd"] = "/other"
+					case "wrong-turn":
+						records[index+1]["payload"].(map[string]any)["turn_id"] = "foreign"
+					case "missing-event":
+						item["type"] = "Other"
+					case "wrong-stdout":
+						item["stdout"] = "conflicting"
+					case "missing-exit":
+						delete(item, "exit_code")
+					}
+				}
+				if mode == "duplicate-event" {
+					records = append(records, records[2])
+				}
+				raw := nativeContextFixtureBytes(t, records)
+				got, err := nativeDecodeChildContextFetch(raw, want)
+				if (err == nil) != (mode == "valid") {
+					t.Fatalf("Go source acceptance=%v: %v", err == nil, err)
+				}
+				if err == nil && (got.Delivery.Payload != want.Delivery.Payload || got.Ack.PayloadSHA256 != want.Delivery.PayloadSHA256) {
+					t.Fatal("EOF wrapper changed actual context bytes")
+				}
+				// Run the actual pure Python coordinator decoder on the same raw
+				// triplets; a Go-only recognizer cannot guard this acquisition path.
+				script := "import json,hashlib,sys,datetime\n" + nativeContextFetchPython + `
+raw_lines = sys.stdin.buffer.read().splitlines()
+events = [native_fetch_json(line) for line in raw_lines]
+for ci in (1,4):
+    parsed = native_fetch_exec(events[ci]["payload"]["input"], "/fixture repo")
+    assert parsed is not None, "unclassified wrapper"
+    native_fetch_source(raw_lines, events, ci, parsed, "/fixture repo", "child-1")
+`
+				cmd := exec.Command("python3", "-c", script)
+				cmd.Stdin = bytes.NewReader(raw)
+				output, pythonErr := cmd.CombinedOutput()
+				if (pythonErr == nil) != (mode == "valid") {
+					t.Fatalf("Python source acceptance=%v: %v\n%s", pythonErr == nil, pythonErr, output)
+				}
+			})
+		}
+	}
 }
 
 func TestCodexNativeChildContextBootstrap(t *testing.T) {
