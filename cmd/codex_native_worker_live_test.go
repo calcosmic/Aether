@@ -9,6 +9,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io"
 	"io/fs"
 	"net/url"
 	"os"
@@ -3899,6 +3900,20 @@ func nativeToolOutputText(raw json.RawMessage) string {
 	return string(raw)
 }
 
+// Exclusion globs only remove matches from the existing cwd-only listing.
+// A leading slash anchors a glob; it is not another filesystem search root.
+func nativeFixtureExclusionFilter(filter string) bool {
+	if len(filter) < 2 || len(filter) > 129 || !regexp.MustCompile(`^!/?[A-Za-z0-9_.*?-]+(?:/[A-Za-z0-9_.*?-]+)*$`).MatchString(filter) {
+		return false
+	}
+	for _, component := range strings.Split(strings.TrimPrefix(filter[1:], "/"), "/") {
+		if component == "." || component == ".." {
+			return false
+		}
+	}
+	return true
+}
+
 func nativeAdditionalFixtureInspection(raw string, words []string, allowed func(string) bool) bool {
 	if len(words) == 3 && words[0] == "git" && words[1] == "diff" && words[2] == "--check" {
 		return true
@@ -3907,7 +3922,7 @@ func nativeAdditionalFixtureInspection(raw string, words []string, allowed func(
 	if len(words) == 2 && words[0] == "rg" && words[1] == "--files" {
 		return true
 	}
-	// Explicit fixture basenames and bounded quoted exclusion patterns only.
+	// Explicit fixture basenames and bounded quoted exclusion path patterns only.
 	// Exclusions narrow the already-admitted cwd-only listing; they cannot
 	// enable hidden files, follow links, add roots or select an output file.
 	if len(words) >= 4 && len(words) <= 14 && len(words)%2 == 0 && words[0] == "rg" && words[1] == "--files" {
@@ -3916,7 +3931,7 @@ func nativeAdditionalFixtureInspection(raw string, words []string, allowed func(
 		for i := 2; i < len(words); i += 2 {
 			filter := words[i+1]
 			fixtureFilter := allowed(filter) && filepath.Base(filter) == filter
-			excluded := regexp.MustCompile(`^![A-Za-z0-9_.*?-]{1,128}$`).MatchString(filter)
+			excluded := nativeFixtureExclusionFilter(filter)
 			if excluded {
 				// Word decoding strips quotes; require the complete raw argument
 				// to be quoted so wildcard expansion cannot change its meaning.
@@ -3984,6 +3999,7 @@ func nativeChildInspectionWords(r codexNativeLiveReceipt, raw string, words []st
 	if (len(words) == 1 && words[0] == "pwd") ||
 		(len(words) == 3 && words[0] == "git" && words[1] == "status" && words[2] == "--short") ||
 		(len(words) == 3 && words[0] == "date" && words[1] == "-u" && words[2] == "+%Y-%m-%dT%H:%M:%SZ") ||
+		(len(words) == 2 && words[0] == "date" && words[1] == "-Iseconds") ||
 		nativeAdditionalFixtureInspection(raw, words, allowed) {
 		return true
 	}
@@ -4585,9 +4601,17 @@ func nativeCodeModeCommands(input, defaultCwd string) ([]nativeRecordedShellComm
 type nativeExitOutputPresentation struct {
 	Label                                 string
 	OutputFirst, Separate, LeadingNewline bool
+	JSON                                  bool
 }
 
 func (p nativeExitOutputPresentation) render(exit int, output string) []string {
+	if p.JSON {
+		encoded, _ := json.Marshal(struct {
+			Exit   int    `json:"exit_code"`
+			Output string `json:"output"`
+		}{exit, output})
+		return []string{string(encoded)}
+	}
 	annotation := p.Label + "=" + strconv.Itoa(exit)
 	if p.Separate {
 		if p.LeadingNewline {
@@ -4615,6 +4639,16 @@ func nativeCodeModePresentation(input, defaultCwd string) (nativeRecordedShellCo
 	command, ok := nativeLiteralCommandObject(match[2], defaultCwd)
 	if !ok {
 		return command, plan, false
+	}
+	// Exactly two direct properties from the same bound result, in either
+	// literal object order. This is presentation only, not a test decoder.
+	name := regexp.QuoteMeta(match[1])
+	exitField := `exit_code\s*:\s*` + name + `\.exit_code`
+	outputField := `output\s*:\s*` + name + `\.output`
+	jsonPrint := regexp.MustCompile(`^\s*text\(JSON\.stringify\(\{\s*(?:` + exitField + `\s*,\s*` + outputField + `|` + outputField + `\s*,\s*` + exitField + `)\s*\}\)\);?\s*$`)
+	if jsonPrint.MatchString(match[3]) {
+		plan.JSON = true
+		return command, plan, true
 	}
 	// Only these two fields and literal safe labels are admitted. No generic
 	// template evaluation, extra printing, property access or transformations.
@@ -4660,6 +4694,43 @@ func nativeCodeModeExitOutputProjection(input, defaultCwd string) (nativeRecorde
 	return command, ok
 }
 
+func nativeExitOutputJSON(text string) (int, string, bool) {
+	decoder := json.NewDecoder(strings.NewReader(text))
+	token, err := decoder.Token()
+	if err != nil || token != json.Delim('{') {
+		return 0, "", false
+	}
+	seen := map[string]bool{}
+	var exit int
+	var output string
+	for decoder.More() {
+		token, err := decoder.Token()
+		key, ok := token.(string)
+		if err != nil || !ok || seen[key] || (key != "exit_code" && key != "output") {
+			return 0, "", false
+		}
+		seen[key] = true
+		var value json.RawMessage
+		if decoder.Decode(&value) != nil || len(value) == 0 {
+			return 0, "", false
+		}
+		if key == "exit_code" {
+			if string(value) == "null" || json.Unmarshal(value, &exit) != nil {
+				return 0, "", false
+			}
+		} else if value[0] != '"' || json.Unmarshal(value, &output) != nil {
+			return 0, "", false
+		}
+	}
+	if token, err := decoder.Token(); err != nil || token != json.Delim('}') || len(seen) != 2 {
+		return 0, "", false
+	}
+	if _, err := decoder.Token(); err != io.EOF {
+		return 0, "", false
+	}
+	return exit, output, true
+}
+
 // Called only after nativeCorroboratedBatch proves the unique same-thread/turn
 // invocation and completed outer output. Compare every printed block in source
 // order to that exact event, including genuine failed CLI refusals.
@@ -4684,7 +4755,16 @@ func nativeCorroboratedExitOutput(raw []byte, callID, defaultCwd string) bool {
 				return false
 			}
 			for index, expected := range want {
-				if p.Output[index+1].Type != "input_text" || p.Output[index+1].Text != expected {
+				if p.Output[index+1].Type != "input_text" {
+					return false
+				}
+				if plan.JSON {
+					gotExit, gotOutput, valid := nativeExitOutputJSON(p.Output[index+1].Text)
+					wantExit, wantOutput, _ := nativeExitOutputJSON(expected)
+					if !valid || gotExit != wantExit || gotOutput != wantOutput {
+						return false
+					}
+				} else if p.Output[index+1].Text != expected {
 					return false
 				}
 			}

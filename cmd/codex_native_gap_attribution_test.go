@@ -840,6 +840,14 @@ func nativeObservedExitOutputProjection(t *testing.T) {
 		name, suffix string
 		printed      func(int, string) []string
 	}{
+		{"json-exit-first", "text(JSON.stringify({exit_code:r.exit_code,output:r.output}));", func(exit int, output string) []string {
+			encoded, _ := json.Marshal(output)
+			return []string{`{"exit_code":` + strconv.Itoa(exit) + `,"output":` + string(encoded) + `}`}
+		}},
+		{"json-output-first-eof", "text(JSON.stringify({output:r.output,exit_code:r.exit_code}))\n", func(exit int, output string) []string {
+			encoded, _ := json.Marshal(output)
+			return []string{`{"output":` + string(encoded) + `,"exit_code":` + strconv.Itoa(exit) + `}`}
+		}},
 		{"exit-first-combined", "text(`exit_code=${r.exit_code}\\n${r.output}`);", func(exit int, output string) []string {
 			return []string{"exit_code=" + strconv.Itoa(exit) + "\n" + output}
 		}},
@@ -854,7 +862,10 @@ func nativeObservedExitOutputProjection(t *testing.T) {
 			return []string{"ABCDEFGHIJKLMNOPQRSTUVWXYZ_12345=" + strconv.Itoa(exit) + "\n" + output}
 		}},
 	} {
-		for _, mode := range []string{"success", "expected-refusal", "file-uri", "renamed-alias", "missing-event", "wrong-thread", "wrong-turn", "wrong-cwd", "changed-command", "duplicate-event", "duplicate-call", "interleaved-call", "missing-output", "duplicate-output", "wrong-output-call", "wrong-output-turn", "incomplete", "omitted-exit", "forged-exit", "forged-output", "reordered", "extra-output", "extra-field", "child-plain-no-credit"} {
+		for _, mode := range []string{"success", "expected-refusal", "file-uri", "renamed-alias", "missing-event", "wrong-thread", "wrong-turn", "wrong-cwd", "changed-command", "duplicate-event", "duplicate-call", "interleaved-call", "missing-output", "duplicate-output", "wrong-output-call", "wrong-output-turn", "incomplete", "omitted-exit", "forged-exit", "forged-output", "reordered", "extra-output", "extra-field", "child-plain-no-credit", "json-reordered-keys", "json-unicode-whitespace", "json-duplicate-output", "json-number-output", "json-boolean-exit", "json-decimal-exit", "json-duplicate-key", "json-extra-key", "json-missing-output", "json-missing-exit", "json-string-exit", "json-null-exit", "json-null-output", "json-trailing-value"} {
+			if strings.HasPrefix(mode, "json-") && !strings.HasPrefix(presentation.name, "json-") {
+				continue
+			}
 			t.Run(presentation.name+"/"+mode, func(t *testing.T) {
 				r := codexNativeLiveReceipt{SchemaVersion: "codex-native-tracer/v2", SessionID: "parent", FixtureRoot: root, CoordinatorPath: coordinator, CoordinatorSHA256: lifecycleDigest(body)}
 				thread, cwd, selected := "parent", root, command
@@ -873,6 +884,7 @@ func nativeObservedExitOutputProjection(t *testing.T) {
 				input := "const r = await tools.exec_command({cmd:" + strconv.Quote(selected) + ",workdir:" + strconv.Quote(root) + "}); " + presentation.suffix
 				if mode == "renamed-alias" {
 					input = strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(input, "const r =", "const result ="), "${r.", "${result."), "text(r.", "text(result.")
+					input = strings.ReplaceAll(input, ":r.", ":result.")
 				}
 				call := map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call", "name": "exec", "call_id": "call", "input": input, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}}
 				add(call)
@@ -885,6 +897,9 @@ func nativeObservedExitOutputProjection(t *testing.T) {
 				turn, status, exit, output := "turn", "completed", 0, "actual output\n"
 				if mode == "expected-refusal" {
 					status, exit, output = "failed", 1, "{\"ok\":false,\"error\":\"nonempty terminal result and summary are required\",\"code\":1}\n\n\n"
+				}
+				if mode == "json-unicode-whitespace" {
+					output = "  <tag>& café \u2028\u2029\t\n\n"
 				}
 				if mode == "child-plain-no-credit" {
 					output = "ok  \texample.invalid/nativefixture\t0.2s\n"
@@ -931,6 +946,39 @@ func nativeObservedExitOutputProjection(t *testing.T) {
 					}
 				case "extra-field":
 					printed[len(printed)-1] += "\nextra=field"
+				case "json-reordered-keys":
+					encoded, _ := json.Marshal(output)
+					printed = []string{`{ "output": ` + string(encoded) + `, "exit_code": ` + strconv.Itoa(exit) + ` }`}
+				case "json-unicode-whitespace":
+					// JavaScript preserves these literals; Go's default JSON encoder
+					// escapes them. Compare decoded output bytes without trimming.
+					for _, pair := range [][2]string{{`\u003c`, "<"}, {`\u003e`, ">"}, {`\u0026`, "&"}, {`\u2028`, "\u2028"}, {`\u2029`, "\u2029"}} {
+						printed[0] = strings.ReplaceAll(printed[0], pair[0], pair[1])
+					}
+				case "json-duplicate-output":
+					printed[0] = strings.TrimSuffix(printed[0], "}") + `,"output":"actual output\n"}`
+				case "json-number-output":
+					printed = []string{`{"exit_code":0,"output":3}`}
+				case "json-boolean-exit":
+					printed = []string{`{"exit_code":false,"output":"actual output\n"}`}
+				case "json-decimal-exit":
+					printed = []string{`{"exit_code":0.0,"output":"actual output\n"}`}
+				case "json-duplicate-key":
+					printed[0] = strings.TrimSuffix(printed[0], "}") + `,"exit_code":0}`
+				case "json-extra-key":
+					printed[0] = strings.TrimSuffix(printed[0], "}") + `,"extra":0}`
+				case "json-missing-output":
+					printed = []string{`{"exit_code":0}`}
+				case "json-missing-exit":
+					printed = []string{`{"output":"actual output\n"}`}
+				case "json-string-exit":
+					printed = []string{`{"exit_code":"0","output":"actual output\n"}`}
+				case "json-null-exit":
+					printed = []string{`{"exit_code":null,"output":"actual output\n"}`}
+				case "json-null-output":
+					printed = []string{`{"exit_code":0,"output":null}`}
+				case "json-trailing-value":
+					printed[0] += `{}`
 				}
 				parts := []any{map[string]any{"type": "input_text", "text": header}}
 				for _, text := range printed {
@@ -956,7 +1004,7 @@ func nativeObservedExitOutputProjection(t *testing.T) {
 					if mode == "expected-refusal" && !r.EmptyResultRefused {
 						t.Fatal("actual failed empty-result refusal lost")
 					}
-					want := mode == "success" || mode == "expected-refusal" || mode == "file-uri" || mode == "renamed-alias"
+					want := mode == "success" || mode == "expected-refusal" || mode == "file-uri" || mode == "renamed-alias" || mode == "json-reordered-keys" || mode == "json-unicode-whitespace"
 					if r.ParentSubstitution == want || r.ChecksPassed || r.ChildEditObserved {
 						t.Fatalf("parent classification: %+v", r.ParentUnclassified)
 					}
@@ -1449,6 +1497,29 @@ func TestCodexNativeObservedFixtureInspections(t *testing.T) {
 		{`rg --files`, true, true},
 		{`rg --files -g '!*.sum'`, true, true},
 		{`rg --files -g '!*vendor*'`, true, true},
+		{`rg --files -g '!/.aether-transactions/**'`, true, true},
+		{`rg --files -g '!nested/vendor/**'`, true, true},
+		{`rg --files -g '!/../vendor/**'`, false, false},
+		{`rg --files -g '!nested/./**'`, false, false},
+		{`rg --files -g '!nested//**'`, false, false},
+		{`rg --files -g '!/'`, false, false},
+		{`rg --files -g '!nested/'`, false, false},
+		{`rg --files -g '//vendor/**'`, false, false},
+		{`rg --files -g '/vendor/**'`, false, false},
+		{`rg --files -g '!/.aether-transactions/**' --hidden`, false, false},
+		{`rg --files -g '!/.aether-transactions/**' --follow`, false, false},
+		{`rg --files -g '!/.aether-transactions/**' /other`, false, false},
+		{`rg --files -g '!/.aether-transactions/**' -g '!/.aether-transactions/**'`, false, false},
+		{`rg --files -g !/.aether-transactions/**`, false, false},
+		{`rg --files -g '!/.aether-transactions/'"**"`, false, false},
+		{`rg --files -g '!/` + strings.Repeat("a", 125) + `/*'`, true, true},
+		{`rg --files -g '!/` + strings.Repeat("a", 126) + `/*'`, false, false},
+		{`date -Iseconds`, true, false},
+		{`'date -Iseconds'`, false, false},
+		{`date -Iseconds -s now`, false, false},
+		{`date -Iseconds > clamp.go`, false, false},
+		{`date -Iseconds /other`, false, false},
+
 		{`rg --files -g "!temp-?.go"`, true, true},
 		{`rg --files -g '!one' -g '!two' -g '!three' -g '!four' -g '!five' -g '!six'`, true, true},
 		{`rg --files -g '!one' -g '!two' -g '!three' -g '!four' -g '!five' -g '!six' -g '!seven'`, false, false},
@@ -1461,7 +1532,7 @@ func TestCodexNativeObservedFixtureInspections(t *testing.T) {
 		{`rg --files -g '!vendor'"*"`, false, false},
 		{`rg --files -g '!!vendor'`, false, false},
 		{`rg --files -g '!'`, false, false},
-		{`rg --files -g '!vendor/*'`, false, false},
+		{`rg --files -g '!vendor/*'`, true, true},
 		{`rg --files -g '!{one,two}'`, false, false},
 		{`rg --files -g '![ab]'`, false, false},
 		{`rg --files -g '!$(touch clamp.go)'`, false, false},
@@ -1564,7 +1635,7 @@ func TestCodexNativeObservedFixtureInspections(t *testing.T) {
 
 func nativeObservedSemicolonInspection(t *testing.T) {
 	const chain = `sed -n '1,240p' clamp.go; sed -n '1,280p' clamp_test.go; git status --short`
-	for _, command := range []string{`pwd && rg --files -g '!*vendor*' && git status --short && sed -n '1,240p' clamp.go && sed -n '1,280p' clamp_test.go && sed -n '1,160p' go.mod`, `pwd; cat clamp.go; git diff -- clamp.go`, `git diff -- clamp.go && git status --short && date -u +%Y-%m-%dT%H:%M:%SZ`, chain, `sed -n '1,200p' clamp.go clamp_test.go`, `sed -n '1,200p' /fixture/clamp.go clamp_test.go`, `rg --files`, `rg --files -g '!*.sum'`, `rg --files -g '!*vendor*'`, `rg --files /other`, `rg --files -g '!*.sum' /other`} {
+	for _, command := range []string{`rg --files -g '!/.aether-transactions/**' && date -Iseconds`, `rg --files -g '!/.aether-transactions/**'`, `pwd && rg --files -g '!*vendor*' && git status --short && sed -n '1,240p' clamp.go && sed -n '1,280p' clamp_test.go && sed -n '1,160p' go.mod`, `pwd; cat clamp.go; git diff -- clamp.go`, `git diff -- clamp.go && git status --short && date -u +%Y-%m-%dT%H:%M:%SZ`, chain, `sed -n '1,200p' clamp.go clamp_test.go`, `sed -n '1,200p' /fixture/clamp.go clamp_test.go`, `rg --files`, `rg --files -g '!*.sum'`, `rg --files -g '!*vendor*'`, `rg --files /other`, `rg --files -g '!*.sum' /other`} {
 		for _, mode := range []string{"valid", "invocation-cwd", "wrong-cwd", "wrong-thread", "wrong-turn", "missing-event", "duplicate-event", "split-events", "changed-command", "missing-output", "duplicate-output", "interleaved-call", "prior-pass", "failed-inspection", "later-failed-check", "later-edit"} {
 			if !strings.Contains(command, " && ") && !strings.Contains(command, ";") && (mode == "prior-pass" || mode == "failed-inspection" || mode == "later-failed-check" || mode == "later-edit") {
 				continue
@@ -1739,6 +1810,18 @@ func nativePresentationPlanBoundaries(t *testing.T) {
 	const prefix = `const r = await tools.exec_command({cmd:"git status --short",workdir:"/fixture"}); `
 	const suffix = "text(r.output); text(`\\nexit_code=${r.exit_code}`);"
 	for _, tc := range []struct{ name, input string }{
+		{"json-duplicate-key", prefix + `text(JSON.stringify({exit_code:r.exit_code,output:r.output,exit_code:r.exit_code}));`},
+		{"json-extra-key", prefix + `text(JSON.stringify({exit_code:r.exit_code,output:r.output,extra:0}));`},
+		{"json-omitted-output", prefix + `text(JSON.stringify({exit_code:r.exit_code}));`},
+		{"json-omitted-exit", prefix + `text(JSON.stringify({output:r.output}));`},
+		{"json-forged-exit", prefix + `text(JSON.stringify({exit_code:0,output:r.output}));`},
+		{"json-transformed-output", prefix + `text(JSON.stringify({exit_code:r.exit_code,output:r.output.trim()}));`},
+		{"json-wrong-alias", prefix + `text(JSON.stringify({exit_code:q.exit_code,output:r.output}));`},
+		{"json-computed", prefix + `text(JSON.stringify({exit_code:r["exit_code"],output:r.output}));`},
+		{"json-spread", prefix + `text(JSON.stringify({...r}));`},
+		{"json-prototype", prefix + `text(JSON.stringify({exit_code:r.exit_code,output:r.__proto__.output}));`},
+		{"json-extra-print", prefix + `text(JSON.stringify({exit_code:r.exit_code,output:r.output})); text(r);`},
+		{"json-reserved-alias", `const JSON = await tools.exec_command({cmd:"git status --short",workdir:"/fixture"}); text(JSON.stringify({exit_code:JSON.exit_code,output:JSON.output}));`},
 		{"extra-exec", prefix + suffix + `text(await tools.exec_command({cmd:"touch clamp.go",workdir:"/fixture"}));`},
 		{"extra-print", prefix + suffix + `text(r.output);`},
 		{"omitted-output", prefix + "text(`exit_code=${r.exit_code}`);"},
@@ -1788,6 +1871,9 @@ func nativeSharedInspectionAtoms(t *testing.T) {
 		{`'pwd'`, true},
 		{`'git' 'status' '--short'`, true},
 		{`'date' '-u' '+%Y-%m-%dT%H:%M:%SZ'`, true},
+		{`'date' '-Iseconds'`, true},
+		{`'date -Iseconds'`, false},
+		{`date -Iseconds -s now`, false},
 		{`'git status' --short`, false},
 		{`git 'status --short'`, false},
 		{`'git status --short'`, false},
@@ -1806,7 +1892,7 @@ func nativeSharedInspectionAtoms(t *testing.T) {
 			}
 		})
 	}
-	atoms := []string{"pwd", "git status --short", "date -u +%Y-%m-%dT%H:%M:%SZ", "cat clamp.go go.mod", "git diff -- /fixture/clamp.go", "git diff --check", "rg --files -g '!*vendor*'", "sed -n '1,240p' clamp.go clamp_test.go", "gofmt -d clamp.go", "test -r go.mod"}
+	atoms := []string{"date -Iseconds", "rg --files -g '!/.aether-transactions/**'", "pwd", "git status --short", "date -u +%Y-%m-%dT%H:%M:%SZ", "cat clamp.go go.mod", "git diff -- /fixture/clamp.go", "git diff --check", "rg --files -g '!*vendor*'", "sed -n '1,240p' clamp.go clamp_test.go", "gofmt -d clamp.go", "test -r go.mod"}
 	for _, atom := range atoms {
 		t.Run(atom, func(t *testing.T) {
 			if !nativeChildInspectionAtom(r, atom) || !nativeChildCommandAllowed(r, []string{"/bin/sh", "-c", atom}) {
