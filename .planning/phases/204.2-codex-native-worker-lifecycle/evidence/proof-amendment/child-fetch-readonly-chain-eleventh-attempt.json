@@ -1,0 +1,153 @@
+{
+  "schema_version": "phase204.2-child-fetch-attempt/v1",
+  "recorded_at": "2026-09-19T18:59:10.563043+00:00",
+  "attempt": 11,
+  "source_revision": "ec857bee668278b97a47193456964936a29304b9",
+  "snapshot_revision": "e1ec96ff582b117d2e2469b68d118ad4f4517202",
+  "focused_summary": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-sed-repair-skub6of9/summary.json",
+    "sha256": "sha256:aae040e1772f9c4c6c4786cc42cb8551128930247132ae20e694f73f1d2af855"
+  },
+  "focused_result": {
+    "families": 24,
+    "normal_pass": 897,
+    "race_pass": 897,
+    "fail": 0,
+    "skip": 0
+  },
+  "summary": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-sed-repair-lpmiovyy/summary.json",
+    "sha256": "sha256:aa89ee97b6a0b1bce35f0eb897b6ae53d5882a10742659d6321dedb3711372d3"
+  },
+  "runner": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-sed-repair-lpmiovyy/run-live-sed-repair.PENDING.py",
+    "sha256": "sha256:60d0b383a1f07ee5e0641dba4a820d8e27b212c81feaaf61a480b68572ff2e94"
+  },
+  "config": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-sed-repair-lpmiovyy/config.READY.json",
+    "sha256": "sha256:f8e8a763a587360d03d6b62f5579bd1efbe647dda0aaec0a359582f4bc94c9fe"
+  },
+  "original_receipt": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-sed-repair-lpmiovyy/capture/native-ordinary-705501961/receipt.json",
+    "sha256": "sha256:ae955e933ea5c138ec4a7d914e5e0fb60c52236f0db160daca7739b24f96d171"
+  },
+  "derived_receipt": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-sed-repair-lpmiovyy/derived-ordinary.json",
+    "sha256": "sha256:65f0b96447c40c96e73ea8b3565f9469cd79da833b901f6ebf0352ad248b2ff6"
+  },
+  "original_outcome": "incomplete",
+  "derived_outcome": "incomplete",
+  "reason": "raw native child edit/check evidence incomplete (edit=true checks=false); child log /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-sed-repair-lpmiovyy/capture/native-ordinary-705501961/home/.codex/sessions/2026/09/19/rollout-2026-09-19T20-51-25-01a0bb02-4cfd-7253-942a-a04883c8267b.jsonl",
+  "observed_flags": {
+    "child_checks_passed": false,
+    "child_edit_observed": true,
+    "parent_substitution": true,
+    "runtime_credit_observed": true,
+    "child_terminal_corroborated": true,
+    "source_event_corroborated": true,
+    "temporary_auth_removed": true
+  },
+  "child_unclassified_operations": [
+    "git diff -- clamp.go && git status --short && date -u +%Y-%m-%dT%H:%M:%SZ",
+    "/bin/zsh -lc git diff -- clamp.go && git status --short && date -u +%Y-%m-%dT%H:%M:%SZ"
+  ],
+  "fallback_auth_cleanup": {
+    "errors": [],
+    "purpose": "fixture-local credential cleanup only; never workflow proof",
+    "removed_paths": []
+  },
+  "runs": {
+    "live": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-run",
+        "^TestCodexNativeWorkerFreshHost$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-json",
+        "-timeout",
+        "60m"
+      ],
+      "bound_seconds": 3700,
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-sed-repair-skub6of9/repo",
+      "elapsed_seconds": 434.40857883300123,
+      "exit_code": 1,
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-sed-repair-lpmiovyy/live.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-sed-repair-lpmiovyy/live.stdout",
+        "sha256": "sha256:3af7288900e9cd1c4ef333b5ab9dab40aaada3dab7df451e27600a7385d2b4e7"
+      },
+      "stopped_reason": null,
+      "cleanup": {
+        "before_wait_processes": [],
+        "errors": [],
+        "purpose": "owned resource cleanup only; never host acknowledgement or no-post-ACK-write proof",
+        "remaining_pids": [],
+        "remaining_zombie_pids": [],
+        "signals": []
+      }
+    },
+    "replay": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-run",
+        "^TestCodexNativeQualificationReceiptReplay$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-timeout",
+        "180s",
+        "-json"
+      ],
+      "bound_seconds": 300,
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-sed-repair-skub6of9/repo",
+      "elapsed_seconds": 6.438309290999314,
+      "exit_code": 1,
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-sed-repair-lpmiovyy/replay.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-sed-repair-lpmiovyy/replay.stdout",
+        "sha256": "sha256:f3d723b8027bde92ab253d164c8a78e6c71de8d39319bea6fec4f9a459fa4303"
+      },
+      "stopped_reason": null,
+      "cleanup": {
+        "before_wait_processes": [],
+        "errors": [],
+        "purpose": "owned resource cleanup only; never host acknowledgement or no-post-ACK-write proof",
+        "remaining_pids": [],
+        "remaining_zombie_pids": [],
+        "signals": []
+      }
+    }
+  },
+  "source_mapping": {
+    "child_id": "01a0bb02-4cfd-7253-942a-a04883c8267b",
+    "child_events": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-sed-repair-lpmiovyy/capture/native-ordinary-705501961/home/.codex/sessions/2026/09/19/rollout-2026-09-19T20-51-25-01a0bb02-4cfd-7253-942a-a04883c8267b.jsonl",
+      "sha256": "sha256:1784d5080f1eae77402ebadfd631e6516240a5f3b138adc8da54734804ae786a"
+    },
+    "parent_events": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-sed-repair-lpmiovyy/capture/native-ordinary-705501961/parent-events.jsonl",
+      "sha256": "sha256:716870d47e285568aa77632a886076d1e0b8c89a1aa15370031409b652c35de0"
+    },
+    "diagnosis": "Actual post-edit uncached, plain and coverage checks passed. Later single read-only diff/status/date chain is unclassified and clears check credit. A separate parent expected-refusal output template is not recognized by projection; the recorded parent_substitution flag remains true. Independent review pending; no original or derived result is regraded."
+  },
+  "passed": false,
+  "phase_complete": false,
+  "requirements_completed": [],
+  "next": "Narrow prospective parser fixes with rejecting controls, independently reviewed focused normal/race run, then newly admitted actual trial."
+}
