@@ -831,6 +831,7 @@ func TestCodexNativeObservedOperationWrappers(t *testing.T) {
 }
 
 func TestCodexNativeObservedReadOnlyBatch(t *testing.T) {
+	t.Run("named-results", nativeObservedNamedReadOnlyBatch)
 	batch := `const results = await Promise.all([tools.exec_command({cmd:"sed -n '1,200p' clamp_test.go",workdir:"/fixture"}),tools.exec_command({cmd:"git status --short",workdir:"/fixture"})]); for (const r of results) text(r.output);`
 	for _, tc := range []struct {
 		name, input string
@@ -863,6 +864,148 @@ func TestCodexNativeObservedReadOnlyBatch(t *testing.T) {
 	}
 	if _, ok := nativeCodeModeCommands(`const results=await Promise.all([`+strings.Join(calls, ",")+`]); for (const r of results) text(r.output);`, "/fixture"); ok {
 		t.Fatal("unbounded batch accepted")
+	}
+}
+
+func nativeObservedNamedReadOnlyBatch(t *testing.T) {
+	inspection := `const [status, source, tests] = await Promise.all([tools.exec_command({cmd:"git status --short",workdir:"/fixture"}),tools.exec_command({cmd:"sed -n '1,200p' clamp.go",workdir:"/fixture"}),tools.exec_command({cmd:"sed -n '1,200p' clamp_test.go",workdir:"/fixture"})]); text(JSON.stringify({status,source,tests}));`
+	freshness := `const [diff, status, freshness] = await Promise.all([tools.exec_command({cmd:"git diff -- clamp.go",workdir:"/fixture"}),tools.exec_command({cmd:"git status --short",workdir:"/fixture"}),tools.exec_command({cmd:"date -u +%Y-%m-%dT%H:%M:%SZ",workdir:"/fixture"})]); text(JSON.stringify({diff,status,freshness}));`
+	for _, tc := range []struct {
+		name, input string
+		want        bool
+	}{
+		{"inspection", inspection, true},
+		{"freshness", freshness, true},
+		{"single", `const [status] = await Promise.all([tools.exec_command({cmd:"git status --short",workdir:"/fixture"})]); text(JSON.stringify({status}));`, true},
+		{"omitted-field", strings.Replace(inspection, "{status,source,tests}", "{status,source}", 1), false},
+		{"duplicate-field", strings.Replace(inspection, "{status,source,tests}", "{status,source,source}", 1), false},
+		{"reordered-fields", strings.Replace(inspection, "{status,source,tests}", "{source,status,tests}", 1), false},
+		{"duplicate-binding", strings.ReplaceAll(inspection, "tests", "source"), false},
+		{"too-few-bindings", strings.Replace(strings.Replace(inspection, "[status, source, tests]", "[status, source]", 1), "{status,source,tests}", "{status,source}", 1), false},
+		{"too-many-bindings", strings.Replace(strings.Replace(inspection, "[status, source, tests]", "[status, source, tests, extra]", 1), "{status,source,tests}", "{status,source,tests,extra}", 1), false},
+		{"default", strings.Replace(inspection, "[status,", "[status = mutate(),", 1), false},
+		{"rest", strings.Replace(inspection, "source, tests]", "source, ...tests]", 1), false},
+		{"hole", strings.Replace(inspection, "status, source, tests]", "status, , tests]", 1), false},
+		{"alias", strings.Replace(inspection, "{status,source,tests}", "{status:source,source,tests}", 1), false},
+		{"computed-key", strings.Replace(inspection, "{status,source,tests}", "{[status]:status,source,tests}", 1), false},
+		{"spread-key", strings.Replace(inspection, "{status,source,tests}", "{...status,source,tests}", 1), false},
+		{"transformed-value", strings.Replace(inspection, "{status,source,tests}", "{status:status.output,source,tests}", 1), false},
+		{"json-replacer", strings.Replace(inspection, "{status,source,tests}", "{status,source,tests},mutate", 1), false},
+		{"extra-statement", inspection + `mutate();`, false},
+		{"mutated-binding", strings.Replace(inspection, "text(JSON", "status.exit_code=0; text(JSON", 1), false},
+		{"unawaited", strings.Replace(inspection, "await Promise", "Promise", 1), false},
+		{"settled", strings.Replace(inspection, "Promise.all(", "Promise.allSettled(", 1), false},
+		{"spread-call", strings.Replace(inspection, "[tools.exec_command", "[...tools.exec_command", 1), false},
+		{"dynamic-command", strings.Replace(inspection, `"git status --short"`, "command", 1), false},
+		{"write", strings.Replace(inspection, "git status --short", "gofmt -w clamp.go", 1), false},
+		{"test", strings.Replace(inspection, "git status --short", "go test ./... -json -count=1", 1), false},
+		{"coverage", strings.Replace(inspection, "git status --short", "go test -cover ./...", 1), false},
+		{"shell-effect", strings.Replace(inspection, "git status --short", "git status --short; touch clamp.go", 1), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, ok := nativeCodeModeCommands(tc.input, "/fixture")
+			if ok != tc.want {
+				t.Fatalf("named batch accepted=%v", ok)
+			}
+		})
+	}
+	for _, name := range []string{"text", "JSON", "tools", "Promise", "await", "null", "const"} {
+		t.Run("shadow-"+name, func(t *testing.T) {
+			input := strings.ReplaceAll(inspection, "source", name)
+			if _, ok := nativeCodeModeCommands(input, "/fixture"); ok {
+				t.Fatal("shadowed execution/printing name accepted")
+			}
+		})
+	}
+	for _, size := range []int{64, 65} {
+		names, calls := make([]string, size), make([]string, size)
+		for index := range names {
+			names[index] = "result" + strconv.Itoa(index)
+			calls[index] = `tools.exec_command({cmd:"git status --short",workdir:"/fixture"})`
+		}
+		input := "const [" + strings.Join(names, ",") + "] = await Promise.all([" + strings.Join(calls, ",") + "]); text(JSON.stringify({" + strings.Join(names, ",") + "}));"
+		if commands, ok := nativeCodeModeCommands(input, "/fixture"); ok != (size == 64) || (ok && len(commands) != size) {
+			t.Fatalf("named bound size=%d accepted=%v count=%d", size, ok, len(commands))
+		}
+	}
+	for _, input := range []string{inspection, freshness} {
+		for _, mode := range []string{"valid", "wrong_thread", "wrong_turn", "wrong_cwd", "wrong_command", "wrong_output", "wrong_output_turn", "duplicate_call", "duplicate_event", "duplicate_output", "missing_event", "missing_output", "interleaved_call", "incomplete_output", "invocation_cwd"} {
+			t.Run(input+"/"+mode, func(t *testing.T) {
+				commands, ok := nativeCodeModeCommands(input, "/fixture")
+				if !ok || len(commands) != 3 {
+					t.Fatal("observed named batch rejected")
+				}
+				r := codexNativeLiveReceipt{ChildID: "child", BoundHostSessionID: "parent", FixtureRoot: "/fixture", Caste: "builder"}
+				var raw []byte
+				add := func(v any) { b, _ := json.Marshal(v); raw = append(raw, append(b, '\n')...) }
+				add(map[string]any{"type": "session_meta", "payload": map[string]any{"id": "child", "parent_thread_id": "parent", "cwd": "/fixture", "agent_role": "aether-builder"}})
+				add(map[string]any{"type": "event_msg", "payload": map[string]any{"thread_id": "child", "turn_id": "turn"}})
+				selected := input
+				if mode == "invocation_cwd" {
+					selected = strings.Replace(input, "/fixture", "/other", 1)
+				}
+				call := map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call", "name": "exec", "call_id": "batch", "input": selected, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}}
+				add(call)
+				if mode == "duplicate_call" {
+					add(call)
+				}
+				if mode == "interleaved_call" {
+					add(map[string]any{"type": "response_item", "payload": map[string]any{"type": "function_call", "name": "send_message", "call_id": "other"}})
+				}
+				for index, command := range commands {
+					if mode == "missing_event" && index == 1 {
+						continue
+					}
+					thread, turn, cwd, cmd := "child", "turn", command.Cwd, command.Command
+					if index == 1 {
+						switch mode {
+						case "wrong_thread":
+							thread = "foreign"
+						case "wrong_turn":
+							turn = "foreign"
+						case "wrong_cwd":
+							cwd = "/other"
+						case "wrong_command":
+							cmd = "cat go.mod"
+						}
+					}
+					event := map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": thread, "turn_id": turn, "item": map[string]any{"type": "CommandExecution", "id": "event" + strconv.Itoa(index), "status": "completed", "command": []string{"/bin/zsh", "-lc", cmd}, "cwd": cwd, "exit_code": 0, "aggregated_output": "actual inspection output"}}}
+					add(event)
+					if mode == "duplicate_event" && index == 1 {
+						add(event)
+					}
+				}
+				id, turn, header := "batch", "turn", "Script completed\n"
+				switch mode {
+				case "wrong_output":
+					id = "other"
+				case "wrong_output_turn":
+					turn = "other"
+				case "incomplete_output":
+					header = "Script running with cell ID unfinished\n"
+				}
+				fields := []string{"status", "source", "tests"}
+				if input == freshness {
+					fields = []string{"diff", "status", "freshness"}
+				}
+				values := map[string]any{}
+				for _, field := range fields {
+					values[field] = map[string]any{"exit_code": 0, "output": "actual inspection output"}
+				}
+				printed, _ := json.Marshal(values)
+				result := map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call_output", "call_id": id, "output": []any{map[string]any{"type": "input_text", "text": header}, map[string]any{"type": "input_text", "text": string(printed)}}, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": turn}}}
+				if mode != "missing_output" {
+					add(result)
+				}
+				if mode == "duplicate_output" {
+					add(result)
+				}
+				nativeInspectChildEvents(&r, raw)
+				if (len(r.ChildUnclassified) == 0) != (mode == "valid") || r.ChecksPassed || r.ChildEditObserved {
+					t.Fatalf("mode=%s unclassified=%v checks=%v edits=%v", mode, r.ChildUnclassified, r.ChecksPassed, r.ChildEditObserved)
+				}
+			})
+		}
 	}
 }
 

@@ -3156,6 +3156,9 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 						continue
 					}
 					commands, ok := nativeCodeModeCommands(p.Input, r.FixtureRoot)
+					if ok && regexp.MustCompile(`^\s*const\s+\[`).MatchString(p.Input) {
+						ok = nativeCorroboratedBatch(raw, r.ChildID, p.CallID, commands)
+					}
 					if !ok {
 						r.ChildUnclassified = append(r.ChildUnclassified, "unclassified child code-mode: "+p.Input)
 						r.ChecksPassed = false
@@ -4698,8 +4701,11 @@ func (p *nativeCommandLiteral) quoted() (string, bool) {
 // additionally subject to the caller's path/source and actual event checks.
 func nativeReadOnlyBatchCommands(input, cwd string) ([]nativeRecordedShellCommand, bool) {
 	array := ""
+	namedCount := 0
 	indexed := regexp.MustCompile(`^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+Promise\.allSettled\(\[([\s\S]*)\]\);\s*for\s*\(let\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*0;\s*([A-Za-z_][A-Za-z0-9_]*)\s*<\s*([A-Za-z_][A-Za-z0-9_]*)\.length;\s*([A-Za-z_][A-Za-z0-9_]*)\+\+\)\s*text\(\{\s*(?:index\s*:\s*)?([A-Za-z_][A-Za-z0-9_]*),\s*\.\.\.([A-Za-z_][A-Za-z0-9_]*)\[([A-Za-z_][A-Za-z0-9_]*)\]\s*\}\);\s*$`)
 	projected := regexp.MustCompile(`^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+Promise\.all\(\[([\s\S]*)\]\);\s*for\s*\(const\s+([A-Za-z_][A-Za-z0-9_]*)\s+of\s+([A-Za-z_][A-Za-z0-9_]*)\)\s*([\s\S]*)$`)
+	identifiers := `\s*[A-Za-z_][A-Za-z0-9_]*(?:\s*,\s*[A-Za-z_][A-Za-z0-9_]*)*\s*`
+	named := regexp.MustCompile(`^\s*const\s+\[(` + identifiers + `)\]\s*=\s*await\s+Promise\.all\(\[([\s\S]*)\]\);\s*text\(JSON\.stringify\(\{(` + identifiers + `)\}\)\);\s*$`)
 	if m := indexed.FindStringSubmatch(input); len(m) == 10 && m[1] == m[5] && m[1] == m[8] && m[3] == m[4] && m[3] == m[6] && m[3] == m[7] && m[3] == m[9] {
 		array = m[2]
 	} else if m := projected.FindStringSubmatch(input); len(m) == 6 && m[1] == m[4] && m[1] != m[3] {
@@ -4709,6 +4715,24 @@ func nativeReadOnlyBatchCommands(input, cwd string) ([]nativeRecordedShellComman
 			return nil, false
 		}
 		array = m[2]
+	} else if m := named.FindStringSubmatch(input); len(m) == 4 {
+		// Bind each untouched result to one unique identifier and print exactly
+		// those shorthand fields in order. No aliases, expressions or shadowed
+		// execution/printing globals can enter this syntax-only decoder.
+		reserved := " JSON Promise tools text await break case catch class const continue debugger default delete do else enum export extends false finally for function if import in instanceof let new null return super switch this throw true try typeof var void while with yield implements interface package private protected public static eval arguments "
+		bindings, fields := strings.Split(m[1], ","), strings.Split(m[3], ",")
+		if len(bindings) != len(fields) || len(bindings) > 64 {
+			return nil, false
+		}
+		seen := map[string]bool{}
+		for index, binding := range bindings {
+			name := strings.TrimSpace(binding)
+			if seen[name] || strings.Contains(reserved, " "+name+" ") || name != strings.TrimSpace(fields[index]) {
+				return nil, false
+			}
+			seen[name] = true
+		}
+		array, namedCount = m[2], len(bindings)
 	} else {
 		return nil, false
 	}
@@ -4730,7 +4754,7 @@ func nativeReadOnlyBatchCommands(input, cwd string) ([]nativeRecordedShellComman
 		}
 		remaining = strings.TrimSpace(remaining[part[1]:])
 	}
-	return commands, len(commands) > 0
+	return commands, len(commands) > 0 && (namedCount == 0 || namedCount == len(commands))
 }
 
 func nativeReadOnlyBatchCommand(command string) bool {
