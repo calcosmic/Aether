@@ -376,7 +376,7 @@ func TestCodexNativeGapParentCoordination(t *testing.T) {
 	for _, wrapper := range []string{"direct", "output-projection", "json-result", "output-exit", "all-output", "all-json"} {
 		modes := []string{"valid", "file_uri", "actual_command_failure", "missing", "wrong_thread", "wrong_turn", "wrong_cwd", "wrong_argv", "reused_event", "duplicate_call", "missing_output", "wrong_output_call", "wrong_output_turn", "failed_script"}
 		if wrapper == "output-exit" {
-			modes = append(modes, "legacy_single_block", "missing_exit_block", "reordered_blocks", "forged_exit", "forged_output", "extra_block")
+			modes = append(modes, "legacy_single_block", "missing_exit_block", "reordered_blocks", "forged_exit", "forged_output", "extra_block", "wrong_event_output_field")
 		}
 		for _, mode := range modes {
 			t.Run(wrapper+"/"+mode, func(t *testing.T) {
@@ -421,7 +421,12 @@ func TestCodexNativeGapParentCoordination(t *testing.T) {
 				if mode == "actual_command_failure" {
 					status, exit = "failed", 1
 				}
-				event := map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": thread, "turn_id": turn, "item": map[string]any{"type": "CommandExecution", "id": "shell", "status": status, "cwd": cwd, "command": []string{"/bin/sh", "-c", command}, "exit_code": exit, "output": "actual output text"}}}
+				event := map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": thread, "turn_id": turn, "item": map[string]any{"type": "CommandExecution", "id": "shell", "status": status, "cwd": cwd, "command": []string{"/bin/sh", "-c", command}, "exit_code": exit, "aggregated_output": "actual output text"}}}
+				if mode == "wrong_event_output_field" {
+					item := event["payload"].(map[string]any)["item"].(map[string]any)
+					delete(item, "aggregated_output")
+					item["output"] = "actual output text"
+				}
 				if mode != "missing" {
 					add(event)
 				}
