@@ -631,7 +631,7 @@ func TestCodexNativeGapRecordedFailedRefusal(t *testing.T) {
 
 func nativeGapUncachedCodeModeResultWithoutNestedEvent(t *testing.T) {
 	const testOutput = "{\"Action\":\"run\",\"Package\":\"example.invalid/nativefixture\",\"Test\":\"TestClamp\"}\n{\"Action\":\"pass\",\"Package\":\"example.invalid/nativefixture\",\"Test\":\"TestClamp\"}\n{\"Action\":\"pass\",\"Package\":\"example.invalid/nativefixture\"}\n"
-	for _, mode := range []string{"valid", "projected", "plain_check", "wrong_child", "wrong_turn", "duplicate_call", "duplicate_output", "missing_exit", "failure", "running", "interrupted", "not_test_json", "later_edit"} {
+	for _, mode := range []string{"valid", "projected", "projected_eof", "plain_check", "wrong_child", "wrong_turn", "duplicate_call", "duplicate_output", "missing_exit", "failure", "running", "interrupted", "not_test_json", "later_edit"} {
 		t.Run(mode, func(t *testing.T) {
 			r := codexNativeLiveReceipt{ChildID: "child", BoundHostSessionID: "parent", FixtureRoot: "/fixture", Caste: "builder"}
 			var raw []byte
@@ -646,8 +646,11 @@ func nativeGapUncachedCodeModeResultWithoutNestedEvent(t *testing.T) {
 			if mode == "plain_check" {
 				command = "go test ./..."
 			}
-			if mode == "projected" {
+			if mode == "projected" || mode == "projected_eof" {
 				print = "text(r.output);"
+				if mode == "projected_eof" {
+					print = "text(r.output)\n"
+				}
 			}
 			call := map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call", "name": "exec", "call_id": "check", "input": "const r = await tools.exec_command({cmd:" + strconv.Quote(command) + ",workdir:\"/fixture\"}); " + print, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}}
 			add(call)
@@ -801,12 +804,22 @@ func TestCodexNativeObservedOperationWrappers(t *testing.T) {
 		want         bool
 	}{
 		{"full-json", `text(JSON.stringify(r));`, true},
+		{"full-json-eof", "text(JSON.stringify(r))\n", true},
+		{"full-result-eof", "text(r)\n", true},
+		{"output-eof", "text(r.output)\n", true},
 		{"output-exit", "text(r.output); text(`\\nEXIT_CODE=${r.exit_code}`);", true},
+		{"output-exit-eof", "text(r.output); text(`\\nEXIT_CODE=${r.exit_code}`)\n", true},
 		{"other-result", `text(JSON.stringify(other));`, false},
 		{"json-replacer", `text(JSON.stringify(r, mutate));`, false},
 		{"json-property", `text(JSON.stringify(r.output));`, false},
 		{"rewritten-result", `r.exit_code=0; text(JSON.stringify(r));`, false},
 		{"extra-side-effect", `text(JSON.stringify(r)); mutate();`, false},
+		{"eof-side-effect", "text(JSON.stringify(r))\nmutate();", false},
+		{"eof-output-side-effect", "text(r.output)\nmutate();", false},
+		{"eof-full-result-side-effect", "text(r)\nmutate();", false},
+		{"eof-output-transform", "text(r.output.trim())\n", false},
+		{"eof-other-result", "text(JSON.stringify(other))\n", false},
+		{"missing-output-exit-separator", "text(r.output)\ntext(`\\nEXIT_CODE=${r.exit_code}`)", false},
 		{"wrong-exit-variable", "text(r.output); text(`\\nEXIT_CODE=${other.exit_code}`);", false},
 		{"computed-exit", "text(r.output); text(`\\nEXIT_CODE=${r.exit_code || 0}`);", false},
 		{"fake-exit", "text(r.output); text(`\\nEXIT_CODE=0`);", false},
@@ -823,11 +836,35 @@ func TestCodexNativeObservedOperationWrappers(t *testing.T) {
 		strings.Replace(prefix, `cmd:`, `cmd:"touch clamp.go",cmd:`, 1) + `text(JSON.stringify(r));`,
 		strings.Replace(prefix, `await `, ``, 1) + `text(JSON.stringify(r));`,
 		`const JSON={stringify:mutate}; ` + prefix + `text(JSON.stringify(r));`,
+		strings.TrimSuffix(strings.TrimSpace(prefix), ";") + "\ntext(r.output)",
+		strings.TrimSuffix(strings.TrimSpace(prefix), ";") + "\ntext(JSON.stringify(r))",
+		strings.TrimSuffix(strings.TrimSpace(prefix), ";") + "text(r)",
 	} {
 		if _, ok := nativeCodeModeCommands(bad, "/fixture"); ok {
 			t.Fatalf("dynamic/side-effect wrapper accepted: %s", bad)
 		}
 	}
+	t.Run("literal-eof-sequence-boundary", func(t *testing.T) {
+		const direct = `text(await tools.exec_command({cmd:"git status --short",workdir:"/fixture"}))`
+		for _, tc := range []struct {
+			input string
+			want  int
+		}{
+			{direct + "\n", 1},
+			{direct + ";\n" + direct + "\n", 2},
+			{direct + "\n" + direct, 0},
+			{direct + direct, 0},
+			{direct + "\nmutate();", 0},
+		} {
+			commands, ok := nativeCodeModeCommands(tc.input, "/fixture")
+			if ok != (tc.want > 0) || (ok && len(commands) != tc.want) {
+				t.Fatalf("EOF sequence accepted=%v commands=%v input=%s", ok, commands, tc.input)
+			}
+		}
+		if !nativeCodeModePlainOutput(prefix+"text(r.output)\n", "/fixture") {
+			t.Fatal("EOF projection lost its independent event requirement")
+		}
+	})
 }
 
 func TestCodexNativeObservedReadOnlyBatch(t *testing.T) {

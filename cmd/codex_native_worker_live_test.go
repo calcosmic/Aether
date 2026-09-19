@@ -1467,13 +1467,13 @@ func nativeCodeModeCommand(input string) (string, string, bool) {
 	}
 	// Parse only one awaited command and print its untouched returned object.
 	// No evaluation, arbitrary JS, loops, second commands or manufactured output.
-	pattern := regexp.MustCompile(`^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+tools\.exec_command\((\{[\s\S]*\})\);\s*text\(([A-Za-z_][A-Za-z0-9_]*)\);\s*$`)
+	pattern := regexp.MustCompile(`^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+tools\.exec_command\((\{[\s\S]*\})\);\s*text\(([A-Za-z_][A-Za-z0-9_]*)\);?\s*$`)
 	match := pattern.FindStringSubmatch(input)
 	var object string
 	if len(match) == 4 && match[1] == match[3] {
 		object = match[2]
 	} else {
-		match = regexp.MustCompile(`^\s*text\(await\s+tools\.exec_command\((\{[\s\S]*\})\)\);\s*$`).FindStringSubmatch(input)
+		match = regexp.MustCompile(`^\s*text\(await\s+tools\.exec_command\((\{[\s\S]*\})\)\);?\s*$`).FindStringSubmatch(input)
 		if len(match) != 2 {
 			return "", "", false
 		}
@@ -4467,9 +4467,10 @@ func nativeCodeModeCommands(input, defaultCwd string) ([]nativeRecordedShellComm
 	}
 	// Only literal command objects and direct printing of their untouched result.
 	// Multiple calls are allowed only as a full sequence of this same grammar.
+	// A missing final semicolon is admitted only at EOF, never between calls.
 	var result []nativeRecordedShellCommand
-	direct := regexp.MustCompile(`^\s*text\(await\s+tools\.exec_command\((\{[\s\S]*?\})\)\);\s*`)
-	assigned := regexp.MustCompile(`^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+tools\.exec_command\((\{[\s\S]*?\})\);\s*text\(([A-Za-z_][A-Za-z0-9_]*)\);\s*`)
+	direct := regexp.MustCompile(`^\s*text\(await\s+tools\.exec_command\((\{[\s\S]*?\})\)\)(?:;\s*|\s*$)`)
+	assigned := regexp.MustCompile(`^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+tools\.exec_command\((\{[\s\S]*?\})\);\s*text\(([A-Za-z_][A-Za-z0-9_]*)\)(?:;\s*|\s*$)`)
 	for strings.TrimSpace(input) != "" {
 		object := ""
 		end := 0
@@ -4506,11 +4507,11 @@ func nativeCodeModeOutputProjection(input, defaultCwd string) (nativeRecordedShe
 		return nativeRecordedShellCommand{}, false
 	}
 	name := regexp.QuoteMeta(match[1])
-	output := `text\(` + name + `\.output\);`
-	full := `text\(JSON\.stringify\(` + name + `\)\);`
+	output := `text\(` + name + `\.output\)`
+	full := `text\(JSON\.stringify\(` + name + `\)\)`
 	// The exact observed exit annotation is presentation, never exit proof.
 	exit := regexp.QuoteMeta("`\\nEXIT_CODE=${" + match[1] + ".exit_code}`")
-	print := regexp.MustCompile(`^\s*(?:` + output + `(?:\s*text\(` + exit + `\);)?|` + full + `)\s*$`)
+	print := regexp.MustCompile(`^\s*(?:` + output + `(?:;\s*text\(` + exit + `\))?|` + full + `);?\s*$`)
 	if !print.MatchString(match[3]) {
 		return nativeRecordedShellCommand{}, false
 	}
@@ -4519,7 +4520,7 @@ func nativeCodeModeOutputProjection(input, defaultCwd string) (nativeRecordedShe
 
 func nativeCodeModePlainOutput(input, defaultCwd string) bool {
 	_, ok := nativeCodeModeOutputProjection(input, defaultCwd)
-	return ok && regexp.MustCompile(`text\([A-Za-z_][A-Za-z0-9_]*\.output\);\s*$`).MatchString(input)
+	return ok && regexp.MustCompile(`text\([A-Za-z_][A-Za-z0-9_]*\.output\);?\s*$`).MatchString(input)
 }
 
 // Decode only the small literal object accepted by this evidence contract.
