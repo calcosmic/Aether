@@ -869,6 +869,7 @@ func TestCodexNativeObservedOperationWrappers(t *testing.T) {
 
 func TestCodexNativeObservedReadOnlyBatch(t *testing.T) {
 	t.Run("named-results", nativeObservedNamedReadOnlyBatch)
+	t.Run("untouched-for-of-results", nativeObservedFullResultReadOnlyBatch)
 	batch := `const results = await Promise.all([tools.exec_command({cmd:"sed -n '1,200p' clamp_test.go",workdir:"/fixture"}),tools.exec_command({cmd:"git status --short",workdir:"/fixture"})]); for (const r of results) text(r.output);`
 	for _, tc := range []struct {
 		name, input string
@@ -901,6 +902,174 @@ func TestCodexNativeObservedReadOnlyBatch(t *testing.T) {
 	}
 	if _, ok := nativeCodeModeCommands(`const results=await Promise.all([`+strings.Join(calls, ",")+`]); for (const r of results) text(r.output);`, "/fixture"); ok {
 		t.Fatal("unbounded batch accepted")
+	}
+}
+
+func nativeObservedFullResultReadOnlyBatch(t *testing.T) {
+	const input = `const results = await Promise.all([tools.exec_command({cmd:"rg --files -g '!*vendor*'",workdir:"/fixture"}),tools.exec_command({cmd:"git status --short",workdir:"/fixture"})]); for (const r of results) text(r);`
+	for _, tc := range []struct {
+		name, input string
+		want        bool
+	}{
+		{"untouched", input, true},
+		{"renamed-identifiers", strings.Replace(strings.Replace(strings.ReplaceAll(input, "results", "items"), "const r of", "const item of", 1), "text(r)", "text(item)", 1), true},
+		{"mismatched-alias-renaming", strings.ReplaceAll(strings.ReplaceAll(input, "results", "items"), " r", " item"), false},
+		{"wrong-array", strings.Replace(input, "of results", "of other", 1), false},
+		{"wrong-result", strings.Replace(input, "text(r)", "text(other)", 1), false},
+		{"same-alias", strings.ReplaceAll(input, "results", "r"), false},
+		{"prototype", strings.Replace(input, "text(r)", "text(r.__proto__)", 1), false},
+		{"constructor", strings.Replace(input, "text(r)", "text(r.constructor())", 1), false},
+		{"extra-output", input + "text(results);", false},
+		{"effect", strings.Replace(input, "text(r);", "{ text(r); mutate(); }", 1), false},
+		{"dynamic-binding", strings.Replace(input, "const results", "const [results]", 1), false},
+		{"dynamic-call", strings.Replace(input, `"git status --short"`, `command`, 1), false},
+		{"test", strings.Replace(input, "git status --short", "go test ./... -json -count=1", 1), false},
+		{"write", strings.Replace(input, "git status --short", "gofmt -w clamp.go", 1), false},
+		{"unawaited", strings.Replace(input, "await Promise", "Promise", 1), false},
+		{"extra-statement", input + "mutate();", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, ok := nativeCodeModeCommands(tc.input, "/fixture")
+			if ok != tc.want {
+				t.Fatalf("accepted=%v input=%s", ok, tc.input)
+			}
+		})
+	}
+	for _, name := range []string{"text", "tools", "Promise", "JSON", "await", "const"} {
+		for _, input := range []string{strings.ReplaceAll(input, "results", name), strings.Replace(strings.Replace(input, "const r of", "const "+name+" of", 1), "text(r)", "text("+name+")", 1)} {
+			if _, ok := nativeCodeModeCommands(input, "/fixture"); ok {
+				t.Fatalf("shadowed batch binding accepted: %s", input)
+			}
+		}
+	}
+	for _, size := range []int{64, 65} {
+		calls := make([]string, size)
+		for i := range calls {
+			calls[i] = `tools.exec_command({cmd:"git status --short",workdir:"/fixture"})`
+		}
+		if _, ok := nativeCodeModeCommands(`const results=await Promise.all([`+strings.Join(calls, ",")+`]); for(const r of results) text(r);`, "/fixture"); ok != (size == 64) {
+			t.Fatalf("batch bound %d accepted=%v", size, ok)
+		}
+	}
+	for _, batch := range []string{input,
+		`const results = await Promise.all([tools.exec_command({cmd:"sed -n '1,240p' clamp.go",workdir:"/fixture"}),tools.exec_command({cmd:"sed -n '1,260p' clamp_test.go",workdir:"/fixture"}),tools.exec_command({cmd:"sed -n '1,160p' go.mod",workdir:"/fixture"})]); for (const r of results) text(r);`,
+		`const results = await Promise.all([tools.exec_command({cmd:"git diff --check",workdir:"/fixture"}),tools.exec_command({cmd:"git diff -- clamp.go",workdir:"/fixture"}),tools.exec_command({cmd:"git status --short",workdir:"/fixture"}),tools.exec_command({cmd:"date -u +%Y-%m-%dT%H:%M:%SZ",workdir:"/fixture"})]); for (const r of results) text(r);`,
+	} {
+		for _, mode := range []string{"valid", "no-prior", "wrong-source-parent", "wrong-thread", "wrong-turn", "wrong-cwd", "invocation-cwd", "wrong-command", "missing-event", "duplicate-event", "duplicate-call", "duplicate-output", "missing-output", "wrong-output-call", "wrong-output-turn", "incomplete-output", "raw-output-mismatch", "raw-exit-mismatch", "extra-output", "truncated-output", "duplicate-command", "reordered-output", "running-result", "interleaved-call", "later-failed-check", "later-edit"} {
+			if batch != input && mode != "valid" {
+				continue
+			}
+			t.Run("raw/"+strconv.Itoa(len(batch))+"/"+mode, func(t *testing.T) {
+				r := codexNativeLiveReceipt{ChildID: "child", BoundHostSessionID: "parent", FixtureRoot: "/fixture", Caste: "builder"}
+				var raw []byte
+				add := func(v any) { b, _ := json.Marshal(v); raw = append(raw, append(b, '\n')...) }
+				parent := "parent"
+				if mode == "wrong-source-parent" {
+					parent = "foreign"
+				}
+				add(map[string]any{"type": "session_meta", "payload": map[string]any{"id": "child", "parent_thread_id": parent, "cwd": "/fixture", "agent_role": "aether-builder"}})
+				if mode != "no-prior" {
+					raw = append(raw, nativeEvidenceEvent(t, "item_completed", "child", map[string]any{"type": "CommandExecution", "status": "completed", "id": "uncached", "command": []string{"/bin/sh", "-c", "go test ./... -json -count=1"}, "cwd": "/fixture", "exit_code": 0, "aggregated_output": "{\"Action\":\"run\",\"Package\":\"example.invalid/nativefixture\",\"Test\":\"TestClamp\"}\n{\"Action\":\"pass\",\"Package\":\"example.invalid/nativefixture\",\"Test\":\"TestClamp\"}\n{\"Action\":\"pass\",\"Package\":\"example.invalid/nativefixture\"}\n"})...)
+				}
+				add(map[string]any{"type": "event_msg", "payload": map[string]any{"thread_id": "child", "turn_id": "turn"}})
+				selected := batch
+				if mode == "invocation-cwd" {
+					selected = strings.Replace(batch, "/fixture", "/other", 1)
+				}
+				if mode == "duplicate-command" {
+					selected = strings.Replace(batch, "rg --files -g '!*vendor*'", "git status --short", 1)
+				}
+				call := map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call", "name": "exec", "call_id": "batch", "input": selected, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}}
+				add(call)
+				if mode == "duplicate-call" {
+					add(call)
+				}
+				if mode == "interleaved-call" {
+					add(map[string]any{"type": "response_item", "payload": map[string]any{"type": "function_call", "name": "send_message", "call_id": "other"}})
+				}
+				commands, _ := nativeCodeModeCommands(batch, "/fixture")
+				// Deliberately finish events out of array order, as in the real capture.
+				for index := len(commands) - 1; index >= 0; index-- {
+					if index == 0 && mode == "missing-event" {
+						continue
+					}
+					thread, turn, cwd, command := "child", "turn", "/fixture", commands[index].Command
+					if index == 0 {
+						switch mode {
+						case "wrong-thread":
+							thread = "foreign"
+						case "wrong-turn":
+							turn = "foreign"
+						case "wrong-cwd":
+							cwd = "/other"
+						case "wrong-command":
+							command = "cat go.mod"
+						}
+					}
+					event := map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": thread, "turn_id": turn, "item": map[string]any{"type": "CommandExecution", "id": "event" + strconv.Itoa(index), "status": "completed", "command": []string{"/bin/zsh", "-lc", command}, "cwd": cwd, "exit_code": 0, "aggregated_output": "inspection" + strconv.Itoa(index)}}}
+					add(event)
+					if index == 0 && mode == "duplicate-event" {
+						add(event)
+					}
+				}
+				id, turn, header := "batch", "turn", "Script completed\n"
+				if mode == "wrong-output-call" {
+					id = "other"
+				}
+				if mode == "wrong-output-turn" {
+					turn = "other"
+				}
+				if mode == "incomplete-output" {
+					header = "Script running with cell ID pending\n"
+				}
+				parts := []any{map[string]any{"type": "input_text", "text": header}}
+				for index := range commands {
+					body := map[string]any{"chunk_id": "actual-shape", "wall_time_seconds": 0.01, "original_token_count": 1, "exit_code": 0, "output": "inspection" + strconv.Itoa(index)}
+					if index == 0 {
+						switch mode {
+						case "raw-output-mismatch":
+							body["output"] = "forged"
+						case "raw-exit-mismatch":
+							body["exit_code"] = 1
+						case "running-result":
+							body["session_id"] = 123
+						}
+					}
+					encoded, _ := json.Marshal(body)
+					parts = append(parts, map[string]any{"type": "input_text", "text": string(encoded)})
+				}
+				if mode == "truncated-output" {
+					parts = parts[:len(parts)-1]
+				}
+				if mode == "extra-output" {
+					parts = append(parts, parts[1])
+				}
+				if mode == "reordered-output" {
+					parts[1], parts[2] = parts[2], parts[1]
+				}
+				output := map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call_output", "call_id": id, "output": parts, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": turn}}}
+				if mode != "missing-output" {
+					add(output)
+				}
+				if mode == "duplicate-output" {
+					add(output)
+				}
+				if mode == "later-failed-check" {
+					raw = append(raw, nativeEvidenceEvent(t, "item_completed", "child", map[string]any{"type": "CommandExecution", "status": "completed", "id": "failed", "command": []string{"/bin/sh", "-c", "go test ./..."}, "cwd": "/fixture", "exit_code": 1, "aggregated_output": "FAIL"})...)
+				}
+				if mode == "later-edit" {
+					raw = append(raw, nativeEvidenceEvent(t, "item_completed", "child", map[string]any{"type": "FileChange", "status": "completed", "changes": map[string]any{}})...)
+				}
+				nativeInspectChildEvents(&r, raw)
+				if r.ChecksPassed != (mode == "valid") || r.ChildEditObserved {
+					t.Fatalf("mode=%s checks=%v edit=%v unclassified=%v", mode, r.ChecksPassed, r.ChildEditObserved, r.ChildUnclassified)
+				}
+				classified := mode == "valid" || mode == "no-prior" || mode == "later-failed-check" || mode == "later-edit" || mode == "wrong-source-parent"
+				if (len(r.ChildUnclassified) == 0) != classified {
+					t.Fatalf("mode=%s classification=%v", mode, r.ChildUnclassified)
+				}
+			})
+		}
 	}
 }
 
@@ -1060,6 +1229,28 @@ func TestCodexNativeObservedFixtureInspections(t *testing.T) {
 		{`git diff --check`, true, true},
 		{`rg --files`, true, true},
 		{`rg --files -g '!*.sum'`, true, true},
+		{`rg --files -g '!*vendor*'`, true, true},
+		{`rg --files -g "!temp-?.go"`, true, true},
+		{`rg --files -g '!one' -g '!two' -g '!three' -g '!four' -g '!five' -g '!six'`, true, true},
+		{`rg --files -g '!one' -g '!two' -g '!three' -g '!four' -g '!five' -g '!six' -g '!seven'`, false, false},
+		{`rg --files -g '!*vendor*' -g '!*vendor*'`, false, false},
+		{`rg --files -g '!*vendor*' --hidden`, false, false},
+		{`rg --files -g '!*vendor*' --follow`, false, false},
+		{`rg --files -g '!*vendor*' /other`, false, false},
+		{`rg --files -g '!*vendor*' -g '--pre'`, false, false},
+		{`rg --files -g !*vendor*`, false, false},
+		{`rg --files -g '!vendor'"*"`, false, false},
+		{`rg --files -g '!!vendor'`, false, false},
+		{`rg --files -g '!'`, false, false},
+		{`rg --files -g '!vendor/*'`, false, false},
+		{`rg --files -g '!{one,two}'`, false, false},
+		{`rg --files -g '![ab]'`, false, false},
+		{`rg --files -g '!$(touch clamp.go)'`, false, false},
+		{`rg --files -g '!*vendor*' > clamp.go`, false, false},
+		{`rg --files -g '!*vendor*'; touch clamp.go`, false, false},
+		{`rg --files -g '*vendor*'`, false, false},
+		{"rg --files -g '!" + strings.Repeat("a", 128) + "'", true, true},
+		{"rg --files -g '!" + strings.Repeat("a", 129) + "'", false, false},
 		{`rg --files -g '!*.sum' -g 'clamp.go'`, true, true},
 		{`rg --files -g '!*.sum' -g 'AGENTS.md' -g 'clamp.go' -g 'clamp_test.go' -g 'double.go' -g 'go.mod'`, true, true},
 		{`rg --files -g '!*.sum' -g 'AGENTS.md' -g 'clamp.go' -g 'clamp_test.go' -g 'double.go' -g 'double_test.go' -g 'go.mod'`, false, false},
@@ -1154,7 +1345,7 @@ func TestCodexNativeObservedFixtureInspections(t *testing.T) {
 
 func nativeObservedSemicolonInspection(t *testing.T) {
 	const chain = `sed -n '1,240p' clamp.go; sed -n '1,280p' clamp_test.go; git status --short`
-	for _, command := range []string{chain, `rg --files`, `rg --files -g '!*.sum'`, `rg --files /other`, `rg --files -g '!*.sum' /other`} {
+	for _, command := range []string{chain, `rg --files`, `rg --files -g '!*.sum'`, `rg --files -g '!*vendor*'`, `rg --files /other`, `rg --files -g '!*.sum' /other`} {
 		for _, mode := range []string{"valid", "invocation-cwd", "wrong-cwd", "wrong-thread", "wrong-turn", "missing-event", "duplicate-event", "split-events", "changed-command", "missing-output", "duplicate-output", "interleaved-call"} {
 			// Bare listing uses the pre-existing direct-command classifier;
 			// only its actual invocation/event workspace needs a new control.
