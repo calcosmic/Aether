@@ -1135,12 +1135,37 @@ func TestCodexNativeObservedReadOnlyBatch(t *testing.T) {
 }
 
 func nativeObservedFullResultReadOnlyBatch(t *testing.T) {
+	const each = `const results = await Promise.all([tools.exec_command({cmd:"git status --short",workdir:"/fixture"}),tools.exec_command({cmd:"sed -n '1,200p' clamp.go && sed -n '1,200p' clamp_test.go && sed -n '1,120p' go.mod",workdir:"/fixture"})]); results.forEach(text);`
 	const input = `const results = await Promise.all([tools.exec_command({cmd:"rg --files -g '!*vendor*'",workdir:"/fixture"}),tools.exec_command({cmd:"git status --short",workdir:"/fixture"})]); for (const r of results) text(r);`
 	for _, tc := range []struct {
 		name, input string
 		want        bool
 	}{
 		{"untouched", input, true},
+		{"foreach-composed-actual", each, true},
+		{"foreach-renamed", strings.ReplaceAll(each, "results", "items"), true},
+		{"forof-composed", strings.Replace(each, "results.forEach(text);", "for (const item of results) text(item);", 1), true},
+		{"foreach-wrong-alias", strings.Replace(each, "results.forEach", "other.forEach", 1), false},
+		{"foreach-write-member", strings.Replace(each, "git status --short", "gofmt -w clamp.go", 1), false},
+		{"foreach-test-member", strings.Replace(each, "git status --short", "go test ./... -json -count=1", 1), false},
+		{"foreach-mixed-chain-write", strings.Replace(each, "sed -n '1,120p' go.mod", "touch clamp.go", 1), false},
+		{"foreach-mixed-chain-test", strings.Replace(each, "sed -n '1,120p' go.mod", "go test ./... -json -count=1", 1), false},
+		{"foreach-chain-outside", strings.Replace(each, "clamp_test.go", "/other/clamp_test.go", 1), false},
+		{"foreach-parent-discovery", strings.Replace(each, "git status --short", "rg --files /other", 1), false},
+		{"foreach-callback-arrow", strings.Replace(each, "forEach(text)", "forEach(r => text(r))", 1), false},
+		{"foreach-callback-other", strings.Replace(each, "forEach(text)", "forEach(mutate)", 1), false},
+		{"foreach-callback-bind", strings.Replace(each, "forEach(text)", "forEach(text.bind(null))", 1), false},
+		{"foreach-extra-this", strings.Replace(each, "forEach(text)", "forEach(text, null)", 1), false},
+		{"foreach-computed-method", strings.Replace(each, ".forEach(text)", `["forEach"](text)`, 1), false},
+		{"foreach-prototype", strings.Replace(each, ".forEach(text)", ".__proto__.forEach(text)", 1), false},
+		{"foreach-mutation", strings.Replace(each, "results.forEach", "results.reverse(); results.forEach", 1), false},
+		{"foreach-extra-result", each + "text(results);", false},
+		{"foreach-extra-exec", each + `text(await tools.exec_command({cmd:"touch clamp.go",workdir:"/fixture"}));`, false},
+		{"foreach-dynamic", strings.Replace(each, `"git status --short"`, "command", 1), false},
+		{"foreach-reserved", strings.ReplaceAll(each, "results", "text"), false},
+
+		{"foreach-chain-eight", strings.Replace(each, "sed -n '1,200p' clamp.go && sed -n '1,200p' clamp_test.go && sed -n '1,120p' go.mod", strings.TrimSuffix(strings.Repeat("pwd && ", 8), " && "), 1), true},
+		{"foreach-chain-nine", strings.Replace(each, "sed -n '1,200p' clamp.go && sed -n '1,200p' clamp_test.go && sed -n '1,120p' go.mod", strings.TrimSuffix(strings.Repeat("pwd && ", 9), " && "), 1), false},
 		{"renamed-identifiers", strings.Replace(strings.Replace(strings.ReplaceAll(input, "results", "items"), "const r of", "const item of", 1), "text(r)", "text(item)", 1), true},
 		{"mismatched-alias-renaming", strings.ReplaceAll(strings.ReplaceAll(input, "results", "items"), " r", " item"), false},
 		{"wrong-array", strings.Replace(input, "of results", "of other", 1), false},
@@ -1179,13 +1204,19 @@ func nativeObservedFullResultReadOnlyBatch(t *testing.T) {
 		if _, ok := nativeCodeModeCommands(`const results=await Promise.all([`+strings.Join(calls, ",")+`]); for(const r of results) text(r);`, "/fixture"); ok != (size == 64) {
 			t.Fatalf("batch bound %d accepted=%v", size, ok)
 		}
+		if _, ok := nativeCodeModeCommands(`const results=await Promise.all([`+strings.Join(calls, ",")+`]); results.forEach(text);`, "/fixture"); ok != (size == 64) {
+			t.Fatalf("foreach batch bound %d accepted=%v", size, ok)
+		}
 	}
-	for _, batch := range []string{input,
+	for _, batch := range []string{input, each,
 		`const results = await Promise.all([tools.exec_command({cmd:"sed -n '1,240p' clamp.go",workdir:"/fixture"}),tools.exec_command({cmd:"sed -n '1,260p' clamp_test.go",workdir:"/fixture"}),tools.exec_command({cmd:"sed -n '1,160p' go.mod",workdir:"/fixture"})]); for (const r of results) text(r);`,
 		`const results = await Promise.all([tools.exec_command({cmd:"git diff --check",workdir:"/fixture"}),tools.exec_command({cmd:"git diff -- clamp.go",workdir:"/fixture"}),tools.exec_command({cmd:"git status --short",workdir:"/fixture"}),tools.exec_command({cmd:"date -u +%Y-%m-%dT%H:%M:%SZ",workdir:"/fixture"})]); for (const r of results) text(r);`,
 	} {
-		for _, mode := range []string{"valid", "no-prior", "wrong-source-parent", "wrong-thread", "wrong-turn", "wrong-cwd", "invocation-cwd", "wrong-command", "missing-event", "duplicate-event", "duplicate-call", "duplicate-output", "missing-output", "wrong-output-call", "wrong-output-turn", "incomplete-output", "raw-output-mismatch", "raw-exit-mismatch", "extra-output", "truncated-output", "duplicate-command", "reordered-output", "running-result", "interleaved-call", "later-failed-check", "later-edit"} {
-			if batch != input && mode != "valid" {
+		for _, mode := range []string{"valid", "no-prior", "wrong-source-parent", "wrong-thread", "wrong-turn", "wrong-cwd", "invocation-cwd", "wrong-command", "missing-event", "duplicate-event", "duplicate-call", "duplicate-output", "missing-output", "wrong-output-call", "wrong-output-turn", "incomplete-output", "raw-output-mismatch", "raw-exit-mismatch", "extra-output", "truncated-output", "duplicate-command", "reordered-output", "running-result", "interleaved-call", "later-failed-check", "later-edit", "failed-member", "completion-order-forward", "callback-index-output", "callback-array-output"} {
+			if batch != input && batch != each && mode != "valid" {
+				continue
+			}
+			if batch != each && (mode == "failed-member" || mode == "completion-order-forward" || strings.HasPrefix(mode, "callback-")) {
 				continue
 			}
 			t.Run("raw/"+strconv.Itoa(len(batch))+"/"+mode, func(t *testing.T) {
@@ -1206,7 +1237,8 @@ func nativeObservedFullResultReadOnlyBatch(t *testing.T) {
 					selected = strings.Replace(batch, "/fixture", "/other", 1)
 				}
 				if mode == "duplicate-command" {
-					selected = strings.Replace(batch, "rg --files -g '!*vendor*'", "git status --short", 1)
+					original, _ := nativeCodeModeCommands(batch, "/fixture")
+					selected = strings.Replace(batch, original[1].Command, original[0].Command, 1)
 				}
 				call := map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call", "name": "exec", "call_id": "batch", "input": selected, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}}
 				add(call)
@@ -1218,7 +1250,11 @@ func nativeObservedFullResultReadOnlyBatch(t *testing.T) {
 				}
 				commands, _ := nativeCodeModeCommands(batch, "/fixture")
 				// Deliberately finish events out of array order, as in the real capture.
-				for index := len(commands) - 1; index >= 0; index-- {
+				for step := 0; step < len(commands); step++ {
+					index := len(commands) - 1 - step
+					if mode == "completion-order-forward" {
+						index = step
+					}
 					if index == 0 && mode == "missing-event" {
 						continue
 					}
@@ -1235,7 +1271,11 @@ func nativeObservedFullResultReadOnlyBatch(t *testing.T) {
 							command = "cat go.mod"
 						}
 					}
-					event := map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": thread, "turn_id": turn, "item": map[string]any{"type": "CommandExecution", "id": "event" + strconv.Itoa(index), "status": "completed", "command": []string{"/bin/zsh", "-lc", command}, "cwd": cwd, "exit_code": 0, "aggregated_output": "inspection" + strconv.Itoa(index)}}}
+					status, exit := "completed", 0
+					if mode == "failed-member" && index == 0 {
+						status, exit = "failed", 1
+					}
+					event := map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": thread, "turn_id": turn, "item": map[string]any{"type": "CommandExecution", "id": "event" + strconv.Itoa(index), "status": status, "command": []string{"/bin/zsh", "-lc", command}, "cwd": cwd, "exit_code": exit, "aggregated_output": "inspection" + strconv.Itoa(index)}}}
 					add(event)
 					if index == 0 && mode == "duplicate-event" {
 						add(event)
@@ -1260,6 +1300,8 @@ func nativeObservedFullResultReadOnlyBatch(t *testing.T) {
 							body["output"] = "forged"
 						case "raw-exit-mismatch":
 							body["exit_code"] = 1
+						case "failed-member":
+							body["exit_code"] = 1
 						case "running-result":
 							body["session_id"] = 123
 						}
@@ -1276,6 +1318,12 @@ func nativeObservedFullResultReadOnlyBatch(t *testing.T) {
 				if mode == "reordered-output" {
 					parts[1], parts[2] = parts[2], parts[1]
 				}
+				if mode == "callback-index-output" {
+					parts = append(parts, map[string]any{"type": "input_text", "text": "0"})
+				}
+				if mode == "callback-array-output" {
+					parts = append(parts, map[string]any{"type": "input_text", "text": `[{"exit_code":0,"output":"inspection0"},{"exit_code":0,"output":"inspection1"}]`})
+				}
 				output := map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call_output", "call_id": id, "output": parts, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": turn}}}
 				if mode != "missing-output" {
 					add(output)
@@ -1290,10 +1338,10 @@ func nativeObservedFullResultReadOnlyBatch(t *testing.T) {
 					raw = append(raw, nativeEvidenceEvent(t, "item_completed", "child", map[string]any{"type": "FileChange", "status": "completed", "changes": map[string]any{}})...)
 				}
 				nativeInspectChildEvents(&r, raw)
-				if r.ChecksPassed != (mode == "valid") || r.ChildEditObserved {
+				if r.ChecksPassed != (mode == "valid" || mode == "completion-order-forward") || r.ChildEditObserved {
 					t.Fatalf("mode=%s checks=%v edit=%v unclassified=%v", mode, r.ChecksPassed, r.ChildEditObserved, r.ChildUnclassified)
 				}
-				classified := mode == "valid" || mode == "no-prior" || mode == "later-failed-check" || mode == "later-edit" || mode == "wrong-source-parent"
+				classified := mode == "valid" || mode == "completion-order-forward" || mode == "no-prior" || mode == "later-failed-check" || mode == "later-edit" || mode == "wrong-source-parent"
 				if (len(r.ChildUnclassified) == 0) != classified {
 					t.Fatalf("mode=%s classification=%v", mode, r.ChildUnclassified)
 				}

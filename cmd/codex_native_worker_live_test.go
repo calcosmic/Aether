@@ -3172,7 +3172,7 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 						needsCommandEvent = needsCommandEvent || (literal && len(words) > 4 && words[0] == "sed" && words[1] == "-n")
 					}
 					if ok && needsCommandEvent {
-						ok = nativeCorroboratedBatch(raw, r.ChildID, p.CallID, commands, inspectionChain)
+						ok = nativeCorroboratedBatch(raw, r.ChildID, p.CallID, commands, inspectionChain || nativeReadOnlyBatchForEach(p.Input))
 						if ok && exitOutput {
 							ok = nativeCorroboratedExitOutput(raw, p.CallID, r.FixtureRoot)
 						}
@@ -3521,7 +3521,7 @@ func validateCodexNativeLiveReceipt(r codexNativeLiveReceipt) error {
 		return fmt.Errorf("raw native child edit/check evidence incomplete (edit=%v checks=%v); child log %s", r.ChildEditObserved, r.ChecksPassed, r.ChildEvents)
 	}
 	if r.ParentSubstitution || len(r.ChildUnclassified) != 0 {
-		return fmt.Errorf("parent writes or unclassified operations prevent child-only attribution: %v", r.ParentUnclassified)
+		return fmt.Errorf("parent writes or unclassified operations prevent child-only attribution: parent_substitution=%v parent=%v child=%v", r.ParentSubstitution, r.ParentUnclassified, r.ChildUnclassified)
 	}
 	if r.AttemptID == "" || r.LaunchID == "" || r.ResultSHA256 == "" || r.CompletionPath == "" || !r.CreditObserved {
 		return fmt.Errorf("accepted native terminal/aggregate/finalizer credit incomplete")
@@ -3672,6 +3672,9 @@ func nativeInspectParentEvents(r *codexNativeLiveReceipt, raw []byte) {
 			// Every new capture requires actual events for single commands too.
 			if ok && (r.SchemaVersion == "codex-native-tracer/v2" || strings.Contains(p.Input, "Promise.allSettled")) {
 				ok = nativeCorroboratedBatch(raw, r.SessionID, p.CallID, commands)
+			}
+			if ok && nativeReadOnlyBatchForEach(p.Input) {
+				ok = nativeCorroboratedBatch(raw, r.SessionID, p.CallID, commands, true) && nativeCorroboratedBatchResults(raw, p.CallID, commands)
 			}
 			if _, projected := nativeCodeModeExitOutputProjection(p.Input, metadata.Payload.Cwd); ok && projected {
 				ok = nativeCorroboratedBatch(raw, r.SessionID, p.CallID, commands) && nativeCorroboratedExitOutput(raw, p.CallID, r.FixtureRoot)
@@ -4021,17 +4024,15 @@ func nativeChildInspectionWords(r codexNativeLiveReceipt, raw string, words []st
 	return true
 }
 
-func nativeChildCommandAllowed(r codexNativeLiveReceipt, command []string) bool {
-	if len(command) != 3 || (command[1] != "-c" && command[1] != "-lc") {
-		return false
-	}
-	// One invocation, at most eight identical separators. Atom decoding rejects
+// Shared chain predicate: only existing child-owned read-only atoms.
+func nativeChildInspectionChain(r codexNativeLiveReceipt, command string) bool {
+	// One invocation, at most eight inspection atoms. Atom decoding rejects
 	// mixed operators, expansion, writes, context calls and tests in a chain.
 	separator := " && "
-	if strings.Contains(command[2], ";") {
+	if strings.Contains(command, ";") {
 		separator = ";"
 	}
-	if parts := strings.Split(command[2], separator); len(parts) > 1 {
+	if parts := strings.Split(command, separator); len(parts) > 1 {
 		if len(parts) > 8 {
 			return false
 		}
@@ -4041,6 +4042,16 @@ func nativeChildCommandAllowed(r codexNativeLiveReceipt, command []string) bool 
 			}
 		}
 		return true
+	}
+	return false
+}
+
+func nativeChildCommandAllowed(r codexNativeLiveReceipt, command []string) bool {
+	if len(command) != 3 || (command[1] != "-c" && command[1] != "-lc") {
+		return false
+	}
+	if strings.Contains(command[2], " && ") || strings.Contains(command[2], ";") {
+		return nativeChildInspectionChain(r, command[2])
 	}
 	if nativeChildInspectionAtom(r, command[2]) {
 		return true
@@ -4989,8 +5000,14 @@ func (p *nativeCommandLiteral) quoted() (string, bool) {
 // additionally subject to the caller's path/source and actual event checks.
 // The entire batch grammar is validated separately; this identifies its
 // untouched per-result print form, whose outputs must match actual events.
+// forEach supplies index/array arguments too. Only actual complete result
+// blocks may establish presentation; never infer printed bytes from callbacks.
+func nativeReadOnlyBatchForEach(input string) bool {
+	return regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]*\.forEach\(text\);\s*$`).MatchString(input)
+}
+
 func nativeReadOnlyBatchFullResults(input string) bool {
-	return regexp.MustCompile(`for\s*\(const\s+[A-Za-z_][A-Za-z0-9_]*\s+of\s+[A-Za-z_][A-Za-z0-9_]*\)\s*text\([A-Za-z_][A-Za-z0-9_]*\);\s*$`).MatchString(input)
+	return nativeReadOnlyBatchForEach(input) || regexp.MustCompile(`for\s*\(const\s+[A-Za-z_][A-Za-z0-9_]*\s+of\s+[A-Za-z_][A-Za-z0-9_]*\)\s*text\([A-Za-z_][A-Za-z0-9_]*\);\s*$`).MatchString(input)
 }
 
 // Called only after nativeCorroboratedBatch proves the unique same-child/turn
@@ -5047,12 +5064,16 @@ func nativeReadOnlyBatchCommands(input, cwd string) ([]nativeRecordedShellComman
 	reserved := " JSON Promise tools text await break case catch class const continue debugger default delete do else enum export extends false finally for function if import in instanceof let new null return super switch this throw true try typeof var void while with yield implements interface package private protected public static eval arguments "
 	array := ""
 	namedCount := 0
+	forEach := false
+	each := regexp.MustCompile(`^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+Promise\.all\(\[([\s\S]*)\]\);\s*([A-Za-z_][A-Za-z0-9_]*)\.forEach\(text\);\s*$`)
 	indexed := regexp.MustCompile(`^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+Promise\.allSettled\(\[([\s\S]*)\]\);\s*for\s*\(let\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*0;\s*([A-Za-z_][A-Za-z0-9_]*)\s*<\s*([A-Za-z_][A-Za-z0-9_]*)\.length;\s*([A-Za-z_][A-Za-z0-9_]*)\+\+\)\s*text\(\{\s*(?:index\s*:\s*)?([A-Za-z_][A-Za-z0-9_]*),\s*\.\.\.([A-Za-z_][A-Za-z0-9_]*)\[([A-Za-z_][A-Za-z0-9_]*)\]\s*\}\);\s*$`)
 	projected := regexp.MustCompile(`^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+Promise\.all\(\[([\s\S]*)\]\);\s*for\s*\(const\s+([A-Za-z_][A-Za-z0-9_]*)\s+of\s+([A-Za-z_][A-Za-z0-9_]*)\)\s*([\s\S]*)$`)
 	identifiers := `\s*[A-Za-z_][A-Za-z0-9_]*(?:\s*,\s*[A-Za-z_][A-Za-z0-9_]*)*\s*`
 	named := regexp.MustCompile(`^\s*const\s+\[(` + identifiers + `)\]\s*=\s*await\s+Promise\.all\(\[([\s\S]*)\]\);\s*text\(JSON\.stringify\(\{(` + identifiers + `)\}\)\);\s*$`)
 	if m := indexed.FindStringSubmatch(input); len(m) == 10 && m[1] == m[5] && m[1] == m[8] && m[3] == m[4] && m[3] == m[6] && m[3] == m[7] && m[3] == m[9] {
 		array = m[2]
+	} else if m := each.FindStringSubmatch(input); len(m) == 4 && m[1] == m[3] && !strings.Contains(reserved, " "+m[1]+" ") {
+		array, forEach = m[2], true
 	} else if m := projected.FindStringSubmatch(input); len(m) == 6 && m[1] == m[4] && m[1] != m[3] && !strings.Contains(reserved, " "+m[1]+" ") && !strings.Contains(reserved, " "+m[3]+" ") {
 		name := regexp.QuoteMeta(m[3])
 		print := regexp.MustCompile(`^\s*text\((?:` + name + `(?:\.output)?|JSON\.stringify\(` + name + `\))\);\s*$`)
@@ -5089,7 +5110,18 @@ func nativeReadOnlyBatchCommands(input, cwd string) ([]nativeRecordedShellComman
 			return nil, false
 		}
 		parsed, ok := nativeCodeModeCommands("text(await tools.exec_command("+remaining[part[2]:part[3]]+"));", cwd)
-		if !ok || len(parsed) != 1 || !nativeReadOnlyBatchCommand(parsed[0].Command) {
+		if !ok || len(parsed) != 1 {
+			return nil, false
+		}
+		owned := codexNativeLiveReceipt{FixtureRoot: parsed[0].Cwd}
+		chain := nativeChildInspectionChain(owned, parsed[0].Command)
+		allowed := nativeReadOnlyBatchCommand(parsed[0].Command) || chain
+		if forEach {
+			// The new callback form admits only the same child inspection atoms
+			// and chains, not broader parent discovery/runtime operations.
+			allowed = nativeChildInspectionAtom(owned, parsed[0].Command) || chain
+		}
+		if !allowed {
 			return nil, false
 		}
 		commands = append(commands, parsed[0])
