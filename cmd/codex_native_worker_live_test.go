@@ -3093,11 +3093,12 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 	metadataSeen := false
 	childTurns := nativeOwnedHostTurns(raw, r.ChildID)
 	type pendingCheck struct {
-		command       []string
-		turn          string
-		epoch         int
-		priorProof    bool
-		observedPlain bool
+		command        []string
+		turn           string
+		epoch          int
+		priorProof     bool
+		observedPlain  bool
+		observedOutput string
 	}
 	pendingChecks := map[string]pendingCheck{}
 	callCounts, outputCounts := map[string]int{}, map[string]int{}
@@ -3183,7 +3184,7 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 					delete(pendingChecks, p.CallID)
 					if ok && pending.turn == p.Metadata.TurnID && pending.epoch == checkEpoch {
 						exit, output, complete := nativeCodeModeResult(wire)
-						r.ChecksPassed = complete && exit == 0 && (nativeAssignedFixtureTest(*r, pending.command, output) || (pending.priorProof && pending.observedPlain))
+						r.ChecksPassed = complete && exit == 0 && (nativeAssignedFixtureTest(*r, pending.command, output) || (pending.priorProof && pending.observedPlain && output == pending.observedOutput))
 					}
 				}
 			}
@@ -3232,11 +3233,11 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 				// A later successful plain suite cannot create uncached proof, but
 				// must not erase an already proved unchanged-source uncached suite.
 				// Restore only after this unique same-turn event AND its exact output.
-				if len(words) == 3 && words[0] == "go" && words[1] == "test" && words[2] == "./..." && *i.ExitCode == 0 && i.ID != "" && commandEventCounts[i.ID] == 1 {
+				if nativeAdditionalFixtureCheck(words) && *i.ExitCode == 0 && i.ID != "" && commandEventCounts[i.ID] == 1 {
 					for id, pending := range pendingChecks {
 						w, _ := nativeFixtureShellWords(pending.command)
-						if pending.priorProof && pending.turn == p.TurnID && pending.epoch+1 == checkEpoch && len(w) == 3 && w[0] == "go" && w[1] == "test" && w[2] == "./..." {
-							pending.epoch, pending.observedPlain = checkEpoch, true
+						if pending.priorProof && pending.turn == p.TurnID && pending.epoch+1 == checkEpoch && nativeAdditionalFixtureCheck(w) && len(i.Command) == 3 && i.Command[2] == pending.command[2] {
+							pending.epoch, pending.observedPlain, pending.observedOutput = checkEpoch, true, i.Output
 							pendingChecks[id] = pending
 						}
 					}
@@ -3858,6 +3859,21 @@ func nativeToolOutputText(raw json.RawMessage) string {
 	return string(raw)
 }
 
+func nativeAdditionalFixtureInspection(words []string, allowed func(string) bool) bool {
+	if len(words) == 4 && words[0] == "sed" && words[1] == "-n" && regexp.MustCompile(`^[0-9]{1,6}(?:,[0-9]{1,6})?p$`).MatchString(words[2]) {
+		return allowed(words[3])
+	}
+	if len(words) == 3 && ((words[0] == "gofmt" && words[1] == "-d") || (words[0] == "test" && words[1] == "-r")) {
+		return allowed(words[2])
+	}
+	return len(words) == 5 && words[0] == "git" && words[1] == "diff" && words[2] == "--check" && words[3] == "--" && allowed(words[4])
+}
+
+func nativeAdditionalFixtureCheck(words []string) bool {
+	joined := strings.Join(words, " ")
+	return joined == "go test ./..." || joined == "go test ./... -cover -count=1"
+}
+
 func nativeChildCommandAllowed(r codexNativeLiveReceipt, command []string) bool {
 	if len(command) != 3 || (command[1] != "-c" && command[1] != "-lc") {
 		return false
@@ -3879,7 +3895,7 @@ func nativeChildCommandAllowed(r codexNativeLiveReceipt, command []string) bool 
 		return true
 	}
 	joined := strings.Join(words, " ")
-	if joined == "go build ./..." || joined == "go test ./..." || joined == "go vet ./..." || joined == "git status --short" || joined == "date -u +%Y-%m-%dT%H:%M:%SZ" {
+	if joined == "go build ./..." || nativeAdditionalFixtureCheck(words) || joined == "go vet ./..." || joined == "git status --short" || joined == "date -u +%Y-%m-%dT%H:%M:%SZ" {
 		return true
 	}
 	allowed := func(path string) bool {
@@ -3895,6 +3911,9 @@ func nativeChildCommandAllowed(r codexNativeLiveReceipt, command []string) bool 
 			}
 		}
 		return false
+	}
+	if nativeAdditionalFixtureInspection(words, allowed) {
+		return true
 	}
 	if words[0] == "cat" && len(words) > 1 {
 		for _, path := range words[1:] {
@@ -4299,7 +4318,6 @@ func nativeCorroboratedLiteralPatch(r codexNativeLiveReceipt, raw []byte, callID
 	if callID == "" {
 		return false
 	}
-	pattern := regexp.MustCompile(`^\s*text\(await\s+tools\.apply_patch\(("(?:[^"\\]|\\.)*")\)\);\s*$`)
 	turn, target := "", ""
 	active, validOutput := false, false
 	calls, outputs, changes := 0, 0, 0
@@ -4311,12 +4329,11 @@ func nativeCorroboratedLiteralPatch(r codexNativeLiveReceipt, raw []byte, callID
 		p := w.Payload
 		if w.Type == "response_item" && p.Type == "custom_tool_call" && p.CallID == callID {
 			calls++
-			match := pattern.FindStringSubmatch(p.Input)
-			if len(match) != 2 || (p.Name != "exec" && !strings.HasSuffix(p.Name, ".exec")) {
+			patch, literal := nativeCodeModeLiteralPatch(p.Input)
+			if !literal || (p.Name != "exec" && !strings.HasSuffix(p.Name, ".exec")) {
 				return false
 			}
-			var patch string
-			if json.Unmarshal([]byte(match[1]), &patch) != nil || !strings.HasPrefix(patch, "*** Begin Patch\n*** Update File: ") || !strings.HasSuffix(patch, "\n*** End Patch") {
+			if !strings.HasPrefix(patch, "*** Begin Patch\n*** Update File: ") || !strings.HasSuffix(patch, "\n*** End Patch") {
 				return false
 			}
 			lines := strings.Split(patch, "\n")
@@ -4370,11 +4387,31 @@ func nativeCorroboratedLiteralPatch(r codexNativeLiveReceipt, raw []byte, callID
 	return calls == 1 && outputs == 1 && changes == 1 && validOutput && changeIDs[selectedChange] == 1
 }
 
+// Admit only a JSON string literal, directly passed or stored in one const.
+// The surrounding call/FileChange/output and owned target checks remain required.
+func nativeCodeModeLiteralPatch(input string) (string, bool) {
+	literal := ""
+	direct := regexp.MustCompile(`^\s*text\(await\s+tools\.apply_patch\(("(?:[^"\\]|\\.)*")\)\);\s*$`)
+	assigned := regexp.MustCompile(`^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*("(?:[^"\\]|\\.)*");\s*text\(await\s+tools\.apply_patch\(([A-Za-z_][A-Za-z0-9_]*)\)\);\s*$`)
+	if match := direct.FindStringSubmatch(input); len(match) == 2 {
+		literal = match[1]
+	} else if match := assigned.FindStringSubmatch(input); len(match) == 4 && match[1] == match[3] {
+		literal = match[2]
+	} else {
+		return "", false
+	}
+	var patch string
+	if json.Unmarshal([]byte(literal), &patch) != nil {
+		return "", false
+	}
+	return patch, true
+}
+
 func nativeCodeModeCommands(input, defaultCwd string) ([]nativeRecordedShellCommand, bool) {
 	if projected, ok := nativeCodeModeOutputProjection(input, defaultCwd); ok {
 		return []nativeRecordedShellCommand{projected}, true
 	}
-	if strings.Contains(input, "Promise.allSettled") {
+	if strings.Contains(input, "Promise.all") {
 		return nativeReadOnlyBatchCommands(input, defaultCwd)
 	}
 	// Only literal command objects and direct printing of their untouched result.
@@ -4412,9 +4449,18 @@ func nativeCodeModeCommands(input, defaultCwd string) ([]nativeRecordedShellComm
 // comes from the separately correlated CommandExecution and call/result events.
 // Requiring the entire input excludes additional commands or result rewriting.
 func nativeCodeModeOutputProjection(input, defaultCwd string) (nativeRecordedShellCommand, bool) {
-	pattern := regexp.MustCompile(`^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+tools\.exec_command\((\{[\s\S]*\})\);\s*text\(([A-Za-z_][A-Za-z0-9_]*)\.output\);\s*$`)
+	pattern := regexp.MustCompile(`^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+tools\.exec_command\((\{[\s\S]*\})\);\s*([\s\S]*)$`)
 	match := pattern.FindStringSubmatch(input)
-	if len(match) != 4 || match[1] != match[3] {
+	if len(match) != 4 {
+		return nativeRecordedShellCommand{}, false
+	}
+	name := regexp.QuoteMeta(match[1])
+	output := `text\(` + name + `\.output\);`
+	full := `text\(JSON\.stringify\(` + name + `\)\);`
+	// The exact observed exit annotation is presentation, never exit proof.
+	exit := regexp.QuoteMeta("`\\nEXIT_CODE=${" + match[1] + ".exit_code}`")
+	print := regexp.MustCompile(`^\s*(?:` + output + `(?:\s*text\(` + exit + `\);)?|` + full + `)\s*$`)
+	if !print.MatchString(match[3]) {
 		return nativeRecordedShellCommand{}, false
 	}
 	return nativeLiteralCommandObject(match[2], defaultCwd)
@@ -4598,12 +4644,22 @@ func (p *nativeCommandLiteral) quoted() (string, bool) {
 // This is syntax recognition, never JavaScript evaluation. Every operation is
 // additionally subject to the caller's path/source and actual event checks.
 func nativeReadOnlyBatchCommands(input, cwd string) ([]nativeRecordedShellCommand, bool) {
-	pattern := regexp.MustCompile(`^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+Promise\.allSettled\(\[([\s\S]*)\]\);\s*for\s*\(let\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*0;\s*([A-Za-z_][A-Za-z0-9_]*)\s*<\s*([A-Za-z_][A-Za-z0-9_]*)\.length;\s*([A-Za-z_][A-Za-z0-9_]*)\+\+\)\s*text\(\{\s*(?:index\s*:\s*)?([A-Za-z_][A-Za-z0-9_]*),\s*\.\.\.([A-Za-z_][A-Za-z0-9_]*)\[([A-Za-z_][A-Za-z0-9_]*)\]\s*\}\);\s*$`)
-	m := pattern.FindStringSubmatch(input)
-	if len(m) != 10 || m[1] != m[5] || m[1] != m[8] || m[3] != m[4] || m[3] != m[6] || m[3] != m[7] || m[3] != m[9] {
+	array := ""
+	indexed := regexp.MustCompile(`^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+Promise\.allSettled\(\[([\s\S]*)\]\);\s*for\s*\(let\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*0;\s*([A-Za-z_][A-Za-z0-9_]*)\s*<\s*([A-Za-z_][A-Za-z0-9_]*)\.length;\s*([A-Za-z_][A-Za-z0-9_]*)\+\+\)\s*text\(\{\s*(?:index\s*:\s*)?([A-Za-z_][A-Za-z0-9_]*),\s*\.\.\.([A-Za-z_][A-Za-z0-9_]*)\[([A-Za-z_][A-Za-z0-9_]*)\]\s*\}\);\s*$`)
+	projected := regexp.MustCompile(`^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+Promise\.all\(\[([\s\S]*)\]\);\s*for\s*\(const\s+([A-Za-z_][A-Za-z0-9_]*)\s+of\s+([A-Za-z_][A-Za-z0-9_]*)\)\s*([\s\S]*)$`)
+	if m := indexed.FindStringSubmatch(input); len(m) == 10 && m[1] == m[5] && m[1] == m[8] && m[3] == m[4] && m[3] == m[6] && m[3] == m[7] && m[3] == m[9] {
+		array = m[2]
+	} else if m := projected.FindStringSubmatch(input); len(m) == 6 && m[1] == m[4] && m[1] != m[3] {
+		name := regexp.QuoteMeta(m[3])
+		print := regexp.MustCompile(`^\s*text\((?:` + name + `\.output|JSON\.stringify\(` + name + `\))\);\s*$`)
+		if !print.MatchString(m[5]) {
+			return nil, false
+		}
+		array = m[2]
+	} else {
 		return nil, false
 	}
-	remaining := strings.TrimSpace(m[2])
+	remaining := strings.TrimSpace(array)
 	call := regexp.MustCompile(`^tools\.exec_command\((\{[\s\S]*?\})\)\s*(,|$)\s*`)
 	var commands []nativeRecordedShellCommand
 	for remaining != "" {
@@ -4634,6 +4690,11 @@ func nativeReadOnlyBatchCommand(command string) bool {
 	}
 	if len(words) == 0 {
 		return false
+	}
+	if nativeAdditionalFixtureInspection(words, func(path string) bool {
+		return path == "clamp.go" || path == "clamp_test.go" || path == "double.go" || path == "double_test.go" || path == "go.mod" || path == "AGENTS.md"
+	}) || strings.Join(words, " ") == "date -u +%Y-%m-%dT%H:%M:%SZ" {
+		return true
 	}
 	switch words[0] {
 	case "cat", "head", "sed", "jq", "rg", "pwd", "ls", "cmp", "git":

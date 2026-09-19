@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -372,7 +373,7 @@ func TestCodexNativeGapCapturedAttribution(t *testing.T) {
 }
 
 func TestCodexNativeGapParentCoordination(t *testing.T) {
-	for _, wrapper := range []string{"direct", "output-projection"} {
+	for _, wrapper := range []string{"direct", "output-projection", "json-result", "output-exit", "all-output", "all-json"} {
 		for _, mode := range []string{"valid", "file_uri", "actual_command_failure", "missing", "wrong_thread", "wrong_turn", "wrong_cwd", "wrong_argv", "reused_event", "duplicate_call", "missing_output", "wrong_output_call", "wrong_output_turn", "failed_script"} {
 			t.Run(wrapper+"/"+mode, func(t *testing.T) {
 				var raw []byte
@@ -381,6 +382,18 @@ func TestCodexNativeGapParentCoordination(t *testing.T) {
 				input := `text(await tools.exec_command({cmd:"aether status",workdir:"/fixture"}));`
 				if wrapper == "output-projection" {
 					input = `const r = await tools.exec_command({cmd:"aether status",workdir:"/fixture"}); text(r.output);`
+				}
+				if wrapper == "json-result" {
+					input = `const r = await tools.exec_command({cmd:"aether status",workdir:"/fixture"}); text(JSON.stringify(r));`
+				}
+				if wrapper == "output-exit" {
+					input = "const r = await tools.exec_command({cmd:\"aether status\",workdir:\"/fixture\"}); text(r.output); text(`\\nEXIT_CODE=${r.exit_code}`);"
+				}
+				if wrapper == "all-output" || wrapper == "all-json" {
+					input = `const results = await Promise.all([tools.exec_command({cmd:"aether status",workdir:"/fixture"})]); for (const r of results) text(r.output);`
+					if wrapper == "all-json" {
+						input = strings.Replace(input, "text(r.output)", "text(JSON.stringify(r))", 1)
+					}
 				}
 				call := map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call", "name": "exec", "call_id": "call", "input": input, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}}
 				add(call)
@@ -610,6 +623,234 @@ func TestCodexNativeGapRecordedFailedRefusal(t *testing.T) {
 			got := nativeObservedFixtureOperation(r, codexNativeLiveReceipt{BoundHostSessionID: "parent"}, 0, "empty-result", true)
 			if got != (mode == "failed") {
 				t.Fatalf("%s observed=%v", mode, got)
+			}
+		})
+	}
+}
+
+func TestCodexNativeGapUncachedCheckSurvivesCoverageRecheck(t *testing.T) {
+	for _, mode := range []string{"valid", "no_prior", "wrong_thread", "wrong_turn", "duplicate_event", "failure", "missing_output", "later_edit", "wrong_argv", "wrong_cwd", "copied_output"} {
+		t.Run(mode, func(t *testing.T) {
+			r := codexNativeLiveReceipt{ChildID: "child", BoundHostSessionID: "parent", FixtureRoot: "/fixture", Caste: "builder"}
+			var raw []byte
+			add := func(v any) { b, _ := json.Marshal(v); raw = append(raw, append(b, '\n')...) }
+			add(map[string]any{"type": "session_meta", "payload": map[string]any{"id": "child", "parent_thread_id": "parent", "cwd": "/fixture", "agent_role": "aether-builder"}})
+			if mode != "no_prior" {
+				raw = append(raw, nativeEvidenceEvent(t, "item_completed", "child", map[string]any{"type": "CommandExecution", "status": "completed", "id": "uncached", "command": []string{"/bin/sh", "-c", "go test ./... -json -count=1"}, "cwd": "/fixture", "exit_code": 0, "aggregated_output": "{\"Action\":\"run\",\"Package\":\"example.invalid/nativefixture\",\"Test\":\"TestClamp\"}\n{\"Action\":\"pass\",\"Package\":\"example.invalid/nativefixture\",\"Test\":\"TestClamp\"}\n{\"Action\":\"pass\",\"Package\":\"example.invalid/nativefixture\"}\n"})...)
+			}
+			add(map[string]any{"type": "event_msg", "payload": map[string]any{"thread_id": "child", "turn_id": "turn"}})
+			add(map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call", "name": "exec", "call_id": "plain", "input": `const r = await tools.exec_command({cmd:"go test ./... -cover -count=1",workdir:"/fixture"}); text(JSON.stringify(r));`, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}})
+			thread, turn, exit, status := "child", "turn", 0, "completed"
+			switch mode {
+			case "wrong_thread":
+				thread = "foreign"
+			case "wrong_turn":
+				turn = "foreign"
+			case "failure":
+				exit = 1
+				status = "failed"
+			}
+			command, cwd := "go test ./... -cover -count=1", "/fixture"
+			if mode == "wrong_argv" {
+				command = "go test ./..."
+			}
+			if mode == "wrong_cwd" {
+				cwd = "/other"
+			}
+			event := map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": thread, "turn_id": turn, "item": map[string]any{"type": "CommandExecution", "id": "plain-event", "status": status, "command": []string{"/bin/sh", "-c", command}, "cwd": cwd, "exit_code": exit, "aggregated_output": "ok example.invalid/nativefixture (cached)"}}}
+			add(event)
+			if mode == "duplicate_event" {
+				add(event)
+			}
+			if mode == "later_edit" {
+				raw = append(raw, nativeEvidenceEvent(t, "item_completed", "child", map[string]any{"type": "FileChange", "status": "completed", "changes": map[string]any{}})...)
+			}
+			if mode != "missing_output" {
+				output := "ok example.invalid/nativefixture (cached)"
+				if mode == "copied_output" {
+					output = "copied success from another command"
+				}
+				result, _ := json.Marshal(map[string]any{"exit_code": exit, "output": output})
+				add(map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call_output", "call_id": "plain", "output": []any{map[string]any{"type": "input_text", "text": "Script completed\n"}, map[string]any{"type": "input_text", "text": string(result)}}, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}})
+			}
+			nativeInspectChildEvents(&r, raw)
+			if r.ChecksPassed != (mode == "valid") {
+				t.Fatalf("%s checks=%v", mode, r.ChecksPassed)
+			}
+		})
+	}
+}
+
+func TestCodexNativeObservedOperationWrappers(t *testing.T) {
+	const prefix = `const r = await tools.exec_command({cmd:"go test ./... -json -count=1",workdir:"/fixture"}); `
+	for _, tc := range []struct {
+		name, suffix string
+		want         bool
+	}{
+		{"full-json", `text(JSON.stringify(r));`, true},
+		{"output-exit", "text(r.output); text(`\\nEXIT_CODE=${r.exit_code}`);", true},
+		{"other-result", `text(JSON.stringify(other));`, false},
+		{"json-replacer", `text(JSON.stringify(r, mutate));`, false},
+		{"json-property", `text(JSON.stringify(r.output));`, false},
+		{"rewritten-result", `r.exit_code=0; text(JSON.stringify(r));`, false},
+		{"extra-side-effect", `text(JSON.stringify(r)); mutate();`, false},
+		{"wrong-exit-variable", "text(r.output); text(`\\nEXIT_CODE=${other.exit_code}`);", false},
+		{"computed-exit", "text(r.output); text(`\\nEXIT_CODE=${r.exit_code || 0}`);", false},
+		{"fake-exit", "text(r.output); text(`\\nEXIT_CODE=0`);", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := nativeCodeModeCommands(prefix+tc.suffix, "/fixture")
+			if ok != tc.want || (ok && (len(got) != 1 || got[0].Command != "go test ./... -json -count=1" || got[0].Cwd != "/fixture")) {
+				t.Fatalf("accepted=%v commands=%+v", ok, got)
+			}
+		})
+	}
+	for _, bad := range []string{
+		strings.Replace(prefix, `"go test ./... -json -count=1"`, `command`, 1) + `text(JSON.stringify(r));`,
+		strings.Replace(prefix, `cmd:`, `cmd:"touch clamp.go",cmd:`, 1) + `text(JSON.stringify(r));`,
+		strings.Replace(prefix, `await `, ``, 1) + `text(JSON.stringify(r));`,
+		`const JSON={stringify:mutate}; ` + prefix + `text(JSON.stringify(r));`,
+	} {
+		if _, ok := nativeCodeModeCommands(bad, "/fixture"); ok {
+			t.Fatalf("dynamic/side-effect wrapper accepted: %s", bad)
+		}
+	}
+}
+
+func TestCodexNativeObservedReadOnlyBatch(t *testing.T) {
+	batch := `const results = await Promise.all([tools.exec_command({cmd:"sed -n '1,200p' clamp_test.go",workdir:"/fixture"}),tools.exec_command({cmd:"git status --short",workdir:"/fixture"})]); for (const r of results) text(r.output);`
+	for _, tc := range []struct {
+		name, input string
+		want        bool
+	}{
+		{"output", batch, true},
+		{"full-json", strings.Replace(batch, "text(r.output)", "text(JSON.stringify(r))", 1), true},
+		{"wrong-array", strings.Replace(batch, "of results", "of other", 1), false},
+		{"wrong-result", strings.Replace(batch, "text(r.output)", "text(other.output)", 1), false},
+		{"mutated-result", strings.Replace(batch, "text(r.output)", "text(r.output.trim())", 1), false},
+		{"trailing", batch + `mutate();`, false},
+		{"unawaited", strings.Replace(batch, "await Promise", "Promise", 1), false},
+		{"write", strings.Replace(batch, "git status --short", "gofmt -w clamp.go", 1), false},
+		{"compound", strings.Replace(batch, "git status --short", "git status --short; touch clamp.go", 1), false},
+		{"computed-command", strings.Replace(batch, `"git status --short"`, `command`, 1), false},
+		{"other-tool", strings.Replace(batch, "tools.exec_command", "tools.apply_patch", 1), false},
+		{"spread-array", strings.Replace(batch, "[tools.exec_command", "[...tools.exec_command", 1), false},
+		{"loop-body-side-effect", strings.Replace(batch, "text(r.output);", "{ mutate(); text(r.output); }", 1), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			commands, ok := nativeCodeModeCommands(tc.input, "/fixture")
+			if ok != tc.want || (ok && len(commands) != 2) {
+				t.Fatalf("accepted=%v commands=%+v", ok, commands)
+			}
+		})
+	}
+	calls := make([]string, 65)
+	for i := range calls {
+		calls[i] = `tools.exec_command({cmd:"git status --short",workdir:"/fixture"})`
+	}
+	if _, ok := nativeCodeModeCommands(`const results=await Promise.all([`+strings.Join(calls, ",")+`]); for (const r of results) text(r.output);`, "/fixture"); ok {
+		t.Fatal("unbounded batch accepted")
+	}
+}
+
+func TestCodexNativeObservedFixtureInspections(t *testing.T) {
+	r := codexNativeLiveReceipt{FixtureRoot: "/fixture"}
+	for _, tc := range []struct {
+		command      string
+		child, batch bool
+	}{
+		{`sed -n '1,200p' clamp.go`, true, true},
+		{`sed -n '1,200p' /fixture/clamp_test.go`, true, true},
+		{`gofmt -d clamp.go`, true, true},
+		{`git diff --check -- clamp.go`, true, true},
+		{`test -r clamp.go`, true, true},
+		{`date -u +%Y-%m-%dT%H:%M:%SZ`, true, true},
+		{`go test ./... -cover -count=1`, true, false},
+		{`sed -n '1,200p' /other/clamp.go`, false, true},
+		{`sed -n '1,200e' clamp.go`, false, false},
+		{`sed -i '' clamp.go`, false, false},
+		{`gofmt -w clamp.go`, false, false},
+		{`gofmt -d /other/clamp.go`, false, false},
+		{`git diff --check -- /other/clamp.go`, false, false},
+		{`git diff --output=/tmp/side-effect -- clamp.go`, false, false},
+		{`test -r /other/clamp.go`, false, false},
+		{`date -u -s tomorrow`, false, false},
+		{`go test ./... -coverprofile=/tmp/profile`, false, false},
+		{`go test ./... -cover -count=1; touch clamp.go`, false, false},
+	} {
+		t.Run(tc.command, func(t *testing.T) {
+			if got := nativeChildCommandAllowed(r, []string{"/bin/sh", "-c", tc.command}); got != tc.child {
+				t.Fatalf("child=%v want%v", got, tc.child)
+			}
+			if got := nativeReadOnlyBatchCommand(tc.command); got != tc.batch {
+				t.Fatalf("batch=%v want%v", got, tc.batch)
+			}
+		})
+	}
+	for _, command := range []string{`gofmt -w clamp.go`, `go test ./... -cover -count=1`} {
+		if nativeParentCoordinationCommand(&r, []string{"/bin/sh", "-c", command}, "/fixture") {
+			t.Fatalf("child operation admitted for parent: %s", command)
+		}
+	}
+}
+
+func TestCodexNativeObservedLiteralPatch(t *testing.T) {
+	patch := "*** Begin Patch\n*** Update File: /fixture/clamp.go\n@@\n-old\n+new\n*** End Patch"
+	input := "const patch = " + strconv.Quote(patch) + "; text(await tools.apply_patch(patch));"
+	for _, mode := range []string{"valid", "computed", "wrong-variable", "trailing", "missing-change", "wrong-child", "wrong-turn", "duplicate-change", "duplicate-call", "wrong-output", "protected-file"} {
+		t.Run(mode, func(t *testing.T) {
+			selected := input
+			switch mode {
+			case "computed":
+				selected = strings.Replace(selected, "; text", `+suffix; text`, 1)
+			case "wrong-variable":
+				selected = strings.Replace(selected, "apply_patch(patch)", "apply_patch(other)", 1)
+			case "trailing":
+				selected += `mutate();`
+			}
+			r := codexNativeLiveReceipt{ChildID: "child", BoundHostSessionID: "parent", FixtureRoot: "/fixture", BaselineSource: "old\n", FinalSource: "new\n"}
+			var raw []byte
+			add := func(v any) { b, _ := json.Marshal(v); raw = append(raw, append(b, '\n')...) }
+			add(map[string]any{"type": "session_meta", "payload": map[string]any{"id": "child", "parent_thread_id": "parent", "agent_role": "aether-builder", "cwd": "/fixture"}})
+			call := map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call", "name": "exec", "call_id": "call", "input": selected, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}}
+			add(call)
+			if mode == "duplicate-call" {
+				add(call)
+			}
+			thread, turn, path := "child", "turn", "/fixture/clamp.go"
+			switch mode {
+			case "wrong-child":
+				thread = "sibling"
+			case "wrong-turn":
+				turn = "other"
+			case "protected-file":
+				path = "/fixture/clamp_test.go"
+			}
+			change := map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": thread, "turn_id": turn, "item": map[string]any{"type": "FileChange", "id": "edit", "status": "completed", "changes": map[string]any{path: map[string]any{"type": "update", "unified_diff": "@@ -1,1 +1,1 @@\n-old\n+new\n"}}}}}
+			if mode != "missing-change" {
+				add(change)
+			}
+			if mode == "duplicate-change" {
+				add(change)
+			}
+			id := "call"
+			if mode == "wrong-output" {
+				id = "other"
+			}
+			add(map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call_output", "call_id": id, "output": []any{map[string]any{"type": "input_text", "text": "Script completed\n"}, map[string]any{"type": "input_text", "text": "{}"}}, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}})
+			if got := nativeCorroboratedLiteralPatch(r, raw, "call"); got != (mode == "valid") {
+				t.Fatalf("corroborated=%v", got)
+			}
+			if mode == "valid" {
+				nativeInspectChildEvents(&r, raw)
+				if !r.ChildEditObserved || len(r.ChildUnclassified) != 0 {
+					t.Fatalf("literal alias child edit unclassified: %v", r.ChildUnclassified)
+				}
+			}
+			parent := codexNativeLiveReceipt{SchemaVersion: "codex-native-tracer/v2", SessionID: "child", FixtureRoot: "/fixture"}
+			nativeInspectParentEvents(&parent, raw)
+			if !parent.ParentSubstitution {
+				t.Fatal("parent literal alias patch accepted")
 			}
 		})
 	}

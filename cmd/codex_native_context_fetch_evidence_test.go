@@ -54,16 +54,16 @@ type nativeContextSourceRecord struct {
 	Timestamp string `json:"timestamp"`
 	Type      string `json:"type"`
 	Payload   struct {
-		Type, ID, Name, Input, Status string
-		CallID                        string   `json:"call_id"`
-		ParentThreadID                string   `json:"parent_thread_id"`
-		ThreadID                      string   `json:"thread_id"`
-		TurnID                        string   `json:"turn_id"`
-		AgentPath                     string   `json:"agent_path"`
-		ThreadSource                  string   `json:"thread_source"`
-		Cwd                           string   `json:"cwd"`
-		RuntimeWorkspaceRoots         []string `json:"runtime_workspace_roots"`
-		Source                        struct {
+		Type, ID, Name, Namespace, Arguments, Input, Status string
+		CallID                                              string   `json:"call_id"`
+		ParentThreadID                                      string   `json:"parent_thread_id"`
+		ThreadID                                            string   `json:"thread_id"`
+		TurnID                                              string   `json:"turn_id"`
+		AgentPath                                           string   `json:"agent_path"`
+		ThreadSource                                        string   `json:"thread_source"`
+		Cwd                                                 string   `json:"cwd"`
+		RuntimeWorkspaceRoots                               []string `json:"runtime_workspace_roots"`
+		Source                                              struct {
 			Subagent struct {
 				ThreadSpawn struct {
 					ParentThreadID string `json:"parent_thread_id"`
@@ -174,7 +174,22 @@ func nativeContextExactCwd(got, want string) bool {
 
 func nativeContextCommand(input, cwd string) (nativeRecordedShellCommand, bool, bool) {
 	if command, ok := nativeCodeModeOutputProjection(input, cwd); ok {
-		return command, true, true
+		// The shared operation recognizer admits several presentations. Context
+		// evidence must distinguish exact stdout from the untouched full result
+		// so its exit/session/output fields are still checked independently.
+		pattern := regexp.MustCompile(`^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+tools\.exec_command\((\{[\s\S]*\})\);\s*text\(([\s\S]*)\);\s*$`)
+		match := pattern.FindStringSubmatch(input)
+		if len(match) == 4 {
+			switch match[3] {
+			case match[1] + ".output":
+				return command, true, true
+			case "JSON.stringify(" + match[1] + ")":
+				return command, false, true
+			}
+		}
+		// Extra EXIT_CODE annotations are outside the exact context-output
+		// contract, even though ordinary operation attribution can classify them.
+		return nativeRecordedShellCommand{}, false, false
 	}
 	// The same literal exec result may be printed untouched as an object. A
 	// single command only: never accept batches, computed output or rewriting.
@@ -581,11 +596,121 @@ func nativeChildContextRequest(r codexNativeLiveReceipt, raw []byte, saved codex
 	return path, nil
 }
 
-// Useful work must follow the child's ACK. The initial protocol permits only its
-// read and ACK tool calls before this boundary. Later answer reads impose the
-// same rule between read and ACK without disqualifying earlier legitimate work.
+// A source-bound collaboration.wait_agent is passive release coordination, not
+// assignment work. Admit only the actual observed call/activity/result shape,
+// completed before the initial context read; never a general tool exception.
+func nativeChildContextPassiveWait(records []nativeContextSourceRecord, lines []json.RawMessage, at int, evidence nativeChildContextFetchEvidence) ([]int, error) {
+	fail := func(reason string) ([]int, error) { return nil, fmt.Errorf("child passive wait: %s", reason) }
+	call := records[at]
+	cp := call.Payload
+	if evidence.Delivery.Purpose != "initial" || at >= evidence.Read.callIndex || call.Type != "response_item" || cp.Type != "function_call" || cp.Namespace != "collaboration" || cp.Name != "wait_agent" || cp.ID == "" || cp.CallID == "" || cp.ID == cp.CallID || cp.Metadata.TurnID == "" || cp.Metadata.TurnID != evidence.Fetch.Read.TurnID {
+		return fail("call is not the exact child's initial release wait")
+	}
+	decodeExact := func(raw []byte, value any) error {
+		if err := nativeContextUnambiguousJSON(raw); err != nil {
+			return err
+		}
+		decoder := json.NewDecoder(bytes.NewReader(raw))
+		decoder.DisallowUnknownFields()
+		return decoder.Decode(value)
+	}
+	var args struct {
+		TimeoutMS *int `json:"timeout_ms"`
+	}
+	if nativeContextRequiredKeys([]byte(cp.Arguments), "timeout_ms") != nil || decodeExact([]byte(cp.Arguments), &args) != nil || args.TimeoutMS == nil || *args.TimeoutMS < 10000 || *args.TimeoutMS > 3600000 {
+		return fail("wait arguments are not one literal supported timeout")
+	}
+	activityIndex, resultIndex, callCount, callIDCount := -1, -1, 0, 0
+	for i, record := range records {
+		p := record.Payload
+		if p.ID == cp.ID {
+			callIDCount++
+		}
+		if record.Type == "response_item" && p.CallID == cp.CallID {
+			switch p.Type {
+			case "function_call":
+				callCount++
+				if i != at {
+					return fail("duplicate or substituted wait call")
+				}
+			case "function_call_output":
+				if resultIndex != -1 {
+					return fail("duplicate wait result")
+				}
+				resultIndex = i
+			default:
+				return fail("wait call ID reused by another operation")
+			}
+		}
+		if record.Type == "event_msg" && p.Type == "item_completed" && p.Item.ID == cp.CallID {
+			if activityIndex != -1 {
+				return fail("duplicate wait activity")
+			}
+			activityIndex = i
+		}
+	}
+	if callCount != 1 || callIDCount != 1 || activityIndex <= at || resultIndex <= activityIndex || resultIndex >= evidence.Read.callIndex {
+		return fail("unique complete wait triplet must precede the initial read")
+	}
+	activity, result := records[activityIndex], records[resultIndex]
+	rp := result.Payload
+	if activity.Payload.ThreadID != evidence.Fetch.Read.ChildID || activity.Payload.TurnID != cp.Metadata.TurnID || rp.Metadata.TurnID != cp.Metadata.TurnID || rp.ID == "" || rp.ID == cp.ID || rp.ID == cp.CallID || result.Metadata.ClientAuthored == nil || *result.Metadata.ClientAuthored {
+		return fail("wait activity/result child, turn or host authorship differs")
+	}
+	resultIDCount := 0
+	for _, record := range records {
+		if record.Payload.ID == rp.ID {
+			resultIDCount++
+		}
+		if record.Payload.Item.ID == rp.ID || record.Payload.Item.ID == cp.ID {
+			return fail("wait source ID reused by an activity")
+		}
+	}
+	if resultIDCount != 1 {
+		return fail("wait result ID is not unique")
+	}
+	var envelope struct {
+		Payload struct {
+			Item          json.RawMessage `json:"item"`
+			StartedAtMS   *int64          `json:"started_at_ms"`
+			CompletedAtMS *int64          `json:"completed_at_ms"`
+		} `json:"payload"`
+	}
+	var item struct {
+		Type, ID, Tool, Status string
+		SenderThreadID         string                     `json:"sender_thread_id"`
+		ReceiverThreadIDs      []string                   `json:"receiver_thread_ids"`
+		ReceiverAgents         []json.RawMessage          `json:"receiver_agents"`
+		AgentsStates           map[string]json.RawMessage `json:"agents_states"`
+	}
+	if json.Unmarshal(lines[activityIndex], &envelope) != nil || decodeExact(envelope.Payload.Item, &item) != nil || nativeContextRequiredKeys(envelope.Payload.Item, "type", "id", "tool", "status", "sender_thread_id", "receiver_thread_ids", "receiver_agents", "agents_states") != nil || item.Type != "CollabAgentToolCall" || item.ID != cp.CallID || item.Tool != "wait" || item.Status != "completed" || item.SenderThreadID != evidence.Fetch.Read.ChildID || len(item.ReceiverThreadIDs) != 0 || len(item.ReceiverAgents) != 0 || len(item.AgentsStates) != 0 || envelope.Payload.StartedAtMS == nil || envelope.Payload.CompletedAtMS == nil {
+		return fail("activity is not a completed passive wait with no recipients")
+	}
+	var output string
+	var completion struct {
+		Message  string `json:"message"`
+		TimedOut *bool  `json:"timed_out"`
+	}
+	if json.Unmarshal(rp.Output, &output) != nil || nativeContextRequiredKeys([]byte(output), "message", "timed_out") != nil || decodeExact([]byte(output), &completion) != nil || completion.Message != "Wait completed." || completion.TimedOut == nil || *completion.TimedOut {
+		return fail("actual wait completion output is missing or substituted")
+	}
+	start, a := time.Parse(time.RFC3339Nano, call.Timestamp)
+	activityTime, b := time.Parse(time.RFC3339Nano, activity.Timestamp)
+	end, c := time.Parse(time.RFC3339Nano, result.Timestamp)
+	readTime, d := time.Parse(time.RFC3339Nano, evidence.Fetch.Read.StartedAt)
+	started := time.UnixMilli(*envelope.Payload.StartedAtMS)
+	completed := time.UnixMilli(*envelope.Payload.CompletedAtMS)
+	if a != nil || b != nil || c != nil || d != nil || started.Before(start) || completed.Before(started) || activityTime.Before(completed) || end.Before(activityTime) || readTime.Before(end) {
+		return fail("wait timestamps do not precede the initial read in actual order")
+	}
+	return []int{at, activityIndex, resultIndex}, nil
+}
+
+// Useful work must follow the child's ACK. The initial protocol permits only
+// source-bound passive release waits followed by its read and ACK. Later answer
+// reads impose the same no-work rule without exempting further tool calls.
 func nativeChildContextWorkOrder(raw []byte, evidence nativeChildContextFetchEvidence) error {
-	records, _, err := nativeContextSourceRecords(raw)
+	records, lines, err := nativeContextSourceRecords(raw)
 	if err != nil {
 		return err
 	}
@@ -593,9 +718,22 @@ func nativeChildContextWorkOrder(raw []byte, evidence nativeChildContextFetchEvi
 	if evidence.Delivery.Purpose == "initial" {
 		start = 0
 	}
+	passive := map[int]bool{}
 	for i := start; i < evidence.ACK.resultIndex; i++ {
 		record := records[i]
 		p := record.Payload
+		if evidence.Delivery.Purpose == "initial" && record.Type == "response_item" && p.Type == "function_call" && p.Name == "wait_agent" {
+			indices, err := nativeChildContextPassiveWait(records, lines, i, evidence)
+			if err != nil {
+				return err
+			}
+			for _, index := range indices {
+				passive[index] = true
+			}
+		}
+		if passive[i] {
+			continue
+		}
 		if evidence.Delivery.Purpose == "initial" && record.Type == "event_msg" && p.Type == "item_completed" && p.ThreadID == evidence.Fetch.Read.ChildID && p.Item.Type == "AgentMessage" && p.Item.Phase == "final_answer" {
 			return fmt.Errorf("child question or final answer preceded initial context ACK")
 		}
@@ -763,19 +901,71 @@ func TestCodexNativeChildContextFetchEvidence(t *testing.T) {
 			}
 		})
 	}
-	t.Run("untouched-exec-result", func(t *testing.T) {
+	objectResultFixture := func(print string) ([]map[string]any, nativeChildContextFetchExpectation) {
 		records, want := nativeContextFetchFixture(t, "initial")
 		for _, index := range []int{1, 4} {
 			p := records[index]["payload"].(map[string]any)
-			p["input"] = strings.ReplaceAll(p["input"].(string), "text(r.output)", "text(r)")
+			p["input"] = strings.ReplaceAll(p["input"].(string), "text(r.output)", print)
 			out := records[index+2]["payload"].(map[string]any)["output"].([]map[string]any)
 			wrapped, _ := json.Marshal(map[string]any{"exit_code": 0, "output": out[1]["text"], "wall_time_seconds": 0.1})
 			out[1]["text"] = string(wrapped)
 		}
-		if _, err := nativeDecodeChildContextFetch(nativeContextFixtureBytes(t, records), want); err != nil {
-			t.Fatal(err)
+		return records, want
+	}
+	for _, presentation := range []struct{ name, print string }{
+		{"untouched-exec-result", "text(r)"},
+		{"json-stringified-exec-result", "text(JSON.stringify(r))"},
+	} {
+		t.Run(presentation.name, func(t *testing.T) {
+			records, want := objectResultFixture(presentation.print)
+			got, err := nativeDecodeChildContextFetch(nativeContextFixtureBytes(t, records), want)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Delivery.Payload != want.Delivery.Payload || got.Ack.PayloadSHA256 != want.Delivery.PayloadSHA256 || got.Fetch.Read.CallID != "call-read" || got.Fetch.Ack.CallID != "call-ack" {
+				t.Fatal("full JSON presentation changed the exact read/ACK binding")
+			}
+		})
+	}
+	for _, operation := range []struct {
+		name      string
+		callIndex int
+	}{{"read", 1}, {"ack", 4}} {
+		for _, mode := range []string{"missing-output", "substituted-output", "trailing-output", "missing-exit", "active-session", "exit-annotation"} {
+			t.Run("json-result-"+operation.name+"-"+mode, func(t *testing.T) {
+				records, want := objectResultFixture("text(JSON.stringify(r))")
+				out := records[operation.callIndex+2]["payload"].(map[string]any)["output"].([]map[string]any)
+				var result map[string]any
+				if err := json.Unmarshal([]byte(out[1]["text"].(string)), &result); err != nil {
+					t.Fatal(err)
+				}
+				switch mode {
+				case "missing-output":
+					delete(result, "output")
+				case "substituted-output":
+					result["output"] = "substituted context or ACK"
+				case "missing-exit":
+					delete(result, "exit_code")
+				case "active-session":
+					result["session_id"] = 42
+				case "exit-annotation":
+					p := records[operation.callIndex]["payload"].(map[string]any)
+					p["input"] = strings.ReplaceAll(p["input"].(string), "text(JSON.stringify(r));", "text(r.output); text(`\\nEXIT_CODE=${r.exit_code}`);")
+					if _, ok := nativeCodeModeOutputProjection(p["input"].(string), want.Workspace); !ok {
+						t.Fatal("annotation control no longer matches the shared operation recognizer")
+					}
+				}
+				changed, _ := json.Marshal(result)
+				out[1]["text"] = string(changed)
+				if mode == "trailing-output" {
+					out[1]["text"] = string(changed) + "\n{}"
+				}
+				if _, err := nativeDecodeChildContextFetch(nativeContextFixtureBytes(t, records), want); err == nil {
+					t.Fatal("incomplete, substituted or annotated full result accepted")
+				}
+			})
 		}
-	})
+	}
 	payload := func(record map[string]any) map[string]any { return record["payload"].(map[string]any) }
 	item := func(record map[string]any) map[string]any { return payload(record)["item"].(map[string]any) }
 	metadata := func(record map[string]any) map[string]any {
@@ -1030,6 +1220,119 @@ func TestCodexNativeChildContextBootstrap(t *testing.T) {
 			}
 			if valid && (boundary.ContextMode != "none" || boundary.Message != message) {
 				t.Fatal("actual bootstrap bytes or fork mode changed")
+			}
+		})
+	}
+}
+
+// The passive-wait triplet mirrors actual Codex 0.155 child rollout lines
+// 17/19/20 retained in child-fetch-passive-wait-20260918T234656Z-hcnvzd02/chronology.json.
+func TestCodexNativeChildContextPassiveWait(t *testing.T) {
+	fixture := func() ([]map[string]any, nativeChildContextFetchExpectation) {
+		records, want := nativeContextFetchFixture(t, "initial")
+		base, _ := time.Parse(time.RFC3339Nano, "2026-09-18T21:22:00Z")
+		meta := func() map[string]any { return map[string]any{"turn_id": "turn-1"} }
+		call := map[string]any{"timestamp": "2026-09-18T21:22:00.1Z", "type": "response_item", "payload": map[string]any{
+			"type": "function_call", "id": "fc-wait", "namespace": "collaboration", "name": "wait_agent", "call_id": "call-wait", "arguments": `{"timeout_ms":3600000}`, "internal_chat_message_metadata_passthrough": meta()}}
+		activity := map[string]any{"timestamp": "2026-09-18T21:22:00.2Z", "type": "event_msg", "payload": map[string]any{
+			"type": "item_completed", "thread_id": want.ChildID, "turn_id": "turn-1", "started_at_ms": base.Add(110 * time.Millisecond).UnixMilli(), "completed_at_ms": base.Add(200 * time.Millisecond).UnixMilli(),
+			"item": map[string]any{"type": "CollabAgentToolCall", "id": "call-wait", "tool": "wait", "status": "completed", "sender_thread_id": want.ChildID, "receiver_thread_ids": []string{}, "receiver_agents": []any{}, "agents_states": map[string]any{}}}}
+		result := map[string]any{"timestamp": "2026-09-18T21:22:00.3Z", "type": "response_item", "payload": map[string]any{
+			"type": "function_call_output", "id": "fco-wait", "call_id": "call-wait", "output": `{"message":"Wait completed.","timed_out":false}`, "internal_chat_message_metadata_passthrough": meta()}, "metadata": map[string]any{"client_authored": false}}
+		return append([]map[string]any{records[0], call, activity, result}, records[1:]...), want
+	}
+	validate := func(records []map[string]any, want nativeChildContextFetchExpectation) error {
+		raw := nativeContextFixtureBytes(t, records)
+		evidence, err := nativeDecodeChildContextFetch(raw, want)
+		if err != nil {
+			return err
+		}
+		return nativeChildContextWorkOrder(raw, evidence)
+	}
+	payload := func(record map[string]any) map[string]any { return record["payload"].(map[string]any) }
+	item := func(record map[string]any) map[string]any { return payload(record)["item"].(map[string]any) }
+	work := func() map[string]any {
+		return map[string]any{"timestamp": "2026-09-18T21:22:03Z", "type": "response_item", "payload": map[string]any{"type": "function_call", "name": "exec_command", "id": "work", "call_id": "work-call", "arguments": `{"cmd":"go test ./..."}`}}
+	}
+	t.Run("wait-read-separate-ack-then-work", func(t *testing.T) {
+		r, want := fixture()
+		r = append(r, work())
+		if err := validate(r, want); err != nil {
+			t.Fatal(err)
+		}
+	})
+	tests := []struct {
+		name   string
+		mutate func([]map[string]any) []map[string]any
+	}{
+		{"mutating-tool-name", func(r []map[string]any) []map[string]any { payload(r[1])["name"] = "send_message"; return r }},
+		{"wrong-namespace", func(r []map[string]any) []map[string]any { payload(r[1])["namespace"] = "other"; return r }},
+		{"dynamic-arguments", func(r []map[string]any) []map[string]any {
+			payload(r[1])["arguments"] = `{"timeout_ms":getTimeout()}`
+			return r
+		}},
+		{"additional-recipient-argument", func(r []map[string]any) []map[string]any {
+			payload(r[1])["arguments"] = `{"timeout_ms":3600000,"target":"another-worker"}`
+			return r
+		}},
+		{"duplicate-argument", func(r []map[string]any) []map[string]any {
+			payload(r[1])["arguments"] = `{"timeout_ms":10000,"timeout_ms":3600000}`
+			return r
+		}},
+		{"null-timeout", func(r []map[string]any) []map[string]any {
+			payload(r[1])["arguments"] = `{"timeout_ms":null}`
+			return r
+		}},
+		{"out-of-range-timeout", func(r []map[string]any) []map[string]any {
+			payload(r[1])["arguments"] = `{"timeout_ms":3600001}`
+			return r
+		}},
+		{"substituted-result-call", func(r []map[string]any) []map[string]any { payload(r[3])["call_id"] = "other-call"; return r }},
+		{"parent-activity", func(r []map[string]any) []map[string]any {
+			payload(r[2])["thread_id"] = "parent"
+			item(r[2])["sender_thread_id"] = "parent"
+			return r
+		}},
+		{"wrong-turn", func(r []map[string]any) []map[string]any {
+			payload(r[3])["internal_chat_message_metadata_passthrough"] = map[string]any{"turn_id": "other"}
+			return r
+		}},
+		{"mutating-activity", func(r []map[string]any) []map[string]any { item(r[2])["tool"] = "spawn_agent"; return r }},
+		{"nonempty-receiver", func(r []map[string]any) []map[string]any {
+			item(r[2])["receiver_thread_ids"] = []string{"another-worker"}
+			return r
+		}},
+		{"missing-receiver-field", func(r []map[string]any) []map[string]any { delete(item(r[2]), "receiver_thread_ids"); return r }},
+		{"duplicate-activity", func(r []map[string]any) []map[string]any {
+			return append(append([]map[string]any{}, r[:3]...), append([]map[string]any{r[2]}, r[3:]...)...)
+		}},
+		{"client-written-result", func(r []map[string]any) []map[string]any {
+			r[3]["metadata"] = map[string]any{"client_authored": true}
+			return r
+		}},
+		{"substituted-result", func(r []map[string]any) []map[string]any {
+			payload(r[3])["output"] = `{"message":"Work completed.","timed_out":false}`
+			return r
+		}},
+		{"reversed-result-time", func(r []map[string]any) []map[string]any { r[3]["timestamp"] = "2026-09-18T21:21:59Z"; return r }},
+		{"work-interleaved-with-wait", func(r []map[string]any) []map[string]any {
+			return append(append([]map[string]any{}, r[:2]...), append([]map[string]any{work()}, r[2:]...)...)
+		}},
+		{"wait-between-read-and-ack", func(r []map[string]any) []map[string]any {
+			reordered := append([]map[string]any{r[0]}, r[4:7]...)
+			reordered = append(reordered, r[1:4]...)
+			return append(reordered, r[7:]...)
+		}},
+		{"question-before-ack", func(r []map[string]any) []map[string]any {
+			question := map[string]any{"timestamp": "2026-09-18T21:22:00.15Z", "type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": "child-1", "turn_id": "turn-1", "item": map[string]any{"type": "AgentMessage", "id": "question", "phase": "final_answer", "content": `{"question":"Which behavior should I implement?"}`}}}
+			return append(append([]map[string]any{}, r[:2]...), append([]map[string]any{question}, r[2:]...)...)
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			records, want := fixture()
+			if err := validate(test.mutate(records), want); err == nil {
+				t.Fatal("unbound wait or pre-ACK work accepted")
 			}
 		})
 	}

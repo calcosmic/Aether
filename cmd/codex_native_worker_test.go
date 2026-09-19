@@ -2128,7 +2128,13 @@ func TestCodexNativeSecondReviewControls(t *testing.T) {
 	t.Run("claude_mixed_helpers_and_prefixed_failure", func(t *testing.T) {
 		run := t.TempDir()
 		root := filepath.Join(run, "fixture")
-		r := codexNativeLiveReceipt{FixtureRoot: root, SourceRevision: "c37006bab857e8b596029bded4656f5a98ef1a85", BaselineSource: "old\n", FinalSource: "new\n"}
+		// This synthetic control uses the current committed agent profile and
+		// must also run in a standalone source snapshot without old git history.
+		revision, err := exec.Command("git", "rev-parse", "HEAD").Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := codexNativeLiveReceipt{FixtureRoot: root, SourceRevision: strings.TrimSpace(string(revision)), BaselineSource: "old\n", FinalSource: "new\n"}
 		profile, err := exec.Command("git", "show", r.SourceRevision+":.claude/agents/ant/aether-builder.md").Output()
 		if err != nil {
 			t.Fatal(err)
