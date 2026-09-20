@@ -247,7 +247,7 @@ func codexDirectBuildCommandGuide(def commandGuideDefinition) commandGuideDefini
 	}
 
 	driftGuards := append([]string(nil), def.DriftGuards...)
-	driftGuards = append(driftGuards, "The native Codex worker bridge (`codexNativeBuildCommandGuide`) is experimental and parked; do not use it or mix its steps into this route without the exact `AETHER_CODEX_NATIVE_BUILD=1` opt-in.")
+	driftGuards = append(driftGuards, "The native Codex worker bridge is experimental and parked; do not use it or mix its steps into this route without the exact `AETHER_CODEX_NATIVE_BUILD=1` opt-in.")
 
 	def.Intent = "Run the Go runtime build directly: the runtime selects the team, dispatches Codex workers itself, and finalizes the phase. Relay its output; never hand-write state."
 	def.PreSteps = preSteps
