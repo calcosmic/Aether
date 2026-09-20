@@ -1886,7 +1886,7 @@ func TestCodexNativeObservedFixtureInspections(t *testing.T) {
 		{`go test ./... -cover -count=1`, true, false},
 		{`go test ./... -cover`, true, false},
 		{`go test -cover ./...`, true, false},
-		{`rg --files -g '*.go'`, false, false},
+		{`rg --files -g '*.go'`, true, true},
 		{`rg --files -g 'clamp.go' -g 'clamp.go'`, false, false},
 		{`rg --files -g '../clamp.go'`, false, false},
 		{`rg --files -g 'clamp.go' --pre mutate`, false, false},
