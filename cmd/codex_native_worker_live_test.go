@@ -3158,9 +3158,10 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 					}
 					commands, ok := nativeCodeModeCommands(p.Input, r.FixtureRoot)
 					fullBatchResults := nativeReadOnlyBatchFullResults(p.Input)
+					_, _, concatenated := nativeReadOnlyBatchConcatenation(p.Input)
 					_, exitOutput := nativeCodeModeExitOutputProjection(p.Input, r.FixtureRoot)
-					inspectionChain, rfcDate := false, false
-					needsCommandEvent := exitOutput || fullBatchResults || regexp.MustCompile(`^\s*const\s+\[`).MatchString(p.Input)
+					inspectionChain, longDate := false, false
+					needsCommandEvent := exitOutput || fullBatchResults || concatenated || regexp.MustCompile(`^\s*const\s+\[`).MatchString(p.Input)
 					for _, command := range commands {
 						// A semicolon inspection chain is one actual invocation,
 						// corroborated as a whole, never split into invented events.
@@ -3169,16 +3170,19 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 						// A multi-file sed read is likewise one invocation, not one
 						// event per operand. Require its exact child/cwd event.
 						words, literal := nativeSimpleShellWords(command.Command)
-						rfcDate = rfcDate || (literal && nativeRFCDateWords(words))
-						needsCommandEvent = needsCommandEvent || rfcDate
+						longDate = longDate || (literal && nativeLongDateWords(words))
+						needsCommandEvent = needsCommandEvent || longDate
 						needsCommandEvent = needsCommandEvent || (literal && len(words) > 4 && words[0] == "sed" && words[1] == "-n")
 					}
 					if ok && needsCommandEvent {
-						ok = nativeCorroboratedBatch(raw, r.ChildID, p.CallID, commands, inspectionChain || nativeReadOnlyBatchForEach(p.Input))
+						ok = nativeCorroboratedBatch(raw, r.ChildID, p.CallID, commands, inspectionChain || nativeReadOnlyBatchForEach(p.Input) || concatenated)
 						if ok && exitOutput {
 							ok = nativeCorroboratedExitOutput(raw, p.CallID, r.FixtureRoot)
 						}
-						if ok && (fullBatchResults || rfcDate) {
+						if ok && concatenated {
+							ok = nativeCorroboratedBatchConcatenation(raw, p.CallID, commands)
+						}
+						if ok && (fullBatchResults || (longDate && !exitOutput && !concatenated)) {
 							ok = nativeCorroboratedBatchResults(raw, p.CallID, commands)
 						}
 					}
@@ -3678,6 +3682,9 @@ func nativeInspectParentEvents(r *codexNativeLiveReceipt, raw []byte) {
 			if ok && nativeReadOnlyBatchForEach(p.Input) {
 				ok = nativeCorroboratedBatch(raw, r.SessionID, p.CallID, commands, true) && nativeCorroboratedBatchResults(raw, p.CallID, commands)
 			}
+			if _, _, concatenated := nativeReadOnlyBatchConcatenation(p.Input); ok && concatenated {
+				ok = nativeCorroboratedBatch(raw, r.SessionID, p.CallID, commands, true) && nativeCorroboratedBatchConcatenation(raw, p.CallID, commands)
+			}
 			if _, projected := nativeCodeModeExitOutputProjection(p.Input, metadata.Payload.Cwd); ok && projected {
 				ok = nativeCorroboratedBatch(raw, r.SessionID, p.CallID, commands) && nativeCorroboratedExitOutput(raw, p.CallID, r.FixtureRoot)
 			}
@@ -3994,8 +4001,16 @@ func nativeFixturePositiveFilter(filter string) bool {
 	return regexp.MustCompile(`^[A-Za-z0-9_.*?][A-Za-z0-9_.*?-]{0,127}$`).MatchString(filter) && filter != "." && filter != ".." && !strings.Contains(filter, "**")
 }
 
-func nativeRFCDateWords(words []string) bool {
-	return len(words) == 2 && words[0] == "date" && (words[1] == "--rfc-3339=date" || words[1] == "--rfc-3339=seconds" || words[1] == "--rfc-3339=ns")
+func nativeLongDateWords(words []string) bool {
+	if len(words) != 2 || words[0] != "date" {
+		return false
+	}
+	switch words[1] {
+	case "--rfc-3339=date", "--rfc-3339=seconds", "--rfc-3339=ns",
+		"--iso-8601=date", "--iso-8601=hours", "--iso-8601=minutes", "--iso-8601=seconds", "--iso-8601=ns":
+		return true
+	}
+	return false
 }
 
 func nativeAdditionalFixtureInspection(raw string, words []string, allowed func(string) bool) bool {
@@ -4082,7 +4097,7 @@ func nativeChildInspectionWords(r codexNativeLiveReceipt, raw string, words []st
 	if (len(words) == 1 && words[0] == "pwd") ||
 		(len(words) == 3 && words[0] == "git" && words[1] == "status" && words[2] == "--short") ||
 		(len(words) == 3 && words[0] == "date" && words[1] == "-u" && words[2] == "+%Y-%m-%dT%H:%M:%SZ") ||
-		(len(words) == 2 && words[0] == "date" && words[1] == "-Iseconds") || nativeRFCDateWords(words) ||
+		(len(words) == 2 && words[0] == "date" && words[1] == "-Iseconds") || nativeLongDateWords(words) ||
 		nativeAdditionalFixtureInspection(raw, words, allowed) {
 		return true
 	}
@@ -5140,17 +5155,105 @@ func nativeCorroboratedBatchResults(raw []byte, callID string, commands []native
 	return false
 }
 
+// One literal label followed by each complete output in input order. This is
+// a finite presentation grammar, not JavaScript evaluation or test evidence.
+func nativeReadOnlyBatchConcatenation(input string) (string, []string, bool) {
+	pattern := regexp.MustCompile(`^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+Promise\.all\(\[([\s\S]*)\]\);\s*text\(([\s\S]*)\);\s*$`)
+	m := pattern.FindStringSubmatch(input)
+	reserved := " JSON Promise tools text await break case catch class const continue debugger default delete do else enum export extends false finally for function if import in instanceof let new null return super switch this throw true try typeof var void while with yield implements interface package private protected public static eval arguments "
+	if len(m) != 4 || strings.Contains(reserved, " "+m[1]+" ") {
+		return "", nil, false
+	}
+	part := regexp.MustCompile(`^\s*("(?:[^"\\]|\\.)*")\s*\+\s*` + regexp.QuoteMeta(m[1]) + `\[(0|[1-9][0-9]*)\]\.output\s*`)
+	remaining := m[3]
+	var labels []string
+	for {
+		p := part.FindStringSubmatchIndex(remaining)
+		if p == nil || len(labels) == 64 || remaining[p[4]:p[5]] != strconv.Itoa(len(labels)) {
+			return "", nil, false
+		}
+		var label string
+		if json.Unmarshal([]byte(remaining[p[2]:p[3]]), &label) != nil || len(label) > 128 || !regexp.MustCompile(`^[A-Za-z0-9_. /:\-\n	]*$`).MatchString(label) {
+			return "", nil, false
+		}
+		labels = append(labels, label)
+		remaining = strings.TrimSpace(remaining[p[1]:])
+		if remaining == "" {
+			return m[2], labels, true
+		}
+		if !strings.HasPrefix(remaining, "+") {
+			return "", nil, false
+		}
+		remaining = remaining[1:]
+	}
+}
+
+// The caller first requires unique successful CommandExecution events in the
+// same child/turn/cwd, bounded by the one call and completed outer output.
+// Completion order may differ; the rendered string must follow input order.
+func nativeCorroboratedBatchConcatenation(raw []byte, callID string, commands []nativeRecordedShellCommand) bool {
+	active := false
+	var labels []string
+	outputs := map[string]string{}
+	for _, line := range bytes.Split(raw, []byte{'\n'}) {
+		var wire nativeCodeModeWire
+		if json.Unmarshal(line, &wire) == nil && wire.Type == "response_item" {
+			p := wire.Payload
+			if p.Type == "custom_tool_call" && p.CallID == callID {
+				var ok bool
+				_, labels, ok = nativeReadOnlyBatchConcatenation(p.Input)
+				if !ok || len(labels) != len(commands) {
+					return false
+				}
+				active = true
+			}
+			if p.Type == "custom_tool_call_output" && p.CallID == callID {
+				if !active || len(p.Output) != 2 || p.Output[0].Type != "input_text" || p.Output[1].Type != "input_text" {
+					return false
+				}
+				var expected strings.Builder
+				for index, command := range commands {
+					output, found := outputs[command.Cwd+"\x00"+command.Command]
+					if !found {
+						return false
+					}
+					expected.WriteString(labels[index])
+					expected.WriteString(output)
+				}
+				return p.Output[1].Text == expected.String()
+			}
+		}
+		var event nativeHostEvent
+		if !active || json.Unmarshal(line, &event) != nil || event.Type != "event_msg" || event.Payload.Type != "item_completed" || event.Payload.Item.Type != "CommandExecution" {
+			continue
+		}
+		item := event.Payload.Item
+		if len(item.Command) != 3 {
+			return false
+		}
+		for _, command := range commands {
+			if nativeSameCwd(item.Cwd, command.Cwd) && item.Command[2] == command.Command {
+				outputs[command.Cwd+"\x00"+command.Command] = item.Output
+			}
+		}
+	}
+	return false
+}
+
 func nativeReadOnlyBatchCommands(input, cwd string) ([]nativeRecordedShellCommand, bool) {
 	reserved := " JSON Promise tools text await break case catch class const continue debugger default delete do else enum export extends false finally for function if import in instanceof let new null return super switch this throw true try typeof var void while with yield implements interface package private protected public static eval arguments "
 	array := ""
 	namedCount := 0
 	forEach := false
+	concatenatedCount := 0
 	each := regexp.MustCompile(`^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+Promise\.all\(\[([\s\S]*)\]\);\s*([A-Za-z_][A-Za-z0-9_]*)\.forEach\(text\);\s*$`)
 	indexed := regexp.MustCompile(`^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+Promise\.allSettled\(\[([\s\S]*)\]\);\s*for\s*\(let\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*0;\s*([A-Za-z_][A-Za-z0-9_]*)\s*<\s*([A-Za-z_][A-Za-z0-9_]*)\.length;\s*([A-Za-z_][A-Za-z0-9_]*)\+\+\)\s*text\(\{\s*(?:index\s*:\s*)?([A-Za-z_][A-Za-z0-9_]*),\s*\.\.\.([A-Za-z_][A-Za-z0-9_]*)\[([A-Za-z_][A-Za-z0-9_]*)\]\s*\}\);\s*$`)
 	projected := regexp.MustCompile(`^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+Promise\.all\(\[([\s\S]*)\]\);\s*for\s*\(const\s+([A-Za-z_][A-Za-z0-9_]*)\s+of\s+([A-Za-z_][A-Za-z0-9_]*)\)\s*([\s\S]*)$`)
 	identifiers := `\s*[A-Za-z_][A-Za-z0-9_]*(?:\s*,\s*[A-Za-z_][A-Za-z0-9_]*)*\s*`
 	named := regexp.MustCompile(`^\s*const\s+\[(` + identifiers + `)\]\s*=\s*await\s+Promise\.all\(\[([\s\S]*)\]\);\s*text\(JSON\.stringify\(\{(` + identifiers + `)\}\)\);\s*$`)
-	if m := indexed.FindStringSubmatch(input); len(m) == 10 && m[1] == m[5] && m[1] == m[8] && m[3] == m[4] && m[3] == m[6] && m[3] == m[7] && m[3] == m[9] {
+	if source, labels, ok := nativeReadOnlyBatchConcatenation(input); ok {
+		array, concatenatedCount = source, len(labels)
+	} else if m := indexed.FindStringSubmatch(input); len(m) == 10 && m[1] == m[5] && m[1] == m[8] && m[3] == m[4] && m[3] == m[6] && m[3] == m[7] && m[3] == m[9] {
 		array = m[2]
 	} else if m := each.FindStringSubmatch(input); len(m) == 4 && m[1] == m[3] && !strings.Contains(reserved, " "+m[1]+" ") {
 		array, forEach = m[2], true
@@ -5196,8 +5299,8 @@ func nativeReadOnlyBatchCommands(input, cwd string) ([]nativeRecordedShellComman
 		owned := codexNativeLiveReceipt{FixtureRoot: parsed[0].Cwd}
 		chain := nativeChildInspectionChain(owned, parsed[0].Command)
 		allowed := nativeReadOnlyBatchCommand(parsed[0].Command) || chain
-		if forEach {
-			// The new callback form admits only the same child inspection atoms
+		if forEach || concatenatedCount > 0 {
+			// The new presentation form admits only the same child inspection atoms
 			// and chains, not broader parent discovery/runtime operations.
 			allowed = nativeChildInspectionAtom(owned, parsed[0].Command) || chain
 		}
@@ -5210,7 +5313,7 @@ func nativeReadOnlyBatchCommands(input, cwd string) ([]nativeRecordedShellComman
 		}
 		remaining = strings.TrimSpace(remaining[part[1]:])
 	}
-	return commands, len(commands) > 0 && (namedCount == 0 || namedCount == len(commands))
+	return commands, len(commands) > 0 && (namedCount == 0 || namedCount == len(commands)) && (concatenatedCount == 0 || concatenatedCount == len(commands))
 }
 
 func nativeReadOnlyBatchCommand(command string) bool {
@@ -5226,7 +5329,7 @@ func nativeReadOnlyBatchCommand(command string) bool {
 	}
 	if nativeAdditionalFixtureInspection(command, words, func(path string) bool {
 		return path == "clamp.go" || path == "clamp_test.go" || path == "double.go" || path == "double_test.go" || path == "go.mod" || path == "AGENTS.md"
-	}) || nativeRFCDateWords(words) || strings.Join(words, " ") == "date -u +%Y-%m-%dT%H:%M:%SZ" {
+	}) || nativeLongDateWords(words) || strings.Join(words, " ") == "date -u +%Y-%m-%dT%H:%M:%SZ" {
 		return true
 	}
 	switch words[0] {
