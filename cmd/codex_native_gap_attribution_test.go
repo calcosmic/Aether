@@ -374,6 +374,7 @@ func TestCodexNativeGapCapturedAttribution(t *testing.T) {
 
 func TestCodexNativeGapParentCoordination(t *testing.T) {
 	t.Run("literal-display-env", nativeParentDisplayEnvControls)
+	t.Run("owned-json-field-ranges", nativeParentJSONFieldControls)
 	for _, wrapper := range []string{"direct", "output-projection", "json-result", "output-exit", "all-output", "all-json"} {
 		modes := []string{"valid", "file_uri", "actual_command_failure", "missing", "wrong_thread", "wrong_turn", "wrong_cwd", "wrong_argv", "reused_event", "duplicate_call", "missing_output", "wrong_output_call", "wrong_output_turn", "failed_script"}
 		if wrapper == "output-exit" {
@@ -570,6 +571,128 @@ func nativeParentDisplayEnvControls(t *testing.T) {
 					add(map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call_output", "call_id": outputCall, "output": []any{map[string]any{"type": "input_text", "text": header}, map[string]any{"type": "input_text", "text": "display only\n"}}, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": outputTurn}}})
 				}
 				r := codexNativeLiveReceipt{SchemaVersion: "codex-native-tracer/v2", SessionID: "parent", FixtureRoot: "/fixture"}
+				nativeInspectParentEvents(&r, raw)
+				allowed := mode == "valid" || mode == "file-uri" || mode == "failed-command"
+				if r.ParentSubstitution == allowed || r.ChecksPassed || r.ChildEditObserved || r.CreditObserved {
+					t.Fatalf("mode=%s parent=%v checks=%v edit=%v credit=%v unclassified=%v", mode, r.ParentSubstitution, r.ChecksPassed, r.ChildEditObserved, r.CreditObserved, r.ParentUnclassified)
+				}
+			})
+		}
+	}
+}
+
+func nativeParentJSONFieldControls(t *testing.T) {
+	root := t.TempDir()
+	helper := filepath.Join(root, "coordinator.py")
+	body := []byte("coord = pathlib.Path(" + strconv.Quote(root) + ")\n")
+	if err := os.WriteFile(helper, body, 0600); err != nil {
+		t.Fatal(err)
+	}
+	r := codexNativeLiveReceipt{FixtureRoot: "/fixture", CoordinationPath: root, CoordinatorPath: helper, CoordinatorSHA256: lifecycleDigest(body)}
+	command := func(script, path string) string { return "sed -n '" + script + "' " + strconv.Quote(path) }
+	commands := []string{
+		command(`/"job_decisions"/,+24p`, filepath.Join(root, "manifest-envelope.json")),
+		command(`/"orchestrator_boundary_guidance"/,+30p`, filepath.Join(root, "manifest.json")),
+		command(`/"orchestrator_boundary_guidance"/,+30p`, filepath.Join(root, "manifest-envelope.json")),
+		command(`/"permission_profile"/,+36p`, filepath.Join(root, "manifest.json")),
+	}
+	for _, script := range []string{`/"a"/,+1p`, `/"` + strings.Repeat("a", 64) + `"/,+256p`} {
+		if !nativeParentCoordinationCommand(&r, []string{"/bin/sh", "-c", command(script, filepath.Join(root, "manifest.json"))}, "/fixture") {
+			t.Fatal("valid field/count boundary rejected")
+		}
+	}
+	for _, script := range []string{`/"a"/,+0p`, `/"a"/,+257p`, `/"a"/,+01p`, `/"a"/,+9999p`, `/""/,+1p`, `/"` + strings.Repeat("a", 65) + `"/,+1p`, `/"a.*"/,+1p`, `/"a|b"/,+1p`, `/"a/b"/,+1p`, `/"a"/,+1w`, `/"a"/,+1r`, `/"a"/,+1e`, `/"a"/,+1p;w out`, `/"a"/,+1p;d`, `/"a"/,$p`, `/"a"/,+-1p`} {
+		t.Run("script/"+script, func(t *testing.T) {
+			if nativeParentCoordinationCommand(&r, []string{"/bin/sh", "-c", command(script, filepath.Join(root, "manifest.json"))}, "/fixture") {
+				t.Fatal("unsafe script admitted")
+			}
+		})
+	}
+	for _, bad := range []string{
+		command(`/"a"/,+1p`, "/other/manifest.json"), command(`/"a"/,+1p`, filepath.Join(root, "other.json")), command(`/"a"/,+1p`, "manifest.json"), command(`/"a"/,+1p`, root+"/../"+filepath.Base(root)+"/manifest.json"),
+		strings.Replace(commands[0], "sed -n", "sed -i", 1), strings.Replace(commands[0], "sed -n", "sed -n -e", 1), commands[0] + " > clamp.go", commands[0] + "; touch clamp.go", commands[0] + " " + strconv.Quote(filepath.Join(root, "manifest.json")),
+	} {
+		if nativeParentCoordinationCommand(&r, []string{"/bin/sh", "-c", bad}, "/fixture") {
+			t.Fatalf("unsafe target/argv admitted: %s", bad)
+		}
+	}
+	for _, mode := range []string{"digest", "root", "missing", "duplicate-binding"} {
+		t.Run("source/"+mode, func(t *testing.T) {
+			copy := r
+			switch mode {
+			case "digest":
+				copy.CoordinatorSHA256 = "wrong"
+			case "root":
+				copy.CoordinationPath = "/other"
+			case "missing":
+				copy.CoordinatorPath = filepath.Join(root, "missing.py")
+			case "duplicate-binding":
+				file := filepath.Join(root, "duplicate.py")
+				b := append(append([]byte(nil), body...), body...)
+				if err := os.WriteFile(file, b, 0600); err != nil {
+					t.Fatal(err)
+				}
+				copy.CoordinatorPath = file
+				copy.CoordinatorSHA256 = lifecycleDigest(b)
+			}
+			if nativeParentCoordinationCommand(&copy, []string{"/bin/sh", "-c", commands[0]}, "/fixture") {
+				t.Fatal("unbound source admitted")
+			}
+		})
+	}
+	for index, command := range commands {
+		for _, mode := range []string{"valid", "file-uri", "failed-command", "wrong-thread", "wrong-turn", "wrong-cwd", "wrong-argv", "missing-event", "duplicate-event", "missing-output", "wrong-output-call", "wrong-output-turn", "duplicate-call", "incomplete-script", "prefix-mutation"} {
+			t.Run("raw/"+strconv.Itoa(index)+"/"+mode, func(t *testing.T) {
+				var raw []byte
+				add := func(value any) { b, _ := json.Marshal(value); raw = append(raw, append(b, '\n')...) }
+				add(map[string]any{"type": "session_meta", "payload": map[string]any{"id": "parent", "cwd": "/fixture"}})
+				selected := command
+				if mode == "prefix-mutation" {
+					selected = strings.Replace(command, root, "/other", 1)
+				}
+				input := "const r = await tools.exec_command({cmd:" + strconv.Quote(selected) + ",workdir:\"/fixture\"}); text(r.output);"
+				call := map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call", "name": "exec", "call_id": "call", "input": input, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}}
+				add(call)
+				if mode == "duplicate-call" {
+					add(call)
+				}
+				thread, turn, cwd := "parent", "turn", "/fixture"
+				switch mode {
+				case "file-uri":
+					cwd = "file:///fixture"
+				case "wrong-thread":
+					thread = "other"
+				case "wrong-turn":
+					turn = "other"
+				case "wrong-cwd":
+					cwd = "/other"
+				case "wrong-argv":
+					selected = "aether status"
+				}
+				status, exit := "completed", 0
+				if mode == "failed-command" {
+					status, exit = "failed", 1
+				}
+				event := map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": thread, "turn_id": turn, "item": map[string]any{"type": "CommandExecution", "id": "display", "status": status, "command": []string{"/bin/zsh", "-lc", selected}, "cwd": cwd, "exit_code": exit, "aggregated_output": "display only\n"}}}
+				if mode != "missing-event" {
+					add(event)
+				}
+				if mode == "duplicate-event" {
+					add(event)
+				}
+				outputCall, outputTurn, header := "call", "turn", "Script completed\n"
+				switch mode {
+				case "wrong-output-call":
+					outputCall = "other"
+				case "wrong-output-turn":
+					outputTurn = "other"
+				case "incomplete-script":
+					header = "Script running\n"
+				}
+				if mode != "missing-output" {
+					add(map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call_output", "call_id": outputCall, "output": []any{map[string]any{"type": "input_text", "text": header}, map[string]any{"type": "input_text", "text": "display only\n"}}, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": outputTurn}}})
+				}
+				r := codexNativeLiveReceipt{SchemaVersion: "codex-native-tracer/v2", SessionID: "parent", FixtureRoot: "/fixture", CoordinationPath: root, CoordinatorPath: helper, CoordinatorSHA256: lifecycleDigest(body)}
 				nativeInspectParentEvents(&r, raw)
 				allowed := mode == "valid" || mode == "file-uri" || mode == "failed-command"
 				if r.ParentSubstitution == allowed || r.ChecksPassed || r.ChildEditObserved || r.CreditObserved {
@@ -1667,6 +1790,34 @@ func TestCodexNativeObservedFixtureInspections(t *testing.T) {
 		{`rg --files -g '!/` + strings.Repeat("a", 126) + `/*'`, false, false},
 		{`date -Iseconds`, true, false},
 		{`'date -Iseconds'`, false, false},
+		{`rg --files -g 'AGENTS.md' -g 'CODEBASE.md' -g '*.go' -g 'go.mod'`, true, true},
+		{`rg --files -g '*.go' -g '*.go'`, false, false},
+		{`rg --files -g *.go`, false, false},
+		{`rg --files -g '*'".go"`, false, false},
+		{`rg --files -g '**.go'`, false, false},
+		{`rg --files -g '../*.go'`, false, false},
+		{`rg --files -g '/other/*.go'`, false, false},
+		{`rg --files -g 'sub/*.go'`, false, false},
+		{`rg --files -g '*.go' --hidden`, false, false},
+		{`rg --files -g '*.go' --follow`, false, false},
+		{`rg --files -g '*.go' /other`, false, false},
+		{`rg --files -g '--pre'`, false, false},
+		{`rg --files -g '{a,b}.go'`, false, false},
+		{`rg --files -g '.'`, false, false},
+		{`rg --files -g '..'`, false, false},
+		{`rg --files -g '` + strings.Repeat("a", 128) + `'`, true, true},
+		{`rg --files -g '` + strings.Repeat("a", 129) + `'`, false, false},
+		{`rg --files -g 'a*' -g 'b*' -g 'c*' -g 'd*' -g 'e*' -g 'f*'`, true, true},
+		{`rg --files -g 'a*' -g 'b*' -g 'c*' -g 'd*' -g 'e*' -g 'f*' -g 'g*'`, false, false},
+		{`date --rfc-3339=seconds`, true, true},
+		{`date --rfc-3339=date`, true, true},
+		{`date --rfc-3339=ns`, true, true},
+		{`date --rfc-3339=hours`, false, false},
+		{`date --rfc-3339=seconds -s now`, false, false},
+		{`date --rfc-3339=seconds 09201200`, false, false},
+		{`date --rfc-3339=seconds > clamp.go`, false, false},
+		{`date --rfc-3339=seconds; touch clamp.go`, false, false},
+		{`'date --rfc-3339=seconds'`, false, false},
 		{`date -Iseconds -s now`, false, false},
 		{`date -Iseconds > clamp.go`, false, false},
 		{`date -Iseconds /other`, false, false},
@@ -1689,7 +1840,7 @@ func TestCodexNativeObservedFixtureInspections(t *testing.T) {
 		{`rg --files -g '!$(touch clamp.go)'`, false, false},
 		{`rg --files -g '!*vendor*' > clamp.go`, false, false},
 		{`rg --files -g '!*vendor*'; touch clamp.go`, false, false},
-		{`rg --files -g '*vendor*'`, false, false},
+		{`rg --files -g '*vendor*'`, true, true},
 		{"rg --files -g '!" + strings.Repeat("a", 128) + "'", true, true},
 		{"rg --files -g '!" + strings.Repeat("a", 129) + "'", false, false},
 		{`rg --files -g '!*.sum' -g 'clamp.go'`, true, true},
@@ -1786,9 +1937,16 @@ func TestCodexNativeObservedFixtureInspections(t *testing.T) {
 
 func nativeObservedSemicolonInspection(t *testing.T) {
 	const chain = `sed -n '1,240p' clamp.go; sed -n '1,280p' clamp_test.go; git status --short`
-	for _, command := range []string{`rg --files -g '!/.aether-transactions/**' && date -Iseconds`, `rg --files -g '!/.aether-transactions/**'`, `pwd && rg --files -g '!*vendor*' && git status --short && sed -n '1,240p' clamp.go && sed -n '1,280p' clamp_test.go && sed -n '1,160p' go.mod`, `pwd; cat clamp.go; git diff -- clamp.go`, `git diff -- clamp.go && git status --short && date -u +%Y-%m-%dT%H:%M:%SZ`, chain, `sed -n '1,200p' clamp.go clamp_test.go`, `sed -n '1,200p' /fixture/clamp.go clamp_test.go`, `rg --files`, `rg --files -g '!*.sum'`, `rg --files -g '!*vendor*'`, `rg --files /other`, `rg --files -g '!*.sum' /other`} {
-		for _, mode := range []string{"valid", "invocation-cwd", "wrong-cwd", "wrong-thread", "wrong-turn", "missing-event", "duplicate-event", "split-events", "changed-command", "missing-output", "duplicate-output", "interleaved-call", "prior-pass", "failed-inspection", "later-failed-check", "later-edit"} {
-			if !strings.Contains(command, " && ") && !strings.Contains(command, ";") && (mode == "prior-pass" || mode == "failed-inspection" || mode == "later-failed-check" || mode == "later-edit") {
+	for _, command := range []string{`date --rfc-3339=seconds`, `pwd && rg --files -g 'AGENTS.md' -g 'CODEBASE.md' -g '*.go' -g 'go.mod' && sed -n '1,240p' clamp.go && sed -n '1,280p' clamp_test.go && sed -n '1,160p' go.mod && git status --short`, `rg --files -g '!/.aether-transactions/**' && date -Iseconds`, `rg --files -g '!/.aether-transactions/**'`, `pwd && rg --files -g '!*vendor*' && git status --short && sed -n '1,240p' clamp.go && sed -n '1,280p' clamp_test.go && sed -n '1,160p' go.mod`, `pwd; cat clamp.go; git diff -- clamp.go`, `git diff -- clamp.go && git status --short && date -u +%Y-%m-%dT%H:%M:%SZ`, chain, `sed -n '1,200p' clamp.go clamp_test.go`, `sed -n '1,200p' /fixture/clamp.go clamp_test.go`, `rg --files`, `rg --files -g '!*.sum'`, `rg --files -g '!*vendor*'`, `rg --files /other`, `rg --files -g '!*.sum' /other`} {
+		for _, mode := range []string{"valid", "invocation-cwd", "wrong-cwd", "wrong-thread", "wrong-turn", "missing-event", "duplicate-event", "split-events", "changed-command", "missing-output", "duplicate-output", "interleaved-call", "prior-pass", "failed-inspection", "later-failed-check", "later-edit", "failed-no-prior", "result-exit-mismatch", "result-output-mismatch", "extra-result"} {
+			rfc := command == "date --rfc-3339=seconds"
+			if !rfc && (mode == "failed-no-prior" || strings.HasPrefix(mode, "result-") || mode == "extra-result") {
+				continue
+			}
+			if rfc && mode == "split-events" {
+				continue
+			}
+			if !rfc && !strings.Contains(command, " && ") && !strings.Contains(command, ";") && (mode == "prior-pass" || mode == "failed-inspection" || mode == "later-failed-check" || mode == "later-edit") {
 				continue
 			}
 			// Bare listing uses the pre-existing direct-command classifier;
@@ -1834,7 +1992,7 @@ func nativeObservedSemicolonInspection(t *testing.T) {
 				}
 				event := func(id, command string) map[string]any {
 					exit, status := 0, "completed"
-					if mode == "failed-inspection" {
+					if mode == "failed-inspection" || mode == "failed-no-prior" {
 						exit, status = 1, "failed"
 					}
 					return map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": thread, "turn_id": turn, "item": map[string]any{"type": "CommandExecution", "id": id, "status": status, "command": []string{"/bin/zsh", "-lc", command}, "cwd": cwd, "exit_code": exit, "aggregated_output": "actual inspection output"}}}
@@ -1857,6 +2015,22 @@ func nativeObservedSemicolonInspection(t *testing.T) {
 					}
 				}
 				result := map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call_output", "call_id": "inspection", "output": []any{map[string]any{"type": "input_text", "text": "Script completed\n"}, map[string]any{"type": "input_text", "text": `{"exit_code":0,"output":"actual inspection output"}`}}, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}}
+				if rfc {
+					body := map[string]any{"exit_code": 0, "output": "actual inspection output"}
+					if mode == "failed-inspection" || mode == "failed-no-prior" || mode == "result-exit-mismatch" {
+						body["exit_code"] = 1
+					}
+					if mode == "result-output-mismatch" {
+						body["output"] = "forged"
+					}
+					b, _ := json.Marshal(body)
+					payload := result["payload"].(map[string]any)
+					parts := payload["output"].([]any)
+					parts[1] = map[string]any{"type": "input_text", "text": string(b)}
+					if mode == "extra-result" {
+						payload["output"] = append(parts, parts[1])
+					}
+				}
 				if mode != "missing-output" {
 					add(result)
 				}
@@ -1870,8 +2044,8 @@ func nativeObservedSemicolonInspection(t *testing.T) {
 					raw = append(raw, nativeEvidenceEvent(t, "item_completed", "child", map[string]any{"type": "FileChange", "status": "completed", "changes": map[string]any{"/fixture/clamp.go": map[string]any{"type": "update", "unified_diff": "@@ -1,1 +1,1 @@\n-package nativefixture\n+package nativefixture\n"}}})...)
 				}
 				nativeInspectChildEvents(&r, raw)
-				wantClassified := (mode == "valid" || mode == "prior-pass" || mode == "later-failed-check" || mode == "later-edit") && !strings.HasSuffix(command, " /other")
-				if (len(r.ChildUnclassified) == 0) != wantClassified || r.ChecksPassed != (mode == "prior-pass") || (mode != "later-edit" && r.ChildEditObserved) {
+				wantClassified := (mode == "valid" || mode == "prior-pass" || mode == "later-failed-check" || mode == "later-edit" || (rfc && (mode == "failed-inspection" || mode == "failed-no-prior"))) && !strings.HasSuffix(command, " /other")
+				if (len(r.ChildUnclassified) == 0) != wantClassified || r.ChecksPassed != (mode == "prior-pass" || (rfc && mode == "failed-inspection")) || (mode != "later-edit" && r.ChildEditObserved) {
 					t.Fatalf("unclassified=%v checks=%v edits=%v", r.ChildUnclassified, r.ChecksPassed, r.ChildEditObserved)
 				}
 			})

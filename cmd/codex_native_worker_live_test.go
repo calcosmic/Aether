@@ -3159,7 +3159,7 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 					commands, ok := nativeCodeModeCommands(p.Input, r.FixtureRoot)
 					fullBatchResults := nativeReadOnlyBatchFullResults(p.Input)
 					_, exitOutput := nativeCodeModeExitOutputProjection(p.Input, r.FixtureRoot)
-					inspectionChain := false
+					inspectionChain, rfcDate := false, false
 					needsCommandEvent := exitOutput || fullBatchResults || regexp.MustCompile(`^\s*const\s+\[`).MatchString(p.Input)
 					for _, command := range commands {
 						// A semicolon inspection chain is one actual invocation,
@@ -3169,6 +3169,8 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 						// A multi-file sed read is likewise one invocation, not one
 						// event per operand. Require its exact child/cwd event.
 						words, literal := nativeSimpleShellWords(command.Command)
+						rfcDate = rfcDate || (literal && nativeRFCDateWords(words))
+						needsCommandEvent = needsCommandEvent || rfcDate
 						needsCommandEvent = needsCommandEvent || (literal && len(words) > 4 && words[0] == "sed" && words[1] == "-n")
 					}
 					if ok && needsCommandEvent {
@@ -3176,7 +3178,7 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 						if ok && exitOutput {
 							ok = nativeCorroboratedExitOutput(raw, p.CallID, r.FixtureRoot)
 						}
-						if ok && fullBatchResults {
+						if ok && (fullBatchResults || rfcDate) {
 							ok = nativeCorroboratedBatchResults(raw, p.CallID, commands)
 						}
 					}
@@ -3790,7 +3792,7 @@ func nativeParentCoordinationCommand(r *codexNativeLiveReceipt, command []string
 	case "ls":
 		return true
 	case "sed":
-		return len(words) == 4 && words[1] == "-n" && regexp.MustCompile(`^[0-9]+(?:,[0-9]+)?p$`).MatchString(words[2])
+		return len(words) == 4 && words[1] == "-n" && (regexp.MustCompile(`^[0-9]+(?:,[0-9]+)?p$`).MatchString(words[2]) || nativeParentJSONFieldInspection(r, words))
 	case "head":
 		return len(words) == 4 && words[1] == "-n" && regexp.MustCompile(`^[0-9]+$`).MatchString(words[2]) && !strings.HasPrefix(words[3], "-")
 	case "rg":
@@ -3863,6 +3865,34 @@ func nativeParentCoordinationCommand(r *codexNativeLiveReceipt, command []string
 		}
 	}
 	return false
+}
+
+// A literal JSON field range can only inspect the two source-bound manifests.
+func nativeParentJSONFieldInspection(r *codexNativeLiveReceipt, words []string) bool {
+	if len(words) != 4 || words[0] != "sed" || words[1] != "-n" {
+		return false
+	}
+	match := regexp.MustCompile(`^/"[A-Za-z_][A-Za-z0-9_]{0,63}"/,\+([1-9][0-9]{0,2})p$`).FindStringSubmatch(words[2])
+	if len(match) != 2 {
+		return false
+	}
+	count, err := strconv.Atoi(match[1])
+	if err != nil || count > 256 || !filepath.IsAbs(r.CoordinationPath) || filepath.Clean(r.CoordinationPath) != r.CoordinationPath {
+		return false
+	}
+	if words[3] != filepath.Join(r.CoordinationPath, "manifest.json") && words[3] != filepath.Join(r.CoordinationPath, "manifest-envelope.json") {
+		return false
+	}
+	raw, err := r.readEvidence(r.CoordinatorPath)
+	if err != nil || lifecycleDigest(raw) != r.CoordinatorSHA256 {
+		return false
+	}
+	binding := regexp.MustCompile(`(?m)^coord = pathlib.Path\((.+)\)$`).FindAllStringSubmatch(string(raw), -1)
+	if len(binding) != 1 {
+		return false
+	}
+	root, err := strconv.Unquote(binding[0][1])
+	return err == nil && root == r.CoordinationPath
 }
 
 // Only literal display settings may prefix these existing parent render commands.
@@ -3958,6 +3988,16 @@ func nativeFixtureExclusionFilter(filter string) bool {
 	return true
 }
 
+// Listing-only basename patterns; positive globs may override ignore selection,
+// with no new roots or hidden/follow/output options.
+func nativeFixturePositiveFilter(filter string) bool {
+	return regexp.MustCompile(`^[A-Za-z0-9_.*?][A-Za-z0-9_.*?-]{0,127}$`).MatchString(filter) && filter != "." && filter != ".." && !strings.Contains(filter, "**")
+}
+
+func nativeRFCDateWords(words []string) bool {
+	return len(words) == 2 && words[0] == "date" && (words[1] == "--rfc-3339=date" || words[1] == "--rfc-3339=seconds" || words[1] == "--rfc-3339=ns")
+}
+
 func nativeAdditionalFixtureInspection(raw string, words []string, allowed func(string) bool) bool {
 	if len(words) == 3 && words[0] == "git" && words[1] == "diff" && words[2] == "--check" {
 		return true
@@ -3966,24 +4006,23 @@ func nativeAdditionalFixtureInspection(raw string, words []string, allowed func(
 	if len(words) == 2 && words[0] == "rg" && words[1] == "--files" {
 		return true
 	}
-	// Explicit fixture basenames and bounded quoted exclusion path patterns only.
-	// Exclusions narrow the already-admitted cwd-only listing; they cannot
-	// enable hidden files, follow links, add roots or select an output file.
+	// Explicit fixture basenames, quoted positive basenames and exclusion paths.
+	// Both new pattern classes stay listing-only with the same bounded -g argv.
 	if len(words) >= 4 && len(words) <= 14 && len(words)%2 == 0 && words[0] == "rg" && words[1] == "--files" {
 		seen := map[string]bool{}
 		literals := regexp.MustCompile(`(?:^|\s)-g\s+('[^']*'|"[^"]*"|[^\s]+)`).FindAllStringSubmatch(raw, -1)
 		for i := 2; i < len(words); i += 2 {
 			filter := words[i+1]
 			fixtureFilter := allowed(filter) && filepath.Base(filter) == filter
-			excluded := nativeFixtureExclusionFilter(filter)
-			if excluded {
+			pattern := nativeFixtureExclusionFilter(filter) || nativeFixturePositiveFilter(filter)
+			if pattern {
 				// Word decoding strips quotes; require the complete raw argument
 				// to be quoted so wildcard expansion cannot change its meaning.
 				index := (i - 2) / 2
-				excluded = len(literals) == (len(words)-2)/2 &&
+				pattern = len(literals) == (len(words)-2)/2 &&
 					(literals[index][1] == "'"+filter+"'" || literals[index][1] == `"`+filter+`"`)
 			}
-			if words[i] != "-g" || (!fixtureFilter && !excluded) || seen[filter] {
+			if words[i] != "-g" || (!fixtureFilter && !pattern) || seen[filter] {
 				return false
 			}
 			seen[filter] = true
@@ -4043,7 +4082,7 @@ func nativeChildInspectionWords(r codexNativeLiveReceipt, raw string, words []st
 	if (len(words) == 1 && words[0] == "pwd") ||
 		(len(words) == 3 && words[0] == "git" && words[1] == "status" && words[2] == "--short") ||
 		(len(words) == 3 && words[0] == "date" && words[1] == "-u" && words[2] == "+%Y-%m-%dT%H:%M:%SZ") ||
-		(len(words) == 2 && words[0] == "date" && words[1] == "-Iseconds") ||
+		(len(words) == 2 && words[0] == "date" && words[1] == "-Iseconds") || nativeRFCDateWords(words) ||
 		nativeAdditionalFixtureInspection(raw, words, allowed) {
 		return true
 	}
@@ -5187,7 +5226,7 @@ func nativeReadOnlyBatchCommand(command string) bool {
 	}
 	if nativeAdditionalFixtureInspection(command, words, func(path string) bool {
 		return path == "clamp.go" || path == "clamp_test.go" || path == "double.go" || path == "double_test.go" || path == "go.mod" || path == "AGENTS.md"
-	}) || strings.Join(words, " ") == "date -u +%Y-%m-%dT%H:%M:%SZ" {
+	}) || nativeRFCDateWords(words) || strings.Join(words, " ") == "date -u +%Y-%m-%dT%H:%M:%SZ" {
 		return true
 	}
 	switch words[0] {
